@@ -140,3 +140,52 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - refactor: none.
 - notes: the passing test at red (`every_tool_has_an_object_input_schema…`) iterates an empty list;
   it now asserts over five entries.
+
+## Cycle 7 — U17–U29 — T002, T005, T010
+
+- tests: `crates/micold-daemon/tests/mcp_endpoint.rs` (15 tests), over the shared fixture
+  `crates/micold-daemon/tests/support/mcp.rs` (a `DaemonState` over a real git repository, a bound
+  tool server, raw-TCP `POST /mcp`)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_endpoint`, against a stub
+  `ToolServer` (empty `url`, a binding path with no extension, credentials that never match) and a
+  `serve` that answers `500` to everything
+  ```
+  thread 'a_request_without_authorization_is_refused_with_an_empty_401' panicked at crates/micold-daemon/tests/mcp_endpoint.rs:107:5:
+    left: 500
+   right: 401
+  test result: FAILED. 0 passed; 15 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `mcp/credentials.rs` (random per-session credential, idempotent, whole-string lookup,
+  `revoke`), `mcp/server.rs` (loopback bind, head 431 → route 404 → method 405 → bearer 401 →
+  body 413 → JSON-RPC; `tools/call` on a blocking thread; nothing of the body or credential
+  logged), `DaemonState::revoke_tool_credentials` after every archive path (`delete_session`,
+  `archive_and_remove_worktree_sessions`, `forget_project`), outside the lock; bound in
+  `server.rs run` beside the hook receiver. U26 needs `whoami`, so the `whoami` handler landed in
+  this cycle. 15 passed; daemon suite 431 passed, 0 failed.
+- refactor: the MCP fixture is included by `#[path]` rather than through `support/mod.rs`, so the
+  framer tests' helpers are not dead code in the MCP test binaries.
+
+## Cycle 8 — A2, A3, U124–U126, U128–U140 — T015, T021
+
+- tests: `crates/micold-daemon/tests/mcp_read_tools.rs` (16 tests)
+- red: none observed. **Test-after admission**: the read handlers in `mcp/tools.rs` were written
+  in the same step as cycle 7's `whoami`, before this file existed. Evidence is the deliberate
+  mutants below instead of a red.
+- mutants (`scripts/build-lock.sh cargo test -p micold-daemon --test mcp_read_tools`, each restored
+  afterwards):
+  - hidden filter disabled → `an_assistant_owned_worktree_is_listed_only_with_include_hidden`,
+    `list_worktrees_is_default_then_the_sidebars_set` FAILED (14 passed; 2 failed)
+  - `is_caller` always false → `list_sessions_marks_only_the_caller` FAILED
+  - `failure_reason` dropped → `get_session_reports_a_failure_reason_only_for_a_failed_session` FAILED
+  - `regular_terminal` reported as the provider → `a_regular_terminal_session_is_listed_as_such` FAILED
+  - worktree filter ignored → `list_sessions_filters_by_worktree` FAILED
+  - project-root holder reported as null → `list_branches_reports_where_each_branch_is_checked_out` FAILED
+  - remote kind reported as local → `list_branches_reports_a_remote_tracking_branch_as_remote` FAILED
+- green: 16 passed; daemon suite 431 passed, 0 failed.
+- refactor: none.
+- notes: U127 (`status: locked`) is BLOCKED: `micold_core::worktree::WorktreeStatus` has no locked
+  state and `wire_worktree_status` never produces `WorktreeStatus::Locked`, so no fixture can reach
+  it without changing worktree discovery, which is outside this feature. Recorded as a follow-up
+  in the ledger. U128 is reached the only way the daemon produces `prunable`: a directory under
+  `.claude/worktrees/` that git does not know (`Invalid` → `Prunable`); a git-prunable worktree
+  reports `missing` (U126).

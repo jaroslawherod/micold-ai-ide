@@ -5,3 +5,7 @@
 //! credential registry, and the tool handlers that read the daemon's state.
 //!
 //! Contracts: `specs/034-daemon-mcp-server/contracts/binding.md` and `contracts/mcp-tools.md`.
+
+pub mod credentials;
+pub mod server;
+pub mod tools;

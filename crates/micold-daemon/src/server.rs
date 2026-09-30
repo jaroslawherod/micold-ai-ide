@@ -211,6 +211,19 @@ pub async fn run() -> io::Result<()> {
         }
     }
 
+    // The tool server (feature 034): a loopback MCP endpoint every bound AI session reaches with its
+    // own credential. A bind failure is non-fatal — sessions start unbound, each logging why (FR-005).
+    match crate::mcp::server::ToolServer::bind(crate::mcp::server::default_binding_dir()).await {
+        Ok((tool_server, listener)) => {
+            state.set_tool_server(tool_server);
+            tokio::spawn(crate::mcp::server::serve(listener, Arc::clone(&state)));
+            tracing::info!("tool server listening on loopback");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not bind the tool server; sessions start unbound");
+        }
+    }
+
     // Feature 027: inside a container there is no socket to bind and no host to share one with —
     // the client reaches us over loopback TCP, published from the container (research R1). Checked
     // before socket activation and before the endpoint, because in this placement neither exists:

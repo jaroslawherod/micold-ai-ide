@@ -62,8 +62,8 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | A1 | A session S3 spawned in worktree `b` with a Claude stand-in, no user action, answers `tools/list` and `whoami` over `POST /mcp` with the credential from its own binding file | US1-AS1, FR-001, FR-002, SC-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| A2 | S3's `list_worktrees` returns `default`, `a` and `b` with branch, status and `app_created`, the set the sidebar's snapshot holds | US1-AS2, FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| A3 | S3's `list_sessions` returns S1, S2, S3 with label, AI CLI, lifecycle, activity and worktree, and only S3 has `is_caller: true` | US1-AS3, FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
+| A2 | S3's `list_worktrees` returns `default`, `a` and `b` with branch, status and `app_created`, the set the sidebar's snapshot holds | US1-AS2, FR-008 | example | DONE | `mcp_read_tools.rs::list_worktrees_is_default_then_the_sidebars_set` |
+| A3 | S3's `list_sessions` returns S1, S2, S3 with label, AI CLI, lifecycle, activity and worktree, and only S3 has `is_caller: true` | US1-AS3, FR-008 | example | DONE | `mcp_read_tools.rs::list_sessions_marks_only_the_caller` |
 | A4 | After bound spawns, fixture `~/.claude.json`, `~/.claude/settings.json`, `<project>/.mcp.json` and `~/.copilot/mcp-config.json` hash identically to before | US1-AS4, FR-003, SC-002 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
 | A5 | A Pi session spawns with exactly its pre-feature argv and one `info` line "no tool server: Pi has no MCP support" (the user-guide half is not testable, see *Out of scope*) | US1-AS5, FR-005, EC-13 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
 | A6 | With `tool_server_enabled = false` a new session spawns unbound with "disabled in settings" logged, and a session bound before the change still answers `whoami` | US1-AS6, FR-004, EC-18 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
@@ -120,19 +120,19 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U17 | The listener's address is `127.0.0.1` with an ephemeral port | FR-001, FR-007 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U18 | A request with no `Authorization` header answers `401` with an empty body | FR-006, SC-006 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U19 | A malformed `Authorization` header answers `401` byte-identical to U18 | FR-006, SC-006 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U20 | An unknown bearer answers `401` byte-identical to U18 | FR-006, SC-006, FR-007 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U21 | `GET /mcp` and `DELETE /mcp` answer `405` | FR-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U22 | Any path other than `/mcp` answers `404` with an empty body | FR-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U23 | A head over 8 KiB answers `431` | FR-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U24 | A body over 1 MiB answers `413` | FR-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U25 | `notifications/initialized` answers `202` with an empty body | FR-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U26 | Two sessions receive different credentials, and each credential's `whoami` names its own session | FR-006, EC-4 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U27 | A credential answers `401` after its session is deleted | FR-006, SC-006, EC-8 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U28 | A fresh `DaemonState` (service restart) answers `401` to every credential issued before it | FR-006, EC-7, EC-8 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
-| U29 | Neither the request body nor the credential appears in the log at any level | FR-006, FR-018 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_endpoint.rs` |
+| U17 | The listener's address is `127.0.0.1` with an ephemeral port | FR-001, FR-007 | example | DONE | `mcp_endpoint.rs::the_listener_is_loopback_with_an_ephemeral_port` |
+| U18 | A request with no `Authorization` header answers `401` with an empty body | FR-006, SC-006 | example | DONE | `mcp_endpoint.rs::a_request_without_authorization_is_refused_with_an_empty_401` |
+| U19 | A malformed `Authorization` header answers `401` byte-identical to U18 | FR-006, SC-006 | example | DONE | `mcp_endpoint.rs::a_malformed_authorization_is_refused_identically` |
+| U20 | An unknown bearer answers `401` byte-identical to U18 | FR-006, SC-006, FR-007 | example | DONE | `mcp_endpoint.rs::an_unknown_bearer_is_refused_identically` |
+| U21 | `GET /mcp` and `DELETE /mcp` answer `405` | FR-001 | example | DONE | `mcp_endpoint.rs::get_and_delete_on_mcp_are_method_not_allowed` |
+| U22 | Any path other than `/mcp` answers `404` with an empty body | FR-001 | example | DONE | `mcp_endpoint.rs::any_other_path_is_not_found_with_an_empty_body` |
+| U23 | A head over 8 KiB answers `431` | FR-001 | example | DONE | `mcp_endpoint.rs::a_head_over_8_kib_is_refused_with_431` |
+| U24 | A body over 1 MiB answers `413` | FR-001 | example | DONE | `mcp_endpoint.rs::a_body_over_1_mib_is_refused_with_413` |
+| U25 | `notifications/initialized` answers `202` with an empty body | FR-001 | example | DONE | `mcp_endpoint.rs::the_initialized_notification_is_accepted_with_an_empty_202` |
+| U26 | Two sessions receive different credentials, and each credential's `whoami` names its own session | FR-006, EC-4 | example | DONE | `mcp_endpoint.rs::each_session_gets_its_own_credential_and_is_named_by_it` |
+| U27 | A credential answers `401` after its session is deleted | FR-006, SC-006, EC-8 | example | DONE | `mcp_endpoint.rs::a_deleted_sessions_credential_and_binding_file_are_gone`, `a_worktree_deletes_sessions_lose_their_credentials` |
+| U28 | A fresh `DaemonState` (service restart) answers `401` to every credential issued before it | FR-006, EC-7, EC-8 | example | DONE | `mcp_endpoint.rs::a_restarted_service_accepts_no_earlier_credential` |
+| U29 | Neither the request body nor the credential appears in the log at any level | FR-006, FR-018 | example | DONE | `mcp_endpoint.rs::neither_the_body_nor_the_credential_is_logged` |
 
 ### `crates/micold-daemon/src/platform/{mod,unix,windows}.rs` `write_owner_only` (T006, T009)
 
@@ -272,23 +272,23 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U124 | `whoami` answers the caller's ref, project name and path, hosting worktree ref and AI CLI | FR-008, SC-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U125 | `list_worktrees` lists `default` first | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U126 | A worktree whose directory is gone reports `status: missing` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U127 | A locked worktree reports `status: locked` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U128 | A prunable worktree reports `status: prunable` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U129 | Each worktree row's `session_count` equals the sessions it hosts | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U130 | An assistant-owned worktree is absent without `include_hidden` | EC-10 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U131 | With `include_hidden` it is present with `assistant_owned: true` | EC-10 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U132 | `list_sessions {worktree}` returns only that worktree's sessions | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U133 | `list_sessions {worktree}` with an unknown worktree fails `not_found` | FR-010, EC-2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U134 | A Regular-terminal session is listed with `ai_cli: regular_terminal` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U135 | `get_session` on a `Failed` session includes its `failure_reason`; on any other lifecycle it has none | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U136 | `list_branches` reports a branch checked out in a worktree with that worktree's ref, and a free one with `null` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U137 | `list_branches` reports a remote-tracking branch with `kind: remote` | FR-008 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U138 | An empty project answers `default` and the caller alone as success | EC-1 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U139 | An unknown session ref fails `not_found` | FR-010, EC-2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
-| U140 | A returned worktree path uses the platform's native form (Windows separators on Windows; CI leg evidence) | EC-17 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_tools.rs` |
+| U124 | `whoami` answers the caller's ref, project name and path, hosting worktree ref and AI CLI | FR-008, SC-001 | example | DONE | `mcp_read_tools.rs::whoami_names_the_caller_its_project_worktree_and_cli` |
+| U125 | `list_worktrees` lists `default` first | FR-008 | example | DONE | `mcp_read_tools.rs::list_worktrees_is_default_then_the_sidebars_set` |
+| U126 | A worktree whose directory is gone reports `status: missing` | FR-008 | example | DONE | `mcp_read_tools.rs::a_worktree_whose_directory_is_gone_is_missing` |
+| U127 | A locked worktree reports `status: locked` | FR-008 | example | BLOCKED | none: the daemon never produces `locked` (core `WorktreeStatus` has no locked state); follow-up in the ledger |
+| U128 | A prunable worktree reports `status: prunable` | FR-008 | example | DONE | `mcp_read_tools.rs::a_directory_git_does_not_know_is_prunable` |
+| U129 | Each worktree row's `session_count` equals the sessions it hosts | FR-008 | example | DONE | `mcp_read_tools.rs::each_worktree_counts_the_sessions_it_hosts` |
+| U130 | An assistant-owned worktree is absent without `include_hidden` | EC-10 | example | DONE | `mcp_read_tools.rs::an_assistant_owned_worktree_is_listed_only_with_include_hidden` |
+| U131 | With `include_hidden` it is present with `assistant_owned: true` | EC-10 | example | DONE | `mcp_read_tools.rs::an_assistant_owned_worktree_is_listed_only_with_include_hidden` |
+| U132 | `list_sessions {worktree}` returns only that worktree's sessions | FR-008 | example | DONE | `mcp_read_tools.rs::list_sessions_filters_by_worktree` |
+| U133 | `list_sessions {worktree}` with an unknown worktree fails `not_found` | FR-010, EC-2 | example | DONE | `mcp_read_tools.rs::list_sessions_on_an_unknown_worktree_is_not_found` |
+| U134 | A Regular-terminal session is listed with `ai_cli: regular_terminal` | FR-008 | example | DONE | `mcp_read_tools.rs::a_regular_terminal_session_is_listed_as_such` |
+| U135 | `get_session` on a `Failed` session includes its `failure_reason`; on any other lifecycle it has none | FR-008 | example | DONE | `mcp_read_tools.rs::get_session_reports_a_failure_reason_only_for_a_failed_session` |
+| U136 | `list_branches` reports a branch checked out in a worktree with that worktree's ref, and a free one with `null` | FR-008 | example | DONE | `mcp_read_tools.rs::list_branches_reports_where_each_branch_is_checked_out` |
+| U137 | `list_branches` reports a remote-tracking branch with `kind: remote` | FR-008 | example | DONE | `mcp_read_tools.rs::list_branches_reports_a_remote_tracking_branch_as_remote` |
+| U138 | An empty project answers `default` and the caller alone as success | EC-1 | example | DONE | `mcp_read_tools.rs::an_empty_project_answers_default_and_the_caller_alone` |
+| U139 | An unknown session ref fails `not_found` | FR-010, EC-2 | example | DONE | `mcp_read_tools.rs::an_unknown_or_foreign_session_is_not_found_with_the_same_message` |
+| U140 | A returned worktree path uses the platform's native form (Windows separators on Windows; CI leg evidence) | EC-17 | example | DONE | `mcp_read_tools.rs::a_returned_worktree_path_is_in_the_platforms_native_form` (Windows CI leg) |
 
 ### `crates/micold-daemon/src/ops.rs` extraction (T029, T035)
 

@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M1
-- **Next step**: Unit: implement M1 (T001–T022, T078–T082, T100), gate, reviews, open PR
+- **Next step**: Unit: M1 remaining: T016/T020 spawn binding, T022 docs, T100 real-CLI evidence, then gate, reviews, open PR. Done: T001–T014, T017–T019 and the endpoint (T002, T005, T010); read tools (T015, T021) green except U127, see Follow-ups
 
 ## Pull requests
 
@@ -75,3 +75,5 @@ None.
 
 - Hook receiver's `--settings` token file is written with the default umask, not owner-only (`crates/micold-daemon/src/hooks.rs` `prepare_settings`); outside this feature (research R7).
 - Pi tool-server binding via a `-e` bridge extension (research R4).
+- U127 (`list_worktrees` reports `status: locked`): the daemon cannot produce it. `micold_core::worktree::WorktreeStatus` has no locked state and `wire_worktree_status` never yields `WorktreeStatus::Locked`, so T015/T021 stay unticked on that one behavior. Needs worktree discovery to parse porcelain `locked` (core + sidebar), outside feature 034's files.
+- T002 deviation: the MCP test fixture is included by `#[path = "support/mcp.rs"]` instead of re-exported from `tests/support/mod.rs`, so the framer helpers do not become dead code (a clippy `-D warnings` failure) in the MCP test binaries.
