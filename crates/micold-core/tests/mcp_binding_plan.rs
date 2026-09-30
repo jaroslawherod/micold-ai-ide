@@ -131,6 +131,10 @@ fn each_skip_reason_renders_its_contract_text() {
             SkipReason::WriteFailed("permission denied".to_string()),
             "could not write the binding: permission denied".to_string(),
         ),
+        (
+            SkipReason::UnboundAtStart,
+            "not bound when it started".to_string(),
+        ),
     ];
     for (reason, text) in cases {
         assert_eq!(reason.to_string(), text);

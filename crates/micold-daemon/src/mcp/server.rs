@@ -70,6 +70,11 @@ impl ToolServer {
         self.credentials.session_for(credential)
     }
 
+    /// Whether `session` holds a credential: it was bound when it started and has not been revoked.
+    pub fn is_bound(&self, session: SessionId) -> bool {
+        self.credentials.is_issued(session)
+    }
+
     /// Where `session`'s binding file lives.
     pub fn binding_file(&self, session: SessionId) -> PathBuf {
         self.binding_dir.join(binding_file_name(session))

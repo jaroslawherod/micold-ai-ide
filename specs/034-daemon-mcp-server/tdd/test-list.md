@@ -195,6 +195,9 @@ each group that changes existing code.
 | U69 | When the binding file cannot be written, the session still starts, unbound, with "could not write the binding: …" logged | FR-005 | example | DONE | `mcp_binding_spawn.rs::an_unwritable_binding_starts_the_session_unbound_and_says_so_once` |
 | U70 | Each unbound AI-CLI spawn logs exactly one skip line | FR-005 | example | DONE | `mcp_binding_spawn.rs` (each skip test asserts exactly one line) |
 | U71 | Re-enabling `tool_server_enabled` binds the next spawn again | FR-004 | example | DONE | `crates/micold-daemon/tests/mcp_binding_spawn.rs::turning_the_toggle_back_on_binds_the_next_session_again` |
+| U220 | A session started with the toggle off withdraws the credential and binding file an earlier bound start left (added mid-loop, M2 review A) | FR-004, FR-006 | example | DONE | `mcp_binding_spawn.rs::a_session_restarted_with_the_toggle_off_loses_its_earlier_credential` |
+| U221 | A crash respawn of a session bound at start stays bound after the toggle is turned off (added mid-loop, M2 review A) | FR-004 | example | DONE | `mcp_binding_spawn.rs::a_crash_respawn_keeps_the_binding_after_the_toggle_is_turned_off` |
+| U222 | A crash respawn of a session started unbound stays unbound after the toggle is turned on (added mid-loop, M2 review A) | FR-004 | example | DONE | `mcp_binding_spawn.rs::a_crash_respawn_stays_unbound_after_the_toggle_is_turned_on` |
 
 ### `crates/micold-core/src/settings.rs`, `protocol/{messages,version}.rs` (T023, T026, T049, T053, T062, T067)
 

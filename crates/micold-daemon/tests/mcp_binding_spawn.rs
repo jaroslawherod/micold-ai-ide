@@ -675,3 +675,103 @@ async fn turning_the_toggle_back_on_binds_the_next_session_again() {
     );
     assert!(skip_lines(id).is_empty());
 }
+
+/// Kill `id`'s process and let supervision respawn it (`Restarting`), returning once it has exited.
+async fn crash(state: &DaemonState, id: SessionId) {
+    let pty = state.live_session(id).unwrap();
+    pty.kill().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while pty.is_alive() {
+        assert!(Instant::now() < deadline, "the stand-in never exited");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    state.supervise_exited_sessions();
+}
+
+/// U220 (FR-004, FR-006). Restarting a session with the toggle off is how the user drops its tools
+/// (the user guide says so), so the credential and file its earlier bound start left must go too.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_session_restarted_with_the_toggle_off_loses_its_earlier_credential() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let id = sid(0x34_0073);
+    let state = sandbox.state(vec![claude(0x34_0073, None)]);
+    let addr = serve_tool_server(&state, sandbox.binding_dir()).await;
+    let file = sandbox.binding_dir().join(format!("{}.json", id.0));
+
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    sandbox.launch(AiCli::ClaudeCode, 0).await;
+    let (_, bearer) = binding_of(&file);
+    // The user quits the CLI (Ctrl-D ends the stand-in's `cat` with status 0): a clean exit, so the
+    // session stops rather than being respawned, and the next start is a new one.
+    let pty = state.live_session(id).unwrap();
+    pty.write_input(b"\x04").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while pty.is_alive() {
+        assert!(Instant::now() < deadline, "the stand-in never exited");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    state.supervise_exited_sessions();
+
+    state.set_tool_server_enabled(false).unwrap();
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    sandbox.launch(AiCli::ClaudeCode, 1).await;
+    kill(&state, id);
+
+    let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    assert_eq!(
+        post_mcp(addr, Some(&bearer), ping).await.0,
+        401,
+        "a session started unbound must not keep the credential of its earlier start"
+    );
+    assert!(!file.exists(), "nor the file that holds it");
+}
+
+/// U221 (FR-004). A crash respawn is the same session continuing, not a session started afterwards,
+/// so it keeps the binding it started with when the toggle has since been turned off.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_crash_respawn_keeps_the_binding_after_the_toggle_is_turned_off() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let id = sid(0x34_0074);
+    let state = sandbox.state(vec![claude(0x34_0074, None)]);
+    serve_tool_server(&state, sandbox.binding_dir()).await;
+
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    sandbox.launch(AiCli::ClaudeCode, 0).await;
+    state.set_tool_server_enabled(false).unwrap();
+    crash(&state, id).await;
+    let args = sandbox.launch(AiCli::ClaudeCode, 1).await;
+    kill(&state, id);
+
+    assert_eq!(
+        args.get(args.len().saturating_sub(4)).map(String::as_str),
+        Some("--mcp-config"),
+        "a running session keeps what it started with, across a crash: {args:?}"
+    );
+}
+
+/// U222 (FR-004). The reverse: a session started unbound does not gain the tools because it crashed
+/// after the toggle was turned on.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_crash_respawn_stays_unbound_after_the_toggle_is_turned_on() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let id = sid(0x34_0075);
+    let state = sandbox.state(vec![claude(0x34_0075, None)]);
+    serve_tool_server(&state, sandbox.binding_dir()).await;
+
+    state.set_tool_server_enabled(false).unwrap();
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    sandbox.launch(AiCli::ClaudeCode, 0).await;
+    state.set_tool_server_enabled(true).unwrap();
+    crash(&state, id).await;
+    let args = sandbox.launch(AiCli::ClaudeCode, 1).await;
+    kill(&state, id);
+
+    assert_eq!(
+        args,
+        ["--resume", id.0.to_string().as_str()],
+        "a session started unbound stays unbound across a crash"
+    );
+}
