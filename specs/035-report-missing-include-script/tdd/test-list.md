@@ -152,11 +152,12 @@ Tests in `crates/micold-client/src/main_tests.rs`.
 | U55 | `on_settings_opened` leaves the draft seeded and `script_check` `Pending`, and its job carries the stored path and stored enabled flag with origin `Opened` | FR-006, FR-009 (T1); research R8 | example | PENDING | |
 | U56 | `apply_save` prepares a `Saved` job for the saved path, including when the path did not change | FR-004, FR-009 (T2) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_checks_the_saved_path_even_when_the_path_did_not_change` |
 | U57 | A terminal restart (`TerminalRestartRequested`) makes no probe call | FR-006, SC-004 | example | PENDING | |
-| U58 | After a save with a missing path, the written `Settings` holds the enabled flag, path and timeout as drafted, and nothing else is added for environment-include | FR-010, SC-005 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_writes_only_the_three_environment_include_settings` |
+| U58 | After a save with a missing path, the written `Settings` holds the enabled flag, path and timeout as drafted, and nothing else is added for environment-include | FR-010, SC-005 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_writes_exactly_the_drafted_settings_and_nothing_of_the_check` |
 | U59 | `DaemonMsg::SettingsChanged` with a new path while `settings_draft` is `Some` prepares an `Opened` job for the new path | FR-009, Edge Cases multi-window (T3) | example | PENDING | |
 | U60 | `DaemonMsg::SettingsChanged` while Settings is closed prepares no job: the other side of U59 | FR-006 (T3) | example | PENDING | |
 | U61 | `on_settings_opened` makes no env-include resolver call (`FakeEnvIncludeResolver::calls()` empty) | FR-014 | example | PENDING | |
 | U62 | Across open, check and save from a missing path, no environment-include setting changes other than what the user drafted | FR-008 | example | PENDING | |
+| U64 | A save whose settings write failed prepares no check and posts no path notice: only the failed write is reported (added in M2 after review A) | FR-004 (T2) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_whose_write_failed_posts_no_notice_about_the_path` |
 
 ## Invariants and edge cases still to place
 
