@@ -147,8 +147,8 @@ Not new behaviours; each change was re-run green, and the gate was re-proved aga
 - **Red (T040)**: `hover_row` (`tests/gates/tooltip_clears_its_row.rs`), `right_press_at`
   (`tests/gates/context_menu_anchor.rs`) and `press_at` (`tests/session_start_press.rs`) drop their
   inline loop and local `SETTLE_FRAMES` and call `lay::settle(…, 0..lay::SETTLE_FRAMES, size)`. On
-  the unfixed harness (`cargo test -p micold-client --no-run --test layout_snapshot --test
-  session_start_press`):
+  the unfixed harness (`scripts/build-lock.sh cargo test -p micold-client --no-run --test
+  layout_snapshot --test session_start_press`, in the shared target dir):
 
   ```
   3 error[E0061]: this function takes 6 arguments but 7 arguments were supplied
