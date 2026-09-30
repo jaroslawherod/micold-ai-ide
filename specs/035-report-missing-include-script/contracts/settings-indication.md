@@ -10,14 +10,15 @@ New `Msg` variants, both routed through the existing `Message::Settings` wrapper
 
 ```rust
 /// A check of the stored script path is starting (spec 035 FR-009). Bumps the sequence number.
-ScriptPathCheckStarted { origin: CheckOrigin },
+/// `path` and `enabled` are the stored values it checks.
+ScriptPathCheckStarted { origin: CheckOrigin, path: String, enabled: bool },
 /// A check finished. `result` is `None` for a blank path.
 ScriptPathChecked { seq: u64, origin: CheckOrigin, result: Option<CheckedScriptPath> },
 ```
 
 | # | Given | Message | Then |
 |---|---|---|---|
-| S1 | any | `ScriptPathCheckStarted { origin }` | `script_check_seq += 1`; `script_check = Pending { seq, last }`, where `last` is the previous `Done` answer, if any; if `origin == Saved`, `script_check_save_seq = Some(seq)` |
+| S1 | any | `ScriptPathCheckStarted { origin, path, enabled }` | `script_check_seq += 1`; `script_check = Pending { seq, last }`, where `last` is the previous answer, if any, and only if it has the same `path` and `enabled` (another window's save may have changed them, T3); if `origin == Saved`, `script_check_save_seq = Some(seq)` |
 | S2 | `script_check_seq == seq` | `ScriptPathChecked { seq, result: Some(c) }` | `script_check = Done(c)` |
 | S3 | `script_check_seq == seq` | `ScriptPathChecked { seq, result: None }` | `script_check = Idle` |
 | S4 | `script_check_seq != seq` | `ScriptPathChecked { .. }` | `script_check` unchanged |
@@ -61,7 +62,7 @@ Wording keys:
 | N4 | `Done(NotFound{tilde:false})` | on | other | `Caution("Script not found: P")`, `Note(ON)`, 011(last) |
 | N5 | `Done(NotFound{tilde:true})` | any | any | as N2–N4, with `Note(TILDE)` right after the caution |
 | N6 | `Done(NotReadable)` | off | any | `Caution("Not a readable file: P")`, `Note(OFF)` |
-| N7 | `Done(NotReadable)` | on | any | `Caution("Not a readable file: P")`, `Note(ON)`, 011(last). For a directory, that is 011's non-zero-exit note (Edge Cases: both notes) |
+| N7 | `Done(NotReadable)` | on | any | `Caution("Not a readable file: P")`, `Note(ON)`, 011(last), except that a `MissingScript` line is merged, not added (a path in an unreadable directory: FR-005). For a directory, that is 011's non-zero-exit note (Edge Cases: both notes) |
 | N8 | `Done(Relative)` | any | any | `Note(REL)`, 011(last) |
 | N9 | `Done(Unchecked)` | any | any | `Caution("Couldn't check the script path: P")`, `Note(HUNG)`, 011(last) |
 | N10 | `Done(Present)` | on | `MissingScript` | `Caution("The last attempt could not find the script")`, `Note("P exists now. Save Settings or restart a session to source it.")` (FR-014) |
@@ -86,7 +87,7 @@ Invariants the tests assert:
 `shell::env_include` splits the trigger in two, so tests can run the check without an executor:
 
 1. `prepare_script_path_check(app: &mut App, origin: CheckOrigin) -> ScriptPathCheckJob`:
-   dispatches `Message::Settings(Msg::ScriptPathCheckStarted { origin })`, reads
+   dispatches `Message::Settings(Msg::ScriptPathCheckStarted { origin, path, enabled })` with the stored values, reads
    `seq = app.core.settings.script_check_seq`, and captures `app.env_include_script_path`,
    `app.env_include_enabled` (the stored values, research R8) and `app.caps.script_path_probe()`.
 2. `ScriptPathCheckJob::run(self) -> Message`: `check_bounded(probe, path,

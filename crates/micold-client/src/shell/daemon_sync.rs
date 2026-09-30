@@ -546,6 +546,23 @@ fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::Cat
     app.sandbox.mounts_changed();
 }
 
+/// Adopt the daemon's settings, which it owns, and re-source env-include under them: every cached
+/// directory's snapshot is stale once the enabled/path/timeout settings may have changed. Shared by
+/// `SettingsChanged` and `Welcome`, so a new service-owned setting reaches both.
+fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::messages::DaemonSettings) {
+    app.scrollback_lines = settings.scrollback_lines;
+    app.env_include_enabled = settings.env_include_enabled;
+    app.env_include_script_path = settings.env_include_script_path;
+    app.env_include_timeout_secs = settings.env_include_timeout_secs;
+    // Service-owned, so the daemon's echo is what applies it (feature 026, FR-003). The client's
+    // own write is a courtesy to the next boot; this is the value in force.
+    app.core.session.default_ai_cli = settings.default_ai_cli;
+    app.core.session.pi_activity_component = settings.pi_activity_component;
+    app.env_include_cache.clear();
+    let cwd = default_resolution_cwd(&app.core);
+    refresh_env_include(app, &cwd);
+}
+
 /// Apply a `SettingsChanged` push (this client's own `SettingsSet` echoed back, or another
 /// window's, FR-011), and prepare a check of the stored script path when Settings is showing
 /// (spec 035 T3). Split from [`on_daemon_event`] so a test can run the job it prepared.
@@ -553,18 +570,7 @@ pub(crate) fn on_settings_changed(
     app: &mut App,
     settings: micold_core::protocol::messages::DaemonSettings,
 ) -> Option<crate::shell::env_include::ScriptPathCheckJob> {
-    app.scrollback_lines = settings.scrollback_lines;
-    app.env_include_enabled = settings.env_include_enabled;
-    app.env_include_script_path = settings.env_include_script_path;
-    app.env_include_timeout_secs = settings.env_include_timeout_secs;
-    // Service-owned, so the daemon's echo is what applies it — here and in
-    // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
-    // to the next boot; this is the value in force.
-    app.core.session.default_ai_cli = settings.default_ai_cli;
-    app.core.session.pi_activity_component = settings.pi_activity_component;
-    app.env_include_cache.clear();
-    let cwd = default_resolution_cwd(&app.core);
-    refresh_env_include(app, &cwd);
+    adopt_daemon_settings(app, settings);
     // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
     // holds, so a change to it re-asks every answer. Compared against what the answers were
     // asked under, not against `app`'s fields — this window's own save overwrote those
@@ -1027,15 +1033,7 @@ pub fn on_connected(
     // (FR-012a/FR-012b) — including environment-include, which this client's own
     // boot-time local read may predate (e.g. another window changed it while this one was
     // still starting up). Re-source env-include under the now-authoritative values.
-    app.scrollback_lines = settings.scrollback_lines;
-    app.env_include_enabled = settings.env_include_enabled;
-    app.env_include_script_path = settings.env_include_script_path;
-    app.env_include_timeout_secs = settings.env_include_timeout_secs;
-    app.core.session.default_ai_cli = settings.default_ai_cli;
-    app.core.session.pi_activity_component = settings.pi_activity_component;
-    app.env_include_cache.clear();
-    let cwd = default_resolution_cwd(&app.core);
-    refresh_env_include(app, &cwd);
+    adopt_daemon_settings(app, settings);
     reconcile_catalog(&mut app.core, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on
