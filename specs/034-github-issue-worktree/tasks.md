@@ -199,7 +199,7 @@ matching open issues into the results (US1 AS10, FR-005a).
 - [X] T040 [US1] [A10] In `crates/micold-client/src/ui/worktree_form.rs`, extend the cap caption with "— search also looks on GitHub.", render "Searching GitHub…" and "Search beyond the loaded issues failed — …" + **Retry** under the picker; register the "Issue source Loaded, Searching" covered state in `crates/micold-client/tests/support/covered_states.rs` and regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`.
 - [X] T041 [US1] Add "Searching beyond the 1,000 loaded issues" to `docs/user-guide/worktrees-and-sessions.md`.
 - [X] T077 [US1] [A10] Outer loop green: A10 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T042 [US1] Run quickstart §B6 with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
+- [X] T042 [US1] Run quickstart §B6 with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
 
 **Checkpoint**: US1 complete (AS1–AS10).
 

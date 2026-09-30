@@ -30,3 +30,19 @@ the machine's git config rewrites https://github.com to ssh, so `git remote -v` 
 - D4: the selected source chip has no outline and the unselected ones do, so the selected state is only a faint difference (`t2` state, all screenshots). Check against the design if intended.
 - D5: Type dropdown list is clipped at "ci" with a scrollbar (8 of the types visible); minor.
 - Not run: "no request before choosing" observation (B2), B6, B10–B12, full B13 (light scheme covered only for B1, B9 and the pre-choice caption `b13-caption-light.png`; error + Retry covered in both schemes: B7/B8 dark, B9 light). No clipping or overlap seen at the 520 px dialog width in any capture.
+
+## §B6 — search beyond the 1,000 loaded issues (milestone M3)
+
+Date 2026-09-30, commit c1c43e14, dev build (client + daemon built in one invocation, copied to ~/vp/b6bin; "client attached to daemon" in the daemon log). Private Xvfb :96 + lavapipe, NOT a real display, on a heavily loaded machine (load average ~20), so redraws lag by seconds and screenshots often show a stale frame. Private XDG dirs. Project /tmp/issue-demo (cli/cli, 1,036 open issues). Beyond-cap issue from `gh issue list --search "sort:updated-asc" -L 1`: #925. Also tried #1469 and #2325.
+
+| Criterion | Verdict | Notes / screenshots (evidence/) |
+|---|---|---|
+| 1 Caption | PASS | With the list closed: "Showing the 1,000 most recently updated of 1,036 open issues — search also looks on GitHub." wrapped onto two lines under the Issue field. `b6-caption-dark.png` |
+| 2a "Searching GitHub…" | NOT OBSERVED | Not caught in any frame: typing and redraw lag by seconds under the load, and while the list is open it covers the area under the field, so the line would be hidden by the overlay in any case (see D6). Not a PASS. |
+| 2b Issue appears once | PASS | Typing 925 lists #925 "Editor is not passed to the shell" once (`b6-search-925-dark.png`); typing 1469 lists #1469 once at the top; the list was scrolled to its end (about 14 rows) and no repeat (`b6-search-1469-dark.png`). 2325 gives #2325 first of three rows (`b6-search-2325-dark.png`). |
+| 3 Pick fills fields | PASS | Click on the #1469 row: Ticket = 1469, Name = "Help output just SLIGHTLY wider than 80 characters" (`b6-picked-dark.png`). Enter not tried. |
+| 4 No clip/overlap at 520 px | PASS | Nothing clipped or overlapping in any capture; long rows are ellipsised. |
+
+### B6 observations
+- D6: the results overlay sits directly under the field and covers the caption/searching/failed line while it is open, so the "Searching GitHub…" and failure lines can only be seen when the list is closed or empty. Check whether the line is meant to show with the list open.
+- Not run: failed-search line (network fault not injected for this row); light scheme; Enter to pick.
