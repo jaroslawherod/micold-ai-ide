@@ -251,7 +251,7 @@ per project would bump the user's window).
 ## R10 — Confirmations (FR-014, FR-016 Confirm each send)
 
 **Decision**: the service holds a registry of pending confirmations and pushes them to every
-connected window with two new daemon messages and one client message (protocol 16 → 17 in M5, see
+connected window with two new daemon messages and one client message (protocol 17 → 18 in M5, see
 [contracts/protocol-delta.md](./contracts/protocol-delta.md)). The tool call waits on a oneshot
 channel for at most 60 s. The first answer removes the entry and broadcasts a withdrawal. With no
 client connected the request fails at once with "needs confirmation". Deleting the target or the
@@ -343,7 +343,7 @@ be discarded or garbled while the TUI initialises); *`AwaitingInput`* (never fir
 the spec); *per-project settings* (the spec defines application-wide Settings options).
 
 Each lands with the milestone that first uses it, so each milestone's protocol bump carries only its
-own wire delta (M2: 15 → 16; M5: confirmation messages, 16 → 17; M6: 17 → 18).
+own wire delta (M2: 16 → 17; M5: confirmation messages, 17 → 18; M6: 18 → 19).
 
 ## R14 — Name collision with a user-configured server
 

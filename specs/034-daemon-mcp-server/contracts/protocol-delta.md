@@ -1,7 +1,7 @@
 # Contract: client ↔ service protocol delta
 
 **Feature**: 034-daemon-mcp-server | Base: `specs/010-daemon-session-persistence/contracts/protocol.md`,
-`PROTOCOL_VERSION = 15` (`crates/micold-core/src/protocol/version.rs`)
+`PROTOCOL_VERSION = 16` (`crates/micold-core/src/protocol/version.rs`)
 
 Each milestone that changes the wire bumps `PROTOCOL_VERSION` once and documents the bump in
 `version.rs`'s changelog comment, as every earlier feature did, and updates the pin in
@@ -9,14 +9,14 @@ Each milestone that changes the wire bumps `PROTOCOL_VERSION` once and documents
 in M5. If another feature takes a number
 first, this feature takes the next one.
 
-## §1 M2 — the binding toggle (15 → 16)
+## §1 M2 — the binding toggle (16 → 17)
 
 - `DaemonSettings.tool_server_enabled: bool`
 - `ClientMsg::SettingsSet.tool_server_enabled: Option<bool>`
 
 Applied to sessions spawned afterwards (FR-004). `SettingsChanged` carries it to every window.
 
-## §2 M5 — confirmations (16 → 17)
+## §2 M5 — confirmations (17 → 18)
 
 ```text
 DaemonMsg::ConfirmationRequested {
@@ -38,7 +38,7 @@ ClientMsg::ConfirmationAnswer { id: u64, allow: bool }
   `id`, is ignored. Resolution in any way broadcasts `ConfirmationWithdrawn`.
 - `SendInput` carries no text: the prompt names the target only.
 
-## §3 M6 — cross-session option (17 → 18)
+## §3 M6 — cross-session option (18 → 19)
 
 - `DaemonSettings.cross_session_access: CrossSessionAccess` (`Auto | ConfirmEachSend | Off`)
 - `ClientMsg::SettingsSet.cross_session_access: Option<CrossSessionAccess>`
