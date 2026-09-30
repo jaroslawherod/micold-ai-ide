@@ -1,9 +1,10 @@
 //! The tool catalog and argument validation (feature 034, contracts/mcp-tools.md; U83–U89 for the
-//! read-only tools of milestone M1, U90–U94 for the create tools of milestone M3).
+//! read-only tools of milestone M1, U90–U94 for the create tools of milestone M3, U85/U95/U96 and
+//! the lifecycle tools for milestone M4).
 
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::jsonrpc::{parse, route, Route};
-use micold_core::mcp::tools::{parse_call, Operation, SessionRef, WorktreeRef};
+use micold_core::mcp::tools::{catalog, parse_call, parse_operation, Operation, SessionRef, WorktreeRef};
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
@@ -18,15 +19,25 @@ const READ_TOOLS: [&str; 5] = [
     "get_session",
 ];
 
-/// The tools whose handlers ship by milestone M3, in catalog order.
-const SHIPPED: [&str; 7] = [
+/// The tools whose handlers ship by milestone M4, in catalog order.
+const SHIPPED: [&str; 9] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
     "create_worktree",
+    "rename_worktree",
     "create_session",
+    "start_session",
+];
+
+/// The tools FR-014 classifies as destructive (U85).
+const DESTRUCTIVE: [&str; 4] = [
+    "delete_worktree",
+    "stop_session",
+    "interrupt_session",
+    "delete_session",
 ];
 
 fn tools_list() -> Vec<Value> {
@@ -263,4 +274,133 @@ fn create_session_accepts_exactly_the_three_ai_clis() {
     );
     invalid("create_session", json!({"ai_cli": "pi"}));
     invalid("create_session", json!({"worktree": "feat-x", "prompt": 3}));
+}
+
+const S: &str = "00000000-0000-0000-0000-000000000007";
+
+fn s7() -> SessionRef {
+    SessionRef(Uuid::parse_str(S).unwrap())
+}
+
+fn invalid_any(name: &str, arguments: Value) -> String {
+    let error = parse_operation(name, &arguments).expect_err("must be rejected");
+    assert_eq!(
+        error.category,
+        ErrorCategory::InvalidInput,
+        "{name} {arguments}"
+    );
+    error.message
+}
+
+/// U85: over the whole catalog, including the tools a later milestone ships.
+#[test]
+fn destructive_hint_is_set_on_exactly_the_destructive_tools() {
+    let tools = catalog()["tools"].as_array().unwrap().clone();
+    let destructive: Vec<&str> = tools
+        .iter()
+        .filter(|t| t["annotations"]["destructiveHint"] == json!(true))
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(destructive, DESTRUCTIVE);
+    for tool in &tools {
+        let name = tool["name"].as_str().unwrap();
+        if DESTRUCTIVE.contains(&name) {
+            assert_eq!(tool["annotations"]["readOnlyHint"], json!(false), "{name}");
+        }
+    }
+}
+
+#[test]
+fn a_tool_whose_handler_has_not_shipped_is_unknown() {
+    for name in DESTRUCTIVE {
+        let message = invalid(name, json!({}));
+        assert!(message.contains("unknown tool"), "{name}: {message}");
+    }
+}
+
+#[test]
+fn the_session_lifecycle_tools_take_a_session_id() {
+    for (name, expected) in [
+        ("start_session", Operation::StartSession { session: s7() }),
+        ("stop_session", Operation::StopSession { session: s7() }),
+        (
+            "interrupt_session",
+            Operation::InterruptSession { session: s7() },
+        ),
+        ("delete_session", Operation::DeleteSession { session: s7() }),
+    ] {
+        assert_eq!(
+            parse_operation(name, &json!({"session": S})).unwrap(),
+            expected
+        );
+        invalid_any(name, json!({}));
+        invalid_any(name, json!({"session": "not-a-uuid"}));
+    }
+    assert_eq!(
+        parse_call("start_session", &json!({"session": S})).unwrap(),
+        Operation::StartSession { session: s7() },
+        "start_session ships in M4"
+    );
+}
+
+#[test]
+fn rename_worktree_takes_a_worktree_and_a_trimmed_display_name() {
+    assert_eq!(
+        parse_call(
+            "rename_worktree",
+            &json!({"worktree": "b", "display_name": "  Login fix "})
+        )
+        .unwrap(),
+        Operation::RenameWorktree {
+            worktree: WorktreeRef::Named("b".into()),
+            display_name: "Login fix".into(),
+        }
+    );
+    invalid("rename_worktree", json!({"worktree": "b"}));
+    invalid("rename_worktree", json!({"display_name": "x"}));
+    let message = invalid("rename_worktree", json!({"worktree": "b", "display_name": ""}));
+    assert!(message.contains("empty"), "the dialog's wording: {message}");
+    let message = invalid(
+        "rename_worktree",
+        json!({"worktree": "b", "display_name": "   "}),
+    );
+    assert!(message.contains("whitespace"), "the dialog's wording: {message}");
+}
+
+/// U95
+#[test]
+fn default_is_not_a_worktree_to_rename_or_delete() {
+    let message = invalid(
+        "rename_worktree",
+        json!({"worktree": "default", "display_name": "x"}),
+    );
+    assert!(message.contains("default"), "{message}");
+    let message = invalid_any("delete_worktree", json!({"worktree": "default"}));
+    assert!(message.contains("default"), "{message}");
+}
+
+/// U96
+#[test]
+fn delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default() {
+    assert_eq!(
+        parse_operation("delete_worktree", &json!({"worktree": "b"})).unwrap(),
+        Operation::DeleteWorktree {
+            worktree: WorktreeRef::Named("b".into()),
+            stop_sessions: false,
+            delete_branch: true,
+        }
+    );
+    assert_eq!(
+        parse_operation(
+            "delete_worktree",
+            &json!({"worktree": "b", "stop_sessions": true, "delete_branch": false})
+        )
+        .unwrap(),
+        Operation::DeleteWorktree {
+            worktree: WorktreeRef::Named("b".into()),
+            stop_sessions: true,
+            delete_branch: false,
+        }
+    );
+    invalid_any("delete_worktree", json!({"worktree": "b", "stop_sessions": "yes"}));
 }
