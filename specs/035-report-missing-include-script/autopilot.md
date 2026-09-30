@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M2 code done (T013, T016, T037–T039, T041, T042); gate re-run for T040, then open the M2 PR.
+- **Next step**: M2 PR open; wait for `ci complete`, merge, then M3.
 
 ## Pull requests
 
@@ -58,6 +58,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D23 | 4-M1 | Review B round 1 (conformance) | CHANGES: 1 MAJOR (T033 ticked without the full-suite result in the cycle log; recorded), 2 MINOR (F2 = D21; user guide's Script path bullet now says the report is while the feature is off, until M3). Verify: test-core 1333 passed; features_settings 31 passed; script_path_report 6 passed. | agent-resolved | reviewer subagent |
 | D24 | 4-M1 | Visual pass B1, B2, B3, B7, B8, B12 (T021) | All six pass (dark theme, Xvfb). B12 showed 011's single `Script not found` (a startup resolution had run). Evidence in `visual-pass/`. | agent-resolved | visual-pass skill |
 | D19 | 3-design | TDD plan (after_tasks hook) | `tdd/test-list.md`: 10 acceptance (A1–A10), 63 unit behaviours; outer loop at `App` in `src/main_tests.rs`. Baseline suite green, 3662 passed at 0f7e0c8f. US3's A9/A10 may pass on arrival; T036 records a mutant as their red. | agent-resolved | speckit-tdd-plan |
+| D25 | 4-M2 | Review A round 1 (code-review high) | 8 findings: 5 fixed (a save whose write failed no longer checks or notifies, new test U64; save tests use a fake resolver; U58 test renamed; `save_notice` private; duplicate helper removed), 3 declined (below). | agent-resolved | code-review skill; snapshot 56aff176:e219b7a2 |
+| D26 | 4-M2 | Review B round 1 (conformance) | CLEAN, 3 MINOR, all applied: contract §1 names `save_notice`'s `Option<String>`; mutants recorded for A5 and U56 (cycle 12); ledger next step. Verify: features_settings 39 passed; script_path_report 9 passed. | agent-resolved | reviewer subagent |
+| D28 | 4-M2 | Review A round 2 (sonnet, fix diff) | CLEAN: fixes 1, 4, 5, 7, 8 hold; declines 2, 3, 6 stand. Gate at 07d0a75a: GATE_EXIT=0, 3767 passed. | agent-resolved | reviewer subagent; snapshot 923f9dcb:07d0a75a |
+| D27 | 4-M2 | Visual pass B11 (T042) | PASS: one Info notice `The environment-include script was not found: /tmp/does-not-exist.sh`, not truncated; reopening shows B1's page. Evidence in `visual-pass/B11-*.png`. | agent-resolved | visual-pass skill |
 
 ## Declined review findings
 
@@ -70,6 +74,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | `origin` ignored and `script_check_save_seq` never read | M2 scope (S5–S7, T013/T016); T011/U25 require the field now. |
 | M1 | A | `~\` and bare `~` on Unix are relative, not tilde | Research R2 and U3: the tilde rule is a string test applied on every OS, so the report is the same everywhere. |
 | M1 | A | `#[allow(clippy::too_many_arguments)]` on `settings_view::view` | Taste; same precedent as `ui::view`. |
+| M2 | A | The save's check probes the client host, not a sandbox container's filesystem | D12, research R1–R4: the check runs in the client on the host, like 011's own Settings resolution; the daemon side is #454, out of scope. |
+| M2 | A | A save's check updates `script_check` after Save closed Settings | Contract S2/S4: only the latest check is shown, every open starts a newer one (T1), and S5 runs whether or not S2/S4 applied. |
+| M2 | A | Early `return` in one `update` arm | Taste: the other arms return `()`; the one arm with outcomes returns them explicitly. |
 
 ## Open escalation
 

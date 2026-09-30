@@ -246,3 +246,10 @@ existed and failed before the implementation.
     (no notice), U56 at `:4368` (origin)
   - the save checks only when the path changed -> U56 failed at `:4358` (no job), A5 at `:4341`
 - commit: 811b8faa
+
+## T040: A5 at the full suite
+
+- `mise run gate` at 07d0a75a -> GATE_EXIT=0; 3767 passed, 0 failed across the workspace;
+  `tests::script_path_report::a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on`
+  (A5) ok, with U56, U58 and U64. (The first gate, at 1b667643, stopped at `cargo fmt --check`;
+  fixed in the `style(035)` commit.)

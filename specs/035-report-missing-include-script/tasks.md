@@ -103,8 +103,8 @@ Run tests with `mise run test-core` (core) and `mise run gate` (everything, in C
 - [X] T016 [US1] [U29] [U30] [U31] [U32] [U33] [U34] [U35] [U36] Implement `save_notice(&CheckedScriptPath) -> String` and the notification step S5–S7 in `update` in `crates/micold-client/src/features/settings.rs`, returning `crate::features::notifications::info(save_notice(&c))`, never calling `State::notify_info` (makes T013 green).
 - [X] T038 [US1] [U56] [A5] Start a check (`run_script_path_check(prepare_script_path_check(app, CheckOrigin::Saved))`) from `apply_save` (origin `Saved`, after the write, 011's `refresh_env_include` and `Msg::Saved`, batched with the survival task through `Task::batch`) in `crates/micold-client/src/shell/persist.rs` (makes T037 green).
 - [X] T041 [US1] Update `docs/user-guide/settings.md` (FR-013): the save-time notification. Saving always goes through, and a save that leaves a missing or unreadable path posts a notice naming it.
-- [ ] T040 [US1] [A5] Confirm A5 from T039 is green with the full suite (`mise run gate`), and record the result in `specs/035-report-missing-include-script/tdd/cycle-log.md`.
-- [ ] T042 [US1] Run quickstart §B step B11 with the `visual-pass` skill. Save the evidence under `specs/035-report-missing-include-script/visual-pass/`.
+- [X] T040 [US1] [A5] Confirm A5 from T039 is green with the full suite (`mise run gate`), and record the result in `specs/035-report-missing-include-script/tdd/cycle-log.md`.
+- [X] T042 [US1] Run quickstart §B step B11 with the `visual-pass` skill. Save the evidence under `specs/035-report-missing-include-script/visual-pass/`.
 
 **Checkpoint (M2)**: US1 acceptance scenarios 1–5 hold.
 
