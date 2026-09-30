@@ -166,15 +166,16 @@ fn the_two_new_refusals_are_distinct_values() {
 /// `ClientMsg::TerminalColorScheme`. And 14 since feature 032 put `SessionLabel::Derived` on
 /// `SessionSummary.title`. And 15 since `029` BUG-001 put the directory on
 /// `ClientMsg::AiCliAvailabilityRequest`, having developed against 13 while 032 took 14. And 16 since
-/// feature 034 added `ClientMsg::RemoteList` / `OperationResult::RemoteList`.
+/// feature 034 added `ClientMsg::RemoteList` / `OperationResult::RemoteList`. And 17 since feature
+/// 034's M2 put `tool_server_enabled` on `DaemonSettings` and `SettingsSet`.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
 /// two builds that disagree will shake hands anyway. Failing here is the reminder — and it worked:
 /// 029 arrived here because of this test, not despite it.
 #[test]
-fn the_protocol_version_is_sixteen() {
-    assert_eq!(PROTOCOL_VERSION, 16);
+fn the_protocol_version_is_seventeen() {
+    assert_eq!(PROTOCOL_VERSION, 17);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts

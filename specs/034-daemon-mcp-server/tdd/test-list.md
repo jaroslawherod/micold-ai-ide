@@ -200,17 +200,17 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U72 | `tool_server_enabled` defaults to `true` | FR-004 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U73 | A settings file written before the field loads `tool_server_enabled = true` | FR-004 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U74 | `tool_server_enabled = false` survives a save/load round trip | FR-004 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U75 | `DaemonSettings` and `SettingsSet` round-trip `tool_server_enabled` | FR-004 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
+| U72 | `tool_server_enabled` defaults to `true` | FR-004 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::the_tool_server_binding_is_on_by_default` |
+| U73 | A settings file written before the field loads `tool_server_enabled = true` | FR-004 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::a_settings_file_written_before_the_toggle_loads_with_the_binding_on` |
+| U74 | `tool_server_enabled = false` survives a save/load round trip | FR-004 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::turning_the_tool_server_binding_off_survives_a_save_and_load` |
+| U75 | `DaemonSettings` and `SettingsSet` round-trip `tool_server_enabled` | FR-004 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs` (`SettingsSet`, `Welcome`, `SettingsChanged` samples) |
 | U76 | `cross_session_access` defaults to `Auto` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
 | U77 | A settings file written before the field loads `Auto` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
 | U78 | `ConfirmEachSend` and `Off` each survive a save/load round trip | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
 | U79 | `DaemonSettings` and `SettingsSet` round-trip `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
 | U80 | `ConfirmationRequested`, `ConfirmationWithdrawn` and `ConfirmationAnswer` round-trip | FR-014 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
 | U81 | `ConfirmOperation::SendInput` has no field that can carry input text | FR-018 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
-| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | PENDING | `crates/micold-core/tests/schema_hash.rs` (existing; pin updated per bump) |
+| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` (pin 17) |
 
 ### `crates/micold-core/src/mcp/tools.rs` catalog and validation (T014, T019, T031, T037, T044, T046, T061, T066)
 

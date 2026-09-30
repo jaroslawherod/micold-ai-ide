@@ -425,6 +425,7 @@ impl ValidSettings {
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
+            tool_server_enabled: true,
             daemon: self.daemon,
         }
     }

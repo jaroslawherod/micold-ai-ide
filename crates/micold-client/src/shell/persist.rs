@@ -260,6 +260,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         daemon,
         default_ai_cli: app.core.session.default_ai_cli,
         pi_activity_component: app.core.session.pi_activity_component,
+        tool_server_enabled: true,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -411,6 +412,7 @@ pub(crate) fn save_and_prepare_check(
             env_include_timeout_secs: Some(settings.env_include_timeout_secs),
             default_ai_cli: Some(settings.default_ai_cli),
             pi_activity_component: Some(settings.pi_activity_component),
+            tool_server_enabled: None,
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
@@ -849,6 +851,7 @@ mod tests {
             daemon: Default::default(),
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: false,
+            tool_server_enabled: true,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

@@ -155,6 +155,7 @@ impl Catalog {
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
             default_ai_cli: self.settings.default_ai_cli,
             pi_activity_component: self.settings.pi_activity_component,
+            tool_server_enabled: self.settings.tool_server_enabled,
         }
     }
 
