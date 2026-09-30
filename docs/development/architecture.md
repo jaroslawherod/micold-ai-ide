@@ -267,8 +267,9 @@ Adding one costs **a trait and a fake in the core, one line in the port list, on
 ### 1. Declare the trait in the core, beside what it is about
 
 `micold-core/src/git.rs` holds `Git`; `env_include.rs` holds `EnvIncludeResolver`; `os_theme.rs`
-holds `OsThemeProbe`; `script_path_check.rs` holds `ScriptPathProbe`. Not a `ports/` directory — a capability lives with the domain it serves, for
-the same reason a feature's types live with the functions over them.
+holds `OsThemeProbe`; `script_path_check.rs` holds `ScriptPathProbe`. Not a `ports/` directory — a
+capability lives with the domain it serves, for the same reason a feature's types live with the
+functions over them.
 
 **Narrow, and the test is stated rather than judged.**
 `specs/021-mvu-slice-architecture/contracts/service-capabilities.md`: *if a test must implement a

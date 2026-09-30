@@ -359,3 +359,22 @@ existed and failed before the implementation.
 - green: no production change. After restoring every mutant: 19 passed.
 - refactor: none (one unneeded `mut` removed from the test helper).
 - commit: see T036 entry
+
+## Cycle 16a (M4): review A on A9, A10, U62
+
+- Cycle 16's commit is 3320e6e4; its mutant line numbers are as of that commit (before the fmt
+  commit a717c164 shifted them).
+- tests changed (review A): A9 installs its own `File` probe and asserts it probed the typed path
+  once; A9 and A10 reopen Settings and assert the page has no lines; the fixture asserts opening
+  posts nothing; U62 drafts a timeout of 9 and asserts it applied while the path and flag stay.
+- mutants re-run on the revised tests (`scripts/build-lock.sh cargo test -p micold-client --bin
+  micold-ai-ide script_path_report`), each applied alone and restored:
+  - `(written && false).then(..)` in `save_and_prepare_check` -> A9 panicked at
+    `main_tests.rs:4684:9`, A10 at `main_tests.rs:4726:9`; 15 passed, 4 failed.
+  - `None => settings.script_check.clone()` in `on_script_path_checked` -> A10 panicked at
+    `main_tests.rs:4726:9`; 18 passed, 1 failed.
+  - `app.env_include_enabled = false;` in `open_settings` -> U62 panicked at
+    `main_tests.rs:4761:9`; 15 passed, 4 failed.
+  - `app.env_include_timeout_secs = valid.env_include_timeout_secs;` dropped from
+    `save_and_prepare_check` -> U62 panicked at `main_tests.rs:4785:9`; 18 passed, 1 failed.
+- green after restoring: 19 passed.
