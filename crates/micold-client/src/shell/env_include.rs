@@ -23,9 +23,15 @@
 //! `env_include_last_outcome` — no new attempt was made, so there is no new outcome to report.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
-use micold_client::app::State;
+use iced::Task;
+use micold_client::app::{Message, State};
+use micold_client::features::settings::{CheckOrigin, Msg as SettingsMsg};
+use micold_core::script_path_check::{
+    check_bounded, CheckedScriptPath, ScriptPathProbe, ScriptPathState, SCRIPT_PATH_CHECK_BOUND,
+};
 use micold_core::env_include::{self, EnvIncludeResolver, EnvIncludeSnapshot};
 
 use crate::{session_cwd_mode_and_active_shell, App};
@@ -87,22 +93,77 @@ pub(crate) fn refresh_env_include(app: &mut App, cwd: &Path) {
 }
 
 /// One check of the stored script path, captured and ready to run off the UI thread (spec 035,
-/// contracts/settings-indication.md §3). Stub until T017.
-pub(crate) struct ScriptPathCheckJob;
+/// contracts/settings-indication.md §3).
+///
+/// Everything it needs is copied out of `App` when it is prepared, so running it touches no UI
+/// state: the stored path exactly as stored, the stored enabled flag at the start (research R8),
+/// and the probe. Tests call [`ScriptPathCheckJob::run`] directly; the app runs it through
+/// [`start_script_path_check`].
+pub(crate) struct ScriptPathCheckJob {
+    seq: u64,
+    origin: CheckOrigin,
+    path: String,
+    enabled: bool,
+    probe: Arc<dyn ScriptPathProbe + Send + Sync>,
+}
 
 impl ScriptPathCheckJob {
-    /// Run the check and say what it found. Stub until T017.
-    pub(crate) fn run(self) -> micold_client::app::Message {
-        todo!("T017")
+    /// Run the check, bounded by [`SCRIPT_PATH_CHECK_BOUND`] (FR-006), and report it as the
+    /// settings reducer's `ScriptPathChecked`. Blocks for at most the bound.
+    pub(crate) fn run(self) -> Message {
+        let state = check_bounded(self.probe, self.path.clone(), SCRIPT_PATH_CHECK_BOUND);
+        let result = state.map(|state| CheckedScriptPath {
+            path: self.path,
+            enabled: self.enabled,
+            state,
+        });
+        Message::Settings(SettingsMsg::ScriptPathChecked {
+            seq: self.seq,
+            origin: self.origin,
+            result,
+        })
+    }
+
+    /// What to report when the check's task itself was lost (a `JoinError`): the path could not
+    /// be checked, which is what the user can act on.
+    fn unchecked(seq: u64, origin: CheckOrigin, path: String, enabled: bool) -> Message {
+        Message::Settings(SettingsMsg::ScriptPathChecked {
+            seq,
+            origin,
+            result: Some(CheckedScriptPath {
+                path,
+                enabled,
+                state: ScriptPathState::Unchecked,
+            }),
+        })
     }
 }
 
-/// Start a check of the stored script path. Stub until T017.
-pub(crate) fn prepare_script_path_check(
-    _app: &mut App,
-    _origin: micold_client::features::settings::CheckOrigin,
-) -> ScriptPathCheckJob {
-    todo!("T017")
+/// Mark a check of the stored script path as started and capture it as a job (spec 035,
+/// contracts/settings-indication.md §3). Only Settings opening (and, from M2, a save) calls this;
+/// never a session launch or a terminal restart (FR-006, SC-004).
+pub(crate) fn prepare_script_path_check(app: &mut App, origin: CheckOrigin) -> ScriptPathCheckJob {
+    app.core
+        .update(Message::Settings(SettingsMsg::ScriptPathCheckStarted { origin }));
+    ScriptPathCheckJob {
+        seq: app.core.settings.script_check_seq,
+        origin,
+        path: app.env_include_script_path.clone(),
+        enabled: app.env_include_enabled,
+        probe: app.caps.script_path_probe(),
+    }
+}
+
+/// Run a prepared check on a blocking worker, so the page never waits for it (FR-006). Its answer
+/// arrives as `ScriptPathChecked`.
+pub(crate) fn run_script_path_check(job: ScriptPathCheckJob) -> Task<Message> {
+    let (seq, origin, path, enabled) = (job.seq, job.origin, job.path.clone(), job.enabled);
+    Task::perform(
+        async move { tokio::task::spawn_blocking(move || job.run()).await },
+        move |joined| {
+            joined.unwrap_or_else(|_| ScriptPathCheckJob::unchecked(seq, origin, path, enabled))
+        },
+    )
 }
 
 #[cfg(test)]

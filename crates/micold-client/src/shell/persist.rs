@@ -218,6 +218,16 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// Open Settings: let the reducer show the overlay, then seed the draft with the current
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
+    let job = open_settings(app);
+    // The page is already seeded; the check runs off the UI thread and its answer lands a moment
+    // later (spec 035 FR-006).
+    crate::shell::env_include::run_script_path_check(job)
+}
+
+/// Open Settings and prepare its script path check (spec 035 T1): seed the draft, then capture the
+/// check of the stored path as a job. Split from [`on_settings_opened`] so a test can run the job
+/// it prepared synchronously.
+pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptPathCheckJob {
     app.core.update(Message::Settings(SettingsMsg::Opened));
     // Refresh the home directory's answer here, on the named event research R11 asks for --
     // "when the choice is offered" -- rather than per frame (feature 026, T014a; contract C1 A2).
@@ -265,12 +275,10 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
         .locations()
         .and_then(|l| l.unshared_sign_in.clone());
     app.core.settings.settings_draft = Some(draft);
-    Task::none()
-}
-
-/// Open Settings and prepare its script path check (spec 035 T1). Stub until T018.
-pub(crate) fn open_settings(_app: &mut App) -> crate::shell::env_include::ScriptPathCheckJob {
-    todo!("T018")
+    crate::shell::env_include::prepare_script_path_check(
+        app,
+        micold_client::features::settings::CheckOrigin::Opened,
+    )
 }
 
 /// Save Settings: validate every section together; on success persist + apply + refresh + close,
