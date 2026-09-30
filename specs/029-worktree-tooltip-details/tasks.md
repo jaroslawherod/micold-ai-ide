@@ -229,3 +229,28 @@ falsely ticked (BUG-001 § tasks.md).
 (Principle I).
 
 **Bugfix**: 2026-09-27 — BUG-001 Added T031–T036. No task reopened. See `bugs/BUG-001.md`.
+
+## Bugfix BUG-002 — the gates restated the minimum window size
+
+The gates that check the interface at the smallest supported window restated 640×480 because
+`MIN_WINDOW_SIZE` was private to the binary's `shell` module, so a change to the minimum window
+would not move them (GitHub issue #431). See `bugs/BUG-002.md` and plan.md § Bugfix BUG-002.
+
+**No task reopened.** T032 allowed restating the value as a literal, so it is not falsely ticked
+(BUG-002 § tasks.md).
+
+- [ ] T037 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
+  replace the `SMALLEST_WINDOW` literal (and its "restated because…" doc comment) with
+  `micold_client::app::MIN_WINDOW_SIZE`, and in `crates/micold-client/tests/known_projects_reflow.rs`
+  take the minimum-window entry of `WIDTHS` from `MIN_WINDOW_SIZE.width`. Run it on the unfixed tree
+  and record that the test crates fail to compile because the item does not exist in
+  `micold_client::app`
+- [ ] T038 Move `MIN_WINDOW_SIZE`, its doc comment and its compile-time floor `assert!` from
+  `crates/micold-client/src/shell/startup.rs` to `pub const` in `crates/micold-client/src/app.rs`
+  beside `SIDEBAR_MIN_WIDTH`; `shell/startup.rs` imports it (window settings and its unit test).
+  Value unchanged (640×480); T037's tests build and pass
+- [ ] T039 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
+
+**Order**: T037 → T038 → T039. T037 must be seen failing before T038 starts (Principle I).
+
+**Bugfix**: 2026-09-30 — BUG-002 Added T037–T039. No task reopened. See `bugs/BUG-002.md`.

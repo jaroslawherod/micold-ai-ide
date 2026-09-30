@@ -205,3 +205,25 @@ sits entirely inside that split — nothing new is introduced to hold it.
   the change is in the shared component. No other principle affected.
 
 **Bugfix**: 2026-09-27 — BUG-001 Updated from bugfix patch.
+
+## Bugfix BUG-002 — the gates read the minimum window size instead of restating it
+
+- **Where the constant lives: the library.** `MIN_WINDOW_SIZE` moves from the private
+  `crates/micold-client/src/shell/startup.rs:64` (module `shell` is compiled only into the binary,
+  `src/main.rs:15`) to `pub const MIN_WINDOW_SIZE` in `crates/micold-client/src/app.rs`, beside
+  `SIDEBAR_MIN_WIDTH`, with its doc comment and its compile-time floor `assert!`.
+  `shell/startup.rs` imports it for `window_settings` and its unit test; the value (640×480) and the
+  window's behaviour are unchanged.
+- **The gates read it.** `tests/gates/tooltip_clears_its_row.rs` drops its `SMALLEST_WINDOW`
+  literal (and the doc comment that explains the restatement) and uses `MIN_WINDOW_SIZE`;
+  `tests/known_projects_reflow.rs` takes its minimum-window width from `MIN_WINDOW_SIZE.width`.
+  The `(640, 480)` click points in `tests/switcher_forget_menu.rs` and the 640-wide records in
+  `tests/layout_record_format.rs` are not the window's minimum and stay literals.
+- **Test layer.** No new test: the regression check is compile-level. With the gates naming
+  `micold_client::app::MIN_WINDOW_SIZE`, the test crates do not build on `origin/main` (E0425 /
+  E0432, no such item), and build once the constant is exported. The existing gate cases then run
+  unchanged at the same 640×480.
+- **Constitution**: I — the gates' use of the constant is written and seen failing to compile
+  before the constant moves. No other principle affected (no user-visible change, no docs change).
+
+**Bugfix**: 2026-09-30 — BUG-002 Updated from bugfix patch.
