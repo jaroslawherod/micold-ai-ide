@@ -223,12 +223,12 @@ docs/user-guide/{agent-tools.md (NEW), settings.md, sandboxed-daemon.md}, docs/S
 
 1. **M1 — US1 s1–s5**: listener, credentials, binding for Claude and Copilot, the read-only tools,
    user guide page.
-2. **M2 — US1 s6**: the FR-004 toggle (protocol 15 → 16).
+2. **M2 — US1 s6**: the FR-004 toggle (protocol 16 → 17).
 3. **M3 — US2**: `ops.rs` extraction, `create_worktree`, `create_session` with prompt.
 4. **M4 — US3 s1, s6**: `start_session`, `rename_worktree`, Default-session refusals.
 5. **M5 — US3 s2–s5**: `stop_session`, confirmation registry and dialog, destructive tools
-   (protocol 16 → 17).
-6. **M6 — US4**: `read_session_output`, `send_session_input`, the FR-016 option (17 → 18).
+   (protocol 17 → 18).
+6. **M6 — US4**: `read_session_output`, `send_session_input`, the FR-016 option (18 → 19).
 7. **M7 — Polish**: audit-log conformance, sandbox real-runtime test, SC-004 timing, §B evidence.
 
 ## Risks
