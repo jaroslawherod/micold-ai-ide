@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 
 use micold_core::github::{
-    list_args, parse_list_page, GithubRepo, Issue, IssueLoadError, LIST_QUERY,
+    list_args, parse_list_page, parse_search, search_args, GithubRepo, Issue, IssueLoadError,
+    LIST_QUERY, SEARCH_QUERY, SEARCH_WITH_NUMBER_QUERY,
 };
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -137,5 +138,151 @@ fn list_args_send_only_the_repository() {
         values.len(),
         3,
         "query, owner and name are the only values sent: {values:?}"
+    );
+}
+
+// --- M3: the search beyond the loaded issues (FR-005a) -------------------------------------
+
+fn numbers(issues: &[Issue]) -> Vec<u64> {
+    issues.iter().map(Issue::number).collect()
+}
+
+/// U66 — the search hits and the numbered lookup are one result: open only, each number once, in
+/// the order GitHub gave them (search first).
+#[test]
+fn search_unions_and_dedupes() {
+    let found = parse_search(&fixture("search_number.json")).expect("a well-formed answer");
+    assert_eq!(
+        numbers(&found),
+        [1200, 1300],
+        "#1200 came from both the search and the lookup, and is held once"
+    );
+    assert_eq!(found[0].title(), "Beyond the cap");
+    assert_eq!(found[0].labels(), ["enhancement"]);
+    assert_eq!(found[0].updated_at(), "2026-01-04T00:00:00Z");
+
+    let plain = parse_search(
+        br#"{"data":{"search":{"nodes":[
+        {"number":5,"title":"Five","updatedAt":"t","state":"OPEN","labels":{"nodes":[]}},
+        {"number":6,"title":"Six","updatedAt":"t","state":"CLOSED","labels":{"nodes":[]}}]}}}"#,
+    )
+    .expect("an answer without a lookup");
+    assert_eq!(
+        numbers(&plain),
+        [5],
+        "a closed search hit is not an open issue"
+    );
+}
+
+/// U67 — a number that is a pull request's, or that does not exist, is "no such open issue": the
+/// search hits stay and no error is raised. A closed numbered issue is dropped. Any other error is
+/// classified.
+#[test]
+fn a_missing_number_is_not_an_error() {
+    assert_eq!(
+        numbers(&parse_search(&fixture("search_pr_number.json")).expect("hits kept")),
+        [4312],
+        "a pull request's number keeps the search hits; the empty node is the pull request"
+    );
+    assert_eq!(
+        parse_search(&fixture("search_missing_number.json")).expect("no error"),
+        [],
+        "a number with no issue behind it is simply not found"
+    );
+    assert_eq!(
+        numbers(&parse_search(&fixture("search_closed_number.json")).expect("no error")),
+        [1500],
+        "the lookup can answer a closed issue; it is not open, so it is dropped"
+    );
+
+    assert_eq!(
+        parse_search(
+            br#"{"data":{"search":null,"repository":null},
+                 "errors":[{"type":"NOT_FOUND","path":["repository"],"message":"no repo"}]}"#
+        )
+        .unwrap_err(),
+        IssueLoadError::NoAccess,
+        "NOT_FOUND anywhere else is the repository the sign-in cannot see"
+    );
+    assert_eq!(
+        parse_search(
+            br#"{"data":{"search":{"nodes":[]},"repository":{"issue":null}},
+                 "errors":[{"type":"NOT_FOUND","path":["repository","issue"]},
+                           {"type":"RATE_LIMITED","message":"slow down"}]}"#
+        )
+        .unwrap_err(),
+        IssueLoadError::RateLimited,
+        "only a sole NOT_FOUND on the lookup is forgiven"
+    );
+    assert!(
+        matches!(parse_search(b"not json"), Err(IssueLoadError::Other(_))),
+        "anything that is not the expected JSON is `Other`"
+    );
+    assert!(
+        matches!(
+            parse_search(br#"{"data":{}}"#),
+            Err(IssueLoadError::Other(_))
+        ),
+        "JSON without the search is `Other`"
+    );
+}
+
+/// U68 — what is sent to search: the text inside `q`, and — only for `N` or `#N` fitting GraphQL's
+/// `Int` — the repository and the number for the lookup (FR-025, research R2).
+#[test]
+fn search_args_send_only_the_query() {
+    let o_r = repo("https://github.com/o/r");
+    let head = ["api", "graphql", "--hostname", "github.com", "-f"];
+    assert_eq!(
+        search_args(&o_r, "crash on open"),
+        [
+            &head[..],
+            &[
+                &format!("query={SEARCH_QUERY}"),
+                "-f",
+                "q=repo:o/r is:issue is:open crash on open",
+            ][..],
+        ]
+        .concat(),
+        "plain text: one variable, the search query"
+    );
+
+    for typed in ["4312", "#4312"] {
+        assert_eq!(
+            search_args(&o_r, typed),
+            [
+                &head[..],
+                &[
+                    &format!("query={SEARCH_WITH_NUMBER_QUERY}"),
+                    "-f",
+                    &format!("q=repo:o/r is:issue is:open {typed}"),
+                    "-f",
+                    "owner=o",
+                    "-f",
+                    "name=r",
+                    "-F",
+                    "n=4312",
+                ][..],
+            ]
+            .concat(),
+            "{typed}: the number is looked up as well"
+        );
+    }
+
+    let too_big = search_args(&o_r, "2147483648");
+    assert_eq!(
+        too_big[5],
+        format!("query={SEARCH_QUERY}"),
+        "a number past Int's range cannot be an issue number"
+    );
+    assert!(!too_big.iter().any(|a| a == "-F"));
+    assert_eq!(
+        search_args(&o_r, "2147483647")[5],
+        format!("query={SEARCH_WITH_NUMBER_QUERY}")
+    );
+    assert_eq!(
+        search_args(&o_r, "42 crash")[5],
+        format!("query={SEARCH_QUERY}"),
+        "a number followed by words is text"
     );
 }

@@ -6,10 +6,19 @@
 //!
 //! # When GitHub is contacted, and why only then
 //!
-//! [`start_issue_load`] is the only path to the issue source, and it has exactly two callers: the
-//! reducer accepting `SourceChanged(Issue)`, and the reducer accepting `IssueRetry` from a failed
-//! load (FR-003). Opening the form asks the daemon for the remotes, a local read, and nothing
-//! else. `tests/issues_are_requested_only_on_named_events.rs` counts the callers.
+//! [`start_issue_load`] and [`start_issue_search`] are the only paths to the issue source. The load
+//! runs when the reducer accepts `SourceChanged(Issue)` or `IssueRetry` from a failed load; the
+//! search beyond the loaded issues runs when the debounce after a keystroke on a capped list ends
+//! with the reducer accepting `IssueSearchDue`, or on `IssueRetry` from a failed search (FR-003,
+//! FR-005a). Opening the form asks the daemon for the remotes, a local read, and nothing else.
+//! `tests/issues_are_requested_only_on_named_events.rs` counts the callers.
+//!
+//! # Why the search waits
+//!
+//! GitHub's search API allows 30 requests a minute, so a search waits [`ISSUE_SEARCH_DEBOUNCE`]
+//! after the last keystroke (research R9). The local ranking does not wait: the reducer re-ranks
+//! the held issues on every keystroke. Every keystroke hands out a fresh seq, so an older
+//! keystroke's timer, or an older search's answer, finds nothing to apply to (FR-007a).
 //!
 //! # Why the environment include is resolved inside the load
 //!
@@ -30,6 +39,9 @@ use micold_core::protocol::messages::ClientMsg;
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
 use crate::App;
+
+/// How long typing must pause before the search beyond the loaded issues runs (research R9).
+pub(crate) const ISSUE_SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// Why the remotes could not be read while the session service is unreachable.
 pub(crate) const NOT_CONNECTED: &str = "not connected to the session service";
@@ -74,12 +86,61 @@ pub fn on_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
     }
 }
 
-/// Retry a failed load, when the reducer accepted the retry.
+/// Retry a failed load or a failed search, when the reducer accepted the retry.
 pub fn on_issue_retry(app: &mut App) -> Task<Message> {
     let before = app.core.worktree_form.issue_request_seq;
     app.core.update(Message::WorktreeForm(FormMsg::IssueRetry));
     match newly_awaited(app, before) {
         Some(retried) => start_issue_load(app, retried),
+        None => retry_issue_search(app, before),
+    }
+}
+
+/// Run the search again when the retry was the failed search's.
+fn retry_issue_search(app: &mut App, before: u64) -> Task<Message> {
+    match app
+        .core
+        .worktree_form
+        .awaited_issue_search()
+        .filter(|seq| *seq > before)
+    {
+        Some(retried) => start_issue_search(app, retried),
+        None => Task::none(),
+    }
+}
+
+/// The issue search text changed. When the reducer left a search pending, wait out the debounce.
+pub fn on_issue_query_changed(app: &mut App, text: String) -> Task<Message> {
+    let before = app.core.worktree_form.issue_request_seq;
+    app.core
+        .update(Message::WorktreeForm(FormMsg::IssueQueryChanged(text)));
+    match app
+        .core
+        .worktree_form
+        .pending_issue_search()
+        .filter(|seq| *seq > before)
+    {
+        // Built inside the future: the timer needs the runtime the task runs on.
+        Some(seq) => Task::perform(
+            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
+            move |()| Message::WorktreeForm(FormMsg::IssueSearchDue { seq }),
+        ),
+        None => Task::none(),
+    }
+}
+
+/// The debounce ended: search, when this was still the pending keystroke's.
+pub fn on_issue_search_due(app: &mut App, seq: u64) -> Task<Message> {
+    let was_pending = app.core.worktree_form.pending_issue_search() == Some(seq);
+    app.core
+        .update(Message::WorktreeForm(FormMsg::IssueSearchDue { seq }));
+    match app
+        .core
+        .worktree_form
+        .awaited_issue_search()
+        .filter(|awaited| was_pending && *awaited == seq)
+    {
+        Some(due) => start_issue_search(app, due),
         None => Task::none(),
     }
 }
@@ -186,6 +247,27 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
                 result,
                 resolved_env,
             })
+        },
+    )
+}
+
+/// Search GitHub beyond the loaded issues on a blocking thread, answering `IssueSearched { seq }`.
+///
+/// The source runs the `gh` the load located: a search never looks for `gh` again (research R3).
+fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
+    let Some((repo, text, gh)) = app.core.worktree_form.issue_search_request() else {
+        return Task::none();
+    };
+    let source = app.caps.issue_tooling().source;
+    Task::perform(
+        async move { tokio::task::spawn_blocking(move || source(gh).search_open(&repo, &text)).await },
+        move |joined| {
+            let result = joined.unwrap_or_else(|stopped| {
+                Err(IssueLoadError::Other(format!(
+                    "the issue search stopped unexpectedly: {stopped}"
+                )))
+            });
+            Message::WorktreeForm(FormMsg::IssueSearched { seq, result })
         },
     )
 }

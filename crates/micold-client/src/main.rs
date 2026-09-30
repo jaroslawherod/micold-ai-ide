@@ -663,13 +663,20 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::daemon_sync::on_add_worktree_overwrite_confirmed(app)
         }
         // Feature 034: the issue source. Opening asks the daemon for the remotes; choosing the
-        // source or retrying runs the load; a row pick resolves to its issue; a result caches the
+        // source or retrying runs the load; a keystroke on a capped list waits out the debounce and
+        // then searches GitHub; a row pick resolves to its issue; a result caches the
         // environment-include snapshot it resolved.
         Message::WorktreeForm(FormMsg::Opened) => shell::issues::on_form_opened(app),
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::issues::on_source_changed(app, source)
         }
         Message::WorktreeForm(FormMsg::IssueRetry) => shell::issues::on_issue_retry(app),
+        Message::WorktreeForm(FormMsg::IssueQueryChanged(text)) => {
+            shell::issues::on_issue_query_changed(app, text)
+        }
+        Message::WorktreeForm(FormMsg::IssueSearchDue { seq }) => {
+            shell::issues::on_issue_search_due(app, seq)
+        }
         Message::WorktreeForm(FormMsg::IssueRowPicked(index)) => {
             shell::issues::on_issue_row_picked(app, index)
         }

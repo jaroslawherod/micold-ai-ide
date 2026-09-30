@@ -343,7 +343,9 @@ repository's remotes: …".
 service. Before you choose the chip, the line under the chips names the repository it would read:
 "GitHub issue reads open issues of *owner/name* from GitHub." Only choosing the chip, or pressing
 **Retry** after a failure, asks GitHub for the repository's open issues. The request carries the
-repository's owner and name and nothing else from your project. The same notice stays at the top of
+repository's owner and name and nothing else from your project. When more than 1,000 issues are
+open, typing in **Issue** also searches GitHub (see below); that request carries the text you typed
+as well. The same notice stays at the top of
 the issue list while the source is chosen.
 
 **The list.** Issues are listed most recently updated first, each as its number, title and labels.
@@ -351,7 +353,8 @@ Type in **Issue** to narrow the list by number, by a word of the title, or by a 
 arrow keys and Enter to pick without leaving the field. The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
 fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a
-line under the list says "Showing the 1,000 most recently updated of *N* open issues." While the
+line under the list says "Showing the 1,000 most recently updated of *N* open issues — search also
+looks on GitHub." While the
 list loads, you can switch back to another chip or fill the fields in yourself. A repository with no
 open issues says "*owner/name* has no open issues."
 
@@ -366,6 +369,24 @@ open issues says "*owner/name* has no open issues."
 | "GitHub's rate limit was reached. Wait a minute, then retry." | Wait a minute, then retry. |
 | "GitHub didn't answer within 10 seconds." | Retry. If it keeps happening, check `gh` works from a terminal. |
 | "Couldn't read issues: …" | Read the detail `gh` reported, then retry. |
+
+### Searching beyond the 1,000 loaded issues
+
+When the repository has more open issues than the 1,000 the form loads, what you type in **Issue**
+is also sent to GitHub's search, so an older issue can still be found — by its number (`4312` or
+`#4312`), a word of its title, or a label. The loaded matches show at once, as always. Once you stop
+typing for a moment (0.3 seconds), "Searching GitHub…" appears under the list, and the open issues
+GitHub finds join the loaded ones. Each issue is listed once, and pull requests and closed issues
+never appear. An issue GitHub matched only in its description or comments is left out, because
+nothing in its row shows why it matched. Pick a found issue like any other.
+
+Each keystroke replaces the previous search, so only the answer for what is typed now is used. When
+every open issue is already loaded, nothing is sent: the search stays on your machine.
+
+If the search fails, the loaded matches stay, and the line under the list says "Search beyond the
+loaded issues failed —" followed by one of the reasons above, with a **Retry** button that runs the
+same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
+retry.
 
 ## Working from an existing branch
 

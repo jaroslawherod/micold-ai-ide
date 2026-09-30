@@ -453,17 +453,21 @@ fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
 
 /// The error a GraphQL `errors[]` array reports, if it has one.
 fn graphql_error(json: &serde_json::Value) -> Option<IssueLoadError> {
-    let first = json["errors"].as_array()?.first()?;
-    Some(match first["type"].as_str() {
+    json["errors"].as_array()?.first().map(graphql_error_of)
+}
+
+/// What one GraphQL `errors[]` entry means for the user.
+fn graphql_error_of(error: &serde_json::Value) -> IssueLoadError {
+    match error["type"].as_str() {
         Some("NOT_FOUND") => IssueLoadError::NoAccess,
         Some("RATE_LIMITED") => IssueLoadError::RateLimited,
         _ => IssueLoadError::Other(
-            first["message"]
+            error["message"]
                 .as_str()
                 .unwrap_or("GitHub reported an error")
                 .to_string(),
         ),
-    })
+    }
 }
 
 /// The arguments after `gh` for one page: only the repository and the cursor leave the machine
@@ -493,6 +497,113 @@ pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
     args
 }
 
+/// The GraphQL document for a search beyond the loaded issues (contracts/github-issue-source.md
+/// §3). One line, like [`LIST_QUERY`].
+pub const SEARCH_QUERY: &str = "query($q: String!) { search(type: ISSUE, query: $q, first: 50) { \
+nodes { ... on Issue { number title updatedAt state labels(first: 20) { nodes { name } } } } } }";
+
+/// [`SEARCH_QUERY`] plus the issue whose number was typed: GitHub's search does not match an issue
+/// by its number (research R2). A second document, because GraphQL rejects a declared variable the
+/// query does not use.
+pub const SEARCH_WITH_NUMBER_QUERY: &str = "query($q: String!, $owner: String!, $name: String!, \
+$n: Int!) { search(type: ISSUE, query: $q, first: 50) { nodes { ... on Issue { number title \
+updatedAt state labels(first: 20) { nodes { name } } } } } repository(owner: $owner, name: $name) \
+{ issue(number: $n) { number title updatedAt state labels(first: 20) { nodes { name } } } } }";
+
+/// The arguments after `gh` for a search beyond the loaded issues: only the typed text and — for a
+/// typed number — the repository and that number leave the machine (FR-025).
+///
+/// `N` or `#N` with `N` fitting GraphQL's `Int` also looks the number up, because search never
+/// matches an issue by its number. The number is the only `-F` (typed) variable; every string stays
+/// `-f` (contracts/github-issue-source.md §3).
+pub fn search_args(repo: &GithubRepo, text: &str) -> Vec<String> {
+    let number = typed_issue_number(text);
+    let query = if number.is_some() {
+        SEARCH_WITH_NUMBER_QUERY
+    } else {
+        SEARCH_QUERY
+    };
+    let mut args: Vec<String> = [
+        "api",
+        "graphql",
+        "--hostname",
+        "github.com",
+        "-f",
+        &format!("query={query}"),
+        "-f",
+        &format!("q=repo:{repo} is:issue is:open {text}"),
+    ]
+    .map(str::to_string)
+    .to_vec();
+    if let Some(n) = number {
+        args.extend([
+            "-f".to_string(),
+            format!("owner={}", repo.owner),
+            "-f".to_string(),
+            format!("name={}", repo.name),
+            "-F".to_string(),
+            format!("n={n}"),
+        ]);
+    }
+    args
+}
+
+/// The issue number `text` names, when it is nothing but `N` or `#N` and `N` fits GraphQL's `Int`.
+fn typed_issue_number(text: &str) -> Option<i32> {
+    let digits = text.trim();
+    let digits = digits.strip_prefix('#').unwrap_or(digits);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+/// Parse `gh api graphql` stdout for [`SEARCH_QUERY`] or [`SEARCH_WITH_NUMBER_QUERY`].
+///
+/// The result is the search hits followed by the looked-up issue, open only, each number once. A
+/// number that is a pull request's or does not exist answers `NOT_FOUND` at
+/// `["repository","issue"]`; that alone is "no such open issue", not a failure. Any other GraphQL
+/// error is classified as [`parse_list_page`] classifies it.
+pub fn parse_search(stdout: &[u8]) -> Result<Vec<Issue>, IssueLoadError> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
+    let lookup_not_found = |error: &serde_json::Value| {
+        error["type"] == "NOT_FOUND" && error["path"] == serde_json::json!(["repository", "issue"])
+    };
+    if let Some(errors) = json["errors"].as_array() {
+        if let Some(other) = errors.iter().find(|e| !lookup_not_found(e)) {
+            return Err(graphql_error_of(other));
+        }
+    }
+    let data = &json["data"];
+    let hits = data["search"]["nodes"]
+        .as_array()
+        .ok_or_else(|| IssueLoadError::Other("GitHub's answer had no search results".into()))?;
+    let mut found: Vec<Issue> = Vec::new();
+    let lookup = &data["repository"]["issue"];
+    for node in hits.iter().chain(lookup.is_object().then_some(lookup)) {
+        // A pull request is an empty node under `... on Issue`; a closed issue is not open.
+        if node["state"] != "OPEN" {
+            continue;
+        }
+        if let Some(issue) = issue_from_node(node) {
+            if !found.iter().any(|held| held.number == issue.number) {
+                found.push(issue);
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// The searched issues the loaded list does not already hold, in GitHub's order (FR-005a
+/// "without duplicates").
+pub fn merge_searched(loaded: &[Issue], searched: Vec<Issue>) -> Vec<Issue> {
+    searched
+        .into_iter()
+        .filter(|issue| !loaded.iter().any(|held| held.number == issue.number))
+        .collect()
+}
+
 /// Open issues the form holds at most (FR-004).
 pub const ISSUE_LOAD_CAP: usize = 1_000;
 
@@ -516,6 +627,10 @@ pub trait IssueSource {
         repo: &GithubRepo,
         cursor: Option<&str>,
     ) -> Result<IssuePage, IssueLoadError>;
+
+    /// Open issues matching `text` on GitHub's side (FR-005a), unfiltered: the caller holds them
+    /// to FR-005's rule.
+    fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError>;
 }
 
 /// Load open issues page by page, up to [`ISSUE_LOAD_CAP`] (contracts/github-issue-source.md §4).
@@ -547,13 +662,15 @@ pub fn load_listing(
     })
 }
 
-/// A scripted [`IssueSource`] for tests: answers each call with the next scripted page or error,
-/// and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
+/// A scripted [`IssueSource`] for tests: answers each call with the next scripted page, search
+/// result or error, and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
 /// [`crate::git::FakeGit`].
 #[derive(Debug, Default)]
 pub struct FakeIssueSource {
     script: std::sync::Mutex<std::collections::VecDeque<Result<IssuePage, IssueLoadError>>>,
     calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+    searches: std::sync::Mutex<std::collections::VecDeque<Result<Vec<Issue>, IssueLoadError>>>,
+    search_calls: std::sync::Mutex<Vec<(String, String)>>,
 }
 
 impl FakeIssueSource {
@@ -572,6 +689,23 @@ impl FakeIssueSource {
     pub fn with_error(self, error: IssueLoadError) -> Self {
         self.lock_script().push_back(Err(error));
         self
+    }
+
+    /// Answer the next unanswered `search_open` call with `result`.
+    pub fn with_search(self, result: Result<Vec<Issue>, IssueLoadError>) -> Self {
+        self.searches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// Every `search_open` call so far, as (`owner/name`, text).
+    pub fn search_calls(&self) -> Vec<(String, String)> {
+        self.search_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Every `list_open` call so far, as (`owner/name`, cursor).
@@ -607,6 +741,22 @@ impl IssueSource for FakeIssueSource {
                 "FakeIssueSource: no page scripted for this call".into(),
             ))
         })
+    }
+
+    fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError> {
+        self.search_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), text.to_string()));
+        self.searches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(IssueLoadError::Other(
+                    "FakeIssueSource: no search scripted for this call".into(),
+                ))
+            })
     }
 }
 
@@ -721,15 +871,21 @@ impl GhCli {
     }
 }
 
-impl IssueSource for GhCli {
-    fn list_open(
+impl GhCli {
+    /// Run `gh` with `args` and read its answer with `parse`.
+    ///
+    /// Stdout is read whenever it is JSON with a `data` member, whatever the exit status: `gh`
+    /// exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside good
+    /// search hits (contracts/github-issue-source.md §3). Anything else is classified from the
+    /// exit status and stderr.
+    fn run<T>(
         &self,
-        repo: &GithubRepo,
-        cursor: Option<&str>,
-    ) -> Result<IssuePage, IssueLoadError> {
+        args: Vec<String>,
+        parse: fn(&[u8]) -> Result<T, IssueLoadError>,
+    ) -> Result<T, IssueLoadError> {
         let mut cmd = std::process::Command::new(&self.gh);
         crate::process::no_window(&mut cmd)
-            .args(list_args(repo, cursor))
+            .args(args)
             .env("GH_PROMPT_DISABLED", "1")
             .env("GH_NO_UPDATE_NOTIFIER", "1")
             .env("NO_COLOR", "1")
@@ -743,13 +899,33 @@ impl IssueSource for GhCli {
             cmd.current_dir(dirs.home_dir());
         }
         match crate::process::run_bounded(cmd, self.timeout) {
-            crate::process::RunOutcome::Exited {
-                code: 0, stdout, ..
-            } => parse_list_page(&stdout),
-            // A GraphQL error exits non-zero and repeats its message on stderr, where
-            // `classify` reads it (contracts/github-issue-source.md §3).
+            crate::process::RunOutcome::Exited { code, stdout, .. }
+                if code == 0 || holds_graphql_data(&stdout) =>
+            {
+                parse(&stdout)
+            }
             outcome => Err(classify(&outcome)),
         }
+    }
+}
+
+/// Whether `stdout` is a GraphQL answer (it has `data`, even `null`), so its `errors[]` say what
+/// went wrong more exactly than `gh`'s stderr does.
+fn holds_graphql_data(stdout: &[u8]) -> bool {
+    serde_json::from_slice::<serde_json::Value>(stdout).is_ok_and(|json| json.get("data").is_some())
+}
+
+impl IssueSource for GhCli {
+    fn list_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        self.run(list_args(repo, cursor), parse_list_page)
+    }
+
+    fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError> {
+        self.run(search_args(repo, text), parse_search)
     }
 }
 

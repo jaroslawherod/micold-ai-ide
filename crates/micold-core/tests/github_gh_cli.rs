@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use micold_core::github::{list_args, GhCli, GithubRepo, IssueLoadError, IssueSource};
+use micold_core::github::{
+    list_args, search_args, GhCli, GithubRepo, Issue, IssueLoadError, IssueSource,
+};
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -28,6 +30,26 @@ enum Then {
     Hang,
     /// Print the not-logged-in text to stderr and exit 4, as `gh` does.
     NotLoggedIn,
+    /// Print a partial answer (search hits, and NOT_FOUND for the numbered lookup) and exit 1, as
+    /// `gh` does for any GraphQL error.
+    PartialSearch,
+    /// Print a repository NOT_FOUND answer and exit 1.
+    ListNotFound,
+    /// Print an unknown failure to stderr, nothing on stdout, and exit 1.
+    FailWithoutJson,
+}
+
+/// The files the stub prints, next to it.
+fn copy_fixtures(dir: &Path) {
+    for (from, to) in [
+        ("list_page.json", "page.json"),
+        ("not_logged_in.stderr", "login.stderr"),
+        ("search_pr_number.json", "partial.json"),
+        ("list_not_found.json", "not_found.json"),
+        ("unknown.stderr", "unknown.stderr"),
+    ] {
+        std::fs::copy(fixture(from), dir.join(to)).unwrap();
+    }
 }
 
 /// Write the stub into `dir` and return its path.
@@ -36,11 +58,14 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
     std::fs::copy(fixture("list_page.json"), dir.join("page.json")).unwrap();
-    std::fs::copy(fixture("not_logged_in.stderr"), dir.join("login.stderr")).unwrap();
+    copy_fixtures(dir);
     let tail = match then {
         Then::PrintPage => "cat \"$dir/page.json\"",
         Then::Hang => "sleep 5",
         Then::NotLoggedIn => "cat \"$dir/login.stderr\" >&2; exit 4",
+        Then::PartialSearch => "cat \"$dir/partial.json\"; exit 1",
+        Then::ListNotFound => "cat \"$dir/not_found.json\"; exit 1",
+        Then::FailWithoutJson => "cat \"$dir/unknown.stderr\" >&2; exit 1",
     };
     let script = format!(
         "#!/bin/sh\n\
@@ -66,12 +91,14 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
 /// Write the stub into `dir` and return its path.
 #[cfg(windows)]
 fn stub(dir: &Path, then: Then) -> PathBuf {
-    std::fs::copy(fixture("list_page.json"), dir.join("page.json")).unwrap();
-    std::fs::copy(fixture("not_logged_in.stderr"), dir.join("login.stderr")).unwrap();
+    copy_fixtures(dir);
     let tail = match then {
         Then::PrintPage => "type \"%~dp0page.json\"",
         Then::Hang => "ping -n 6 127.0.0.1 >nul",
         Then::NotLoggedIn => "type \"%~dp0login.stderr\" 1>&2\r\nexit /b 4",
+        Then::PartialSearch => "type \"%~dp0partial.json\"\r\nexit /b 1",
+        Then::ListNotFound => "type \"%~dp0not_found.json\"\r\nexit /b 1",
+        Then::FailWithoutJson => "type \"%~dp0unknown.stderr\" 1>&2\r\nexit /b 1",
     };
     let script = format!(
         "@echo off\r\n\
@@ -177,4 +204,37 @@ fn exit_4_is_not_signed_in() {
     let dir = tempfile::tempdir().unwrap();
     let result = GhCli::new(stub(dir.path(), Then::NotLoggedIn)).list_open(&repo(), None);
     assert_eq!(result.unwrap_err(), IssueLoadError::NotSignedIn);
+}
+
+/// U95 — a GraphQL answer with `data` is read whatever `gh`'s exit status: the numbered lookup's
+/// NOT_FOUND exits 1, and the search hits beside it are the result. A failure with no JSON is
+/// classified from stderr, as a list failure is.
+#[test]
+fn a_partial_response_is_parsed() {
+    let dir = tempfile::tempdir().unwrap();
+    let found = GhCli::new(stub(dir.path(), Then::PartialSearch))
+        .search_open(&repo(), "#4313")
+        .expect("the hits beside a NOT_FOUND lookup are the answer");
+    assert_eq!(found.iter().map(Issue::number).collect::<Vec<_>>(), [4312]);
+    let args = recorded(dir.path(), "args.txt");
+    if cfg!(unix) {
+        let got: Vec<&str> = args.lines().collect();
+        assert_eq!(
+            got,
+            search_args(&repo(), "#4313"),
+            "exactly `search_args` (FR-025)"
+        );
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let failed = GhCli::new(stub(dir.path(), Then::FailWithoutJson)).search_open(&repo(), "x");
+    assert!(
+        matches!(failed, Err(IssueLoadError::Other(_))),
+        "no JSON on stdout: classified from stderr, got {failed:?}"
+    );
+
+    // The list reads the same way: its GraphQL errors are what `parse_list_page` classifies.
+    let dir = tempfile::tempdir().unwrap();
+    let listed = GhCli::new(stub(dir.path(), Then::ListNotFound)).list_open(&repo(), None);
+    assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
 }

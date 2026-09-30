@@ -29,7 +29,7 @@ use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::git::GitRemote;
 use micold_core::github::{
-    choose_remote, GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
+    choose_remote, merge_searched, GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
 };
 use micold_core::naming::name_from_title;
 use micold_core::naming::{
@@ -77,6 +77,47 @@ impl State {
     pub fn awaited_issue_load(&self) -> Option<u64> {
         match self.form.as_ref()?.issues {
             IssueList::Loading { seq } => Some(seq),
+            _ => None,
+        }
+    }
+
+    /// The search state of the open form's loaded list, if it has one.
+    fn issue_search(&self) -> Option<&SearchState> {
+        match &self.form.as_ref()?.issues {
+            IssueList::Loaded { search, .. } => Some(search),
+            _ => None,
+        }
+    }
+
+    /// The seq a keystroke is waiting out the debounce for (research R9).
+    pub fn pending_issue_search(&self) -> Option<u64> {
+        match self.issue_search()? {
+            SearchState::Pending { seq } => Some(*seq),
+            _ => None,
+        }
+    }
+
+    /// The seq of the search beyond the loaded issues now running (FR-005a).
+    pub fn awaited_issue_search(&self) -> Option<u64> {
+        match self.issue_search()? {
+            SearchState::Searching { seq } => Some(*seq),
+            _ => None,
+        }
+    }
+
+    /// What a running search asks: the repository, the text and the `gh` the list was read with.
+    pub fn issue_search_request(&self) -> Option<(GithubRepo, String, PathBuf)> {
+        let form = self.form.as_ref()?;
+        match &form.issues {
+            IssueList::Loaded {
+                gh,
+                search: SearchState::Searching { .. },
+                ..
+            } => Some((
+                form.github_repo()?.clone(),
+                form.issue_query.trim().to_string(),
+                gh.clone(),
+            )),
             _ => None,
         }
     }
@@ -187,12 +228,19 @@ fn thousands(n: u64) -> String {
     out
 }
 
-/// The search beyond the loaded issues (feature 034, FR-005a). Only `Idle` until slice C.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// The search beyond the loaded issues (feature 034, FR-005a, data-model §5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum SearchState {
-    /// No search pending or running.
+    /// No search pending or running: the listing is complete, nothing is typed, or the last search
+    /// answered.
     #[default]
     Idle,
+    /// A keystroke is waiting out the debounce (research R9); only `IssueSearchDue { seq }` starts it.
+    Pending { seq: u64 },
+    /// GitHub is being searched; only the answer carrying `seq` applies (FR-007a).
+    Searching { seq: u64 },
+    /// The search failed; the loaded matches stay shown and Retry searches again.
+    Failed { error: IssueLoadError },
 }
 
 /// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
@@ -342,9 +390,34 @@ impl WorktreeForm {
     pub fn issue_cap_caption(&self) -> Option<String> {
         match &self.issues {
             IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
-                "Showing the {} most recently updated of {} open issues.",
+                "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
                 thousands(listing.issues.len() as u64),
                 thousands(listing.total_open)
+            )),
+            _ => None,
+        }
+    }
+
+    /// The line under the picker while the search beyond the loaded issues runs or after it failed
+    /// (FR-005a, FR-007). `None` otherwise.
+    pub fn issue_search_status(&self) -> Option<String> {
+        match (&self.issues, &self.github) {
+            (
+                IssueList::Loaded {
+                    search: SearchState::Searching { .. },
+                    ..
+                },
+                _,
+            ) => Some("Searching GitHub…".to_string()),
+            (
+                IssueList::Loaded {
+                    search: SearchState::Failed { error },
+                    ..
+                },
+                GithubAvailability::Available(repo),
+            ) => Some(format!(
+                "Search beyond the loaded issues failed — {}",
+                error.message(repo)
             )),
             _ => None,
         }
@@ -735,15 +808,25 @@ pub fn issues_loaded(
     });
 }
 
-/// Retry a failed load with a fresh seq. Nothing else is retried: a first load is started by
-/// choosing the source, never from here.
+/// Retry a failed load, or a failed search beyond the loaded issues, with a fresh seq (invariant
+/// 1). Nothing else is retried: a first load is started by choosing the source, never from here.
 pub fn issue_retry(state: &mut crate::app::State) {
     let next_seq = state.worktree_form.issue_request_seq + 1;
     let mut started = false;
     while_editing_unprompted(state, |form| {
-        if form.source == BranchSource::Issue && matches!(form.issues, IssueList::Failed { .. }) {
-            form.issues = IssueList::Loading { seq: next_seq };
-            started = true;
+        if form.source != BranchSource::Issue {
+            return;
+        }
+        match &mut form.issues {
+            IssueList::Failed { .. } => {
+                form.issues = IssueList::Loading { seq: next_seq };
+                started = true;
+            }
+            IssueList::Loaded { search, .. } if matches!(search, SearchState::Failed { .. }) => {
+                *search = SearchState::Searching { seq: next_seq };
+                started = true;
+            }
+            _ => {}
         }
     });
     if started {
@@ -751,11 +834,74 @@ pub fn issue_retry(state: &mut crate::app::State) {
     }
 }
 
-/// The issue search text changed (FR-005). Local only: nothing is asked of GitHub here.
+/// The issue search text changed (FR-005). The held issues are re-ranked at once. When the list
+/// is capped and something is typed, a search beyond it waits out the debounce under a fresh seq,
+/// which makes any older search stale (FR-005a, FR-007a, invariant 6).
 pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut started = false;
     while_editing_unprompted(state, |form| {
         form.issue_query = text;
         form.issue_list_open = true;
+        form.rematch_issues();
+        let typed = !form.issue_query.trim().is_empty();
+        if let IssueList::Loaded {
+            listing, search, ..
+        } = &mut form.issues
+        {
+            *search = if typed && !listing.complete {
+                started = true;
+                SearchState::Pending { seq: next_seq }
+            } else {
+                SearchState::Idle
+            };
+        }
+    });
+    if started {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
+}
+
+/// The debounce ran out: search, if this is still the latest keystroke's (research R9).
+pub fn issue_search_due(state: &mut crate::app::State, seq: u64) {
+    with_form(state, |form| {
+        if let IssueList::Loaded { search, .. } = &mut form.issues {
+            if *search == (SearchState::Pending { seq }) {
+                *search = SearchState::Searching { seq };
+            }
+        }
+    });
+}
+
+/// The search beyond the loaded issues answered. Only the awaited answer applies (FR-007a); its
+/// issues replace the previous search's, less any already loaded (invariant 4), and are ranked
+/// with the loaded ones, so one that does not match the query is not shown (invariant 5). A
+/// failure leaves the loaded matches in place.
+pub fn issue_searched(
+    state: &mut crate::app::State,
+    seq: u64,
+    result: Result<Vec<Issue>, IssueLoadError>,
+) {
+    with_form(state, |form| {
+        let IssueList::Loaded {
+            listing,
+            searched,
+            search,
+            ..
+        } = &mut form.issues
+        else {
+            return;
+        };
+        if *search != (SearchState::Searching { seq }) {
+            return;
+        }
+        match result {
+            Ok(found) => {
+                *searched = merge_searched(&listing.issues, found);
+                *search = SearchState::Idle;
+            }
+            Err(error) => *search = SearchState::Failed { error },
+        }
         form.rematch_issues();
     });
 }
@@ -1139,6 +1285,14 @@ pub enum Msg {
     IssueRowPicked(usize),
     /// An issue was picked: its number and title fill ticket and name (FR-009, FR-010).
     IssuePicked { number: u64 },
+    /// The debounce after a keystroke ran out (research R9). Starts the search only while `seq` is
+    /// still the pending one.
+    IssueSearchDue { seq: u64 },
+    /// The search beyond the loaded issues answered (FR-005a). Applies only while it awaits `seq`.
+    IssueSearched {
+        seq: u64,
+        result: Result<Vec<Issue>, IssueLoadError>,
+    },
 }
 
 /// The form's own reducer: one entry point, twenty-two answers (FR-004a).
@@ -1181,6 +1335,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         // Resolved by the shell, which holds the index and the results together.
         Msg::IssueRowPicked(_) => {}
         Msg::IssuePicked { number } => issue_picked(state, number),
+        Msg::IssueSearchDue { seq } => issue_search_due(state, seq),
+        Msg::IssueSearched { seq, result } => issue_searched(state, seq, result),
     }
     Vec::new()
 }

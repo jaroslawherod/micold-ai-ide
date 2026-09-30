@@ -1,9 +1,10 @@
 //! GitHub is asked for issues only when the user asks for them (feature 034, FR-003, FR-024).
 //!
 //! Opening the add-worktree form must contact nothing but the daemon's local `RemoteList`. The
-//! issue source runs `gh`, which reaches GitHub, and the spec allows that on exactly two named
-//! events in this milestone: choosing the **GitHub issue** source, and pressing **Retry** after a
-//! failed load (M3 adds the debounced search). A load on form open, on reconnect or on a timer
+//! issue source runs `gh`, which reaches GitHub, and the spec allows that on exactly three named
+//! events: choosing the **GitHub issue** source, pressing **Retry** after a failed load or search,
+//! and the debounce after a keystroke on a capped list running out (FR-005a). A load on form open,
+//! on reconnect or on a timer
 //! would pass every behavioural test of the picker and quietly send the repository's name to
 //! GitHub for a user who never chose the source — which is what FR-025's opt-in notice promises
 //! does not happen.
@@ -16,8 +17,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The names that mean "issues are being fetched": the capability that builds the `gh`-backed
-/// source, and the one shell function that uses it.
-const MARKERS: &[&str] = &[".issue_tooling()", "start_issue_load("];
+/// source, and the two shell functions that use it — the load and the search beyond it.
+const MARKERS: &[&str] = &[
+    ".issue_tooling()",
+    "start_issue_load(",
+    "start_issue_search(",
+];
 
 /// `(file relative to the repository root, the trimmed line, why it is not another trigger)`.
 const ALLOWED: &[(&str, &str, &str)] = &[
@@ -41,6 +46,28 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "crates/micold-client/src/shell/issues.rs",
         "Some(retried) => start_issue_load(app, retried),",
         "Named event 2: the reducer accepted `IssueRetry` from a failed load.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {",
+        "The definition of the single search path; it calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "let source = app.caps.issue_tooling().source;",
+        "The capability's use inside `start_issue_search`: the source is built from the `gh` the \
+         load located, so the search never locates again (R3).",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "Some(due) => start_issue_search(app, due),",
+        "Named event 3: the debounce after a keystroke on a capped list ran out and the reducer \
+         accepted `IssueSearchDue` for the pending seq (FR-005a, R9).",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "Some(retried) => start_issue_search(app, retried),",
+        "Named event 2, for a search: the reducer accepted `IssueRetry` from a failed search.",
     ),
 ];
 
@@ -108,7 +135,7 @@ fn issues_are_fetched_only_from_the_named_events() {
     assert!(
         offenders.is_empty(),
         "these lines fetch issues and are not accounted for:\n{}\n\nGitHub is contacted only when \
-         the user chooses the issue source or retries a failed load (FR-003). A load on form open, \
+         the user chooses the issue source, retries, or types on a capped list (FR-003, FR-005a). A load on form open, \
          reconnect or a timer contradicts FR-025's opt-in notice; anything else (a rename, a test) \
          goes in ALLOWED with its reason.",
         offenders
