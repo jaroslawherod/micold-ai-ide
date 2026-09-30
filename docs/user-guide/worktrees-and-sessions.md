@@ -393,6 +393,9 @@ changing it later does not change the type of an issue you already picked. It is
 `settings.json`, together with your other settings, and holds only labels and types, never anything
 from an issue.
 
+To add your own labels, change a type, reorder entries or restore the defaults, use **Settings →
+GitHub issues** (see [GitHub issues](settings.md#github-issues)).
+
 ### Searching beyond the 1,000 loaded issues
 
 When the repository has more open issues than the 1,000 the form loads, what you type in **Issue**

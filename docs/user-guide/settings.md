@@ -1,7 +1,7 @@
 # Settings
 
 Open **Settings** from the overflow menu (the three-dots button) in the top toolbar. It fills the
-main area, with a rail down the left listing four sections. The app bar and the connection strip
+main area, with a rail down the left listing five sections. The app bar and the connection strip
 stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
@@ -10,7 +10,7 @@ rail back out. Every section stays one press away while the rail is collapsed or
 section with something to report keeps marking its row throughout: by its badge while there is room
 for it, and by a tinted icon when there is not.
 
-Editing is one form across all four sections: switching sections never discards what you typed, and
+Editing is one form across all five sections: switching sections never discards what you typed, and
 **Save** applies every section at once. If a value is rejected, Settings jumps to the section
 holding it and marks the field — press **Cancel**, or Esc, to leave without saving anything.
 
@@ -20,6 +20,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Terminal](#terminal) | The embedded terminal's scrollback limit |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
+| [GitHub issues](#github-issues) | Which worktree type an issue's labels choose |
 
 <!-- media: settings-view-light -->
 
@@ -308,6 +309,29 @@ something is being shared.
   only thing that starts one, and nothing it starts outlives the session it was started from. The
   control says so rather than accepting a choice it cannot keep. Your sessions are still kept and
   come back resumable; only the running processes inside them stop.
+
+## GitHub issues
+
+When you create a worktree from a GitHub issue, the issue's labels choose its **Type** (see [The
+issue's labels choose the type](worktrees-and-sessions.md#the-issues-labels-choose-the-type)). This
+section is that label-to-type mapping: one list, applied to every project.
+
+Each row is one entry: a **Label**, the **Type** it selects, and buttons to move the entry up or
+down, or to delete it. Order matters: when an issue carries several mapped labels, the entry nearest
+the top wins, so move an entry up to make it win.
+
+- **Add entry** adds a row at the bottom with an empty label and the type `feat`.
+- **Restore defaults** puts back the three default entries — `bug` → fix, `enhancement` → feat,
+  `documentation` → docs — replacing whatever the list holds.
+- With no entries, the section says so, and picking an issue leaves the type for you to choose.
+
+Several labels may select the same type. A label may appear only once, though, and labels are
+compared ignoring letter case and surrounding spaces, so `Bug` repeats `bug`. **Save** refuses a
+blank label or a repeated one, jumps to this section, and marks the row; nothing is saved until you
+fix or delete it.
+
+A saved change applies to the next issue you pick, in every open project, without a restart. It is
+kept in `settings.json` with your other settings.
 
 ## Where settings are stored
 
