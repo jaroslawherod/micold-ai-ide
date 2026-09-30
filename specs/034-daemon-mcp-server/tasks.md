@@ -103,7 +103,7 @@ credential registry. Everything here ships in M1.
 - [ ] T080 [US1] [A3] Acceptance: US1-AS3 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_read_tools.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1)
 - [ ] T081 [US1] [A4] Acceptance: US1-AS4 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1)
 - [ ] T082 [US1] [A5] Acceptance: US1-AS5 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1); the user-guide half is reviewed in T022, not tested
-- [ ] T100 [US1] Run quickstart §B1 steps 1–6 and §B2 against real `claude` and `copilot`; save evidence under `specs/034-daemon-mcp-server/evidence/`; if the Copilot probe fails, switch Copilot to `Unsupported` with the observed reason in `crates/micold-core/src/provider.rs` and `docs/user-guide/agent-tools.md` (FR-005); a Claude failure is an escalation (plan *Risks*)
+- [X] T100 [US1] Run quickstart §B1 steps 1–6 and §B2 against real `claude` and `copilot`; save evidence under `specs/034-daemon-mcp-server/evidence/`; if the Copilot probe fails, switch Copilot to `Unsupported` with the observed reason in `crates/micold-core/src/provider.rs` and `docs/user-guide/agent-tools.md` (FR-005); a Claude failure is an escalation (plan *Risks*)
 
 ### FR-004 toggle for User Story 1 (US1 s6)
 
