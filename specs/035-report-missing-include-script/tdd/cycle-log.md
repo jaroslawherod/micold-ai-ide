@@ -291,3 +291,25 @@ existed and failed before the implementation.
     `features_settings.rs:1050`, U46 at `:916`, U48 at `:939`.
 - refactor: none beyond `cargo fmt`.
 - commit: 30b37e4a
+
+## Cycle 14 (M3): U59–U61, another window's save and no re-sourcing (T023, T025)
+
+- seam (stub, before the tests): the `DaemonMsg::SettingsChanged` arm's body moved unchanged into
+  `shell::daemon_sync::on_settings_changed(app, settings) -> Option<ScriptPathCheckJob>`, returning
+  `None`; the arm runs the job when there is one (contract §3 T3; the same split as D21).
+- tests: `crates/micold-client/src/main_tests.rs` `tests::script_path_report::`
+  `another_windows_save_rechecks_the_new_path_while_settings_is_open` (U59),
+  `another_windows_save_checks_nothing_while_settings_is_closed` (U60),
+  `showing_settings_sources_nothing` (U61, through `on_settings_opened`).
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report`
+  -> 15 passed; 1 failed: U59 `panicked at crates/micold-client/src/main_tests.rs:4493:10:
+  an open Settings page is re-checked (T3)`. U60 and U61 passed at once (absences; mutants below).
+- green: `on_settings_changed` ends with `settings_draft.as_ref()?` and
+  `prepare_script_path_check(app, CheckOrigin::Opened)` -> 16 passed.
+- mutants (applied alone from a backup copy, restored):
+  - the Settings-open guard dropped -> U60 failed at `main_tests.rs:4533`.
+  - `open_settings` re-sources the home directory (`refresh_env_include`) -> U61 failed at
+    `main_tests.rs:4551` (run while U61 still called `open_settings` through `open_and_check`;
+    `on_settings_opened` runs the same `open_settings`).
+- refactor: none beyond `cargo fmt`.
+- commit: 3de463df
