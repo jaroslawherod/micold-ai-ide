@@ -298,9 +298,9 @@ each group that changes existing code.
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U141 | The protocol worktree create / delete / rename paths behave as today (refusals without side effects, provenance, live-session refusal, stop-and-archive, branch keep/delete) | INV-1, FR-009 | characterization | BASELINE | `crates/micold-daemon/tests/mutation_semantics.rs::worktree_*`, `mutation_atomicity.rs`, `worktree_provenance_rpc.rs` (existing) |
-| U142 | `ops::create_worktree` without a client yields the same catalog, provenance record and directory as `WorktreeCreate` | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/ops_extraction.rs` |
-| U143 | `ops::delete_worktree` without a client yields the same catalog and disk result as `WorktreeDelete` | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/ops_extraction.rs` |
-| U144 | `ops::rename_worktree` without a client yields the same catalog as `WorktreeRename` | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/ops_extraction.rs` |
+| U142 | `ops::create_worktree` without a client yields the same catalog, provenance record and directory as `WorktreeCreate` | FR-009 | example | DONE | `crates/micold-daemon/tests/ops_extraction.rs::create_without_a_client_matches_the_protocol_create` |
+| U143 | `ops::delete_worktree` without a client yields the same catalog and disk result as `WorktreeDelete` | FR-009 | example | DONE | `crates/micold-daemon/tests/ops_extraction.rs::delete_without_a_client_matches_the_protocol_delete` |
+| U144 | `ops::rename_worktree` without a client yields the same catalog as `WorktreeRename` | FR-009 | example | DONE | `crates/micold-daemon/tests/ops_extraction.rs::rename_without_a_client_matches_the_protocol_rename` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` `create_worktree` (T032, T038)
 

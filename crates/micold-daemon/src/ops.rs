@@ -1,0 +1,332 @@
+//! The worktree and session operations, callable without a client (feature 034, research R9).
+//!
+//! The sidebar reaches these through protocol messages (`WorktreeCreate`, `WorktreeDelete`,
+//! `WorktreeRename`, `SessionCreate`, `SessionStart`), and the tool server reaches the same
+//! functions, so an agent's create is the dialog's create: the same validation, the same naming and
+//! placement, the same provenance record, the same safeguards and the same catalog broadcast
+//! (FR-009, FR-011). `server::route` wraps each one and keeps its protocol replies.
+
+use std::io;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use micold_core::git::GitCli;
+use micold_core::naming::DerivedNames;
+use micold_core::project::{validate_rename, RenameError};
+use micold_core::session::SessionId;
+use micold_core::worktree::{
+    create_worktree as git_create_worktree, remove_worktree, remove_worktree_dir, CreateError,
+    CreateMode, CreateProgressEvent, Leftover, ProvenanceView,
+};
+
+use crate::server::refresh_worktrees_and_broadcast;
+use crate::state::DaemonState;
+
+/// Where a create's progress goes: the requesting window's `OperationProgress` frames, or nowhere
+/// (the tool server passes none).
+pub type ProgressSink = Box<dyn FnMut(CreateProgressEvent) + Send>;
+
+/// Why a worktree create did not happen.
+#[derive(Debug)]
+pub enum CreateFailure {
+    /// The project is unknown, or not a git repository.
+    NotARepository,
+    /// Refused before anything was created, or rolled back (FR-034).
+    Create(CreateError),
+    /// The blocking task itself failed (panicked or was cancelled).
+    Task(String),
+}
+
+/// A delete that git carried out: whether the branch delete failed, and what could not be removed.
+#[derive(Debug)]
+pub struct Deleted {
+    pub branch_delete_failed: bool,
+    pub leftovers: Vec<Leftover>,
+}
+
+/// Why a worktree delete did not happen.
+#[derive(Debug)]
+pub enum DeleteFailure {
+    /// The project is unknown, or not a git repository.
+    NotARepository,
+    /// The worktree hosts live sessions and stopping them was not requested (W2, T052).
+    LiveSessions(Vec<SessionId>),
+    /// git failed; the sessions are untouched (FR-023).
+    Git(io::Error),
+    /// The blocking task itself failed (panicked or was cancelled).
+    Task(String),
+}
+
+/// Why a rename did not happen.
+#[derive(Debug)]
+pub enum RenameFailure {
+    Invalid(RenameError),
+    Io(io::Error),
+}
+
+/// Create worktree `names.dir_name` on `names.branch` under `<project>/.claude/worktrees/`, record
+/// it as app-created, and broadcast the refreshed catalog.
+///
+/// Serialized per project by `worktree_gate`, so two creates cannot interleave and a rolled-back
+/// one cannot remove the directory a racing one just populated (T120). `git worktree add` runs on
+/// the blocking pool and never under the state lock.
+pub async fn create_worktree(
+    state: &Arc<DaemonState>,
+    project: PathBuf,
+    names: DerivedNames,
+    mode: CreateMode,
+    progress: Option<ProgressSink>,
+) -> Result<(), CreateFailure> {
+    let Some((repo, true)) = state.project_repo(&project) else {
+        return Err(CreateFailure::NotARepository);
+    };
+    let dir_name = names.dir_name.clone();
+    // Read before the blocking task: the included set and the provenance records decide how a
+    // blocked holder is described (016 BUG-002, FR-032; 029 FR-016), and the lock must not be held
+    // across the git work.
+    let included = state.included_worktrees(&project);
+    let (created, unreadable) = state.provenance(&project);
+    let gate = state.worktree_gate(&project);
+    let _serialized = gate.lock().await;
+    let result = tokio::task::spawn_blocking(move || {
+        let root = repo.join(".claude/worktrees");
+        let target = root.join(&names.dir_name);
+        let _ = std::fs::create_dir_all(&root);
+        let target_exists = target.exists()
+            && std::fs::read_dir(&target)
+                .map(|mut d| d.next().is_some())
+                .unwrap_or(false);
+        let mut progress = progress;
+        let mut on_progress = |event: CreateProgressEvent| {
+            if let Some(sink) = progress.as_mut() {
+                sink(event);
+            }
+        };
+        let r = git_create_worktree(
+            &GitCli::new(),
+            &repo,
+            &target,
+            &names,
+            target_exists,
+            &mode,
+            &included,
+            &ProvenanceView {
+                records: &created,
+                state_unreadable: unreadable,
+            },
+            &mut on_progress,
+        );
+        // `RolledBack` is the only outcome in which this attempt created anything at `target`.
+        // `DuplicateDir` in particular means the directory was already there — removing it would
+        // destroy the user's files (feature 016).
+        if matches!(r, Err(CreateError::RolledBack(_))) {
+            let _ = std::fs::remove_dir_all(&target);
+        }
+        r
+    })
+    .await;
+    match result {
+        Ok(Ok(_worktree)) => {
+            // Feature 029 FR-002/FR-010: the record is written *before* the broadcast, so the very
+            // first snapshot a window renders already carries `user_created: true`. A persistence
+            // failure is not fatal: the worktree exists, and the next successful write, or the
+            // claim action, recovers the durable half.
+            if let Err(e) = state.record_worktree_provenance(&project, &dir_name) {
+                tracing::warn!(
+                    project = %project.display(),
+                    dir_name = %dir_name,
+                    error = %e,
+                    "could not record worktree provenance"
+                );
+            }
+            refresh_worktrees_and_broadcast(state, project).await;
+            Ok(())
+        }
+        Ok(Err(e)) => Err(CreateFailure::Create(e)),
+        Err(join) => Err(CreateFailure::Task(join.to_string())),
+    }
+}
+
+/// Delete worktree `dir_name`: refuse when it hosts live sessions and `stop_sessions` is false;
+/// otherwise remove it through git, archive its sessions and kill their processes, forget its
+/// provenance, and broadcast. `delete_branch` deletes the branch it had checked out.
+pub async fn delete_worktree(
+    state: &Arc<DaemonState>,
+    project: PathBuf,
+    dir_name: String,
+    stop_sessions: bool,
+    delete_branch: bool,
+) -> Result<Deleted, DeleteFailure> {
+    let Some((repo, true)) = state.project_repo(&project) else {
+        return Err(DeleteFailure::NotARepository);
+    };
+    // FR-045: a worktree delete is destructive and often fails with a reason that lives entirely in
+    // git's stderr, so the attempt, the refusal and the failure are all logged. Worktree and branch
+    // names and git's own message are identity and error text, never terminal content (FR-047).
+    tracing::info!(
+        project = %project.display(),
+        worktree = %dir_name,
+        stop_sessions,
+        delete_branch,
+        "worktree delete requested"
+    );
+    // Never orphan a live process: a delete with a live session and `stop_sessions: false` fails
+    // specifically instead (W2, T052). No mutation has happened yet.
+    let live = state.worktree_live_sessions(&project, &dir_name);
+    if !live.is_empty() && !stop_sessions {
+        tracing::warn!(
+            project = %project.display(),
+            worktree = %dir_name,
+            live_sessions = live.len(),
+            "worktree delete refused: live sessions and stop_sessions not set"
+        );
+        return Err(DeleteFailure::LiveSessions(live));
+    }
+    // The same path a session in this worktree resolves as its `cwd`, so the env-include cache
+    // entry for it can be dropped once the delete succeeds (BUG-003: a worktree recreated for the
+    // same branch reuses this exact path).
+    let cache_path = repo.join(".claude/worktrees").join(&dir_name);
+    // Feature 013 (FR-011/FR-012): the keep/delete choice, resolved against the worktree's actual
+    // bound branch from the discovery cache — `None` for an unbound worktree or a kept branch.
+    let branch_to_delete = if delete_branch {
+        state.worktree_branch(&project, &dir_name)
+    } else {
+        None
+    };
+    let dir2 = dir_name.clone();
+    // Serialized with creates on the same project (T120/T124).
+    let gate = state.worktree_gate(&project);
+    let _serialized = gate.lock().await;
+    let result = tokio::task::spawn_blocking(move || {
+        let target = repo.join(".claude/worktrees").join(&dir2);
+        let outcome = remove_worktree(&GitCli::new(), &repo, &target, branch_to_delete.as_deref())?;
+        // Leftovers are NOT an error: git has already deregistered the worktree, so the delete
+        // did partly succeed. Failing here skipped the session cleanup and left the directory to
+        // come back as an unregistered orphan — the "I deleted it and it reappeared" report.
+        let leftovers = remove_worktree_dir(&target);
+        Ok::<(bool, Vec<Leftover>), io::Error>((outcome.branch_delete_failed, leftovers))
+    })
+    .await;
+    match result {
+        Ok(Ok((branch_delete_failed, mut leftovers))) => {
+            // Gated on the git delete having succeeded (main `d88c7a1`): only now archive the
+            // worktree's sessions durably and kill their live processes (outside the lock).
+            let killed_any = match state.archive_and_remove_worktree_sessions(&project, &dir_name)
+            {
+                Ok(ptys) => {
+                    let killed_any = !ptys.is_empty();
+                    for pty in ptys {
+                        let _ = pty.kill();
+                    }
+                    killed_any
+                }
+                Err(e) => {
+                    tracing::warn!(%e, "archiving deleted worktree's sessions failed");
+                    false
+                }
+            };
+            // Windows cannot delete a directory a running process has as its working directory,
+            // and a kill returns before the job's processes have exited, so retry with a bounded
+            // backoff (about 3 s in all) rather than once.
+            if killed_any {
+                let mut delay = std::time::Duration::from_millis(100);
+                for _ in 0..5 {
+                    if leftovers.is_empty() {
+                        break;
+                    }
+                    tokio::time::sleep(delay).await;
+                    delay *= 2;
+                    let target = cache_path.clone();
+                    match tokio::task::spawn_blocking(move || remove_worktree_dir(&target)).await {
+                        Ok(retried) => leftovers = retried,
+                        Err(_) => break,
+                    }
+                }
+            }
+            state.invalidate_env_include(&cache_path);
+            // Feature 029 FR-018: the record dies with the worktree, and only once git has released
+            // it. A directory name is reusable, so a record that outlived its worktree would hand
+            // the next thing created at that path an ownership nobody granted it.
+            if let Err(e) = state.forget_worktree_provenance(&project, &dir_name) {
+                tracing::warn!(
+                    project = %project.display(),
+                    worktree = %dir_name,
+                    error = %e,
+                    "could not forget the deleted worktree's provenance"
+                );
+            }
+            if leftovers.is_empty() {
+                tracing::info!(
+                    project = %project.display(),
+                    worktree = %dir_name,
+                    branch_delete_failed,
+                    "worktree deleted"
+                );
+            } else {
+                // WARN, not ERROR: git released the worktree and the sessions are archived, so this
+                // is a partial success. Naming the blockers and their owner is the point (FR-023).
+                tracing::warn!(
+                    project = %project.display(),
+                    worktree = %dir_name,
+                    branch_delete_failed,
+                    leftovers = %describe_leftovers(&leftovers),
+                    "worktree deregistered, but its directory could not be fully removed"
+                );
+            }
+            refresh_worktrees_and_broadcast(state, project).await;
+            Ok(Deleted {
+                branch_delete_failed,
+                leftovers,
+            })
+        }
+        // Failed delete: sessions are left untouched (not killed, not archived) so a recoverable
+        // failure never becomes permanent loss. Logged at ERROR so it also lands in the
+        // recent-errors ring (FR-046).
+        Ok(Err(e)) => {
+            tracing::error!(
+                project = %project.display(),
+                worktree = %dir_name,
+                error = %e,
+                "worktree delete failed"
+            );
+            Err(DeleteFailure::Git(e))
+        }
+        Err(join) => {
+            tracing::error!(
+                project = %project.display(),
+                worktree = %dir_name,
+                error = %join,
+                "worktree delete task failed"
+            );
+            Err(DeleteFailure::Task(join.to_string()))
+        }
+    }
+}
+
+/// Give worktree `dir_name` the display name `display_name` and broadcast. A display-name override
+/// is durable catalog state; no git is involved.
+pub fn rename_worktree(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    dir_name: &str,
+    display_name: &str,
+) -> Result<(), RenameFailure> {
+    let name = validate_rename(display_name).map_err(RenameFailure::Invalid)?;
+    state
+        .set_worktree_display_name(project, dir_name, &name)
+        .map_err(RenameFailure::Io)?;
+    state.broadcast_catalog();
+    Ok(())
+}
+
+/// Leftover paths for a log line, each with its owner when it is not this account.
+pub fn describe_leftovers(leftovers: &[Leftover]) -> String {
+    leftovers
+        .iter()
+        .map(|l| match l.foreign_uid {
+            Some(uid) => format!("{} (uid {uid})", l.path.display()),
+            None => l.path.display().to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
