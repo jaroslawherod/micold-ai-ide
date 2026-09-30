@@ -29,6 +29,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
 
+## Review rounds
+
+| Review | Round | Snapshot | Verdict |
+|---|---|---|---|
+| Review B M1 | 1 | <review-snapshot.sh SHA> | CHANGES: 2 MAJOR |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |

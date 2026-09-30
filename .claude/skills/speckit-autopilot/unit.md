@@ -18,7 +18,7 @@ sends you there.
   worktree.
 - **Reviews.** Every artifact and diff gets a review by a **fresh-context subagent**, never you. Give
   it a description that names the review (`Review B M2 042`). Loop fix → re-review for up to
-  **3 rounds**; a fourth round is an escalation. Dispatch and rubrics:
+  **3 rounds**; still BLOCKER or MAJOR after the third is an escalation. Dispatch and rubrics:
   [references/review-rubrics.md](references/review-rubrics.md).
 - **PRs.** Open them per [references/pr-and-merge.md](references/pr-and-merge.md) §2–4. Record the PR
   number in the ledger at once.

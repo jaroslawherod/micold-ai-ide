@@ -5,7 +5,8 @@ write. Give it paths, not a summary. It never edits.
 
 ## Dispatching a reviewer
 
-Commit what is under review first, and note `git rev-parse HEAD`: the next round diffs from it.
+Before each round, run `scripts/autopilot/review-snapshot.sh` and record the SHA it prints in the
+ledger's *Review rounds*. Nothing needs committing: the snapshot holds the working tree as is.
 Use `Agent` (`subagent_type: general-purpose`). Round 1 of every review (including review B's first
 pass): omit `model`. Round 2 and later: `model: "sonnet"`.
 
@@ -38,15 +39,20 @@ Prompt parts, in order:
 
 ### Round 2 and later
 
-A re-review checks the fixes, not the whole artifact again, unless the last round ended with
-`+<n> more`: then run a full round 1 review on `model: "sonnet"`. Its prompt has parts 1, 3 and 5, plus:
+A re-review checks the fix diff, not the whole artifact again. Its prompt has parts 1 to 5, except
+that part 2 gives the paths and the brief but not the full diff, plus:
 
 - the previous round's findings, each marked fixed (with how) or declined (with the reason);
-- the fix diff only: `git diff <head reviewed last round>..HEAD`, with the fixes committed;
-- the rubric items those findings came from, not the whole rubric.
+- the fix diff: `scripts/autopilot/review-snapshot.sh diff <last round's snapshot>`.
 
-It confirms each fix holds, that each declined reason stands, and that the fix diff broke nothing
-next to it. It does not reopen what the last round passed.
+It confirms each fix holds and each declined reason stands, and applies every rubric item to the
+fix diff. It does not reopen what the last round passed. Review B always re-runs **Verify**.
+
+Run a full round instead, with `model` omitted, when:
+
+- the last round ended with `+<n> more`. This round finds the rest and does not count toward the
+  limit below;
+- the snapshot is missing from the ledger, or `review-snapshot.sh diff` exits 2.
 
 After it returns:
 
@@ -54,7 +60,8 @@ After it returns:
 - Fix every BLOCKER and MAJOR that holds up. Fix a MINOR only if it takes a few minutes.
 - **Stop when clean.** `CLEAN`, or only MINORs: the review is done; fixing MINORs needs no new
   round. Otherwise fix, commit, and dispatch a **new** reviewer, never the old one.
-- A third round with BLOCKER or MAJOR is an escalation (category 5).
+- At most 3 rounds per review. A third round that still finds a BLOCKER or MAJOR is an escalation
+  (category 5); never run a fourth.
 
 ## Bug rubric (Phase 0, after `speckit-bugfix-verify`)
 
