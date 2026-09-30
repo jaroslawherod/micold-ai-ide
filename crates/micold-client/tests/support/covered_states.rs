@@ -1314,6 +1314,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || {
                 let mut state = with_project();
                 state.settings.settings_draft = Some(SettingsDraft {
+                    github: Default::default(),
                     section: SettingsSection::Environment,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
