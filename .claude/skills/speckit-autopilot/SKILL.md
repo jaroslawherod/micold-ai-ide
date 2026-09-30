@@ -80,11 +80,13 @@ name. A unit keeps its model when continued with `SendMessage`.
 
 | Unit | `model` |
 |---|---|
-| Spec, clarify, design, bug, close, and a milestone the ledger does not mark **Docs-only** `yes` | omit (session model) |
-| A milestone the ledger marks **Docs-only** `yes` | `"sonnet"` |
+| Spec, clarify round 1, design, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
+| Clarify round 2 and later, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
 | Record | `"haiku"` |
 
-A cheaper unit that returns `FAILED` is retried on the session model.
+A ledger from an older run has **Docs-only** instead of **Tier**: `yes` is `docs`, `no` is `full`.
+A cheaper unit that returns `FAILED` is retried on the session model, with the ledger's *Handover*
+as its starting point.
 
 - **Description:** name the unit (`Milestone M2 042`, `Clarify round 3 042`). Token reports group by
   it.

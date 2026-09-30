@@ -44,7 +44,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US1 acceptance scenarios 1–3; FR-001, FR-002, FR-004
 - **Verify**: <the command, test name or quickstart section a reviewer runs to see the deliverable>
 - **Depends on**: —
-- **Docs-only**: no
+- **Tier**: full
 
 ### M2 — <short name>
 
@@ -53,11 +53,20 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US2 acceptance scenarios 1–2; FR-003
 - **Verify**: …
 - **Depends on**: M1
-- **Docs-only**: no
+- **Tier**: light
 ```
 
-**Docs-only** is `yes` only when every task's file paths are docs or spec files (no code, tests,
-scripts, CI or build config). When unsure, `no`.
+**Tier** picks the model that implements the milestone. Cheaper tiers cost less per call; the
+session model is for work that needs judgment.
+
+- `docs`: every task's file paths are docs or spec files (no code, tests, scripts, CI or build
+  config).
+- `light`: every task follows a pattern that already exists in the repo, and plan.md names where.
+  At most about 8 tasks. None adds or changes a wire protocol, persistence format, concurrency,
+  process or sandbox boundary, security check, or a public API between crates.
+- `full`: anything else. M1 is always `full`.
+
+When unsure, pick the higher tier.
 
 Task lists need not be contiguous. When rule 4 pulls a user-guide task forward, list it
 (`T001–T020, T030`) and pass the same list to `speckit-implement`.
