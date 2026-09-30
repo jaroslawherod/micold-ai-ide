@@ -295,6 +295,9 @@ impl AiCliProvider for MinimalProvider {
     fn tool_server_support(&self) -> ToolServerSupport {
         self.tool_server
     }
+    fn input_readiness(&self) -> micold_core::provider::InputReadiness {
+        micold_core::provider::InputReadiness::OutputSettled
+    }
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
         // Copilot's `session-state/<uuid>/`.

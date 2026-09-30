@@ -50,6 +50,9 @@ pub fn call(
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
+        Operation::CreateWorktree { .. } | Operation::CreateSession { .. } => Err(
+            OpError::service_error(format!("{name} is not available yet")),
+        ),
     }
 }
 

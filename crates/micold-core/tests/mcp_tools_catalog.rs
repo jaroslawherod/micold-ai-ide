@@ -1,19 +1,32 @@
 //! The tool catalog and argument validation (feature 034, contracts/mcp-tools.md; U83–U89 for the
-//! read-only tools of milestone M1).
+//! read-only tools of milestone M1, U90–U94 for the create tools of milestone M3).
 
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::jsonrpc::{parse, route, Route};
 use micold_core::mcp::tools::{parse_call, Operation, SessionRef, WorktreeRef};
+use micold_core::session::AiCli;
+use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-/// The tools whose handlers ship in milestone M1, in catalog order.
-const SHIPPED: [&str; 5] = [
+/// The read-only tools, shipped in milestone M1.
+const READ_TOOLS: [&str; 5] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
+];
+
+/// The tools whose handlers ship by milestone M3, in catalog order.
+const SHIPPED: [&str; 7] = [
+    "whoami",
+    "list_worktrees",
+    "list_branches",
+    "list_sessions",
+    "get_session",
+    "create_worktree",
+    "create_session",
 ];
 
 fn tools_list() -> Vec<Value> {
@@ -47,6 +60,7 @@ fn tools_list_names_exactly_the_shipped_tools() {
 fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
     for tool in tools_list() {
         let name = tool["name"].as_str().unwrap();
+        let read_only = READ_TOOLS.contains(&name);
         assert_eq!(tool["inputSchema"]["type"], "object", "{name}");
         assert_eq!(
             tool["inputSchema"]["additionalProperties"],
@@ -57,7 +71,11 @@ fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
             tool["description"].as_str().is_some_and(|d| !d.is_empty()),
             "{name} has a description"
         );
-        assert_eq!(tool["annotations"]["readOnlyHint"], json!(true), "{name}");
+        assert_eq!(
+            tool["annotations"]["readOnlyHint"],
+            json!(read_only),
+            "{name}"
+        );
         assert_eq!(
             tool["annotations"]["destructiveHint"],
             json!(false),
@@ -139,4 +157,110 @@ fn worktree_ref_default_is_the_project_root_and_anything_else_is_named() {
     );
     assert_eq!(WorktreeRef::Default.as_str(), "default");
     assert_eq!(WorktreeRef::Named("a".into()).as_str(), "a");
+}
+
+fn create_worktree(branch: &str, name: Option<&str>, mode: CreateMode) -> Operation {
+    Operation::CreateWorktree {
+        branch: branch.into(),
+        name: name.map(str::to_string),
+        mode,
+    }
+}
+
+#[test]
+fn create_worktree_without_a_mode_starts_a_new_branch() {
+    assert_eq!(
+        parse_call("create_worktree", &json!({"branch": "feat-x"})).unwrap(),
+        create_worktree("feat-x", None, CreateMode::NewBranch)
+    );
+    assert_eq!(
+        parse_call(
+            "create_worktree",
+            &json!({"branch": "feat-x", "name": "x", "mode": "existing_local"})
+        )
+        .unwrap(),
+        create_worktree("feat-x", Some("x"), CreateMode::ReuseLocal)
+    );
+}
+
+#[test]
+fn track_remote_needs_the_remote_to_track() {
+    let message = invalid(
+        "create_worktree",
+        json!({"branch": "feat-x", "mode": "track_remote"}),
+    );
+    assert!(message.contains("remote"), "{message}");
+    assert_eq!(
+        parse_call(
+            "create_worktree",
+            &json!({"branch": "feat-x", "mode": "track_remote", "remote": "origin"})
+        )
+        .unwrap(),
+        create_worktree(
+            "feat-x",
+            None,
+            CreateMode::TrackRemote {
+                remote: "origin".into()
+            }
+        )
+    );
+}
+
+#[test]
+fn create_worktree_offers_no_way_to_overwrite_a_branch() {
+    invalid(
+        "create_worktree",
+        json!({"branch": "feat-x", "overwrite": true}),
+    );
+    invalid(
+        "create_worktree",
+        json!({"branch": "feat-x", "mode": "overwrite"}),
+    );
+}
+
+#[test]
+fn create_worktree_needs_a_branch() {
+    invalid("create_worktree", json!({}));
+    invalid("create_worktree", json!({"branch": ""}));
+    invalid("create_worktree", json!({"branch": 7}));
+}
+
+#[test]
+fn create_session_accepts_exactly_the_three_ai_clis() {
+    for (name, cli) in [
+        ("claude_code", AiCli::ClaudeCode),
+        ("copilot", AiCli::Copilot),
+        ("pi", AiCli::Pi),
+    ] {
+        assert_eq!(
+            parse_call(
+                "create_session",
+                &json!({"worktree": "feat-x", "ai_cli": name, "prompt": "go"})
+            )
+            .unwrap(),
+            Operation::CreateSession {
+                worktree: WorktreeRef::Named("feat-x".into()),
+                ai_cli: Some(cli),
+                prompt: Some("go".into()),
+            }
+        );
+    }
+    assert_eq!(
+        parse_call("create_session", &json!({"worktree": "default"})).unwrap(),
+        Operation::CreateSession {
+            worktree: WorktreeRef::Default,
+            ai_cli: None,
+            prompt: None,
+        }
+    );
+    invalid(
+        "create_session",
+        json!({"worktree": "feat-x", "ai_cli": "regular_terminal"}),
+    );
+    invalid(
+        "create_session",
+        json!({"worktree": "feat-x", "ai_cli": "vim"}),
+    );
+    invalid("create_session", json!({"ai_cli": "pi"}));
+    invalid("create_session", json!({"worktree": "feat-x", "prompt": 3}));
 }

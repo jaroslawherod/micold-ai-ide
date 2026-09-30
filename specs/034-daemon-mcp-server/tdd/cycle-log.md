@@ -463,3 +463,51 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `Credentials::is_issued`), else skips with the new `SkipReason::UnboundAtStart` ("not bound when
   it started", pinned in `mcp_binding_plan.rs`). mcp_binding_spawn 18 passed.
 - refactor: none needed.
+
+## Cycle 18 — U104, U105, U90–U94, U38–U40, U118–U123 (milestone M3, core) — T030, T031, T033, T036, T037, T039
+
+- baseline: `main` at 7964273e (M2 merged, CI green); the workspace suite was not re-run locally
+  before the cycle.
+- tests: `crates/micold-core/tests/mcp_policy.rs` (U104, U105, plus the FR-015a "every other
+  operation" row), `crates/micold-core/tests/mcp_tools_catalog.rs` (U90–U94; `SHIPPED` gains the two
+  create tools and the read-only annotation check is scoped to `READ_TOOLS`, since the create tools
+  are the first that are not read-only), `crates/micold-core/tests/input_readiness.rs` (U38–U40,
+  U118–U123). Stubs only so the symbols resolve: `decide` always `Proceed`, `encode_submission`
+  returns the bare text, `OutputSettled::is_ready` always false, `input_readiness` defaulting to
+  `OutputSettled`, the two `Operation` variants unparsed.
+- red: `scripts/build-lock.sh cargo test -p micold-core --no-fail-fast --test mcp_policy --test mcp_tools_catalog --test input_readiness`
+  ```
+  thread 'a_default_caller_is_refused_create_worktree_naming_principle_iii' panicked at crates/micold-core/tests/mcp_policy.rs:46:9:
+  a Default session must not create a worktree (FR-015a): Proceed
+  thread 'create_worktree_without_a_mode_starts_a_new_branch' panicked at crates/micold-core/tests/mcp_tools_catalog.rs:173:69:
+  called `Result::unwrap()` on an `Err` value: OpError { category: InvalidInput, message: "unknown tool \"create_worktree\"" }
+  thread 'create_session_accepts_exactly_the_three_ai_clis' panicked at crates/micold-core/tests/mcp_tools_catalog.rs:240:14:
+  called `Result::unwrap()` on an `Err` value: OpError { category: InvalidInput, message: "unknown tool \"create_session\"" }
+  thread 'claude_is_ready_on_its_session_start_hook' panicked at crates/micold-core/tests/input_readiness.rs:22:5:
+    left: OutputSettled
+   right: HookSessionStart
+  thread 'pi_is_ready_on_its_components_session_start_event' panicked at crates/micold-core/tests/input_readiness.rs:30:5:
+    left: OutputSettled
+   right: ExtensionEvent("session_start")
+  thread 'an_unbracketed_submission_is_the_text_then_a_carriage_return' panicked at crates/micold-core/tests/input_readiness.rs:54:5:
+    left: [112, 114, 105, 110, 116, …, 101]
+   right: [112, 114, 105, 110, 116, …, 101, 13]
+  thread 'a_multi_line_prompt_is_submitted_exactly_once' panicked at crates/micold-core/tests/input_readiness.rs:63:5:
+    left: 0
+   right: 1
+  ```
+  (U118, U122, U123 failed likewise.) Passed at red, and why: U40 and U121 (the stub's answers
+  happen to be theirs), U105 (the stub proceeds), U92 and U93 (an unknown tool is `invalid_input`
+  too). Deliberate mutant after green: accepting `mode: overwrite` and defaulting a missing branch
+  to `""` failed `create_worktree_offers_no_way_to_overwrite_a_branch` and
+  `create_worktree_needs_a_branch`; restored.
+- green: `policy::decide` refuses `CreateWorktree` from a Default caller with `refused_by_policy`
+  naming Principle III; `Operation::{CreateWorktree, CreateSession}` parsed (`mode` →
+  `CreateMode::{NewBranch, ReuseLocal, TrackRemote}`, never `Overwrite`), `tool_name`,
+  `is_mutating`, `audit_target`; the catalog lists the create tools with `readOnlyHint: false`;
+  `InputReadiness` is a required `AiCliProvider` method (Claude `HookSessionStart`, Pi
+  `ExtensionEvent("session_start")`, Copilot and the fake `OutputSettled`;
+  `ai_cli_provider_seam.rs`'s minimal provider implements it); `encode_submission` and
+  `OutputSettled` in `mcp/submission.rs`. The daemon's `call` answers the two create tools
+  `service_error` until their handlers land in the next cycles. `mise run test-core`: 1405 passed.
+- refactor: none needed.

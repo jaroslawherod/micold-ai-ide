@@ -104,6 +104,24 @@ pub enum ActivitySource {
     None,
 }
 
+/// The event Pi's activity component reports once a session is ready for input.
+pub const PI_SESSION_START: &str = "session_start";
+
+/// How the service learns that a new session of a CLI is ready for input (feature 034, FR-017,
+/// research R12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputReadiness {
+    /// The hook receiver's `SessionStart` post (`claude`). Without a running hook receiver the
+    /// service falls back to [`Self::OutputSettled`].
+    HookSessionStart,
+    /// An event the injected activity component reports (`pi`: `session_start`). With the
+    /// component declined the service falls back to [`Self::OutputSettled`].
+    ExtensionEvent(&'static str),
+    /// The terminal produced output and then none for 1.5 s (`copilot`, which writes nothing
+    /// before its first prompt).
+    OutputSettled,
+}
+
 /// How a CLI's sessions are bound to the session service's tool server (feature 034, FR-002,
 /// contracts/binding.md §4). Each variant names a launch mechanism; the daemon builds the arguments
 /// and the file from it, so no code outside this module asks which CLI a session runs.
@@ -240,6 +258,11 @@ pub trait AiCliProvider {
     /// How a session of this CLI is bound to the session service's tool server at launch (FR-002),
     /// or why it cannot be (FR-005).
     fn tool_server_support(&self) -> ToolServerSupport;
+
+    /// The signal that says a freshly started session is ready for its first prompt (FR-017,
+    /// research R12). A fresh session never reports "awaiting input" before that prompt, so this
+    /// is a separate signal, and it never moves the activity badge.
+    fn input_readiness(&self) -> InputReadiness;
 }
 
 impl AiCli {
@@ -552,6 +575,10 @@ impl AiCliProvider for ClaudeProvider {
         ToolServerSupport::McpConfigArg
     }
 
+    fn input_readiness(&self) -> InputReadiness {
+        InputReadiness::HookSessionStart
+    }
+
     fn activity_source(
         &self,
         _config_dir: &Path,
@@ -810,6 +837,11 @@ impl AiCliProvider for CopilotProvider {
     fn tool_server_support(&self) -> ToolServerSupport {
         // `copilot --additional-mcp-config @<file>` augments the user's config (research R3).
         ToolServerSupport::AdditionalMcpConfig
+    }
+
+    fn input_readiness(&self) -> InputReadiness {
+        // Copilot writes nothing to its event log before the first user message (feature 026).
+        InputReadiness::OutputSettled
     }
 
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
@@ -1146,6 +1178,10 @@ impl AiCliProvider for PiProvider {
         }
     }
 
+    fn input_readiness(&self) -> InputReadiness {
+        InputReadiness::ExtensionEvent(PI_SESSION_START)
+    }
+
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
         // Pi reports busy/idle only to code loaded into its own process, so the source names the
         // log that code writes and the daemon supplies the code at spawn. Beside `sessions/`, never
@@ -1370,6 +1406,10 @@ impl AiCliProvider for FakeAiCliProvider {
         ToolServerSupport::Unsupported {
             reason: "the fake CLI has no MCP support",
         }
+    }
+
+    fn input_readiness(&self) -> InputReadiness {
+        InputReadiness::OutputSettled
     }
 
     fn activity_source(
