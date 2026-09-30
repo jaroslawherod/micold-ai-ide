@@ -116,8 +116,6 @@ impl Registered for ConfirmAgentRequestDialog {
 
 /// This feature's whole reducer surface (shape A). Pure: the answer's wire message is the shell's.
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
-    #[allow(unreachable_code)]
-    return Vec::new(); // red: not yet implemented
     match msg {
         Msg::Requested(prompt) => requested(state, prompt),
         Msg::Withdrawn(id) | Msg::Answered { id, .. } => forget(state, id),
@@ -151,8 +149,6 @@ fn forget(state: &mut crate::app::State, id: u64) {
 ///
 /// `SendInput` names the act only: the wire carries no text, and the prompt shows none.
 pub fn operation_phrase(operation: &ConfirmOperation) -> String {
-    #[allow(unreachable_code)]
-    return String::new(); // red
     match operation {
         ConfirmOperation::DeleteWorktree {
             stop_sessions,
@@ -178,8 +174,6 @@ pub fn operation_phrase(operation: &ConfirmOperation) -> String {
 ///
 /// `“planner” asks to delete worktree “feat-x” and its branch, stopping its sessions`.
 pub fn headline(prompt: &Prompt) -> String {
-    #[allow(unreachable_code)]
-    return String::new(); // red
     let (verb, suffix) = match prompt.operation {
         ConfirmOperation::DeleteWorktree {
             stop_sessions,

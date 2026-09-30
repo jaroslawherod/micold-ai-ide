@@ -78,7 +78,13 @@ fn u210_allowing_closes_that_prompt() {
 fn u211_denying_closes_that_prompt() {
     let mut st = State::default();
     send(&mut st, Msg::Requested(prompt(7, "feat-x")));
-    send(&mut st, Msg::Answered { id: 7, allow: false });
+    send(
+        &mut st,
+        Msg::Answered {
+            id: 7,
+            allow: false,
+        },
+    );
 
     assert!(st.agent_confirm.pending.is_empty());
     assert_eq!(open_dialog(&st), None);
@@ -114,7 +120,11 @@ fn a_second_request_does_not_dismiss_the_one_showing() {
     send(&mut st, Msg::Requested(prompt(2, "b")));
 
     let ids: Vec<u64> = st.agent_confirm.pending.iter().map(|p| p.id).collect();
-    assert_eq!(ids, vec![1, 2], "the shown prompt stays; the new one queues behind it");
+    assert_eq!(
+        ids,
+        vec![1, 2],
+        "the shown prompt stays; the new one queues behind it"
+    );
 }
 
 #[test]
