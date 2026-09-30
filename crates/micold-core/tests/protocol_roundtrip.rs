@@ -15,8 +15,9 @@ use micold_core::protocol::grid::{
 };
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg, ConfirmOperation,
-    DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult, ProjectSnapshot,
-    RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult,
+    ProjectSnapshot, RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot,
+    WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
@@ -250,7 +251,10 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::Ping { nonce: 0xdead_beef },
         // Feature 034 M5 (FR-014): a window's answer to an agent's destructive request.
         ClientMsg::ConfirmationAnswer { id: 7, allow: true },
-        ClientMsg::ConfirmationAnswer { id: 8, allow: false },
+        ClientMsg::ConfirmationAnswer {
+            id: 8,
+            allow: false,
+        },
     ]
 }
 
