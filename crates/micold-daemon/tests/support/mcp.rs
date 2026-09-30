@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
@@ -51,14 +51,7 @@ pub fn add_worktree(repo: &Path, name: &str) -> PathBuf {
     let path = repo.join(".claude/worktrees").join(name);
     git(
         repo,
-        &[
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            name,
-            path.to_str().unwrap(),
-        ],
+        &["worktree", "add", "-q", "-b", name, path.to_str().unwrap()],
     );
     path
 }
@@ -177,4 +170,50 @@ pub async fn call_err(addr: SocketAddr, bearer: &str, tool: &str, arguments: Val
     let result = call_tool(addr, bearer, tool, arguments).await;
     assert_eq!(result["isError"], json!(true), "{tool} succeeded: {result}");
     result["structuredContent"]["error"].clone()
+}
+
+#[derive(Clone)]
+struct BufWriter(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for BufWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for BufWriter {
+    type Writer = BufWriter;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+/// Everything this test binary logs, at every level, from the first call on.
+pub fn log() -> Arc<Mutex<Vec<u8>>> {
+    static LOG: OnceLock<Arc<Mutex<Vec<u8>>>> = OnceLock::new();
+    LOG.get_or_init(|| {
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(BufWriter(buf.clone()))
+            .with_ansi(false)
+            .with_max_level(tracing::Level::TRACE)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber).expect("one global subscriber");
+        buf
+    })
+    .clone()
+}
+
+/// The logged lines that mention `session`.
+pub fn log_lines_for(session: SessionId) -> Vec<String> {
+    let id = session.0.to_string();
+    String::from_utf8_lossy(&log().lock().unwrap())
+        .lines()
+        .filter(|line| line.contains(&id))
+        .map(str::to_string)
+        .collect()
 }

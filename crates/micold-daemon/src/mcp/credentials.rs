@@ -55,6 +55,8 @@ impl Credentials {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Maps> {
-        self.inner.lock().expect("credential registry lock poisoned")
+        self.inner
+            .lock()
+            .expect("credential registry lock poisoned")
     }
 }

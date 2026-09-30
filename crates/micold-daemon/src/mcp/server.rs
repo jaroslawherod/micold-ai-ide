@@ -77,11 +77,7 @@ impl ToolServer {
 
     /// Write `session`'s binding file owner-only, replacing any earlier one; returns its path.
     pub fn write_binding(&self, session: SessionId, contents: &[u8]) -> io::Result<PathBuf> {
-        crate::platform::write_owner_only(
-            &self.binding_dir,
-            &binding_file_name(session),
-            contents,
-        )
+        crate::platform::write_owner_only(&self.binding_dir, &binding_file_name(session), contents)
     }
 
     /// Withdraw `session`'s credential and delete its binding file. Blocking file I/O: call it

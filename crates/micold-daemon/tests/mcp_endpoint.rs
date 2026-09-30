@@ -7,53 +7,15 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
-use std::io;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
+use mcp_support::*;
 use micold_core::session::{AiCli, TerminalMode};
 use serde_json::{json, Value};
-use mcp_support::*;
-use tracing_subscriber::fmt::MakeWriter;
 
 const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
 const PING: &str = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
-
-#[derive(Clone)]
-struct BufWriter(Arc<Mutex<Vec<u8>>>);
-
-impl io::Write for BufWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> MakeWriter<'a> for BufWriter {
-    type Writer = BufWriter;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
-}
-
-/// Everything this test binary logs, at every level, from the first call on.
-fn log() -> Arc<Mutex<Vec<u8>>> {
-    static LOG: OnceLock<Arc<Mutex<Vec<u8>>>> = OnceLock::new();
-    LOG.get_or_init(|| {
-        let buf = Arc::new(Mutex::new(Vec::new()));
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(BufWriter(buf.clone()))
-            .with_ansi(false)
-            .with_max_level(tracing::Level::TRACE)
-            .finish();
-        tracing::subscriber::set_global_default(subscriber).expect("one global subscriber");
-        buf
-    })
-    .clone()
-}
 
 /// A served tool server over a project root with sessions S1 (root) and S2 (worktree `a`).
 struct Served {
@@ -119,7 +81,11 @@ async fn a_malformed_authorization_is_refused_identically() {
     );
     let full_reference = raw_request(
         s.addr,
-        format!("POST /mcp HTTP/1.1\r\nContent-Length: {}\r\n\r\n{PING}", PING.len()).as_bytes(),
+        format!(
+            "POST /mcp HTTP/1.1\r\nContent-Length: {}\r\n\r\n{PING}",
+            PING.len()
+        )
+        .as_bytes(),
     )
     .await;
     let malformed = raw_request(s.addr, request.as_bytes()).await;
@@ -218,7 +184,11 @@ async fn each_session_gets_its_own_credential_and_is_named_by_it() {
     let one = credential(&s.state, sid(1));
     let two = credential(&s.state, sid(2));
     assert_ne!(one, two);
-    assert_eq!(one, credential(&s.state, sid(1)), "stable while the session exists");
+    assert_eq!(
+        one,
+        credential(&s.state, sid(1)),
+        "stable while the session exists"
+    );
     let who_one = call_ok(s.addr, &one, "whoami", json!({})).await;
     let who_two = call_ok(s.addr, &two, "whoami", json!({})).await;
     assert_eq!(who_one["session"], sid(1).0.to_string());

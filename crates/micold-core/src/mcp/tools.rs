@@ -188,10 +188,7 @@ fn optional_bool(args: &Map<String, Value>, key: &str) -> Result<Option<bool>, O
     }
 }
 
-fn optional_worktree(
-    args: &Map<String, Value>,
-    key: &str,
-) -> Result<Option<WorktreeRef>, OpError> {
+fn optional_worktree(args: &Map<String, Value>, key: &str) -> Result<Option<WorktreeRef>, OpError> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) if !s.is_empty() => Ok(Some(WorktreeRef::parse(s))),

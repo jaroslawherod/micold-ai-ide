@@ -66,7 +66,12 @@ async fn fixture_with(extra: Vec<micold_core::session::Session>) -> Fixture {
             (
                 other.path().to_path_buf(),
                 true,
-                vec![session(sid(9), None, TerminalMode::AiCli, AiCli::ClaudeCode)],
+                vec![session(
+                    sid(9),
+                    None,
+                    TerminalMode::AiCli,
+                    AiCli::ClaudeCode,
+                )],
             ),
         ],
         store.path(),
@@ -138,7 +143,11 @@ async fn list_worktrees_is_default_then_the_sidebars_set() {
     assert_eq!(b["branch"], "b");
     assert_eq!(b["status"], "clean");
     assert_eq!(b["display_name"], "b");
-    assert_eq!(b["app_created"], json!(true), "a worktree with sessions is the user's");
+    assert_eq!(
+        b["app_created"],
+        json!(true),
+        "a worktree with sessions is the user's"
+    );
     assert_eq!(b["assistant_owned"], json!(false));
     assert_eq!(
         b["path"],
@@ -272,7 +281,11 @@ async fn a_regular_terminal_session_is_listed_as_such() {
     )])
     .await;
     let out = f
-        .ok(sid(3), "get_session", json!({"session": sid(5).0.to_string()}))
+        .ok(
+            sid(3),
+            "get_session",
+            json!({"session": sid(5).0.to_string()}),
+        )
         .await;
     assert_eq!(out["ai_cli"], "regular_terminal");
 }
@@ -286,13 +299,21 @@ async fn get_session_reports_a_failure_reason_only_for_a_failed_session() {
     };
     let f = fixture_with(vec![failed]).await;
     let out = f
-        .ok(sid(3), "get_session", json!({"session": sid(6).0.to_string()}))
+        .ok(
+            sid(3),
+            "get_session",
+            json!({"session": sid(6).0.to_string()}),
+        )
         .await;
     assert_eq!(out["lifecycle"], "failed");
     assert_eq!(out["failure_reason"], "claude exited three times");
 
     let idle = f
-        .ok(sid(3), "get_session", json!({"session": sid(2).0.to_string()}))
+        .ok(
+            sid(3),
+            "get_session",
+            json!({"session": sid(2).0.to_string()}),
+        )
         .await;
     assert_eq!(idle["lifecycle"], "idle");
     assert!(idle.get("failure_reason").is_none(), "{idle}");
@@ -304,10 +325,18 @@ async fn an_unknown_or_foreign_session_is_not_found_with_the_same_message() {
     let unknown = sid(77);
     let foreign = sid(9);
     let e1 = f
-        .err(sid(3), "get_session", json!({"session": unknown.0.to_string()}))
+        .err(
+            sid(3),
+            "get_session",
+            json!({"session": unknown.0.to_string()}),
+        )
         .await;
     let e2 = f
-        .err(sid(3), "get_session", json!({"session": foreign.0.to_string()}))
+        .err(
+            sid(3),
+            "get_session",
+            json!({"session": foreign.0.to_string()}),
+        )
         .await;
     assert_eq!(e1["category"], "not_found");
     assert_eq!(e2["category"], "not_found");
@@ -373,7 +402,12 @@ async fn an_empty_project_answers_default_and_the_caller_alone() {
         vec![(
             project.path().to_path_buf(),
             true,
-            vec![session(sid(1), None, TerminalMode::AiCli, AiCli::ClaudeCode)],
+            vec![session(
+                sid(1),
+                None,
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            )],
         )],
         store.path(),
     );
@@ -391,7 +425,10 @@ async fn an_empty_project_answers_default_and_the_caller_alone() {
 async fn a_returned_worktree_path_is_in_the_platforms_native_form() {
     let f = fixture().await;
     let out = f.ok(sid(3), "list_worktrees", json!({})).await;
-    let path = row(&out, "worktrees", "a")["path"].as_str().unwrap().to_string();
+    let path = row(&out, "worktrees", "a")["path"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert_eq!(
         path,
         native(f.repo().join(".claude").join("worktrees").join("a"))

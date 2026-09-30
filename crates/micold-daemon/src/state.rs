@@ -16,12 +16,13 @@ use std::time::Instant;
 
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
+use micold_core::mcp::binding::{self as mcp_binding, ConfigLocations, SkipReason};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
     RefusalReason, SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::provider::ActivitySource;
+use micold_core::provider::{ActivitySource, ToolServerSupport};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
     TerminalMode, RESTART_STABLE_AFTER,
@@ -316,6 +317,9 @@ fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
 /// Project the core [`worktree::WorktreeStatus`] (git-discovery facts) onto the wire enum the client
 /// renders. `Invalid` (an on-disk dir git does not know) maps to `Prunable` — the actionable state
 /// telling the user git would drop it.
+/// The variable that relocates Claude Code's configuration, `.claude.json` included (research R14).
+const CLAUDE_CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
+
 fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
     match status {
         worktree::WorktreeStatus::Valid => WorktreeStatus::Clean,
@@ -527,6 +531,64 @@ impl DaemonState {
             }
             ActivitySource::EventLog { .. } | ActivitySource::None => Vec::new(),
         }
+    }
+
+    /// The arguments that bind an AI-CLI session to the tool server (feature 034, FR-002), appended
+    /// after every other argument. A session that cannot be bound starts without them and logs one
+    /// `info` line saying why (FR-005); nothing here ever fails the start. Writes the binding file,
+    /// so it runs off the state lock like [`Self::activity_launch_for`].
+    fn tool_server_launch_for(&self, id: SessionId, spec: &LaunchSpec) -> Vec<OsString> {
+        match self.tool_server_binding(id, spec) {
+            Ok(args) => args.into_iter().map(OsString::from).collect(),
+            Err(reason) => {
+                tracing::info!(session = %id.0, "no tool server: {reason}");
+                Vec::new()
+            }
+        }
+    }
+
+    fn tool_server_binding(
+        &self,
+        id: SessionId,
+        spec: &LaunchSpec,
+    ) -> Result<Vec<String>, SkipReason> {
+        let provider = spec.provider.provider();
+        let support = provider.tool_server_support();
+        if let ToolServerSupport::Unsupported { reason } = support {
+            return Err(SkipReason::Unsupported(reason));
+        }
+        let server = self.tool_server().ok_or(SkipReason::ServerUnavailable)?;
+        // Where the user's own configuration lives, as the session will see it: its environment
+        // first (an environment-include script may set `CLAUDE_CONFIG_DIR`), then this process's.
+        let claude_config_dir = spec
+            .env
+            .iter()
+            .find(|(name, _)| name == CLAUDE_CONFIG_DIR_VAR)
+            .map(|(_, value)| OsString::from(value))
+            .or_else(|| std::env::var_os(CLAUDE_CONFIG_DIR_VAR))
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from);
+        let locations = ConfigLocations {
+            home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
+            claude_config_dir,
+            copilot_config_dir: matches!(support, ToolServerSupport::AdditionalMcpConfig)
+                .then(|| provider.config_dir())
+                .flatten(),
+        };
+        if let Some(path) = mcp_binding::name_taken(support, &locations, &spec.cwd) {
+            return Err(SkipReason::NameTaken(path));
+        }
+        let credential = server.credential_for(id);
+        let plan = mcp_binding::plan(
+            support,
+            &server.url(),
+            &credential,
+            &server.binding_file(id),
+        )?;
+        server
+            .write_binding(id, plan.file_contents.as_bytes())
+            .map_err(|e| SkipReason::WriteFailed(e.to_string()))?;
+        Ok(plan.args)
     }
 
     fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
@@ -1906,13 +1968,15 @@ impl DaemonState {
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
-                let activity = self.activity_launch_for(id, &mut spec);
+                let mut extra = self.activity_launch_for(id, &mut spec);
+                // Last of all, so no positional argument can follow it (contracts/binding.md §4).
+                extra.extend(self.tool_server_launch_for(id, &spec));
                 PtySession::spawn_ai_cli(
                     id,
                     &spec,
                     plan.scrollback,
                     size,
-                    &activity,
+                    &extra,
                     &self.terminal_colors,
                 )
             }
@@ -2413,15 +2477,9 @@ impl DaemonState {
                     provider,
                     mode: LaunchMode::Resume,
                 };
-                let activity = self.activity_launch_for(id, &mut spec);
-                PtySession::spawn_ai_cli(
-                    id,
-                    &spec,
-                    scrollback,
-                    size,
-                    &activity,
-                    &self.terminal_colors,
-                )
+                let mut extra = self.activity_launch_for(id, &mut spec);
+                extra.extend(self.tool_server_launch_for(id, &spec));
+                PtySession::spawn_ai_cli(id, &spec, scrollback, size, &extra, &self.terminal_colors)
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,

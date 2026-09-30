@@ -26,7 +26,11 @@ fn tools_list() -> Vec<Value> {
 
 fn invalid(name: &str, arguments: Value) -> String {
     let error = parse_call(name, &arguments).expect_err("must be rejected");
-    assert_eq!(error.category, ErrorCategory::InvalidInput, "{name} {arguments}");
+    assert_eq!(
+        error.category,
+        ErrorCategory::InvalidInput,
+        "{name} {arguments}"
+    );
     error.message
 }
 
@@ -54,7 +58,11 @@ fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
             "{name} has a description"
         );
         assert_eq!(tool["annotations"]["readOnlyHint"], json!(true), "{name}");
-        assert_eq!(tool["annotations"]["destructiveHint"], json!(false), "{name}");
+        assert_eq!(
+            tool["annotations"]["destructiveHint"],
+            json!(false),
+            "{name}"
+        );
     }
 }
 

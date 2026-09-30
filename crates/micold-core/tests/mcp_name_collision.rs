@@ -174,7 +174,11 @@ fn absent_files_are_not_taken() {
 #[test]
 fn a_malformed_file_is_not_taken() {
     let f = Fixture::new();
-    std::fs::write(f.home().join(".claude.json"), "{\"mcpServers\": {\"micold\"").unwrap();
+    std::fs::write(
+        f.home().join(".claude.json"),
+        "{\"mcpServers\": {\"micold\"",
+    )
+    .unwrap();
     std::fs::write(f.cwd().join(".mcp.json"), "not json").unwrap();
     std::fs::write(f.home().join(".copilot/mcp-config.json"), "[1,2").unwrap();
     assert_eq!(name_taken(CLAUDE, &f.locations(), &f.cwd()), None);
