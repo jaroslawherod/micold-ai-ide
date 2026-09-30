@@ -138,10 +138,10 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U30 | On Unix the created directory has mode `0700` | FR-007, SC-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_file_mode.rs` |
-| U31 | On Unix the written file has mode `0600` | FR-007, SC-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_file_mode.rs` |
-| U32 | Rewriting an existing file replaces its bytes and it stays `0600` | FR-007 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_file_mode.rs` |
-| U33 | On Windows the file's DACL is protected and its only ACE grants the current user's SID (red/green observable only on the `windows-latest` CI leg) | FR-007, SC-009, EC-17 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_file_mode.rs` |
+| U30 | On Unix the created directory has mode `0700` | FR-007, SC-009 | example | DONE | `crates/micold-daemon/tests/mcp_binding_file_mode.rs::unix::the_created_directory_is_owner_only` |
+| U31 | On Unix the written file has mode `0600` | FR-007, SC-009 | example | DONE | `crates/micold-daemon/tests/mcp_binding_file_mode.rs::unix::the_written_file_is_owner_only` |
+| U32 | Rewriting an existing file replaces its bytes and it stays `0600` | FR-007 | example | DONE | `crates/micold-daemon/tests/mcp_binding_file_mode.rs::unix::{rewriting_replaces_the_bytes_and_stays_owner_only, an_existing_wider_file_is_narrowed_on_rewrite}` |
+| U33 | On Windows the file's DACL is protected and its only ACE grants the current user's SID (red/green observable only on the `windows-latest` CI leg) | FR-007, SC-009, EC-17 | example | DONE | `crates/micold-daemon/tests/mcp_binding_file_mode.rs::windows::{the_written_file_has_a_protected_dacl_for_the_current_user_only, rewriting_keeps_the_owner_only_dacl}` (windows-latest CI leg) |
 
 ### `crates/micold-core/src/provider.rs` (T013, T017, T033, T039)
 
