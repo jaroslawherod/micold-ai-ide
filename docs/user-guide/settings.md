@@ -134,8 +134,8 @@ This section holds three fields:
   sourced) or back on. Turning it off keeps the path, so re-enabling it doesn't mean typing it
   again.
 - **Script path**: the file to source. Any path is accepted and never rejected at save time. Each
-  time you open Settings, the path is checked (without running the script), and a path that names
-  no readable file is reported below the fields — see
+  time you open Settings, the path is checked (without running the script), and while environment
+  include is off, a path that names no readable file is reported below the fields — see
   [If the script path names no file](#if-the-script-path-names-no-file).
 - **Timeout (seconds)**: how long sourcing may run before being treated as hung. **Default**: 10
   seconds. **Range**: 1 – 60 seconds; out-of-range or non-numeric input is rejected with a message
