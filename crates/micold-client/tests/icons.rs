@@ -40,6 +40,9 @@ fn expected(icon: Icon) -> char {
         Icon::SelectChevron => '\u{e5cf}',
         Icon::SessionService => '\u{e875}',
         Icon::Refresh => '\u{e5d5}',
+        Icon::IssueMapping => '\u{e892}',
+        Icon::MoveUp => '\u{e316}',
+        Icon::MoveDown => '\u{e313}',
     }
 }
 
@@ -67,8 +70,10 @@ fn all_covers_every_variant_without_duplicates() {
     // trailing affordance — `expand_more`, the glyph §7.7 gives the control and the one thing that
     // tells a select from a text field at a glance), +1 for Refresh (feature 029's sidebar-header
     // control — Material's `refresh`, chosen over `sync` and `autorenew` because those two say
-    // "there is a remote" and "this happens by itself", and neither is true here).
-    assert_eq!(Icon::ALL.len(), 32, "curated set size");
+    // "there is a remote" and "this happens by itself", and neither is true here), +3 for
+    // IssueMapping/MoveUp/MoveDown (feature 034's GitHub issues settings section — `label`,
+    // `keyboard_arrow_up`, `keyboard_arrow_down`; `arrow_upward` is already `NavigateUp`).
+    assert_eq!(Icon::ALL.len(), 35, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

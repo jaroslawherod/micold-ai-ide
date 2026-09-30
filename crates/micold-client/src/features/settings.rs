@@ -54,7 +54,10 @@ use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::issue_types::{default_mapping, LabelTypeEntry};
+use micold_core::issue_types::{
+    default_mapping, validate_mapping, LabelTypeEntry, MappingErrorKind,
+};
+use micold_core::naming::ConventionalType;
 use micold_core::overlay::Layer;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
@@ -65,6 +68,7 @@ use micold_core::script_path_check::CheckedScriptPath;
 use micold_core::session::AiCli;
 use micold_core::settings::{DaemonConfig, Settings};
 use micold_core::theme::{SystemScheme, ThemePreference};
+use micold_core::typeahead::Direction;
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -242,6 +246,8 @@ pub enum SettingsSection {
     Environment,
     /// Where the session service runs and what it may reach (FR-028).
     Daemon,
+    /// How an issue's labels choose a worktree's type (feature 034, FR-018).
+    GithubIssues,
 }
 
 impl SettingsSection {
@@ -251,6 +257,7 @@ impl SettingsSection {
         SettingsSection::Terminal,
         SettingsSection::Environment,
         SettingsSection::Daemon,
+        SettingsSection::GithubIssues,
     ];
 
     /// The section's name, as the rail shows it.
@@ -260,6 +267,7 @@ impl SettingsSection {
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
             SettingsSection::Daemon => "Session service",
+            SettingsSection::GithubIssues => "GitHub issues",
         }
     }
 
@@ -279,6 +287,7 @@ impl SettingsSection {
             // a user is looking for when they come here.
             SettingsSection::Environment => Icon::AiCli,
             SettingsSection::Daemon => Icon::SessionService,
+            SettingsSection::GithubIssues => Icon::IssueMapping,
         }
     }
 
@@ -339,7 +348,8 @@ pub struct EnvironmentDraft {
 /// The label-to-type mapping the draft carries (feature 034, FR-016).
 ///
 /// Seeded from what is stored and written back whole by a save, so that a save changing anything
-/// else keeps the mapping. No view edits it yet; the GitHub issues section arrives with US3.
+/// else keeps the mapping. The GitHub issues section edits it (US3); labels are held as typed, and
+/// only [`SettingsDraft::validate`] judges them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubDraft {
     /// The mapping, in order.
@@ -550,6 +560,7 @@ impl SettingsDraft {
             (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
         };
         profile.budget = self.budget()?;
+        self.mapping()?;
 
         Ok(ValidSettings {
             theme: self.appearance.theme,
@@ -565,6 +576,20 @@ impl SettingsDraft {
                 sandbox: profile,
             },
             issue_label_types: self.github.entries.clone(),
+        })
+    }
+
+    /// The label-to-type mapping, checked last because its section is last in the rail (FR-019).
+    fn mapping(&self) -> Result<(), FieldError> {
+        validate_mapping(&self.github.entries).map_err(|error| FieldError {
+            field: FieldId::IssueMappingLabel(error.index),
+            section: SettingsSection::GithubIssues,
+            message: match error.kind {
+                MappingErrorKind::Blank => "Enter a label, or remove this entry.".to_string(),
+                MappingErrorKind::Duplicate { of } => {
+                    format!("Entry {} already maps this label.", of + 1)
+                }
+            },
         })
     }
 
@@ -911,6 +936,18 @@ pub enum Msg {
     /// Both have to reach the same field, which is why this is a message rather than an assignment
     /// inside the one of them that happened to be written first.
     PlacementMoved(PlacementKind),
+    /// A mapping entry's label was edited (feature 034, FR-018).
+    IssueMappingLabelChanged(usize, String),
+    /// A mapping entry's type was picked (feature 034, FR-018).
+    IssueMappingTypeChanged(usize, ConventionalType),
+    /// **Add entry**: append a blank label typed `feat` (feature 034, FR-018).
+    IssueMappingAdded,
+    /// A mapping entry's delete button (feature 034, FR-018).
+    IssueMappingRemoved(usize),
+    /// A mapping entry's move up (`Prev`) or move down (`Next`) button (feature 034, FR-017).
+    IssueMappingMoved(usize, Direction),
+    /// **Restore defaults** (feature 034, FR-018, FR-021).
+    IssueMappingDefaultsRestored,
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -974,6 +1011,35 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlacementChangeConfirmed => placement_change_confirmed(state),
         Msg::PlacementChangeCancelled => placement_change_cancelled(state),
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
+        Msg::IssueMappingLabelChanged(index, label) => {
+            edit_mapping(state, |entries| {
+                if let Some(entry) = entries.get_mut(index) {
+                    entry.label = label;
+                }
+            })
+        }
+        Msg::IssueMappingTypeChanged(index, type_) => edit_mapping(state, |entries| {
+            if let Some(entry) = entries.get_mut(index) {
+                entry.type_ = type_;
+            }
+        }),
+        Msg::IssueMappingAdded => edit_mapping(state, |entries| {
+            entries.push(LabelTypeEntry {
+                label: String::new(),
+                type_: ConventionalType::Feat,
+            })
+        }),
+        Msg::IssueMappingRemoved(index) => edit_mapping(state, |entries| {
+            if index < entries.len() {
+                entries.remove(index);
+            }
+        }),
+        Msg::IssueMappingMoved(index, direction) => {
+            edit_mapping(state, |entries| move_entry(entries, index, direction))
+        }
+        Msg::IssueMappingDefaultsRestored => {
+            edit_mapping(state, |entries| *entries = default_mapping())
+        }
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted {
@@ -1190,6 +1256,24 @@ pub fn storage_limit_changed(state: &mut crate::app::State, text: String) {
 /// Every field edit did these two things and the second was easy to forget: a stale validation
 /// error left beside a field the user has since corrected is the form telling them they are wrong
 /// after they have fixed it. One place, so a new field cannot omit it.
+/// GitHub issues: one edit to the mapping (feature 034, FR-018). An index past the end — a
+/// message from a row that is gone — changes nothing.
+fn edit_mapping(state: &mut crate::app::State, change: impl FnOnce(&mut Vec<LabelTypeEntry>)) {
+    edit(state, |draft| change(&mut draft.github.entries));
+}
+
+/// Swap the entry at `index` with its neighbour: `Prev` is up, `Next` is down (FR-017). The first
+/// entry cannot move up and the last cannot move down.
+fn move_entry(entries: &mut [LabelTypeEntry], index: usize, direction: Direction) {
+    let other = match direction {
+        Direction::Prev => index.checked_sub(1),
+        Direction::Next => index.checked_add(1),
+    };
+    if let Some(other) = other.filter(|o| *o < entries.len() && index < entries.len()) {
+        entries.swap(index, other);
+    }
+}
+
 fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) {
     if let Some(draft) = &mut state.settings.settings_draft {
         change(draft);

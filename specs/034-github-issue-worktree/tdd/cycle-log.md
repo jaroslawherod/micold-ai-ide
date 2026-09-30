@@ -582,3 +582,32 @@ failed before the implementation.
   folded label (`of` = its index), is returned -> `issue_types` 4 passed.
 - refactor: none needed; reuses `fold` from `type_for_labels`.
 - commit: the commit that adds this entry
+
+## Cycle 25: U87–U93 — the GitHub issues section's draft, messages and glyphs (M5)
+
+- tests: `crates/micold-client/tests/features_settings.rs::issue_mapping` — `the_section_is_fifth_and_named` (U87),
+  `the_draft_loads_the_mapping` (U88), `entries_are_edited` (U89), `entries_are_reordered` (U90),
+  `restore_defaults` (U91), `an_invalid_mapping_refuses_the_save` (U92);
+  `crates/micold-client/tests/icons_font.rs::the_issue_mapping_glyphs_are_shipped` and `icons.rs` pins (U93).
+- structural step first: `SettingsSection::GithubIssues` (outside `ALL`, empty label), the six
+  `IssueMapping…` messages with no-op arms, `FieldId::IssueMappingLabel`, and the three `Icon`
+  variants on `'\u{0}'` outside `ALL`, so the tests compile.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings …` -> 55 passed, 5 failed:
+  `:475:9 left: None right: Some(GithubIssues)`; `:512:9 left: Some(("c", Docs)) right: Some(("", Feat))`;
+  `:553:9 left: [("a", Fix), ("b", Feat), ("c", Docs)] right: [("a", Fix), ("c", Docs), ("b", Feat)]`;
+  `:578:9 left: [LabelTypeEntry { label: "defect", … }] right: [… "bug" …, … "enhancement" …, … "documentation" …]`;
+  `:592:38` (`expect_err` on an `Ok` validate). `--no-fail-fast --test icons_font --test icons` ->
+  `icons.rs:76:5 left: 32 right: 35`; `icons_font.rs:73:9` (not in `Icon::ALL`).
+- green: section in `ALL` with its label and `Icon::IssueMapping`; the arms edit the draft through
+  `edit_mapping` (an index past the end is a no-op; `move_entry` swaps with the neighbour, `Prev` =
+  up); `validate` runs `validate_mapping` last (rail order) and maps the error to
+  `FieldError { IssueMappingLabel(i), GithubIssues }`; glyphs `label` E892, `keyboard_arrow_up` E316,
+  `keyboard_arrow_down` E313 -> `features_settings` 60, `icons` 2, `icons_font` 5, `settings_rail` 6,
+  `settings_sections` 14 passed.
+- refactor: none needed.
+- notes: U88 passed at the red run — M4 (cycle 22) already seeds the draft from the store. Deliberate
+  mutant: `from_settings` seeding `GithubDraft::default()` fails it at `:494:9`; restored. The contract
+  named `arrow_upward`/`arrow_downward`, but `arrow_upward` is `NavigateUp`'s codepoint and
+  `tests/icons.rs` forbids a shared one, so both move glyphs are the `keyboard_arrow_*` pair
+  (contract §4 and PROVENANCE.md updated).
+- commit: the commit that adds this entry

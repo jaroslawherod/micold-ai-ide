@@ -99,6 +99,12 @@ pub enum Icon {
     /// `autorenew` says the thing happens *by itself*. This control has neither property (029
     /// FR-012), and an icon that promises one is worse than no icon at all.
     Refresh,
+    /// The Settings section that maps issue labels to worktree types (feature 034, FR-018).
+    IssueMapping,
+    /// Move a list entry one place up (feature 034's mapping editor).
+    MoveUp,
+    /// Move a list entry one place down (feature 034's mapping editor).
+    MoveDown,
 }
 
 impl Icon {
@@ -136,6 +142,9 @@ impl Icon {
         Icon::SelectChevron,
         Icon::SessionService,
         Icon::Refresh,
+        Icon::IssueMapping,
+        Icon::MoveUp,
+        Icon::MoveDown,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -182,6 +191,12 @@ impl Icon {
             // `dns`.
             Icon::SessionService => '\u{e875}',
             Icon::Refresh => '\u{e5d5}',
+            // `label` — the tag glyph GitHub's own label chips echo.
+            Icon::IssueMapping => '\u{e892}',
+            // `keyboard_arrow_up` / `keyboard_arrow_down`. Not `arrow_upward`: that codepoint is
+            // already `NavigateUp`'s, and two icons never share one.
+            Icon::MoveUp => '\u{e316}',
+            Icon::MoveDown => '\u{e313}',
         }
     }
 }
