@@ -46,7 +46,7 @@ pub struct Head {
 pub enum HeadRead {
     /// A complete head, and the bytes read past it (the start of the body).
     Complete { head: Head, rest: Vec<u8> },
-    /// No blank line within [`MAX_HEAD`] bytes: answer `431`.
+    /// No blank line within [`MAX_HEAD`] bytes: answer `431`. The rest has been drained.
     TooLarge,
     /// The request line is malformed: answer `400`.
     Malformed,
@@ -71,6 +71,9 @@ pub async fn read_head<S: AsyncRead + Unpin>(stream: &mut S) -> io::Result<HeadR
             break pos;
         }
         if buf.len() >= MAX_HEAD {
+            // Drain as for an over-bound body: closing with unread bytes makes the peer's stack
+            // (Windows in particular) reset the connection, and the 431 is lost (BUG-010).
+            drain(stream, 0).await;
             return Ok(HeadRead::TooLarge);
         }
         let mut chunk = [0u8; 1024];
@@ -308,5 +311,21 @@ mod tests {
         let mut stream: &[u8] = b"45678NEXT";
         discard_body(&mut stream, 3, 8).await;
         assert_eq!(stream, b"NEXT");
+    }
+
+    #[tokio::test]
+    async fn an_over_bound_head_is_drained_before_it_is_refused() {
+        // Unread bytes at close make Windows reset the connection, and the peer loses the 431.
+        let request = [
+            b"POST /mcp HTTP/1.1\r\nX-Padding: ".as_slice(),
+            &[b'x'; 9 * 1024],
+        ]
+        .concat();
+        let mut stream: &[u8] = &request;
+        assert!(matches!(
+            read_head(&mut stream).await.unwrap(),
+            HeadRead::TooLarge
+        ));
+        assert!(stream.is_empty(), "the refused head must be drained");
     }
 }

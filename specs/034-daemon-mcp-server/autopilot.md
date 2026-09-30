@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M1
-- **Next step**: Coordinator: wait for #469's checks and merge it; then M2. T015/T021 unticked (U127 blocked)
+- **Next step**: Coordinator: wait for #469's checks (Windows fix attempt 1 pushed: 431 head drain, cycle 11) and merge it; then M2. T015/T021 unticked (U127 blocked)
 
 ## Pull requests
 
