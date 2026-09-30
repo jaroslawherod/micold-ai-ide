@@ -5,6 +5,7 @@ write. Give it paths, not a summary. It never edits.
 
 ## Dispatching a reviewer
 
+Commit what is under review first, and note `git rev-parse HEAD`: the next round diffs from it.
 Use `Agent` (`subagent_type: general-purpose`). Round 1 of every review (including review B's first
 pass): omit `model`. Round 2 and later: `model: "sonnet"`.
 
@@ -18,21 +19,41 @@ Prompt parts, in order:
    bug, the BUG record and `brief.py items tasks.md <fix task IDs>`. Then
    `git diff --stat origin/main...HEAD`, and the diff file by file.
    Tell it to pull more with `brief.py section|items` rather than reading an artifact whole.
-3. **Rubric.** The matching section below, verbatim.
-4. **Output contract:**
+3. **Reading rules**, verbatim: "Everything you read stays in your context for every later call.
+   For code, `grep -n` then `Read` with `offset`/`limit`; never read a whole source file to review
+   a few changed lines. Send command output (tests, **Verify** steps) to a file in the scratchpad
+   and `grep` it for the result."
+4. **Rubric.** The matching section below, verbatim.
+5. **Output contract:**
    ```
    VERDICT: CLEAN | CHANGES
    F1 [BLOCKER|MAJOR|MINOR] <file>:<line or section> — <what is wrong>
-      Evidence: <quote or command output>
+      Evidence: <one line: a quote or the decisive line of output>
       Fix: <concrete change>
    ```
-   Report BLOCKER and MAJOR only when an item can be pointed at. Taste is MINOR.
+   `CHANGES` only when there is a BLOCKER or MAJOR. Report BLOCKER and MAJOR only when an item can
+   be pointed at. Taste is MINOR. At most 8 findings, most severe first, and at most 3 of them
+   MINOR. More BLOCKER or MAJOR than fit: end with `+<n> more`. Nothing else: no summary, no
+   praise, no list of what was checked.
+
+### Round 2 and later
+
+A re-review checks the fixes, not the whole artifact again, unless the last round ended with
+`+<n> more`: then run a full round 1 review on `model: "sonnet"`. Its prompt has parts 1, 3 and 5, plus:
+
+- the previous round's findings, each marked fixed (with how) or declined (with the reason);
+- the fix diff only: `git diff <head reviewed last round>..HEAD`, with the fixes committed;
+- the rubric items those findings came from, not the whole rubric.
+
+It confirms each fix holds, that each declined reason stands, and that the fix diff broke nothing
+next to it. It does not reopen what the last round passed.
 
 After it returns:
 
 - Verify each finding. Decline a wrong one and record the reason in the ledger.
 - Fix every BLOCKER and MAJOR that holds up. Fix a MINOR only if it takes a few minutes.
-- Re-dispatch a **new** reviewer, never the old one.
+- **Stop when clean.** `CLEAN`, or only MINORs: the review is done; fixing MINORs needs no new
+  round. Otherwise fix, commit, and dispatch a **new** reviewer, never the old one.
 - A third round with BLOCKER or MAJOR is an escalation (category 5).
 
 ## Bug rubric (Phase 0, after `speckit-bugfix-verify`)
