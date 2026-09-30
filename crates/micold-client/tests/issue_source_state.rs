@@ -595,6 +595,11 @@ fn the_cap_caption_counts_the_loaded_and_the_open() {
 
 /// A form on the issue source holding `issues()` of 1,234 open: the list is capped.
 fn capped() -> State {
+    capped_with(issues())
+}
+
+/// A form on the issue source holding `issues` of 1,234 open.
+fn capped_with(issues: Vec<Issue>) -> State {
     let (mut state, seq) = loading();
     send(
         &mut state,
@@ -602,7 +607,7 @@ fn capped() -> State {
             seq,
             result: Ok((
                 IssueListing {
-                    issues: issues(),
+                    issues,
                     total_open: 1_234,
                     complete: false,
                 },
@@ -784,4 +789,85 @@ fn an_unmatched_searched_issue_is_hidden() {
         !shown.contains(&1300),
         "GitHub matched #1300 in its body only"
     );
+}
+
+// --- M3 review A --------------------------------------------------------------------------------
+
+/// U107 — a search answer that re-ranks the list keeps the highlight on the issue it was on, so
+/// Enter never picks a row that moved under it (review A #1).
+#[test]
+fn a_search_answer_keeps_the_highlighted_issue() {
+    // `#999999 Crash later` matches later in its row than a searched `#5 Crash`, so the answer
+    // ranks above it and pushes it down a row.
+    let mut state = capped_with(vec![issue(999_999, "Crash later", &[])]);
+    let seq = searching(&mut state, "crash");
+    send(&mut state, Msg::IssueHighlightMoved(Direction::Next));
+    let before = form(&state).issue_highlight.expect("a row is highlighted");
+    let highlighted = state.worktree_form.issue_number_at(before);
+    assert_eq!(highlighted, Some(999_999));
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![issue(5, "Crash", &[])]),
+        },
+    );
+    assert_eq!(offered(&state), vec![5, 999_999], "the answer ranks first");
+    let after = form(&state).issue_highlight.expect("still highlighted");
+    assert_eq!(
+        state.worktree_form.issue_number_at(after),
+        highlighted,
+        "the highlight follows #999999, wherever it now ranks"
+    );
+}
+
+/// U108 — clearing the query forgets the last search's issues, so an empty query offers the loaded
+/// list alone (review A #4).
+#[test]
+fn clearing_the_query_forgets_searched_issues() {
+    let mut state = capped();
+    let seq = searching(&mut state, "crash");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![issue(1200, "Crash when saving", &[])]),
+        },
+    );
+    query(&mut state, "");
+    assert_eq!(offered(&state), vec![7, 42, 108]);
+}
+
+/// U109 — a keystroke that leaves the trimmed text as it was asks GitHub nothing new (review A #6).
+#[test]
+fn whitespace_alone_does_not_search_again() {
+    let mut state = capped();
+    let seq = searching(&mut state, "crash");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![issue(1200, "Crash when saving", &[])]),
+        },
+    );
+    query(&mut state, "crash ");
+    assert_eq!(search(&state), SearchState::Idle);
+    assert!(
+        offered(&state).contains(&1200),
+        "the answer for `crash` stays"
+    );
+}
+
+/// U110 — a debounce that ends while a create is running starts no search (review A #7).
+#[test]
+fn a_search_does_not_start_while_creating() {
+    let mut state = capped();
+    query(&mut state, "crash");
+    let seq = pending_seq(&state);
+    send(
+        &mut state,
+        Msg::CreateStarted(micold_core::worktree::CreateMode::default()),
+    );
+    send(&mut state, Msg::IssueSearchDue { seq });
+    assert_eq!(search(&state), SearchState::Pending { seq });
 }

@@ -33,19 +33,25 @@ enum Then {
     /// Print a partial answer (search hits, and NOT_FOUND for the numbered lookup) and exit 1, as
     /// `gh` does for any GraphQL error.
     PartialSearch,
-    /// Print a repository NOT_FOUND answer and exit 1.
-    ListNotFound,
+    /// Print a SAML-refused answer on stdout and the same refusal on stderr, and exit 1, as `gh`
+    /// does for an organization that enforces SAML.
+    SamlRefused,
     /// Print an unknown failure to stderr, nothing on stdout, and exit 1.
     FailWithoutJson,
 }
 
 /// The files the stub prints, next to it.
 fn copy_fixtures(dir: &Path) {
+    std::fs::write(
+        dir.join("saml.json"),
+        r#"{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource protected by organization SAML enforcement."}]}"#,
+    )
+    .unwrap();
     for (from, to) in [
         ("list_page.json", "page.json"),
         ("not_logged_in.stderr", "login.stderr"),
         ("search_pr_number.json", "partial.json"),
-        ("list_not_found.json", "not_found.json"),
+        ("saml.stderr", "saml.stderr"),
         ("unknown.stderr", "unknown.stderr"),
     ] {
         std::fs::copy(fixture(from), dir.join(to)).unwrap();
@@ -64,7 +70,7 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::Hang => "sleep 5",
         Then::NotLoggedIn => "cat \"$dir/login.stderr\" >&2; exit 4",
         Then::PartialSearch => "cat \"$dir/partial.json\"; exit 1",
-        Then::ListNotFound => "cat \"$dir/not_found.json\"; exit 1",
+        Then::SamlRefused => "cat \"$dir/saml.json\"; cat \"$dir/saml.stderr\" >&2; exit 1",
         Then::FailWithoutJson => "cat \"$dir/unknown.stderr\" >&2; exit 1",
     };
     let script = format!(
@@ -97,7 +103,9 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::Hang => "ping -n 6 127.0.0.1 >nul",
         Then::NotLoggedIn => "type \"%~dp0login.stderr\" 1>&2\r\nexit /b 4",
         Then::PartialSearch => "type \"%~dp0partial.json\"\r\nexit /b 1",
-        Then::ListNotFound => "type \"%~dp0not_found.json\"\r\nexit /b 1",
+        Then::SamlRefused => {
+            "type \"%~dp0saml.json\"\r\ntype \"%~dp0saml.stderr\" 1>&2\r\nexit /b 1"
+        }
         Then::FailWithoutJson => "type \"%~dp0unknown.stderr\" 1>&2\r\nexit /b 1",
     };
     let script = format!(
@@ -233,8 +241,9 @@ fn a_partial_response_is_parsed() {
         "no JSON on stdout: classified from stderr, got {failed:?}"
     );
 
-    // The list reads the same way: its GraphQL errors are what `parse_list_page` classifies.
+    // An answer the parser refuses is classified from stderr, which names what GraphQL's error
+    // type does not: FORBIDDEN alone would read as `Other`, stderr says SAML (review A #2).
     let dir = tempfile::tempdir().unwrap();
-    let listed = GhCli::new(stub(dir.path(), Then::ListNotFound)).list_open(&repo(), None);
+    let listed = GhCli::new(stub(dir.path(), Then::SamlRefused)).list_open(&repo(), None);
     assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
 }

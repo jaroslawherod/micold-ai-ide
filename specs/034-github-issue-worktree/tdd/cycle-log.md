@@ -428,3 +428,28 @@ failed before the implementation.
   outside a runtime); the retry arm was split into `retry_issue_search` so the gate's existing
   load-retry line stayed exact.
 - commit: the commit that adds this entry
+
+## Cycle 16: U107–U111 — M3 review A (code-review, high) findings
+
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client --test issue_source_state`
+  -> 21 passed, 4 failed:
+  `a_search_does_not_start_while_creating` `:869:5 left: Searching { seq: 2 } right: Pending { seq: 2 }` (U110, #7);
+  `a_search_answer_keeps_the_highlighted_issue` `:817:5 left: Some(5) right: Some(999999)` (U107, #1);
+  `clearing_the_query_forgets_searched_issues` `:838:5 left: [7, 42, 108, 1200] right: [7, 42, 108]` (U108, #4);
+  `whitespace_alone_does_not_search_again` `:854:5` (search `Pending`, not `Idle`) (U109, #6).
+- test-after, pinned by a mutant: U111 (#2). The fix and the `SamlRefused` stub were written
+  together; with the mutant `parse(stdout)` in place of `parse(stdout).map_err(|_| classify(&outcome))`
+  `github_gh_cli` failed 2 of 4 (`a_partial_response_is_parsed` `:248:5 left: Other("Resource
+  protected by organization SAML enforcement.") right: NoAccess`, and `exit_4_is_not_signed_in`),
+  then it was restored and passed 4 of 4.
+- green: `issue_search_due` runs under `while_editing_unprompted`; `issue_searched` re-seats the
+  highlight on the issue it was on; clearing the query clears `searched`; a whitespace-only change
+  keeps the search state; `GhCli::run` parses a non-zero exit's stdout and, when the parser refuses
+  it, classifies from stderr — `holds_graphql_data` and its second JSON parse are gone.
+  -> `issue_source_state` 25 passed; `github_gh_cli` 4, `github_parse` 7, `github_search` 2,
+  `github_load` 4; `--bin micold-ai-ide issue` 17 passed.
+- notes: this supersedes cycle 14's note on M1 conformance B F2. The `ListNotFound` stub (exit 1,
+  empty stderr) is gone: real `gh` repeats the GraphQL message on stderr, and stderr names what
+  GraphQL's error types do not (SAML, scopes), so a refused list answer stays with `classify`, and
+  `parse_list_page`'s `errors[]` branch remains the exit-0 path M1 declined.
+- commit: the commit that adds this entry
