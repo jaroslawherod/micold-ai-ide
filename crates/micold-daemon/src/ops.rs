@@ -371,9 +371,6 @@ pub fn start_session(
     session: SessionId,
     launch: LaunchMode,
 ) -> tokio::task::JoinHandle<bool> {
-    // Every window sees the start in flight as `Starting` until its process runs or it fails
-    // (feature 034, US3 s1), whoever asked for it.
-    state.broadcast_catalog();
     let state = Arc::clone(state);
     tokio::spawn(async move {
         let gate = state.session_gate(session);
