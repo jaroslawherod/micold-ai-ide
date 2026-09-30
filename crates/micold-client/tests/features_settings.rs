@@ -940,11 +940,23 @@ mod script_path_notice_off {
         );
     }
 
+    /// 011's lines after a check that named `P`, with the `MissingScript` line spelled out as a
+    /// literal: it is the one line spec 035 changed (FR-005), so it must not be derived from a
+    /// helper that mirrors the production mapping. The other outcomes are 011's own, unchanged.
+    fn literal_011(outcome: &EnvIncludeOutcome) -> Vec<NoticeLine> {
+        match outcome {
+            EnvIncludeOutcome::MissingScript => {
+                vec![caution("Script not found: /tmp/does-not-exist.sh")]
+            }
+            other => lines_011(other, Some(P)),
+        }
+    }
+
     #[test]
     fn a_relative_path_says_it_is_not_checked_then_011s_note() {
         for outcome in every_outcome() {
             let mut expected = vec![note(REL)];
-            expected.extend(lines_011(&outcome, Some(P)));
+            expected.extend(literal_011(&outcome));
             assert_eq!(
                 script_path_notice(&done(ScriptPathState::Relative, false), &outcome),
                 expected,
@@ -960,7 +972,7 @@ mod script_path_notice_off {
                 caution(&format!("Couldn't check the script path: {P}")),
                 note(HUNG),
             ];
-            expected.extend(lines_011(&outcome, Some(P)));
+            expected.extend(literal_011(&outcome));
             assert_eq!(
                 script_path_notice(&done(ScriptPathState::Unchecked, false), &outcome),
                 expected,
@@ -1145,7 +1157,12 @@ mod script_path_notice_on {
                 if state == ScriptPathState::Present && outcome == EnvIncludeOutcome::MissingScript
                 {
                     // N10: a stale attempt, which only the feature-on page has; not a not-found
-                    // indication (SC-002).
+                    // indication (SC-002). Off, the same pair is N11: 011's line, path named.
+                    assert_eq!(
+                        script_path_notice(&done(state.clone(), false), &outcome),
+                        vec![caution(&format!("Script not found: {P}"))],
+                        "N11: FR-014's note is the feature-on page's only"
+                    );
                     continue;
                 }
                 let first_caution = |enabled| {

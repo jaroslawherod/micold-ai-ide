@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 10 # US1 AS1–AS5, US2 AS1–AS3, US3 AS1–AS2
 planned_at: 0f7e0c8f
-updated_at: 0f7e0c8f
+updated_at: 02ae3dc6 (close, T044)
 suite_baseline: green # 3662 passed, 0 failed, 8 ignored, 341 binaries at 0f7e0c8f
 ---
 
@@ -33,10 +33,10 @@ quickstart §B visual pass (T021, T042, T027, T029).
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| A1  | Feature off, stored absolute path missing: after Settings opens and its check lands, the page's first line is the caution `Script not found: <path>`, followed by the OFF note | US1-AS1, FR-001, FR-002, SC-001 | example | PENDING | |
-| A2  | Feature off, stored path an existing regular file: after the check lands, the page has no lines below the timeout field | US1-AS2, SC-002 | example | PENDING | |
-| A3  | Feature off, stored path blank: the page has no lines, and the probe is never called | US1-AS3, FR-011 | example | PENDING | |
-| A4  | Feature off with a missing stored path: a session launch makes no probe call and no resolver call, and the launch proceeds as before | US1-AS4, FR-003, FR-006, SC-004 | example | PENDING | |
+| A1  | Feature off, stored absolute path missing: after Settings opens and its check lands, the page's first line is the caution `Script not found: <path>`, followed by the OFF note | US1-AS1, FR-001, FR-002, SC-001 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::off_with_a_missing_stored_path_the_page_says_it_was_not_found_and_that_the_feature_is_off` |
+| A2  | Feature off, stored path an existing regular file: after the check lands, the page has no lines below the timeout field | US1-AS2, SC-002 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::off_with_an_existing_stored_file_the_page_says_nothing` |
+| A3  | Feature off, stored path blank: the page has no lines, and the probe is never called | US1-AS3, FR-011 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::off_with_a_blank_stored_path_the_page_says_nothing_and_nothing_is_examined` |
+| A4  | Feature off with a missing stored path: a session launch makes no probe call and no resolver call, and the launch proceeds as before | US1-AS4, FR-003, FR-006, SC-004 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::off_with_a_missing_stored_path_a_session_launch_examines_and_sources_nothing` |
 | A5  | A save with a missing stored path, the feature off and then on: the settings are written, and exactly one Info notification names the path and says it was not found, for each save | US1-AS5, FR-004 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on` |
 | A6  | Feature on, stored path missing, last outcome `MissingScript`: the page shows exactly one `Script not found: <path>` caution, then the ON note | US2-AS1, FR-005 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::on_with_a_missing_stored_path_the_page_says_it_was_not_found_once_and_that_the_feature_is_on` |
 | A7  | From A6, the user unticks the feature and saves, then reopens Settings: the same `Script not found: <path>` caution, now followed by the OFF note | US2-AS2, FR-005, SC-003 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::switching_the_feature_off_and_saving_keeps_the_same_not_found_report` |
@@ -149,9 +149,9 @@ Tests in `crates/micold-client/src/main_tests.rs`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U55 | `on_settings_opened` leaves the draft seeded and `script_check` `Pending`, and its job carries the stored path and stored enabled flag with origin `Opened` | FR-006, FR-009 (T1); research R8 | example | PENDING | |
+| U55 | `on_settings_opened` leaves the draft seeded and `script_check` `Pending`, and its job carries the stored path and stored enabled flag with origin `Opened` | FR-006, FR-009 (T1); research R8 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::opening_settings_seeds_the_draft_at_once_and_checks_the_stored_path_as_it_is_stored`, `tests::script_path_report::opening_settings_hands_back_work_that_runs_the_check` |
 | U56 | `apply_save` prepares a `Saved` job for the saved path, including when the path did not change | FR-004, FR-009 (T2) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_checks_the_saved_path_even_when_the_path_did_not_change` |
-| U57 | A terminal restart (`TerminalRestartRequested`) makes no probe call | FR-006, SC-004 | example | PENDING | |
+| U57 | A terminal restart (`TerminalRestartRequested`) makes no probe call | FR-006, SC-004 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_terminal_restart_does_not_check_the_path` |
 | U58 | After a save with a missing path, the written `Settings` holds the enabled flag, path and timeout as drafted, and nothing else is added for environment-include | FR-010, SC-005 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_writes_exactly_the_drafted_settings_and_nothing_of_the_check` |
 | U59 | `DaemonMsg::SettingsChanged` with a new path while `settings_draft` is `Some` prepares an `Opened` job for the new path | FR-009, Edge Cases multi-window (T3) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::another_windows_save_rechecks_the_new_path_while_settings_is_open` |
 | U60 | `DaemonMsg::SettingsChanged` while Settings is closed prepares no job: the other side of U59 | FR-006 (T3) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::another_windows_save_checks_nothing_while_settings_is_closed` |

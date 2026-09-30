@@ -201,6 +201,10 @@ fn a_file_the_user_cannot_open_answers_unreadable() {
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o000)).expect("chmod");
     if std::fs::File::open(&script).is_ok() {
         // Running as root: mode bits do not stop the open, so there is no unreadable file to test.
+        eprintln!(
+            "SKIPPED a_file_the_user_cannot_open_answers_unreadable: running as root, mode 000 \
+             does not stop the open"
+        );
         return;
     }
 
@@ -231,6 +235,10 @@ fn a_file_under_a_directory_without_search_permission_answers_unreadable() {
     let _unlock = Unlock(&locked);
     if std::fs::metadata(&script).is_ok() {
         // Running as root: the parent's mode does not stop the lookup.
+        eprintln!(
+            "SKIPPED a_file_under_a_directory_without_search_permission_answers_unreadable: \
+             running as root, the parent's mode does not stop the lookup"
+        );
         return;
     }
 
