@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Review B M1 | 1 | <review-snapshot.sh SHA> | CHANGES: 2 MAJOR |
+| Review B M1 | 1 | <review-snapshot.sh tree:head> | CHANGES: 2 MAJOR |
 
 ## Declined review findings
 

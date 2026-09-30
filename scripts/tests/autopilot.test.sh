@@ -318,18 +318,27 @@ check "brief: section stops at a sibling heading" 0 '^ok$' bash -c "out=\$('$B' 
 check "brief: items by ID" 0 '^- \*\*SC-001' "$B" items "$d/f/spec.md" FR-002 SC-001
 check "brief: missing item fails" 1 'not found.*FR-009' "$B" items "$d/f/spec.md" FR-009
 
-# review-snapshot.sh: a snapshot takes uncommitted and untracked files, and leaves the index alone.
+# review-snapshot.sh: a snapshot takes uncommitted and untracked files, and leaves the index,
+# HEAD and stash alone; it refuses a snapshot a rebase made stale. Run inside a real git worktree.
 R="$S/review-snapshot.sh"
-d="$(new_repo)"; cd "$d/wt"
-echo one > seed.txt; echo new > added.txt
+d="$(new_repo)"; cd "$d/wt"; git worktree add -q "$d/lwt" -b lwt; cd "$d/lwt"
+echo one > seed.txt; echo new > added.txt; echo gone > doomed.txt; git add doomed.txt; git commit -qm doomed
+head_before="$(git rev-parse HEAD)"
 snap="$("$R")"
-echo two > seed.txt; echo later > later.txt
+echo two > seed.txt; echo later > later.txt; rm doomed.txt
+check "review-snapshot prints tree:head" 0 "^[0-9a-f]{40}:$head_before\$" echo "$snap"
 check "review-snapshot diffs a changed file" 0 '^\+two$' "$R" diff "$snap"
 check "review-snapshot diffs an untracked file added after" 0 '^\+later$' "$R" diff "$snap"
+check "review-snapshot diffs a deleted file" 0 '^-gone$' "$R" diff "$snap"
 check "review-snapshot leaves out what the snapshot already held" 0 '^ok$' \
-  bash -c "! '$R' diff '$snap' | grep -q '^+new\$' && echo ok"
-check "review-snapshot leaves the index alone" 0 '^ok$' bash -c '[ -z "$(git diff --cached --name-only)" ] && echo ok'
-check "review-snapshot refuses an unknown snapshot" 2 'UNKNOWN-SNAPSHOT' bash -c "'$R' diff 0123456789abcdef0123456789abcdef01234567 2>&1"
+  bash -c "out=\$('$R' diff '$snap') && ! grep -q '^+new\$' <<<\"\$out\" && echo ok"
+check "review-snapshot leaves index, HEAD and stash alone" 0 '^ok$' bash -c \
+  "[ -z \"\$(git diff --cached --name-only)\" ] && [ \"\$(git rev-parse HEAD)\" = $head_before ] \
+   && [ -z \"\$(git stash list)\" ] && echo ok"
+check "review-snapshot refuses an unknown snapshot" 2 'UNKNOWN-SNAPSHOT' bash -c "'$R' diff 0123:4567 2>&1"
+git add -A; git commit -qm wip; git reset -q --hard HEAD~2; echo rebased > seed.txt; git commit -qam rebased
+check "review-snapshot refuses a snapshot a rebase made stale" 2 'STALE-SNAPSHOT' bash -c "'$R' diff '$snap' 2>&1"
+cd "$d/wt"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
