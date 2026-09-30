@@ -85,3 +85,19 @@ Date 2026-09-30, commit d1a67cf4, dev build (client + daemon built in one invoca
 - Save from another Settings page jumps to GitHub issues on a bad row, as required.
 - Not run: light scheme at full width; error rows in light; Save with mapping errors at 520 px; no worktree was created.
 - Harness note: clicking the sidebar "+" starts a Claude session in the project root (not the create-worktree form); the form is the header icon left of it. That session was stopped with the daemon.
+
+### §B12 re-check after D1 (commit 0baf811a)
+
+Date 2026-09-30, dev build of commit 0baf811a (client + daemon built in one invocation, pinned to ~/vp/d1bin, the pair connected). Private Xvfb :61 + lavapipe, NOT a real display. Private XDG data/runtime dirs, project /tmp/issue-demo. Settings rail expanded, default three entries plus one added entry; Save pressed with the added entry's label blank.
+
+| # | Criterion | Verdict | Notes / screenshots (evidence/) |
+|---|---|---|---|
+| 9 | 520 px wide, rail expanded, dark and light: every Label field, Type select and the three buttons fully visible; rows do not overlap; error line readable | PASS | Each row is Label over Type, with move-up / move-down / delete stacked to the right. Floating labels "Label" and "Type" sit clear of the values; nothing overlaps or is clipped at the field edges. Error row: red "Label" plus "Enter a label, or remove this entry." on two lines, readable in both schemes. `b12-d1-520-expanded-error-dark.png`, `b12-d1-520-expanded-error-light.png` |
+| — | Window about 1000 px wide still sensible | PASS (dark only) | Label and Type span the full content width, stacked, buttons at the right; error on one line; Add entry / Restore defaults below. `b12-d1-1000-error-dark.png` |
+
+D1 is fixed. Observations:
+- At 520 px the Label field is about 100 px wide, so a long label is cut inside the field ("documentation" shows as "documentatio"). Normal text-input clipping, not a layout defect; the full text is reachable by editing.
+- At 520 px the Restore defaults button wraps to two lines and its second line sits under the sticky Cancel/Save footer at the bottom of the unscrolled list (scrolling reveals it). Minor.
+- The disabled arrow (up on the first row, down on the last) sits a few px left of the enabled ones (cosmetic, as noted in the earlier observations).
+- At 1000 px the stacked fields are very wide (about 600 px each); sensible but roomy. Not a defect.
+- Not run: light scheme at 1000 px; Save with errors on several rows; the tooltips (unchanged by the fix).

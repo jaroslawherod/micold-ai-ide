@@ -270,7 +270,7 @@ reorder and restore defaults, refusing blank or duplicate labels.
 - [X] T090 [US3] [A21] Outer loop green: A21 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T091 [US3] [A22] Outer loop green: A22 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T092 [US3] [A23] Outer loop green: A23 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T062 [US3] Run quickstart §B12 with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
+- [X] T062 [US3] Run quickstart §B12 with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
 
 **Checkpoint**: All three stories work; `mise run gate` passes.
 
