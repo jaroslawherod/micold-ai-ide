@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 5-close
-- **Next step**: Close unit: converge → tdd-verify → docguard-guard, then close PR.
+- **Next step**: Close unit: T096–T106 test remediation (two subagents), review, spec Closed, gate, close PR.
 
 ## Pull requests
 
@@ -43,6 +43,9 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | 7 | 2-clarify r2 | Show a beyond-cap search result that matched only in its body/comments? | No — held to FR-005's rule (number, title, labels) | agent-resolved | spec.md#FR-005; specs/021-branch-typeahead-search (one matching rule) |
 | 8 | 2-clarify r3 | Any critical ambiguity left? | None — clarify round 3 reported no critical ambiguities; Phase 2 done | agent-resolved | spec.md coverage scan, all categories Clear or deferred to plan |
 | 9 | 4-milestones M6 | How to record §B10 (desktop launch) on macOS and Windows? | A CI test on the macOS and Windows runners that launches with a minimal launcher-like PATH and checks gh is found; no real Dock/Start-menu launch | user | AskUserQuestion 2026-09-30 |
+| 10 | 5-close | `speckit-converge`: any gap left? | Converged — 30 FRs, 23 scenarios, 24 edge cases, SC-002–006, 10 plan decisions, constitution I–VIII checked; no findings, tasks.md untouched by converge | agent-resolved | fresh-context converge assessment 2026-09-30 |
+| 11 | 5-close | `speckit-tdd-verify`: FAIL (F1 A4 cannot fail, F2 T095 passes silently off CI, 12 test-after, F4–F18 MED) — new milestone? | No unbuilt behaviour; all 23 scenarios covered, 15/15 mutants caught. Remediation T096–T106 (tests only) fixed in the close PR per phase-5 step 3 | agent-resolved | tdd/verification.md |
+| 12 | 5-close | `speckit-docguard-guard`: FAIL 1085/2773, 6 errors repo-wide | Only 034 findings: TRC004 ×34 (`@req` annotations) and SPR002 ×1 (docguard Spec ID) — repo conventions never adopted (031 D65, 033 D14, 035 D42); the 6 `STR001` want `docs-canonical/*`. Nothing changed | agent-resolved | `docguard-cli@latest guard --format json`, filtered to 034 |
 
 ## Declined review findings
 
