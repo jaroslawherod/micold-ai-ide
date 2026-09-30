@@ -1,19 +1,33 @@
-//! Feature 034 (contracts/mcp-tools.md `start_session`, `rename_worktree`; US3 scenarios 1 and 6;
-//! FR-012a, FR-015a; A12, U163–U167): an agent starts a session and renames a worktree through
-//! `POST /mcp`, exactly as the sidebar would.
+//! Feature 034 (contracts/mcp-tools.md; US3; FR-009, FR-011, FR-012a, FR-014, FR-015, FR-015a):
+//! an agent starts, stops, interrupts and deletes sessions and renames and deletes worktrees
+//! through `POST /mcp`, exactly as the sidebar would.
 //!
-//! The fixture is a real git repository with worktree `b`, the caller S3 in `b`, S1 in the project
-//! root, and shell sessions in `b` in each lifecycle the tools must handle. Shell sessions start the
-//! platform shell, so no stand-in CLI is needed.
+//! Part 1 (M4; A12, U163–U167): `start_session`, `rename_worktree`. Part 2 (M5; A13–A18,
+//! U168–U171, U186–U193): the destructive tools, each of which waits for a window's answer. A
+//! test window answers every prompt it is shown ([`answering_window`]) and counts them, so "no
+//! prompt was raised" is observable.
+//!
+//! The fixture is a real git repository with worktrees `b`, `c` and `d`, the caller S3 in `b`, S1
+//! in the project root, shell sessions in `b` in each lifecycle the tools must handle, a shell
+//! session in `c`, and nothing in `d`. Shell sessions start the platform shell, so no stand-in CLI
+//! is needed.
 
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::SinkExt;
 use mcp_support::*;
-use micold_core::protocol::messages::{CatalogSnapshot, WireLifecycle};
+use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::messages::{
+    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, WireLifecycle,
+};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use micold_core::session::{AiCli, SessionId, SessionLifecycle, TerminalMode};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -33,6 +47,8 @@ const RESTARTING: u128 = 24;
 /// A Claude Code session marked resumable whose conversation no CLI has: its start fails before
 /// anything is spawned, whether or not `claude` is installed.
 const UNRESUMABLE: u128 = 25;
+/// An idle shell session in worktree `c`.
+const IN_C: u128 = 30;
 
 struct Fixture {
     state: Arc<DaemonState>,
@@ -47,6 +63,8 @@ impl Fixture {
         let store = tempfile::tempdir().unwrap();
         init_repo(project.path());
         add_worktree(project.path(), "b");
+        add_worktree(project.path(), "c");
+        add_worktree(project.path(), "d");
         let shell = |n: u128, lifecycle: SessionLifecycle| {
             let mut s = session(sid(n), Some("b"), TerminalMode::Regular, AiCli::ClaudeCode);
             s.lifecycle = lifecycle;
@@ -81,6 +99,7 @@ impl Fixture {
                 s.lifecycle = SessionLifecycle::InterruptedResumable;
                 s
             },
+            session(sid(IN_C), Some("c"), TerminalMode::Regular, AiCli::ClaudeCode),
         ];
         let state = state_over(
             vec![(project.path().to_path_buf(), true, sessions)],
@@ -124,6 +143,37 @@ impl Fixture {
             .to_string()
     }
 
+    async fn call_as(&self, caller: u128, tool: &str, args: Value) -> Value {
+        call_tool(self.addr, &credential(&self.state, sid(caller)), tool, args).await
+    }
+
+    fn project(&self) -> &std::path::Path {
+        self._project.path()
+    }
+
+    fn worktree_dir(&self, name: &str) -> std::path::PathBuf {
+        self.project().join(".claude/worktrees").join(name)
+    }
+
+    fn has_branch(&self, name: &str) -> bool {
+        let out = std::process::Command::new("git")
+            .args(["branch", "--list", name])
+            .current_dir(self.project())
+            .output()
+            .unwrap();
+        !String::from_utf8_lossy(&out.stdout).trim().is_empty()
+    }
+
+    async fn worktree_refs(&self) -> Vec<String> {
+        self.ok(CALLER, "list_worktrees", json!({"include_hidden": true}))
+            .await["worktrees"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["ref"].as_str().unwrap().to_string())
+            .collect()
+    }
+
     async fn display_name_of(&self, worktree: &str) -> String {
         let out = self
             .ok(CALLER, "list_worktrees", json!({"include_hidden": true}))
@@ -142,7 +192,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        for n in [IDLE, FAILED, RESUMABLE, STARTING, RESTARTING] {
+        for n in [IDLE, FAILED, RESUMABLE, STARTING, RESTARTING, IN_C] {
             if let Some(pty) = self.state.live_session(sid(n)) {
                 let _ = pty.kill();
             }
@@ -323,4 +373,460 @@ async fn a_default_session_is_refused_rename_worktree() {
         "{error}"
     );
     assert_eq!(f.display_name_of("b").await, before, "nothing changed");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Part 2 (M5): the destructive tools.
+// ---------------------------------------------------------------------------------------------
+
+fn target(n: u128) -> Value {
+    json!({"session": sid(n).0.to_string()})
+}
+
+/// A window that answers every prompt it is shown with `allow`; returns how many it was shown.
+fn answering_window(state: &Arc<DaemonState>, allow: bool) -> Arc<AtomicUsize> {
+    let mut rx = fake_window(state);
+    let shown = Arc::new(AtomicUsize::new(0));
+    let (st, count) = (Arc::clone(state), Arc::clone(&shown));
+    tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            if let Frame::Control(DaemonMsg::ConfirmationRequested { id, .. }) = frame {
+                count.fetch_add(1, Ordering::SeqCst);
+                st.answer_confirmation(id, allow);
+            }
+        }
+    });
+    shown
+}
+
+/// The next prompt a window is shown, within 5 s.
+async fn next_prompt(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<Frame<DaemonMsg>>,
+) -> (u64, DaemonMsg) {
+    let wait = async {
+        while let Some(frame) = rx.recv().await {
+            if let Frame::Control(msg @ DaemonMsg::ConfirmationRequested { .. }) = frame {
+                let DaemonMsg::ConfirmationRequested { id, .. } = &msg else {
+                    unreachable!()
+                };
+                return (*id, msg);
+            }
+        }
+        panic!("window closed");
+    };
+    tokio::time::timeout(Duration::from_secs(5), wait)
+        .await
+        .expect("a prompt within 5 s")
+}
+
+/// The platform shell's visible screen.
+fn visible_text(pty: &micold_daemon::supervisor::PtySession) -> String {
+    use alacritty_terminal::grid::Dimensions;
+    use alacritty_terminal::index::{Column, Line};
+    let term = pty.term().lock();
+    let grid = term.grid();
+    let mut out = String::new();
+    for line in 0..grid.screen_lines() {
+        for col in 0..grid.columns() {
+            out.push(grid[Line(line as i32)][Column(col)].c);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+async fn screen_shows(pty: &micold_daemon::supervisor::PtySession, pred: impl Fn(&str) -> bool) -> bool {
+    for _ in 0..100 {
+        if pred(&visible_text(pty)) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// A13 (US3 s2; U169, U170): an allowed stop ends the processes, every window shows the session
+/// `Idle`, its credential still answers, and it can be started again.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_stop_session_ends_it_shows_idle_everywhere_and_it_stays_resumable() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let key = credential(&f.state, sid(IDLE));
+    let asked = answering_window(&f.state, true);
+    let mut window = fake_window(&f.state);
+
+    let out = f.ok(CALLER, "stop_session", target(IDLE)).await;
+
+    assert_eq!(out["lifecycle"], "idle", "{out}");
+    assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
+    assert!(f.state.live_session(sid(IDLE)).is_none(), "no process left");
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |c| {
+            lifecycle_in(c, sid(IDLE)) == Some(WireLifecycle::Idle)
+        })
+        .await,
+        "every window sees it idle within 2 s (SC-003)"
+    );
+    assert_eq!(
+        f.state.tool_server().unwrap().session_for(&key),
+        Some(sid(IDLE)),
+        "a stopped session keeps its credential"
+    );
+    assert_eq!(f.start(IDLE).await["lifecycle"], "running", "it starts again");
+}
+
+/// U186 (FR-012a, assumption A-5): stopping an idle session changes nothing and asks nobody.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_session_on_an_idle_session_succeeds_unchanged_without_a_prompt() {
+    let f = Fixture::new().await;
+    let asked = answering_window(&f.state, true);
+    let out = f.ok(CALLER, "stop_session", target(IDLE)).await;
+    assert_eq!(out["lifecycle"], "idle", "{out}");
+    assert_eq!(asked.load(Ordering::SeqCst), 0, "no prompt for a no-op");
+}
+
+/// A14 (US3 s2): an allowed interrupt types `0x03` into the primary terminal and the session keeps
+/// running. The shell is put where the byte is readable: no signal characters, no line buffering,
+/// and `od` printing the one byte it reads.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let pty = f.state.primary_pty(sid(IDLE)).expect("running");
+    pty.write_input(b"stty -isig -icanon; dd bs=1 count=1 2>/dev/null | od -An -tx1\r")
+        .unwrap();
+    assert!(screen_shows(&pty, |s| s.contains("od -An -tx1")).await);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let asked = answering_window(&f.state, true);
+
+    let out = f.ok(CALLER, "interrupt_session", target(IDLE)).await;
+
+    assert_eq!(out, json!({}));
+    assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
+    assert!(
+        screen_shows(&pty, |s| s.lines().any(|l| l.trim() == "03")).await,
+        "0x03 reached the terminal:\n{}",
+        visible_text(&pty)
+    );
+    let still = f.state.primary_pty(sid(IDLE)).expect("still live");
+    assert!(Arc::ptr_eq(&pty, &still), "the same process");
+    assert_eq!(f.lifecycle_of(IDLE).await, "running");
+}
+
+/// U187 (FR-012a): interrupting a session that is not running is a conflict, asked of nobody.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn interrupt_session_on_a_session_that_is_not_running_is_a_conflict() {
+    let f = Fixture::new().await;
+    let asked = answering_window(&f.state, true);
+    let error = f.err(CALLER, "interrupt_session", target(IDLE)).await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+}
+
+/// A15 (US3 s3; FR-009): a worktree with a live session is not deleted unless stopping it was
+/// asked for; the refusal names the session, nobody is asked, and nothing changes.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn delete_worktree_with_live_sessions_and_no_stop_sessions_is_a_conflict_naming_them() {
+    let f = Fixture::new().await;
+    f.start(IN_C).await;
+    let asked = answering_window(&f.state, true);
+
+    let error = f
+        .err(CALLER, "delete_worktree", json!({"worktree": "c"}))
+        .await;
+
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains(&sid(IN_C).0.to_string()),
+        "names the live session: {error}"
+    );
+    assert_eq!(asked.load(Ordering::SeqCst), 0, "no prompt for a conflict");
+    assert!(f.worktree_dir("c").is_dir(), "the worktree is still there");
+    assert!(f.has_branch("c"), "its branch is still there");
+    assert!(f.state.live_session(sid(IN_C)).is_some(), "its session runs");
+    assert!(f.worktree_refs().await.contains(&"c".to_string()));
+}
+
+/// U188, U189 (FR-009, FR-011): an allowed delete with `stop_sessions` stops the worktree's
+/// sessions, removes it and, by default, its branch; every window sees it go.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_delete_worktree_stops_its_sessions_and_removes_it_and_its_branch() {
+    let f = Fixture::new().await;
+    f.start(IN_C).await;
+    let asked = answering_window(&f.state, true);
+    let mut window = fake_window(&f.state);
+
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "c", "stop_sessions": true}),
+        )
+        .await;
+
+    assert_eq!(out["removed"], "c", "{out}");
+    assert_eq!(out["branch_deleted"], true, "{out}");
+    assert_eq!(out["leftovers"], json!([]), "{out}");
+    assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
+    assert!(f.state.live_session(sid(IN_C)).is_none(), "its session stopped");
+    assert!(!f.worktree_dir("c").exists(), "the worktree is gone");
+    assert!(!f.has_branch("c"), "its branch is gone");
+    assert!(!f.worktree_refs().await.contains(&"c".to_string()));
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |c| {
+            c.projects
+                .iter()
+                .all(|p| p.worktrees.iter().all(|w| w.dir_name != "c"))
+        })
+        .await,
+        "every window sees it gone"
+    );
+}
+
+/// U190: `delete_branch: false` keeps the branch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_delete_worktree_without_delete_branch_keeps_the_branch() {
+    let f = Fixture::new().await;
+    answering_window(&f.state, true);
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "d", "delete_branch": false}),
+        )
+        .await;
+    assert_eq!(out["removed"], "d", "{out}");
+    assert_eq!(out["branch_deleted"], false, "{out}");
+    assert!(!f.worktree_dir("d").exists());
+    assert!(f.has_branch("d"), "the branch is kept");
+}
+
+/// U191, U192 (FR-006, EC-8): an allowed delete archives the session and its credential stops
+/// answering.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_delete_session_archives_it_and_revokes_its_credential() {
+    let f = Fixture::new().await;
+    let key = credential(&f.state, sid(FAILED));
+    let asked = answering_window(&f.state, true);
+
+    let out = f.ok(CALLER, "delete_session", target(FAILED)).await;
+
+    assert_eq!(out, json!({}));
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    let error = f.err(CALLER, "get_session", target(FAILED)).await;
+    assert_eq!(error["category"], "not_found", "archived: {error}");
+    let request = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).to_string();
+    let (status, _) = post_mcp(f.addr, Some(&key), &request).await;
+    assert_eq!(status, 401, "the deleted session's credential is refused");
+}
+
+/// U193 (EC-4): of two agents deleting one worktree, the one asked second is told it is gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn of_two_agents_deleting_one_worktree_the_second_is_not_found() {
+    let f = Fixture::new().await;
+    let mut window = fake_window(&f.state);
+    let args = json!({"worktree": "d"});
+    let first = {
+        let (addr, key, args) = (f.addr, credential(&f.state, sid(CALLER)), args.clone());
+        tokio::spawn(async move { call_tool(addr, &key, "delete_worktree", args).await })
+    };
+    let (first_id, _) = next_prompt(&mut window).await;
+    let second = {
+        let (addr, key, args) = (f.addr, credential(&f.state, sid(IDLE)), args.clone());
+        tokio::spawn(async move { call_tool(addr, &key, "delete_worktree", args).await })
+    };
+    let (_second_id, _) = next_prompt(&mut window).await;
+
+    f.state.answer_confirmation(first_id, true);
+
+    let first = first.await.unwrap();
+    assert_eq!(first["isError"], json!(false), "{first}");
+    let second = second.await.unwrap();
+    assert_eq!(second["isError"], json!(true), "{second}");
+    assert_eq!(
+        second["structuredContent"]["error"]["category"], "not_found",
+        "{second}"
+    );
+}
+
+/// A16 (US3 s4; FR-014): each destructive tool on another target asks every window first, and
+/// nothing changes while it waits or when the user declines.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn each_destructive_tool_waits_for_the_user_and_a_decline_changes_nothing() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let running = f.state.primary_pty(sid(IDLE)).expect("running");
+    let cases = [
+        ("stop_session", target(IDLE)),
+        ("interrupt_session", target(IDLE)),
+        ("delete_session", target(FAILED)),
+        (
+            "delete_worktree",
+            json!({"worktree": "d", "stop_sessions": true}),
+        ),
+    ];
+    for (tool, args) in cases {
+        let mut window = fake_window(&f.state);
+        let call = {
+            let (addr, key, args) = (f.addr, credential(&f.state, sid(CALLER)), args.clone());
+            tokio::spawn(async move { call_tool(addr, &key, tool, args).await })
+        };
+        let (id, prompt) = next_prompt(&mut window).await;
+        let DaemonMsg::ConfirmationRequested {
+            caller,
+            target_label,
+            ..
+        } = &prompt
+        else {
+            unreachable!()
+        };
+        assert_eq!(*caller, sid(CALLER), "{tool}: names the caller");
+        assert!(!target_label.is_empty(), "{tool}: names the target");
+        // Waiting: nothing has changed yet.
+        assert!(!call.is_finished(), "{tool} waits for the answer");
+        assert!(f.state.live_session(sid(IDLE)).is_some(), "{tool}");
+        f.state.answer_confirmation(id, false);
+        let result = call.await.unwrap();
+        assert_eq!(result["isError"], json!(true), "{tool}: {result}");
+        let error = &result["structuredContent"]["error"];
+        assert_eq!(error["category"], "refused_by_policy", "{tool}: {error}");
+        assert_eq!(error["message"], "declined by the user", "{tool}");
+    }
+    let still = f.state.primary_pty(sid(IDLE)).expect("still running");
+    assert!(Arc::ptr_eq(&running, &still), "the same process");
+    assert_eq!(f.lifecycle_of(FAILED).await, "failed", "not deleted");
+    assert!(f.worktree_dir("d").is_dir(), "not deleted");
+}
+
+/// FR-014: with no window to ask, a destructive request needs confirmation and changes nothing.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn with_no_window_a_destructive_request_needs_confirmation() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let error = f.err(CALLER, "stop_session", target(IDLE)).await;
+    assert_eq!(error["category"], "needs_confirmation", "{error}");
+    assert!(f.state.live_session(sid(IDLE)).is_some(), "still running");
+}
+
+/// A17 (US3 s5; FR-015): a session may not stop or delete itself or delete its own worktree, nor
+/// interrupt itself; nobody is asked and nothing changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn self_targets_are_refused_without_a_prompt() {
+    let f = Fixture::new().await;
+    let asked = answering_window(&f.state, true);
+    for (tool, args, category) in [
+        ("stop_session", target(CALLER), "refused_by_policy"),
+        ("delete_session", target(CALLER), "refused_by_policy"),
+        ("delete_worktree", json!({"worktree": "b"}), "refused_by_policy"),
+        (
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true}),
+            "refused_by_policy",
+        ),
+        ("interrupt_session", target(CALLER), "invalid_input"),
+    ] {
+        let error = f.err(CALLER, tool, args.clone()).await;
+        assert_eq!(error["category"], category, "{tool} {args}: {error}");
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 0, "no prompt for a refusal");
+    assert!(f.worktree_dir("b").is_dir());
+    assert_eq!(f.lifecycle_of(CALLER).await, "idle");
+}
+
+/// A18 (US3 s6; FR-015a): a Default session may not delete a worktree; nobody is asked.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_default_session_is_refused_delete_worktree() {
+    let f = Fixture::new().await;
+    let asked = answering_window(&f.state, true);
+    let error = f
+        .err(
+            ROOT,
+            "delete_worktree",
+            json!({"worktree": "d", "stop_sessions": true}),
+        )
+        .await;
+    assert_eq!(error["category"], "refused_by_policy", "{error}");
+    assert!(
+        error["message"].as_str().unwrap().contains("Principle III"),
+        "{error}"
+    );
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+    assert!(f.worktree_dir("d").is_dir(), "nothing changed");
+}
+
+/// Scope (FR-010): an unknown target is not found before anybody is asked.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_unknown_target_is_not_found_without_a_prompt() {
+    let f = Fixture::new().await;
+    let asked = answering_window(&f.state, true);
+    for (tool, args) in [
+        ("stop_session", target(99)),
+        ("interrupt_session", target(99)),
+        ("delete_session", target(99)),
+        ("delete_worktree", json!({"worktree": "nope"})),
+    ] {
+        let error = f.err(CALLER, tool, args).await;
+        assert_eq!(error["category"], "not_found", "{tool}: {error}");
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+}
+
+type Client = tokio_util::codec::Framed<tokio::io::DuplexStream, ClientCodec>;
+
+async fn connect(state: &Arc<DaemonState>) -> Client {
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    tokio::spawn(micold_daemon::server::serve_connection(
+        Arc::clone(state),
+        server_io,
+    ));
+    let mut client = tokio_util::codec::Framed::new(client_io, ClientCodec::new());
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "test".into(),
+            client_instance: ClientInstance::current(),
+            client_package_version: PACKAGE_VERSION.into(),
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
+        }))
+        .await
+        .unwrap();
+    client
+}
+
+/// U168, U171: the protocol's `SessionStop` ends the processes and now tells every window the
+/// session is `Idle`.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_protocol_session_stop_ends_the_processes_and_broadcasts_idle() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let mut window = fake_window(&f.state);
+    let mut client = connect(&f.state).await;
+
+    client
+        .send(Frame::Control(ClientMsg::SessionStop { session: sid(IDLE) }))
+        .await
+        .unwrap();
+
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |c| {
+            lifecycle_in(c, sid(IDLE)) == Some(WireLifecycle::Idle)
+        })
+        .await,
+        "every window sees it idle"
+    );
+    assert!(f.state.live_session(sid(IDLE)).is_none(), "no process left");
+    drop(client);
 }
