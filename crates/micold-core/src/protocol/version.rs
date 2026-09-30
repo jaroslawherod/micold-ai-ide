@@ -62,7 +62,10 @@
 /// Bumped 15 → 16 for feature 034's `ClientMsg::RemoteList` / `OperationResult::RemoteList`: the
 /// client asks for a project's own remote URLs to find the GitHub repository behind them. An older
 /// peer would fail to decode either variant.
-pub const PROTOCOL_VERSION: u32 = 16;
+/// Bumped 16 → 17 for feature 034's `tool_server_enabled` on `DaemonSettings` and
+/// `ClientMsg::SettingsSet` (FR-004): the Settings toggle that turns the tool-server binding off.
+/// An older peer would fail to decode either field.
+pub const PROTOCOL_VERSION: u32 = 17;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

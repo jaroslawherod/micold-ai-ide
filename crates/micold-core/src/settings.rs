@@ -142,6 +142,14 @@ pub struct Settings {
     /// service is what spawns the session and so the only side that acts on it.
     #[serde(default = "default_pi_activity_component")]
     pub pi_activity_component: bool,
+    /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
+    #[serde(default = "default_tool_server_enabled")]
+    pub tool_server_enabled: bool,
+}
+
+/// The binding's default when a file predates it: on (FR-004).
+fn default_tool_server_enabled() -> bool {
+    true
 }
 
 /// The switch's default when a file predates it: on (FR-012e).
@@ -160,6 +168,7 @@ impl Default for Settings {
             daemon: DaemonConfig::default(),
             default_ai_cli: AiCli::default(),
             pi_activity_component: default_pi_activity_component(),
+            tool_server_enabled: default_tool_server_enabled(),
         }
     }
 }
@@ -365,6 +374,10 @@ struct StoredSettings {
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_pi_activity_component")]
     pi_activity_component: bool,
+    /// Missing in pre-034 files → on, the requirement's default (FR-004). Additive and defaulted,
+    /// so `settings_version` does not move for it either.
+    #[serde(default = "default_tool_server_enabled")]
+    tool_server_enabled: bool,
 }
 
 impl StoredSettings {
@@ -379,6 +392,7 @@ impl StoredSettings {
             daemon: settings.daemon.clone(),
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
+            tool_server_enabled: settings.tool_server_enabled,
         }
     }
 
@@ -407,6 +421,7 @@ impl StoredSettings {
             // which is the user's choice to keep (research R11).
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
+            tool_server_enabled: self.tool_server_enabled,
         }
     }
 }

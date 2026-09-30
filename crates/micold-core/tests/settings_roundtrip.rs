@@ -488,3 +488,56 @@ fn a_document_without_a_version_number_keeps_every_value_it_holds() {
         "the file was moved aside, so the settings in it were discarded"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 034 — the tool server's binding toggle (FR-004)
+// ---------------------------------------------------------------------------------------
+
+/// U72. The binding is what makes the tools reach an agent with no setup, so it is on until the
+/// user turns it off (FR-004: "default: on").
+#[test]
+fn the_tool_server_binding_is_on_by_default() {
+    assert!(
+        Settings::default().tool_server_enabled,
+        "FR-004 makes the binding the default; a fresh install must bind its sessions"
+    );
+}
+
+/// U73. A file written before the toggle existed is a user who never turned the binding off.
+#[test]
+fn a_settings_file_written_before_the_toggle_loads_with_the_binding_on() {
+    let (_dir, store, _path) = store_with(
+        r#"{
+            "settings_version": 4,
+            "theme": "dark",
+            "pi_activity_component": false
+        }"#,
+    );
+
+    let outcome = store.load();
+
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(
+        outcome.settings.tool_server_enabled,
+        "a file that predates the toggle never said no, so the binding stays on"
+    );
+}
+
+/// U74. Turning the binding off is a choice the user makes once; it outlives a restart.
+#[test]
+fn turning_the_tool_server_binding_off_survives_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+
+    store
+        .save(&Settings {
+            tool_server_enabled: false,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    assert!(
+        !store.load().settings.tool_server_enabled,
+        "the user turned the binding off; loading the file must not turn it back on"
+    );
+}

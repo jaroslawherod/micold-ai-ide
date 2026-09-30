@@ -164,6 +164,7 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
         env_include_timeout_secs: None,
         default_ai_cli: None,
         pi_activity_component: None,
+        tool_server_enabled: None,
     }))
     .await
     .unwrap();

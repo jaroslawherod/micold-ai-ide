@@ -525,6 +525,9 @@ pub enum ClientMsg {
         /// Load Pi's activity component into new Pi sessions, or `None` to leave unchanged
         /// (feature 029, FR-012e).
         pi_activity_component: Option<bool>,
+        /// Bind new sessions to the service's tool server, or `None` to leave unchanged
+        /// (feature 034, FR-004).
+        tool_server_enabled: Option<bool>,
     },
 
     // --- AI CLIs ---
@@ -1026,6 +1029,9 @@ pub struct DaemonSettings {
     /// Whether a Pi session is started with this application's activity component loaded
     /// (feature 029, FR-012e). Service-owned like the default CLI, because the spawn reads it.
     pub pi_activity_component: bool,
+    /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
+    /// Service-owned for the same reason: the spawn reads it, and running sessions keep theirs.
+    pub tool_server_enabled: bool,
 }
 
 /// The result payload of a successful mutating request.

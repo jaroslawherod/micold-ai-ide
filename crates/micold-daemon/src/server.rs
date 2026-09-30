@@ -973,6 +973,7 @@ where
                 env_include_timeout_secs,
                 default_ai_cli,
                 pi_activity_component,
+                tool_server_enabled: _,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),

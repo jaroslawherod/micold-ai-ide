@@ -281,6 +281,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         default_ai_cli: AiCli::ClaudeCode,
         pi_activity_component: true,
+        tool_server_enabled: true,
     }
 }
 
@@ -2014,6 +2015,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 env_include_script_path: "/authoritative/from-daemon.sh".into(),
                 env_include_timeout_secs: 30,
                 pi_activity_component: true,
+                tool_server_enabled: true,
             },
         }),
     );
@@ -2044,6 +2046,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 env_include_script_path: "/tmp/after.sh".into(),
                 env_include_timeout_secs: 45,
                 pi_activity_component: true,
+                tool_server_enabled: true,
             },
         })),
     );
@@ -2514,6 +2517,7 @@ fn the_service_answers_with(
                 env_include_script_path: String::new(),
                 env_include_timeout_secs: 30,
                 pi_activity_component: false,
+                tool_server_enabled: true,
             },
         }),
     );

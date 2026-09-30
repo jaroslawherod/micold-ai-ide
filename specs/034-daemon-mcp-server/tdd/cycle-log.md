@@ -276,3 +276,57 @@ was taken by stubbing that implementation out and restoring it afterwards.
   ```
 - green: `read_head` drains (bounded by `MAX_DRAIN` and `DRAIN_TIMEOUT`) before returning
   `TooLarge`; this covers the hook receiver's 431 too. http 8 passed, mcp_endpoint 17, hooks_receiver 5.
+
+## Cycle 12 — U72, U73, U74 — T023 (settings half), T026 (core `Settings`)
+
+- tests: `crates/micold-core/tests/settings_roundtrip.rs` — `the_tool_server_binding_is_on_by_default`,
+  `a_settings_file_written_before_the_toggle_loads_with_the_binding_on`,
+  `turning_the_tool_server_binding_off_survives_a_save_and_load`.
+- red (U72, U73), with a stub `tool_server_enabled: bool` on `Settings` defaulting to `false`:
+  `scripts/build-lock.sh cargo test -p micold-core --test settings_roundtrip -- the_tool_server_binding_is_on_by_default a_settings_file_written_before_the_toggle_loads_with_the_binding_on turning_the_tool_server_binding_off_survives_a_save_and_load`
+  ```
+  thread 'a_settings_file_written_before_the_toggle_loads_with_the_binding_on' (1525542) panicked at crates/micold-core/tests/settings_roundtrip.rs:520:5:
+  a file that predates the toggle never said no, so the binding stays on
+  thread 'the_tool_server_binding_is_on_by_default' (1525543) panicked at crates/micold-core/tests/settings_roundtrip.rs:500:5:
+  FR-004 makes the binding the default; a fresh install must bind its sessions
+  test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 21 filtered out
+  ```
+  U74 passed against that stub (false saved, false loaded), so it was not a red yet.
+- green (U72, U73): `default_tool_server_enabled() -> true` for `Default` and the serde default;
+  `into_settings` still ignored the stored value. That made U74 red, same command:
+  ```
+  thread 'turning_the_tool_server_binding_off_survives_a_save_and_load' (1534075) panicked at crates/micold-core/tests/settings_roundtrip.rs:539:5:
+  the user turned the binding off; loading the file must not turn it back on
+  test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out
+  ```
+- green (U74): `StoredSettings.tool_server_enabled` (`#[serde(default = "default_tool_server_enabled")]`),
+  carried both ways. settings_roundtrip 24 passed.
+- refactor: none needed.
+
+## Cycle 13 — U75, U82 — T023 (protocol half), T026 (wire + bump)
+
+- tests: `crates/micold-core/tests/protocol_roundtrip.rs` (`SettingsSet` with `Some(false)` and with
+  `None`, `DaemonSettings` in `Welcome` with `true` and in `SettingsChanged` with `false`);
+  `crates/micold-core/tests/schema_hash.rs` pin `FEATURE_026_PROTOCOL_VERSION` 16 → 17.
+- red (U75): `scripts/build-lock.sh cargo test -p micold-core --test protocol_roundtrip --test schema_hash`
+  ```
+  error[E0559]: variant `ClientMsg::SettingsSet` has no field named `tool_server_enabled`
+  error[E0560]: struct `DaemonSettings` has no field named `tool_server_enabled`
+  ```
+  A compile red: a serde-derived field round-trips the moment it exists, so the round trip has no
+  assertion red of its own (the same shape as `pi_activity_component` in feature 029).
+- red (U82): `scripts/build-lock.sh cargo test -p micold-core --test schema_hash the_wire_changes_for_this_feature_cost_exactly_one_version_bump`
+  ```
+  assertion `left == right` failed: the protocol version moved. …
+    left: 16
+   right: 17
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out
+  ```
+- green: `DaemonSettings.tool_server_enabled: bool`, `ClientMsg::SettingsSet.tool_server_enabled:
+  Option<bool>`, `PROTOCOL_VERSION` 16 → 17 with its changelog line. `protocol_auth.rs`'s literal
+  pin followed (`the_protocol_version_is_seventeen`), the pin's documented purpose. Compile plumbing
+  only elsewhere: `settings_wire` projects the field; the server's `SettingsSet` arm ignores it
+  (cycle 14 wires it); client literals and `SettingsSet` sends carry placeholders (cycle 15 replaces
+  them). `mise run test-core`: 1381 passed, 0 failed; `cargo check --workspace --all-targets` clean.
+  Full workspace suite deferred to the milestone's `mise run gate`.
+- refactor: none needed.

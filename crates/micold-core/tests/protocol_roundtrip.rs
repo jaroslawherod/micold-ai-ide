@@ -226,6 +226,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_timeout_secs: Some(20),
             default_ai_cli: Some(AiCli::Copilot),
             pi_activity_component: Some(false),
+            // Feature 034 (FR-004): turning the binding off must cross the wire as `false`.
+            tool_server_enabled: Some(false),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -237,6 +239,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            tool_server_enabled: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -351,6 +354,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_timeout_secs: 10,
                 default_ai_cli: AiCli::ClaudeCode,
                 pi_activity_component: true,
+                tool_server_enabled: true,
             },
         },
         DaemonMsg::Refused {
@@ -408,6 +412,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_timeout_secs: 5,
                 default_ai_cli: AiCli::Pi,
                 pi_activity_component: false,
+                tool_server_enabled: false,
             },
         },
         DaemonMsg::SessionTitleChanged {
