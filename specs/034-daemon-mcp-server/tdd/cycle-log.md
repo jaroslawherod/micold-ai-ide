@@ -189,3 +189,31 @@ was taken by stubbing that implementation out and restoring it afterwards.
   in the ledger. U128 is reached the only way the daemon produces `prunable`: a directory under
   `.claude/worktrees/` that git does not know (`Invalid` → `Prunable`); a git-prunable worktree
   reports `missing` (U126).
+
+## Cycle 9 — A1, A4, A5, U59–U70 — T016, T020
+
+- tests: `crates/micold-daemon/tests/mcp_binding_spawn.rs` (11 tests, unix-only: recording
+  `#!/bin/sh` stand-ins for `claude`, `copilot` and `pi` on `PATH`, `HOME`/`XDG_DATA_HOME`
+  redirected, one test at a time under a `tokio::sync::Mutex`). The log capture moved from
+  `mcp_endpoint.rs` into `tests/support/mcp.rs` (`log`, `log_lines_for`) so both files share it.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_spawn`, before any
+  spawn wiring
+  ```
+  thread 'a_pi_session_spawns_with_its_pre_feature_argv_and_one_skip_line' (558691) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:295:5:
+  assertion `left == right` failed: []
+    left: 0
+   right: 1
+  test result: FAILED. 2 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `DaemonState::tool_server_launch_for` / `tool_server_binding` beside
+  `activity_launch_for`: provider support → tool server present → name collision (session env
+  `CLAUDE_CONFIG_DIR`, then the process's; Copilot's config dir from its provider) → credential →
+  `binding::plan` → owner-only write; appended after the activity arguments in `start_session` and
+  `respawn_primary`; one `info` line "no tool server: <reason>" per unbound AI-CLI spawn. 11 passed.
+- mutants: the two tests passing at red were checked. `the_service_keeps_binding_files_under_its_own_data_directory`
+  (the directory had landed with cycle 7): `default_binding_dir` pointed at the temp directory made
+  it fail (0 passed; 1 failed); restored. `a_regular_terminal_session_gets_no_binding_and_no_log_line`
+  passes by construction (a Regular spawn never reaches the binding); it is a regression guard for
+  U67.
+- refactor: `cargo fmt --all` reformatted the feature's earlier files too (cycles 2–8 were
+  committed unformatted); formatting only.

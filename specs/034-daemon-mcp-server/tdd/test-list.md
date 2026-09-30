@@ -61,11 +61,11 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1 | A session S3 spawned in worktree `b` with a Claude stand-in, no user action, answers `tools/list` and `whoami` over `POST /mcp` with the credential from its own binding file | US1-AS1, FR-001, FR-002, SC-001 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
+| A1 | A session S3 spawned in worktree `b` with a Claude stand-in, no user action, answers `tools/list` and `whoami` over `POST /mcp` with the credential from its own binding file | US1-AS1, FR-001, FR-002, SC-001 | example | DONE | `mcp_binding_spawn.rs::a_claude_session_is_bound_and_answers_whoami_with_its_own_credential` |
 | A2 | S3's `list_worktrees` returns `default`, `a` and `b` with branch, status and `app_created`, the set the sidebar's snapshot holds | US1-AS2, FR-008 | example | DONE | `mcp_read_tools.rs::list_worktrees_is_default_then_the_sidebars_set` |
 | A3 | S3's `list_sessions` returns S1, S2, S3 with label, AI CLI, lifecycle, activity and worktree, and only S3 has `is_caller: true` | US1-AS3, FR-008 | example | DONE | `mcp_read_tools.rs::list_sessions_marks_only_the_caller` |
-| A4 | After bound spawns, fixture `~/.claude.json`, `~/.claude/settings.json`, `<project>/.mcp.json` and `~/.copilot/mcp-config.json` hash identically to before | US1-AS4, FR-003, SC-002 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| A5 | A Pi session spawns with exactly its pre-feature argv and one `info` line "no tool server: Pi has no MCP support" (the user-guide half is not testable, see *Out of scope*) | US1-AS5, FR-005, EC-13 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
+| A4 | After bound spawns, fixture `~/.claude.json`, `~/.claude/settings.json`, `<project>/.mcp.json` and `~/.copilot/mcp-config.json` hash identically to before | US1-AS4, FR-003, SC-002 | example | DONE | `mcp_binding_spawn.rs::bound_spawns_leave_every_user_configuration_file_byte_identical` |
+| A5 | A Pi session spawns with exactly its pre-feature argv and one `info` line "no tool server: Pi has no MCP support" (the user-guide half is not testable, see *Out of scope*) | US1-AS5, FR-005, EC-13 | example | DONE | `mcp_binding_spawn.rs::a_pi_session_spawns_with_its_pre_feature_argv_and_one_skip_line` |
 | A6 | With `tool_server_enabled = false` a new session spawns unbound with "disabled in settings" logged, and a session bound before the change still answers `whoami` | US1-AS6, FR-004, EC-18 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
 | A7 | `create_worktree {branch: feat-x}` from a worktree session creates `.claude/worktrees/feat-x` recorded app-created, a fake window receives `CatalogChanged` holding it within 2 s, and the result carries its ref, branch and path | US2-AS1, FR-009, FR-011, SC-003 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
 | A8 | `create_worktree` for a branch that exists or is checked out elsewhere fails `conflict` naming the pre-flight situation, and the worktree list and directory tree are unchanged | US2-AS2, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
@@ -182,18 +182,18 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U59 | A Claude session's spawn argv ends with the binding arguments | FR-002 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U60 | A Copilot session's spawn argv ends with `--additional-mcp-config @<file> --allow-tool micold` | FR-002 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U61 | The binding file is `<data_dir>/mcp/<uuid>.json` and is owner-only | FR-003, FR-007 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U62 | Twenty bound spawns leave every fixture configuration file byte-identical | SC-002, FR-003 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U63 | A name collision spawns the session unbound, with its pre-feature argv, logging the colliding path | FR-003, FR-005, EC-14 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U64 | A respawn of the same session reuses its credential and rewrites its file | FR-006, EC-11 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U65 | A session respawned after a crash (`Restarting`) answers `whoami` with its credential | EC-11 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U66 | An `InterruptedResumable` session started after a service restart gets a new credential in its file, and the pre-restart one answers `401` | EC-7, FR-006 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U67 | A Regular-terminal session gets no binding and no tool-server log line | FR-002 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U68 | With no tool server running, an AI-CLI session starts unbound with "tool server unavailable" logged | FR-005 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U69 | When the binding file cannot be written, the session still starts, unbound, with "could not write the binding: …" logged | FR-005 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
-| U70 | Each unbound AI-CLI spawn logs exactly one skip line | FR-005 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
+| U59 | A Claude session's spawn argv ends with the binding arguments | FR-002 | example | DONE | `mcp_binding_spawn.rs::a_claude_session_is_bound_and_answers_whoami_with_its_own_credential` |
+| U60 | A Copilot session's spawn argv ends with `--additional-mcp-config @<file> --allow-tool micold` | FR-002 | example | DONE | `mcp_binding_spawn.rs::a_copilot_session_ends_with_the_additional_mcp_config_arguments` |
+| U61 | The binding file is `<data_dir>/mcp/<uuid>.json` and is owner-only | FR-003, FR-007 | example | DONE | `mcp_binding_spawn.rs::a_claude_session_is_bound_and_answers_whoami_with_its_own_credential`, `the_service_keeps_binding_files_under_its_own_data_directory` |
+| U62 | Twenty bound spawns leave every fixture configuration file byte-identical | SC-002, FR-003 | example | DONE | `mcp_binding_spawn.rs::bound_spawns_leave_every_user_configuration_file_byte_identical` |
+| U63 | A name collision spawns the session unbound, with its pre-feature argv, logging the colliding path | FR-003, FR-005, EC-14 | example | DONE | `mcp_binding_spawn.rs::a_name_collision_spawns_unbound_and_logs_the_colliding_file` |
+| U64 | A respawn of the same session reuses its credential and rewrites its file | FR-006, EC-11 | example | DONE | `mcp_binding_spawn.rs::a_crash_respawn_reuses_the_credential_and_rewrites_the_file` |
+| U65 | A session respawned after a crash (`Restarting`) answers `whoami` with its credential | EC-11 | example | DONE | `mcp_binding_spawn.rs::a_crash_respawn_reuses_the_credential_and_rewrites_the_file` |
+| U66 | An `InterruptedResumable` session started after a service restart gets a new credential in its file, and the pre-restart one answers `401` | EC-7, FR-006 | example | DONE | `mcp_binding_spawn.rs::a_session_started_after_a_service_restart_gets_a_new_credential` |
+| U67 | A Regular-terminal session gets no binding and no tool-server log line | FR-002 | example | DONE | `mcp_binding_spawn.rs::a_regular_terminal_session_gets_no_binding_and_no_log_line` |
+| U68 | With no tool server running, an AI-CLI session starts unbound with "tool server unavailable" logged | FR-005 | example | DONE | `mcp_binding_spawn.rs::without_a_tool_server_a_session_starts_unbound_and_says_so_once` |
+| U69 | When the binding file cannot be written, the session still starts, unbound, with "could not write the binding: …" logged | FR-005 | example | DONE | `mcp_binding_spawn.rs::an_unwritable_binding_starts_the_session_unbound_and_says_so_once` |
+| U70 | Each unbound AI-CLI spawn logs exactly one skip line | FR-005 | example | DONE | `mcp_binding_spawn.rs` (each skip test asserts exactly one line) |
 | U71 | Re-enabling `tool_server_enabled` binds the next spawn again | FR-004 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_binding_spawn.rs` |
 
 ### `crates/micold-core/src/settings.rs`, `protocol/{messages,version}.rs` (T023, T026, T049, T053, T062, T067)

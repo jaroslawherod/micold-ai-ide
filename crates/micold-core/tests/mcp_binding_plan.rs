@@ -47,7 +47,13 @@ fn the_claude_file_is_exactly_one_http_server_named_micold() {
 
 #[test]
 fn copilot_is_bound_by_additional_mcp_config_and_allow_tool() {
-    let bound = plan(ToolServerSupport::AdditionalMcpConfig, URL, CREDENTIAL, &file()).unwrap();
+    let bound = plan(
+        ToolServerSupport::AdditionalMcpConfig,
+        URL,
+        CREDENTIAL,
+        &file(),
+    )
+    .unwrap();
     assert_eq!(
         bound.args,
         vec![
@@ -61,7 +67,13 @@ fn copilot_is_bound_by_additional_mcp_config_and_allow_tool() {
 
 #[test]
 fn the_copilot_file_is_the_claude_entry_plus_every_tool() {
-    let bound = plan(ToolServerSupport::AdditionalMcpConfig, URL, CREDENTIAL, &file()).unwrap();
+    let bound = plan(
+        ToolServerSupport::AdditionalMcpConfig,
+        URL,
+        CREDENTIAL,
+        &file(),
+    )
+    .unwrap();
     let parsed: Value = serde_json::from_str(&bound.file_contents).unwrap();
     let mut entry = claude_entry();
     entry["tools"] = json!(["*"]);

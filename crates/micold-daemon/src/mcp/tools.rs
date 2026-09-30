@@ -154,13 +154,9 @@ impl Context<'_> {
         } else {
             ProvenanceView::new(&records)
         };
-        let candidates = worktree::branch_candidates(
-            &micold_core::git::GitCli::new(),
-            &repo,
-            &included,
-            &view,
-        )
-        .map_err(|e| OpError::service_error(format!("could not list the branches: {e}")))?;
+        let candidates =
+            worktree::branch_candidates(&micold_core::git::GitCli::new(), &repo, &included, &view)
+                .map_err(|e| OpError::service_error(format!("could not list the branches: {e}")))?;
         let branches: Vec<Value> = candidates
             .iter()
             .map(|c| {
@@ -222,7 +218,9 @@ impl Context<'_> {
             .sessions
             .iter()
             .find(|s| s.id == session)
-            .ok_or_else(|| OpError::not_found(format!("no session {} in this project", session.0)))?;
+            .ok_or_else(|| {
+                OpError::not_found(format!("no session {} in this project", session.0))
+            })?;
         let mut row = self.session_row(summary);
         if let WireLifecycle::Failed { reason, .. } = &summary.lifecycle {
             row["failure_reason"] = json!(reason);

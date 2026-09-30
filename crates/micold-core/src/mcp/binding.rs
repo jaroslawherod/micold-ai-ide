@@ -149,7 +149,10 @@ pub fn name_taken(
                 .map(|_| project_file)
         }
         ToolServerSupport::AdditionalMcpConfig => {
-            let path = locations.copilot_config_dir.as_ref()?.join("mcp-config.json");
+            let path = locations
+                .copilot_config_dir
+                .as_ref()?
+                .join("mcp-config.json");
             read_json(&path).filter(names_micold).map(|_| path)
         }
         ToolServerSupport::Unsupported { .. } => None,

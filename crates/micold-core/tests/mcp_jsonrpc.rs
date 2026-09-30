@@ -91,7 +91,10 @@ fn initialize_echoes_each_supported_protocol_version() {
 fn initialize_answers_the_latest_version_for_any_other() {
     for version in ["2024-11-05", "1999-01-01", ""] {
         let response = initialize(version);
-        assert_eq!(response["result"]["protocolVersion"], LATEST_PROTOCOL_VERSION);
+        assert_eq!(
+            response["result"]["protocolVersion"],
+            LATEST_PROTOCOL_VERSION
+        );
     }
     assert_eq!(LATEST_PROTOCOL_VERSION, "2026-07-28");
 }
@@ -103,7 +106,9 @@ fn initialize_declares_tools_without_list_changes_and_names_the_server() {
     assert_eq!(result["serverInfo"]["name"], "micold");
     assert_eq!(result["serverInfo"]["version"], VERSION);
     assert!(
-        result["instructions"].as_str().is_some_and(|s| !s.is_empty()),
+        result["instructions"]
+            .as_str()
+            .is_some_and(|s| !s.is_empty()),
         "initialize must carry the instructions paragraph"
     );
 }
@@ -155,10 +160,7 @@ fn a_failure_result_names_its_category_and_message() {
     let error = OpError::new(ErrorCategory::NotFound, "no such session");
     let result = tool_failure(&error);
     assert_eq!(result["isError"], json!(true));
-    assert_eq!(
-        result["content"][0]["text"],
-        "not_found: no such session"
-    );
+    assert_eq!(result["content"][0]["text"], "not_found: no such session");
     assert_eq!(
         result["structuredContent"]["error"],
         json!({"category": "not_found", "message": "no such session"})

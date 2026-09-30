@@ -26,7 +26,8 @@ pub const LATEST_PROTOCOL_VERSION: &str = "2026-07-28";
 pub const SERVER_NAME: &str = "micold";
 
 /// The `instructions` paragraph `initialize` returns: the scope and the confirmation policy.
-pub const INSTRUCTIONS: &str = "These tools read and manage the worktrees and sessions of the Micold \
+pub const INSTRUCTIONS: &str =
+    "These tools read and manage the worktrees and sessions of the Micold \
 project this session belongs to, and only that project: another project's sessions and worktrees \
 are reported as not found. Changes made here are the same operations the user performs in the app \
 and appear in its windows at once. Operations that stop, interrupt or delete another session or a \
@@ -62,8 +63,8 @@ pub enum Route {
 
 /// Parse one request body. On failure, the JSON-RPC error response to send.
 pub fn parse(body: &[u8]) -> Result<Message, Value> {
-    let value: Value = serde_json::from_slice(body)
-        .map_err(|_| error(Value::Null, PARSE_ERROR, "Parse error"))?;
+    let value: Value =
+        serde_json::from_slice(body).map_err(|_| error(Value::Null, PARSE_ERROR, "Parse error"))?;
     let Value::Object(mut object) = value else {
         return Err(error(Value::Null, INVALID_REQUEST, "Invalid Request"));
     };

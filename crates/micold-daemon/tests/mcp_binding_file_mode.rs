@@ -101,7 +101,10 @@ mod windows {
             assert!(!dacl.is_null(), "{path:?} has a NULL DACL");
             let mut control = 0u16;
             let mut revision = 0u32;
-            assert_ne!(GetSecurityDescriptorControl(sd, &mut control, &mut revision), 0);
+            assert_ne!(
+                GetSecurityDescriptorControl(sd, &mut control, &mut revision),
+                0
+            );
             let ace_count = (*dacl).AceCount;
             let mut first_ace_allows_current_user = false;
             let mut ace: *mut core::ffi::c_void = null_mut();
@@ -127,7 +130,10 @@ mod windows {
         // SAFETY: the token handle is closed before returning; the SID lives in `buffer`.
         unsafe {
             let mut token: HANDLE = null_mut();
-            assert_ne!(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token), 0);
+            assert_ne!(
+                OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token),
+                0
+            );
             let mut needed = 0u32;
             GetTokenInformation(token, TokenUser, null_mut(), 0, &mut needed);
             let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
