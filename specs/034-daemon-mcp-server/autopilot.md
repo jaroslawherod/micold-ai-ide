@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M3
-- **Next step**: M3 PR #498 open (Windows CI fix 1: test expected a mixed-separator worktree path); wait for CI, then merge (rebase) and start M4.
+- **Next step**: M3 PR #498 open; Windows CI fix 1 (96d5b559: test expected a mixed-separator worktree path) was the only failure in run 36755280155; gate green and `cargo check --target x86_64-pc-windows-msvc --tests` (core, daemon) green after it; pushed. Wait for CI, then merge (rebase) and start M4.
 
 ## Pull requests
 
