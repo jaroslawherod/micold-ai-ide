@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M3
-- **Next step**: M3 in progress: create_worktree (cycle 20), create_session (cycle 21), audit line (cycle 22) done; next docs T042, quickstart B3 T102, gate, reviews, PR.
+- **Next step**: ESCALATED (see Open escalation): first prompt vs a CLI folder-trust question. After the answer: apply it test-first if needed, then gate, review A, review B, PR.
 
 ## Pull requests
 
@@ -57,6 +57,7 @@ deliverable (tasks.md Notes).
 | D16 | plan | Does Auto-default cross-session read/type conflict with Principle II? | Yes, a conflict (speckit-analyze C1, tie-break review). Keep `Auto`; record a justified violation in plan.md Complexity Tracking; Principle II check marked "justified violation"; keep FR-010/016/018 guards and `mcp_cross_session.rs`; no amendment | decided by user | plan.md#Complexity Tracking; .specify/memory/constitution.md#II, #Governance |
 | D17 | design | Resolve the Principle II conflict how: justified violation, MINOR amendment, or default `Off`? | Option 1, justified violation; no constitution amendment | decided by user | Coordinator relay of the user's decision on the escalation |
 | D18 | design | Milestones M1–M7 as cut? | Ship as cut, M1 through M7 in order, no changes | decided by user | Coordinator relay of the user's decision |
+| D19 | 4-milestone M3 | Claude Code never posts `SessionStart` over the HTTP hook; how does a Claude session show it is ready for its first prompt? | The output-settled rule, as FR-017 prescribes for a CLI that reports no signal; `HookSessionStart` removed | agent-resolved | evidence/m3-real-cli.md finding 1; cycle 23 |
 
 ## Review rounds
 
@@ -95,7 +96,17 @@ deliverable (tasks.md Notes).
 
 ## Open escalation
 
-None.
+- **M3, first prompt vs folder trust** (category 6, the plan proved false). In a folder the CLI has
+  not trusted yet, Claude Code and Copilot first show a trust question, and their output settles on
+  it. Under the output-settled rule the prompt's Enter answers it: Copilot's default is "Yes"
+  (trust granted for that session, prompt text lost, result still `prompt_delivered: true`);
+  Claude's default is "No, exit" (the session exits). With the project root trusted, worktrees
+  inherit it and every CLI got its prompt (evidence/m3-real-cli.md finding 4).
+  Options: (1, recommended) before waiting, read the CLI's own trust record for the session folder
+  (Claude `.claude.json` `projects[<main repo root>].hasTrustDialogAccepted`, Copilot
+  `config.json` `trustedFolders` ancestor match; read-only) and, when it would ask, type nothing and
+  return `prompt_delivered: false`, documented as "trust the project in that CLI first";
+  (2) ship as is and document the risk; (3) drop the first prompt for Claude and Copilot.
 
 ## Follow-ups not done
 

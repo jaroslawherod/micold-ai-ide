@@ -185,18 +185,6 @@ impl Sandbox {
         SessionId::from_uuid(out["session"].as_str().unwrap().parse().unwrap())
     }
 
-    /// Wait for a session other than `known` to appear in the catalog.
-    async fn new_session(&self, known: &[SessionId]) -> SessionId {
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            if let Some(id) = self.session_ids().into_iter().find(|id| !known.contains(id)) {
-                return id;
-            }
-            assert!(Instant::now() < deadline, "the session record never appeared");
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    }
-
     fn kill_all(&self) {
         for id in self.session_ids() {
             if let Some(pty) = self.state.live_session(id) {
@@ -394,8 +382,11 @@ async fn a_session_that_fails_to_start_reports_the_prompt_undelivered() {
     assert_eq!(out["lifecycle"], "failed", "{out}");
 }
 
+/// Claude Code posts no `SessionStart` over an HTTP hook (quickstart §B3,
+/// `evidence/m3-real-cli.md`), so with the hook receiver running it is still ready by the
+/// output-settled rule, and a `SessionStart` post, should one come, moves nothing.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown() {
+async fn with_the_hook_receiver_running_claude_is_ready_once_its_output_settles() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     let (receiver, listener) = HookReceiver::bind(s.store.path().join("hooks"))
@@ -409,26 +400,16 @@ async fn a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown
         Arc::clone(&s.state),
     ));
     s.state.set_hooks(receiver);
-    let known = s.session_ids();
 
-    let call = {
-        let addr = s.addr;
-        let bearer = credential(&s.state, sid(3));
-        tokio::spawn(async move {
-            call_ok(
-                addr,
-                &bearer,
-                "create_session",
-                json!({"worktree": "b", "ai_cli": "claude_code", "prompt": PROMPT}),
-            )
-            .await
-        })
-    };
-    let id = s.new_session(&known).await;
-    // Long past the point its drawn prompt settled: with a hook receiver, only the hook counts.
-    tokio::time::sleep(SETTLE_AFTER * 2).await;
-    assert_eq!(s.typed("claude"), "", "nothing is typed before the hook");
+    let asked = Instant::now();
+    let out = s
+        .ok(json!({"worktree": "b", "ai_cli": "claude_code", "prompt": PROMPT}))
+        .await;
+    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    assert!(asked.elapsed() >= SETTLE_AFTER, "not before its output settled");
+    assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
 
+    let id = Sandbox::created(&out);
     let token = registry
         .lock()
         .unwrap()
@@ -443,10 +424,6 @@ async fn a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown
     );
     let (status, _) = raw_request(hook_addr, request.as_bytes()).await;
     assert_eq!(status, 200);
-
-    let out = call.await.unwrap();
-    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
-    assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
     let summary = session_in(&s.state.catalog_snapshot(), id).cloned().unwrap();
     assert_eq!(
         summary.activity,

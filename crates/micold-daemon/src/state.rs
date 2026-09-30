@@ -254,8 +254,8 @@ struct LiveSession {
     /// not. A `Restarting` session counts as recovered only once its respawn has stayed up for
     /// [`RESTART_STABLE_AFTER`] from this reading (`005` BUG-004, FR-022a).
     respawned_at: Option<micold_core::clock::Uptime>,
-    /// Whether the CLI has said it is ready for its first prompt (feature 034, FR-017): Claude's
-    /// `SessionStart` hook, or Pi's `session_start` event. `create_session` waits on it.
+    /// Whether the CLI has said it is ready for its first prompt (feature 034, FR-017): Pi's
+    /// `session_start` event. `create_session` waits on it.
     ready: tokio::sync::watch::Sender<bool>,
 }
 
@@ -2429,10 +2429,10 @@ impl DaemonState {
     /// Wait until `session`'s CLI is ready for its first prompt, or until `deadline` (feature 034,
     /// FR-017, research R12). `true` when it became ready in time.
     ///
-    /// Each CLI names its own signal ([`InputReadiness`]): Claude's `SessionStart` hook, Pi's
-    /// `session_start` event. Where that signal cannot arrive — no hook receiver is running, or the
-    /// Pi component is declined — and for a CLI with no signal at all, the session is ready once
-    /// its terminal has produced output and then been quiet for [`SETTLE_AFTER`].
+    /// Each CLI names its own signal ([`InputReadiness`]): Pi's `session_start` event. Where that
+    /// signal cannot arrive — the Pi component is declined — and for a CLI with no signal at all
+    /// (Claude Code, Copilot), the session is ready once its terminal has produced output and then
+    /// been quiet for [`SETTLE_AFTER`].
     ///
     /// [`InputReadiness`]: micold_core::provider::InputReadiness
     /// [`SETTLE_AFTER`]: micold_core::mcp::submission::SETTLE_AFTER
@@ -2461,7 +2461,6 @@ impl DaemonState {
             return false;
         };
         let signalled = match provider.provider().input_readiness() {
-            InputReadiness::HookSessionStart => self.hooks.get().is_some(),
             InputReadiness::ExtensionEvent(_) => self.lock().catalog.pi_activity_component(),
             InputReadiness::OutputSettled => false,
         };

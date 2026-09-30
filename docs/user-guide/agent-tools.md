@@ -2,11 +2,13 @@
 
 Every Claude Code and GitHub Copilot session the application starts can see your project the way the
 sidebar shows it: which worktrees exist, which branches are free, and which sessions are running
-where. The session service provides this through a small tool server named `micold`, and each
+where. It can also create a worktree and start a session in it, as you would from the sidebar. The session service provides this through a small tool server named `micold`, and each
 session is connected to it automatically. You do not install or configure anything.
 
 Ask the assistant in a session something like *"which worktrees does this project have?"* or *"is
-anyone else working on the `parser` branch?"* and it answers from the same list you see.
+anyone else working on the `parser` branch?"* and it answers from the same list you see. Ask it to
+*"create a worktree for `feat-login` and start a Claude Code session there that fixes the login
+form"*, and the new worktree and session appear in every open window within a couple of seconds.
 
 ## What the assistant can do
 
@@ -22,6 +24,41 @@ These tools only read. None of them changes anything.
 
 Worktrees an assistant created for itself are left out, as they are in the sidebar, unless the
 assistant asks for them with `include_hidden`.
+
+These tools make changes, exactly as the sidebar does:
+
+| Tool | What it does |
+|---|---|
+| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch |
+| `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session |
+
+A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
+branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch
+name git does not accept. Nothing is created when a request fails. When several requests race for
+the same branch, one succeeds and the others are told the branch is taken.
+
+A session running in the project folder itself (`default`) cannot create worktrees. Work in the
+project folder is kept separate from worktrees, and an assistant there is refused with that reason.
+
+### The first prompt
+
+When `create_session` is given a prompt, it waits until the new session's AI CLI is ready to take
+it, types it in, and submits it once. A prompt of several lines arrives as one message. How the
+service knows the CLI is ready depends on the CLI:
+
+| AI CLI | Ready when |
+|---|---|
+| Claude Code | Its screen has shown something and then stopped changing for 1.5 seconds |
+| Pi Coding Agent | Pi reports that its session has started, through the activity reporter the application loads into it. If you turned off **Show activity for Pi sessions**, it is ready once its screen has stopped changing for 1.5 seconds |
+| GitHub Copilot | Its screen has shown something and then stopped changing for 1.5 seconds |
+
+The service waits at most 60 seconds from the request. If the CLI is not ready by then, or the
+session failed to start, the prompt is not typed at all, not even later, and the result says
+`prompt_delivered: false`. The session itself is still there; type into it yourself or ask the
+assistant to try again.
+
+If the AI CLI is not installed where the session would run, `create_session` fails, names the CLI,
+and leaves no session behind.
 
 ## What it can see
 
@@ -58,8 +95,21 @@ started with a few extra arguments pointing it at a per-session file in the sess
 data directory. Your own MCP servers keep working beside `micold`, and nothing is left in your files
 when you stop using the application.
 
-The assistant is allowed to use the `micold` tools without asking you each time. They only read,
-and they read nothing outside the project the session already works in.
+The assistant is allowed to use the `micold` tools without asking you each time. They reach
+nothing outside the project the session already works in, and they change only what you could
+change from the sidebar.
+
+## What the log records
+
+The session service writes one line to its log for every change an assistant asks for, whether it
+succeeds or not: the calling session, the tool, what it acted on (a branch, worktree or session), and
+`ok` or why it failed. For example:
+
+```text
+INFO micold::mcp: tool call caller=6f1c… op=create_worktree target=feat-login outcome=ok
+```
+
+A prompt, and anything else an assistant types into a session, is never written to the log.
 
 ## If you already have a server named `micold`
 

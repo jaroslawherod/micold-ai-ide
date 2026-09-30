@@ -646,3 +646,30 @@ was taken by stubbing that implementation out and restoring it afterwards.
   First run: `outcome` was a `&str` field, which fmt prints quoted; now `%outcome`.
   `cargo test -p micold-daemon`: 483 passed, 0 failed.
 - refactor: none (no per-handler logging existed to remove).
+
+## Cycle 23 — U38, U159 changed — T102 (quickstart §B3 finding)
+
+- trigger: the §B3 probe with the real CLIs (`evidence/m3-real-cli.md`): Claude Code posts its turn
+  hooks to the HTTP receiver but never `SessionStart`, so `HookSessionStart` readiness timed out
+  (`prompt_delivered: false` after 60 s) while a prompt typed once output settled was answered.
+- tests changed first (requirement change, stated): `crates/micold-core/tests/input_readiness.rs`
+  `claude_is_ready_on_its_session_start_hook` → `claude_is_ready_once_its_output_has_settled`
+  (U38); `crates/micold-daemon/tests/mcp_create_session.rs`
+  `a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown` →
+  `with_the_hook_receiver_running_claude_is_ready_once_its_output_settles` (U159: hook receiver
+  running, no hook posted, prompt delivered after `SETTLE_AFTER`; a later `SessionStart` post
+  leaves activity `Unknown`).
+- red: `scripts/build-lock.sh cargo test -p micold-core --test input_readiness` and
+  `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_create_session with_the_hook`
+  ```
+  thread 'claude_is_ready_once_its_output_has_settled' panicked at crates/micold-core/tests/input_readiness.rs:24:5:
+    left: HookSessionStart
+   right: OutputSettled
+  thread 'with_the_hook_receiver_running_claude_is_ready_once_its_output_settles' panicked at crates/micold-daemon/tests/mcp_create_session.rs:420:5:
+  assertion `left == right` failed: {"lifecycle":"running","prompt_delivered":false,"session":"331325a7-f07b-4c10-9dc2-8282fe50f96d"}
+  ```
+- green: Claude's `input_readiness()` is `OutputSettled`; the `HookSessionStart` variant and its
+  arm in `wait_ready_for_input` are gone; `hooks.rs` is back to `origin/main` (ignores
+  `SessionStart`). `cargo test -p micold-core --all-targets` + `-p micold-daemon`: 1888 passed.
+- refactor: `mcp_create_session.rs` lost its now-unused `new_session` helper; `mcp_audit_log.rs`'s
+  `// unix-only:` reason fits on the line above the gate (`daemon_tests_gate_with_reason.rs`).
