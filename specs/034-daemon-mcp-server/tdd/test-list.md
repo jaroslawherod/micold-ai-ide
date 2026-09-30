@@ -216,13 +216,13 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U83 | `tools/list` names exactly the tools whose handlers ship in the current milestone | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U84 | Every listed tool has a JSON-Schema `inputSchema`, `readOnlyHint` on read-only tools | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U83 | `tools/list` names exactly the tools whose handlers ship in the current milestone | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::tools_list_names_exactly_the_shipped_tools` (M1: the five read tools) |
+| U84 | Every listed tool has a JSON-Schema `inputSchema`, `readOnlyHint` on read-only tools | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only` |
 | U85 | `destructiveHint` is set on exactly `delete_worktree`, `delete_session`, `stop_session`, `interrupt_session` | FR-008, FR-014 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U86 | An unknown tool name fails `invalid_input` | FR-008, FR-013 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U87 | `list_worktrees` with a non-boolean `include_hidden` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U88 | A `session` that is not a UUID string fails `invalid_input` | FR-008, EC-2 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U89 | `WorktreeRef` parses `default` as the project root and any other name as a named worktree | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U86 | An unknown tool name fails `invalid_input` | FR-008, FR-013 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::an_unknown_tool_is_invalid_input` |
+| U87 | `list_worktrees` with a non-boolean `include_hidden` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_non_boolean_include_hidden_is_invalid_input` |
+| U88 | A `session` that is not a UUID string fails `invalid_input` | FR-008, EC-2 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_session_that_is_not_a_uuid_string_is_invalid_input` |
+| U89 | `WorktreeRef` parses `default` as the project root and any other name as a named worktree | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::{worktree_ref_default_is_the_project_root_and_anything_else_is_named, the_read_tools_parse_their_arguments}` |
 | U90 | `create_worktree` without `mode` means `new_branch` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U91 | `create_worktree` with `mode: track_remote` and no `remote` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U92 | `create_worktree` with an `overwrite` field fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
