@@ -4,11 +4,14 @@
 //! Pure; no I/O. Contract: `specs/034-github-issue-worktree/contracts/issue-naming-and-typing.md` §2.
 
 use crate::naming::ConventionalType;
+use serde::{Deserialize, Serialize};
 
-/// One mapping entry: an issue label and the worktree type it selects.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One mapping entry: an issue label and the worktree type it selects. Stored as
+/// `{"label": …, "type": …}` (contract §3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelTypeEntry {
     pub label: String,
+    #[serde(rename = "type")]
     pub type_: ConventionalType,
 }
 

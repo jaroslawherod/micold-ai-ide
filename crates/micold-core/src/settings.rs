@@ -7,6 +7,7 @@
 //! FR-019). On-disk format is the durable contract in
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
+use crate::issue_types::{default_mapping, LabelTypeEntry};
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
 use crate::session::AiCli;
@@ -145,6 +146,9 @@ pub struct Settings {
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     #[serde(default = "default_tool_server_enabled")]
     pub tool_server_enabled: bool,
+    /// The ordered label-to-type mapping an issue pick reads (feature 034, FR-016, FR-017).
+    #[serde(default = "default_mapping")]
+    pub issue_label_types: Vec<LabelTypeEntry>,
 }
 
 /// The binding's default when a file predates it: on (FR-004).
@@ -169,6 +173,7 @@ impl Default for Settings {
             default_ai_cli: AiCli::default(),
             pi_activity_component: default_pi_activity_component(),
             tool_server_enabled: default_tool_server_enabled(),
+            issue_label_types: default_mapping(),
         }
     }
 }
@@ -378,6 +383,24 @@ struct StoredSettings {
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_tool_server_enabled")]
     tool_server_enabled: bool,
+    /// Missing in pre-034 files → the default table (FR-021); `[]` stays `[]`. An entry naming a
+    /// type this build does not know is dropped on read and the rest kept (R10): one hand-edited
+    /// entry must not send the whole document to `.bak`. Additive and defaulted, so
+    /// `settings_version` does not move for it.
+    #[serde(default = "default_mapping", deserialize_with = "known_entries")]
+    issue_label_types: Vec<LabelTypeEntry>,
+}
+
+/// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped.
+fn known_entries<'de, D>(deserializer: D) -> Result<Vec<LabelTypeEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Vec::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .filter_map(|entry| serde_json::from_value(entry).ok())
+        .collect())
 }
 
 impl StoredSettings {
@@ -393,6 +416,7 @@ impl StoredSettings {
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
+            issue_label_types: settings.issue_label_types.clone(),
         }
     }
 
@@ -422,6 +446,7 @@ impl StoredSettings {
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
+            issue_label_types: self.issue_label_types,
         }
     }
 }

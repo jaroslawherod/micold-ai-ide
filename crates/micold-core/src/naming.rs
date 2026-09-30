@@ -12,7 +12,13 @@ use std::fmt;
 ///
 /// A closed enum: an invalid type is unrepresentable (Constitution Principle V). Fixed
 /// defaults this version; the whole ruleset is designed to become configurable later.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Serialised as its lowercase token (`"fix"`), the same text [`ConventionalType::as_str`] gives
+/// — the label-to-type mapping in `settings.json` stores it (feature 034).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum ConventionalType {
     Feat,
     Fix,
