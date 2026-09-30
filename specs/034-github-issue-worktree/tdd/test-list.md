@@ -33,13 +33,13 @@ the repository can test without a display and without the network. The rendered 
 | A8  | With a typed ticket and name, or an earlier pick, a pick replaces both | US1-8, FR-010a | example | DONE | `main_tests.rs::issue_a_pick_replaces_ticket_and_name` |
 | A9  | Before choosing, the caption under the switch reads "GitHub issue reads open issues of o/r from GitHub." and no source call was made; after choosing, the body notice names `o/r` | US1-9, FR-025, FR-003 | example | DONE | `main_tests.rs::issue_the_source_says_it_contacts_github_before_it_does` |
 | A10 | With 1,000 loaded of 1,200 open, typing the number of an unloaded open issue shows loaded matches at once, then (after the debounce) the searched issue joins them once and can be picked | US1-10, FR-005a | example | DONE | `main_tests.rs::issue_search_finds_an_issue_beyond_the_cap` |
-| A11 | With the default mapping, picking an issue labelled `bug` selects type `fix` | US2-1, FR-013, FR-021 | example | TODO | `main_tests.rs::issue_a_bug_label_selects_fix` |
-| A12 | Mapping `bug` before `enhancement`: an issue labelled `enhancement, bug` selects `fix` | US2-2, FR-013, FR-017 | example | TODO | `main_tests.rs::issue_the_first_mapping_entry_wins` |
-| A13 | With a type selected, picking an issue with no mapped label clears it and `can_submit()` reports "type required" | US2-3, FR-014 | example | TODO | `main_tests.rs::issue_an_unmapped_issue_clears_the_type` |
-| A14 | After a label-selected type, choosing another type keeps the user's choice in the create request | US2-4, FR-015 | example | TODO | `main_tests.rs::issue_a_label_type_can_be_overridden` |
-| A15 | A mapping entry `Bug` matches an issue label `bug` | US2-5, FR-013 | example | TODO | `main_tests.rs::issue_label_matching_ignores_case` |
-| A16 | With a type selected, picking an issue carrying a mapped label replaces it | US2-6, FR-014 | example | TODO | `main_tests.rs::issue_a_mapped_label_replaces_the_selected_type` |
-| A17 | An issue row's text includes its labels | US2-7, FR-004 | example | TODO | `main_tests.rs::issue_rows_show_labels` |
+| A11 | With the default mapping, picking an issue labelled `bug` selects type `fix` | US2-1, FR-013, FR-021 | example | DONE | `main_tests.rs::issue_a_bug_label_selects_fix` |
+| A12 | Mapping `bug` before `enhancement`: an issue labelled `enhancement, bug` selects `fix` | US2-2, FR-013, FR-017 | example | DONE | `main_tests.rs::issue_the_first_mapping_entry_wins` |
+| A13 | With a type selected, picking an issue with no mapped label clears it and `can_submit()` reports "type required" | US2-3, FR-014 | example | DONE | `main_tests.rs::issue_an_unmapped_issue_clears_the_type` |
+| A14 | After a label-selected type, choosing another type keeps the user's choice in the create request | US2-4, FR-015 | example | DONE | `main_tests.rs::issue_a_label_type_can_be_overridden` |
+| A15 | A mapping entry `Bug` matches an issue label `bug` | US2-5, FR-013 | example | DONE | `main_tests.rs::issue_label_matching_ignores_case` |
+| A16 | With a type selected, picking an issue carrying a mapped label replaces it | US2-6, FR-014 | example | DONE | `main_tests.rs::issue_a_mapped_label_replaces_the_selected_type` |
+| A17 | An issue row's text includes its labels | US2-7, FR-004 | example | DONE | `main_tests.rs::issue_rows_show_labels` |
 | A18 | Opening Settings → GitHub issues shows the stored mapping as ordered label → type entries | US3-1, FR-018 | example | TODO | `main_tests.rs::issue_settings_shows_the_mapping` |
 | A19 | Adding `defect → fix` and saving, then picking a `defect` issue in a project selects `fix` without restart | US3-2, FR-016, SC-005 | example | TODO | `main_tests.rs::issue_an_added_entry_types_the_next_pick` |
 | A20 | Changing, removing and reordering entries then saving types the next pick by the new mapping | US3-3, FR-017, FR-018 | example | TODO | `main_tests.rs::issue_edited_mapping_types_the_next_pick` |
@@ -247,13 +247,13 @@ Tests: `crates/micold-core/tests/issue_types.rs`, `settings_issue_mapping.rs` (n
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U76 | `default_mapping()` is `bug→fix, enhancement→feat, documentation→docs` in that order | FR-021 | example | TODO | `issue_types.rs::default_mapping` |
-| U77 | `type_for_labels` returns the first mapping entry matching any label, whatever the label order | FR-013 | example | TODO | `issue_types.rs::mapping_order_wins` |
-| U78 | Matching trims and ignores case; no match or empty mapping → `None`; two labels to one type allowed | FR-013, FR-014 | example | TODO | `issue_types.rs::case_and_no_match` |
+| U76 | `default_mapping()` is `bug→fix, enhancement→feat, documentation→docs` in that order | FR-021 | example | DONE | `issue_types.rs::default_mapping` |
+| U77 | `type_for_labels` returns the first mapping entry matching any label, whatever the label order | FR-013 | example | DONE | `issue_types.rs::mapping_order_wins` |
+| U78 | Matching trims and ignores case; no match or empty mapping → `None`; two labels to one type allowed | FR-013, FR-014 | example | DONE | `issue_types.rs::case_and_no_match` |
 | U79 | `validate_mapping`: blank after trim → `Blank` at its index; `Bug` after `bug` → `Duplicate { of }`; first offender returned; same type twice valid | FR-019 | example | TODO | `issue_types.rs::validation` |
-| U80 | Settings round-trip the mapping; absent → default; `[]` stays `[]` | FR-020, FR-021 | example | TODO | `settings_issue_mapping.rs::round_trip_and_default` |
-| U81 | An unknown type token drops that entry only; the file is not moved to `.bak` | R10 | example | TODO | `settings_issue_mapping.rs::unknown_type_is_dropped` |
-| U82 | A daemon-side `update` not touching the field preserves it; `SETTINGS_VERSION` stays 4; no issue content is written | FR-016, SC-006 | example | TODO | `settings_issue_mapping.rs::other_writers_preserve_the_mapping` |
+| U80 | Settings round-trip the mapping; absent → default; `[]` stays `[]` | FR-020, FR-021 | example | DONE | `settings_issue_mapping.rs::round_trip_and_default` |
+| U81 | An unknown type token drops that entry only; the file is not moved to `.bak` | R10 | example | DONE | `settings_issue_mapping.rs::unknown_type_is_dropped` |
+| U82 | A daemon-side `update` not touching the field preserves it; `SETTINGS_VERSION` stays 4; no issue content is written | FR-016, SC-006 | example | DONE | `settings_issue_mapping.rs::other_writers_preserve_the_mapping` |
 
 ### `crates/micold-client/src/features/worktree_form.rs` + shell: type from labels
 
@@ -261,10 +261,10 @@ Tests: `crates/micold-client/tests/issue_source_state.rs`, `features_settings.rs
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U83 | `IssuePicked { mapping }` sets `type_` from a match, replaces a selected type, clears it on no match | FR-013, FR-014 | example | TODO | `issue_source_state.rs::the_pick_sets_or_clears_the_type` |
-| U84 | A pick with mapping A then one with mapping B uses B; the first pick's type is not recomputed | FR-014a | example | TODO | `issue_source_state.rs::the_mapping_is_read_at_the_pick` |
-| U85 | The shell fills `mapping` from the settings store at the pick, `default_mapping()` with no store | FR-014a | example | TODO | `main_tests.rs::issue_the_pick_reads_the_stored_mapping` |
-| U86 | `ValidSettings::into_settings()` carries the mapping; a theme-only save keeps it | FR-016, FR-020 | example | TODO | `features_settings.rs::the_mapping_survives_other_saves` |
+| U83 | `IssuePicked { mapping }` sets `type_` from a match, replaces a selected type, clears it on no match | FR-013, FR-014 | example | DONE | `issue_source_state.rs::the_pick_sets_or_clears_the_type` |
+| U84 | A pick with mapping A then one with mapping B uses B; the first pick's type is not recomputed | FR-014a | example | DONE | `issue_source_state.rs::the_mapping_is_read_at_the_pick` |
+| U85 | The shell fills `mapping` from the settings store at the pick, `default_mapping()` with no store | FR-014a | example | DONE | `main_tests.rs::issue_the_pick_reads_the_stored_mapping` |
+| U86 | `ValidSettings::into_settings()` carries the mapping; a theme-only save keeps it | FR-016, FR-020 | example | DONE | `features_settings.rs::the_mapping_survives_other_saves` |
 
 ### `crates/micold-client/src/features/settings.rs`: GitHub issues section
 
