@@ -42,7 +42,7 @@ git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
   done_ledger="$(ledgers | head -1)"
   if [ -n "$done_ledger" ]; then
-    pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number' 2>/dev/null)"
+    pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number // empty' 2>/dev/null)"
     echo "RECORD-PR-PENDING $done_ledger ${pr:-none}"
     exit 4
   fi

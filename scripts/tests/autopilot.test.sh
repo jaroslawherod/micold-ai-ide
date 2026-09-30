@@ -34,6 +34,7 @@ case "$1 $2" in
     if [ -f "$F/merge-$n.fail" ]; then cat "$F/merge-$n.fail" >&2; exit 1; fi
     for k in "$F/pr-$n.json".*; do [ -f "$k" ] && rm -f "$k"; done
     cp "$F/pr-$n.merged.json" "$F/pr-$n.json" ;;
+  "pr list") [ -f "$F/pr-list.json" ] && jq -r "$(q "$@")" "$F/pr-list.json" || echo "" ;;
   "run list") jq -r "$(q "$@")" "$F/runs.json" ;;
   "run view") echo "error[E0308]: mismatched types" ;;
   *) echo "gh stub: unhandled: $*" >&2; exit 2 ;;
@@ -144,7 +145,12 @@ check "resume reports several ledgers" 3 'BUG-1.autopilot.md' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/042-x/autopilot.md wt done; git add -A; git commit -qm "record the run"
-check "resume spots an unmerged record PR" 4 '^RECORD-PR-PENDING' "$S/resume.sh"
+check "resume spots an unmerged record PR" 4 '^RECORD-PR-PENDING specs/042-x/autopilot.md none$' "$S/resume.sh"
+
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+ledger specs/042-x/autopilot.md wt done; git add -A; git commit -qm "record the run"
+echo '[{"number": 470}]' > "$d/fx/pr-list.json"
+check "resume names the open record PR" 4 '^RECORD-PR-PENDING specs/042-x/autopilot.md 470$' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 git switch -q main; ledger specs/042-x/autopilot.md wt 4-milestones; git add -A; git commit -qm ledger
