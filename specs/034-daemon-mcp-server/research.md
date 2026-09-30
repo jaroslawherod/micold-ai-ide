@@ -305,11 +305,10 @@ newline. The mode is read from the target's `Term` at write time.
 (`activity.rs`: only `Stop`/`Notification` lead there, and `SessionStart` is ignored by
 `hooks.rs`), so the prompt waits on a separate **ready-for-input** signal, chosen per CLI behind the
 provider seam (`AiCliProvider::input_readiness() -> InputReadiness`):
-- `InputReadiness::HookSessionStart` (Claude Code): the hook receiver's `SessionStart` post, which
-  it already receives and ignores, now also marks the session ready. The activity FSM is unchanged.
-  When the hook receiver is not running (bind failure), Claude falls back to the output-settled
-  rule. If the §B3 probe shows bytes written right at `SessionStart` are lost, readiness becomes
-  "`SessionStart` and then output settled", which the same two signals already provide.
+- Claude Code: **the output-settled rule** (below). The plan was its `SessionStart` hook, but the
+  §B3 probe (T102, `evidence/m3-real-cli.md`) showed Claude Code posts every turn hook to the HTTP
+  receiver except `SessionStart`, so that signal never arrives; a prompt typed once its output has
+  settled is accepted. `hooks.rs` keeps ignoring `SessionStart`.
 - `InputReadiness::ExtensionEvent("session_start")` (Pi): the activity component adds
   `session_start` to the events it reports; the tail marks the session ready. With the component
   declined (FR-012e), Pi falls back to the output-settled rule.

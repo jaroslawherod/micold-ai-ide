@@ -111,14 +111,12 @@ pub const PI_SESSION_START: &str = "session_start";
 /// research R12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputReadiness {
-    /// The hook receiver's `SessionStart` post (`claude`). Without a running hook receiver the
-    /// service falls back to [`Self::OutputSettled`].
-    HookSessionStart,
     /// An event the injected activity component reports (`pi`: `session_start`). With the
     /// component declined the service falls back to [`Self::OutputSettled`].
     ExtensionEvent(&'static str),
-    /// The terminal produced output and then none for 1.5 s (`copilot`, which writes nothing
-    /// before its first prompt).
+    /// The terminal produced output and then none for 1.5 s: `copilot`, which writes nothing
+    /// before its first prompt, and `claude`, which posts no `SessionStart` over an HTTP hook
+    /// (quickstart §B3, `specs/034-daemon-mcp-server/evidence/m3-real-cli.md`).
     OutputSettled,
 }
 
@@ -576,7 +574,8 @@ impl AiCliProvider for ClaudeProvider {
     }
 
     fn input_readiness(&self) -> InputReadiness {
-        InputReadiness::HookSessionStart
+        // Its `SessionStart` hook never reaches an HTTP receiver (quickstart §B3).
+        InputReadiness::OutputSettled
     }
 
     fn activity_source(

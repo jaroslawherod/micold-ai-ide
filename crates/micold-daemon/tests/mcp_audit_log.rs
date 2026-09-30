@@ -8,8 +8,7 @@
 //! Each test calls as its own session, so the lines it counts are its own even though every test in
 //! this binary shares one log.
 
-// unix-only: `create_session` starts a stand-in `#!/bin/sh` CLI (Windows port is a recorded
-// follow-up).
+// unix-only: `create_session` starts a stand-in `#!/bin/sh` CLI (Windows port is a follow-up).
 #![cfg(unix)]
 
 #[path = "support/mcp.rs"]

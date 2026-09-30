@@ -151,7 +151,7 @@ each group that changes existing code.
 | U35 | Claude's `tool_server_support()` is `McpConfigArg` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::claude_is_bound_through_an_mcp_config_argument` |
 | U36 | Copilot's `tool_server_support()` is `AdditionalMcpConfig` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::copilot_is_bound_through_an_additional_mcp_config` |
 | U37 | Pi's `tool_server_support()` is `Unsupported { reason: "Pi has no MCP support" }` | FR-002, FR-005, EC-13 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::{pi_is_unsupported_because_it_has_no_mcp, every_cli_answers_its_tool_server_support_through_the_seam}` |
-| U38 | Claude's `input_readiness()` is `HookSessionStart` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::claude_is_ready_on_its_session_start_hook` |
+| U38 | Claude's `input_readiness()` is `OutputSettled` (changed in cycle 23: Claude posts no `SessionStart` over HTTP, evidence/m3-real-cli.md) | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::claude_is_ready_once_its_output_has_settled` |
 | U39 | Pi's `input_readiness()` is `ExtensionEvent("session_start")` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::pi_is_ready_on_its_components_session_start_event` |
 | U40 | Copilot's `input_readiness()` is `OutputSettled` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::copilot_is_ready_once_its_output_has_settled` |
 
@@ -324,7 +324,7 @@ each group that changes existing code.
 | U156 | No ready signal by 60 s after the request returns `prompt_delivered: false` | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::no_ready_signal_by_the_bound_is_not_delivered_and_a_late_one_types_nothing` |
 | U157 | A ready signal after the 60 s bound writes nothing to the PTY | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::no_ready_signal_by_the_bound_is_not_delivered_and_a_late_one_types_nothing` |
 | U158 | A session that fails to start returns `prompt_delivered: false` | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_session_that_fails_to_start_reports_the_prompt_undelivered` |
-| U159 | A `SessionStart` hook marks the session ready and leaves its activity `Unknown` | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown` |
+| U159 | With the hook receiver running, Claude is ready by the output-settled rule, and a `SessionStart` post leaves its activity `Unknown` (changed in cycle 23) | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::with_the_hook_receiver_running_claude_is_ready_once_its_output_settles` |
 | U160 | A Pi `session_start` event marks the session ready | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_pi_session_start_event_makes_pi_ready` |
 | U161 | A Copilot session becomes ready by the output-settled rule | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::copilot_is_ready_once_its_output_settles` |
 | U162 | A Claude session with no hook receiver running becomes ready by the output-settled rule | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::claude_without_a_hook_receiver_is_ready_once_its_output_settles` |

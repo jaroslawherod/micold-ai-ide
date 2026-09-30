@@ -17,11 +17,13 @@ fn at(millis: u64) -> Uptime {
     Uptime::from_nanos(millis * 1_000_000)
 }
 
+/// Claude Code posts no `SessionStart` over an HTTP hook (quickstart §B3,
+/// `specs/034-daemon-mcp-server/evidence/m3-real-cli.md`), so it has no ready signal of its own.
 #[test]
-fn claude_is_ready_on_its_session_start_hook() {
+fn claude_is_ready_once_its_output_has_settled() {
     assert_eq!(
         AiCli::ClaudeCode.provider().input_readiness(),
-        InputReadiness::HookSessionStart
+        InputReadiness::OutputSettled
     );
 }
 
