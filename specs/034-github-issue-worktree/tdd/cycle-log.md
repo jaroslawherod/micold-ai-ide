@@ -656,3 +656,16 @@ failed before the implementation.
   back what was written through its JSON form, A22 asserts no save; the file round trip itself is
   `micold-core/tests/settings_issue_mapping.rs` (U80). `--bin micold-ai-ide` 301 passed.
 - commit: the commit that adds this entry
+
+## Cycle 28: the §B12 visual pass's D1 — the page at 520 px (M5)
+
+- no behaviour change: a layout fix found by the §B12 pass (D1: at 520 px with the rail open the
+  five controls of a row shared ~180 px, and the fields collapsed to slivers). Each entry now stacks
+  the label over the type, with move up / move down / delete stacked beside them.
+- verified by: covered state `settings-view-github-issues`, `layout_snapshot.txt` regenerated
+  (`UPDATE_LAYOUT_SNAPSHOT=1`), `layout_snapshot` 43 and `layout_text_overflow` 4 passed; the narrow
+  width re-checked by a second visual pass.
+- notes: review B F2 — T054 named `settings_rail.rs`, which needed no edit: it iterates
+  `SettingsSection::ALL`, so `every_section_has_an_icon_of_its_own` covers the fifth section as is.
+  Review B F1 — A21's doc comment corrected to what the test does since cycle 27.
+- commit: the commit that adds this entry

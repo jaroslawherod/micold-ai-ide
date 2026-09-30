@@ -96,6 +96,8 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M4 | B (conformance) | 1 | 0c96ddb3:d721635b | CLEAN (1 MINOR: A14/U83 did not assert the label-set type before overriding — fixed); Verify all green |
 | M4 | visual pass §B4 | 1 | d721635b | criteria 1–4 PASS (labels on rows, bug→fix, unmapped clears after chore, enhancement→feat) |
 | M5 | A (code-review high) | 1 | 3699a996:7b00d5f2 | 9 findings: #1 (doc placement), #2 (labels saved untrimmed), #3 (duplicate message named an entry number), #4 (tooltips) fixed (cycle 27); #5–#9 declined. Gate also caught `JsonFileSettingsStore` in `main_tests.rs` (fixed). |
+| M5 | B (conformance) | 1 | e2429ecf:d1a67cf4 | CLEAN (2 MINOR: A21 doc comment, T054's settings_rail note — both fixed, cycle 28); Verify targeted commands green |
+| M5 | visual pass §B12 | 1 | d1a67cf4 | criteria 1–8 PASS (`tech-debt`→`chore` stood in for `question`: cli/cli has no such label); 9 FAIL: D1, rows unusable at 520 px with the rail open — fixed (cycle 28, stacked row) |
 | M3 | visual pass §B6 | 1 | c1c43e14 | criteria 1, 3, 4 PASS; 2 partial — the issue beyond the cap appears once and is pickable, "Searching GitHub…" not caught on screen (load ~20); D6 declined |
 
 ## Open escalation
