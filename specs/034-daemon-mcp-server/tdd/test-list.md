@@ -72,7 +72,7 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 | A9 | `create_worktree` then `create_session {worktree: feat-x, ai_cli, prompt}` (two calls) creates and starts a session a fake window sees, and the stand-in CLI receives the prompt as its first submitted input after its ready signal (`prompt_delivered: true`) | US2-AS3, FR-017, SC-007 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::create_worktree_then_create_session_types_the_first_prompt` |
 | A10 | `create_session` without `ai_cli` creates a session running the Settings `default_ai_cli` | US2-AS4 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::without_ai_cli_the_session_runs_the_default_cli_from_settings` |
 | A11 | `create_session` with a CLI not on the session environment's `PATH` fails `service_error` naming that CLI, and no session record exists afterwards | US2-AS5, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record` |
-| A12 | `start_session` on an `Idle`, a `Failed` and an `InterruptedResumable` session moves each through `Starting` to `Running`, as the protocol start does | US3-AS1, FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
+| A12 | `start_session` on an `Idle`, a `Failed` and an `InterruptedResumable` session moves each through `Starting` to `Running`, as the protocol start does | US3-AS1, FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::start_session_moves_an_idle_failed_or_resumable_session_through_starting_to_running` |
 | A13 | An allowed `stop_session` on a `Running` sibling ends its processes, every fake window receives it as `Idle`, and a later `start_session` resumes its conversation | US3-AS2, FR-009, FR-011 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
 | A14 | An allowed `interrupt_session` on a `Running` sibling writes `0x03` to its primary PTY and it stays `Running` | US3-AS2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
 | A15 | `delete_worktree` on a worktree with live sessions and no `stop_sessions` fails `conflict` naming those sessions, and the worktree, its sessions and its branch are unchanged | US3-AS3, FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
@@ -221,7 +221,7 @@ each group that changes existing code.
 | --- | --- | --- | --- | --- | --- |
 | U83 | `tools/list` names exactly the tools whose handlers ship in the current milestone | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::tools_list_names_exactly_the_shipped_tools` (M1: the five read tools) |
 | U84 | Every listed tool has a JSON-Schema `inputSchema`, `readOnlyHint` on read-only tools | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only` |
-| U85 | `destructiveHint` is set on exactly `delete_worktree`, `delete_session`, `stop_session`, `interrupt_session` | FR-008, FR-014 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U85 | `destructiveHint` is set on exactly `delete_worktree`, `delete_session`, `stop_session`, `interrupt_session` | FR-008, FR-014 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::destructive_hint_is_set_on_exactly_the_destructive_tools` |
 | U86 | An unknown tool name fails `invalid_input` | FR-008, FR-013 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::an_unknown_tool_is_invalid_input` |
 | U87 | `list_worktrees` with a non-boolean `include_hidden` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_non_boolean_include_hidden_is_invalid_input` |
 | U88 | A `session` that is not a UUID string fails `invalid_input` | FR-008, EC-2 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_session_that_is_not_a_uuid_string_is_invalid_input` |
@@ -231,8 +231,8 @@ each group that changes existing code.
 | U92 | `create_worktree` with an `overwrite` field fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_worktree_offers_no_way_to_overwrite_a_branch` |
 | U93 | `create_worktree` without `branch` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_worktree_needs_a_branch` |
 | U94 | `create_session` accepts `ai_cli` of `claude_code`, `copilot`, `pi` and rejects any other value as `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_session_accepts_exactly_the_three_ai_clis` |
-| U95 | `rename_worktree` or `delete_worktree` targeting `default` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U96 | `delete_worktree` defaults to `stop_sessions: false`, `delete_branch: true` | FR-008, FR-009 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U95 | `rename_worktree` or `delete_worktree` targeting `default` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::default_is_not_a_worktree_to_rename_or_delete` |
+| U96 | `delete_worktree` defaults to `stop_sessions: false`, `delete_branch: true` | FR-008, FR-009 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default` |
 | U97 | `read_session_output` without `lines` means 200 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U98 | `lines: 0` fails `invalid_input` | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U99 | `lines: 1` is accepted as 1 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
@@ -247,15 +247,15 @@ each group that changes existing code.
 | --- | --- | --- | --- | --- | --- |
 | U104 | `create_worktree` from a Default caller is `refused_by_policy` naming Principle III | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_create_worktree_naming_principle_iii` |
 | U105 | `create_worktree` from a worktree caller proceeds | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_worktree_caller_may_create_a_worktree` |
-| U106 | `rename_worktree` from a Default caller is refused; from a worktree caller it proceeds | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U107 | `delete_worktree` from a Default caller is refused before any confirmation | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U108 | Every non-worktree operation from a Default caller is decided exactly as from a worktree caller | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U109 | `delete_worktree` of the caller's hosting worktree is `refused_by_policy` | FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U110 | `delete_worktree` of another worktree is `Confirm` | FR-014 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U111 | `stop_session` on self is `refused_by_policy`; on another session it is `Confirm` | FR-014, FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U112 | `delete_session` on self is `refused_by_policy`; on another session it is `Confirm` | FR-014, FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U113 | `interrupt_session` on self is `invalid_input`; on another session it is `Confirm` | FR-014, FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U114 | `start_session` proceeds | FR-009 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
+| U106 | `rename_worktree` from a Default caller is refused; from a worktree caller it proceeds | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename` |
+| U107 | `delete_worktree` from a Default caller is refused before any confirmation | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_delete_worktree_before_any_confirmation` |
+| U108 | Every non-worktree operation from a Default caller is decided exactly as from a worktree caller | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_operations` |
+| U109 | `delete_worktree` of the caller's hosting worktree is `refused_by_policy` | FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::deleting_the_callers_own_worktree_is_refused_by_policy` |
+| U110 | `delete_worktree` of another worktree is `Confirm` | FR-014 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::deleting_another_worktree_waits_for_confirmation` |
+| U111 | `stop_session` on self is `refused_by_policy`; on another session it is `Confirm` | FR-014, FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::stop_session_on_self_is_refused_and_on_another_session_confirmed` |
+| U112 | `delete_session` on self is `refused_by_policy`; on another session it is `Confirm` | FR-014, FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::delete_session_on_self_is_refused_and_on_another_session_confirmed` |
+| U113 | `interrupt_session` on self is `invalid_input`; on another session it is `Confirm` | FR-014, FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::interrupt_session_on_self_is_invalid_input_and_on_another_session_confirmed` |
+| U114 | `start_session` proceeds | FR-009 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::start_session_proceeds_on_any_session` |
 | U115 | `read_session_output` on another session proceeds at Auto and at ConfirmEachSend, and is refused at Off | FR-016 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
 | U116 | `send_session_input` on another session proceeds at Auto, is `Confirm(SendInput)` at ConfirmEachSend, and is refused at Off | FR-016 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
 | U117 | `read_session_output` and `send_session_input` on self are `invalid_input` under every option value, Off included | FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
@@ -333,11 +333,11 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U163 | `start_session` on a `Running` session succeeds, reports `running`, and spawns nothing | FR-012a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U164 | `start_session` on a `Starting` session succeeds and reports `starting` unchanged | FR-012a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U165 | `start_session` on a `Restarting` session succeeds and reports `restarting` unchanged | FR-012a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U166 | `rename_worktree` changes the display name and a fake window receives it in `CatalogChanged` | FR-009, FR-011, SC-003 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U167 | `rename_worktree` on an unknown worktree fails `not_found` | FR-010, EC-2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
+| U163 | `start_session` on a `Running` session succeeds, reports `running`, and spawns nothing | FR-012a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::start_session_on_a_running_session_reports_running_and_spawns_nothing` |
+| U164 | `start_session` on a `Starting` session succeeds and reports `starting` unchanged | FR-012a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::start_session_on_a_starting_or_restarting_session_succeeds_unchanged` |
+| U165 | `start_session` on a `Restarting` session succeeds and reports `restarting` unchanged | FR-012a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::start_session_on_a_starting_or_restarting_session_succeeds_unchanged` |
+| U166 | `rename_worktree` changes the display name and a fake window receives it in `CatalogChanged` | FR-009, FR-011, SC-003 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::rename_worktree_changes_the_display_name_and_every_window_sees_it` |
+| U167 | `rename_worktree` on an unknown worktree fails `not_found` | FR-010, EC-2 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::rename_worktree_on_an_unknown_worktree_is_not_found` |
 
 ### `crates/micold-daemon/src/state.rs` `stop_session`, `server.rs` `SessionStop` arm (T054)
 

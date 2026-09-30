@@ -738,3 +738,37 @@ was taken by stubbing that implementation out and restoring it afterwards.
   ```
 - green: `without_paste_markers` repeats the pass until nothing is removed. 11 passed.
 - also: clippy `needless_lifetimes` on `session_in` in `mcp_create_session.rs` (first gate run).
+
+## Cycle 27 — M4 core: U85, U95, U96, U106–U114 (T043, T044 → T046)
+
+- red: `scripts/build-lock.sh cargo test -p micold-core --no-fail-fast --test mcp_policy --test mcp_tools_catalog`
+  against stubs (the new `Operation` variants, `ConfirmedOp`, `PolicyDecision::Confirm`, and
+  `catalog` / `parse_operation` delegating to the M3 listing and parser)
+  ```
+  mcp_policy: 5 passed; 7 failed (every refusal/confirmation row: "expected a refusal, got Proceed")
+  mcp_tools_catalog: 13 passed; 6 failed (tools_list_names_exactly_the_shipped_tools,
+  destructive_hint_is_set_on_exactly_the_destructive_tools, the_session_lifecycle_tools_take_a_session_id,
+  rename_worktree_takes_a_worktree_and_a_trimmed_display_name, default_is_not_a_worktree_to_rename_or_delete,
+  delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default)
+  ```
+  U108/U114 passed against the stub: their decision is `Proceed` either way; they guard the rows
+  added in green from over-reaching.
+- green: `policy::decide` rows (Principle III for every worktree mutation from Default; own
+  worktree / own session refusals; self-interrupt `invalid_input`; `Confirm(ConfirmedOp)` for the
+  four destructive tools). The catalog holds all six lifecycle tools with `destructive` and
+  `shipped` flags; `tools/list` and `parse_call` see only the shipped ones (`start_session`,
+  `rename_worktree`), `catalog()` / `parse_operation` see all. `display_name` is checked and
+  trimmed with the rename dialog's `validate_rename`. 13 + 12 passed.
+
+## Cycle 28 — M4 daemon: A12, U163–U167 (T045 → T047)
+
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_lifecycle_tools` with the two
+  tools dispatched to a stub answering `service_error "not yet"`: 0 passed; 7 failed (each on
+  `call_ok`/`call_err`'s category assertion).
+- green: `start_session` (scope → policy → no-op for Starting/Running/Restarting → the sidebar's
+  `begin_start` + `ops::start_session(Resume)`), `rename_worktree` (scope → policy →
+  `ops::rename_worktree`, row from `list_worktrees`). "Starting" is projected onto the wire for a
+  start in flight (`starting` marker, no process yet) rather than written to the record, because
+  the start reads the record's `InterruptedResumable` to decide whether the conversation is gone;
+  `ops::start_session` now announces a failed start after `finish_start`, so a failure is never
+  left showing `Starting` (`a_start_that_fails_is_reported_failed_not_left_starting`).

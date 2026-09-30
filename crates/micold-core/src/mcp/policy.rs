@@ -3,13 +3,13 @@
 //!
 //! [`decide`] is evaluated after the call's input is validated and its target resolved, and before
 //! anything changes (contracts/mcp-tools.md *Order of checks*). It is pure, so every rule is pinned
-//! by a table test rather than by a daemon round trip. Later milestones add rows; a row this table
-//! does not have means "proceed".
+//! by a table test rather than by a daemon round trip. A row this table does not have means
+//! "proceed".
 
 use std::path::PathBuf;
 
 use super::errors::{ErrorCategory, OpError};
-use super::tools::Operation;
+use super::tools::{Operation, SessionRef, WorktreeRef};
 use crate::session::{AiCli, SessionId, SessionLocation};
 
 /// The session a call comes from, resolved per request from its credential and the catalog.
@@ -45,11 +45,26 @@ pub enum CrossSessionAccess {
     Off,
 }
 
-/// What policy says about one call.
+/// What policy says about one call. A refusal is always decided before a confirmation, so the user
+/// is never asked about a request that would be refused anyway (FR-014).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyDecision {
     Proceed,
+    Confirm(ConfirmedOp),
     Refuse(OpError),
+}
+
+/// A destructive operation that waits for the user's confirmation (FR-014, data-model TM5). Names
+/// the operation and the options the user is asked to allow; the target travels beside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmedOp {
+    DeleteWorktree {
+        stop_sessions: bool,
+        delete_branch: bool,
+    },
+    DeleteSession,
+    StopSession,
+    InterruptSession,
 }
 
 /// The refusal a Default session gets for a worktree mutation (FR-015a).
@@ -57,17 +72,58 @@ const PRINCIPLE_III: &str = "a session running in the project root (Default) may
     rename or delete worktrees (Constitution Principle III); ask from a session that runs in a \
     worktree";
 
-/// Decide `operation` for `caller`.
+/// Decide `operation` for `caller`. The refusals come first: Principle III for a Default caller
+/// (FR-015a), then the caller's own session or hosting worktree (FR-015); only then does a
+/// destructive operation wait for the user (FR-014).
 pub fn decide(
     caller: &Caller,
     operation: &Operation,
     _facts: &TargetFacts,
     _access: CrossSessionAccess,
 ) -> PolicyDecision {
+    let refused = |message: &str| {
+        PolicyDecision::Refuse(OpError::new(ErrorCategory::RefusedByPolicy, message))
+    };
+    let is_me = |session: &SessionRef| session.0 == caller.session.0;
     match operation {
-        Operation::CreateWorktree { .. } if caller.is_default() => {
-            PolicyDecision::Refuse(OpError::new(ErrorCategory::RefusedByPolicy, PRINCIPLE_III))
+        Operation::CreateWorktree { .. }
+        | Operation::RenameWorktree { .. }
+        | Operation::DeleteWorktree { .. }
+            if caller.is_default() =>
+        {
+            refused(PRINCIPLE_III)
         }
+        Operation::DeleteWorktree {
+            worktree: WorktreeRef::Named(name),
+            ..
+        } if matches!(&caller.location, SessionLocation::Worktree(mine) if mine == name) => {
+            refused("the calling session runs in this worktree, so it may not delete it")
+        }
+        Operation::StopSession { session } if is_me(session) => {
+            refused("a session may not stop itself; the user can stop it from the sidebar")
+        }
+        Operation::DeleteSession { session } if is_me(session) => {
+            refused("a session may not delete itself; the user can delete it from the sidebar")
+        }
+        Operation::InterruptSession { session } if is_me(session) => {
+            PolicyDecision::Refuse(OpError::invalid_input(
+                "a session may not interrupt itself: the interrupt would abort the turn waiting \
+                 for this result",
+            ))
+        }
+        Operation::DeleteWorktree {
+            stop_sessions,
+            delete_branch,
+            ..
+        } => PolicyDecision::Confirm(ConfirmedOp::DeleteWorktree {
+            stop_sessions: *stop_sessions,
+            delete_branch: *delete_branch,
+        }),
+        Operation::StopSession { .. } => PolicyDecision::Confirm(ConfirmedOp::StopSession),
+        Operation::InterruptSession { .. } => {
+            PolicyDecision::Confirm(ConfirmedOp::InterruptSession)
+        }
+        Operation::DeleteSession { .. } => PolicyDecision::Confirm(ConfirmedOp::DeleteSession),
         _ => PolicyDecision::Proceed,
     }
 }

@@ -972,6 +972,22 @@ impl DaemonState {
                     attempts: 0,
                 };
             }
+            // A start in flight (`begin_start` until `finish_start`) of a session with no process
+            // yet is `Starting`, whatever the record still says: the record learns `Running` only
+            // once the process exists, and a previous failure is no longer the latest news
+            // (feature 034, US3 s1). Projected here rather than written to the record, because the
+            // start reads the record's `InterruptedResumable` to decide how to resume.
+            if inner.starting.contains_key(&summary.id)
+                && !inner.sessions.contains_key(&summary.id)
+                && matches!(
+                    summary.lifecycle,
+                    WireLifecycle::Idle
+                        | WireLifecycle::Failed { .. }
+                        | WireLifecycle::InterruptedResumable
+                )
+            {
+                summary.lifecycle = WireLifecycle::Starting;
+            }
         }
     }
 

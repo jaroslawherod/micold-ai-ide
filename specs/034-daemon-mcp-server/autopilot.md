@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M3
-- **Next step**: M3 PR #498 open; Windows CI fix 1 (96d5b559: test expected a mixed-separator worktree path) was the only failure in run 36755280155; gate green and `cargo check --target x86_64-pc-windows-msvc --tests` (core, daemon) green after it; pushed. Wait for CI, then merge (rebase) and start M4.
+- **Phase**: 4-milestone M4
+- **Next step**: M4 (T043–T048, T089): implement start_session / rename_worktree and the policy rows, gate, reviews A/B, open the PR.
 
 ## Pull requests
 
@@ -17,7 +17,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #455 | Spec | merged | 8ff6e0561386ba21219411bc16f828f08b177961 |
 | #465 | Design (PR 2) | merged | a5fcc795294b6dcd2972ab5e3d31a814b41d8fb7 |
 | #469 | M1: bound sessions with the read tools | merged | 3c8d332ddc4f4497d0caa1764ae2fbf2c301c6f3 |
-| #474 | M2: Settings toggle for the tool server | merged at 7964273e | — |
+| #474 | M2: Settings toggle for the tool server | merged | 7964273e |
+| #498 | M3: create_worktree / create_session | merged | 2486d096bfb6ddbba8f6b6cad1f2489f3a2e481c |
 
 ## Milestones
 
@@ -25,8 +26,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
-| M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | PR open; gate green; review A (2 rounds) and review B fixed |
-| M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
+| M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
+| M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | in progress |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |

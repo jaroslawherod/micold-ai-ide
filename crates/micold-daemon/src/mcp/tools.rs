@@ -16,7 +16,7 @@ use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
 use micold_core::mcp::submission::encode_submission;
-use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, WorktreeRef};
+use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, SessionRef, WorktreeRef};
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
     ActivitySignal, ProjectSnapshot, SessionSummary, WireLifecycle, WorktreeSnapshot,
@@ -92,6 +92,11 @@ async fn dispatch(
             ai_cli,
             prompt,
         } => create_session(&state, caller, worktree, ai_cli, prompt, asked).await,
+        Operation::StartSession { session } => start_session(&state, caller, session).await,
+        Operation::RenameWorktree {
+            worktree,
+            display_name,
+        } => rename_worktree(&state, caller, worktree, display_name).await,
         read => blocking(move || read_call(&state, caller, read)).await,
     }
 }
@@ -126,8 +131,17 @@ fn read_call(
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
-        Operation::CreateWorktree { .. } | Operation::CreateSession { .. } => {
+        Operation::CreateWorktree { .. }
+        | Operation::CreateSession { .. }
+        | Operation::StartSession { .. }
+        | Operation::RenameWorktree { .. } => {
             unreachable!("mutating tools are dispatched by call")
+        }
+        Operation::StopSession { .. }
+        | Operation::InterruptSession { .. }
+        | Operation::DeleteSession { .. }
+        | Operation::DeleteWorktree { .. } => {
+            unreachable!("parse_call refuses a tool whose handler has not shipped")
         }
     }
 }
@@ -153,6 +167,24 @@ fn resolve_caller(
         provider: me.provider,
     };
     Ok((who, project))
+}
+
+/// What policy says about `operation` from `who`, as a result: a refusal is the call's failure. No
+/// shipped tool waits for a confirmation yet, so one that would is refused as needing it (FR-014).
+fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
+    match policy::decide(
+        who,
+        operation,
+        &TargetFacts::default(),
+        CrossSessionAccess::default(),
+    ) {
+        PolicyDecision::Proceed => Ok(()),
+        PolicyDecision::Refuse(error) => Err(error),
+        PolicyDecision::Confirm(_) => Err(OpError::new(
+            ErrorCategory::NeedsConfirmation,
+            "this operation needs the user's confirmation in an app window",
+        )),
+    }
 }
 
 /// `create_worktree` (contracts/mcp-tools.md): scope, then the naming rules and git's ref check,
@@ -192,19 +224,14 @@ async fn create_worktree(
     })
     .await?;
 
-    let operation = Operation::CreateWorktree {
-        branch: branch.clone(),
-        name,
-        mode: mode.clone(),
-    };
-    if let PolicyDecision::Refuse(error) = policy::decide(
+    check_policy(
         &who,
-        &operation,
-        &TargetFacts::default(),
-        CrossSessionAccess::default(),
-    ) {
-        return Err(error);
-    }
+        &Operation::CreateWorktree {
+            branch: branch.clone(),
+            name,
+            mode: mode.clone(),
+        },
+    )?;
 
     let names = DerivedNames {
         dir_name: dir_name.clone(),
@@ -234,6 +261,15 @@ async fn create_worktree(
         .await
         .map_err(create_failure)?;
 
+    worktree_row(state, caller, dir_name).await
+}
+
+/// The `list_worktrees` row of worktree `dir_name`, as it is now.
+async fn worktree_row(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    dir_name: String,
+) -> Result<Value, OpError> {
     let st = Arc::clone(state);
     blocking(move || {
         let project = caller_project(&st, caller)?;
@@ -247,11 +283,110 @@ async fn create_worktree(
             .worktree_rows(&st, true)
             .into_iter()
             .find(|row| row["ref"] == dir_name.as_str())
-            .ok_or_else(|| {
-                OpError::service_error("the worktree was created but is not in the catalog")
-            })
+            .ok_or_else(|| OpError::not_found(format!("no worktree \"{dir_name}\" in this project")))
     })
     .await
+}
+
+/// `rename_worktree` (contracts/mcp-tools.md): scope, then policy (FR-015a), then the sidebar's own
+/// rename, which every window receives (FR-009, SC-003). The name was checked and trimmed by
+/// `parse_call`, as the rename dialog does.
+async fn rename_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    worktree: WorktreeRef,
+    display_name: String,
+) -> Result<Value, OpError> {
+    let WorktreeRef::Named(dir_name) = worktree.clone() else {
+        return Err(OpError::invalid_input(
+            "\"default\" is the project root, not a worktree; it cannot be renamed",
+        ));
+    };
+    let st = Arc::clone(state);
+    let name = dir_name.clone();
+    let (who, project) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        if !project.worktrees.iter().any(|wt| wt.dir_name == name) {
+            return Err(OpError::not_found(format!(
+                "no worktree \"{name}\" in this project"
+            )));
+        }
+        Ok((who, project))
+    })
+    .await?;
+    check_policy(
+        &who,
+        &Operation::RenameWorktree {
+            worktree,
+            display_name: display_name.clone(),
+        },
+    )?;
+
+    let st = Arc::clone(state);
+    let name = dir_name.clone();
+    blocking(move || {
+        ops::rename_worktree(&st, &project.path, &name, &display_name).map_err(|e| match e {
+            ops::RenameFailure::Invalid(_) => {
+                OpError::invalid_input("display_name cannot be empty or only whitespace")
+            }
+            ops::RenameFailure::Io(e) => {
+                OpError::service_error(format!("could not save the new name: {e}"))
+            }
+        })
+    })
+    .await?;
+    worktree_row(state, caller, dir_name).await
+}
+
+/// `start_session` (contracts/mcp-tools.md): scope, then policy, then the no-op for a session that
+/// is already starting, running or restarting (FR-012a), then the sidebar's own start (FR-009),
+/// shown as `Starting` in every window until its process runs (US3 s1).
+async fn start_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let (who, lifecycle) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let lifecycle = project
+            .sessions
+            .iter()
+            .find(|s| s.id == session)
+            .map(|s| s.lifecycle.clone())
+            .ok_or_else(|| {
+                OpError::not_found(format!("no session {} in this project", session.0))
+            })?;
+        Ok((who, lifecycle))
+    })
+    .await?;
+    check_policy(&who, &Operation::StartSession { session: target })?;
+
+    if !matches!(
+        lifecycle,
+        WireLifecycle::Starting | WireLifecycle::Running | WireLifecycle::Restarting { .. }
+    ) {
+        // The sidebar's `SessionStart`: bringing an existing session back is a resume. Every
+        // window sees it `Starting` while the start runs.
+        state.begin_start(session);
+        state.broadcast_catalog();
+        let _ = ops::start_session(state, session, LaunchMode::Resume).await;
+    }
+    let st = Arc::clone(state);
+    let lifecycle = blocking(move || {
+        let project = caller_project(&st, caller)?;
+        let modes = st.session_modes(&project.path);
+        Context {
+            caller,
+            project: &project,
+            modes: &modes,
+        }
+        .get_session(session)
+    })
+    .await?["lifecycle"]
+        .clone();
+    Ok(json!({ "lifecycle": lifecycle }))
 }
 
 /// `create_session` (contracts/mcp-tools.md): scope and the worktree, then the CLI's availability
@@ -287,19 +422,14 @@ async fn create_session(
         Some(cli) => cli,
         None => state.default_ai_cli(),
     };
-    let operation = Operation::CreateSession {
-        worktree: worktree.clone(),
-        ai_cli: Some(cli),
-        prompt: None,
-    };
-    if let PolicyDecision::Refuse(error) = policy::decide(
+    check_policy(
         &who,
-        &operation,
-        &TargetFacts::default(),
-        CrossSessionAccess::default(),
-    ) {
-        return Err(error);
-    }
+        &Operation::CreateSession {
+            worktree: worktree.clone(),
+            ai_cli: Some(cli),
+            prompt: None,
+        },
+    )?;
 
     // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5).
     let st = Arc::clone(state);
