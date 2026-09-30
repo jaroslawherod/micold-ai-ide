@@ -20,9 +20,10 @@ Columns:
   rebuilds    requests after a transcript's first that wrote over half of a 30k+ context to the
               cache: the cache had expired (5 min for subagents, 1 h for the main session) or the
               prefix changed (compaction, model switch)
-  unbatched   requests that made one read-only tool call (Read, Grep, Glob, or a Bash read such as
-              cat, grep, ls, git status/log/diff, gh … view) right after a request that did the
-              same: a call that could have gone into the previous message
+  unbatched   requests that made one read-only tool call (Read, Grep, Glob, or a Bash command whose
+              every step reads: cat, grep, ls, git status/log/diff, gh … view, after an optional
+              cd) right after a request that did the same: a call that could have gone into the
+              previous message
   output      LOWER BOUND: transcripts store usage from the start of the stream, so output is
               mostly undercounted. Input and cache columns are exact.
   peak_ctx    largest context sent in one request (input + cache_w + cache_r)
@@ -54,16 +55,33 @@ def read_jsonl(path):
                     continue
 
 
-READ_ONLY_BASH = re.compile(
-    r"^\s*(cat|sed -n|head|tail|grep|rg|ls|find|wc|git (status|log|diff|show|branch|rev-parse|cherry)"
+READ_ONLY_CMD = re.compile(
+    r"^(cat|sed -n|head|tail|grep|rg|ls|find|wc|sort|uniq|cut|jq|echo|cd|pwd"
+    r"|git (status|log|diff|show|branch|rev-parse|cherry|grep|ls-files)"
     r"|gh (pr|run) (view|list|checks))\b")
+WRITES = re.compile(r">|-delete\b|-exec\b|\bsed -i|\bbranch -[dDmM]\b")
+
+
+def read_only_bash(command):
+    """True when every step of a shell command only reads: `cd d && git status | head` is a read,
+    `ls; cargo build` and `cat > f` are not."""
+    cmd = re.sub(r"\d?>\s*/dev/null|\d?>&\d", "", command)
+    if WRITES.search(cmd):
+        return False
+    steps = [st.strip() for st in re.split(r"&&|\|\||;|\||\n", cmd) if st.strip()]
+    for st in steps:
+        st = re.sub(r"^(env\s+)?(\w+=\S*\s+)*", "", st)
+        st = re.sub(r"^git\s+-C\s+\S+", "git", st)
+        if not READ_ONLY_CMD.match(st):
+            return False
+    return bool(steps)
 
 
 def read_only(block):
     name, args = block.get("name"), block.get("input") or {}
     if name in ("Read", "Grep", "Glob"):
         return True
-    return name == "Bash" and bool(READ_ONLY_BASH.match(args.get("command", "")))
+    return name == "Bash" and read_only_bash(args.get("command", ""))
 
 
 def usage_of(path):
