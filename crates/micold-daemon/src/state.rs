@@ -202,6 +202,10 @@ struct Inner {
     /// still that size); dropped when the session is archived. Never persisted — it describes a
     /// client's window, not the session.
     sizes: HashMap<SessionId, (u16, u16)>,
+    /// Agents' destructive requests waiting for the user (feature 034, FR-014). Beside `clients`
+    /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
+    /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
+    confirmations: crate::mcp::confirm::Registry,
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -437,6 +441,7 @@ impl DaemonState {
                 starting: HashMap::new(),
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
+                confirmations: crate::mcp::confirm::Registry::default(),
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -999,14 +1004,23 @@ impl DaemonState {
     ) -> (ClientId, mpsc::UnboundedReceiver<Frame<DaemonMsg>>) {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::unbounded_channel();
-        self.lock().clients.insert(
-            id,
-            ClientHandle {
-                tx,
-                identity,
-                viewed: HashMap::new(),
-            },
-        );
+        {
+            let mut inner = self.lock();
+            // A window that connects while prompts are pending is shown each of them, with the
+            // time it has left (FR-014). Under the same lock as the insert, so a prompt opened
+            // meanwhile reaches it exactly once: by this replay or by its broadcast.
+            for prompt in inner.confirmations.replay(tokio::time::Instant::now()) {
+                let _ = tx.send(Frame::Control(prompt));
+            }
+            inner.clients.insert(
+                id,
+                ClientHandle {
+                    tx,
+                    identity,
+                    viewed: HashMap::new(),
+                },
+            );
+        }
         self.presence
             .lock()
             .expect("presence mutex poisoned")
@@ -1271,6 +1285,116 @@ impl DaemonState {
         let inner = self.lock();
         for client in inner.clients.values() {
             let _ = client.tx.send(Frame::Control(msg.clone()));
+        }
+    }
+
+    /// Wait for the user to confirm an agent's destructive request (feature 034, FR-014).
+    ///
+    /// With no window connected the answer is [`ConfirmOutcome::NoWindow`] at once and nothing is
+    /// broadcast. Otherwise every window is shown the prompt and this waits for the first answer,
+    /// the 60 s deadline, or the target or caller going away; every exit withdraws the prompt from
+    /// every window. Dropping the future — the agent's HTTP connection closed — abandons the
+    /// request and withdraws it too.
+    ///
+    /// [`ConfirmOutcome::NoWindow`]: crate::mcp::confirm::ConfirmOutcome::NoWindow
+    pub async fn confirm(
+        &self,
+        request: crate::mcp::confirm::ConfirmRequest,
+    ) -> crate::mcp::confirm::ConfirmOutcome {
+        use crate::mcp::confirm::ConfirmOutcome;
+
+        let opened = {
+            let mut inner = self.lock();
+            if inner.clients.is_empty() {
+                return ConfirmOutcome::NoWindow;
+            }
+            let opened = inner
+                .confirmations
+                .open(request, tokio::time::Instant::now());
+            for client in inner.clients.values() {
+                let _ = client.tx.send(Frame::Control(opened.prompt.clone()));
+            }
+            opened
+        };
+
+        /// Withdraws the prompt if the waiter is dropped before it resolves.
+        struct Abandon<'a> {
+            state: &'a DaemonState,
+            id: u64,
+        }
+        impl Drop for Abandon<'_> {
+            fn drop(&mut self) {
+                self.state
+                    .resolve_confirmation(self.id, ConfirmOutcome::Abandoned);
+            }
+        }
+        let _abandon = Abandon {
+            state: self,
+            id: opened.id,
+        };
+
+        let mut answer = opened.answer;
+        match tokio::time::timeout_at(opened.deadline, &mut answer).await {
+            Ok(Ok(outcome)) => outcome,
+            // The registry dropped the sender without an answer; it never does.
+            Ok(Err(_)) => ConfirmOutcome::Abandoned,
+            Err(_elapsed) => {
+                if self.resolve_confirmation(opened.id, ConfirmOutcome::TimedOut) {
+                    ConfirmOutcome::TimedOut
+                } else {
+                    // Something resolved it in the same instant the deadline passed; that wins.
+                    answer.try_recv().unwrap_or(ConfirmOutcome::TimedOut)
+                }
+            }
+        }
+    }
+
+    /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
+    /// decides; a later one, or one for an unknown id, is ignored (FR-014).
+    pub fn answer_confirmation(&self, id: u64, allow: bool) {
+        use crate::mcp::confirm::ConfirmOutcome;
+        let outcome = if allow {
+            ConfirmOutcome::Allowed
+        } else {
+            ConfirmOutcome::Declined
+        };
+        self.resolve_confirmation(id, outcome);
+    }
+
+    /// Resolve every pending prompt `session` is the caller or target of: it was deleted, or the
+    /// caller was stopped (FR-014, edge case *Target changes while pending*).
+    pub fn confirmations_session_gone(&self, session: SessionId) {
+        let mut inner = self.lock();
+        let withdrawn = inner.confirmations.session_gone(session);
+        Self::broadcast_locked(&inner, withdrawn);
+    }
+
+    /// Resolve every pending prompt whose target is `project`'s worktree `dir_name`: it was
+    /// deleted while the prompt was pending.
+    pub fn confirmations_worktree_gone(&self, project: &Path, dir_name: &str) {
+        let mut inner = self.lock();
+        let withdrawn = inner.confirmations.worktree_gone(project, dir_name);
+        Self::broadcast_locked(&inner, withdrawn);
+    }
+
+    /// Resolve prompt `id` with `outcome` and withdraw it everywhere, if it is still pending.
+    /// Returns whether this call was the one that resolved it.
+    fn resolve_confirmation(&self, id: u64, outcome: crate::mcp::confirm::ConfirmOutcome) -> bool {
+        let mut inner = self.lock();
+        match inner.confirmations.resolve(id, outcome) {
+            Some(withdrawn) => {
+                Self::broadcast_locked(&inner, vec![withdrawn]);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn broadcast_locked(inner: &Inner, messages: Vec<DaemonMsg>) {
+        for msg in messages {
+            for client in inner.clients.values() {
+                let _ = client.tx.send(Frame::Control(msg.clone()));
+            }
         }
     }
 
