@@ -799,6 +799,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || {
                 let mut state = with_project();
                 let mut draft = SettingsDraft {
+                    github: Default::default(),
                     section: SettingsSection::Terminal,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
@@ -859,6 +860,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || {
                 let mut state = with_project();
                 let mut draft = SettingsDraft {
+                    github: Default::default(),
                     section: SettingsSection::Appearance,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
