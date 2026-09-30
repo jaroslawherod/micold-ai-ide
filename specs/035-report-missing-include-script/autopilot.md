@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M1 PR open; wait for `ci complete`, merge, then M2.
+- **Next step**: M1 merged (#466 at 4ef54b2d). M2 in progress: implement T013, T016, T037–T042.
 
 ## Pull requests
 
@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #457 | Spec (also carries the BUG-006 record) | merged | 118f3ce0 |
 | #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | merged | f954674d |
-| #466 | M1: report a missing path while the feature is off | open | — |
+| #466 | M1: report a missing path while the feature is off | merged | 4ef54b2d |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | PR open |
-| M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | — | pending |
+| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | merged |
+| M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | — | in progress |
 | M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | — | pending |
 | M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | pending |
 
