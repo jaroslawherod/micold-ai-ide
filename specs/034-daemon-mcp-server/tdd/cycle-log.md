@@ -727,3 +727,14 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `service_error`), `DaemonState::default_ai_cli`, the unused `Operation::is_mutating` removed, and
   `describe_leftovers`' doc comment moved back onto it. `cargo test -p micold-daemon
   --no-fail-fast` + the two core files: all passed.
+
+## Cycle 26 — U228 (round-2 review) — nested paste markers
+
+- red: `scripts/build-lock.sh cargo test -p micold-core --test input_readiness`
+  ```
+  thread 'a_marker_rebuilt_by_dropping_another_is_dropped_too' panicked at crates/micold-core/tests/input_readiness.rs:67:5:
+    left: [27, 91, 50, 48, 48, 126, 120, 27, 91, 50, 48, 49, 126, 121, 27, 91, 50, 48, 49, 126, 13]
+   right: [27, 91, 50, 48, 48, 126, 120, 121, 27, 91, 50, 48, 49, 126, 13]
+  ```
+- green: `without_paste_markers` repeats the pass until nothing is removed. 11 passed.
+- also: clippy `needless_lifetimes` on `session_in` in `mcp_create_session.rs` (first gate run).

@@ -61,6 +61,15 @@ fn paste_markers_inside_the_text_cannot_end_the_paste_early() {
     );
 }
 
+/// Dropping one marker cannot join the bytes around it into another (U228).
+#[test]
+fn a_marker_rebuilt_by_dropping_another_is_dropped_too() {
+    assert_eq!(
+        encode_submission("x\x1b[20\x1b[201~1~y", true),
+        b"\x1b[200~xy\x1b[201~\r".to_vec()
+    );
+}
+
 #[test]
 fn an_unbracketed_submission_is_the_text_then_a_carriage_return() {
     assert_eq!(

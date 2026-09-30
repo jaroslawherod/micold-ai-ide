@@ -249,10 +249,10 @@ fn install_cli(bin: &Path, command: &str, draws: bool) {
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-fn session_in<'a>(
-    catalog: &'a CatalogSnapshot,
+fn session_in(
+    catalog: &CatalogSnapshot,
     id: SessionId,
-) -> Option<&'a micold_core::protocol::messages::SessionSummary> {
+) -> Option<&micold_core::protocol::messages::SessionSummary> {
     catalog
         .projects
         .iter()

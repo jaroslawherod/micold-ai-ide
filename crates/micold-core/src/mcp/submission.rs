@@ -27,21 +27,35 @@ pub fn encode_submission(text: &str, bracketed: bool) -> Vec<u8> {
     let mut out = Vec::with_capacity(body.len() + PASTE_START.len() + PASTE_END.len() + 1);
     if bracketed {
         out.extend_from_slice(PASTE_START);
-        let mut rest = body;
-        while !rest.is_empty() {
-            if rest.starts_with(PASTE_START) || rest.starts_with(PASTE_END) {
-                rest = &rest[PASTE_END.len()..];
-            } else {
-                out.push(rest[0]);
-                rest = &rest[1..];
-            }
-        }
+        out.extend_from_slice(&without_paste_markers(body));
         out.extend_from_slice(PASTE_END);
     } else {
         out.extend_from_slice(body);
     }
     out.push(b'\r');
     out
+}
+
+/// `body` with every paste marker removed, repeated until none is left: dropping one marker can
+/// join the bytes around it into another.
+fn without_paste_markers(body: &[u8]) -> Vec<u8> {
+    let mut text = body.to_vec();
+    loop {
+        let mut next = Vec::with_capacity(text.len());
+        let mut rest = text.as_slice();
+        while let Some((&first, tail)) = rest.split_first() {
+            if rest.starts_with(PASTE_START) || rest.starts_with(PASTE_END) {
+                rest = &rest[PASTE_END.len()..];
+            } else {
+                next.push(first);
+                rest = tail;
+            }
+        }
+        if next.len() == text.len() {
+            return next;
+        }
+        text = next;
+    }
 }
 
 /// The output-settled rule, fed with readings of a clock the caller owns.
