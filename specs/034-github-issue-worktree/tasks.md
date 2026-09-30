@@ -278,7 +278,7 @@ reorder and restore defaults, refusing blank or duplicate labels.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T063 [P] Add to `docs/development/architecture.md` where the issue fetch runs (client, on the host) and why the daemon only answers `RemoteList` (research R4, R5).
+- [x] T063 [P] Add to `docs/development/architecture.md` where the issue fetch runs (client, on the host) and why the daemon only answers `RemoteList` (research R4, R5).
 - [ ] T064 Run quickstart §B10 (desktop launch), §B11 (sandbox placement) and §B13 (both colour schemes) and record them in `specs/034-github-issue-worktree/evidence/quickstart-b.md`; the macOS and Windows arms of §B10 are recorded on those hosts, or escalated as missing access.
 - [ ] T065 Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; confirm every quickstart §A row passes.
 
