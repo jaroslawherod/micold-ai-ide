@@ -668,4 +668,15 @@ failed before the implementation.
 - notes: review B F2 — T054 named `settings_rail.rs`, which needed no edit: it iterates
   `SettingsSection::ALL`, so `every_section_has_an_icon_of_its_own` covers the fifth section as is.
   Review B F1 — A21's doc comment corrected to what the test does since cycle 27.
+
+## Cycle M6a-1: T095 — a desktop launch finds the real `gh` (quickstart §B10, macOS and Windows arms)
+
+- test: `crates/micold-core/tests/github_locate_desktop_launch.rs::a_desktop_launch_finds_the_gh_a_terminal_finds`
+- red: the lookup already existed (M1), so red was shown by mutation: with `under_home(&["bin"])`
+  deleted from the Linux well-known table, on this host (`gh` only at `~/bin/gh`)
+  `scripts/build-lock.sh cargo test -p micold-core --test github_locate_desktop_launch` -> 1 failed:
+  `a desktop launch did not find `gh`, which a terminal launch finds at /home/jaro/bin/gh`.
+- green: table restored -> 1 passed; `desktop launch (PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin): Some("/home/jaro/bin/gh")`.
+- refactor: none.
+- notes: the macOS and Windows runs are CI's `build + test` matrix (`cargo test -p micold-core --all-targets`).
 - commit: the commit that adds this entry

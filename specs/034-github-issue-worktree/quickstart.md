@@ -41,6 +41,7 @@ scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budge
 | Remote parsing and choice | `micold-core/tests/github_remote.rs`, `git_remotes.rs` | FR-002, Edge "several remotes" |
 | `RemoteList` RPC | `micold-daemon/tests/remote_list.rs` | FR-002 |
 | Locating `gh` | `micold-core/tests/github_locate.rs` | FR-026, Edge "desktop launch", "tooling not installed" |
+| Desktop launch on the real host (every CI OS) | `micold-core/tests/github_locate_desktop_launch.rs` | FR-026, §B10 macOS and Windows arms |
 | Paging, cap, completeness | `micold-core/tests/github_load.rs` | FR-004, FR-005a (completeness) |
 | JSON parsing | `micold-core/tests/github_parse.rs` | FR-004 (fields, PR exclusion by type) |
 | Failure classification + messages | `micold-core/tests/github_classify.rs` + `tests/fixtures/gh/` | FR-007, FR-022, Edge "rate-limited", "not signed in", "public repo" |
@@ -74,11 +75,14 @@ screenshots under `specs/034-github-issue-worktree/evidence/`.
 | B7 | Disconnect the network; choose GitHub issue (or Retry). | Within 10 s: "Couldn't reach GitHub…" + Retry; **New branch** still creates a worktree. | FR-007, FR-024, SC-004 |
 | B8 | `gh auth logout`, retry; then `gh auth login` again. | "you're not signed in to GitHub…" + Retry. | FR-022, Edge "not signed in" |
 | B9 | Temporarily rename `gh` off every search dir; retry. | "the GitHub CLI (`gh`) isn't installed…". | Edge "tooling not installed" |
-| B10 | Launch the app from the desktop launcher (macOS: Dock/Finder; Linux: `.desktop`; Windows: Start menu), repeat B2. | Same list as from a terminal launch. | FR-026, Edge "desktop launch" |
+| B10 | Linux: launch the app from its `.desktop` launcher, repeat B2. macOS and Windows: the CI test `github_locate_desktop_launch` (below). | Same list as from a terminal launch. | FR-026, Edge "desktop launch" |
 | B11 | Switch Settings → Session service to the sandbox placement, repeat B2. | Same list. | FR-026, Edge "session sandbox" |
 | B12 | Settings → GitHub issues: add `question → chore`, move it to the top, save; pick an issue labelled `question` in any open project. Restart; reopen Settings. | Type `chore`; entry persisted. Blank or duplicate label → save refused with the entry marked. Restore defaults → three default entries. | US3 AS1–AS6, SC-005 |
 | B13 | Both colour schemes: the disabled chip, the loading line, the error + Retry, the issue rows, the Settings rows. | Legible, themed, nothing clipped at 520 px. | Principle VIII |
 
-B10 must be recorded on each of Linux, macOS and Windows before the feature closes (Principle VI);
-the Linux arm can run under the `visual-pass` skill, the macOS and Windows arms are recorded by the
-Close milestone on those hosts or through CI artefacts where the pass is scripted.
+B10 must hold on each of Linux, macOS and Windows before the feature closes (Principle VI). The
+Linux arm is recorded by hand, under the `visual-pass` skill. The macOS and Windows arms are
+`crates/micold-core/tests/github_locate_desktop_launch.rs`, which the CI `build + test` matrix runs
+on all three OSes: it resolves `gh` over the runner's real files with the `PATH` a Dock/Finder or
+Start-menu launch hands the app and no environment-include `PATH`, and runs the `gh` it finds. It
+skips only where `gh` is installed nowhere the lookup knows, and fails instead of skipping on CI.
