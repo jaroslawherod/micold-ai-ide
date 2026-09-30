@@ -12,5 +12,6 @@ Mid-flight animation and light theme not exercised.
 | B7 | B7.png | PASS: caution "Script not found: ~/env.sh", "~ is not expanded. Use a full path.", OFF note |
 | B8 | B8.png | PASS: only "Relative path: whether the script is found depends on each session's directory." |
 | B12 | B12.png | PASS: exactly one caution "Script not found", no path (011 interim; a startup resolution attempt had already run) |
+| B11 | B11-notice.png, B11-reopen.png | PASS: one Info-style notice "The environment-include script was not found: /tmp/does-not-exist.sh" after Save (Xvfb :79, rebuilt binaries, 2026-09-30), text whole, no truncation, gone after ~6s; reopen shows B1 page (red caution, then OFF note) |
 
 Legibility: lines sit under the Timeout field in the page column, left-aligned with the fields, no overlap or overflow.
