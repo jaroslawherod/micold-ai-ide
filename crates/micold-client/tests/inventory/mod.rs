@@ -136,6 +136,9 @@ pub const PORTS: &[&str] = &[
     "OsThemeProbe",
     // Spec 035's: whether the stored environment-include script path names a readable file.
     "ScriptPathProbe",
+    // Feature 034's: where open GitHub issues come from. `GhCli` runs the user's own `gh`, so a
+    // client test that reached it would contact GitHub; `FakeIssueSource` is the double.
+    "IssueSource",
 ];
 
 /// One `impl <Port> for <Type>`, and where it was found.

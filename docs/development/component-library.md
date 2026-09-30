@@ -184,6 +184,22 @@ So: if the list's contents depend on something the screen holds, the screen hold
 If they do not, the widget holds it. Do not make a new picker symmetric with the other one for
 symmetry's sake — that is the mistake this arrangement exists to avoid.
 
+## Switching between options: `ToggleChip`
+
+```rust
+material::ToggleChip::new("GitHub issue", Message::SourceChosen(Source::Issue), roles)
+    .active(source == Source::Issue)
+    .disabled(!github_available)
+    .into()
+```
+
+`.disabled(true)` is a builder step like the rest, not a second chip type. A disabled chip emits no
+press and does not ripple, because a ripple would report a press that never happens. It takes
+Material's disabled treatment from `tokens::state`: its content at `DISABLED_CONTENT` (38%) and, when
+active, its container at `DISABLED_CONTAINER` (12%). Say *why* it is disabled next to it. The
+add-worktree form puts the reason in the caption under its source switch, because a greyed chip on
+its own does not tell the user what to fix. The gallery poses it as `disabled`.
+
 ## Where the boundary genuinely bends
 
 Two things sit outside the library on purpose, and both are documented at their call sites:

@@ -245,12 +245,14 @@ is unnecessary overhead this avoids.
 
 ## Creating a worktree
 
-Click **add** in the sidebar header to open the New worktree form. At the top, two chips choose
+Click **add** in the sidebar header to open the New worktree form. At the top, three chips choose
 where the worktree's branch comes from:
 
 - **New branch** (the default) — describe the work and the app derives a fresh branch name.
 - **Existing branch** — pick a branch that already exists. See
   [Working from an existing branch](#working-from-an-existing-branch) below.
+- **GitHub issue** — pick one of the repository's open GitHub issues, and its number and title
+  fill in the ticket and the name. See [From a GitHub issue](#from-a-github-issue) below.
 
 ### Creating a new branch
 
@@ -315,6 +317,55 @@ creation, which carries on in the background. When it finishes, a notification t
 outcome: the name of the new worktree, or the error and the step where it failed.
 
 > Naming formats are fixed in this version and are intended to become configurable later.
+
+### From a GitHub issue
+
+With **GitHub issue** selected, the form lists the repository's open issues. Pick one and its
+number becomes the **Ticket** and its title becomes the **Name**. Everything else works as for a
+new branch: the same preview, the same create, the same prompt when the branch name is already
+taken. Choose the **Type** yourself.
+
+**What you need.** The app reads issues through the GitHub CLI, `gh`, so install it from
+[cli.github.com](https://cli.github.com) and sign in once with `gh auth login` in a terminal. The app
+looks for `gh` on the `PATH` your environment-include script sets up (Settings → Environment), then
+on the app's own `PATH`, then in the usual install folders. Issues are read as you: a private
+repository works when your `gh` sign-in can see it, and an anonymous read is never attempted.
+
+**Which repository.** The chip reads the repository behind the `origin` remote when it is on
+github.com, otherwise the first github.com remote in the repository's configuration. Only
+github.com is supported. A remote whose address is rewritten by git's `url.<base>.insteadOf` setting
+is read as written in the configuration, so an alias that only becomes a github.com address after
+rewriting is not recognised. When no github.com remote is found, the chip is disabled and the line
+under the chips says why: "This repository has no GitHub remote." or "Couldn't read this
+repository's remotes: …".
+
+**What is sent to GitHub, and when.** Opening the form contacts nothing but the app's own session
+service. Before you choose the chip, the line under the chips names the repository it would read:
+"GitHub issue reads open issues of *owner/name* from GitHub." Only choosing the chip, or pressing
+**Retry** after a failure, asks GitHub for the repository's open issues. The request carries the
+repository's owner and name and nothing else from your project. The same notice stays at the top of
+the issue list while the source is chosen.
+
+**The list.** Issues are listed most recently updated first, each as its number, title and labels.
+Type in **Issue** to narrow the list by number, by a word of the title, or by a label, and use the
+arrow keys and Enter to pick without leaving the field. The search runs over the loaded issues, on
+your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
+fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a
+line under the list says "Showing the 1,000 most recently updated of *N* open issues." While the
+list loads, you can switch back to another chip or fill the fields in yourself. A repository with no
+open issues says "*owner/name* has no open issues."
+
+**When the issues can't be read.** The list shows what went wrong and a **Retry** button:
+
+| Message | What to do |
+|---|---|
+| "Couldn't read issues: the GitHub CLI (`gh`) isn't installed. …" | Install `gh`, sign in with `gh auth login`, then retry. |
+| "Couldn't read issues: you're not signed in to GitHub. …" | Run `gh auth login` in a terminal, then retry. |
+| "Couldn't read issues: your GitHub sign-in can't access *owner/name*." | Sign in with an account that can see the repository, or ask for access. |
+| "Couldn't reach GitHub. Check your connection, then retry." | Check the network connection, then retry. |
+| "GitHub's rate limit was reached. Wait a minute, then retry." | Wait a minute, then retry. |
+| "GitHub didn't answer within 10 seconds." | Retry. If it keeps happening, check `gh` works from a terminal. |
+| "Couldn't read issues: …" | Read the detail `gh` reported, then retry. |
 
 ## Working from an existing branch
 

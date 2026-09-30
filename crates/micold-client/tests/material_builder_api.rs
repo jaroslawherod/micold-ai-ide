@@ -113,3 +113,21 @@ fn the_scan_actually_finds_the_library_components() {
         );
     }
 }
+
+/// `ToggleChip::disabled` is a chainable step like every other option (feature 034, T021 — U65):
+/// the GitHub issue chip is built as `ToggleChip::new(..).active(..).disabled(..)`, not by a second
+/// chip type or a wrapper that drops the press.
+///
+/// The library is private to the binary, so a call cannot be compiled from here; this holds the
+/// declaration instead, and `every_optional_input_is_a_chainable_builder_step` holds its shape.
+#[test]
+fn a_toggle_chip_can_be_disabled_in_the_chain() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/material/toggle_chip.rs"),
+    )
+    .expect("read toggle_chip.rs");
+    assert!(
+        source.contains("pub fn disabled(mut self, disabled: bool) -> Self"),
+        "ToggleChip has no chainable `.disabled(bool)` step"
+    );
+}

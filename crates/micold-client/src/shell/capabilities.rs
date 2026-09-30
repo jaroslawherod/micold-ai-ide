@@ -73,9 +73,11 @@ use std::sync::Arc;
 use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
+use micold_core::github::{locate_gh, GhCli, HostOs, IssueSource, LocateInputs};
 use micold_core::script_path_check::{ScriptPathProbe, StdScriptPathProbe};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
+use std::path::PathBuf;
 
 use crate::shell::link_opener::{LinkOpener, SystemLinkOpener};
 
@@ -96,6 +98,56 @@ pub struct Capabilities {
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
     script_path_probe: Arc<dyn ScriptPathProbe + Send + Sync>,
     link_opener: Arc<dyn LinkOpener>,
+    issue_tooling: IssueTooling,
+}
+
+/// Find `gh` on this machine: the include's `PATH`, this process's `PATH`, then the well-known
+/// install directories (contracts/github-issue-source.md §1).
+fn locate_gh_here(env_include_path: Option<&str>) -> Option<PathBuf> {
+    let process_path = std::env::var("PATH").unwrap_or_default();
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    locate_gh(&LocateInputs {
+        os: HostOs::current(),
+        env_include_path,
+        process_path: &process_path,
+        home: home.as_deref(),
+        env: &|name| std::env::var(name).ok(),
+        exists: &|path| path.is_file(),
+    })
+}
+
+/// Locating `gh`, and building the issue source that runs it (feature 034).
+///
+/// Two halves because the lookup's answer is the source's input: the load locates `gh` on the
+/// environment-include `PATH` first, and only a found `gh` becomes a source, so "tooling missing"
+/// never constructs one. Both run on a blocking thread, hence `Send + Sync`.
+#[derive(Clone)]
+pub struct IssueTooling {
+    /// Find `gh`, given the `PATH` the environment include contributes, if any.
+    pub locate_gh: LocateGh,
+    /// The issue source running the `gh` at this path.
+    pub source: IssueSourceFactory,
+}
+
+/// Finds `gh`, given the `PATH` the environment include contributes, if any.
+pub type LocateGh = Arc<dyn Fn(Option<&str>) -> Option<PathBuf> + Send + Sync>;
+
+/// Builds the issue source that runs the `gh` at a path.
+pub type IssueSourceFactory =
+    Arc<dyn Fn(PathBuf) -> Arc<dyn IssueSource + Send + Sync> + Send + Sync>;
+
+#[cfg(test)]
+impl IssueTooling {
+    /// Tooling that never finds `gh`, so no test can run the developer's own. Every load through
+    /// it fails as tooling missing; a test that wants issues supplies its own.
+    pub(crate) fn none() -> Self {
+        Self {
+            locate_gh: Arc::new(|_| None),
+            source: Arc::new(|_: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
+                unreachable!("no `gh` is ever located, so no source is built")
+            }),
+        }
+    }
 }
 
 impl Capabilities {
@@ -115,6 +167,12 @@ impl Capabilities {
             env_include: Arc::new(SubprocessResolver),
             script_path_probe: Arc::new(StdScriptPathProbe),
             link_opener: Arc::new(SystemLinkOpener),
+            issue_tooling: IssueTooling {
+                locate_gh: Arc::new(locate_gh_here),
+                source: Arc::new(|gh: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
+                    Arc::new(GhCli::new(gh))
+                }),
+            },
         }
     }
 
@@ -173,6 +231,13 @@ impl Capabilities {
     #[cfg(test)]
     pub(crate) fn with_link_opener(mut self, opener: Arc<dyn LinkOpener>) -> Self {
         self.link_opener = opener;
+        self
+    }
+
+    /// The same capabilities, with `tooling` in place of the real `gh` (feature 034).
+    #[cfg(test)]
+    pub(crate) fn with_issue_tooling(mut self, tooling: IssueTooling) -> Self {
+        self.issue_tooling = tooling;
         self
     }
 
@@ -238,5 +303,15 @@ impl Capabilities {
     /// the one consumer runs the check on a blocking task.
     pub fn script_path_probe(&self) -> Arc<dyn ScriptPathProbe + Send + Sync> {
         Arc::clone(&self.script_path_probe)
+    }
+
+    /// Sourcing the environment-include script, owned, for a load on a blocking thread.
+    pub fn env_include_shared(&self) -> Arc<dyn EnvIncludeResolver + Send + Sync> {
+        Arc::clone(&self.env_include)
+    }
+
+    /// Locating and running `gh` (feature 034). Owned, because the load runs on a blocking thread.
+    pub fn issue_tooling(&self) -> IssueTooling {
+        self.issue_tooling.clone()
     }
 }

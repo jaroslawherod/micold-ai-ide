@@ -755,3 +755,19 @@ fn a_healthy_pair_produces_no_findings() {
     };
     assert_eq!(all_rules(&lib, &cat), Vec::<String>::new());
 }
+
+/// The gallery poses a disabled `ToggleChip` (feature 034, T021 — U65): the GitHub issue chip is
+/// disabled whenever the repository has no GitHub remote, so the disabled treatment is a state
+/// users see and the gallery has to show it.
+#[test]
+fn the_toggle_chip_is_posed_disabled() {
+    let chip = COMPONENTS
+        .iter()
+        .find(|e| e.component == "ToggleChip")
+        .expect("ToggleChip has a gallery entry");
+    assert!(
+        chip.posed.contains(&"disabled"),
+        "ToggleChip poses {:?}; the disabled chip is missing",
+        chip.posed
+    );
+}

@@ -84,7 +84,8 @@ fn update_inner_applies_window_focus_changed() {
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
-            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
+            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -138,7 +139,8 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
-            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
+            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -703,7 +705,8 @@ pub(crate) fn base_app() -> App {
                 micold_core::script_path_check::FakeScriptPathProbe::answering(
                     micold_core::script_path_check::ProbeAnswer::File,
                 ),
-            )),
+            ))
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -2062,7 +2065,8 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
-            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
+            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -4250,5 +4254,556 @@ mod script_path_report {
             probe.calls().is_empty(),
             "a restart must not check the path (FR-006, SC-004)"
         );
+    }
+}
+
+// --- feature 034: the GitHub issue source, through the shell (T022, T066) --------------------
+//
+// The reducer half is `tests/issue_source_state.rs`. These drive what only the shell does: asking
+// the daemon for the remotes, locating `gh` and running the load off the update thread, caching
+// the environment-include snapshot the load resolved. `gh` itself is never run: every test gets
+// its tooling from `issue_rig`, which locates a fake path (or none) and hands out a
+// `FakeIssueSource`.
+
+mod issue_source {
+    use super::*;
+    use crate::shell::capabilities::IssueTooling;
+    use micold_client::features::worktree_form::{BranchSource, IssueList, WorktreeForm};
+    use micold_core::git::GitRemote;
+    use micold_core::github::{FakeIssueSource, Issue, IssueLoadError, IssuePage, IssueSource};
+    use micold_core::naming::ConventionalType;
+    use micold_core::protocol::messages::{ErrorKind, OperationResult};
+    use micold_core::typeahead::Direction;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    const PROJECT: &str = "/repo/demo";
+    const FAKE_GH: &str = "/fake/bin/gh";
+
+    /// An app wired to fake issue tooling, and what that tooling saw.
+    pub(super) struct IssueRig {
+        pub app: App,
+        pub rx: iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        /// The `PATH` contributed by the environment include, per `gh` lookup.
+        pub located_with: Arc<Mutex<Vec<Option<String>>>>,
+        /// The `gh` path each constructed source was given.
+        pub constructed: Arc<Mutex<Vec<PathBuf>>>,
+        pub source: Arc<FakeIssueSource>,
+    }
+
+    fn issue(number: u64, title: &str, labels: &[&str]) -> Issue {
+        Issue::new(
+            number,
+            title.to_string(),
+            labels.iter().map(|l| l.to_string()).collect(),
+            "2026-09-29T00:00:00Z".to_string(),
+        )
+    }
+
+    /// Three open issues, most recently updated first.
+    fn issues() -> Vec<Issue> {
+        vec![
+            issue(7, "Sidebar flickers on resize", &["ui"]),
+            issue(42, "Crash when opening empty project", &["bug"]),
+            issue(108, "Document the sandbox placement", &["documentation"]),
+        ]
+    }
+
+    fn page(issues: Vec<Issue>) -> IssuePage {
+        IssuePage {
+            total_open: issues.len() as u64,
+            issues,
+            next_cursor: None,
+        }
+    }
+
+    /// Connected, `PROJECT` active, and tooling that finds `gh` at `gh` (or nowhere).
+    fn issue_rig(gh: Option<&str>, source: FakeIssueSource) -> IssueRig {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let located_with: Arc<Mutex<Vec<Option<String>>>> = Arc::default();
+        let constructed: Arc<Mutex<Vec<PathBuf>>> = Arc::default();
+        let source = Arc::new(source);
+        let found = gh.map(PathBuf::from);
+        let tooling = IssueTooling {
+            locate_gh: {
+                let located_with = Arc::clone(&located_with);
+                Arc::new(move |path: Option<&str>| {
+                    located_with.lock().unwrap().push(path.map(str::to_string));
+                    found.clone()
+                })
+            },
+            source: {
+                let constructed = Arc::clone(&constructed);
+                let source = Arc::clone(&source);
+                Arc::new(move |gh: PathBuf| {
+                    constructed.lock().unwrap().push(gh);
+                    Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>
+                })
+            },
+        };
+        let mut app = base_app();
+        app.caps = app.caps.clone().with_issue_tooling(tooling);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        IssueRig {
+            app,
+            rx,
+            located_with,
+            constructed,
+            source,
+        }
+    }
+
+    /// Run `work` and every message it produces back through the shell until nothing is left.
+    fn settle(app: &mut App, work: Task<Message>) {
+        let mut queue: VecDeque<Message> = messages(work).into();
+        while let Some(message) = queue.pop_front() {
+            queue.extend(messages(update_inner(app, message)));
+        }
+    }
+
+    fn send(app: &mut App, msg: FormMsg) {
+        let work = update_inner(app, Message::WorktreeForm(msg));
+        settle(app, work);
+    }
+
+    fn form(app: &App) -> &WorktreeForm {
+        app.core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("the form is open")
+    }
+
+    /// Every `RemoteList` sent so far, drained from the outbox.
+    fn remote_lists_sent(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<(u64, PathBuf)> {
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::RemoteList { req, project } = msg {
+                sent.push((req, project));
+            }
+        }
+        sent
+    }
+
+    fn github_remote() -> Vec<GitRemote> {
+        vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }]
+    }
+
+    fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
+        let work = shell::daemon_sync::on_daemon_event(
+            app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RemoteList { remotes },
+            },
+        );
+        settle(app, work);
+    }
+
+    /// Open the form and answer its `RemoteList` with `remotes`.
+    fn open_with(rig: &mut IssueRig, remotes: Vec<GitRemote>) {
+        send(&mut rig.app, FormMsg::Opened);
+        let sent = remote_lists_sent(&mut rig.rx);
+        let (req, _) = *sent.first().expect("opening the form asks for the remotes");
+        answer_remotes(&mut rig.app, req, remotes);
+    }
+
+    /// A rig on the issue source with `issues()` loaded.
+    fn loaded_rig() -> IssueRig {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues())),
+        );
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        rig
+    }
+
+    fn offered(app: &App) -> Vec<u64> {
+        (0..form(app).issue_matches.len())
+            .map(|i| app.core.worktree_form.issue_number_at(i).expect("a row"))
+            .collect()
+    }
+
+    fn pick(app: &mut App, number: u64) {
+        send(app, FormMsg::IssuePicked { number });
+    }
+
+    // --- T022: the shell's half -----------------------------------------------------------------
+
+    /// U58 — opening the form sends one `RemoteList` for the active project; its answer decides the
+    /// source, and an answer for a project that is no longer active is dropped (FR-002).
+    #[test]
+    fn issue_opening_the_form_asks_for_remotes() {
+        use micold_client::features::worktree_form::GithubAvailability;
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        send(&mut rig.app, FormMsg::Opened);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "exactly one RemoteList, got {sent:?}");
+        assert_eq!(sent[0].1, PathBuf::from(PROJECT));
+
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert!(matches!(
+            form(&rig.app).github,
+            GithubAvailability::Available(_)
+        ));
+
+        // An error reply reads as the reason, on the form rather than as a toast.
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        send(&mut rig.app, FormMsg::Opened);
+        let (req, _) = remote_lists_sent(&mut rig.rx)[0];
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::GitFailed,
+                message: "git remote failed".into(),
+                detail: None,
+            },
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(
+            form(&rig.app).github,
+            GithubAvailability::Unavailable(
+                "Couldn't read this repository's remotes: git remote failed".into()
+            )
+        );
+        assert!(nothing_was_reported(&rig.app), "the form says it; no toast");
+
+        // The user switched project while the question was out.
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        send(&mut rig.app, FormMsg::Opened);
+        let (req, _) = remote_lists_sent(&mut rig.rx)[0];
+        rig.app.core.workspace.active = Some(PathBuf::from("/repo/other"));
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(
+            form(&rig.app).github,
+            GithubAvailability::Checking,
+            "another project's remotes must not decide this form's source"
+        );
+    }
+
+    /// U59 — with no connection the remotes cannot be read: the form says so, with no toast; and a
+    /// connection that drops with the question out resolves it the same way (FR-002, FR-024).
+    #[test]
+    fn issue_remotes_without_a_connection() {
+        use micold_client::features::worktree_form::GithubAvailability;
+        let unreachable = GithubAvailability::Unavailable(
+            "Couldn't read this repository's remotes: not connected to the session service".into(),
+        );
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        rig.app.daemon = None;
+        send(&mut rig.app, FormMsg::Opened);
+        assert_eq!(form(&rig.app).github, unreachable);
+        assert!(
+            nothing_was_reported(&rig.app),
+            "the caption says it; no toast"
+        );
+
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        send(&mut rig.app, FormMsg::Opened);
+        let work = shell::daemon_sync::on_disconnected(&mut rig.app);
+        settle(&mut rig.app, work);
+        assert_eq!(form(&rig.app).github, unreachable);
+        assert!(
+            nothing_was_reported(&rig.app),
+            "a read-only question needs no 'may or may not have taken effect' notice"
+        );
+    }
+
+    /// A resolver that answers a fixed `PATH` and counts its calls. `Send + Sync`, because the
+    /// load resolves on a blocking thread.
+    struct PathResolver {
+        path: &'static str,
+        calls: Mutex<usize>,
+    }
+
+    impl micold_core::env_include::EnvIncludeResolver for PathResolver {
+        fn resolve(
+            &self,
+            _path: &Path,
+            _cwd: &Path,
+            _timeout: std::time::Duration,
+        ) -> (Vec<(String, String)>, EnvIncludeOutcome) {
+            *self.calls.lock().unwrap() += 1;
+            (
+                vec![("PATH".to_string(), self.path.to_string())],
+                EnvIncludeOutcome::Success,
+            )
+        }
+    }
+
+    /// U60 — `gh` is looked for on the `PATH` the environment include contributes; a cache miss
+    /// resolves inside the load and lands in the cache, and a hit is reused (FR-026, R3).
+    #[test]
+    fn issue_the_load_uses_the_env_include_path() {
+        let resolver = Arc::new(PathResolver {
+            path: "/opt/gh/bin",
+            calls: Mutex::new(0),
+        });
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new()
+                .with_page(page(issues()))
+                .with_page(page(issues())),
+        );
+        rig.app.caps = rig.app.caps.clone().with_env_include(resolver.clone());
+        rig.app.env_include_enabled = true;
+        rig.app.env_include_script_path = "/home/u/.include.sh".into();
+        open_with(&mut rig, github_remote());
+
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(*resolver.calls.lock().unwrap(), 1, "a miss resolves once");
+        assert!(
+            rig.app.env_include_cache.contains_key(Path::new(PROJECT)),
+            "the snapshot the load resolved is kept"
+        );
+
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(*resolver.calls.lock().unwrap(), 1, "a hit is reused");
+        assert_eq!(
+            *rig.located_with.lock().unwrap(),
+            vec![Some("/opt/gh/bin".to_string()); 2],
+            "both lookups searched the include's PATH"
+        );
+    }
+
+    /// U61 — no `gh` found: the load fails as tooling missing and no source is built (Edge "tooling
+    /// not installed").
+    #[test]
+    fn issue_missing_gh_is_reported_without_running() {
+        let mut rig = issue_rig(None, FakeIssueSource::new());
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(
+            form(&rig.app).issues,
+            IssueList::Failed {
+                error: IssueLoadError::ToolMissing
+            }
+        );
+        assert!(rig.constructed.lock().unwrap().is_empty());
+        assert!(rig.source.calls().is_empty());
+    }
+
+    // --- T066: US1 acceptance ---------------------------------------------------------------------
+
+    /// A1 — three sources; the issue one is enabled only with a GitHub remote (US1-1).
+    #[test]
+    fn issue_the_form_offers_a_github_issue_source() {
+        use micold_client::features::worktree_form::GithubAvailability;
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        open_with(&mut rig, github_remote());
+        assert!(matches!(
+            form(&rig.app).github,
+            GithubAvailability::Available(_)
+        ));
+
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        open_with(&mut rig, vec![]);
+        assert_eq!(
+            form(&rig.app).source_caption().as_deref(),
+            Some("This repository has no GitHub remote.")
+        );
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(form(&rig.app).source, BranchSource::New);
+    }
+
+    /// A2 — choosing the source loads through the source and lists its issues in its order (US1-2).
+    #[test]
+    fn issue_choosing_the_source_lists_open_issues() {
+        let rig = loaded_rig();
+        assert_eq!(rig.source.calls(), vec![("o/r".to_string(), None)]);
+        assert_eq!(
+            *rig.constructed.lock().unwrap(),
+            vec![PathBuf::from(FAKE_GH)]
+        );
+        assert_eq!(offered(&rig.app), vec![7, 42, 108]);
+        assert!(form(&rig.app).issue_list_open, "the list opens on arrival");
+    }
+
+    /// A3 — typing narrows locally with no source call; Down then Enter picks (US1-3).
+    #[test]
+    fn issue_typing_narrows_the_list_locally() {
+        let mut rig = loaded_rig();
+        let calls = rig.source.calls().len();
+        send(&mut rig.app, FormMsg::IssueQueryChanged("flicker".into()));
+        assert_eq!(offered(&rig.app), vec![7]);
+        send(
+            &mut rig.app,
+            FormMsg::IssueQueryChanged("documentation".into()),
+        );
+        assert_eq!(offered(&rig.app), vec![108]);
+        send(&mut rig.app, FormMsg::IssueQueryChanged("42".into()));
+        assert_eq!(offered(&rig.app).first(), Some(&42));
+        assert_eq!(rig.source.calls().len(), calls, "search is local (FR-005)");
+
+        send(&mut rig.app, FormMsg::IssueFocused);
+        send(&mut rig.app, FormMsg::IssueHighlightMoved(Direction::Next));
+        let highlighted = form(&rig.app)
+            .issue_highlight
+            .expect("a row is highlighted");
+        let number = rig
+            .app
+            .core
+            .worktree_form
+            .issue_number_at(highlighted)
+            .expect("the highlight is a row");
+        pick(&mut rig.app, number);
+        assert_eq!(form(&rig.app).ticket, number.to_string());
+    }
+
+    /// A4 — a pick fills ticket and name; the preview is the new-branch one (US1-4).
+    #[test]
+    fn issue_a_pick_fills_ticket_and_name() {
+        let mut rig = loaded_rig();
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        pick(&mut rig.app, 42);
+        let as_issue = form(&rig.app).clone();
+        assert_eq!(as_issue.ticket, "42");
+        assert_eq!(as_issue.name, "Crash when opening empty project");
+        let mut as_new = as_issue.clone();
+        as_new.source = BranchSource::New;
+        assert_eq!(as_issue.preview(), as_new.preview());
+    }
+
+    /// A5 — picked values stay editable, and the preview follows the edit (US1-5).
+    #[test]
+    fn issue_picked_values_stay_editable() {
+        let mut rig = loaded_rig();
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        pick(&mut rig.app, 42);
+        send(
+            &mut rig.app,
+            FormMsg::NameChanged("empty project crash".into()),
+        );
+        send(&mut rig.app, FormMsg::TicketChanged("43".into()));
+        assert_eq!(
+            form(&rig.app).preview().map(|d| d.branch),
+            Ok("fix/43_empty-project-crash".to_string())
+        );
+    }
+
+    /// The branch each `BranchPreflight` in the outbox asked about.
+    fn preflights_sent(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<String> {
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::BranchPreflight { branch, .. } = msg {
+                sent.push(branch);
+            }
+        }
+        sent
+    }
+
+    /// A6 — submitting after a pick sends what a new-branch submit sends, and a taken name raises
+    /// the existing prompt (US1-6).
+    #[test]
+    fn issue_submit_creates_like_a_new_branch() {
+        let mut rig = loaded_rig();
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        pick(&mut rig.app, 42);
+        let _ = remote_lists_sent(&mut rig.rx);
+        send(&mut rig.app, FormMsg::Submitted);
+        assert_eq!(
+            preflights_sent(&mut rig.rx),
+            vec!["fix/42_crash-when-opening-empty-project".to_string()]
+        );
+
+        let req = *rig
+            .app
+            .pending_ops
+            .iter()
+            .find(|(_, op)| matches!(op, PendingOp::BranchPreflight { picked: false, .. }))
+            .expect("the issue source pre-flights as a new branch, not a picked one")
+            .0;
+        let branch = "fix/42_crash-when-opening-empty-project".to_string();
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::BranchPreflight {
+                    situation: micold_core::worktree::BranchSituation::LocalAvailable { branch },
+                },
+            },
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            form(&rig.app).resolution.is_prompting(),
+            "a taken branch raises the conflict prompt"
+        );
+    }
+
+    /// A7 — the form stays usable while the load runs; the late result then changes nothing
+    /// (US1-7).
+    #[test]
+    fn issue_the_form_stays_usable_while_loading() {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues())),
+        );
+        open_with(&mut rig, github_remote());
+        // Take the load's work without running it: the result is "in flight".
+        let in_flight = update_inner(
+            &mut rig.app,
+            Message::WorktreeForm(FormMsg::SourceChanged(BranchSource::Issue)),
+        );
+        assert!(matches!(form(&rig.app).issues, IssueList::Loading { .. }));
+
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
+        send(&mut rig.app, FormMsg::NameChanged("typed".into()));
+        assert_eq!(form(&rig.app).source, BranchSource::New);
+
+        settle(&mut rig.app, in_flight);
+        assert_eq!(form(&rig.app).issues, IssueList::NotRequested);
+        assert_eq!(form(&rig.app).name, "typed");
+    }
+
+    /// A8 — a pick replaces a typed ticket and name, and an earlier pick (US1-8).
+    #[test]
+    fn issue_a_pick_replaces_ticket_and_name() {
+        let mut rig = loaded_rig();
+        send(&mut rig.app, FormMsg::TicketChanged("1".into()));
+        send(&mut rig.app, FormMsg::NameChanged("typed".into()));
+        pick(&mut rig.app, 7);
+        assert_eq!(form(&rig.app).ticket, "7");
+        assert_eq!(form(&rig.app).name, "Sidebar flickers on resize");
+        pick(&mut rig.app, 108);
+        assert_eq!(form(&rig.app).ticket, "108");
+        assert_eq!(form(&rig.app).name, "Document the sandbox placement");
+    }
+
+    /// A9 — before the choice the caption names the repository and nothing was fetched; after it,
+    /// the body notice names it (US1-9, FR-025, FR-003).
+    #[test]
+    fn issue_the_source_says_it_contacts_github_before_it_does() {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues())),
+        );
+        open_with(&mut rig, github_remote());
+        assert_eq!(
+            form(&rig.app).source_caption().as_deref(),
+            Some("GitHub issue reads open issues of o/r from GitHub.")
+        );
+        assert!(
+            rig.source.calls().is_empty(),
+            "nothing is sent before the choice"
+        );
+        assert!(rig.located_with.lock().unwrap().is_empty());
+
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(
+            form(&rig.app).issue_notice().as_deref(),
+            Some("Reads open issues of o/r from GitHub.")
+        );
+        assert_eq!(rig.source.calls().len(), 1);
     }
 }

@@ -23,15 +23,15 @@ the repository can test without a display and without the network. The rendered 
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1  | With `RemoteList` answering `origin` on github.com, the open form offers three sources and **GitHub issue** is enabled; with no GitHub remote it is disabled with "This repository has no GitHub remote." | US1-1, FR-001, FR-002 | example | TODO | `main_tests.rs::issue_the_form_offers_a_github_issue_source` |
-| A2  | Choosing **GitHub issue** loads through the fake source and lists its open issues in the source's order (most recently updated first), each row showing number, title and labels | US1-2, FR-004 | example | TODO | `main_tests.rs::issue_choosing_the_source_lists_open_issues` |
-| A3  | Typing a title fragment, a label name, then a number narrows the matches on each keystroke with no source call; Down/Enter picks without leaving the field | US1-3, FR-005 | example | TODO | `main_tests.rs::issue_typing_narrows_the_list_locally` |
-| A4  | Picking #42 "Crash when opening empty project" sets ticket `42`, name the title, and `preview()` equals the new-branch preview for the same type/ticket/name | US1-4, FR-009, FR-010, FR-012 | example | TODO | `main_tests.rs::issue_a_pick_fills_ticket_and_name` |
-| A5  | After a pick, editing name and ticket changes `preview()` and the create request uses the edited values | US1-5, FR-011 | example | TODO | `main_tests.rs::issue_picked_values_stay_editable` |
-| A6  | Submitting after a pick sends the same create request as a new-branch submit with the same type/ticket/name, and a taken branch raises the existing conflict prompt | US1-6, FR-012 | example | TODO | `main_tests.rs::issue_submit_creates_like_a_new_branch` |
-| A7  | While the load is in flight the form shows Loading, and switching to **New branch** works; the late result then changes nothing | US1-7, FR-006, FR-007a | example | TODO | `main_tests.rs::issue_the_form_stays_usable_while_loading` |
-| A8  | With a typed ticket and name, or an earlier pick, a pick replaces both | US1-8, FR-010a | example | TODO | `main_tests.rs::issue_a_pick_replaces_ticket_and_name` |
-| A9  | Before choosing, the caption under the switch reads "GitHub issue reads open issues of o/r from GitHub." and no source call was made; after choosing, the body notice names `o/r` | US1-9, FR-025, FR-003 | example | TODO | `main_tests.rs::issue_the_source_says_it_contacts_github_before_it_does` |
+| A1  | With `RemoteList` answering `origin` on github.com, the open form offers three sources and **GitHub issue** is enabled; with no GitHub remote it is disabled with "This repository has no GitHub remote." | US1-1, FR-001, FR-002 | example | DONE | `main_tests.rs::issue_the_form_offers_a_github_issue_source` |
+| A2  | Choosing **GitHub issue** loads through the fake source and lists its open issues in the source's order (most recently updated first), each row showing number, title and labels | US1-2, FR-004 | example | DONE | `main_tests.rs::issue_choosing_the_source_lists_open_issues` |
+| A3  | Typing a title fragment, a label name, then a number narrows the matches on each keystroke with no source call; Down/Enter picks without leaving the field | US1-3, FR-005 | example | DONE | `main_tests.rs::issue_typing_narrows_the_list_locally` |
+| A4  | Picking #42 "Crash when opening empty project" sets ticket `42`, name the title, and `preview()` equals the new-branch preview for the same type/ticket/name | US1-4, FR-009, FR-010, FR-012 | example | DONE | `main_tests.rs::issue_a_pick_fills_ticket_and_name` |
+| A5  | After a pick, editing name and ticket changes `preview()` and the create request uses the edited values | US1-5, FR-011 | example | DONE | `main_tests.rs::issue_picked_values_stay_editable` |
+| A6  | Submitting after a pick sends the same create request as a new-branch submit with the same type/ticket/name, and a taken branch raises the existing conflict prompt | US1-6, FR-012 | example | DONE | `main_tests.rs::issue_submit_creates_like_a_new_branch` |
+| A7  | While the load is in flight the form shows Loading, and switching to **New branch** works; the late result then changes nothing | US1-7, FR-006, FR-007a | example | DONE | `main_tests.rs::issue_the_form_stays_usable_while_loading` |
+| A8  | With a typed ticket and name, or an earlier pick, a pick replaces both | US1-8, FR-010a | example | DONE | `main_tests.rs::issue_a_pick_replaces_ticket_and_name` |
+| A9  | Before choosing, the caption under the switch reads "GitHub issue reads open issues of o/r from GitHub." and no source call was made; after choosing, the body notice names `o/r` | US1-9, FR-025, FR-003 | example | DONE | `main_tests.rs::issue_the_source_says_it_contacts_github_before_it_does` |
 | A10 | With 1,000 loaded of 1,200 open, typing the number of an unloaded open issue shows loaded matches at once, then (after the debounce) the searched issue joins them once and can be picked | US1-10, FR-005a | example | TODO | `main_tests.rs::issue_search_finds_an_issue_beyond_the_cap` |
 | A11 | With the default mapping, picking an issue labelled `bug` selects type `fix` | US2-1, FR-013, FR-021 | example | TODO | `main_tests.rs::issue_a_bug_label_selects_fix` |
 | A12 | Mapping `bug` before `enhancement`: an issue labelled `enhancement, bug` selects `fix` | US2-2, FR-013, FR-017 | example | TODO | `main_tests.rs::issue_the_first_mapping_entry_wins` |
@@ -168,15 +168,15 @@ Tests: `crates/micold-client/tests/issue_source_state.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U96 | `Opened` starts with `github = Checking` and `issues = NotRequested`; `source_caption()` gives the Checking text, the Unavailable reason, or — while `Available` and the source is not `Issue` — the opt-in notice naming `owner/name`; `issue_notice()` names `owner/name` while the source is `Issue` | FR-002, FR-025 | example | TODO | `issue_source_state.rs::captions_follow_availability` |
-| U44 | `RemotesListed(Ok)` → `Available(repo)`; no GitHub remote → `Unavailable("This repository has no GitHub remote.")`; `Err(d)` → `Unavailable("Couldn't read this repository's remotes: d")` | FR-002 | example | TODO | `issue_source_state.rs::remotes_decide_availability` |
-| U45 | `SourceChanged(Issue)` is refused while `Checking` or `Unavailable`, accepted while `Available` → `Loading { seq }` | FR-003, inv. 1 | example | TODO | `issue_source_state.rs::the_source_is_chosen_only_when_available` |
-| U46 | `IssuesLoaded` with the awaited seq applies; with any other seq is dropped; with no form open is dropped | FR-007a, inv. 2 | example | TODO | `issue_source_state.rs::only_the_awaited_result_applies` |
-| U47 | `IssueRetry` from `Failed` → `Loading` with a new seq; from `NotRequested` or `Loaded` does nothing | FR-007, inv. 1 | example | TODO | `issue_source_state.rs::retry_only_from_failed` |
-| U48 | Switching away keeps type/ticket/name, returns to `NotRequested`, and a late result is dropped | Edges "switch mid-load", "switch back", inv. 7 | example | TODO | `issue_source_state.rs::switching_away_keeps_fields_and_drops_the_load` |
-| U49 | A zero-issue listing is the empty state | FR-008 | example | TODO | `issue_source_state.rs::no_open_issues` |
-| U50 | Closing and reopening the form starts at `NotRequested` with no issues held | FR-023, Edge "form closed" | example | TODO | `issue_source_state.rs::closing_the_form_forgets_issues` |
-| U51 | `issue_request_seq` is never reset: a result for a closed form's seq does not apply to a new form | FR-007a, R9 | example | TODO | `issue_source_state.rs::a_closed_forms_result_never_matches_a_new_form` |
+| U96 | `Opened` starts with `github = Checking` and `issues = NotRequested`; `source_caption()` gives the Checking text, the Unavailable reason, or — while `Available` and the source is not `Issue` — the opt-in notice naming `owner/name`; `issue_notice()` names `owner/name` while the source is `Issue` | FR-002, FR-025 | example | DONE | `issue_source_state.rs::captions_follow_availability` |
+| U44 | `RemotesListed(Ok)` → `Available(repo)`; no GitHub remote → `Unavailable("This repository has no GitHub remote.")`; `Err(d)` → `Unavailable("Couldn't read this repository's remotes: d")` | FR-002 | example | DONE | `issue_source_state.rs::remotes_decide_availability` |
+| U45 | `SourceChanged(Issue)` is refused while `Checking` or `Unavailable`, accepted while `Available` → `Loading { seq }` | FR-003, inv. 1 | example | DONE | `issue_source_state.rs::the_source_is_chosen_only_when_available` |
+| U46 | `IssuesLoaded` with the awaited seq applies; with any other seq is dropped; with no form open is dropped | FR-007a, inv. 2 | example | DONE | `issue_source_state.rs::only_the_awaited_result_applies` |
+| U47 | `IssueRetry` from `Failed` → `Loading` with a new seq; from `NotRequested` or `Loaded` does nothing | FR-007, inv. 1 | example | DONE | `issue_source_state.rs::retry_only_from_failed` |
+| U48 | Switching away keeps type/ticket/name, returns to `NotRequested`, and a late result is dropped | Edges "switch mid-load", "switch back", inv. 7 | example | DONE | `issue_source_state.rs::switching_away_keeps_fields_and_drops_the_load` |
+| U49 | A zero-issue listing is the empty state | FR-008 | example | DONE | `issue_source_state.rs::no_open_issues` |
+| U50 | Closing and reopening the form starts at `NotRequested` with no issues held | FR-023, Edge "form closed" | example | DONE | `issue_source_state.rs::closing_the_form_forgets_issues` |
+| U51 | `issue_request_seq` is never reset: a result for a closed form's seq does not apply to a new form | FR-007a, R9 | example | DONE | `issue_source_state.rs::a_closed_forms_result_never_matches_a_new_form` |
 
 ### `crates/micold-client/src/features/worktree_form.rs`: ranking and the pick
 
@@ -184,12 +184,12 @@ Tests: `crates/micold-client/tests/issue_source_state.rs`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U52 | `IssueQueryChanged("42")` ranks `#42` first; a label name finds its issue; a title fragment narrows | FR-005 | example | TODO | `issue_source_state.rs::the_query_ranks_row_text` |
-| U53 | `issue_highlight < issue_matches.len()` through move/focus/dismiss and re-rank | inv. 3 | example | TODO | `issue_source_state.rs::highlight_stays_in_range` |
-| U54 | `issue_number_at(i)` returns the number at `issue_matches[i]`; `None` at `len()` (both sides) | R12 | example | TODO | `issue_source_state.rs::issue_number_at_bounds` |
-| U55 | `IssuePicked` sets ticket (no `#`), name via `name_from_title`, clears error, closes the list, marks `picked_issue` | FR-009, FR-010 | example | TODO | `issue_source_state.rs::a_pick_fills_ticket_and_name` |
-| U56 | `IssuePicked` for a number not held, or on a form not `Loaded`, is a no-op | contract §4 | example | TODO | `issue_source_state.rs::a_stale_pick_is_ignored` |
-| U57 | `preview()`/`can_submit()` for `Issue` equal those for `New` with the same fields | FR-012 | example | TODO | `issue_source_state.rs::issue_source_previews_as_new` |
+| U52 | `IssueQueryChanged("42")` ranks `#42` first; a label name finds its issue; a title fragment narrows | FR-005 | example | DONE | `issue_source_state.rs::the_query_ranks_row_text` |
+| U53 | `issue_highlight < issue_matches.len()` through move/focus/dismiss and re-rank | inv. 3 | example | DONE | `issue_source_state.rs::highlight_stays_in_range` |
+| U54 | `issue_number_at(i)` returns the number at `issue_matches[i]`; `None` at `len()` (both sides) | R12 | example | DONE | `issue_source_state.rs::issue_number_at_bounds` |
+| U55 | `IssuePicked` sets ticket (no `#`), name via `name_from_title`, clears error, closes the list, marks `picked_issue` | FR-009, FR-010 | example | DONE | `issue_source_state.rs::a_pick_fills_ticket_and_name` |
+| U56 | `IssuePicked` for a number not held, or on a form not `Loaded`, is a no-op | contract §4 | example | DONE | `issue_source_state.rs::a_stale_pick_is_ignored` |
+| U57 | `preview()`/`can_submit()` for `Issue` equal those for `New` with the same fields | FR-012 | example | DONE | `issue_source_state.rs::issue_source_previews_as_new` |
 
 ### `crates/micold-client/src/shell/` and `main.rs`: RemoteList, load, pick
 
@@ -197,12 +197,12 @@ Tests: `crates/micold-client/src/main_tests.rs`, each named with `issue`; `crate
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U58 | Opening the form sends one `RemoteList` for the active project; OK/Err route to `RemotesListed`; a reply for an inactive project is dropped | FR-002 | example | TODO | `main_tests.rs::issue_opening_the_form_asks_for_remotes` |
-| U59 | Not connected → `RemotesListed(Err("not connected to the session service"))`, no toast; a dropped connection resolves a pending `RemoteList` the same way | FR-002, FR-024 | example | TODO | `main_tests.rs::issue_remotes_without_a_connection` |
-| U60 | A cache miss resolves the env-include snapshot inside the load and it lands in `App::env_include_cache`; a hit is reused | FR-026, R3 | example | TODO | `main_tests.rs::issue_the_load_uses_the_env_include_path` |
-| U61 | `gh` not located → `Failed(ToolMissing)` and no source is constructed | Edge "tooling not installed" | example | TODO | `main_tests.rs::issue_missing_gh_is_reported_without_running` |
-| U62 | The issue-source capability is called only from the load, retry and search-due arms | FR-003, FR-024 | example | TODO | `issues_are_requested_only_on_named_events.rs` |
-| U63 | `GhCli` is named only in `Capabilities::real()` | Principle I | example | TODO | `no_concrete_implementations.rs` (existing gate, extended by construction) |
+| U58 | Opening the form sends one `RemoteList` for the active project; OK/Err route to `RemotesListed`; a reply for an inactive project is dropped | FR-002 | example | DONE | `main_tests.rs::issue_opening_the_form_asks_for_remotes` |
+| U59 | Not connected → `RemotesListed(Err("not connected to the session service"))`, no toast; a dropped connection resolves a pending `RemoteList` the same way | FR-002, FR-024 | example | DONE | `main_tests.rs::issue_remotes_without_a_connection` |
+| U60 | A cache miss resolves the env-include snapshot inside the load and it lands in `App::env_include_cache`; a hit is reused | FR-026, R3 | example | DONE | `main_tests.rs::issue_the_load_uses_the_env_include_path` |
+| U61 | `gh` not located → `Failed(ToolMissing)` and no source is constructed | Edge "tooling not installed" | example | DONE | `main_tests.rs::issue_missing_gh_is_reported_without_running` |
+| U62 | The issue-source capability is called only from the load, retry and search-due arms | FR-003, FR-024 | example | DONE | `issues_are_requested_only_on_named_events.rs` |
+| U63 | `GhCli` is named only in `Capabilities::real()` | Principle I | example | DONE | `no_concrete_implementations.rs` (existing gate, extended by construction) |
 
 ### `crates/micold-client/src/ui/material/toggle_chip.rs`
 
@@ -210,8 +210,8 @@ Tests: unit tests in `toggle_chip.rs`, `material_builder_api.rs`, `showcase_comp
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U64 | A disabled chip emits no press; an enabled one does (both sides) | FR-002, Principle VIII | example | TODO | `toggle_chip.rs::a_disabled_chip_emits_no_press` |
-| U65 | `.disabled(bool)` is chainable and the gallery poses it | Principle VIII | example | TODO | `material_builder_api.rs`, `showcase_completeness.rs` |
+| U64 | A disabled chip emits no press; an enabled one does (both sides) | FR-002, Principle VIII | example | DONE | `toggle_chip.rs::a_disabled_chip_emits_no_press` |
+| U65 | `.disabled(bool)` is chainable and the gallery poses it | Principle VIII | example | DONE | `material_builder_api.rs`, `showcase_completeness.rs` |
 
 ### Search beyond the cap (`github.rs`, `worktree_form.rs`, shell)
 
@@ -229,7 +229,7 @@ Tests: `crates/micold-core/tests/github_parse.rs`, `github_search.rs` (new), `cr
 | U73 | `IssueSearched(Err)` → `SearchState::Failed` with loaded matches kept; `IssueRetry` → `Searching` | FR-005a, FR-007 | example | TODO | `issue_source_state.rs::a_failed_search_keeps_loaded_matches` |
 | U74 | A keystroke schedules one 300 ms debounce; `IssueSearchDue` runs `search_open` with the load's `gh` path | R9 | example | TODO | `main_tests.rs::issue_search_is_debounced` |
 | U95 | `GhCli` returns stdout that parses as JSON with `data` whatever the exit status (partial response); non-zero exit without JSON goes to `classify` | FR-005a, R2 | example | TODO | `github_gh_cli.rs::a_partial_response_is_parsed` |
-| U75 | Ranking 1,000 issue rows for a 3-character query takes < 50 ms in release | SC-003 | example | TODO | `typeahead_budget.rs` (new case) |
+| U75 | Ranking 1,000 issue rows for a 3-character query takes < 50 ms in release | SC-003 | example | DONE | `typeahead_budget.rs` (new case) |
 
 ### `crates/micold-core/src/issue_types.rs`, `settings.rs`
 

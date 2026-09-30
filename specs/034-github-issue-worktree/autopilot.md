@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: Wait for M1 CI (#460), merge.
+- **Next step**: Run milestone M2 (T018–T031, T066–T075, T032).
 
 ## Pull requests
 
@@ -21,8 +21,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | #460 | ci |
-| M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | — | pending |
+| M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | #460 | merged (454c716c) |
+| M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | — | in-progress |
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | — | pending |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | — | pending |
 | M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | — | pending |

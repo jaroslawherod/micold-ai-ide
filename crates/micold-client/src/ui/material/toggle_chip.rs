@@ -42,6 +42,7 @@ pub struct ToggleChip<M> {
     active: bool,
     accent: Option<(Rgb, Rgb)>,
     count: usize,
+    disabled: bool,
 }
 
 impl<M> ToggleChip<M> {
@@ -55,6 +56,7 @@ impl<M> ToggleChip<M> {
             active: false,
             accent: None,
             count: 0,
+            disabled: false,
         }
     }
 
@@ -78,6 +80,22 @@ impl<M> ToggleChip<M> {
     pub fn count(mut self, count: usize) -> Self {
         self.count = count;
         self
+    }
+
+    /// Whether the chip refuses presses (feature 034). A disabled chip emits nothing, does not
+    /// ripple, and takes Material's disabled treatment: content at 38%, and — when active — its
+    /// container at 12% (`tokens::state`).
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    /// The message a press emits, or `None` while disabled.
+    fn press(&self) -> Option<M>
+    where
+        M: Clone,
+    {
+        (!self.disabled).then(|| self.on_press.clone())
     }
 
     /// The `(fill, on_fill)` pair used while active — e.g. a worktree type's tag color. Defaults
@@ -113,6 +131,8 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         let muted = style::color(r.on_surface_variant);
         let outline = style::color(r.outline);
         let active = chip.active;
+        let disabled = chip.disabled;
+        let on_press = chip.press();
         // §7.6 gives a chip `label_large`. It was `SidebarTag` (`label_small`, 11dp), which was
         // right while the chip had no height of its own — but T060 gave it §7.6's 32dp, and an 11dp
         // word in a 32dp pill leaves so much empty height that a short label renders as a circle
@@ -147,8 +167,40 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
             right: anatomy::chip::PADDING,
         })
         .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
-        .on_press(chip.on_press)
+        .on_press_maybe(on_press)
         .style(move |_theme: &iced::Theme, status| {
+            if disabled {
+                // Material's disabled treatment, from the state tokens rather than a literal.
+                let content = |c: Color| Color {
+                    a: state::DISABLED_CONTENT,
+                    ..c
+                };
+                let text = if active { on } else { muted };
+                return iced::widget::button::Style {
+                    background: Some(Background::Color(if active {
+                        Color {
+                            a: state::DISABLED_CONTAINER,
+                            ..fill
+                        }
+                    } else {
+                        Color::TRANSPARENT
+                    })),
+                    text_color: content(text),
+                    border: Border {
+                        color: if active {
+                            Color::TRANSPARENT
+                        } else {
+                            Color {
+                                a: state::DISABLED_CONTAINER,
+                                ..outline
+                            }
+                        },
+                        width: if active { 0.0 } else { anatomy::chip::OUTLINE },
+                        radius: shape::FULL.into(),
+                    },
+                    ..Default::default()
+                };
+            }
             // The chip responds to the pointer. It used to ignore `status` entirely, so a
             // filter chip was the one interactive thing in the sidebar that gave no
             // feedback at all — FR-021 applies the state-layer set to *every* interactive
@@ -182,6 +234,10 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         });
         // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
         // in its own text colour: the accent when on, the muted role when off.
+        // A disabled chip cannot be pressed, so a ripple would report a press that never happens.
+        if disabled {
+            return chip_button.into();
+        }
         super::Ripple::new(chip_button, ripple_tint, shape::FULL).into()
     }
 }
@@ -205,5 +261,16 @@ mod tests {
                 "{scheme:?}: a neutral chip's label measures {ratio:.2}:1 pressed, below AA"
             );
         }
+    }
+
+    /// A disabled chip has nowhere to send a press, and an enabled one does (feature 034, U64):
+    /// the GitHub issue chip is disabled while the repository has no GitHub remote, and a press
+    /// that still arrived would choose a source that cannot load.
+    #[test]
+    fn a_disabled_chip_emits_no_press() {
+        let r = roles(ColorScheme::Light);
+        assert_eq!(ToggleChip::new("x", 7, r).press(), Some(7));
+        assert_eq!(ToggleChip::new("x", 7, r).disabled(false).press(), Some(7));
+        assert_eq!(ToggleChip::new("x", 7, r).disabled(true).press(), None);
     }
 }

@@ -286,3 +286,58 @@ failed before the implementation.
   and Unix cases in `relative_path_entries_are_dropped_and_quotes_removed` still hold.
 - research.md R3 and R8, data-model.md and contracts/github-issue-source.md §3 now describe the
   relative-entry rule, the "Resource not accessible" `NoAccess` text and the `GH_DEBUG` removal.
+
+## M2 baseline
+
+- `cargo test --workspace` on 454c716c (origin/main after PR #460) before any M2 test: exit 0.
+
+## Cycle 12: M2 reds, batched per test file (U96, U44–U65, U75, A1–A9)
+
+- deviation (as M1): the reds were written per file and run together against minimal stubs,
+  not one behavior at a time. The stubs declared the types, messages and capability shapes so the
+  tests compiled; every reducer arm was a no-op, the three readers returned `None`, `press()`
+  always returned the press, and `Capabilities::real()` built no `GhCli`.
+- test fixes made before the first red run, no implementation present: the expected branch in
+  `issue_source_previews_as_new` was corrected to `fix/42_crash-…` (`naming::derive` joins the
+  ticket with `_`); `Direction::Down` was corrected to `Direction::Next` (the enum's real name);
+  the U65 builder test reads the declaration from source, because `ui::material` is private to
+  the binary and cannot be called from an integration test.
+- red, `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state`
+  -> `test result: FAILED. 0 passed; 15 failed`. Decisive lines: `issue_source_state.rs:102:31`
+  (`choosing an available source starts a load`), `:150:5` (captions), `:193:5` (availability),
+  `:229:5` (source chosen only when available).
+- red, `--test issues_are_requested_only_on_named_events` -> `1 passed; 1 failed`:
+  `every_allowlist_entry_still_matches` (`these ALLOWED entries match nothing`).
+- red, `--test showcase_completeness` -> `the_toggle_chip_is_posed_disabled` FAILED at `:768:5`
+  (`the disabled chip is missing`).
+- red, `--test no_concrete_implementations` -> `each_implementation_is_chosen_in_exactly_one_place`
+  FAILED at `:279:5` (`GhCli` chosen 0 times) (U63).
+- red, `--lib ui::material::toggle_chip` -> `a_disabled_chip_emits_no_press` FAILED:
+  `left: Some(7) / right: None` (U64).
+- red, `--bin micold-ai-ide issue_source` -> `0 passed; 13 failed`. Decisive lines:
+  `main_tests.rs:4199:38` (`opening the form asks for the remotes`), `:4231:9` and `:4286:9`
+  (the remotes' error and disconnected captions).
+- passed at first run, pinned by a deliberate mutant:
+  `material_builder_api.rs::a_toggle_chip_can_be_disabled_in_the_chain` passed against the stub's
+  declaration. A mutant (`disabled(&mut self, …)`, not chainable) could not be observed through
+  it: the library stops compiling at the call sites that chain it, which is the stronger check.
+  U65's observable half is the showcase pose red above. U75,
+  `scripts/build-lock.sh cargo test -p micold-core --release --test typeahead_budget`, passed
+  (ranking 1,000 rows well under 50 ms); with `ISSUE_BUDGET_MS` set to 0 it failed with
+  `ranking 1,000 issue rows for "cra" took 0.65ms, over SC-003's 0ms`, then was restored.
+- green: the reducer arms in `features/worktree_form.rs` (availability from `choose_remote`, seq
+  handed out on an accepted choice or retry and kept outside the form, only the awaited result
+  applies, local ranking over `row_text`, a pick fills ticket and `name_from_title`, `preview()`
+  treats `Issue` as `New`); `PendingOp::RemoteList` and its reply, error and disconnect arms;
+  `shell/issues.rs` (remotes on open, the load on `spawn_blocking` with the env-include snapshot
+  resolved on a miss and cached from `IssuesLoaded`, `ToolMissing` without building a source);
+  `IssueTooling` in `Capabilities` with `GhCli` named once in `real()`, and a test default that
+  never finds `gh`; `ToggleChip::disabled` using `on_press_maybe` and the disabled tokens.
+  -> each target above passes (15, 2, 11, 35, 14, 2, 13); `mise run gate` exit 0.
+- refactor: `naming_inputs` shared by the New and Issue sources in `ui/worktree_form.rs`; the two
+  capability closure types named (`LocateGh`, `IssueSourceFactory`) for clippy's
+  `type_complexity`. Gate re-run green.
+- notes: the caption under the source switch moved the Type select from child 2 to child 3 of the
+  dialog's fields, so the `add-worktree-dialog-type-menu-open` press path and anchor moved with it,
+  and `layout_snapshot.txt` was regenerated with four new covered states (T030).
+- commit: the commit that adds this entry
