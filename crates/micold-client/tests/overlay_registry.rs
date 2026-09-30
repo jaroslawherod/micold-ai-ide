@@ -158,6 +158,13 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
+        // without answering; the daemon keeps waiting for another window or times out.
+        Dialog {
+            id: "confirm_agent_request",
+            cancel: Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Dismissed),
+            open: |state| state.agent_confirm.pending = vec![an_agent_request()],
+        },
     ]
 }
 
@@ -274,14 +281,14 @@ fn every_dialog_is_in_the_list() {
     // and does take Escape.
     assert_eq!(
         dialogs().len(),
-        10,
+        11,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        22,
-        "ten dialogs plus nothing open, each with the filter panel open and closed"
+        24,
+        "eleven dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -340,6 +347,15 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
         ("about", Message::Help(HelpMsg::AboutOpened)),
+        (
+            "confirm_agent_request",
+            Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Requested(
+                micold_client::features::agent_confirm::Prompt {
+                    id: 2,
+                    ..an_agent_request()
+                },
+            )),
+        ),
         (
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
@@ -763,4 +779,15 @@ fn the_registry_is_actually_looking_at_something() {
         "the default state has nothing open; a registry that reports a surface there is matching \
          on something other than what it was asked"
     );
+}
+
+/// An agent's destructive request, pending an answer (feature 034, FR-014).
+fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
+    micold_client::features::agent_confirm::Prompt {
+        id: 1,
+        project: PathBuf::from("/p"),
+        caller_label: "planner".to_string(),
+        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
+        target_label: "reviewer".to_string(),
+    }
 }
