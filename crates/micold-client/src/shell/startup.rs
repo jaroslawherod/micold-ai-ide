@@ -35,7 +35,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use iced::Task;
-use micold_client::app::{Message, State};
+use micold_client::app::{Message, State, MIN_WINDOW_SIZE};
 use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::input::SessionInputStamper;
@@ -52,22 +52,6 @@ use crate::{observe_system_scheme, probe_config, theme, update, view, App};
 /// The app window icon as raw 64x64 RGBA (generated from `assets/icon/icon.svg` by
 /// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
 const ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64.rgba");
-
-/// The narrowest window the interface is supported at.
-///
-/// It exists so that "the narrowest supported window width" is a fact rather than a question. The
-/// settings surface puts a fixed 288dp rail beside a content column, and the rail never gives any
-/// of its width back — so below roughly 520dp the actions row runs off the right edge and the Save
-/// button loses first its edge and then its label, which is the primary action of the surface
-/// becoming an unlabelled circle. Every control renders at this size; see
-/// `the_window_declares_the_narrowest_size_it_supports`.
-const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
-
-/// The floor stays above the width the layout was seen to break at, not at it: 520dp was the last
-/// width whose actions row still fitted, and 640x480 was checked by hand and renders every control.
-/// A compile-time check rather than a test, because both sides are constants and a test of two
-/// constants is a test of nothing.
-const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
 
 /// Window settings carrying the app icon (taskbar / titlebar) and the narrowest size the interface
 /// is supported at. On Linux the window app-id / WM_CLASS is set to match `StartupWMClass` in the

@@ -19,7 +19,7 @@ mod support;
 
 use iced::widget::container;
 use iced::{Element, Length};
-use micold_client::app::{Message, State};
+use micold_client::app::{Message, State, MIN_WINDOW_SIZE};
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::sandbox::Sandbox;
 use micold_core::env_include::EnvIncludeOutcome;
@@ -35,7 +35,7 @@ const GONE: &str = "gone-away-and-renamed-elsewhere-on-disk";
 
 /// The width each case gives the whole view, and what it stands for.
 const WIDTHS: &[(f32, &str)] = &[
-    (640.0, "the minimum window, no project open"),
+    (MIN_WINDOW_SIZE.width, "the minimum window, no project open"),
     (440.0, "the main area beside a minimum-width sidebar"),
 ];
 
