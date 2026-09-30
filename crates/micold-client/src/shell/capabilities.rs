@@ -154,6 +154,15 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `store` as the settings file (spec 035).
+    ///
+    /// For a save test that reads back what was written, which only a recording fake can show.
+    #[cfg(test)]
+    pub(crate) fn with_settings(mut self, store: Arc<dyn SettingsStore + Send + Sync>) -> Self {
+        self.settings = Some(store);
+        self
+    }
+
     /// The same capabilities, minus the project catalog.
     ///
     /// The companion to [`Self::without_settings`], for the same reason and the same configuration
