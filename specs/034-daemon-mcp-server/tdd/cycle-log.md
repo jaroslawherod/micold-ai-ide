@@ -545,3 +545,36 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - note: the shared target ran out of disk mid-cycle (`No space left on device` truncated an edit to
   `server.rs`); `target-shared/debug/incremental` was deleted under the build lock, the file
   restored from git and the edit re-applied.
+
+## Cycle 20 — A7, A8, U145, U146, U148, U149, U150, U151, U219 — T032, T038
+
+- tests: `crates/micold-daemon/tests/mcp_create_worktree.rs` —
+  `create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it` (A7),
+  `an_existing_or_checked_out_branch_is_a_conflict_and_nothing_changes` (A8),
+  `without_a_name_the_directory_is_derived_from_the_branch` (U145),
+  `a_name_the_naming_rules_reject_is_invalid_input_and_creates_nothing` (U146),
+  `a_branch_name_git_rejects_is_invalid_input_with_gits_message` (U148),
+  `existing_local_checks_out_a_free_branch` (U149),
+  `ten_concurrent_creates_of_one_branch_leave_one_worktree` (U150),
+  `back_to_back_creates_from_one_caller_all_succeed` (U151),
+  `a_default_session_is_refused_by_principle_iii_and_nothing_changes` (U219).
+  `support/mcp.rs` gained `fake_window` (a registered client's catalog stream) and `window_sees`.
+  Stub: the M3 catalog commit's `service_error "create_worktree is not available yet"` arm.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_create_worktree`
+  ```
+  thread 'a_name_the_naming_rules_reject_is_invalid_input_and_creates_nothing' panicked at crates/micold-daemon/tests/mcp_create_worktree.rs:227:5:
+  assertion `left == right` failed
+    left: String("service_error")
+   right: "invalid_input"
+  test result: FAILED. 0 passed; 9 failed
+  ```
+- green: `mcp::tools::call` is async; read tools still run on the blocking pool, `create_worktree`
+  runs scope → naming (`checked_dir_name`, or `dir_name_from_branch`) → `GitCli::check_branch_name`
+  (`git check-ref-format --branch`) → `policy::decide` → `ops::branch_situation` +
+  `CreateMode::is_compatible_with` (conflict names the situation and the fitting mode) →
+  `ops::create_worktree` → the new `WorktreeRow`. `server.rs` awaits `call` directly.
+  First green run failed U219's last assertion: the fixture already holds a provenance record, so
+  "no record" was wrong; the test now compares the records before and after (a test fix before
+  green, not a weakening: the refused call still must add nothing).
+  `cargo test -p micold-daemon`: 466 passed, 0 failed.
+- refactor: none.

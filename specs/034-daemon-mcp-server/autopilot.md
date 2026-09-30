@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M2
-- **Next step**: Coordinator: wait for #474's checks and merge it; then M3. (#474 rebased onto origin/main after a conflict in `daemon_sync.rs` with feature 035's `adopt_daemon_settings`; PROTOCOL_VERSION on main still 16, so no renumbering; gate green at d53d2242, 3951 passed)
+- **Phase**: 4-milestone M3
+- **Next step**: M3 in progress: create_worktree done (cycle 20); next create_session with first prompt (T034, T040, T041), then the audit line (T072, T073), docs T042, quickstart B3 T102, gate, reviews, PR.
 
 ## Pull requests
 
@@ -17,15 +17,15 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #455 | Spec | merged | 8ff6e0561386ba21219411bc16f828f08b177961 |
 | #465 | Design (PR 2) | merged | a5fcc795294b6dcd2972ab5e3d31a814b41d8fb7 |
 | #469 | M1: bound sessions with the read tools | merged | 3c8d332ddc4f4497d0caa1764ae2fbf2c301c6f3 |
-| #474 | M2: Settings toggle for the tool server | open | — |
+| #474 | M2: Settings toggle for the tool server | merged at 7964273e | — |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
-| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | PR open |
-| M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
+| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
+| M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | in progress |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |

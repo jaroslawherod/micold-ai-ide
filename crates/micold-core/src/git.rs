@@ -152,6 +152,12 @@ impl GitCli {
     pub fn new() -> Self {
         Self
     }
+
+    /// Whether git accepts `branch` as a branch name (`git check-ref-format --branch`); the error
+    /// carries git's own message (feature 034, EC-3).
+    pub fn check_branch_name(&self, repo: &Path, branch: &str) -> io::Result<()> {
+        run_git(repo, &["check-ref-format", "--branch", branch]).map(|_| ())
+    }
 }
 
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying

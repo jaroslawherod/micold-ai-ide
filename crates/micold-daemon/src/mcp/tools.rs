@@ -5,36 +5,70 @@
 //! that does not exist at all, so the tools never reveal another project's contents.
 //!
 //! The read tools answer from the same catalog snapshot the sidebar renders, so an agent and the
-//! user see the same worktrees and sessions. **Blocking**: `list_branches` runs git and the worktree
-//! cache may need filling, so the server calls [`call`] on a blocking thread.
+//! user see the same worktrees and sessions. The mutating tools call the same operations the
+//! sidebar's protocol messages do ([`crate::ops`]), so an agent's change is the user's (FR-009).
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use micold_core::mcp::errors::OpError;
+use micold_core::git::GitCli;
+use micold_core::mcp::errors::{ErrorCategory, OpError};
+use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
 use micold_core::mcp::tools::{parse_call, Operation, WorktreeRef};
+use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
     ActivitySignal, ProjectSnapshot, SessionSummary, WireLifecycle, WorktreeSnapshot,
     WorktreeStatus,
 };
-use micold_core::session::{SessionId, TerminalMode};
+use micold_core::session::{SessionId, SessionLocation, TerminalMode};
 use micold_core::worktree::{
-    self, BlockReason, BranchOrigin, ProvenanceView, Worktree, WorktreeOwner,
+    self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
+    CreateMode, ProvenanceView, Worktree, WorktreeOwner,
 };
 use serde_json::{json, Value};
 
+use crate::ops;
 use crate::state::DaemonState;
 
 /// The sidebar's name for the project-root row.
 const DEFAULT_DISPLAY_NAME: &str = "Default";
 
-/// Validate and run one tool call made by `caller`.
-pub fn call(
+/// Validate and run one tool call made by `caller`. Read tools run on a blocking thread (they may
+/// run git or fill the worktree cache); mutating tools await the shared operations in [`crate::ops`].
+pub async fn call(
+    state: Arc<DaemonState>,
+    caller: SessionId,
+    name: String,
+    arguments: Value,
+) -> Result<Value, OpError> {
+    let operation = parse_call(&name, &arguments)?;
+    match operation {
+        Operation::CreateWorktree { branch, name, mode } => {
+            create_worktree(&state, caller, branch, name, mode).await
+        }
+        Operation::CreateSession { .. } => Err(OpError::service_error(format!(
+            "{} is not available yet",
+            operation.tool_name()
+        ))),
+        read => blocking(move || read_call(&state, caller, read)).await,
+    }
+}
+
+/// Run `work` on the blocking pool; a task that panicked is a `service_error`.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, OpError> + Send + 'static,
+) -> Result<T, OpError> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .unwrap_or_else(|_| Err(OpError::service_error("the tool call failed unexpectedly")))
+}
+
+/// Answer a read-only tool from the catalog snapshot. **Blocking.**
+fn read_call(
     state: &DaemonState,
     caller: SessionId,
-    name: &str,
-    arguments: &Value,
+    operation: Operation,
 ) -> Result<Value, OpError> {
-    let operation = parse_call(name, arguments)?;
     let project = caller_project(state, caller)?;
     let modes = state.session_modes(&project.path);
     let context = Context {
@@ -50,9 +84,192 @@ pub fn call(
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
-        Operation::CreateWorktree { .. } | Operation::CreateSession { .. } => Err(
-            OpError::service_error(format!("{name} is not available yet")),
+        Operation::CreateWorktree { .. } | Operation::CreateSession { .. } => {
+            unreachable!("mutating tools are dispatched by call")
+        }
+    }
+}
+
+/// The caller as policy sees it, and its project. **Blocking.**
+fn resolve_caller(state: &DaemonState, caller: SessionId) -> Result<(Caller, ProjectSnapshot), OpError> {
+    let project = caller_project(state, caller)?;
+    let me = project
+        .sessions
+        .iter()
+        .find(|s| s.id == caller)
+        .expect("caller_project found the caller in this project");
+    let who = Caller {
+        session: caller,
+        project: project.path.clone(),
+        location: match &me.worktree_dir {
+            Some(dir) => SessionLocation::Worktree(dir.clone()),
+            None => SessionLocation::Default,
+        },
+        provider: me.provider,
+    };
+    Ok((who, project))
+}
+
+/// `create_worktree` (contracts/mcp-tools.md): scope, then the naming rules and git's ref check,
+/// then policy (FR-015a), then the dialog's pre-flight, then the dialog's own create (FR-009).
+async fn create_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    branch: String,
+    name: Option<String>,
+    mode: CreateMode,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
+    let Some((repo, true)) = state.project_repo(&project.path) else {
+        return Err(OpError::invalid_input(
+            "this project is not a git repository, so it has no worktrees",
+        ));
+    };
+
+    let dir_name = match &name {
+        Some(name) => checked_dir_name(name)?,
+        None => {
+            let derived = naming::dir_name_from_branch(&branch);
+            if derived.is_empty() {
+                return Err(OpError::invalid_input(
+                    NamingError::EmptyNameAfterSlug.to_string(),
+                ));
+            }
+            derived
+        }
+    };
+    let checked = branch.clone();
+    blocking(move || {
+        GitCli::new()
+            .check_branch_name(&repo, &checked)
+            .map_err(|e| OpError::invalid_input(e.to_string()))
+    })
+    .await?;
+
+    let operation = Operation::CreateWorktree {
+        branch: branch.clone(),
+        name,
+        mode: mode.clone(),
+    };
+    if let PolicyDecision::Refuse(error) = policy::decide(
+        &who,
+        &operation,
+        &TargetFacts::default(),
+        CrossSessionAccess::default(),
+    ) {
+        return Err(error);
+    }
+
+    let names = DerivedNames {
+        dir_name: dir_name.clone(),
+        branch: branch.clone(),
+    };
+    match ops::branch_situation(state, &project.path, &names).await {
+        Some(Ok(situation)) if mode.is_compatible_with(&situation) => {}
+        Some(Ok(situation)) => {
+            return Err(OpError::new(
+                ErrorCategory::Conflict,
+                describe_situation(&branch, &situation),
+            ))
+        }
+        Some(Err(e)) => {
+            return Err(OpError::service_error(format!(
+                "could not check the branch: {e}"
+            )))
+        }
+        None => {
+            return Err(OpError::invalid_input(
+                "this project is not a git repository, so it has no worktrees",
+            ))
+        }
+    }
+
+    ops::create_worktree(state, project.path.clone(), names, mode, None)
+        .await
+        .map_err(create_failure)?;
+
+    let st = Arc::clone(state);
+    blocking(move || {
+        let project = caller_project(&st, caller)?;
+        let modes = st.session_modes(&project.path);
+        let context = Context {
+            caller,
+            project: &project,
+            modes: &modes,
+        };
+        context
+            .worktree_rows(&st, true)
+            .into_iter()
+            .find(|row| row["ref"] == dir_name.as_str())
+            .ok_or_else(|| {
+                OpError::service_error("the worktree was created but is not in the catalog")
+            })
+    })
+    .await
+}
+
+/// A worktree directory name given by the agent: accepted only as the dialog would write it
+/// (`naming::dir_name_from_branch` leaves it unchanged).
+fn checked_dir_name(name: &str) -> Result<String, OpError> {
+    let normal = naming::dir_name_from_branch(name);
+    if normal.is_empty() {
+        return Err(OpError::invalid_input(
+            NamingError::EmptyNameAfterSlug.to_string(),
+        ));
+    }
+    if normal != name {
+        return Err(OpError::invalid_input(format!(
+            "\"{name}\" is not a worktree name the create dialog would write; it would use \
+             \"{normal}\" (lowercase letters, digits and '-')"
+        )));
+    }
+    Ok(normal)
+}
+
+/// The pre-flight's situation in the dialog's words, with the mode that fits it (US2 s2).
+fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
+    match situation {
+        BranchSituation::Free => format!(
+            "branch '{branch}' does not exist yet; use mode new_branch to create it"
         ),
+        BranchSituation::LocalAvailable { branch } => format!(
+            "branch '{branch}' already exists locally and no worktree has it checked out; use \
+             mode existing_local to check it out"
+        ),
+        BranchSituation::RemoteOnly { branch, remotes } => format!(
+            "branch '{branch}' exists only on the remote(s) {}; use mode track_remote with one \
+             of them as remote, or new_branch to start a fresh branch",
+            remotes.join(", ")
+        ),
+        BranchSituation::Blocked { branch, reason } => reason.explain(branch),
+        BranchSituation::DirectoryTaken { dir } => explain_directory_taken(dir).to_string(),
+    }
+}
+
+/// A create the shared operation refused or could not complete.
+fn create_failure(failure: ops::CreateFailure) -> OpError {
+    match failure {
+        ops::CreateFailure::NotARepository => OpError::invalid_input(
+            "this project is not a git repository, so it has no worktrees",
+        ),
+        ops::CreateFailure::Create(CreateError::BranchInUse { branch, reason }) => {
+            OpError::new(ErrorCategory::Conflict, reason.explain(&branch))
+        }
+        ops::CreateFailure::Create(CreateError::SituationChanged) => OpError::new(
+            ErrorCategory::Conflict,
+            "the branch changed while the worktree was being created, so nothing was done",
+        ),
+        ops::CreateFailure::Create(CreateError::DuplicateDir { dir }) => OpError::new(
+            ErrorCategory::Conflict,
+            explain_directory_taken(&dir).to_string(),
+        ),
+        ops::CreateFailure::Create(CreateError::RolledBack(stderr)) => {
+            OpError::service_error(format!("git failed to create the worktree: {stderr}"))
+        }
+        ops::CreateFailure::Task(e) => {
+            OpError::service_error(format!("the worktree create failed: {e}"))
+        }
     }
 }
 

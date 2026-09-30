@@ -113,6 +113,45 @@ pub fn credential(state: &DaemonState, session: SessionId) -> String {
         .credential_for(session)
 }
 
+/// A window connected to `state`: it receives every broadcast from now on.
+pub fn fake_window(
+    state: &DaemonState,
+) -> tokio::sync::mpsc::UnboundedReceiver<
+    micold_core::protocol::codec::Frame<micold_core::protocol::messages::DaemonMsg>,
+> {
+    let (_id, rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test-window",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "window".into(),
+        },
+    ));
+    rx
+}
+
+/// Wait up to `within` for a `CatalogChanged` the window received whose snapshot satisfies `pred`.
+pub async fn window_sees(
+    window: &mut tokio::sync::mpsc::UnboundedReceiver<
+        micold_core::protocol::codec::Frame<micold_core::protocol::messages::DaemonMsg>,
+    >,
+    within: std::time::Duration,
+    pred: impl Fn(&micold_core::protocol::messages::CatalogSnapshot) -> bool,
+) -> bool {
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::DaemonMsg;
+    let wait = async {
+        while let Some(frame) = window.recv().await {
+            if let Frame::Control(DaemonMsg::CatalogChanged { catalog }) = frame {
+                if pred(&catalog) {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+    tokio::time::timeout(within, wait).await.unwrap_or(false)
+}
+
 /// Send raw request bytes and read the whole response: its status and body.
 pub async fn raw_request(addr: SocketAddr, request: &[u8]) -> (u16, String) {
     let mut stream = TcpStream::connect(addr).await.expect("connect");
