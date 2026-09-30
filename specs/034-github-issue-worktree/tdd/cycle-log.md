@@ -572,3 +572,13 @@ failed before the implementation.
 - notes: the gate also caught `settings_sections::every_persisted_setting_is_claimed_or_recorded_as_deferred`;
   `issue_label_types` is recorded in `DEFERRED` against T059 (M5 adds its editor).
 - commit: the commit that adds this entry
+
+## Cycle 24: U79 — `validate_mapping` (M5)
+
+- test: `crates/micold-core/tests/issue_types.rs::validation`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test issue_types` with `validate_mapping`
+  stubbed to `Ok(())` -> 3 passed, 1 failed: `:109:5 left: Ok(()) right: Err(MappingError { index: 1, kind: Blank })`.
+- green: fold every label (trim, lower-case); the first blank, or the first that repeats an earlier
+  folded label (`of` = its index), is returned -> `issue_types` 4 passed.
+- refactor: none needed; reuses `fold` from `type_for_labels`.
+- commit: the commit that adds this entry

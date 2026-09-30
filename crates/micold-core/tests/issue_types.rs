@@ -1,7 +1,9 @@
 //! The label-to-type mapping (feature 034, contracts/issue-naming-and-typing.md §2): the default
 //! table and the first-entry-wins lookup that turns an issue's labels into a worktree type.
 
-use micold_core::issue_types::{self, type_for_labels, LabelTypeEntry};
+use micold_core::issue_types::{
+    self, type_for_labels, validate_mapping, LabelTypeEntry, MappingError, MappingErrorKind,
+};
 use micold_core::naming::ConventionalType;
 
 fn entry(label: &str, type_: ConventionalType) -> LabelTypeEntry {
@@ -93,5 +95,58 @@ fn case_and_no_match() {
         type_for_labels(&two_to_one, &labels(&["regression"])),
         Some(ConventionalType::Fix),
         "several labels may map to one type (spec Edge Cases)"
+    );
+}
+
+#[test]
+fn validation() {
+    assert_eq!(
+        validate_mapping(&issue_types::default_mapping()),
+        Ok(()),
+        "the default mapping is valid"
+    );
+    assert_eq!(validate_mapping(&[]), Ok(()), "an empty mapping is valid");
+    assert_eq!(
+        validate_mapping(&[
+            entry("bug", ConventionalType::Fix),
+            entry("   ", ConventionalType::Feat),
+        ]),
+        Err(MappingError {
+            index: 1,
+            kind: MappingErrorKind::Blank
+        }),
+        "a label that is blank after trimming is refused at its index (FR-019)"
+    );
+    assert_eq!(
+        validate_mapping(&[
+            entry("bug", ConventionalType::Fix),
+            entry("docs", ConventionalType::Docs),
+            entry("Bug ", ConventionalType::Chore),
+        ]),
+        Err(MappingError {
+            index: 2,
+            kind: MappingErrorKind::Duplicate { of: 0 }
+        }),
+        "a label repeating an earlier one ignoring case and spaces names the earlier index (FR-019)"
+    );
+    assert_eq!(
+        validate_mapping(&[
+            entry("bug", ConventionalType::Fix),
+            entry("", ConventionalType::Feat),
+            entry("BUG", ConventionalType::Fix),
+        ]),
+        Err(MappingError {
+            index: 1,
+            kind: MappingErrorKind::Blank
+        }),
+        "the first offending entry in order is the one reported"
+    );
+    assert_eq!(
+        validate_mapping(&[
+            entry("bug", ConventionalType::Fix),
+            entry("regression", ConventionalType::Fix),
+        ]),
+        Ok(()),
+        "the same type twice is valid (spec Edge Cases)"
     );
 }

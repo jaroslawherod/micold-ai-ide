@@ -250,7 +250,7 @@ Tests: `crates/micold-core/tests/issue_types.rs`, `settings_issue_mapping.rs` (n
 | U76 | `default_mapping()` is `bug→fix, enhancement→feat, documentation→docs` in that order | FR-021 | example | DONE | `issue_types.rs::default_mapping` |
 | U77 | `type_for_labels` returns the first mapping entry matching any label, whatever the label order | FR-013 | example | DONE | `issue_types.rs::mapping_order_wins` |
 | U78 | Matching trims and ignores case; no match or empty mapping → `None`; two labels to one type allowed | FR-013, FR-014 | example | DONE | `issue_types.rs::case_and_no_match` |
-| U79 | `validate_mapping`: blank after trim → `Blank` at its index; `Bug` after `bug` → `Duplicate { of }`; first offender returned; same type twice valid | FR-019 | example | TODO | `issue_types.rs::validation` |
+| U79 | `validate_mapping`: blank after trim → `Blank` at its index; `Bug` after `bug` → `Duplicate { of }`; first offender returned; same type twice valid | FR-019 | example | DONE | `issue_types.rs::validation` |
 | U80 | Settings round-trip the mapping; absent → default; `[]` stays `[]` | FR-020, FR-021 | example | DONE | `settings_issue_mapping.rs::round_trip_and_default` |
 | U81 | An unknown type token drops that entry only; the file is not moved to `.bak` | R10 | example | DONE | `settings_issue_mapping.rs::unknown_type_is_dropped` |
 | U82 | A daemon-side `update` not touching the field preserves it; `SETTINGS_VERSION` stays 4; no issue content is written | FR-016, SC-006 | example | DONE | `settings_issue_mapping.rs::other_writers_preserve_the_mapping` |
