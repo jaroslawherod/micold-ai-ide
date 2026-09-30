@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M2
-- **Next step**: M2: gate re-run after review A fixes, review A round 2 (sonnet), then push and open the PR
+- **Next step**: Coordinator: wait for the M2 PR's checks and merge it; then M3
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
-| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | implemented; reviews A r1 fixed, B r1 CLEAN |
+| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | PR open |
 | M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
@@ -63,6 +63,7 @@ deliverable (tasks.md Notes).
 |---|---|---|---|---|
 | M2 | A (code-review high) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | 2 fixed (unbound start revokes old credential; crash respawn keeps its start's binding), 1 doc fix, 5 declined |
 | M2 | B (conformance) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | CLEAN, 2 MINOR (ledger row fixed; persistence visual check declined) |
+| M2 | A (sonnet re-review) | 2 | 6ad850082b956db79b824cda29517a5172665dba:4c3b01ae36397dc436b511995f71ef7ced33322d | CLEAN; fixes hold, declines stand |
 
 ## Declined review findings
 
