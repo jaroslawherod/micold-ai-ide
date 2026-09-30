@@ -19,12 +19,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #457 | Spec (also carries the BUG-006 record) | merged | 118f3ce0 |
 | #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | merged | f954674d |
+| #466 | M1: report a missing path while the feature is off | open | — |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | — | review done, PR pending |
+| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | PR open |
 | M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | — | pending |
 | M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | — | pending |
 | M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | pending |
