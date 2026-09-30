@@ -19,9 +19,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Milestones
 
-| ID | Tasks | Docs-only | Deliverable | PR | Status |
+| ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | no | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
 
 ## Decisions
 

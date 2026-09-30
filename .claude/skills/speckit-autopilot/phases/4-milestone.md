@@ -35,7 +35,9 @@ For milestone K:
    Verify each finding against the code first; decline one that contradicts the spec, and record
    why in the ledger. Only rounds after a review's own BLOCKER or MAJOR count toward its limit
    ([../references/review-rubrics.md](../references/review-rubrics.md) *After it returns*). Red
-   gates for one cause: after the third failed fix, escalate (category 5).
+   gates for one cause: after the third failed fix, escalate (category 5). A milestone on a cheaper
+   model (**Tier** `light` or `docs`) instead writes *Handover* after the second failed fix and
+   returns `FAILED`, so the orchestrator retries it on the session model.
 4. Check the ticks from step 1, update the ledger, commit, push, and open the PR. Title
    `feat(NNN): <deliverable>`, or `fix(NNN): … (BUG-<k>)` for a bug.
 

@@ -3,7 +3,7 @@
 1. `speckit-plan`. A fresh reviewer checks it against the plan rubric.
 2. `speckit-tasks`, then cut milestones by [../references/milestones.md](../references/milestones.md).
    Every milestone ships a **deliverable**: something observable on `main`. "Setup" or
-   "Foundational" is never a milestone on its own. Add the milestones to the ledger, with their **Docs-only** field.
+   "Foundational" is never a milestone on its own. Add the milestones to the ledger, with their **Tier** field.
 3. `speckit-analyze`, and fix what it finds. A fresh reviewer checks against the tasks and milestone
    rubric.
 4. **Close checklists.** `speckit-implement` stops on unchecked checklist items, so resolve them
