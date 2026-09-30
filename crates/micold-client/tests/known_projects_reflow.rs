@@ -11,9 +11,9 @@
 //! walkthrough recorded is a *paint* failure: the name's node is always the width its parent allots,
 //! defect or not, and what goes wrong is the paragraph drawn inside it.
 //!
-//! Held at two widths. The minimum window (`MIN_WINDOW_SIZE`) with no project open is where the report's ladder
-//! ends; the narrower one stands for the main area beside a sidebar at its minimum width, which is
-//! the narrowest the list is ever given while the window is at its own minimum.
+//! Held at two widths. The minimum window (`MIN_WINDOW_SIZE`) with no project open is where the
+//! report's ladder ends; the narrower one stands for the main area beside a sidebar at its minimum
+//! width, which is the narrowest the list is ever given while the window is at its own minimum.
 
 mod support;
 

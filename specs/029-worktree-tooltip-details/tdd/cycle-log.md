@@ -123,3 +123,21 @@ Not new behaviours; each change was re-run green, and the gate was re-proved aga
   ```
 
   Restored. `mise run gate` then exited 0 on da034898.
+
+## BUG-002 — the gates read `MIN_WINDOW_SIZE` (T037–T038, issue #431)
+
+- **Red (T037)**: `tests/gates/tooltip_clears_its_row.rs` drops its `SMALLEST_WINDOW` literal and
+  uses `micold_client::app::MIN_WINDOW_SIZE`; `tests/known_projects_reflow.rs` takes its minimum-window
+  width from `MIN_WINDOW_SIZE.width`. On the unfixed tree
+  (`cargo test -p micold-client --no-run --test layout_snapshot --test known_projects_reflow`):
+
+  ```
+  error[E0432]: unresolved import `micold_client::app::MIN_WINDOW_SIZE`
+  error: could not compile `micold-client` (test "known_projects_reflow") due to 1 previous error
+  error: could not compile `micold-client` (test "layout_snapshot") due to 1 previous error
+  ```
+
+- **Green (T038)**: the constant, its doc comment and its compile-time floor `assert!` move to
+  `pub const MIN_WINDOW_SIZE` in `src/app.rs`; `shell/startup.rs` imports it. Value unchanged
+  (640×480), so the gate cases run at the same sizes.
+- **Gate (T039)**: `mise run gate` exited 0 on 93f0d8ea (after review A's fixes).

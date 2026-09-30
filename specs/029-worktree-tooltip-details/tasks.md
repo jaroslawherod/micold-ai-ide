@@ -239,17 +239,17 @@ would not move them (GitHub issue #431). See `bugs/BUG-002.md` and plan.md § Bu
 **No task reopened.** T032 allowed restating the value as a literal, so it is not falsely ticked
 (BUG-002 § tasks.md).
 
-- [ ] T037 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
+- [x] T037 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
   replace the `SMALLEST_WINDOW` literal (and its "restated because…" doc comment) with
   `micold_client::app::MIN_WINDOW_SIZE`, and in `crates/micold-client/tests/known_projects_reflow.rs`
   take the minimum-window entry of `WIDTHS` from `MIN_WINDOW_SIZE.width`. Run it on the unfixed tree
   and record that the test crates fail to compile because the item does not exist in
   `micold_client::app`
-- [ ] T038 Move `MIN_WINDOW_SIZE`, its doc comment and its compile-time floor `assert!` from
+- [x] T038 Move `MIN_WINDOW_SIZE`, its doc comment and its compile-time floor `assert!` from
   `crates/micold-client/src/shell/startup.rs` to `pub const` in `crates/micold-client/src/app.rs`
   beside `SIDEBAR_MIN_WIDTH`; `shell/startup.rs` imports it (window settings and its unit test).
   Value unchanged (640×480); T037's tests build and pass
-- [ ] T039 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
+- [x] T039 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
 
 **Order**: T037 → T038 → T039. T037 must be seen failing before T038 starts (Principle I).
 
