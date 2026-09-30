@@ -348,15 +348,6 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     let openers: &[(&str, Message)] = &[
         ("about", Message::Help(HelpMsg::AboutOpened)),
         (
-            "confirm_agent_request",
-            Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Requested(
-                micold_client::features::agent_confirm::Prompt {
-                    id: 2,
-                    ..an_agent_request()
-                },
-            )),
-        ),
-        (
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
         ),
@@ -378,6 +369,29 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
                 already.id
             );
         }
+    }
+}
+
+#[test]
+fn an_agent_prompt_waits_behind_the_open_dialog_rather_than_closing_it() {
+    // Feature 034: the one dialog the user did not open. It keeps the invariant the other way
+    // round — the dialog already open stays the only one, so an unsaved form is not lost to an
+    // agent's request — and opens once that dialog closes (`agent_confirm_waits_behind_dialogs.rs`).
+    let request = Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Requested(
+        micold_client::features::agent_confirm::Prompt {
+            id: 2,
+            ..an_agent_request()
+        },
+    ));
+    for already in dialogs() {
+        let mut state = state(Some(&already), false);
+        state.update(request.clone());
+
+        let open: Vec<&str> = registry::open_dialogs(&state)
+            .iter()
+            .map(|open| open.id().as_str())
+            .collect();
+        assert_eq!(open, vec![already.id], "with `{}` already open", already.id);
     }
 }
 

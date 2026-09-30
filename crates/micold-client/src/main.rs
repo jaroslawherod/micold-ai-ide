@@ -415,6 +415,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // `006` BUG-007: whichever message changed the resolved scheme — a desktop switch, a saved
     // preference — the daemon has to hear of it, and only here sees every message.
     shell::daemon_sync::report_color_scheme(app);
+    // Feature 034 (FR-014): a dismissed agent prompt is declined; the dismissal reaches the core by
+    // several routes (Escape, the scrim, another dialog opening), so the answer is sent from here.
+    shell::daemon_sync::send_agent_confirm_declines(app);
 
     // Feature 024: an armed reveal scrolls its row into view once there *is* a row to scroll to.
     //
