@@ -565,3 +565,76 @@ async fn pi_gets_its_first_prompt_without_a_trust_record() {
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }
+
+/// The prompt goes to the session's primary process, and readiness is judged on its output, even
+/// when the user opens a shell in the new session and attaches it while the call waits (U230).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(Duration::from_secs(5));
+    let before = s.session_ids();
+    let addr = s.addr;
+    let credential = credential(&s.state, sid(3));
+    let call = tokio::spawn(async move {
+        call_ok(
+            addr,
+            &credential,
+            "create_session",
+            json!({"worktree": "b", "ai_cli": "copilot", "prompt": PROMPT}),
+        )
+        .await
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let id = loop {
+        let new = s.session_ids().into_iter().find(|id| !before.contains(id));
+        if let Some(id) = new.filter(|id| s.state.live_session(*id).is_some()) {
+            break id;
+        }
+        assert!(Instant::now() < deadline, "the new session never went live");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let shell = micold_core::session::ShellInstanceId(1);
+    s.state.open_shell(id, shell).unwrap();
+    s.state
+        .attach_process(
+            id,
+            micold_core::protocol::messages::SessionProcess::Shell(shell),
+        )
+        .unwrap();
+    let out = call.await.unwrap();
+    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
+}
+
+/// Every window's connection learns that a session an agent created has gone live, so a window
+/// already viewing it builds its stream then (U231).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn every_connection_hears_that_an_agent_created_session_went_live() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let mut started = s.state.subscribe_session_started();
+    let out = s.ok(json!({"worktree": "b", "ai_cli": "copilot"})).await;
+    let id = Sandbox::created(&out);
+    let heard = tokio::time::timeout(Duration::from_secs(2), started.recv())
+        .await
+        .expect("announced")
+        .unwrap();
+    assert_eq!(heard, id);
+}
+
+/// A Pi session whose `session_start` never reaches the service is still ready once its output
+/// settles, rather than waiting out the bound (U232).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pi_without_its_event_is_ready_once_its_output_settles() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    install_cli(s.bin.path(), "pi", true);
+    s.set_pi_delay(30.0);
+    s.state.set_first_prompt_bound(Duration::from_secs(5));
+    let out = s
+        .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
+        .await;
+    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
+}

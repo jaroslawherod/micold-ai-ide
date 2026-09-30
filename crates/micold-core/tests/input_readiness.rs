@@ -51,6 +51,16 @@ fn a_bracketed_submission_is_wrapped_in_paste_markers_then_submitted() {
     );
 }
 
+/// Paste markers inside the text would end the paste early and turn the rest into keystrokes, so
+/// they are dropped from it (U228).
+#[test]
+fn paste_markers_inside_the_text_cannot_end_the_paste_early() {
+    assert_eq!(
+        encode_submission("a\x1b[201~b\x1b[200~c", true),
+        b"\x1b[200~abc\x1b[201~\r".to_vec()
+    );
+}
+
 #[test]
 fn an_unbracketed_submission_is_the_text_then_a_carriage_return() {
     assert_eq!(

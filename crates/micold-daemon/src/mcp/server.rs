@@ -178,7 +178,15 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             name,
             arguments,
         } => {
-            let outcome = super::tools::call(state, caller, name, arguments).await;
+            // Its own task, so a panic in a tool answers `service_error` instead of dropping the
+            // connection with no reply.
+            let outcome = tokio::spawn(super::tools::call(state, caller, name, arguments))
+                .await
+                .unwrap_or_else(|_| {
+                    Err(micold_core::mcp::errors::OpError::service_error(
+                        "the tool call failed unexpectedly",
+                    ))
+                });
             let result = match outcome {
                 Ok(output) => tool_success(&output),
                 Err(error) => tool_failure(&error),

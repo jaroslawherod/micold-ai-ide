@@ -262,6 +262,20 @@ async fn a_branch_name_git_rejects_is_invalid_input_with_gits_message() {
     f.assert_unchanged(&before).await;
 }
 
+/// `git check-ref-format --branch` expands `@{-N}` to the branch checked out before, so it would
+/// pass; the agent names a branch, never a reflog shorthand (EC-3, U229).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_previous_branch_shorthand_is_invalid_input() {
+    let f = Fixture::new().await;
+    // A checkout history, so `@{-1}` names a real branch (`prev`) for git to expand to.
+    git(f.project.path(), &["checkout", "-q", "-b", "prev"]);
+    git(f.project.path(), &["checkout", "-q", "-"]);
+    let before = f.snapshot().await;
+    let error = f.err(sid(3), json!({"branch": "@{-1}"})).await;
+    assert_eq!(error["category"], "invalid_input", "{error}");
+    f.assert_unchanged(&before).await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn existing_local_checks_out_a_free_branch() {
     let f = Fixture::new().await;

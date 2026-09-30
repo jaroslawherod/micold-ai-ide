@@ -25,7 +25,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
-| M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | in progress |
+| M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | — | in progress |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |
@@ -101,6 +101,8 @@ None.
 
 ## Follow-ups not done
 
+- `create_session` builds several full catalog snapshots per call (`caller_project` / `get_session`); reuse the one `resolve_caller` returns (M3 review A).
+- An unbracketed first prompt with inner newlines submits line by line; only reachable when the CLI has not enabled bracketed paste by the time it is ready (M3 review A).
 - Hook receiver's `--settings` token file is written with the default umask, not owner-only (`crates/micold-daemon/src/hooks.rs` `prepare_settings`); outside this feature (research R7).
 - Pi tool-server binding via a `-e` bridge extension (research R4).
 - U127 (`list_worktrees` reports `status: locked`): the daemon cannot produce it. `micold_core::worktree::WorktreeStatus` has no locked state and `wire_worktree_status` never yields `WorktreeStatus::Locked`, so T015/T021 stay unticked on that one behavior. Needs worktree discovery to parse porcelain `locked` (core + sidebar), outside feature 034's files.

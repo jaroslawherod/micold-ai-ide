@@ -701,3 +701,29 @@ was taken by stubbing that implementation out and restoring it afterwards.
   launch environment; `create_session` checks it before `deliver_first_prompt` and returns
   `prompt_reason` whenever `prompt_delivered` is false. 15 passed.
 - refactor: `session_dir_var` takes the environment slice, shared by the binding and the trust read.
+
+## Cycle 25 — U228–U232 — review A (M3) findings
+
+- red: `scripts/build-lock.sh cargo test -p micold-core --test input_readiness`, then
+  `-p micold-daemon --test mcp_create_session` and `--test mcp_create_worktree a_previous_branch`
+  ```
+  test paste_markers_inside_the_text_cannot_end_the_paste_early ... FAILED
+  test every_connection_hears_that_an_agent_created_session_went_live ... FAILED
+  test pi_without_its_event_is_ready_once_its_output_settles ... FAILED
+  test the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached ... FAILED
+    left: ""
+   right: "print the branch name\n"
+  assertion `left == right` failed: {"category":"service_error","message":"git failed to create the worktree: git worktree add -b @{-1} …"}
+  ```
+  (U231 ran against a `subscribe_session_started` channel that nothing announced on yet, so it
+  failed on its timeout, not on compilation.) A test for "a CLI that exits before it is ready" was
+  written and dropped: the exited session stays live under supervision and the wait runs to the
+  bound, so review A's finding 6 did not reproduce.
+- green: `encode_submission` drops inner paste markers; `GitCli::check_branch_name` refuses a name
+  git echoes back changed; `DaemonState::primary_pty` for the ready wait and the write; a
+  state-wide `session_started` broadcast announced by `ops::start_session`, which replaces the
+  per-connection `Internal` channel in `server.rs`; Pi's ready wait races the event against the
+  output-settled rule. Also: tool calls run in their own task again (a panic answers
+  `service_error`), `DaemonState::default_ai_cli`, the unused `Operation::is_mutating` removed, and
+  `describe_leftovers`' doc comment moved back onto it. `cargo test -p micold-daemon
+  --no-fail-fast` + the two core files: all passed.

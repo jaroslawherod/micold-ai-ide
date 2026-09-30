@@ -92,6 +92,10 @@ pub struct DaemonState {
     /// How long `create_session` waits for a new session to be ready for its first prompt,
     /// counted from the request (feature 034, FR-017). [`FIRST_PROMPT_BOUND`] outside tests.
     first_prompt_bound: Mutex<std::time::Duration>,
+    /// Every session start that has finished, whoever asked for it: each connection loop listens,
+    /// so a window already viewing a session builds its stream once the session is live, including
+    /// one an agent created (feature 034).
+    session_started: tokio::sync::broadcast::Sender<SessionId>,
     /// The shared secret this daemon requires of a client, if it was started with one (feature
     /// 027, research R1).
     ///
@@ -442,6 +446,7 @@ impl DaemonState {
             hooks: std::sync::OnceLock::new(),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
+            session_started: tokio::sync::broadcast::channel(64).0,
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
         }
@@ -481,6 +486,22 @@ impl DaemonState {
             .first_prompt_bound
             .lock()
             .expect("first-prompt bound poisoned")
+    }
+
+    /// The AI CLI a new session runs when none is named (the Settings default).
+    pub fn default_ai_cli(&self) -> AiCli {
+        self.lock().catalog.settings_wire().default_ai_cli
+    }
+
+    /// Hear of every session start that finishes from now on (see `session_started`).
+    pub fn subscribe_session_started(&self) -> tokio::sync::broadcast::Receiver<SessionId> {
+        self.session_started.subscribe()
+    }
+
+    /// Tell every listener that `session`'s start has finished.
+    pub fn announce_session_started(&self, session: SessionId) {
+        // No listener (no window connected) is not an error.
+        let _ = self.session_started.send(session);
     }
 
     /// Shorten (or lengthen) the first-prompt bound, so a test need not wait 60 s to see it pass.
@@ -2488,17 +2509,26 @@ impl DaemonState {
             InputReadiness::OutputSettled => false,
         };
         if signalled {
+            // The event, or the output-settled rule should the event never reach the service (its
+            // log tail failed to open, or the line came before the tail did): whichever is first.
             let mut signal = signal;
-            let ready = tokio::time::timeout_at(deadline, signal.wait_for(|ready| *ready))
-                .await
-                .is_ok_and(|seen| seen.is_ok());
-            ready
+            let event = async move { signal.wait_for(|ready| *ready).await.is_ok() };
+            let settled = self.wait_output_settled(session, deadline);
+            tokio::pin!(event, settled);
+            tokio::time::timeout_at(deadline, async {
+                tokio::select! {
+                    true = &mut event => true,
+                    ready = &mut settled => ready,
+                }
+            })
+            .await
+            .unwrap_or(false)
         } else {
             self.wait_output_settled(session, deadline).await
         }
     }
 
-    /// The output-settled rule over `session`'s attached terminal, sampled every 100 ms.
+    /// The output-settled rule over `session`'s primary terminal, sampled every 100 ms.
     async fn wait_output_settled(
         &self,
         session: SessionId,
@@ -2509,7 +2539,7 @@ impl DaemonState {
         let mut rule = OutputSettled::new();
         let mut seen = 0;
         loop {
-            let Some(pty) = self.live_session(session) else {
+            let Some(pty) = self.primary_pty(session) else {
                 return false;
             };
             let now = micold_core::clock::now();
@@ -2716,6 +2746,16 @@ impl DaemonState {
             .insert(SessionProcess::Primary, new_proc(pty, id));
         drop(inner);
         old
+    }
+
+    /// The session's primary process PTY, whichever process is attached (feature 034: the first
+    /// prompt is for the AI CLI, never a shell the user attached meanwhile).
+    pub fn primary_pty(&self, session: SessionId) -> Option<Arc<PtySession>> {
+        let inner = self.lock();
+        let live = inner.sessions.get(&session)?;
+        live.procs
+            .get(&SessionProcess::Primary)
+            .map(|p| Arc::clone(&p.pty))
     }
 
     /// The *attached* process's PTY handle, if the daemon is hosting the session.
