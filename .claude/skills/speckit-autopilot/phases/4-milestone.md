@@ -16,21 +16,25 @@ For milestone K:
 2. **Gate, with review A in its shadow.** Start `mise run gate` detached, as in
    [../references/pr-and-merge.md](../references/pr-and-merge.md) §2 (if `cfg(target_os)` code
    changed, also `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`).
-   While it builds, run review **A**: the `code-review` skill at `high` on `origin/main...HEAD`. It
-   builds nothing, so it does not wait on the build lock. Then wait for the gate.
-   - **Red:** fix, start the gate again, and give A a scoped round on the fix diff while it runs.
+   While it builds, run review **A**: the `code-review` skill at `high` on `origin/main...HEAD` (a
+   scoped round on the fix diff when A has run before). A builds nothing, so it does not wait on
+   the build lock. Then wait for the gate.
+   - **A found a real BLOCKER or MAJOR, or the gate is red:** fix, and repeat step 2. The gate
+     must pass on the tree as it now is.
+   - Otherwise go to step 3.
 3. **Green gate: review B and the visual pass, together.** Dispatch **B** in the background: a
    fresh subagent checks the diff against the milestone's deliverable, its acceptance scenarios and
-   the constitution (conformance rubric). Its **Verify** reuses the gate's build. If anything
-   visible changed, run the `visual-pass` skill meanwhile. It is a forked Sonnet subagent that sees
-   only its arguments: pass the worktree path, the quickstart section or change to check, and what
-   counts as a pass.
+   the constitution (conformance rubric); a scoped round on the fix diff when B has run before. Its
+   **Verify** reuses the gate's build. If anything visible changed since the last visual pass, run
+   the `visual-pass` skill meanwhile. It is a forked Sonnet subagent that sees only its arguments:
+   pass the worktree path, the quickstart section or change to check, and what counts as a pass.
+   - **B or the visual pass found something real:** fix, and go back to step 2, then 3.
+   - Otherwise go to step 4.
 
-   Verify each finding against the code first. Fix real ones, then back to step 2 with a next round
-   of each review whose last round had a real BLOCKER or MAJOR. Any review whose snapshot predates
-   a fix gets a scoped round on the fix diff (B after A's fixes, A after a gate fix). What counts
-   toward the round limit: [../references/review-rubrics.md](../references/review-rubrics.md)
-   *After it returns*. Decline a finding that contradicts the spec, and record why in the ledger.
+   Verify each finding against the code first; decline one that contradicts the spec, and record
+   why in the ledger. Only rounds after a review's own BLOCKER or MAJOR count toward its limit
+   ([../references/review-rubrics.md](../references/review-rubrics.md) *After it returns*). Red
+   gates for one cause: after the third failed fix, escalate (category 5).
 4. Check the ticks from step 1, update the ledger, commit, push, and open the PR. Title
    `feat(NNN): <deliverable>`, or `fix(NNN): … (BUG-<k>)` for a bug.
 

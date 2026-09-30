@@ -75,10 +75,10 @@ flowchart TD
 flowchart TD
     M0["Reset branch to origin/main after previous PR MERGED"] --> M1["speckit-implement: this milestone only"]
     M1 --> M2["tdd-run: red, green, refactor"]
-    M2 --> GATE["mise run gate"]
-    GATE --> EXTRA["cfg changed: macOS check. Visuals changed: visual-pass"]
-    EXTRA --> REV["Review A: code-review high. Review B: conformance"]
-    REV -->|"real findings, max 3 rounds"| GATE
+    M2 --> GATE["mise run gate (cfg changed: macOS check), review A: code-review high meanwhile"]
+    GATE -->|"red, or A finds a real issue: fix"| GATE
+    GATE -->|"green, A clean"| REV["Review B: conformance, and visual-pass if visuals changed"]
+    REV -->|"real findings, max 3 rounds: fix"| GATE
     REV -->|clean| PR["Update ledger, push, open PR"]
     PR --> CI{"ci complete"}
     CI -->|"red in this flow's code"| FIX["systematic-debugging, fix, push"]
