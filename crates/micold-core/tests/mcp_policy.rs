@@ -127,10 +127,7 @@ fn refusal(decision: PolicyDecision) -> micold_core::mcp::errors::OpError {
 /// U106
 #[test]
 fn a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename() {
-    let error = refusal(decide_for(
-        SessionLocation::Default,
-        &rename_worktree("b"),
-    ));
+    let error = refusal(decide_for(SessionLocation::Default, &rename_worktree("b")));
     assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
     assert!(error.message.contains("Principle III"), "{}", error.message);
     assert_eq!(
@@ -147,10 +144,7 @@ fn a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename(
 /// U107: refused, not confirmed — the user is never asked about a request policy refuses.
 #[test]
 fn a_default_caller_is_refused_delete_worktree_before_any_confirmation() {
-    let error = refusal(decide_for(
-        SessionLocation::Default,
-        &delete_worktree("b"),
-    ));
+    let error = refusal(decide_for(SessionLocation::Default, &delete_worktree("b")));
     assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
     assert!(error.message.contains("Principle III"), "{}", error.message);
 }
@@ -159,14 +153,30 @@ fn a_default_caller_is_refused_delete_worktree_before_any_confirmation() {
 #[test]
 fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_operations() {
     for operation in [
-        Operation::StartSession { session: session(OTHER) },
-        Operation::StopSession { session: session(OTHER) },
-        Operation::StopSession { session: session(ME) },
-        Operation::InterruptSession { session: session(OTHER) },
-        Operation::InterruptSession { session: session(ME) },
-        Operation::DeleteSession { session: session(OTHER) },
-        Operation::DeleteSession { session: session(ME) },
-        Operation::GetSession { session: session(OTHER) },
+        Operation::StartSession {
+            session: session(OTHER),
+        },
+        Operation::StopSession {
+            session: session(OTHER),
+        },
+        Operation::StopSession {
+            session: session(ME),
+        },
+        Operation::InterruptSession {
+            session: session(OTHER),
+        },
+        Operation::InterruptSession {
+            session: session(ME),
+        },
+        Operation::DeleteSession {
+            session: session(OTHER),
+        },
+        Operation::DeleteSession {
+            session: session(ME),
+        },
+        Operation::GetSession {
+            session: session(OTHER),
+        },
     ] {
         assert_eq!(
             decide_for(SessionLocation::Default, &operation),
@@ -205,13 +215,17 @@ fn deleting_another_worktree_waits_for_confirmation() {
 fn stop_session_on_self_is_refused_and_on_another_session_confirmed() {
     let error = refusal(decide_for(
         in_worktree("b"),
-        &Operation::StopSession { session: session(ME) },
+        &Operation::StopSession {
+            session: session(ME),
+        },
     ));
     assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
     assert_eq!(
         decide_for(
             in_worktree("b"),
-            &Operation::StopSession { session: session(OTHER) }
+            &Operation::StopSession {
+                session: session(OTHER)
+            }
         ),
         PolicyDecision::Confirm(ConfirmedOp::StopSession)
     );
@@ -222,13 +236,17 @@ fn stop_session_on_self_is_refused_and_on_another_session_confirmed() {
 fn delete_session_on_self_is_refused_and_on_another_session_confirmed() {
     let error = refusal(decide_for(
         in_worktree("b"),
-        &Operation::DeleteSession { session: session(ME) },
+        &Operation::DeleteSession {
+            session: session(ME),
+        },
     ));
     assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
     assert_eq!(
         decide_for(
             in_worktree("b"),
-            &Operation::DeleteSession { session: session(OTHER) }
+            &Operation::DeleteSession {
+                session: session(OTHER)
+            }
         ),
         PolicyDecision::Confirm(ConfirmedOp::DeleteSession)
     );
@@ -239,13 +257,17 @@ fn delete_session_on_self_is_refused_and_on_another_session_confirmed() {
 fn interrupt_session_on_self_is_invalid_input_and_on_another_session_confirmed() {
     let error = refusal(decide_for(
         in_worktree("b"),
-        &Operation::InterruptSession { session: session(ME) },
+        &Operation::InterruptSession {
+            session: session(ME),
+        },
     ));
     assert_eq!(error.category, ErrorCategory::InvalidInput);
     assert_eq!(
         decide_for(
             in_worktree("b"),
-            &Operation::InterruptSession { session: session(OTHER) }
+            &Operation::InterruptSession {
+                session: session(OTHER)
+            }
         ),
         PolicyDecision::Confirm(ConfirmedOp::InterruptSession)
     );
@@ -258,7 +280,9 @@ fn start_session_proceeds_on_any_session() {
         assert_eq!(
             decide_for(
                 in_worktree("b"),
-                &Operation::StartSession { session: session(target) }
+                &Operation::StartSession {
+                    session: session(target)
+                }
             ),
             PolicyDecision::Proceed
         );

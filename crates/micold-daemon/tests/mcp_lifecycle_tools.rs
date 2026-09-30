@@ -54,7 +54,12 @@ impl Fixture {
         };
         let sessions = vec![
             session(sid(ROOT), None, TerminalMode::AiCli, AiCli::ClaudeCode),
-            session(sid(CALLER), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode),
+            session(
+                sid(CALLER),
+                Some("b"),
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            ),
             shell(IDLE, SessionLifecycle::Idle),
             shell(
                 FAILED,
@@ -67,7 +72,12 @@ impl Fixture {
             shell(STARTING, SessionLifecycle::Starting),
             shell(RESTARTING, SessionLifecycle::Restarting { attempts: 1 }),
             {
-                let mut s = session(sid(UNRESUMABLE), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode);
+                let mut s = session(
+                    sid(UNRESUMABLE),
+                    Some("b"),
+                    TerminalMode::AiCli,
+                    AiCli::ClaudeCode,
+                );
                 s.lifecycle = SessionLifecycle::InterruptedResumable;
                 s
             },
@@ -208,13 +218,26 @@ async fn start_session_on_a_starting_or_restarting_session_succeeds_unchanged() 
     }
 }
 
-/// A start that fails ends `Starting`: the tool and every window report the failure.
+/// A start that fails ends `Starting`: the call fails with the reason (FR-013), and every window
+/// shows the failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_start_that_fails_is_reported_failed_not_left_starting() {
     let f = Fixture::new().await;
     let mut window = fake_window(&f.state);
-    let out = f.start(UNRESUMABLE).await;
-    assert_eq!(out["lifecycle"], "failed", "{out}");
+    let error = f
+        .err(
+            CALLER,
+            "start_session",
+            json!({"session": sid(UNRESUMABLE).0.to_string()}),
+        )
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("did not start"), "{message}");
+    assert!(
+        !message.ends_with("its process could not be started"),
+        "the recorded reason is given: {message}"
+    );
     assert!(
         window_sees(&mut window, WINDOW_BOUND, |c| {
             matches!(
@@ -296,10 +319,7 @@ async fn a_default_session_is_refused_rename_worktree() {
         .await;
     assert_eq!(error["category"], "refused_by_policy", "{error}");
     assert!(
-        error["message"]
-            .as_str()
-            .unwrap()
-            .contains("Principle III"),
+        error["message"].as_str().unwrap().contains("Principle III"),
         "{error}"
     );
     assert_eq!(f.display_name_of("b").await, before, "nothing changed");

@@ -264,7 +264,8 @@ async fn create_worktree(
     worktree_row(state, caller, dir_name).await
 }
 
-/// The `list_worktrees` row of worktree `dir_name`, as it is now.
+/// The `list_worktrees` row of worktree `dir_name`, as it is now, after a change to it. A row
+/// missing then is the service's fault: the change was made.
 async fn worktree_row(
     state: &Arc<DaemonState>,
     caller: SessionId,
@@ -283,7 +284,11 @@ async fn worktree_row(
             .worktree_rows(&st, true)
             .into_iter()
             .find(|row| row["ref"] == dir_name.as_str())
-            .ok_or_else(|| OpError::not_found(format!("no worktree \"{dir_name}\" in this project")))
+            .ok_or_else(|| {
+                OpError::service_error(format!(
+                    "worktree \"{dir_name}\" was changed but is no longer in the catalog"
+                ))
+            })
     })
     .await
 }
@@ -370,8 +375,31 @@ async fn start_session(
         // The sidebar's `SessionStart`: bringing an existing session back is a resume. Every
         // window sees it `Starting` while the start runs.
         state.begin_start(session);
-        state.broadcast_catalog();
-        let _ = ops::start_session(state, session, LaunchMode::Resume).await;
+        let started = ops::start_session(state, session, LaunchMode::Resume)
+            .await
+            .unwrap_or(false);
+        if !started {
+            // A failed start is the call's failure (FR-013), with the reason the sidebar shows.
+            let st = Arc::clone(state);
+            let row = blocking(move || {
+                let project = caller_project(&st, caller)?;
+                let modes = st.session_modes(&project.path);
+                Context {
+                    caller,
+                    project: &project,
+                    modes: &modes,
+                }
+                .get_session(session)
+            })
+            .await?;
+            let reason = row["failure_reason"]
+                .as_str()
+                .filter(|r| !r.is_empty())
+                .unwrap_or("its process could not be started");
+            return Err(OpError::service_error(format!(
+                "the session did not start: {reason}"
+            )));
+        }
     }
     let st = Arc::clone(state);
     let lifecycle = blocking(move || {
@@ -452,7 +480,6 @@ async fn create_session(
         .create_session(&project.path, &dir, cli)
         .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
     state.begin_start(session);
-    state.broadcast_catalog();
     let started = ops::start_session(state, session, LaunchMode::Fresh)
         .await
         .unwrap_or(false);

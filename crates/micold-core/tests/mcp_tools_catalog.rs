@@ -4,7 +4,9 @@
 
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::jsonrpc::{parse, route, Route};
-use micold_core::mcp::tools::{catalog, parse_call, parse_operation, Operation, SessionRef, WorktreeRef};
+use micold_core::mcp::tools::{
+    catalog, parse_call, parse_operation, Operation, SessionRef, WorktreeRef,
+};
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
@@ -358,13 +360,19 @@ fn rename_worktree_takes_a_worktree_and_a_trimmed_display_name() {
     );
     invalid("rename_worktree", json!({"worktree": "b"}));
     invalid("rename_worktree", json!({"display_name": "x"}));
-    let message = invalid("rename_worktree", json!({"worktree": "b", "display_name": ""}));
+    let message = invalid(
+        "rename_worktree",
+        json!({"worktree": "b", "display_name": ""}),
+    );
     assert!(message.contains("empty"), "the dialog's wording: {message}");
     let message = invalid(
         "rename_worktree",
         json!({"worktree": "b", "display_name": "   "}),
     );
-    assert!(message.contains("whitespace"), "the dialog's wording: {message}");
+    assert!(
+        message.contains("whitespace"),
+        "the dialog's wording: {message}"
+    );
 }
 
 /// U95
@@ -402,5 +410,8 @@ fn delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default() {
             delete_branch: false,
         }
     );
-    invalid_any("delete_worktree", json!({"worktree": "b", "stop_sessions": "yes"}));
+    invalid_any(
+        "delete_worktree",
+        json!({"worktree": "b", "stop_sessions": "yes"}),
+    );
 }
