@@ -384,6 +384,7 @@ impl PtySession {
                             let mut term = reader_term.lock();
                             parser.advance(&mut *term, &buf[..n]);
                             drop(term);
+                            reader_dirty.note_output();
                             reader_dirty.mark_dirty();
                         }
                     }

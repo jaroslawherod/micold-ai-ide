@@ -14,6 +14,7 @@ use micold_core::git::GitCli;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
 use micold_core::session::SessionId;
+use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
     BranchSituation, CreateError, CreateMode, CreateProgressEvent, Leftover, ProvenanceView,
@@ -358,6 +359,52 @@ pub fn rename_worktree(
 }
 
 /// Leftover paths for a log line, each with its owner when it is not this account.
+/// Start `session`'s process off the async runtime and report whether it is running (T125,
+/// feature 034). The caller has already called [`DaemonState::begin_start`], so input typed while
+/// this runs is held and replayed.
+///
+/// Serialized per session by its gate. A failed start moves the catalog and nothing else says so,
+/// so it is announced here (feature 026, T087, FR-010): `start_session` records the reason, which
+/// fills the wire's `Failed { reason, attempts: 0 }`. A resume has no reply to carry it, and the
+/// catalog is the surface both launch modes share. The held input is replayed before the task
+/// ends, so whoever acts on its result finds the session already caught up.
+pub fn start_session(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    launch: LaunchMode,
+) -> tokio::task::JoinHandle<bool> {
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        let gate = state.session_gate(session);
+        let _serialized = gate.lock().await;
+        let worker = Arc::clone(&state);
+        let outcome = tokio::task::spawn_blocking(move || {
+            worker.start_session(session, launch)?;
+            // Watch this session's own event log, for a provider that reports one (feature 026,
+            // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
+            // has just started — that is what keeps a merely discovered session unwatched.
+            worker.open_event_log_tail(session);
+            Ok::<(), io::Error>(())
+        })
+        .await;
+        let started = match outcome {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                tracing::warn!(session = %session.0, %err, "session start failed");
+                state.broadcast_catalog();
+                false
+            }
+            Err(join) => {
+                tracing::warn!(session = %session.0, error = %join, "session start task failed");
+                state.broadcast_catalog();
+                false
+            }
+        };
+        state.finish_start(session);
+        started
+    })
+}
+
 pub fn describe_leftovers(leftovers: &[Leftover]) -> String {
     leftovers
         .iter()

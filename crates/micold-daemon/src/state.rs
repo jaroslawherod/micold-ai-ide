@@ -89,6 +89,9 @@ pub struct DaemonState {
     /// not bind one and when binding fails: AI-CLI sessions then start unbound, with the reason
     /// logged (FR-005).
     tool_server: std::sync::OnceLock<crate::mcp::server::ToolServer>,
+    /// How long `create_session` waits for a new session to be ready for its first prompt,
+    /// counted from the request (feature 034, FR-017). [`FIRST_PROMPT_BOUND`] outside tests.
+    first_prompt_bound: Mutex<std::time::Duration>,
     /// The shared secret this daemon requires of a client, if it was started with one (feature
     /// 027, research R1).
     ///
@@ -251,7 +254,14 @@ struct LiveSession {
     /// not. A `Restarting` session counts as recovered only once its respawn has stayed up for
     /// [`RESTART_STABLE_AFTER`] from this reading (`005` BUG-004, FR-022a).
     respawned_at: Option<micold_core::clock::Uptime>,
+    /// Whether the CLI has said it is ready for its first prompt (feature 034, FR-017): Claude's
+    /// `SessionStart` hook, or Pi's `session_start` event. `create_session` waits on it.
+    ready: tokio::sync::watch::Sender<bool>,
 }
+
+/// How long `create_session` waits for a new session to be ready for its first prompt, counted
+/// from the request (feature 034, FR-017).
+pub const FIRST_PROMPT_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
 /// The variable Pi's activity component reads to find its log (feature 029, contracts/pi-cli.md).
@@ -432,6 +442,7 @@ impl DaemonState {
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
             tool_server: std::sync::OnceLock::new(),
+            first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
         }
@@ -463,6 +474,22 @@ impl DaemonState {
     /// The diagnostics handle, if logging was initialised (absent in tests / ephemeral catalog).
     pub fn diagnostics(&self) -> Option<&crate::logging::Logging> {
         self.diagnostics.get()
+    }
+
+    /// How long `create_session` waits for a new session to be ready for its first prompt.
+    pub fn first_prompt_bound(&self) -> std::time::Duration {
+        *self
+            .first_prompt_bound
+            .lock()
+            .expect("first-prompt bound poisoned")
+    }
+
+    /// Shorten (or lengthen) the first-prompt bound, so a test need not wait 60 s to see it pass.
+    pub fn set_first_prompt_bound(&self, bound: std::time::Duration) {
+        *self
+            .first_prompt_bound
+            .lock()
+            .expect("first-prompt bound poisoned") = bound;
     }
 
     /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
@@ -2099,6 +2126,7 @@ impl DaemonState {
                 name_stale: true,
                 event_log: None,
                 respawned_at: None,
+                ready: tokio::sync::watch::Sender::new(false),
             },
         );
         // A fresh FSM starts at `Unknown`, so a retained `Ended` from the previous run would be
@@ -2159,7 +2187,7 @@ impl DaemonState {
                     if !self.lock().catalog.pi_activity_component() {
                         return;
                     }
-                    (log, crate::activity::pi_event)
+                    (log, crate::activity::pi_tail_event)
                 }
                 ActivitySource::Hooks | ActivitySource::None => return,
             };
@@ -2374,6 +2402,10 @@ impl DaemonState {
     /// unread until the closing `Stop`. The prompt is the event that wrote the turn, and it fires
     /// at most once per turn, so the bound SC-006 rests on is unmoved.
     pub fn note_activity(&self, session: SessionId, event: ActivityEvent) -> bool {
+        if matches!(event, ActivityEvent::ReadyForInput) {
+            self.mark_ready_for_input(session);
+            return false;
+        }
         let mut inner = self.lock();
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
@@ -2384,6 +2416,90 @@ impl DaemonState {
         let changed = live.activity.signal() != &before;
         live.name_stale |= changed || first_turn_evidence;
         changed
+    }
+
+    /// Record that `session`'s CLI is ready for its first prompt (feature 034, FR-017). A no-op for
+    /// a session that is not live.
+    pub fn mark_ready_for_input(&self, session: SessionId) {
+        if let Some(live) = self.lock().sessions.get(&session) {
+            live.ready.send_replace(true);
+        }
+    }
+
+    /// Wait until `session`'s CLI is ready for its first prompt, or until `deadline` (feature 034,
+    /// FR-017, research R12). `true` when it became ready in time.
+    ///
+    /// Each CLI names its own signal ([`InputReadiness`]): Claude's `SessionStart` hook, Pi's
+    /// `session_start` event. Where that signal cannot arrive — no hook receiver is running, or the
+    /// Pi component is declined — and for a CLI with no signal at all, the session is ready once
+    /// its terminal has produced output and then been quiet for [`SETTLE_AFTER`].
+    ///
+    /// [`InputReadiness`]: micold_core::provider::InputReadiness
+    /// [`SETTLE_AFTER`]: micold_core::mcp::submission::SETTLE_AFTER
+    pub async fn wait_ready_for_input(
+        self: &Arc<Self>,
+        session: SessionId,
+        deadline: tokio::time::Instant,
+    ) -> bool {
+        use micold_core::provider::InputReadiness;
+        let (provider, signal) = {
+            let inner = self.lock();
+            let Some(live) = inner.sessions.get(&session) else {
+                return false;
+            };
+            let provider = inner
+                .catalog
+                .workspace()
+                .sessions
+                .values()
+                .flatten()
+                .find(|s| s.id == session)
+                .map(|s| s.provider);
+            (provider, live.ready.subscribe())
+        };
+        let Some(provider) = provider else {
+            return false;
+        };
+        let signalled = match provider.provider().input_readiness() {
+            InputReadiness::HookSessionStart => self.hooks.get().is_some(),
+            InputReadiness::ExtensionEvent(_) => self.lock().catalog.pi_activity_component(),
+            InputReadiness::OutputSettled => false,
+        };
+        if signalled {
+            let mut signal = signal;
+            let ready = tokio::time::timeout_at(deadline, signal.wait_for(|ready| *ready))
+                .await
+                .is_ok_and(|seen| seen.is_ok());
+            ready
+        } else {
+            self.wait_output_settled(session, deadline).await
+        }
+    }
+
+    /// The output-settled rule over `session`'s attached terminal, sampled every 100 ms.
+    async fn wait_output_settled(&self, session: SessionId, deadline: tokio::time::Instant) -> bool {
+        use micold_core::mcp::submission::OutputSettled;
+        const SAMPLE: std::time::Duration = std::time::Duration::from_millis(100);
+        let mut rule = OutputSettled::new();
+        let mut seen = 0;
+        loop {
+            let Some(pty) = self.live_session(session) else {
+                return false;
+            };
+            let now = micold_core::clock::now();
+            let count = pty.signals().output_count();
+            if count != seen {
+                seen = count;
+                rule.output(now);
+            }
+            if rule.is_ready(now) {
+                return true;
+            }
+            if tokio::time::Instant::now() + SAMPLE > deadline {
+                return false;
+            }
+            tokio::time::sleep(SAMPLE).await;
+        }
     }
 
     /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
@@ -2738,6 +2854,7 @@ impl DaemonState {
                         // A shell-only session has no AI CLI, so there is nothing to tail.
                         event_log: None,
                         respawned_at: None,
+                        ready: tokio::sync::watch::Sender::new(false),
                     },
                 );
             }

@@ -578,3 +578,46 @@ was taken by stubbing that implementation out and restoring it afterwards.
   green, not a weakening: the refused call still must add nothing).
   `cargo test -p micold-daemon`: 466 passed, 0 failed.
 - refactor: none.
+
+## Cycle 21 — A9, A10, A11, U152–U162 — T034, T040, T041
+
+- tests: `crates/micold-daemon/tests/mcp_create_session.rs` (unix; stand-in `claude`, `copilot`,
+  `pi` on a sandboxed `PATH` that record launches and append typed input to a file) —
+  `create_worktree_then_create_session_types_the_first_prompt` (A9),
+  `without_ai_cli_the_session_runs_the_default_cli_from_settings` (A10),
+  `a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record` (A11),
+  `a_session_in_default_runs_in_the_project_root` (U152),
+  `an_unknown_worktree_is_not_found_and_creates_no_record` (U153),
+  `without_a_prompt_the_call_does_not_wait_for_readiness` (U154),
+  `a_ready_signal_inside_the_bound_delivers_the_prompt` (U155),
+  `no_ready_signal_by_the_bound_is_not_delivered_and_a_late_one_types_nothing` (U156, U157),
+  `a_session_that_fails_to_start_reports_the_prompt_undelivered` (U158),
+  `a_session_start_hook_makes_claude_ready_and_leaves_its_activity_unknown` (U159),
+  `a_pi_session_start_event_makes_pi_ready` (U160),
+  `copilot_is_ready_once_its_output_settles` (U161),
+  `claude_without_a_hook_receiver_is_ready_once_its_output_settles` (U162).
+  Stub: `DaemonState::{first_prompt_bound, set_first_prompt_bound}` so the file compiles; the
+  handler still answered `service_error "create_session is not available yet"`.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_create_session`
+  ```
+  thread 'an_unknown_worktree_is_not_found_and_creates_no_record' panicked at crates/micold-daemon/tests/mcp_create_session.rs:336:5:
+  assertion `left == right` failed: {"category":"service_error","message":"create_session is not available yet"}
+  test result: FAILED. 0 passed; 13 failed
+  ```
+- green: `ops::start_session` (the body of `server::spawn_session_start`, returning a
+  `JoinHandle<bool>`; `route()` wraps it and keeps its `Internal` notice and reply). The handler:
+  scope and worktree → default CLI from Settings → `ai_clis_available_in(cwd)` before
+  `create_session` → `begin_start` + broadcast + `ops::start_session` → optional prompt via
+  `wait_ready_for_input` bounded from the request, then `encode_submission` written to the primary
+  PTY with bracketed mode read from its `Term`. Readiness: `LiveSession.ready` (a `watch`) set by
+  `SessionStart` (new `HookClass::SessionStart`, FSM untouched) and by Pi's `session_start`
+  (`ActivityEvent::ReadyForInput` via `activity::pi_tail_event`; `pi-activity.ts` subscribes to it);
+  otherwise the output-settled rule over a new `VtSignals` output counter the reader thread bumps.
+  `cargo test -p micold-daemon`: 479 passed, 0 failed.
+- mutant: tail mapper put back to `pi_event` — `a_pi_session_start_event_makes_pi_ready` failed
+  with `"prompt_delivered":false`; restored.
+- refactor: none.
+- note: `hooks.rs`'s unit test `classifies_hook_event_names` asserted `SessionStart` is `Ignored`;
+  T040 makes it a readiness signal, so that assertion now expects `HookClass::SessionStart` (a
+  requirement change, stated here, not a weakening). `pi_event` keeps ignoring `session_start`
+  (`pi_activity.rs` unchanged); the tail uses the wrapper instead.

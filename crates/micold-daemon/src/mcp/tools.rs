@@ -12,7 +12,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use micold_core::git::GitCli;
+use alacritty_terminal::term::TermMode;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
+use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
 use micold_core::mcp::tools::{parse_call, Operation, WorktreeRef};
 use micold_core::naming::{self, DerivedNames, NamingError};
@@ -20,7 +22,8 @@ use micold_core::protocol::messages::{
     ActivitySignal, ProjectSnapshot, SessionSummary, WireLifecycle, WorktreeSnapshot,
     WorktreeStatus,
 };
-use micold_core::session::{SessionId, SessionLocation, TerminalMode};
+use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
+use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
     CreateMode, ProvenanceView, Worktree, WorktreeOwner,
@@ -41,15 +44,18 @@ pub async fn call(
     name: String,
     arguments: Value,
 ) -> Result<Value, OpError> {
+    // The first-prompt bound is counted from here, the request (FR-017).
+    let asked = tokio::time::Instant::now();
     let operation = parse_call(&name, &arguments)?;
     match operation {
         Operation::CreateWorktree { branch, name, mode } => {
             create_worktree(&state, caller, branch, name, mode).await
         }
-        Operation::CreateSession { .. } => Err(OpError::service_error(format!(
-            "{} is not available yet",
-            operation.tool_name()
-        ))),
+        Operation::CreateSession {
+            worktree,
+            ai_cli,
+            prompt,
+        } => create_session(&state, caller, worktree, ai_cli, prompt, asked).await,
         read => blocking(move || read_call(&state, caller, read)).await,
     }
 }
@@ -207,6 +213,128 @@ async fn create_worktree(
             })
     })
     .await
+}
+
+/// `create_session` (contracts/mcp-tools.md): scope and the worktree, then the CLI's availability
+/// where the session would run, then the sidebar's own create and start (FR-009), then the
+/// optional first prompt once the CLI is ready for it (FR-017).
+async fn create_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    worktree: WorktreeRef,
+    ai_cli: Option<AiCli>,
+    prompt: Option<String>,
+    asked: tokio::time::Instant,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    let place = worktree.clone();
+    let (who, project, cwd) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let cwd = match &place {
+            WorktreeRef::Default => project.path.clone(),
+            WorktreeRef::Named(name) => project
+                .worktrees
+                .iter()
+                .find(|wt| &wt.dir_name == name)
+                .map(|wt| wt.path.clone())
+                .ok_or_else(|| {
+                    OpError::not_found(format!("no worktree \"{name}\" in this project"))
+                })?,
+        };
+        Ok((who, project, cwd))
+    })
+    .await?;
+    let cli = match ai_cli {
+        Some(cli) => cli,
+        None => state.welcome_payload().1.default_ai_cli,
+    };
+    let operation = Operation::CreateSession {
+        worktree: worktree.clone(),
+        ai_cli: Some(cli),
+        prompt: None,
+    };
+    if let PolicyDecision::Refuse(error) = policy::decide(
+        &who,
+        &operation,
+        &TargetFacts::default(),
+        CrossSessionAccess::default(),
+    ) {
+        return Err(error);
+    }
+
+    // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5).
+    let st = Arc::clone(state);
+    let available = blocking(move || Ok(st.ai_clis_available_in(&cwd))).await?;
+    if !available.contains(&cli) {
+        let provider = cli.provider();
+        return Err(OpError::service_error(format!(
+            "{} is not installed where this session would run: `{}` is not on its PATH",
+            provider.display_name(),
+            provider.command()
+        )));
+    }
+
+    let dir = match &worktree {
+        WorktreeRef::Default => String::new(),
+        WorktreeRef::Named(name) => name.clone(),
+    };
+    let session = state
+        .create_session(&project.path, &dir, cli)
+        .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
+    state.begin_start(session);
+    state.broadcast_catalog();
+    let started = ops::start_session(state, session, LaunchMode::Fresh)
+        .await
+        .unwrap_or(false);
+
+    let prompt_delivered = match prompt {
+        None => Value::Null,
+        Some(_) if !started => json!(false),
+        Some(text) => json!(deliver_first_prompt(state, session, &text, asked).await),
+    };
+
+    let st = Arc::clone(state);
+    let lifecycle = blocking(move || {
+        let project = caller_project(&st, caller)?;
+        let modes = st.session_modes(&project.path);
+        let context = Context {
+            caller,
+            project: &project,
+            modes: &modes,
+        };
+        context.get_session(session)
+    })
+    .await?["lifecycle"]
+        .clone();
+    Ok(json!({
+        "session": session.0.to_string(),
+        "lifecycle": lifecycle,
+        "prompt_delivered": prompt_delivered,
+    }))
+}
+
+/// Type `text` into `session` as one submission once its CLI is ready for it, if that happens
+/// within the first-prompt bound of `asked` (FR-017). A signal after the bound types nothing: the
+/// wait has ended, and nothing else writes the prompt.
+async fn deliver_first_prompt(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    text: &str,
+    asked: tokio::time::Instant,
+) -> bool {
+    let deadline = asked + state.first_prompt_bound();
+    if !state.wait_ready_for_input(session, deadline).await {
+        return false;
+    }
+    let Some(pty) = state.live_session(session) else {
+        return false;
+    };
+    let bracketed = pty
+        .term()
+        .lock()
+        .mode()
+        .contains(TermMode::BRACKETED_PASTE);
+    pty.write_input(&encode_submission(text, bracketed)).is_ok()
 }
 
 /// A worktree directory name given by the agent: accepted only as the dialog would write it
