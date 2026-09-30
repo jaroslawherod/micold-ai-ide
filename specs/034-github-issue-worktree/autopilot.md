@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
-- **Phase**: 4-milestones
-- **Next step**: Wait for M6b PR #500 CI and merge; then Phase 5 (close).
+- **Phase**: 5-close
+- **Next step**: Close unit: converge → tdd-verify → docguard-guard, then close PR.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | #472 | merged (691510de) |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | #478 | merged (e201a04e) |
 | M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | #495 | merged (8d7707f7) |
-| M6 | T063–T065, T095 | Architecture doc + quickstart §B10, B11, B13 recorded | #496 (M6a), #500 (M6b) | M6a #496 merged (cf1bdc53): T063, T095, §B10 Linux, §B11; M6b: T064 (§B13 both schemes PASS; §B10 macOS/Windows = T095 CI test, Decisions row 9) and T065 (gate green, typeahead_budget release 9/9, every §A test file present and run by the gate) done, #500 open |
+| M6 | T063–T065, T095 | Architecture doc + quickstart §B10, B11, B13 recorded | #496 (M6a), #500 (M6b) | merged — M6a #496 merged (cf1bdc53): T063, T095, §B10 Linux, §B11; M6b: T064 (§B13 both schemes PASS; §B10 macOS/Windows = T095 CI test, Decisions row 9) and T065 (gate green, typeahead_budget release 9/9, every §A test file present and run by the gate) done, #500 merged (2001fbc0) |
 
 Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free core + RPC, UI unreachable per rule 6; M2 completes it) and M2, plus M3 along AS10. M2 stays whole (~25 tasks, 9 of them outer-loop-green ticks): an acceptance-scenario split would put a list on `main` that cannot be picked from.
 
