@@ -573,6 +573,16 @@ pub enum ClientMsg {
         directives: String,
     },
 
+    // --- Agent confirmations (feature 034, FR-014) ---
+    /// The user's answer to a [`DaemonMsg::ConfirmationRequested`]. The first answer for a live
+    /// `id` decides; a later one, or one for an unknown `id`, is ignored.
+    ConfirmationAnswer {
+        /// The prompt's id.
+        id: u64,
+        /// `true` performs the operation; `false` refuses it ("declined by the user").
+        allow: bool,
+    },
+
     // --- Keepalive ---
     /// Liveness probe (protocol.md §5 Liveness). Answered with [`DaemonMsg::Pong`].
     Ping {
@@ -750,6 +760,33 @@ pub enum DaemonMsg {
         available: Vec<AiCli>,
     },
 
+    // --- Agent confirmations (feature 034, FR-014) ---
+    /// An agent asked for a destructive operation; every window shows this prompt until one
+    /// answers, it expires, or it is withdrawn. Also sent, once per pending prompt, to a window
+    /// that completes its handshake while prompts are pending.
+    ConfirmationRequested {
+        /// The prompt's id, echoed by [`ClientMsg::ConfirmationAnswer`].
+        id: u64,
+        /// The project both the caller and the target belong to.
+        project: PathBuf,
+        /// The calling session.
+        caller: SessionId,
+        /// The calling session's display label.
+        caller_label: String,
+        /// What the agent asks to do.
+        operation: ConfirmOperation,
+        /// The target's display name: a worktree's display name or a session's label.
+        target_label: String,
+        /// Milliseconds left of the 60 s the prompt waits for an answer.
+        expires_in_ms: u32,
+    },
+    /// The prompt is resolved (answered, expired, abandoned, or its target is gone); every window
+    /// closes it.
+    ConfirmationWithdrawn {
+        /// The prompt's id.
+        id: u64,
+    },
+
     // --- Diagnostics ---
     /// Where the daemon logs.
     LogLocation {
@@ -772,6 +809,27 @@ pub enum DaemonMsg {
 // ---------------------------------------------------------------------------------------------
 // Supporting types
 // ---------------------------------------------------------------------------------------------
+
+/// The destructive operation a [`DaemonMsg::ConfirmationRequested`] asks the user to allow
+/// (feature 034, FR-014). Names the operation only: `SendInput` deliberately carries no text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConfirmOperation {
+    /// Delete a worktree.
+    DeleteWorktree {
+        /// Its live sessions are stopped first.
+        stop_sessions: bool,
+        /// Its branch is deleted too.
+        delete_branch: bool,
+    },
+    /// Delete (archive) a session.
+    DeleteSession,
+    /// Stop another session.
+    StopSession,
+    /// Interrupt another session.
+    InterruptSession,
+    /// Type into another session (FR-016 "Confirm each send").
+    SendInput,
+}
 
 /// Why a handshake or attach was refused (contracts/messages.md).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
