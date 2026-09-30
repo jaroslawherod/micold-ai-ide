@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M2
-- **Next step**: Coordinator: wait for the M2 PR's checks and merge it; then M3
+- **Next step**: Coordinator: wait for #474's checks and merge it; then M3
 
 ## Pull requests
 
@@ -17,13 +17,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #455 | Spec | merged | 8ff6e0561386ba21219411bc16f828f08b177961 |
 | #465 | Design (PR 2) | merged | a5fcc795294b6dcd2972ab5e3d31a814b41d8fb7 |
 | #469 | M1: bound sessions with the read tools | merged | 3c8d332ddc4f4497d0caa1764ae2fbf2c301c6f3 |
+| #474 | M2: Settings toggle for the tool server | open | — |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
-| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | PR open |
+| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | PR open |
 | M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
