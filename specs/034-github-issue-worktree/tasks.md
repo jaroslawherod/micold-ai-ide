@@ -168,7 +168,7 @@ still chosen by hand (US2 adds it).
 - [X] T073 [US1] [A7] Outer loop green: A7 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T074 [US1] [A8] Outer loop green: A8 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T075 [US1] [A9] Outer loop green: A9 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [x] T032 [US1] Run quickstart §B1–B5 and B7–B9 with the `visual-pass` skill (in §B4 check ticket, name and preview only — the type is chosen by hand until M4, and T052 checks it), time §B2–B5 from the open form to the created worktree (SC-001: under 20 s, no ticket or name typed), and record results, the timing and screenshots in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
+- [X] T032 [US1] Run quickstart §B1–B5 and B7–B9 with the `visual-pass` skill (in §B4 check ticket, name and preview only — the type is chosen by hand until M4, and T052 checks it), time §B2–B5 from the open form to the created worktree (SC-001: under 20 s, no ticket or name typed), and record results, the timing and screenshots in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
 
 **Checkpoint**: US1 AS1–AS9 work end to end; `mise run gate` passes.
 
