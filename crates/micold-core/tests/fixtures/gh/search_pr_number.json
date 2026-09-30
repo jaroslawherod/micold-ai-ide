@@ -1,0 +1,41 @@
+{
+  "data": {
+    "search": {
+      "nodes": [
+        {
+          "number": 4312,
+          "title": "Crash on startup with 4312 files",
+          "updatedAt": "2026-01-02T00:00:00Z",
+          "state": "OPEN",
+          "labels": {
+            "nodes": [
+              {
+                "name": "bug"
+              }
+            ]
+          }
+        },
+        {}
+      ]
+    },
+    "repository": {
+      "issue": null
+    }
+  },
+  "errors": [
+    {
+      "type": "NOT_FOUND",
+      "path": [
+        "repository",
+        "issue"
+      ],
+      "locations": [
+        {
+          "line": 1,
+          "column": 200
+        }
+      ],
+      "message": "Could not resolve to an Issue with the number of 4313."
+    }
+  ]
+}

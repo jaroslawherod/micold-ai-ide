@@ -4844,4 +4844,140 @@ mod issue_source {
         );
         assert_eq!(rig.source.calls().len(), 1);
     }
+
+    // --- T036, T076: the search beyond the loaded issues (FR-005a) ------------------------------
+
+    /// 1,000 loaded of 1,200 open: #1000 down to #1, and #17 mentions #1100 in its title.
+    fn capped_page() -> IssuePage {
+        IssuePage {
+            issues: (1..=1000)
+                .rev()
+                .map(|n| {
+                    if n == 17 {
+                        issue(17, "Follow-up to 1100", &["bug"])
+                    } else {
+                        issue(n, "Loaded issue", &[])
+                    }
+                })
+                .collect(),
+            total_open: 1_200,
+            next_cursor: Some("more".into()),
+        }
+    }
+
+    /// A rig on the issue source with `capped_page()` loaded and `source`'s searches scripted.
+    fn capped_rig(source: FakeIssueSource) -> IssueRig {
+        let mut rig = issue_rig(Some(FAKE_GH), source.with_page(capped_page()));
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(!rig
+            .app
+            .core
+            .worktree_form
+            .form
+            .as_ref()
+            .is_some_and(|f| matches!(
+                &f.issues,
+                IssueList::Loaded { listing, .. } if listing.complete
+            )));
+        rig
+    }
+
+    /// Type `text` without running what the keystroke scheduled.
+    fn keystroke(app: &mut App, text: &str) -> Task<Message> {
+        update_inner(
+            app,
+            Message::WorktreeForm(FormMsg::IssueQueryChanged(text.into())),
+        )
+    }
+
+    /// U74 — a keystroke on a capped list schedules one debounce; its end runs the search with the
+    /// `gh` the list was read with, and an older keystroke's end runs nothing (R9, R3).
+    #[test]
+    fn issue_search_is_debounced() {
+        let mut rig = capped_rig(FakeIssueSource::new().with_search(Ok(vec![issue(
+            1100,
+            "Beyond the cap",
+            &[],
+        )])));
+        let started = std::time::Instant::now();
+        let first = messages(keystroke(&mut rig.app, "beyond"));
+        assert!(
+            started.elapsed() >= shell::issues::ISSUE_SEARCH_DEBOUNCE,
+            "the search waits out the debounce"
+        );
+        let [Message::WorktreeForm(FormMsg::IssueSearchDue { seq: stale })] = first[..] else {
+            panic!("one keystroke schedules exactly one IssueSearchDue");
+        };
+        assert!(rig.source.search_calls().is_empty(), "not before it is due");
+
+        let newer = keystroke(&mut rig.app, "beyond the");
+        let work = update_inner(
+            &mut rig.app,
+            Message::WorktreeForm(FormMsg::IssueSearchDue { seq: stale }),
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            rig.source.search_calls().is_empty(),
+            "an older keystroke's debounce searches nothing"
+        );
+
+        settle(&mut rig.app, newer);
+        assert_eq!(
+            rig.source.search_calls(),
+            vec![("o/r".to_string(), "beyond the".to_string())]
+        );
+        assert_eq!(
+            *rig.constructed.lock().unwrap(),
+            vec![PathBuf::from(FAKE_GH); 2],
+            "the search runs the gh the list was read with"
+        );
+        assert_eq!(
+            rig.located_with.lock().unwrap().len(),
+            1,
+            "gh is located once, for the load"
+        );
+    }
+
+    /// A10 — with 1,000 loaded of 1,200 open, typing an unloaded issue's number shows the loaded
+    /// matches at once, then the searched issue joins them once and can be picked (US1-10,
+    /// FR-005a).
+    #[test]
+    fn issue_search_finds_an_issue_beyond_the_cap() {
+        let mut rig = capped_rig(FakeIssueSource::new().with_search(Ok(vec![
+            issue(1100, "Beyond the cap", &["enhancement"]),
+            issue(17, "Follow-up to 1100", &["bug"]),
+            issue(5555, "Unrelated work", &[]),
+        ])));
+
+        let scheduled = keystroke(&mut rig.app, "1100");
+        let at_once = offered(&rig.app);
+        assert!(
+            at_once.contains(&17) && !at_once.contains(&1100),
+            "the loaded matches are shown at once, before GitHub answers: {at_once:?}"
+        );
+        assert!(rig.source.search_calls().is_empty());
+
+        settle(&mut rig.app, scheduled);
+        assert_eq!(
+            rig.source.search_calls(),
+            vec![("o/r".to_string(), "1100".to_string())]
+        );
+        let shown = offered(&rig.app);
+        assert_eq!(
+            shown.iter().filter(|n| **n == 1100).count(),
+            1,
+            "the issue beyond the cap is found: {shown:?}"
+        );
+        assert_eq!(shown.iter().filter(|n| **n == 17).count(), 1, "#17 once");
+        assert!(
+            !shown.contains(&5555),
+            "#5555 matched only in its body: held to FR-005's rule"
+        );
+
+        let row = shown.iter().position(|n| *n == 1100).unwrap();
+        send(&mut rig.app, FormMsg::IssueRowPicked(row));
+        assert_eq!(form(&rig.app).ticket, "1100");
+        assert_eq!(form(&rig.app).name, "Beyond the cap");
+    }
 }

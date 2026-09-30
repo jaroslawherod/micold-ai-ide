@@ -32,7 +32,7 @@ the repository can test without a display and without the network. The rendered 
 | A7  | While the load is in flight the form shows Loading, and switching to **New branch** works; the late result then changes nothing | US1-7, FR-006, FR-007a | example | DONE | `main_tests.rs::issue_the_form_stays_usable_while_loading` |
 | A8  | With a typed ticket and name, or an earlier pick, a pick replaces both | US1-8, FR-010a | example | DONE | `main_tests.rs::issue_a_pick_replaces_ticket_and_name` |
 | A9  | Before choosing, the caption under the switch reads "GitHub issue reads open issues of o/r from GitHub." and no source call was made; after choosing, the body notice names `o/r` | US1-9, FR-025, FR-003 | example | DONE | `main_tests.rs::issue_the_source_says_it_contacts_github_before_it_does` |
-| A10 | With 1,000 loaded of 1,200 open, typing the number of an unloaded open issue shows loaded matches at once, then (after the debounce) the searched issue joins them once and can be picked | US1-10, FR-005a | example | TODO | `main_tests.rs::issue_search_finds_an_issue_beyond_the_cap` |
+| A10 | With 1,000 loaded of 1,200 open, typing the number of an unloaded open issue shows loaded matches at once, then (after the debounce) the searched issue joins them once and can be picked | US1-10, FR-005a | example | DONE | `main_tests.rs::issue_search_finds_an_issue_beyond_the_cap` |
 | A11 | With the default mapping, picking an issue labelled `bug` selects type `fix` | US2-1, FR-013, FR-021 | example | TODO | `main_tests.rs::issue_a_bug_label_selects_fix` |
 | A12 | Mapping `bug` before `enhancement`: an issue labelled `enhancement, bug` selects `fix` | US2-2, FR-013, FR-017 | example | TODO | `main_tests.rs::issue_the_first_mapping_entry_wins` |
 | A13 | With a type selected, picking an issue with no mapped label clears it and `can_submit()` reports "type required" | US2-3, FR-014 | example | TODO | `main_tests.rs::issue_an_unmapped_issue_clears_the_type` |
@@ -205,7 +205,7 @@ Tests: `crates/micold-client/src/main_tests.rs`, each named with `issue`; `crate
 | U59 | Not connected → `RemotesListed(Err("not connected to the session service"))`, no toast; a dropped connection resolves a pending `RemoteList` the same way | FR-002, FR-024 | example | DONE | `main_tests.rs::issue_remotes_without_a_connection` |
 | U60 | A cache miss resolves the env-include snapshot inside the load and it lands in `App::env_include_cache`; a hit is reused | FR-026, R3 | example | DONE | `main_tests.rs::issue_the_load_uses_the_env_include_path` |
 | U61 | `gh` not located → `Failed(ToolMissing)` and no source is constructed | Edge "tooling not installed" | example | DONE | `main_tests.rs::issue_missing_gh_is_reported_without_running` |
-| U62 | The issue-source capability is called only from the load, retry and search-due arms | FR-003, FR-024 | example | DONE | `issues_are_requested_only_on_named_events.rs` |
+| U62 | The issue-source capability is called only from the load, retry and search-due arms | FR-003, FR-024 | example | DONE | `issues_are_requested_only_on_named_events.rs` (M3: + search-due and search-retry arms) |
 | U63 | `GhCli` is named only in `Capabilities::real()` | Principle I | example | DONE | `no_concrete_implementations.rs` (existing gate, extended by construction) |
 
 ### `crates/micold-client/src/ui/material/toggle_chip.rs`
@@ -223,16 +223,16 @@ Tests: `crates/micold-core/tests/github_parse.rs`, `github_search.rs` (new), `cr
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U66 | `parse_search` unions `search.nodes` and `repository.issue`, open only, deduped by number | FR-005a | example | TODO | `github_parse.rs::search_unions_and_dedupes` |
-| U67 | A sole NOT_FOUND at `["repository","issue"]` (PR number, missing number) keeps the hits without error; a closed numbered issue is dropped | FR-005a, Edge "pull requests" | example | TODO | `github_parse.rs::a_missing_number_is_not_an_error` |
-| U68 | `search_args`: plain text uses SEARCH_QUERY with only `-f q=repo:o/n is:issue is:open <text>`; `N`/`#N` uses SEARCH_WITH_NUMBER_QUERY with `-F n=N`; a number over `Int` range falls back to SEARCH_QUERY | FR-025, R2 | example | TODO | `github_parse.rs::search_args` |
-| U69 | `merge_searched` drops numbers already loaded | FR-005a, inv. 4 | example | TODO | `github_search.rs::merge_drops_loaded_numbers` |
-| U70 | A searched issue that does not match by number, title or label is not displayed: `typeahead::rank` over `row_text` drops it (core), and the reducer leaves it out of `issue_matches` | FR-005a, inv. 5 | example | TODO | `github_search.rs::a_body_only_match_is_hidden` + `issue_source_state.rs::an_unmatched_searched_issue_is_hidden` |
-| U71 | Non-empty query on an incomplete listing → `Pending`; on a complete listing or an empty query → `Idle` | FR-005a, inv. 6 | example | TODO | `issue_source_state.rs::search_only_when_incomplete` |
-| U72 | `IssueSearchDue` acts only for the current `Pending` seq; an older `IssueSearched` is dropped | FR-007a | example | TODO | `issue_source_state.rs::a_newer_keystroke_discards_an_older_search` |
-| U73 | `IssueSearched(Err)` → `SearchState::Failed` with loaded matches kept; `IssueRetry` → `Searching` | FR-005a, FR-007 | example | TODO | `issue_source_state.rs::a_failed_search_keeps_loaded_matches` |
-| U74 | A keystroke schedules one 300 ms debounce; `IssueSearchDue` runs `search_open` with the load's `gh` path | R9 | example | TODO | `main_tests.rs::issue_search_is_debounced` |
-| U95 | `GhCli` returns stdout that parses as JSON with `data` whatever the exit status (partial response); non-zero exit without JSON goes to `classify` | FR-005a, R2 | example | TODO | `github_gh_cli.rs::a_partial_response_is_parsed` |
+| U66 | `parse_search` unions `search.nodes` and `repository.issue`, open only, deduped by number | FR-005a | example | DONE | `github_parse.rs::search_unions_and_dedupes` |
+| U67 | A sole NOT_FOUND at `["repository","issue"]` (PR number, missing number) keeps the hits without error; a closed numbered issue is dropped | FR-005a, Edge "pull requests" | example | DONE | `github_parse.rs::a_missing_number_is_not_an_error` |
+| U68 | `search_args`: plain text uses SEARCH_QUERY with only `-f q=repo:o/n is:issue is:open <text>`; `N`/`#N` uses SEARCH_WITH_NUMBER_QUERY with `-F n=N`; a number over `Int` range falls back to SEARCH_QUERY | FR-025, R2 | example | DONE | `github_parse.rs::search_args_send_only_the_query` |
+| U69 | `merge_searched` drops numbers already loaded | FR-005a, inv. 4 | example | DONE | `github_search.rs::merge_drops_loaded_numbers` |
+| U70 | A searched issue that does not match by number, title or label is not displayed: `typeahead::rank` over `row_text` drops it (core), and the reducer leaves it out of `issue_matches` | FR-005a, inv. 5 | example | DONE | `github_search.rs::a_body_only_match_is_hidden` + `issue_source_state.rs::an_unmatched_searched_issue_is_hidden` |
+| U71 | Non-empty query on an incomplete listing → `Pending`; on a complete listing or an empty query → `Idle` | FR-005a, inv. 6 | example | DONE | `issue_source_state.rs::search_only_when_incomplete` |
+| U72 | `IssueSearchDue` acts only for the current `Pending` seq; an older `IssueSearched` is dropped | FR-007a | example | DONE | `issue_source_state.rs::a_newer_keystroke_discards_an_older_search` |
+| U73 | `IssueSearched(Err)` → `SearchState::Failed` with loaded matches kept; `IssueRetry` → `Searching` | FR-005a, FR-007 | example | DONE | `issue_source_state.rs::a_failed_search_keeps_loaded_matches` |
+| U74 | A keystroke schedules one 300 ms debounce; `IssueSearchDue` runs `search_open` with the load's `gh` path | R9 | example | DONE | `main_tests.rs::issue_search_is_debounced` |
+| U95 | `GhCli` returns stdout that parses as JSON with `data` whatever the exit status (partial response); non-zero exit without JSON goes to `classify` | FR-005a, R2 | example | DONE | `github_gh_cli.rs::a_partial_response_is_parsed` |
 | U75 | Ranking 1,000 issue rows for a 3-character query takes < 50 ms in release | SC-003 | example | DONE | `typeahead_budget.rs` (new case) |
 
 ### `crates/micold-core/src/issue_types.rs`, `settings.rs`

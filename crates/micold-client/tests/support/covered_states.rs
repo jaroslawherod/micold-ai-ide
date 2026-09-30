@@ -45,6 +45,34 @@ fn github_repo() -> GithubAvailability {
     )
 }
 
+/// A capped issue list with `1100` typed, the loaded match shown, and the search in `search`.
+fn issue_search_state(search: SearchState) -> StateUnderTest {
+    let mut state = with_project();
+    let issues = vec![Issue::new(
+        17,
+        "Follow-up to 1100".to_string(),
+        vec!["bug".to_string()],
+        "2026-09-29T00:00:00Z".to_string(),
+    )];
+    let query = "1100";
+    let issue_matches = rank(&issues, |i| i.row_text(), &Query::new(query));
+    let mut form = issue_form(IssueList::Loaded {
+        listing: IssueListing {
+            issues,
+            total_open: 1_200,
+            complete: false,
+        },
+        gh: std::path::PathBuf::from("/usr/bin/gh"),
+        searched: Vec::new(),
+        search,
+    });
+    form.issue_query = query.to_string();
+    form.issue_matches = issue_matches;
+    form.type_ = None;
+    state.worktree_form.form = Some(form);
+    StateUnderTest::new(state)
+}
+
 /// A form on the issue source, its list in `issues`.
 fn issue_form(issues: IssueList) -> WorktreeForm {
     WorktreeForm {
@@ -519,6 +547,22 @@ pub fn covered_states() -> &'static [CoveredState] {
                 form.picked_issue = Some(42);
                 state.worktree_form.form = Some(form);
                 StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // The search beyond the cap, running (FR-005a): "Searching GitHub…" under the picker.
+        CoveredState {
+            name: "add-worktree-dialog-issue-searching",
+            build: || issue_search_state(SearchState::Searching { seq: 2 }),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // The search beyond the cap, failed: the error and Retry under the loaded matches.
+        CoveredState {
+            name: "add-worktree-dialog-issue-search-failed",
+            build: || {
+                issue_search_state(SearchState::Failed {
+                    error: IssueLoadError::Offline,
+                })
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },

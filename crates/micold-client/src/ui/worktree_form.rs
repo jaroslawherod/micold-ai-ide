@@ -12,7 +12,8 @@ use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, ResolutionState, WorktreeForm, WorktreeFormStatus,
+    BranchSource, GithubAvailability, IssueList, ResolutionState, SearchState, WorktreeForm,
+    WorktreeFormStatus,
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
@@ -380,6 +381,21 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
             // FR-004: say the list is capped rather than presenting a part as the whole.
             if let Some(caption) = form.issue_cap_caption() {
                 col = col.push(Text::new(caption, TypeRole::Caption, r).muted());
+            }
+            // FR-005a: the search beyond the cap, running or failed. A failure leaves the loaded
+            // matches above in place and offers Retry, as a failed load does (FR-007).
+            if let (Some(status), IssueList::Loaded { search, .. }) =
+                (form.issue_search_status(), &form.issues)
+            {
+                col = if matches!(search, SearchState::Failed { .. }) {
+                    col.push(Text::new(status, TypeRole::Caption, r).tint(r.error))
+                        .push(
+                            Button::text("Retry", r)
+                                .on_press(Message::WorktreeForm(FormMsg::IssueRetry)),
+                        )
+                } else {
+                    col.push(StageProgress::new(status, r))
+                };
             }
         }
     }

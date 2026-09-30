@@ -1,0 +1,45 @@
+{
+  "data": {
+    "search": {
+      "nodes": [
+        {
+          "number": 1200,
+          "title": "Beyond the cap",
+          "updatedAt": "2026-01-04T00:00:00Z",
+          "state": "OPEN",
+          "labels": {
+            "nodes": [
+              {
+                "name": "enhancement"
+              }
+            ]
+          }
+        },
+        {
+          "number": 1300,
+          "title": "Another one beyond the cap",
+          "updatedAt": "2026-01-05T00:00:00Z",
+          "state": "OPEN",
+          "labels": {
+            "nodes": []
+          }
+        }
+      ]
+    },
+    "repository": {
+      "issue": {
+        "number": 1200,
+        "title": "Beyond the cap",
+        "updatedAt": "2026-01-04T00:00:00Z",
+        "state": "OPEN",
+        "labels": {
+          "nodes": [
+            {
+              "name": "enhancement"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

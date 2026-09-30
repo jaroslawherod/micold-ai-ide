@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, Msg, WorktreeForm,
+    BranchSource, GithubAvailability, IssueList, Msg, SearchState, WorktreeForm,
 };
 use micold_core::git::GitRemote;
 use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
@@ -587,6 +587,201 @@ fn the_cap_caption_counts_the_loaded_and_the_open() {
     );
     assert_eq!(
         form(&state).issue_cap_caption().as_deref(),
-        Some("Showing the 3 most recently updated of 1,234 open issues.")
+        Some("Showing the 3 most recently updated of 1,234 open issues — search also looks on GitHub.")
+    );
+}
+
+// --- T035: the search beyond the loaded issues (FR-005a, FR-007a) ---------------------------
+
+/// A form on the issue source holding `issues()` of 1,234 open: the list is capped.
+fn capped() -> State {
+    let (mut state, seq) = loading();
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                IssueListing {
+                    issues: issues(),
+                    total_open: 1_234,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    state
+}
+
+fn search(state: &State) -> SearchState {
+    match &form(state).issues {
+        IssueList::Loaded { search, .. } => search.clone(),
+        other => panic!("not loaded: {other:?}"),
+    }
+}
+
+fn pending_seq(state: &State) -> u64 {
+    match search(state) {
+        SearchState::Pending { seq } => seq,
+        other => panic!("no search pending: {other:?}"),
+    }
+}
+
+/// Type `text` and let its debounce fire; returns the running search's seq.
+fn searching(state: &mut State, text: &str) -> u64 {
+    query(state, text);
+    let seq = pending_seq(state);
+    send(state, Msg::IssueSearchDue { seq });
+    assert_eq!(search(state), SearchState::Searching { seq });
+    seq
+}
+
+/// U71 — only a capped list with something typed may reach GitHub (invariant 6).
+#[test]
+fn search_only_when_incomplete() {
+    let mut state = loaded();
+    query(&mut state, "crash");
+    assert_eq!(
+        search(&state),
+        SearchState::Idle,
+        "every open issue is held"
+    );
+
+    let mut state = capped();
+    query(&mut state, "crash");
+    let first = pending_seq(&state);
+    query(&mut state, "crash o");
+    assert!(
+        pending_seq(&state) > first,
+        "each keystroke restarts the wait with a fresh seq"
+    );
+    query(&mut state, "  ");
+    assert_eq!(
+        search(&state),
+        SearchState::Idle,
+        "nothing typed, nothing asked"
+    );
+}
+
+/// U72 — the debounce acts only for the current keystroke, and only the current search's answer
+/// applies (FR-007a).
+#[test]
+fn a_newer_keystroke_discards_an_older_search() {
+    let mut state = capped();
+    query(&mut state, "cra");
+    let stale = pending_seq(&state);
+    query(&mut state, "crash");
+    send(&mut state, Msg::IssueSearchDue { seq: stale });
+    assert!(
+        matches!(search(&state), SearchState::Pending { .. }),
+        "an older keystroke's debounce starts nothing"
+    );
+
+    let old = searching(&mut state, "crash");
+    let new = searching(&mut state, "crash when");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq: old,
+            result: Ok(vec![issue(1200, "Crash when saving", &[])]),
+        },
+    );
+    assert_eq!(search(&state), SearchState::Searching { seq: new });
+    assert!(
+        !offered(&state).contains(&1200),
+        "the older answer is dropped"
+    );
+
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq: new,
+            result: Ok(vec![
+                issue(1200, "Crash when saving", &[]),
+                issue(42, "Crash when opening empty project", &["bug"]),
+            ]),
+        },
+    );
+    assert_eq!(search(&state), SearchState::Idle);
+    let shown = offered(&state);
+    assert!(
+        shown.contains(&1200),
+        "the searched issue joins the loaded matches"
+    );
+    assert_eq!(
+        shown.iter().filter(|n| **n == 42).count(),
+        1,
+        "a searched issue already loaded is shown once (invariant 4)"
+    );
+    send(&mut state, Msg::IssuePicked { number: 1200 });
+    assert_eq!(
+        form(&state).ticket,
+        "1200",
+        "a searched issue can be picked (AS10)"
+    );
+    assert_eq!(form(&state).name, "Crash when saving");
+}
+
+/// U73 — a failed search keeps the loaded matches, and Retry runs the search again.
+#[test]
+fn a_failed_search_keeps_loaded_matches() {
+    let mut state = capped();
+    let seq = searching(&mut state, "crash");
+    let before = offered(&state);
+    assert_eq!(before, vec![42]);
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Err(IssueLoadError::Offline),
+        },
+    );
+    assert_eq!(
+        search(&state),
+        SearchState::Failed {
+            error: IssueLoadError::Offline
+        }
+    );
+    assert_eq!(offered(&state), before, "the loaded matches stay shown");
+    assert_eq!(
+        form(&state).issue_search_status().as_deref(),
+        Some("Search beyond the loaded issues failed — Couldn't reach GitHub. Check your connection, then retry.")
+    );
+
+    send(&mut state, Msg::IssueRetry);
+    let retried = match search(&state) {
+        SearchState::Searching { seq } => seq,
+        other => panic!("Retry searches again: {other:?}"),
+    };
+    assert!(retried > seq, "the retry is a new request");
+    assert!(is_loaded(&state), "the list itself is not reloaded");
+    assert_eq!(
+        form(&state).issue_search_status().as_deref(),
+        Some("Searching GitHub…")
+    );
+}
+
+/// U70 (reducer) — a searched issue that matches the query by neither number, title nor label is
+/// not offered (invariant 5).
+#[test]
+fn an_unmatched_searched_issue_is_hidden() {
+    let mut state = capped();
+    let seq = searching(&mut state, "crash");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![
+                issue(1300, "Mentions it only in the body", &[]),
+                issue(1200, "Crash when saving", &[]),
+            ]),
+        },
+    );
+    let shown = offered(&state);
+    assert!(shown.contains(&1200));
+    assert!(
+        !shown.contains(&1300),
+        "GitHub matched #1300 in its body only"
     );
 }

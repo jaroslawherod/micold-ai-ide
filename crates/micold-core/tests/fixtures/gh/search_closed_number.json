@@ -1,0 +1,28 @@
+{
+  "data": {
+    "search": {
+      "nodes": [
+        {
+          "number": 1500,
+          "title": "Mentions 1400 in its title",
+          "updatedAt": "2026-01-03T00:00:00Z",
+          "state": "OPEN",
+          "labels": {
+            "nodes": []
+          }
+        }
+      ]
+    },
+    "repository": {
+      "issue": {
+        "number": 1400,
+        "title": "Fixed long ago",
+        "updatedAt": "2025-01-01T00:00:00Z",
+        "state": "CLOSED",
+        "labels": {
+          "nodes": []
+        }
+      }
+    }
+  }
+}

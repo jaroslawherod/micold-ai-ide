@@ -362,3 +362,69 @@ failed before the implementation.
   error instead of leaving `Checking` (#4); rows and the selected row come from `held()` in one
   pass (#6, #7); the snapshot is resolved through `resolve_env_include` (#10).
 - commit: the commit that adds this entry
+
+## Cycle 14: U66–U69, U70 (core), U95 — M3 search in the core, reds batched per test file
+
+- baseline: `origin/main` at `a17e6cde` (M2 PR #468 merged, CI green); not re-measured locally
+  before the first red. The gate runs the full workspace before the PR.
+- red: with stubs that only make the symbols resolve (`search_args` → `[]`, `parse_search` →
+  `Ok([])`, `merge_searched` → its input, `search_open` → `Ok([])`):
+  `scripts/build-lock.sh cargo test --no-fail-fast -p micold-core --test github_search --test github_parse --test github_gh_cli`
+  -> `github_parse` 4 passed, 3 failed:
+  `github_parse.rs:155:5 left: [] right: [1200, 1300]` (U66),
+  `github_parse.rs:176:5 left: [] right: [4312]` (U67),
+  `github_parse.rs:227:5 left: [] right: ["api", "graphql", …, "q=repo:o/r is:issue is:open crash on open"]` (U68);
+  `github_search` 1 passed, 1 failed: `github_search.rs:29:5 left: [1200, 42, 1100] right: [1200, 1100]` (U69);
+  `github_gh_cli` 3 passed, 1 failed: `github_gh_cli.rs:218:5 left: [] right: [4312]` (U95).
+- test-after: U70's core half (`a_body_only_match_is_hidden`) passed at first run — it pins
+  feature 021's `typeahead::rank` over `row_text`, which already existed and has its own mutant-
+  checked suite; it is recorded as characterization of that rule for searched issues.
+- green: `SEARCH_QUERY` / `SEARCH_WITH_NUMBER_QUERY`; `search_args` (`-f q=…` always; `-f owner -f
+  name -F n=N` only for `N`/`#N` fitting `i32`); `parse_search` (search nodes then the lookup, open
+  only, first of each number; a sole NOT_FOUND at `["repository","issue"]` forgiven, any other entry
+  classified by the same `graphql_error_of` the list uses); `merge_searched`; `IssueSource::search_open`
+  on `FakeIssueSource` (scripted `with_search`, recorded `search_calls`) and `GhCli`.
+  -> 4, 7, 2 and `github_load` 4 passed.
+- refactor: `GhCli::run` shared by `list_open` and `search_open`, holding the partial-response rule
+  (stdout read whenever it is JSON with `data`, whatever the exit status). This also answers M1's
+  declined conformance B F2: `parse_list_page`'s `errors[]` branch is now reached for a real `gh`,
+  which exits 1 on any GraphQL error — pinned by the `ListNotFound` stub in
+  `a_partial_response_is_parsed` (exit 1, empty stderr, `list_not_found.json` on stdout → `NoAccess`;
+  before, `classify` read the empty stderr as `Other("gh exited with status 1")`).
+- commit: the commit that adds this entry
+
+## Cycle 15: U70 (reducer), U71–U74, U62, A10 — the search in the form and the shell
+
+- red (reducer): with `SearchState::{Pending, Searching, Failed}` and the two messages declared but
+  handled as no-ops, and `issue_search_status` → `None`:
+  `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client --test issue_source_state` ->
+  16 passed, 5 failed: `search_only_when_incomplete`, `a_newer_keystroke_discards_an_older_search`,
+  `a_failed_search_keeps_loaded_matches`, `an_unmatched_searched_issue_is_hidden` each at
+  `issue_source_state.rs:627:18` "no search pending: Idle" (U71–U73, U70); and
+  `the_cap_caption_counts_the_loaded_and_the_open` `:588:5 left: Some("Showing the 3 most recently
+  updated of 1,234 open issues.") right: Some("… — search also looks on GitHub.")` (T040's caption,
+  a stated test change: contracts/issue-picker-ui.md §2 words the caption that way).
+- red (shell), with only `ISSUE_SEARCH_DEBOUNCE` declared:
+  `--test issues_are_requested_only_on_named_events` 1 passed, 1 failed:
+  `every_allowlist_entry_still_matches` "these ALLOWED entries match nothing" (the four
+  `start_issue_search` lines, U62);
+  `--bin micold-ai-ide issue_search` 0 passed, 2 failed: `issue_search_is_debounced`
+  `main_tests.rs:4897:9` "the search waits out the debounce" (U74);
+  `issue_search_finds_an_issue_beyond_the_cap` `main_tests.rs:4954:9 left: [] right: [("o/r", "1100")]` (A10).
+- green: reducer — a keystroke on a capped list with text hands out a fresh seq as
+  `Pending{seq}`, otherwise `Idle`; `IssueSearchDue` moves only the current `Pending` to
+  `Searching`; `IssueSearched` applies only to the current `Searching`, replaces `searched` with
+  `merge_searched` and re-ranks, or becomes `Failed`; `IssueRetry` from a failed search →
+  `Searching{new seq}`; `issue_search_status`; State helpers `pending_issue_search`,
+  `awaited_issue_search`, `issue_search_request`. Shell — `on_issue_query_changed` (300 ms timer →
+  `IssueSearchDue`), `on_issue_search_due`, `retry_issue_search`, `start_issue_search`
+  (`spawn_blocking(search_open)` on a source built from the load's `gh`, never locating again).
+  UI — "Searching GitHub…" / the failure + **Retry** under the picker.
+  -> `issue_source_state` 21 passed; the gate test 2 passed; `--bin micold-ai-ide issue` 17 passed.
+- notes: A10's first run failed on the wrong assertion — the fixture assumed `1100` matches only
+  #17 locally, but 021's approximate tier also offers #1000; the assertion was corrected to
+  "#17 shown, #1100 not yet" before any implementation, and the body-only issue renumbered to
+  #5555 for the same reason. The timer is built inside the future (`tokio::time::sleep` panics
+  outside a runtime); the retry arm was split into `retry_issue_search` so the gate's existing
+  load-retry line stayed exact.
+- commit: the commit that adds this entry
