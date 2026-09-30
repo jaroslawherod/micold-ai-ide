@@ -1,21 +1,32 @@
-//! The tool server's policy table (feature 034, data-model TM7; U104–U105 for milestone M3).
+//! The tool server's policy table (feature 034, data-model TM7; U104–U105 for milestone M3,
+//! U106–U114 for milestone M4).
 //!
-//! `policy::decide` is evaluated before anything changes. Milestone M3 ships its first row: a
-//! Default session (one running in the project root) may not create a worktree, because
-//! Principle III forbids a Default session to create, modify or remove any git worktree (FR-015a).
+//! `policy::decide` is evaluated before anything changes. A Default session (one running in the
+//! project root) may not create, rename or delete a worktree, because Principle III forbids a
+//! Default session to create, modify or remove any git worktree (FR-015a). An agent may not stop,
+//! delete or interrupt its own session, nor delete the worktree it runs in (FR-015). The other
+//! destructive operations wait for the user's confirmation (FR-014), and a refusal is always
+//! decided before any confirmation.
 
 use std::path::PathBuf;
 
 use micold_core::mcp::errors::ErrorCategory;
-use micold_core::mcp::policy::{decide, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
-use micold_core::mcp::tools::{Operation, WorktreeRef};
+use micold_core::mcp::policy::{
+    decide, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
+};
+use micold_core::mcp::tools::{Operation, SessionRef, WorktreeRef};
 use micold_core::session::{AiCli, SessionId, SessionLocation};
 use micold_core::worktree::CreateMode;
 use uuid::Uuid;
 
+/// The caller's own session id.
+const ME: u128 = 1;
+/// Another session of the caller's project.
+const OTHER: u128 = 2;
+
 fn caller(location: SessionLocation) -> Caller {
     Caller {
-        session: SessionId::from_uuid(Uuid::from_u128(1)),
+        session: SessionId::from_uuid(Uuid::from_u128(ME)),
         project: PathBuf::from("/work/project"),
         location,
         provider: AiCli::ClaudeCode,
@@ -79,6 +90,177 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
             decide_for(SessionLocation::Default, &operation),
             PolicyDecision::Proceed,
             "FR-015a: every other operation stays available to a Default session: {operation:?}"
+        );
+    }
+}
+
+fn session(n: u128) -> SessionRef {
+    SessionRef(Uuid::from_u128(n))
+}
+
+fn in_worktree(name: &str) -> SessionLocation {
+    SessionLocation::Worktree(name.into())
+}
+
+fn rename_worktree(worktree: &str) -> Operation {
+    Operation::RenameWorktree {
+        worktree: WorktreeRef::Named(worktree.into()),
+        display_name: "Renamed".into(),
+    }
+}
+
+fn delete_worktree(worktree: &str) -> Operation {
+    Operation::DeleteWorktree {
+        worktree: WorktreeRef::Named(worktree.into()),
+        stop_sessions: true,
+        delete_branch: false,
+    }
+}
+
+fn refusal(decision: PolicyDecision) -> micold_core::mcp::errors::OpError {
+    match decision {
+        PolicyDecision::Refuse(error) => error,
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+/// U106
+#[test]
+fn a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename() {
+    let error = refusal(decide_for(
+        SessionLocation::Default,
+        &rename_worktree("b"),
+    ));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(error.message.contains("Principle III"), "{}", error.message);
+    assert_eq!(
+        decide_for(in_worktree("a"), &rename_worktree("b")),
+        PolicyDecision::Proceed
+    );
+    assert_eq!(
+        decide_for(in_worktree("b"), &rename_worktree("b")),
+        PolicyDecision::Proceed,
+        "renaming the caller's own worktree changes only its display name"
+    );
+}
+
+/// U107: refused, not confirmed — the user is never asked about a request policy refuses.
+#[test]
+fn a_default_caller_is_refused_delete_worktree_before_any_confirmation() {
+    let error = refusal(decide_for(
+        SessionLocation::Default,
+        &delete_worktree("b"),
+    ));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(error.message.contains("Principle III"), "{}", error.message);
+}
+
+/// U108: the session operations are decided the same from the project root as from a worktree.
+#[test]
+fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_operations() {
+    for operation in [
+        Operation::StartSession { session: session(OTHER) },
+        Operation::StopSession { session: session(OTHER) },
+        Operation::StopSession { session: session(ME) },
+        Operation::InterruptSession { session: session(OTHER) },
+        Operation::InterruptSession { session: session(ME) },
+        Operation::DeleteSession { session: session(OTHER) },
+        Operation::DeleteSession { session: session(ME) },
+        Operation::GetSession { session: session(OTHER) },
+    ] {
+        assert_eq!(
+            decide_for(SessionLocation::Default, &operation),
+            decide_for(in_worktree("b"), &operation),
+            "FR-015a restricts only worktree mutations: {operation:?}"
+        );
+    }
+}
+
+/// U109
+#[test]
+fn deleting_the_callers_own_worktree_is_refused_by_policy() {
+    let error = refusal(decide_for(in_worktree("b"), &delete_worktree("b")));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(
+        error.message.contains("runs in"),
+        "the refusal says why: {}",
+        error.message
+    );
+}
+
+/// U110: the confirmation carries the options the user is asked to allow.
+#[test]
+fn deleting_another_worktree_waits_for_confirmation() {
+    assert_eq!(
+        decide_for(in_worktree("a"), &delete_worktree("b")),
+        PolicyDecision::Confirm(ConfirmedOp::DeleteWorktree {
+            stop_sessions: true,
+            delete_branch: false,
+        })
+    );
+}
+
+/// U111
+#[test]
+fn stop_session_on_self_is_refused_and_on_another_session_confirmed() {
+    let error = refusal(decide_for(
+        in_worktree("b"),
+        &Operation::StopSession { session: session(ME) },
+    ));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert_eq!(
+        decide_for(
+            in_worktree("b"),
+            &Operation::StopSession { session: session(OTHER) }
+        ),
+        PolicyDecision::Confirm(ConfirmedOp::StopSession)
+    );
+}
+
+/// U112
+#[test]
+fn delete_session_on_self_is_refused_and_on_another_session_confirmed() {
+    let error = refusal(decide_for(
+        in_worktree("b"),
+        &Operation::DeleteSession { session: session(ME) },
+    ));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert_eq!(
+        decide_for(
+            in_worktree("b"),
+            &Operation::DeleteSession { session: session(OTHER) }
+        ),
+        PolicyDecision::Confirm(ConfirmedOp::DeleteSession)
+    );
+}
+
+/// U113: interrupting its own turn would abort the call awaiting the result (decision D2).
+#[test]
+fn interrupt_session_on_self_is_invalid_input_and_on_another_session_confirmed() {
+    let error = refusal(decide_for(
+        in_worktree("b"),
+        &Operation::InterruptSession { session: session(ME) },
+    ));
+    assert_eq!(error.category, ErrorCategory::InvalidInput);
+    assert_eq!(
+        decide_for(
+            in_worktree("b"),
+            &Operation::InterruptSession { session: session(OTHER) }
+        ),
+        PolicyDecision::Confirm(ConfirmedOp::InterruptSession)
+    );
+}
+
+/// U114
+#[test]
+fn start_session_proceeds_on_any_session() {
+    for target in [ME, OTHER] {
+        assert_eq!(
+            decide_for(
+                in_worktree("b"),
+                &Operation::StartSession { session: session(target) }
+            ),
+            PolicyDecision::Proceed
         );
     }
 }
