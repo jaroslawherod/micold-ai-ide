@@ -142,3 +142,39 @@ existed and failed before the implementation.
   `crates/micold-client/src/features/settings.rs` -> 31 passed (the whole file)
 - refactor: none needed; `ui/settings/environment.rs`'s `failure()` is deleted in T019 when the page
   renders these lines.
+
+## Cycle 8: U55, U57 the triggers (T1; no check on a terminal restart); the check job (T014, T017, T018)
+
+- test: `crates/micold-client/src/main_tests.rs`, module `tests::script_path_report`, two tests (new):
+  `opening_settings_seeds_the_draft_at_once_and_checks_the_stored_path_as_it_is_stored` (U55, T1) and
+  `a_terminal_restart_does_not_check_the_path` (U57)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report`
+  against the `open_settings` / `ScriptPathCheckJob` stubs -> 2 passed, 4 failed: U55, A1, A2 and A3
+  each `not yet implemented: T018`. U57 and A4 assert an absence and passed on arrival (mutants
+  below, T033).
+- green: `ScriptPathCheckJob`, `prepare_script_path_check` and `run_script_path_check` in
+  `crates/micold-client/src/shell/env_include.rs`; `open_settings` seeds the draft and prepares the
+  job, and `on_settings_opened` runs it on `spawn_blocking` -> 6 passed
+- refactor: T017's `start_script_path_check(app, origin)` is split into `prepare_script_path_check`
+  (returns the job) and `run_script_path_check(job) -> Task` so `open_settings` can hand its job to
+  a test; `start` is their composition and is not needed until M2's save trigger.
+
+## Cycle 9: T019 the page renders the notice
+
+- No new test: GUI glue (Principle VIII exception, validated by T021's visual pass). `failure()` is
+  deleted from `ui/settings/environment.rs`; the page pushes `script_path_notice(check, outcome)`
+  after the timeout field, `Caution` through `caution`, `Note` through `note`. `script_check` is
+  threaded from `ui::view` through `settings_view::view`.
+
+## T033: A1–A4 and U57 at the full suite
+
+- A1 and U55 went red for the right reason (the stub) and are green. A2, A3, A4 and U57 assert an
+  absence. Deliberate mutants, applied together, then reverted with `git checkout`:
+  - render a caution for `Present` (`script_path_notice`) -> A2
+    `a readable file is not a problem to report (US1 scenario 2, SC-002) left: [Caution("Script not found: /tmp/does-not-exist.sh")] right: []`
+  - probe before the blank short-circuit in `classify` -> A3 panicked at `main_tests.rs:4138`
+    (`a blank path must not be probed`)
+  - run a check from `view_and_start` -> A4 panicked at `main_tests.rs:4157` (the probe was called)
+  - run a check from the `TerminalRestartRequested` handler -> U57 panicked at `main_tests.rs:4243`
+    (`a restart must not check the path`)
+  - (U55 also failed, under the `classify` mutant: `left: [path, path] right: [path]`.)
