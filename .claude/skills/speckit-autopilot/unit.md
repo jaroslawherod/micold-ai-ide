@@ -39,13 +39,15 @@ sends you there.
   - Diffs: `git diff --stat` first, then one file at a time.
   - `gh`: `--json <fields> -q <filter>` for just the fields you need.
 - **Hand over at 150k.** A large context makes every later call costly. At each checkpoint (a
-  finished step, an implement slice, a review round) run
-  `scripts/autopilot/context.py "<your description>"`. On `OVER`: write *Handover* in the ledger
-  (what is done, the next step, open findings with their review snapshots, anything else the next
-  unit needs), commit locally without pushing, and return `STATUS: HANDOVER`. A fresh unit of the
-  same phase continues from it.
+  finished step, a gate or review round) run `scripts/autopilot/context.py "<description>"` with
+  the exact description your prompt gives you. On `OVER`: write *Handover* in the ledger (what is
+  done, the next step, open findings, your PR if you opened one), commit, push only if your PR is
+  already open, and return `STATUS: HANDOVER`. A fresh unit of the same phase continues from it.
+  Exit 2 means the check cannot run: say so in your return's lines and carry on.
 - **Continuing a handover.** Your prompt says so: read the ledger's *Handover*, carry on from its
-  next step, and set the section back to `None.` in your first commit.
+  next step, and set the section back to `None.` in your first commit. If it names your unit's own
+  open PR, skip `branch-start.sh`: stay on the branch as it is. Review rounds already counted in
+  *Review rounds* stay counted; a full round forced by a stale snapshot does not count.
 - `systematic-debugging` is the superpowers skill. If that plugin is enabled instead of the personal
   copy, invoke `superpowers:systematic-debugging`.
 

@@ -105,8 +105,9 @@ What the skill does about it:
   "<its description>"`, which reads the size of its own last request from its transcript. Past the
   cap it writes a *Handover* into the ledger, commits locally and returns `HANDOVER`; the
   orchestrator starts a fresh unit of the same phase that continues from it.
-- **Milestones implement in slices** of about five tasks, so there is a checkpoint before a unit
-  grows far past the cap.
+- **Checkpoints sit between steps.** `speckit-implement` runs as one step, since its TDD hook
+  drives every pending behaviour at once; a milestone that grows far past the cap inside it was cut
+  too large (see the skill's `references/milestones.md`).
 - **The orchestrator** checks its own size after each merge and, past the cap, tells the user that
   `/clear` then `/speckit-autopilot resume` would restart it small. The ledger is current at every
   merge, so nothing is lost.
