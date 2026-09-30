@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: M6b: reviews A and B on the §B13 evidence diff, then open M6b's PR; after it merges, Phase 5 (close).
+- **Next step**: Wait for M6b's PR CI and merge; then Phase 5 (close).
 
 ## Pull requests
 
@@ -111,6 +111,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M6b | visual pass §B13 | 1 | 1025e85e | all five elements PASS in dark and light at 520 px; D-B13-1 declined; D6 still visible (follow-up) |
 | M6b | A (code-review high) | 1 | cf1bdc53:0f7fc572 | 5 findings: #1 MAJOR (stale SC-001 follow-up) fixed — reworded as carried forward with reason; #2–#5 MINOR (lavapipe chip blob, Settings description/scrollbar + lower rows, T065 record, M2 "Not run" pointer) fixed as evidence notes |
 | M6b | B (conformance) | 1 | cf1bdc53:0f7fc572 | CLEAN (2 MINOR: T065 record, stale SC-001 follow-up — both fixed with A's) |
+| M6b | A (code-review high), scoped | 2 | 0f7fc572:9027b284 | no BLOCKER/MAJOR; 2 MINOR (load-time figure only in ledger, blob cause stated as fact) fixed as wording; untracked-follow-up note left in *Follow-ups not done* |
 
 ## Open escalation
 
