@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: M6b in progress: T064 §B13 (both colour schemes) and T065 (gate, typeahead budget, §A rows); then open M6b's PR.
+- **Next step**: M6b: reviews A and B on the §B13 evidence diff, then open M6b's PR; after it merges, Phase 5 (close).
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | #472 | merged (691510de) |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | #478 | merged (e201a04e) |
 | M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | #495 | merged (8d7707f7) |
-| M6 | T063–T065, T095 | Architecture doc + quickstart §B10, B11, B13 recorded | #496 (M6a) | M6a #496 merged (cf1bdc53): T063, T095, §B10 Linux, §B11; M6b in progress: T064 §B13 (+ tick T064; §B10 macOS/Windows = T095 CI test, Decisions row 9), T065 |
+| M6 | T063–T065, T095 | Architecture doc + quickstart §B10, B11, B13 recorded | #496 (M6a) | M6a #496 merged (cf1bdc53): T063, T095, §B10 Linux, §B11; M6b: T064 (§B13 both schemes PASS; §B10 macOS/Windows = T095 CI test, Decisions row 9) and T065 (gate green, typeahead_budget release 9/9, every §A test file present and run by the gate) done, PR pending |
 
 Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free core + RPC, UI unreachable per rule 6; M2 completes it) and M2, plus M3 along AS10. M2 stays whole (~25 tasks, 9 of them outer-loop-green ticks): an acceptance-scenario split would put a list on `main` that cannot be picked from.
 
@@ -84,6 +84,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M6a | code-review A F4 | Linux §B10 run kept the environment include on | That is §B10's default setup; the evidence names the unprobed lookup step; T095's test covers the no-include fallback. |
 | M6a | code-review A F5 | macOS/Windows §B10 are a CI test, not a real Dock/Start-menu launch | User decision, Decisions row 9. |
 | M6a | code-review A F7 | tasks.md M6 "Satisfies FR-026 on every OS" while §B13 is missing | §B13 and T064 are M6b; T064 stays unticked in M6a. |
+| M6b | visual pass §B13 D-B13-1 | Default label "documentation" shows as "documentatio" in its Label field at 520 px with the rail open | The field's content scrolls like any text input whose value is wider than the field, and stays editable; no chrome, label or control is clipped (Principle VIII's "nothing clipped"). M5's §B12 re-check passed the same layout. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
 ## Review rounds
@@ -107,6 +108,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M6a | A (code-review high), scoped | 2 | — | CLEAN |
 | M6a | B (conformance) | 1 | — | CLEAN |
 | M6a | B (conformance), scoped | 2 | — | CLEAN |
+| M6b | visual pass §B13 | 1 | 1025e85e | all five elements PASS in dark and light at 520 px; D-B13-1 declined; D6 still visible (follow-up) |
 
 ## Open escalation
 
@@ -114,6 +116,6 @@ None.
 
 ## Follow-ups not done
 
-- Visual pass D6 (M3): while the issue list is open, its overlay hides the search status line under the field. A status position that stays visible (above the field, or in the list's empty/footer row) would need a contract §2 change; raise it with M6's §B13 pass.
+- Visual pass D6 (M3): while the issue list is open, its overlay hides the search status line under the field. A status position that stays visible (above the field, or in the list's empty/footer row) would need a contract §2 change; §B13 (M6b) confirmed it is still visible in both schemes.
 - SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2; re-time §B2–B5 on a release build in M6 (T063–T065).
 - Quickstart §B5's second attempt with the same ticket and name shows the folder-collision error, not a reuse prompt, because the branch is held by the existing worktree. That is the existing FR-021 path; the reuse prompt itself is covered by A6.

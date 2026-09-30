@@ -123,3 +123,32 @@ only at `~/bin/gh`, signed in. Run 1 is the control (terminal launch) the other 
 - §B10's macOS and Windows arms are not in this file: they are `crates/micold-core/tests/github_locate_desktop_launch.rs` on CI's macOS and Windows runners (T095, quickstart §B10 note).
 - Harness: stopping run 3's container hung once (`docker rm -f` reported "removal already in progress"); it was gone when checked later. Not app behaviour.
 - A first stray click on "+" opened a Claude session tab in run 1; harmless, closed with the client.
+
+## §B13 — both colour schemes (milestone M6b)
+
+Date 2026-09-30, commit 1025e85e (origin/main cf1bdc53 + ledger; no app code changed), dev build
+(`micold-ai-ide` + `micold-daemon` built under `scripts/build-lock.sh`, copied to a private pin dir
+`~/vp/b13/bin`; the pair connected: "client attached to daemon"). Private Xvfb :83 + lavapipe, NOT a real
+display; private XDG data/runtime dirs per scheme. The scheme was set by `theme` = `dark` / `light` in the
+run's private `settings.json`. Projects: /tmp/issue-demo (shallow clone of cli/cli, 1,036 open issues) and a
+`git init` repository with no remote. The create-worktree dialog is 520 px wide by design; Settings ran in a
+520×700 window with the rail open.
+
+| Element | Dark | Light | Notes |
+|---|---|---|---|
+| Disabled "GitHub issue" chip + "This repository has no GitHub remote." | PASS `b13-chip-dark.png` | PASS `b13-chip-light.png` | Disabled styling follows the scheme. |
+| Loading line (notice, progress bar, "Loading issues from GitHub…") | PASS `b13-loading-dark.png` | PASS `b13-loading-light.png` | Progress bar animation not judged (lavapipe). |
+| Error + Retry ("Couldn't reach GitHub. Check your connection, then retry.") | PASS `b13-error-dark.png` | PASS `b13-error-light.png` | `HTTPS_PROXY=http://127.0.0.1:9`; error colour is the scheme's error role in each. |
+| Issue rows (`#n title · labels`, open list) | PASS `b13-rows-dark.png` | PASS `b13-rows-light.png` | Long titles end in an ellipsis; nothing overlaps. |
+| Closed-list status line ("Showing the 1,000 most recently updated of 1,036 …") | PASS `b13-status-dark.png` | PASS `b13-status-light.png` | Visible once the list closes (D6, below). |
+| Settings → GitHub issues rows at 520 px, rail open | PASS `b13-settings-dark.png` | PASS `b13-settings-light.png` | Stacked row layout from M5's D1 fix holds. |
+
+### B13 observations
+- The text field for the default label "documentation" shows "documentatio" at 520 px with the rail open: the
+  field's content scrolls, as any text input does when its value is wider than the field, and stays editable.
+  No chrome, label or control is clipped. Accepted.
+- Dark: the open issue list's surface is close to the page background where it hangs below the dialog, so its
+  bottom edge is faint. Legible; not a defect.
+- M3's D6 is still visible in both schemes: the open list covers the status line under the Issue field until
+  the list closes. It stays under *Follow-ups not done* in the ledger.
+- Earlier light-scheme captures (B1, B9, `b13-caption-light.png`) and dark ones (B1–B8) agree with this run.
