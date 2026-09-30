@@ -39,7 +39,6 @@ use std::path::Path;
 use iced::Task;
 
 use micold_client::app::Message;
-use micold_core::issue_types::default_mapping;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::sandbox::placement::{Placement, PlacementKind};
 use micold_core::settings::{DaemonConfig, Settings, SettingsStore};
@@ -247,27 +246,24 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
     // them actually lives: the scrollback limit and the environment include are applied to running
     // sessions and so are held in memory, while the placement was read once at boot by the
     // connection subscription and never kept.
-    // The label-to-type mapping, too, is read from the store: nothing in memory holds it, because an
+    // The label-to-type mapping, too, comes from the store: `App` keeps no copy of it, because an
     // issue pick reads the store at the moment of the pick (feature 034, FR-014a).
-    let (daemon, issue_label_types) = app
+    let stored = app
         .caps
         .settings()
-        .map(|store| {
-            let stored = store.load().settings;
-            (stored.daemon, stored.issue_label_types)
-        })
-        .unwrap_or_else(|| (DaemonConfig::default(), default_mapping()));
+        .map(|store| store.load().settings)
+        .unwrap_or_default();
     let current = Settings {
         theme: app.core.settings.theme_pref,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
         env_include_timeout_secs: app.env_include_timeout_secs,
-        daemon,
+        daemon: stored.daemon,
         default_ai_cli: app.core.session.default_ai_cli,
         pi_activity_component: app.core.session.pi_activity_component,
         tool_server_enabled: app.core.session.tool_server_enabled,
-        issue_label_types,
+        issue_label_types: stored.issue_label_types,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the

@@ -180,3 +180,46 @@ fn other_writers_preserve_the_mapping() {
         "no issue content or GitHub credential is written to settings.json (SC-006)"
     );
 }
+
+/// Review A (M4): a hand edit that makes the field something other than a list is one bad value,
+/// not a corrupt document — the rest of the settings must not go to `.bak` over it.
+#[test]
+fn a_mapping_that_is_not_a_list_reads_as_the_default() {
+    for bad in ["null", r#""bug=fix""#, r#"{ "bug": "fix" }"#] {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("settings.json"),
+            format!(r#"{{ "settings_version": 4, "scrollback_lines": 12345, "issue_label_types": {bad} }}"#),
+        )
+        .unwrap();
+
+        let loaded = store(&dir).load();
+        assert_eq!(
+            loaded.status,
+            LoadStatus::Loaded,
+            "{bad} is not a corrupt document"
+        );
+        assert_eq!(
+            loaded.settings.scrollback_lines, 12345,
+            "{bad}: the rest still loads"
+        );
+        assert_eq!(
+            loaded.settings.issue_label_types,
+            default_mapping(),
+            "{bad}: an unreadable mapping reads as the default table, as an absent one does"
+        );
+        assert!(
+            !dir.path().join("settings.json.bak").exists(),
+            "{bad}: nothing moved aside"
+        );
+    }
+
+    let parsed: Settings = serde_json::from_str(
+        r#"{ "issue_label_types": [ { "label": "x", "type": "bogus" }, { "label": "bug", "type": "fix" } ] }"#,
+    )
+    .expect("`Settings` reads the field as leniently as the file store does");
+    assert_eq!(
+        parsed.issue_label_types,
+        vec![entry("bug", ConventionalType::Fix)]
+    );
+}
