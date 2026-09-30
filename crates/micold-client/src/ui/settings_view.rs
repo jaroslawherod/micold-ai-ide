@@ -95,6 +95,7 @@ pub fn view<'a>(
             r,
         ),
         SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
+        SettingsSection::GithubIssues => iced::widget::Space::new().into(),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while

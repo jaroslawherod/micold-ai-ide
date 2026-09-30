@@ -272,13 +272,13 @@ Tests: `crates/micold-client/tests/features_settings.rs`, `settings_sections.rs`
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U87 | `GithubIssues` is 5th in `ALL`, labelled "GitHub issues", icon `IssueMapping` | FR-018 | example | TODO | `settings_sections.rs`, `settings_rail.rs` |
-| U88 | The draft loads the stored mapping, or the default when absent | FR-021 | example | TODO | `features_settings.rs::the_draft_loads_the_mapping` |
-| U89 | Add appends `("", Feat)`; label/type change edit in place; remove deletes | FR-018 | example | TODO | `features_settings.rs::entries_are_edited` |
-| U90 | Move up at index 0 and move down at the last index are no-ops; elsewhere they swap (both sides) | FR-017, FR-018 | example | TODO | `features_settings.rs::entries_are_reordered` |
-| U91 | Restore defaults replaces the draft with `default_mapping()` | FR-018 | example | TODO | `features_settings.rs::restore_defaults` |
-| U92 | An invalid mapping maps to `FieldError { IssueMappingLabel(i), GithubIssues }` and nothing is written | FR-019 | example | TODO | `features_settings.rs::an_invalid_mapping_refuses_the_save` |
-| U93 | `IssueMapping`, `MoveUp`, `MoveDown` glyphs are in the shipped font | Principle VIII | example | TODO | `icons_font.rs` |
+| U87 | `GithubIssues` is 5th in `ALL`, labelled "GitHub issues", icon `IssueMapping` | FR-018 | example | DONE | `features_settings.rs::issue_mapping::the_section_is_fifth_and_named`, `settings_rail.rs::every_section_has_an_icon_of_its_own` |
+| U88 | The draft loads the stored mapping, or the default when absent | FR-021 | example | DONE | `features_settings.rs::issue_mapping::the_draft_loads_the_mapping` |
+| U89 | Add appends `("", Feat)`; label/type change edit in place; remove deletes | FR-018 | example | DONE | `features_settings.rs::issue_mapping::entries_are_edited` |
+| U90 | Move up at index 0 and move down at the last index are no-ops; elsewhere they swap (both sides) | FR-017, FR-018 | example | DONE | `features_settings.rs::issue_mapping::entries_are_reordered` |
+| U91 | Restore defaults replaces the draft with `default_mapping()` | FR-018 | example | DONE | `features_settings.rs::issue_mapping::restore_defaults` |
+| U92 | An invalid mapping maps to `FieldError { IssueMappingLabel(i), GithubIssues }` and nothing is written | FR-019 | example | DONE | `features_settings.rs::issue_mapping::an_invalid_mapping_refuses_the_save` |
+| U93 | `IssueMapping`, `MoveUp`, `MoveDown` glyphs are in the shipped font | Principle VIII | example | DONE | `icons_font.rs::the_issue_mapping_glyphs_are_shipped`, `icons.rs` |
 
 ## Invariants and edge cases still to place
 

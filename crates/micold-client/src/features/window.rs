@@ -149,6 +149,8 @@ pub enum FieldId {
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
     SettingsEnvIncludeTimeout,
+    /// Settings → GitHub issues: the label of the mapping entry at this index (feature 034).
+    IssueMappingLabel(usize),
 }
 
 /// What the window reports about itself (feature 028, FR-001).

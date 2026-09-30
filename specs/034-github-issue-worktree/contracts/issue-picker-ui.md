@@ -79,8 +79,9 @@ source that the issue-source capability is called from exactly the load, retry a
 - One row per entry: `TextField` (label, `FieldId::IssueMappingLabel(i)`, shows the `FieldError`
   when it is the offending one) · `Select<ConventionalType>` · `IconButton(Icon::MoveUp)` (disabled on
   the first row) · `IconButton(Icon::MoveDown)` (disabled on the last) · `IconButton(Icon::Delete)`.
-  `MoveUp`/`MoveDown` are NEW `Icon` variants mapped to Material Symbols `arrow_upward` /
-  `arrow_downward`.
+  `MoveUp`/`MoveDown` are NEW `Icon` variants mapped to Material Symbols `keyboard_arrow_up` /
+  `keyboard_arrow_down` (`arrow_upward` is already `Icon::NavigateUp`'s codepoint, and no two icons
+  share one — `tests/icons.rs`).
 - Below: **Add entry**, **Restore defaults** (text buttons).
 - Empty mapping: caption "No labels are mapped — picking an issue leaves the type for you to choose."
 - Save/Cancel are the Settings view's existing ones (save-together rule).

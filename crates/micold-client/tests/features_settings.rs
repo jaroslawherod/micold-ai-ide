@@ -418,6 +418,213 @@ fn the_mapping_survives_other_saves() {
     );
 }
 
+// --- Feature 034 US3: the GitHub issues section edits the mapping (U87–U92) --------------------
+
+mod issue_mapping {
+    use micold_client::app::State;
+    use micold_client::features::settings::{update, Msg, SettingsDraft, SettingsSection};
+    use micold_client::features::window::FieldId;
+    use micold_core::issue_types::{default_mapping, LabelTypeEntry};
+    use micold_core::naming::ConventionalType;
+    use micold_core::settings::Settings;
+    use micold_core::typeahead::Direction;
+
+    fn entry(label: &str, type_: ConventionalType) -> LabelTypeEntry {
+        LabelTypeEntry {
+            label: label.to_string(),
+            type_,
+        }
+    }
+
+    /// Settings open on a valid draft holding `entries`.
+    fn open_with(entries: Vec<LabelTypeEntry>) -> State {
+        let mut draft = SettingsDraft::from_settings(&Settings::default());
+        draft.github.entries = entries;
+        let mut state = State::default();
+        state.settings.settings_draft = Some(draft);
+        state
+    }
+
+    fn entries(state: &State) -> Vec<(String, ConventionalType)> {
+        state
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("Settings is open")
+            .github
+            .entries
+            .iter()
+            .map(|e| (e.label.clone(), e.type_))
+            .collect()
+    }
+
+    fn pairs(list: &[(&str, ConventionalType)]) -> Vec<(String, ConventionalType)> {
+        list.iter().map(|(l, t)| (l.to_string(), *t)).collect()
+    }
+
+    fn abc() -> Vec<LabelTypeEntry> {
+        vec![
+            entry("a", ConventionalType::Fix),
+            entry("b", ConventionalType::Feat),
+            entry("c", ConventionalType::Docs),
+        ]
+    }
+
+    #[test]
+    fn the_section_is_fifth_and_named() {
+        assert_eq!(
+            SettingsSection::ALL.get(4),
+            Some(&SettingsSection::GithubIssues),
+            "GitHub issues is the fifth section in the rail (AS1)"
+        );
+        assert_eq!(SettingsSection::ALL.len(), 5);
+        assert_eq!(SettingsSection::GithubIssues.label(), "GitHub issues");
+        assert_eq!(
+            SettingsSection::GithubIssues.icon(),
+            micold_client::icons::Icon::IssueMapping
+        );
+    }
+
+    #[test]
+    fn the_draft_loads_the_mapping() {
+        let stored = Settings {
+            issue_label_types: vec![entry("defect", ConventionalType::Fix)],
+            ..Settings::default()
+        };
+        assert_eq!(
+            SettingsDraft::from_settings(&stored).github.entries,
+            stored.issue_label_types,
+            "the section shows the stored mapping, in order (AS1)"
+        );
+        let never_edited: Settings =
+            serde_json::from_str("{}").expect("an empty document reads as the defaults");
+        assert_eq!(
+            SettingsDraft::from_settings(&never_edited).github.entries,
+            default_mapping(),
+            "a mapping never edited shows the default table (AS6)"
+        );
+    }
+
+    #[test]
+    fn entries_are_edited() {
+        let mut state = open_with(abc());
+        update(&mut state, Msg::IssueMappingAdded);
+        assert_eq!(
+            entries(&state).last(),
+            Some(&(String::new(), ConventionalType::Feat)),
+            "Add entry appends a blank label typed `feat` (FR-018)"
+        );
+        update(&mut state, Msg::IssueMappingLabelChanged(3, "defect".into()));
+        update(
+            &mut state,
+            Msg::IssueMappingTypeChanged(3, ConventionalType::Fix),
+        );
+        update(
+            &mut state,
+            Msg::IssueMappingTypeChanged(0, ConventionalType::Chore),
+        );
+        update(&mut state, Msg::IssueMappingRemoved(1));
+        assert_eq!(
+            entries(&state),
+            pairs(&[
+                ("a", ConventionalType::Chore),
+                ("c", ConventionalType::Docs),
+                ("defect", ConventionalType::Fix),
+            ]),
+            "label and type change in place; remove deletes only that entry (AS2, AS3)"
+        );
+    }
+
+    #[test]
+    fn entries_are_reordered() {
+        let mut state = open_with(abc());
+        update(&mut state, Msg::IssueMappingMoved(0, Direction::Prev));
+        update(&mut state, Msg::IssueMappingMoved(2, Direction::Next));
+        assert_eq!(
+            entries(&state),
+            pairs(&[
+                ("a", ConventionalType::Fix),
+                ("b", ConventionalType::Feat),
+                ("c", ConventionalType::Docs),
+            ]),
+            "moving the first entry up or the last entry down changes nothing"
+        );
+        update(&mut state, Msg::IssueMappingMoved(2, Direction::Prev));
+        assert_eq!(
+            entries(&state),
+            pairs(&[
+                ("a", ConventionalType::Fix),
+                ("c", ConventionalType::Docs),
+                ("b", ConventionalType::Feat),
+            ]),
+            "moving up swaps an entry with the one above it (FR-017)"
+        );
+        update(&mut state, Msg::IssueMappingMoved(0, Direction::Next));
+        assert_eq!(
+            entries(&state),
+            pairs(&[
+                ("c", ConventionalType::Docs),
+                ("a", ConventionalType::Fix),
+                ("b", ConventionalType::Feat),
+            ]),
+            "moving down swaps an entry with the one below it (FR-017)"
+        );
+    }
+
+    #[test]
+    fn restore_defaults() {
+        let mut state = open_with(vec![entry("defect", ConventionalType::Fix)]);
+        update(&mut state, Msg::IssueMappingDefaultsRestored);
+        assert_eq!(
+            state.settings.settings_draft.as_ref().unwrap().github.entries,
+            default_mapping(),
+            "Restore defaults returns the draft to the default table (AS6)"
+        );
+    }
+
+    #[test]
+    fn an_invalid_mapping_refuses_the_save() {
+        let mut state = open_with(vec![
+            entry("bug", ConventionalType::Fix),
+            entry("  ", ConventionalType::Feat),
+        ]);
+        let draft = state.settings.settings_draft.as_ref().unwrap();
+        let error = draft.validate().expect_err("a blank label cannot be saved");
+        assert_eq!(error.field, FieldId::IssueMappingLabel(1));
+        assert_eq!(error.section, SettingsSection::GithubIssues);
+        assert!(!error.message.is_empty(), "the entry says what is wrong");
+
+        update(&mut state, Msg::IssueMappingLabelChanged(1, "Bug".into()));
+        let draft = state.settings.settings_draft.as_ref().unwrap();
+        let error = draft
+            .validate()
+            .expect_err("a label repeating another ignoring case cannot be saved");
+        assert_eq!(
+            (error.field, error.section),
+            (FieldId::IssueMappingLabel(1), SettingsSection::GithubIssues),
+            "the duplicate is reported on the later entry (AS5, FR-019)"
+        );
+
+        update(&mut state, Msg::IssueMappingLabelChanged(1, "defect".into()));
+        let saved = state
+            .settings
+            .settings_draft
+            .as_ref()
+            .unwrap()
+            .validate()
+            .expect("a valid mapping saves")
+            .into_settings();
+        assert_eq!(
+            saved.issue_label_types,
+            vec![
+                entry("bug", ConventionalType::Fix),
+                entry("defect", ConventionalType::Feat)
+            ],
+            "a valid save writes the mapping in order (AS4, FR-020)"
+        );
+    }
+}
+
 // --- Spec 035: the script path check, in the reducer (contracts/settings-indication.md §1) -------
 
 mod script_path_check {
