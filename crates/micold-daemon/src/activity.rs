@@ -43,6 +43,9 @@ pub enum ActivityEvent {
     /// An OSC 0 title carrying a braille spinner glyph was observed on the terminal
     /// (from the `Event::Title` handler; see [`is_spinner_title`]).
     SpinnerObserved,
+    /// The CLI reported it is ready for its first prompt (Pi's `session_start`, feature 034,
+    /// FR-017). Not activity: the FSM ignores it, and the session stays `Unknown`.
+    ReadyForInput,
     /// The session's process exited or the supervisor gave up (terminal).
     Ended {
         /// Why it ended — mirrors [`ActivitySignal::Ended`]'s `reason` field.
@@ -104,6 +107,8 @@ impl Activity {
                     self.current = ActivitySignal::Working;
                 }
             }
+            // Readiness for a first prompt says nothing about a turn.
+            ActivityEvent::ReadyForInput => {}
         }
     }
 }
@@ -251,6 +256,16 @@ pub fn pi_event(line: &str) -> Option<ActivityEvent> {
         }),
         _ => None,
     }
+}
+
+/// A line of the Pi component's log as the session's tail reads it: [`pi_event`]'s activity
+/// vocabulary, plus `session_start` as [`ActivityEvent::ReadyForInput`] (feature 034, FR-017).
+pub fn pi_tail_event(line: &str) -> Option<ActivityEvent> {
+    let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    if value.get("type")?.as_str()? == micold_core::provider::PI_SESSION_START {
+        return Some(ActivityEvent::ReadyForInput);
+    }
+    pi_event(line)
 }
 
 #[cfg(test)]

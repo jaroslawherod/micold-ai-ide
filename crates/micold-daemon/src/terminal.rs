@@ -14,7 +14,7 @@
 //! - [`SharedTerm`] — the `Arc<FairMutex<Term<DaemonListener>>>` handle shared between the PTY
 //!   reader thread (which advances the parser) and the framer (which reads the grid).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
@@ -50,6 +50,10 @@ pub struct VtSignals {
     spinner: Arc<AtomicBool>,
     title: Arc<Mutex<Option<String>>>,
     child_exit: Arc<Mutex<Option<i32>>>,
+    /// How many reads of output the process has produced so far. `create_session` watches it for
+    /// the output-settled readiness rule (feature 034, FR-017): a CLI that names no ready signal
+    /// is ready once this has moved and then stood still for 1.5 s.
+    output: Arc<AtomicU64>,
 }
 
 impl VtSignals {
@@ -61,6 +65,16 @@ impl VtSignals {
     /// Raise the dirty flag (used on attach to force the next tick to snapshot).
     pub fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Release);
+    }
+
+    /// Count one read of output from the process.
+    pub fn note_output(&self) {
+        self.output.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// How many reads of output the process has produced so far.
+    pub fn output_count(&self) -> u64 {
+        self.output.load(Ordering::Acquire)
     }
 
     /// Take and clear the bell edge.

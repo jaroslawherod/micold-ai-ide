@@ -1847,43 +1847,10 @@ fn spawn_session_start(
     reply: Option<(crate::state::ClientId, u64)>,
     done: tokio::sync::mpsc::UnboundedSender<Internal>,
 ) {
+    let started = ops::start_session(state, session, launch);
     let task_state = Arc::clone(state);
     tokio::spawn(async move {
-        let gate = task_state.session_gate(session);
-        let _serialized = gate.lock().await;
-        let worker = Arc::clone(&task_state);
-        let outcome = tokio::task::spawn_blocking(move || {
-            worker.start_session(session, launch)?;
-            // Watch this session's own event log, for a provider that reports one (feature 026,
-            // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
-            // has just started — that is what keeps a merely discovered session unwatched.
-            worker.open_event_log_tail(session);
-            Ok::<(), std::io::Error>(())
-        })
-        .await;
-        match outcome {
-            Ok(Ok(())) => {}
-            // A failed start moves the catalog and, unlike a successful one, nothing else says so
-            // (feature 026, T087, FR-010). `start_session` records the reason — it is what fills
-            // the wire's `Failed { reason, attempts: 0 }` — and broadcasts only *after* it has
-            // marked the session running, which it returned before doing. Announced here rather
-            // than beside the reply below, because a resume has no reply to carry it:
-            // `ClientMsg::SessionStart` carries no `req`, so there is no `OperationError` to
-            // address to it, and pressing restart on a session whose CLI is gone did nothing
-            // visible at all. The catalog is the surface both launch modes share, and the one the
-            // `SessionCreate` path already relies on for exactly this.
-            Ok(Err(err)) => {
-                tracing::warn!(session = %session.0, %err, "session start failed");
-                task_state.broadcast_catalog();
-            }
-            Err(join) => {
-                tracing::warn!(session = %session.0, error = %join, "session start task failed");
-                task_state.broadcast_catalog();
-            }
-        }
-        // Before the reply, so a client that acts on `SessionCreated` immediately finds the session
-        // already caught up on anything held.
-        task_state.finish_start(session);
+        let _ = started.await;
         // Tell the connection loop, which owns the view stream and may have been waiting to build
         // one for this session. A closed channel just means the client has gone.
         let _ = done.send(Internal::SessionStarted(session));

@@ -21,6 +21,8 @@ import { appendFileSync } from "node:fs";
 
 // Pi's own event names, as the contract maps them (specs/029-pi-cli-provider/contracts/pi-cli.md).
 const EVENTS = [
+  // Not activity: it tells the session service Pi is ready for a first prompt (feature 034).
+  "session_start",
   "turn_start",
   "agent_start",
   "tool_execution_start",

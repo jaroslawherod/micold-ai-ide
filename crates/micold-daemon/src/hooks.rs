@@ -144,7 +144,10 @@ pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState
 enum HookClass {
     /// A recognised turn-affecting hook — apply it to the FSM.
     Event(HookKind),
-    /// A well-formed hook that carries no FSM transition (e.g. `SessionStart`) — accept, do nothing.
+    /// `SessionStart`: no FSM transition (the session starts `Unknown`), but the session is now
+    /// ready for its first prompt (feature 034, FR-017).
+    SessionStart,
+    /// A well-formed hook that carries no FSM transition — accept, do nothing.
     Ignored,
     /// The body was not valid JSON or lacked a usable `hook_event_name` — reject with `400`.
     Invalid,
@@ -204,6 +207,10 @@ async fn handle_connection(
             }
             respond(&mut stream, 200, "OK").await
         }
+        HookClass::SessionStart => {
+            state.mark_ready_for_input(SessionId::from_uuid(session_uuid));
+            respond(&mut stream, 200, "OK").await
+        }
         HookClass::Ignored => respond(&mut stream, 200, "OK").await,
         HookClass::Invalid => respond(&mut stream, 400, "Bad Request").await,
     }
@@ -238,8 +245,8 @@ fn classify_hook(body: &str) -> HookClass {
         "PostToolUse" => HookClass::Event(HookKind::PostToolUse),
         "Stop" | "SubagentStop" => HookClass::Event(HookKind::Stop),
         "Notification" => HookClass::Event(HookKind::Notification),
-        // SessionStart is well-formed but carries no FSM transition (the session starts Unknown).
-        "SessionStart" => HookClass::Ignored,
+        // No FSM transition (the session starts Unknown); it marks the session ready for input.
+        "SessionStart" => HookClass::SessionStart,
         // An unrecognised but structurally valid hook: accept it without inventing a transition.
         _ => HookClass::Ignored,
     }
@@ -369,8 +376,9 @@ mod tests {
         assert_eq!(ev("PostToolUse"), HookClass::Event(HookKind::PostToolUse));
         assert_eq!(ev("Stop"), HookClass::Event(HookKind::Stop));
         assert_eq!(ev("Notification"), HookClass::Event(HookKind::Notification));
-        // SessionStart and unknown-but-valid hooks are accepted without a transition.
-        assert_eq!(ev("SessionStart"), HookClass::Ignored);
+        // SessionStart marks readiness (feature 034), not a transition; unknown-but-valid hooks are
+        // accepted without either.
+        assert_eq!(ev("SessionStart"), HookClass::SessionStart);
         assert_eq!(ev("SomethingNew"), HookClass::Ignored);
     }
 
