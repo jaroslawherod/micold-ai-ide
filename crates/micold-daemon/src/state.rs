@@ -1349,8 +1349,34 @@ impl DaemonState {
         }
     }
 
-    /// Stop `session` (red stub).
-    pub fn stop_session(&self, _session: SessionId) {}
+    /// Stop `session` as the sidebar's stop does (feature 034, FR-009; the protocol `SessionStop`):
+    /// end every process it has, mark the record `Idle`, and tell every window. The record, its
+    /// conversation and its tool-server credential are kept, so it can be started (resumed) again.
+    /// A request the stopped session was waiting on for confirmation is withdrawn (FR-014).
+    ///
+    /// The live entry is taken under the lock and its processes killed and dropped off it (module
+    /// invariant), so the supervisor never sees the kill as a crash. Returns whether the session is
+    /// known.
+    pub fn stop_session(&self, session: SessionId) -> bool {
+        let (removed, owner) = {
+            let mut inner = self.lock();
+            let removed = inner.sessions.remove(&session);
+            let owner = inner.catalog.mark_session_stopped(session);
+            (removed, owner)
+        };
+        if let Some(live) = &removed {
+            for proc in live.procs.values() {
+                let _ = proc.pty.kill();
+            }
+        }
+        drop(removed);
+        self.confirmations_caller_stopped(session);
+        if owner.is_some() {
+            tracing::info!(session = %session.0, reason = "stopped on request", "session stopped");
+            self.broadcast_catalog();
+        }
+        owner.is_some()
+    }
 
     /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
     /// decides; a later one, or one for an unknown id, is ignored (FR-014).
@@ -1369,6 +1395,15 @@ impl DaemonState {
     pub fn confirmations_session_gone(&self, session: SessionId) {
         let mut inner = self.lock();
         let withdrawn = inner.confirmations.session_gone(session);
+        Self::broadcast_locked(&inner, withdrawn);
+    }
+
+    /// Resolve every pending prompt `session` is waiting on as the caller: it was stopped, so the
+    /// agent that asked is gone (FR-014). A prompt about stopping or interrupting it stays: the
+    /// answer then finds nothing to stop, or nothing running.
+    pub fn confirmations_caller_stopped(&self, session: SessionId) {
+        let mut inner = self.lock();
+        let withdrawn = inner.confirmations.caller_stopped(session);
         Self::broadcast_locked(&inner, withdrawn);
     }
 
@@ -1882,11 +1917,17 @@ impl DaemonState {
     /// Withdraw the tool-server credentials and binding files of sessions that have left the
     /// catalog (feature 034, FR-006). Deletes files, so it runs **outside** the state lock; every
     /// path that archives a session comes through here once the archive is durable.
+    ///
+    /// The same sessions are gone for any confirmation that names them as caller or target, so
+    /// those prompts are withdrawn here too (FR-014, edge case *Target changes while pending*).
     fn revoke_tool_credentials(&self, ids: &[SessionId]) {
         if let Some(server) = self.tool_server() {
             for id in ids {
                 server.revoke(*id);
             }
+        }
+        for id in ids {
+            self.confirmations_session_gone(*id);
         }
     }
 

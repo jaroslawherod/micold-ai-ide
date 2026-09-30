@@ -17,7 +17,9 @@ use std::sync::Arc;
 use micold_core::mcp::errors::{tool_failure, tool_success};
 use micold_core::mcp::jsonrpc::{self, Route};
 use micold_core::session::SessionId;
+use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio_util::sync::CancellationToken;
 
 use super::credentials::Credentials;
 use crate::http::{self, respond, respond_json, Body, HeadRead};
@@ -179,19 +181,47 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             arguments,
         } => {
             // Its own task, so a panic in a tool answers `service_error` instead of dropping the
-            // connection with no reply.
-            let outcome = tokio::spawn(super::tools::call(state, caller, name, arguments))
-                .await
-                .unwrap_or_else(|_| {
-                    Err(micold_core::mcp::errors::OpError::service_error(
-                        "the tool call failed unexpectedly",
-                    ))
-                });
+            // connection with no reply. If the agent hangs up first, a request still waiting for
+            // the user's confirmation is abandoned (withdrawn, nothing done); a call already past
+            // that point finishes, and its reply has nowhere to go.
+            let hangup = CancellationToken::new();
+            let mut call = tokio::spawn(super::tools::call(
+                state,
+                caller,
+                name,
+                arguments,
+                hangup.clone(),
+            ));
+            let joined = tokio::select! {
+                joined = &mut call => joined,
+                () = peer_closed(&mut stream) => {
+                    hangup.cancel();
+                    let _ = call.await;
+                    return Ok(());
+                }
+            };
+            let outcome = joined.unwrap_or_else(|_| {
+                Err(micold_core::mcp::errors::OpError::service_error(
+                    "the tool call failed unexpectedly",
+                ))
+            });
             let result = match outcome {
                 Ok(output) => tool_success(&output),
                 Err(error) => tool_failure(&error),
             };
             reply(&mut stream, 200, "OK", &jsonrpc::result(id, result)).await
+        }
+    }
+}
+
+/// Resolves once the peer has closed the connection (or it failed). Anything the peer sends after
+/// its one request is discarded: the connection answers exactly one.
+async fn peer_closed(stream: &mut TcpStream) {
+    let mut scratch = [0u8; 512];
+    loop {
+        match stream.read(&mut scratch).await {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
         }
     }
 }

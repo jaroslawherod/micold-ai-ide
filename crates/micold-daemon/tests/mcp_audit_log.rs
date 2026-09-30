@@ -202,7 +202,10 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
                 json!({"session": sid(99).0.to_string()}),
                 ErrorCategory::NotFound,
             ),
-            (json!({"session": caller.0.to_string()}), ErrorCategory::RefusedByPolicy),
+            (
+                json!({"session": caller.0.to_string()}),
+                ErrorCategory::RefusedByPolicy,
+            ),
         ],
         "interrupt_session" => vec![(
             json!({"session": caller.0.to_string()}),
@@ -235,7 +238,9 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     for tool in &tools {
         if tool == "interrupt_session" {
             // Only a running session can be interrupted; starting it is not what is counted.
-            let started = f.call(caller, "start_session", good_call(tool, caller)).await;
+            let started = f
+                .call(caller, "start_session", good_call(tool, caller))
+                .await;
             assert_eq!(started["isError"], json!(false), "{started}");
         }
         let before = audit_lines(caller).len();

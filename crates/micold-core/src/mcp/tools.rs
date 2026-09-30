@@ -316,7 +316,7 @@ const TOOLS: &[Tool] = &[
         required: &["worktree"],
         read_only: false,
         destructive: true,
-        shipped: false,
+        shipped: true,
     },
     Tool {
         name: "create_session",
@@ -358,7 +358,7 @@ const TOOLS: &[Tool] = &[
         required: &["session"],
         read_only: false,
         destructive: true,
-        shipped: false,
+        shipped: true,
     },
     Tool {
         name: "interrupt_session",
@@ -368,7 +368,7 @@ const TOOLS: &[Tool] = &[
         required: &["session"],
         read_only: false,
         destructive: true,
-        shipped: false,
+        shipped: true,
     },
     Tool {
         name: "delete_session",
@@ -378,7 +378,7 @@ const TOOLS: &[Tool] = &[
         required: &["session"],
         read_only: false,
         destructive: true,
-        shipped: false,
+        shipped: true,
     },
 ];
 

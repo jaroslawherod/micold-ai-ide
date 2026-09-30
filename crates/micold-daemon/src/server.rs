@@ -934,7 +934,12 @@ where
                 cols,
                 rows,
             } => state.resize_session(session, cols, rows),
-            ClientMsg::SessionKill { session } | ClientMsg::SessionStop { session } => {
+            // Feature 034 (FR-009): the stop an agent's `stop_session` performs, so the two agree:
+            // processes end, the record is `Idle`, and every window is told.
+            ClientMsg::SessionStop { session } => {
+                state.stop_session(session);
+            }
+            ClientMsg::SessionKill { session } => {
                 // Stop the session's processes and drop it from the live registry (kill happens
                 // outside the state lock inside remove_session). TODO(T053): archive the durable
                 // record so reconciliation can't resurrect it, and broadcast the catalog.

@@ -151,6 +151,12 @@ impl Registry {
         self.resolve_where(|r| r.caller == session || r.target == ConfirmTarget::Session(session))
     }
 
+    /// Resolve every pending prompt `session` asked for as [`ConfirmOutcome::TargetGone`]: the
+    /// caller was stopped. Prompts that only target it stay pending.
+    pub fn caller_stopped(&mut self, session: SessionId) -> Vec<DaemonMsg> {
+        self.resolve_where(|r| r.caller == session)
+    }
+
     /// Resolve every pending prompt whose target is `project`'s worktree `dir_name` as
     /// [`ConfirmOutcome::TargetGone`], returning the withdrawals to broadcast.
     pub fn worktree_gone(&mut self, project: &std::path::Path, dir_name: &str) -> Vec<DaemonMsg> {

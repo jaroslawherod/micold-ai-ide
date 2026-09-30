@@ -99,7 +99,12 @@ impl Fixture {
                 s.lifecycle = SessionLifecycle::InterruptedResumable;
                 s
             },
-            session(sid(IN_C), Some("c"), TerminalMode::Regular, AiCli::ClaudeCode),
+            session(
+                sid(IN_C),
+                Some("c"),
+                TerminalMode::Regular,
+                AiCli::ClaudeCode,
+            ),
         ];
         let state = state_over(
             vec![(project.path().to_path_buf(), true, sessions)],
@@ -141,10 +146,6 @@ impl Fixture {
             .as_str()
             .unwrap()
             .to_string()
-    }
-
-    async fn call_as(&self, caller: u128, tool: &str, args: Value) -> Value {
-        call_tool(self.addr, &credential(&self.state, sid(caller)), tool, args).await
     }
 
     fn project(&self) -> &std::path::Path {
@@ -435,8 +436,11 @@ fn visible_text(pty: &micold_daemon::supervisor::PtySession) -> String {
     out
 }
 
-async fn screen_shows(pty: &micold_daemon::supervisor::PtySession, pred: impl Fn(&str) -> bool) -> bool {
-    for _ in 0..100 {
+async fn screen_shows(
+    pty: &micold_daemon::supervisor::PtySession,
+    pred: impl Fn(&str) -> bool,
+) -> bool {
+    for _ in 0..300 {
         if pred(&visible_text(pty)) {
             return true;
         }
@@ -473,7 +477,11 @@ async fn an_allowed_stop_session_ends_it_shows_idle_everywhere_and_it_stays_resu
         Some(sid(IDLE)),
         "a stopped session keeps its credential"
     );
-    assert_eq!(f.start(IDLE).await["lifecycle"], "running", "it starts again");
+    assert_eq!(
+        f.start(IDLE).await["lifecycle"],
+        "running",
+        "it starts again"
+    );
 }
 
 /// U186 (FR-012a, assumption A-5): stopping an idle session changes nothing and asks nobody.
@@ -495,10 +503,16 @@ async fn an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running() {
     let f = Fixture::new().await;
     f.start(IDLE).await;
     let pty = f.state.primary_pty(sid(IDLE)).expect("running");
+    // The user's shell may take a while to read its startup files; wait until it runs commands.
+    pty.write_input(b"echo ready-$((40+2))\r").unwrap();
+    assert!(
+        screen_shows(&pty, |s| s.contains("ready-42")).await,
+        "the shell runs commands:\n{}",
+        visible_text(&pty)
+    );
     pty.write_input(b"stty -isig -icanon; dd bs=1 count=1 2>/dev/null | od -An -tx1\r")
         .unwrap();
-    assert!(screen_shows(&pty, |s| s.contains("od -An -tx1")).await);
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
     let asked = answering_window(&f.state, true);
 
     let out = f.ok(CALLER, "interrupt_session", target(IDLE)).await;
@@ -506,7 +520,7 @@ async fn an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running() {
     assert_eq!(out, json!({}));
     assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
     assert!(
-        screen_shows(&pty, |s| s.lines().any(|l| l.trim() == "03")).await,
+        screen_shows(&pty, |s| s.lines().any(|l| l.trim_end().ends_with(" 03"))).await,
         "0x03 reached the terminal:\n{}",
         visible_text(&pty)
     );
@@ -549,7 +563,10 @@ async fn delete_worktree_with_live_sessions_and_no_stop_sessions_is_a_conflict_n
     assert_eq!(asked.load(Ordering::SeqCst), 0, "no prompt for a conflict");
     assert!(f.worktree_dir("c").is_dir(), "the worktree is still there");
     assert!(f.has_branch("c"), "its branch is still there");
-    assert!(f.state.live_session(sid(IN_C)).is_some(), "its session runs");
+    assert!(
+        f.state.live_session(sid(IN_C)).is_some(),
+        "its session runs"
+    );
     assert!(f.worktree_refs().await.contains(&"c".to_string()));
 }
 
@@ -575,7 +592,10 @@ async fn an_allowed_delete_worktree_stops_its_sessions_and_removes_it_and_its_br
     assert_eq!(out["branch_deleted"], true, "{out}");
     assert_eq!(out["leftovers"], json!([]), "{out}");
     assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
-    assert!(f.state.live_session(sid(IN_C)).is_none(), "its session stopped");
+    assert!(
+        f.state.live_session(sid(IN_C)).is_none(),
+        "its session stopped"
+    );
     assert!(!f.worktree_dir("c").exists(), "the worktree is gone");
     assert!(!f.has_branch("c"), "its branch is gone");
     assert!(!f.worktree_refs().await.contains(&"c".to_string()));
@@ -726,7 +746,11 @@ async fn self_targets_are_refused_without_a_prompt() {
     for (tool, args, category) in [
         ("stop_session", target(CALLER), "refused_by_policy"),
         ("delete_session", target(CALLER), "refused_by_policy"),
-        ("delete_worktree", json!({"worktree": "b"}), "refused_by_policy"),
+        (
+            "delete_worktree",
+            json!({"worktree": "b"}),
+            "refused_by_policy",
+        ),
         (
             "delete_worktree",
             json!({"worktree": "b", "stop_sessions": true}),
@@ -816,7 +840,9 @@ async fn the_protocol_session_stop_ends_the_processes_and_broadcasts_idle() {
     let mut client = connect(&f.state).await;
 
     client
-        .send(Frame::Control(ClientMsg::SessionStop { session: sid(IDLE) }))
+        .send(Frame::Control(ClientMsg::SessionStop {
+            session: sid(IDLE),
+        }))
         .await
         .unwrap();
 
