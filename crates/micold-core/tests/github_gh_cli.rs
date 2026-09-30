@@ -36,6 +36,8 @@ enum Then {
     /// Print a SAML-refused answer on stdout and the same refusal on stderr, and exit 1, as `gh`
     /// does for an organization that enforces SAML.
     SamlRefused,
+    /// Print a repository NOT_FOUND answer, nothing on stderr, and exit 1.
+    ListNotFound,
     /// Print an unknown failure to stderr, nothing on stdout, and exit 1.
     FailWithoutJson,
 }
@@ -52,6 +54,7 @@ fn copy_fixtures(dir: &Path) {
         ("not_logged_in.stderr", "login.stderr"),
         ("search_pr_number.json", "partial.json"),
         ("saml.stderr", "saml.stderr"),
+        ("list_not_found.json", "not_found.json"),
         ("unknown.stderr", "unknown.stderr"),
     ] {
         std::fs::copy(fixture(from), dir.join(to)).unwrap();
@@ -71,6 +74,7 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::NotLoggedIn => "cat \"$dir/login.stderr\" >&2; exit 4",
         Then::PartialSearch => "cat \"$dir/partial.json\"; exit 1",
         Then::SamlRefused => "cat \"$dir/saml.json\"; cat \"$dir/saml.stderr\" >&2; exit 1",
+        Then::ListNotFound => "cat \"$dir/not_found.json\"; exit 1",
         Then::FailWithoutJson => "cat \"$dir/unknown.stderr\" >&2; exit 1",
     };
     let script = format!(
@@ -103,6 +107,7 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::Hang => "ping -n 6 127.0.0.1 >nul",
         Then::NotLoggedIn => "type \"%~dp0login.stderr\" 1>&2\r\nexit /b 4",
         Then::PartialSearch => "type \"%~dp0partial.json\"\r\nexit /b 1",
+        Then::ListNotFound => "type \"%~dp0not_found.json\"\r\nexit /b 1",
         Then::SamlRefused => {
             "type \"%~dp0saml.json\"\r\ntype \"%~dp0saml.stderr\" 1>&2\r\nexit /b 1"
         }
@@ -245,5 +250,11 @@ fn a_partial_response_is_parsed() {
     // type does not: FORBIDDEN alone would read as `Other`, stderr says SAML (review A #2).
     let dir = tempfile::tempdir().unwrap();
     let listed = GhCli::new(stub(dir.path(), Then::SamlRefused)).list_open(&repo(), None);
+    assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
+
+    // An error the answer itself types exactly is kept, even when stderr says nothing (review A
+    // round 2 #3).
+    let dir = tempfile::tempdir().unwrap();
+    let listed = GhCli::new(stub(dir.path(), Then::ListNotFound)).list_open(&repo(), None);
     assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
 }

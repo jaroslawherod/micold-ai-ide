@@ -876,8 +876,9 @@ impl GhCli {
     ///
     /// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
     /// good search hits, so an answer `parse` accepts is used whatever the exit status
-    /// (contracts/github-issue-source.md §3). An answer it refuses is classified from the exit
-    /// status and stderr, which name what GraphQL's error types do not (SAML, missing scopes).
+    /// (contracts/github-issue-source.md §3), and so is an error it types exactly. An answer it
+    /// cannot type is classified from the exit status and stderr, which name what GraphQL's error
+    /// types do not (SAML, missing scopes).
     fn run<T>(
         &self,
         args: Vec<String>,
@@ -903,9 +904,12 @@ impl GhCli {
             crate::process::RunOutcome::Exited {
                 code: 0, stdout, ..
             } => parse(stdout),
-            crate::process::RunOutcome::Exited { stdout, .. } => {
-                parse(stdout).map_err(|_| classify(&outcome))
-            }
+            // An error the answer types exactly (NOT_FOUND, RATE_LIMITED) stands; one it only
+            // names (`Other`) is classified from stderr, which knows SAML and scope refusals.
+            crate::process::RunOutcome::Exited { stdout, .. } => match parse(stdout) {
+                Err(IssueLoadError::Other(_)) => Err(classify(&outcome)),
+                answer => answer,
+            },
             _ => Err(classify(&outcome)),
         }
     }

@@ -858,9 +858,11 @@ fn whitespace_alone_does_not_search_again() {
     );
 }
 
-/// U110 — a debounce that ends while a create is running starts no search (review A #7).
+/// U110 — a debounce that ends while a create is running still searches: the keystroke was the
+/// named event, and a search left pending would never run once the form is back to editing
+/// (review A round 2 #1, superseding round 1 #7).
 #[test]
-fn a_search_does_not_start_while_creating() {
+fn a_search_due_while_creating_is_not_left_pending() {
     let mut state = capped();
     query(&mut state, "crash");
     let seq = pending_seq(&state);
@@ -869,5 +871,5 @@ fn a_search_does_not_start_while_creating() {
         Msg::CreateStarted(micold_core::worktree::CreateMode::default()),
     );
     send(&mut state, Msg::IssueSearchDue { seq });
-    assert_eq!(search(&state), SearchState::Pending { seq });
+    assert_eq!(search(&state), SearchState::Searching { seq });
 }
