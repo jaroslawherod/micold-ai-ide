@@ -639,3 +639,20 @@ failed before the implementation.
 - notes: A18 checks the draft the page renders plus that the view builds; what the rows *look* like
   is the layout fixture's and quickstart §B12's.
 - commit: the commit that adds this entry
+
+## Cycle 27: U92 (extended), A21/A22 rework — M5 review A round 1 and the gate
+
+- test: `crates/micold-client/tests/features_settings.rs::issue_mapping::an_invalid_mapping_refuses_the_save`
+  gains two assertions: the duplicate's message names the label it repeats; a saved label is trimmed.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings issue_mapping` ->
+  5 passed, 1 failed: `:616:9 the message names the label it repeats …: "Entry 1 already maps this label."`;
+  after the message fix, `:634:9 left: [… "bug" …, LabelTypeEntry { label: " defect ", … }] right: [… "defect" …]`.
+- green: `“{label}” is already mapped above.` (review A #3); `validate` writes labels trimmed (#2)
+  -> `features_settings` 60 passed.
+- refactor: `edit`'s doc comment moved back above `fn edit` (#1); the page's icon buttons wrapped in
+  `Tooltip` (#4); covered state's message updated, `layout_snapshot.txt` regenerated.
+- notes: the gate's `no_concrete_implementations` refused `JsonFileSettingsStore` in `main_tests.rs`
+  (only the shell may name a real implementation). A18–A23 now use `FakeSettingsStore`; A21 reads
+  back what was written through its JSON form, A22 asserts no save; the file round trip itself is
+  `micold-core/tests/settings_issue_mapping.rs` (U80). `--bin micold-ai-ide` 301 passed.
+- commit: the commit that adds this entry

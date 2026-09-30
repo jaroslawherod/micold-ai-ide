@@ -575,7 +575,17 @@ impl SettingsDraft {
                 placement: self.daemon.placement,
                 sandbox: profile,
             },
-            issue_label_types: self.github.entries.clone(),
+            // Stored trimmed: the spaces around a label are not part of it (they are ignored when it
+            // is matched and compared), so they are not written back.
+            issue_label_types: self
+                .github
+                .entries
+                .iter()
+                .map(|entry| LabelTypeEntry {
+                    label: entry.label.trim().to_string(),
+                    type_: entry.type_,
+                })
+                .collect(),
         })
     }
 
@@ -586,9 +596,11 @@ impl SettingsDraft {
             section: SettingsSection::GithubIssues,
             message: match error.kind {
                 MappingErrorKind::Blank => "Enter a label, or remove this entry.".to_string(),
-                MappingErrorKind::Duplicate { of } => {
-                    format!("Entry {} already maps this label.", of + 1)
-                }
+                // Named by the label it repeats: the rows carry no numbers to point at.
+                MappingErrorKind::Duplicate { of } => format!(
+                    "“{}” is already mapped above.",
+                    self.github.entries[of].label.trim()
+                ),
             },
         })
     }
@@ -1249,11 +1261,6 @@ pub fn storage_limit_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.storage_mib = text);
 }
 
-/// Apply an edit to the open draft, if there is one, and clear the pending error.
-///
-/// Every field edit did these two things and the second was easy to forget: a stale validation
-/// error left beside a field the user has since corrected is the form telling them they are wrong
-/// after they have fixed it. One place, so a new field cannot omit it.
 /// GitHub issues: one edit to the mapping (feature 034, FR-018). An index past the end — a
 /// message from a row that is gone — changes nothing.
 fn edit_mapping(state: &mut crate::app::State, change: impl FnOnce(&mut Vec<LabelTypeEntry>)) {
@@ -1272,6 +1279,11 @@ fn move_entry(entries: &mut [LabelTypeEntry], index: usize, direction: Direction
     }
 }
 
+/// Apply an edit to the open draft, if there is one, and clear the pending error.
+///
+/// Every field edit did these two things and the second was easy to forget: a stale validation
+/// error left beside a field the user has since corrected is the form telling them they are wrong
+/// after they have fixed it. One place, so a new field cannot omit it.
 fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) {
     if let Some(draft) = &mut state.settings.settings_draft {
         change(draft);

@@ -613,10 +613,15 @@ mod issue_mapping {
             (FieldId::IssueMappingLabel(1), SettingsSection::GithubIssues),
             "the duplicate is reported on the later entry (AS5, FR-019)"
         );
+        assert!(
+            error.message.contains("bug"),
+            "the message names the label it repeats, since the rows carry no numbers: {:?}",
+            error.message
+        );
 
         update(
             &mut state,
-            Msg::IssueMappingLabelChanged(1, "defect".into()),
+            Msg::IssueMappingLabelChanged(1, " defect ".into()),
         );
         let saved = state
             .settings
@@ -632,7 +637,7 @@ mod issue_mapping {
                 entry("bug", ConventionalType::Fix),
                 entry("defect", ConventionalType::Feat)
             ],
-            "a valid save writes the mapping in order (AS4, FR-020)"
+            "a valid save writes the mapping in order, labels trimmed (AS4, FR-020)"
         );
     }
 }
