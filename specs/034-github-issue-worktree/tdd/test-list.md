@@ -40,12 +40,12 @@ the repository can test without a display and without the network. The rendered 
 | A15 | A mapping entry `Bug` matches an issue label `bug` | US2-5, FR-013 | example | DONE | `main_tests.rs::issue_label_matching_ignores_case` |
 | A16 | With a type selected, picking an issue carrying a mapped label replaces it | US2-6, FR-014 | example | DONE | `main_tests.rs::issue_a_mapped_label_replaces_the_selected_type` |
 | A17 | An issue row's text includes its labels | US2-7, FR-004 | example | DONE | `main_tests.rs::issue_rows_show_labels` |
-| A18 | Opening Settings → GitHub issues shows the stored mapping as ordered label → type entries | US3-1, FR-018 | example | TODO | `main_tests.rs::issue_settings_shows_the_mapping` |
-| A19 | Adding `defect → fix` and saving, then picking a `defect` issue in a project selects `fix` without restart | US3-2, FR-016, SC-005 | example | TODO | `main_tests.rs::issue_an_added_entry_types_the_next_pick` |
-| A20 | Changing, removing and reordering entries then saving types the next pick by the new mapping | US3-3, FR-017, FR-018 | example | TODO | `main_tests.rs::issue_edited_mapping_types_the_next_pick` |
-| A21 | A saved mapping is read back from `settings.json` by a fresh store (restart) | US3-4, FR-020 | example | TODO | `main_tests.rs::issue_the_mapping_survives_a_restart` |
-| A22 | A blank label, or `Bug` beside `bug`, refuses the save with an error on that entry and the file is unchanged | US3-5, FR-019 | example | TODO | `main_tests.rs::issue_an_invalid_mapping_is_not_saved` |
-| A23 | Never edited → the default three entries are shown; after edits, Restore defaults returns them | US3-6, FR-021, FR-018 | example | TODO | `main_tests.rs::issue_restore_defaults_returns_the_default_mapping` |
+| A18 | Opening Settings → GitHub issues shows the stored mapping as ordered label → type entries | US3-1, FR-018 | example | DONE | `main_tests.rs::issue_settings_shows_the_mapping` |
+| A19 | Adding `defect → fix` and saving, then picking a `defect` issue in a project selects `fix` without restart | US3-2, FR-016, SC-005 | example | DONE | `main_tests.rs::issue_an_added_entry_types_the_next_pick` |
+| A20 | Changing, removing and reordering entries then saving types the next pick by the new mapping | US3-3, FR-017, FR-018 | example | DONE | `main_tests.rs::issue_edited_mapping_types_the_next_pick` |
+| A21 | A saved mapping is read back from `settings.json` by a fresh store (restart) | US3-4, FR-020 | example | DONE | `main_tests.rs::issue_the_mapping_survives_a_restart` |
+| A22 | A blank label, or `Bug` beside `bug`, refuses the save with an error on that entry and the file is unchanged | US3-5, FR-019 | example | DONE | `main_tests.rs::issue_an_invalid_mapping_is_not_saved` |
+| A23 | Never edited → the default three entries are shown; after edits, Restore defaults returns them | US3-6, FR-021, FR-018 | example | DONE | `main_tests.rs::issue_restore_defaults_returns_the_default_mapping` |
 
 ## Inner loop: unit behaviors
 

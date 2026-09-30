@@ -19,6 +19,7 @@
 pub(crate) mod appearance;
 pub(crate) mod daemon;
 pub(crate) mod environment;
+pub(crate) mod github;
 pub(crate) mod terminal;
 
 use crate::app::Message;
