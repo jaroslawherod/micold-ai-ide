@@ -869,10 +869,17 @@ impl Catalog {
 
     /// Record that `id` was stopped on request (feature 034, FR-009): → `Idle`, record and
     /// conversation kept, no auto-restart. Lifecycle is not persisted (S3), so nothing is written.
-    /// Returns the owning project, or `None` for an unknown session.
+    /// Returns the owning project, or `None` for an unknown or archived (deleted) session. A
+    /// `Failed` session keeps its state and reason: it has no process, and the reason is what the
+    /// client shows.
     pub fn mark_session_stopped(&mut self, id: SessionId) -> Option<PathBuf> {
         let (project, session) = self.workspace.find_session_mut(id)?;
-        session.lifecycle = SessionLifecycle::Idle;
+        if session.archived {
+            return None;
+        }
+        if !matches!(session.lifecycle, SessionLifecycle::Failed { .. }) {
+            session.lifecycle = SessionLifecycle::Idle;
+        }
         Some(project)
     }
 

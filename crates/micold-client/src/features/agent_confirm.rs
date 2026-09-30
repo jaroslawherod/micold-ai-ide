@@ -67,6 +67,8 @@ pub struct State {
     /// Prompts this window declined by dismissing the dialog, not yet sent. The shell drains it
     /// after every message.
     pub declined: Vec<u64>,
+    /// How deep `app::State::update` is nested; held prompts are released only at depth 0.
+    pub update_depth: u32,
 }
 
 impl State {
@@ -103,6 +105,8 @@ pub enum Msg {
     /// The dialog was dismissed (Escape, scrim, or another dialog opening): the shown prompt is
     /// declined.
     Dismissed,
+    /// The connection to the service was lost: every prompt it sent is void, and none is declined.
+    Disconnected,
 }
 
 /// The dialog that asks, as a floating surface.
@@ -137,10 +141,17 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     match msg {
         Msg::Requested(prompt) => requested(state, prompt),
         Msg::Withdrawn(id) | Msg::Answered { id, .. } => forget(state, id),
+        Msg::Disconnected => disconnected(state),
         Msg::Dismissed => {
             if let Some(id) = state.agent_confirm.shown().map(|p| p.id) {
                 state.agent_confirm.declined.push(id);
                 forget(state, id);
+                // The next prompt waits for the root's `release`: another dialog opening over
+                // this one closes every open dialog in a loop, and an unheld next prompt would
+                // be shown and declined in turn without the user ever seeing it.
+                if !state.agent_confirm.pending.is_empty() {
+                    state.agent_confirm.held = true;
+                }
             }
         }
     }
@@ -172,6 +183,15 @@ pub fn release(state: &mut crate::app::State) {
         // Opening a modal closes the lightweight popovers (FR-012), as `clear_for_dialog` does.
         crate::overlay::registry::close_popovers(state);
     }
+}
+
+/// The connection to the service was lost: every prompt it sent is void. The service withdraws
+/// them on its side (the window is gone), and after a restart its ids start again, so a stale
+/// prompt kept here could be answered for a different request. Nothing is declined.
+fn disconnected(state: &mut crate::app::State) {
+    state.agent_confirm.pending.clear();
+    state.agent_confirm.declined.clear();
+    state.agent_confirm.held = false;
 }
 
 /// Drop `id`; an id this window does not hold changes nothing.

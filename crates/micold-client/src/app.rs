@@ -410,6 +410,19 @@ impl State {
 
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
+        // Feature 034: an agent's prompt that arrived while another dialog was open opens as soon
+        // as that dialog has closed, whichever message closed it. Only once the outermost message
+        // is done: a reducer closing dialogs one by one re-enters `update`, and releasing the next
+        // prompt in between would show it only to have that same loop dismiss (decline) it.
+        self.agent_confirm.update_depth += 1;
+        self.reduce(message);
+        self.agent_confirm.update_depth -= 1;
+        if self.agent_confirm.update_depth == 0 {
+            crate::features::agent_confirm::release(self);
+        }
+    }
+
+    fn reduce(&mut self, message: Message) {
         match message {
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
@@ -476,9 +489,6 @@ impl State {
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
         }
-        // Feature 034: an agent's prompt that arrived while another dialog was open opens as soon
-        // as that dialog has closed, whichever message closed it.
-        crate::features::agent_confirm::release(self);
     }
 
     /// The effective sidebar width in pixels: the user's chosen width (clamped), or the

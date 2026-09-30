@@ -72,6 +72,7 @@ deliverable (tasks.md Notes).
 | M4 | A (code-review high) | 1 | d60651b2f4fd809dee2612cd097776c8547cdd48:ca68d3837395b780eb1ccda1f1cf3b538d44db9f | CHANGES: F1 BLOCKER fmt (fixed), F2 MAJOR failed start answered success (fixed: service_error with the recorded reason), F3 MINOR fixed, F4/F5 MINOR declined |
 | M4 | A (sonnet re-review) | 2 | 1882e06044be9f66f4b5bc1ad8b239d5237956bd:29e38622b60e5a1c9ff48c67d972cca5661cf3d1 | CLEAN |
 | M4 | B (conformance) | 1 | 0e3d56ded2112ab8955dac9cdbb45e6215c2396e:a18955332115b3bc228c76e32100a90b6f61e72c | CLEAN; Verify green (mcp_policy 12, mcp_tools_catalog 19, mcp_lifecycle_tools 8); 1 MINOR declined |
+| M5 | A (code-review high) | 1 | 9e8856e41323ac71ea4b9f4d660319f6e88e6832:ac6aaebe56cdac342e724f809336270975084e90 | CHANGES, 10 findings. Fixed: stale prompts dropped on disconnect (ids reused after a restart); another dialog opening declined every queued prompt (release now only at the outermost `update`); peer half-close no longer loses the reply; `stop_session` off the runtime thread; stopping an archived session is unknown and `Failed` keeps its reason; `delete_session` re-resolves its target after the answer; interrupt types Ctrl-C only into the process the user was asked about; 14-space typo in the conflict text. Declined: 3 (below) |
 
 ## Declined review findings
 
@@ -102,6 +103,9 @@ deliverable (tasks.md Notes).
 | M4 | B round 1 | F1: `rename_worktree`'s own `default` check is unreachable after `parse_call` | Kept as a defensive `invalid_input` rather than a panic on the request path; same wording as the parser's |
 | M4 | A round 1 | F5: the `starting` marker is not reference-counted, so of two concurrent starts the second runs without the overlay/held input | Pre-existing semantics of `begin_start`/`finish_start` shared with the sidebar's `SessionStart` (feature 026 T125); the tool already skips a session the snapshot shows `Starting`, and the per-session gate still serializes the spawns |
 | M1 | B round 2 | No endpoint-level test for `discard_body` before 401/404/405 | Optional per the reviewer; the unit test pins the bound, and loopback socket buffers absorb any test-sized body, so an endpoint test would pass with or without the drain |
+| M5 | A round 1 | `SessionStop` racing a start/respawn in flight: the spawn registers after the stop reported `Idle` | Pre-existing for the sidebar's stop (the old kill-only arm raced the same spawns); the start gate serialization is feature 026's. Follow-up below |
+| M5 | A round 1 | `headline` repeats `operation_phrase`'s delete-worktree suffixes | Cosmetic; two short phrases in one file |
+| M5 | A round 1 | `wire_operation` mirrors `policy::ConfirmedOp` onto the protocol's `ConfirmOperation` | Layering: the policy type is daemon-internal and the wire type is the versioned protocol; a `From` in core would tie the policy to protocol 18. `SendInput` arrives with M6 |
 
 ## Open escalation
 
@@ -120,5 +124,6 @@ None.
 - Windows: port `mcp_binding_spawn.rs` (unix `#!/bin/sh` stand-ins) to Windows stand-ins (M1 review B).
 - Daemon `SettingsSet`: apply all fields as one catalog update with one persist and one `SettingsChanged` (today each field short-circuits, persists and broadcasts separately, and a failed persist leaves memory changed). Pre-existing across all service-owned settings (M2 review A).
 - Flaky: `crates/micold-core/tests/github_gh_cli.rs::a_typed_error_stands_at_any_exit_status` failed once with `ToolMissing` (stub executable race) during the M4 gate; passed on rerun. Not this feature's code.
+- `SessionStop` (sidebar or `stop_session`) racing a start/respawn in flight: the spawn can register a live process after the stop reported `Idle` (M5 review A).
 - M5 merge note: M4 added `policy::ConfirmedOp` and `PolicyDecision::Confirm`; M5's prebuilt protocol `ConfirmOperation` should be mapped from it.
 - Client: a Settings save made while disconnected is overwritten by the daemon's `Welcome` on reconnect, for every service-owned field (M2 review A).

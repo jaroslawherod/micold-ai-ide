@@ -183,7 +183,8 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             // Its own task, so a panic in a tool answers `service_error` instead of dropping the
             // connection with no reply. If the agent hangs up first, a request still waiting for
             // the user's confirmation is abandoned (withdrawn, nothing done); a call already past
-            // that point finishes, and its reply has nowhere to go.
+            // that point finishes. The reply is still written: a client that only half-closed
+            // (shut its sending side) still reads it, and for a gone one the write just fails.
             let hangup = CancellationToken::new();
             let mut call = tokio::spawn(super::tools::call(
                 state,
@@ -196,8 +197,7 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
                 joined = &mut call => joined,
                 () = peer_closed(&mut stream) => {
                     hangup.cancel();
-                    let _ = call.await;
-                    return Ok(());
+                    call.await
                 }
             };
             let outcome = joined.unwrap_or_else(|_| {

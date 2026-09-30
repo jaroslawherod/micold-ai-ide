@@ -274,6 +274,10 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // filled are re-requested by the next scroll. Keeping the entries would suppress exactly
     // that request (`010` BUG-021).
     app.scrollback_inflight.clear();
+    // An agent's prompt is answered on the connection that asked it; the service has already
+    // dropped this window's prompts, and a restarted service reuses their ids (feature 034).
+    app.core
+        .update(Message::AgentConfirm(AgentConfirmMsg::Disconnected));
     for (_req, op) in app.pending_ops.drain() {
         let text = format!(
             "The session service disconnected before confirming the request to {} — \
