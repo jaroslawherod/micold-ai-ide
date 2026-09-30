@@ -931,7 +931,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted { origin } => script_path_check_started(state, origin),
-        Msg::ScriptPathChecked { seq, result, .. } => script_path_checked(state, seq, result),
+        Msg::ScriptPathChecked {
+            seq,
+            origin,
+            result,
+        } => return script_path_checked(state, seq, origin, result),
     }
     Vec::new()
 }
@@ -1170,23 +1174,59 @@ pub fn script_path_check_started(state: &mut crate::app::State, origin: CheckOri
     }
 }
 
-/// A check of the stored script path finished (spec 035, contracts S2–S4).
+/// A check of the stored script path finished (spec 035, contracts S2–S7).
 ///
 /// Shown only if it is the latest check started; an older one's answer is about a path the user
 /// may since have changed (S4). `None` is a blank path, which has nothing to show (FR-011).
+///
+/// A save's own check also answers for that save (S5–S7): Save closed Settings, so a path it left
+/// missing or unreadable is reported by a notification, whether or not a newer open has since taken
+/// over the page. Only the latest save's check reports, and only once.
 pub fn script_path_checked(
     state: &mut crate::app::State,
     seq: u64,
+    origin: CheckOrigin,
     result: Option<CheckedScriptPath>,
-) {
+) -> Vec<crate::features::Outcome> {
     let settings = &mut state.settings;
-    if seq != settings.script_check_seq {
-        return;
+    let reports = origin == CheckOrigin::Saved && settings.script_check_save_seq == Some(seq);
+    if reports {
+        settings.script_check_save_seq = None;
     }
-    settings.script_check = match result {
-        Some(checked) => ScriptCheck::Done(checked),
-        None => ScriptCheck::Idle,
-    };
+    let notice = result
+        .as_ref()
+        .filter(|_| reports)
+        .and_then(save_notice)
+        .map(crate::features::notifications::info);
+    if seq == settings.script_check_seq {
+        settings.script_check = match result {
+            Some(checked) => ScriptCheck::Done(checked),
+            None => ScriptCheck::Idle,
+        };
+    }
+    notice.into_iter().collect()
+}
+
+/// The notification a save posts when it leaves a path that is not a readable file (spec 035
+/// FR-004, research R6), or `None` when the check found nothing to report.
+///
+/// There is no "Settings saved." prefix: the notice is posted for the path, not for the write.
+pub fn save_notice(checked: &CheckedScriptPath) -> Option<String> {
+    use micold_core::script_path_check::ScriptPathState;
+    let path = &checked.path;
+    match checked.state {
+        ScriptPathState::NotFound { tilde: false } => Some(format!(
+            "The environment-include script was not found: {path}"
+        )),
+        ScriptPathState::NotFound { tilde: true } => Some(format!(
+            "The environment-include script was not found: {path} \
+             (~ is not expanded; use a full path)"
+        )),
+        ScriptPathState::NotReadable => Some(format!(
+            "The environment-include script is not a readable file: {path}"
+        )),
+        ScriptPathState::Present | ScriptPathState::Relative | ScriptPathState::Unchecked => None,
+    }
 }
 
 /// The form was dismissed without saving.
