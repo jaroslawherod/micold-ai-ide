@@ -147,14 +147,20 @@ pub fn on_issue_search_due(app: &mut App, seq: u64) -> Task<Message> {
 }
 
 /// A row of the shown results was picked: resolve it to its issue while the index and the results
-/// are both in hand.
+/// are both in hand, and read the label-to-type mapping as it is stored now — the default with no
+/// settings store (FR-014a).
 pub fn on_issue_row_picked(app: &mut App, index: usize) -> Task<Message> {
     if let Some(number) = app.core.worktree_form.issue_number_at(index) {
-        app.core
-            .update(Message::WorktreeForm(FormMsg::IssuePicked {
-                number,
-                mapping: Vec::new(),
-            }));
+        let mapping = app
+            .caps
+            .settings()
+            .map_or_else(micold_core::issue_types::default_mapping, |store| {
+                store.load().settings.issue_label_types
+            });
+        app.core.update(Message::WorktreeForm(FormMsg::IssuePicked {
+            number,
+            mapping,
+        }));
     }
     Task::none()
 }

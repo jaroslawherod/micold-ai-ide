@@ -68,7 +68,10 @@ fn case_and_no_match() {
         "the issue's label is trimmed and case-folded too"
     );
     assert_eq!(
-        type_for_labels(&issue_types::default_mapping(), &labels(&["question", "wontfix"])),
+        type_for_labels(
+            &issue_types::default_mapping(),
+            &labels(&["question", "wontfix"])
+        ),
         None,
         "no mapped label gives no type (AS3)"
     );
