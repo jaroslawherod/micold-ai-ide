@@ -6,7 +6,7 @@
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -84,6 +84,10 @@ pub struct DaemonState {
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
     /// `claude`'s lifecycle hooks at it.
     hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
+    /// The tool server (feature 034), set once at startup by `server::run`. Absent for tests that do
+    /// not bind one and when binding fails: AI-CLI sessions then start unbound, with the reason
+    /// logged (FR-005).
+    tool_server: std::sync::OnceLock<crate::mcp::server::ToolServer>,
     /// The shared secret this daemon requires of a client, if it was started with one (feature
     /// 027, research R1).
     ///
@@ -408,6 +412,7 @@ impl DaemonState {
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
+            tool_server: std::sync::OnceLock::new(),
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
         }
@@ -445,6 +450,17 @@ impl DaemonState {
     /// T045/T046). A no-op if already set.
     pub fn set_hooks(&self, receiver: crate::hooks::HookReceiver) {
         let _ = self.hooks.set(receiver);
+    }
+
+    /// Record the tool server at startup so AI-CLI spawns can be bound to it (feature 034). A no-op
+    /// if already set.
+    pub fn set_tool_server(&self, server: crate::mcp::server::ToolServer) {
+        let _ = self.tool_server.set(server);
+    }
+
+    /// The tool server, if one is running.
+    pub fn tool_server(&self) -> Option<&crate::mcp::server::ToolServer> {
+        self.tool_server.get()
     }
 
     /// The launch arguments — and, for Pi, the environment — that wire a session's activity
@@ -1151,6 +1167,30 @@ impl DaemonState {
         )
     }
 
+    /// Each of `project`'s sessions and the mode its pane is in (feature 034: the tools report a
+    /// Regular-terminal session as such). The wire summary does not carry `mode`, so the tools read
+    /// it here.
+    pub fn session_modes(&self, project: &Path) -> BTreeMap<SessionId, TerminalMode> {
+        let inner = self.lock();
+        inner
+            .catalog
+            .workspace()
+            .sessions
+            .get(project)
+            .map(|sessions| sessions.iter().map(|s| (s.id, s.mode)).collect())
+            .unwrap_or_default()
+    }
+
+    /// Discover `project`'s worktrees unless the cache already holds them (feature 034). The tools
+    /// answer from the same cache the sidebar's snapshot reads; this fills it when no client has
+    /// attached to the project since the service started. **Blocking**, like
+    /// [`Self::refresh_worktrees`].
+    pub fn ensure_worktrees(&self, project: &Path) {
+        if !self.lock().worktrees.contains_key(project) {
+            self.refresh_worktrees(project);
+        }
+    }
+
     /// Start showing `path` among `project`'s worktrees, persisting it (016 BUG-002, FR-027).
     pub fn include_worktree(&self, project: &Path, path: &Path) -> io::Result<()> {
         self.lock().catalog.include_worktree(project, path)
@@ -1513,9 +1553,25 @@ impl DaemonState {
         project: &Path,
         dir_name: &str,
     ) -> io::Result<Vec<Arc<PtySession>>> {
-        let mut inner = self.lock();
-        let ids = inner.catalog.archive_worktree_sessions(project, dir_name)?;
-        Ok(Self::remove_live_by_ids(&mut inner, ids))
+        let (ids, ptys) = {
+            let mut inner = self.lock();
+            let ids = inner.catalog.archive_worktree_sessions(project, dir_name)?;
+            let ptys = Self::remove_live_by_ids(&mut inner, ids.clone());
+            (ids, ptys)
+        };
+        self.revoke_tool_credentials(&ids);
+        Ok(ptys)
+    }
+
+    /// Withdraw the tool-server credentials and binding files of sessions that have left the
+    /// catalog (feature 034, FR-006). Deletes files, so it runs **outside** the state lock; every
+    /// path that archives a session comes through here once the archive is durable.
+    fn revoke_tool_credentials(&self, ids: &[SessionId]) {
+        if let Some(server) = self.tool_server() {
+            for id in ids {
+                server.revoke(*id);
+            }
+        }
     }
 
     /// Remove the given session ids from the live registry, returning **every** removed process
@@ -1562,10 +1618,15 @@ impl DaemonState {
     /// Forget a known project, dropping its discovery cache and returning its live primaries so the
     /// caller can `kill()` them outside the lock (T053, feature 014). A no-op for an unknown path.
     pub fn forget_project(&self, path: &Path) -> io::Result<Vec<Arc<PtySession>>> {
-        let mut inner = self.lock();
-        let ids = inner.catalog.forget_project(path)?;
-        inner.worktrees.remove(path);
-        Ok(Self::remove_live_by_ids(&mut inner, ids))
+        let (ids, ptys) = {
+            let mut inner = self.lock();
+            let ids = inner.catalog.forget_project(path)?;
+            inner.worktrees.remove(path);
+            let ptys = Self::remove_live_by_ids(&mut inner, ids.clone());
+            (ids, ptys)
+        };
+        self.revoke_tool_credentials(&ids);
+        Ok(ptys)
     }
 
     /// Rename a project's display name (validated by the caller), persisting (T053).
@@ -1580,9 +1641,13 @@ impl DaemonState {
         &self,
         session: SessionId,
     ) -> io::Result<(Option<PathBuf>, Vec<Arc<PtySession>>)> {
-        let mut inner = self.lock();
-        let owner = inner.catalog.archive_session(session)?;
-        let ptys = Self::remove_live_by_ids(&mut inner, vec![session]);
+        let (owner, ptys) = {
+            let mut inner = self.lock();
+            let owner = inner.catalog.archive_session(session)?;
+            let ptys = Self::remove_live_by_ids(&mut inner, vec![session]);
+            (owner, ptys)
+        };
+        self.revoke_tool_credentials(&[session]);
         Ok((owner, ptys))
     }
 
