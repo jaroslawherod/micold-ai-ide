@@ -55,7 +55,18 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M2 | code-review A #8 | `IssuesLoaded` carries `resolved_env`, shell data, through the reducer's `Msg` | T027 and contract §4 specify it: the snapshot resolved on the blocking thread reaches the shell's cache through the same message; the reducer ignores the field. |
 | M2 | code-review A #9 | A row pick round-trips through the shell (`IssueRowPicked` then `IssuePicked`) | T024/T027 specify it: the Typeahead reports a row, the shell resolves it with `issue_number_at`, the reducer only sees issue numbers. U105 covers the path. |
 | M2 | conformance B F3 / visual pass D1, D2 | Highlight after retyping, and the Issue field keeping the typed query after a pick | Parity with 021's branch picker, which the spec says to follow (FR-005): the same `rematch` re-seats the highlight and the same field keeps the query. A change belongs to both pickers, not to this one. |
+| M3 | code-review A #3 | Typed text is not escaped, so `repo:other/x` could pull another repository's issues | Every searched issue is ranked against the whole typed text before it is shown (invariant 5), and a row's text never contains the typed qualifier, so such a hit is dropped (A10 and U70 pin the ranking). Escaping would also change what GitHub matches for ordinary words. |
+| M3 | code-review A #5 | A 300 ms debounce still allows more than 30 searches a minute for slow typists | R9 fixes 300 ms; a rate-limit answer is `RateLimited` with Retry and the loaded matches stay. Superseded answers are discarded by seq (FR-007a). |
+| M3 | code-review A #8 (MINOR) | "No open issue matches." shows while the search is pending | Contract §2 fixes the empty text; "Searching GitHub…" shows under the field once the search runs. MINOR, not fixed. |
+| M3 | code-review A #9 | "Search beyond the loaded issues failed — Couldn't read issues: …" doubles the prefix | Contract §5 specifies exactly this: the same set of messages, prefixed. |
+| M3 | M1 conformance B F2 (revisited) | `parse_list_page`'s `errors[]` branch is reached only at exit 0 | Revisited with M3's partial-response rule: a non-zero exit's stdout is used only when the parser accepts it, otherwise stderr is classified, because stderr names SAML and scope refusals that GraphQL types as FORBIDDEN (review A #2, U111). The branch stays the exit-0 path; decline stands. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
+
+## Review rounds
+
+| Milestone | Review | Round | Snapshot | Verdict |
+|---|---|---|---|---|
+| M3 | A (code-review high) | 1 | 0b3a3df2:7c1231e2 | 10 findings: #1, #2, #4, #6, #7, #10 (doc, double parse) fixed (U107–U111); #3, #5, #8, #9 declined |
 
 ## Open escalation
 

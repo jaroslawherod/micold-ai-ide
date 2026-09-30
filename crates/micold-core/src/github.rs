@@ -874,10 +874,10 @@ impl GhCli {
 impl GhCli {
     /// Run `gh` with `args` and read its answer with `parse`.
     ///
-    /// Stdout is read whenever it is JSON with a `data` member, whatever the exit status: `gh`
-    /// exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside good
-    /// search hits (contracts/github-issue-source.md §3). Anything else is classified from the
-    /// exit status and stderr.
+    /// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
+    /// good search hits, so an answer `parse` accepts is used whatever the exit status
+    /// (contracts/github-issue-source.md §3). An answer it refuses is classified from the exit
+    /// status and stderr, which name what GraphQL's error types do not (SAML, missing scopes).
     fn run<T>(
         &self,
         args: Vec<String>,
@@ -898,21 +898,17 @@ impl GhCli {
         if let Some(dirs) = directories::BaseDirs::new() {
             cmd.current_dir(dirs.home_dir());
         }
-        match crate::process::run_bounded(cmd, self.timeout) {
-            crate::process::RunOutcome::Exited { code, stdout, .. }
-                if code == 0 || holds_graphql_data(&stdout) =>
-            {
-                parse(&stdout)
+        let outcome = crate::process::run_bounded(cmd, self.timeout);
+        match &outcome {
+            crate::process::RunOutcome::Exited {
+                code: 0, stdout, ..
+            } => parse(stdout),
+            crate::process::RunOutcome::Exited { stdout, .. } => {
+                parse(stdout).map_err(|_| classify(&outcome))
             }
-            outcome => Err(classify(&outcome)),
+            _ => Err(classify(&outcome)),
         }
     }
-}
-
-/// Whether `stdout` is a GraphQL answer (it has `data`, even `null`), so its `errors[]` say what
-/// went wrong more exactly than `gh`'s stderr does.
-fn holds_graphql_data(stdout: &[u8]) -> bool {
-    serde_json::from_slice::<serde_json::Value>(stdout).is_ok_and(|json| json.get("data").is_some())
 }
 
 impl IssueSource for GhCli {

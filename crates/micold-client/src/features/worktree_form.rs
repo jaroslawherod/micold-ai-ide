@@ -196,7 +196,7 @@ pub enum IssueList {
     Loaded {
         listing: IssueListing,
         gh: PathBuf,
-        /// Issues GitHub search found beyond the loaded ones. Empty until the search slice.
+        /// Issues GitHub search found beyond the loaded ones, none of them loaded (invariant 4).
         searched: Vec<Issue>,
         /// Where that search is.
         search: SearchState,
@@ -836,26 +836,36 @@ pub fn issue_retry(state: &mut crate::app::State) {
 
 /// The issue search text changed (FR-005). The held issues are re-ranked at once. When the list
 /// is capped and something is typed, a search beyond it waits out the debounce under a fresh seq,
-/// which makes any older search stale (FR-005a, FR-007a, invariant 6).
+/// which makes any older search stale (FR-005a, FR-007a, invariant 6). A change of surrounding
+/// whitespace alone keeps the search as it is; clearing the text forgets the searched issues.
 pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
     let next_seq = state.worktree_form.issue_request_seq + 1;
     let mut started = false;
     while_editing_unprompted(state, |form| {
+        // Whitespace around the text changes nothing GitHub would be asked (review A #6).
+        let same_search = form.issue_query.trim() == text.trim();
         form.issue_query = text;
         form.issue_list_open = true;
-        form.rematch_issues();
         let typed = !form.issue_query.trim().is_empty();
         if let IssueList::Loaded {
-            listing, search, ..
+            listing,
+            searched,
+            search,
+            ..
         } = &mut form.issues
         {
-            *search = if typed && !listing.complete {
+            if !typed {
+                // Nothing typed: the list is the loaded issues alone again.
+                searched.clear();
+                *search = SearchState::Idle;
+            } else if listing.complete {
+                *search = SearchState::Idle;
+            } else if !same_search {
                 started = true;
-                SearchState::Pending { seq: next_seq }
-            } else {
-                SearchState::Idle
-            };
+                *search = SearchState::Pending { seq: next_seq };
+            }
         }
+        form.rematch_issues();
     });
     if started {
         state.worktree_form.issue_request_seq = next_seq;
@@ -864,7 +874,8 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
 
 /// The debounce ran out: search, if this is still the latest keystroke's (research R9).
 pub fn issue_search_due(state: &mut crate::app::State, seq: u64) {
-    with_form(state, |form| {
+    // Not while a create runs or a prompt is up: GitHub is asked only for a form being edited.
+    while_editing_unprompted(state, |form| {
         if let IssueList::Loaded { search, .. } = &mut form.issues {
             if *search == (SearchState::Pending { seq }) {
                 *search = SearchState::Searching { seq };
@@ -902,7 +913,16 @@ pub fn issue_searched(
             }
             Err(error) => *search = SearchState::Failed { error },
         }
+        // The answer re-ranks the list under the keyboard: keep the highlight on its issue, so
+        // Enter picks what the user is looking at (review A #1).
+        let highlighted = form
+            .issue_highlight
+            .and_then(|row| form.issue_number_at(row));
         form.rematch_issues();
+        if let Some(number) = highlighted {
+            form.issue_highlight = (0..form.issue_matches.len())
+                .find(|row| form.issue_number_at(*row) == Some(number));
+        }
     });
 }
 
