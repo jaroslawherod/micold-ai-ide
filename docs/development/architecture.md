@@ -372,7 +372,7 @@ assembly point harder to express for a cost that does not exist.
 | `shell/env_include.rs` | a subprocess running the user's own script |
 | `shell/os_theme.rs` | the desktop's light/dark preference |
 | `shell/clipboard.rs` | the system clipboard |
-| `shell/issues.rs` | GitHub, through the user's own `gh` on the host (feature 034) |
+| `shell/issues.rs` | GitHub, through the user's own `gh` on the host, and the `RemoteList` ask that decides whether it may be reached — one conversation (feature 034) |
 
 **One module per external system, and never per feature** (FR-019a). The question the split answers
 is "what can a change to this one outside thing reach", so the module boundary follows the system,

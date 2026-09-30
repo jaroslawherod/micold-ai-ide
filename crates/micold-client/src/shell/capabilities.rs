@@ -73,7 +73,7 @@ use std::sync::Arc;
 use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
-use micold_core::github::{locate_gh, GhCli, HostOs, IssueSource, LocateInputs};
+use micold_core::github::{locate_gh_on_host, GhCli, IssueSource};
 use micold_core::script_path_check::{ScriptPathProbe, StdScriptPathProbe};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -104,16 +104,7 @@ pub struct Capabilities {
 /// Find `gh` on this machine: the include's `PATH`, this process's `PATH`, then the well-known
 /// install directories (contracts/github-issue-source.md §1).
 fn locate_gh_here(env_include_path: Option<&str>) -> Option<PathBuf> {
-    let process_path = std::env::var("PATH").unwrap_or_default();
-    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
-    locate_gh(&LocateInputs {
-        os: HostOs::current(),
-        env_include_path,
-        process_path: &process_path,
-        home: home.as_deref(),
-        env: &|name| std::env::var(name).ok(),
-        exists: &|path| path.is_file(),
-    })
+    locate_gh_on_host(env_include_path, &std::env::var("PATH").unwrap_or_default())
 }
 
 /// Locating `gh`, and building the issue source that runs it (feature 034).
