@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 5-close
-- **Next step**: Close unit: T096–T106 test remediation (two subagents), review, spec Closed, gate, close PR.
+- **Next step**: Merge the close PR (`docs(034): close the spec`), then the record PR.
 
 ## Pull requests
 
@@ -115,6 +115,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M6b | A (code-review high) | 1 | cf1bdc53:0f7fc572 | 5 findings: #1 MAJOR (stale SC-001 follow-up) fixed — reworded as carried forward with reason; #2–#5 MINOR (lavapipe chip blob, Settings description/scrollbar + lower rows, T065 record, M2 "Not run" pointer) fixed as evidence notes |
 | M6b | B (conformance) | 1 | cf1bdc53:0f7fc572 | CLEAN (2 MINOR: T065 record, stale SC-001 follow-up — both fixed with A's) |
 | M6b | A (code-review high), scoped | 2 | 0f7fc572:9027b284 | no BLOCKER/MAJOR; 2 MINOR (load-time figure only in ledger, blob cause stated as fact) fixed as wording; untracked-follow-up note left in *Follow-ups not done* |
+| close | A (diff review, sonnet) | 1 | aee542bf:18fec058 | no BLOCKER/MAJOR; 5 MINOR: `process_run_bounded` bound 500 ms → 2 s and QUIET → 1 s, stale cycle-log line numbers (R-C1, R-C3–R-C5, R-14) — fixed; `in_child` duplicated in two test files — kept (no shared test module in `micold-core/tests`); spec Status names the close PR — intended (phase 5 step 3). T101's 20x repeat found an ETXTBSY stub race (17/20) — fixed, 40/40 |
 
 ## Open escalation
 

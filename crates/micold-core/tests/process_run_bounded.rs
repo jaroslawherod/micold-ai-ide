@@ -19,8 +19,8 @@ const CHILD_MODE: &str = "MICOLD_RUN_BOUNDED_CHILD";
 const CHILD_MARKER: &str = "MICOLD_RUN_BOUNDED_MARKER";
 /// How often a beating child writes its heartbeat.
 const BEAT: Duration = Duration::from_millis(50);
-/// How long a heartbeat must stay unchanged before the child counts as dead: ten beats.
-const QUIET: Duration = Duration::from_millis(500);
+/// How long a heartbeat must stay unchanged before the child counts as dead: twenty beats.
+const QUIET: Duration = Duration::from_secs(1);
 
 /// 1 MiB: well over every OS's pipe buffer (64 KiB on Linux, less on macOS and Windows).
 const LARGE_STDOUT: usize = 1024 * 1024;
@@ -82,7 +82,9 @@ fn count(bytes: &[u8], of: u8) -> usize {
 fn a_child_past_the_bound_is_killed_and_reported() {
     let dir = tempfile::tempdir().unwrap();
     let marker = dir.path().join("marker");
-    let bound = Duration::from_millis(500);
+    // The child is a fresh copy of this test binary; 2 s gives its first beat room on a loaded
+    // host, since the marker can only appear before the kill.
+    let bound = Duration::from_secs(2);
     let mut cmd = child("beat");
     cmd.env(CHILD_MARKER, &marker);
 

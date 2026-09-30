@@ -684,7 +684,7 @@ failed before the implementation.
 ## Cycle R-C1: T096 — A4's preview comparison can fail (F1)
 
 - test: `main_tests.rs::issue_source::issue_a_pick_fills_ticket_and_name` — the type is chosen after the pick (as A5), the preview must be `Ok` with branch `fix/42_crash-when-opening-empty-project`, then equal the `BranchSource::New` preview.
-- red: mutant `preview()` returns `Err(NamingError::NoType)` for `BranchSource::Issue` (the old A4 passed on it: both sides were `Err(NoType)`) -> `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue_a_pick_fills_ticket_and_name` 1 failed at `main_tests.rs:5475` ("a picked issue with a type previews a branch").
+- red: mutant `preview()` returns `Err(NamingError::NoType)` for `BranchSource::Issue` (the old A4 passed on it: both sides were `Err(NoType)`) -> `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue_a_pick_fills_ticket_and_name` 1 failed ("a picked issue with a type previews a branch").
 - green: mutant restored -> 1 passed.
 - notes: tests-only; no production change.
 
@@ -697,19 +697,19 @@ failed before the implementation.
 ## Cycle R-C3: T099 — A1, A2, A3, U85, U53 and `capped_rig` assert what they claim (F8)
 
 - test: A1 asserts `Available(o/r)`, the caption naming `o/r`, and that `SourceChanged(Issue)` is accepted; A2 asserts every row's full `row_text` in order; A3 asserts Down lands on row 0, row 0 is `#42`, and Enter fills ticket `42` and #42's title (no oracle derived from `issue_number_at`); `capped_rig` asserts `Loaded { listing } if !listing.complete`; U85 sends three shell messages after the store save before reading the type; U53 asserts the re-seated highlight is `Some(0)` on `#7`.
-- red (one mutant each, restored after): reducer refuses `Issue` while available -> A1 failed `left: New right: Issue` (old A1 passed it); core `row_text` drops labels -> A2 failed on the row list (old A2 passed it); `issue_number_at` indexes the held list, not the matches -> A3 failed `left: [7] right: [108]` (the old A3 also failed there, at its `documentation` line: its Down/Enter half could not); load forced to `Err(Offline)` -> `issue_search_is_debounced` failed in `capped_rig` at `main_tests.rs:5695` (the old guard passed on `Failed`); a keystroke re-types the picked issue from the store -> U85 failed `left: Some(Perf) right: Some(Chore)` (old passed); `rematch_issues` clears a highlight past the end -> U53 failed `left: None right: Some(0)` (old `is_none_or` passed).
+- red (one mutant each, restored after): reducer refuses `Issue` while available -> A1 failed `left: New right: Issue` (old A1 passed it); core `row_text` drops labels -> A2 failed on the row list (old A2 passed it); `issue_number_at` indexes the held list, not the matches -> A3 failed `left: [7] right: [108]` (the old A3 also failed there, at its `documentation` line: its Down/Enter half could not); load forced to `Err(Offline)` -> `issue_search_is_debounced` failed in `capped_rig` (the old guard passed on `Failed`); a keystroke re-types the picked issue from the store -> U85 failed `left: Some(Perf) right: Some(Chore)` (old passed); `rematch_issues` clears a highlight past the end -> U53 failed `left: None right: Some(0)` (old `is_none_or` passed).
 - green: `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state --bin micold-ai-ide issue` -> bin 34 passed, `issue_source_state` 40 passed.
 
 ## Cycle R-C4: T100 — the unit and shell layers mutation found missing (F3; M7, M13)
 
 - test: `issue_source_state.rs::a_pick_replaces_typed_ticket_and_name` (U121) and `main_tests.rs::issue_source::issue_typing_on_a_complete_list_never_searches` (U120).
-- red: M7 (a pick keeps an existing ticket) -> U121 failed `left: "1" right: "7"`; M13 (`issue_query_changed` searches on a complete list too) -> U120 failed at `main_tests.rs:5768`, a debounce was scheduled.
+- red: M7 (a pick keeps an existing ticket) -> U121 failed `left: "1" right: "7"`; M13 (`issue_query_changed` searches on a complete list too) -> U120 failed: a debounce was scheduled.
 - green: restored -> both pass.
 
 ## Cycle R-C5: T104 (client half) — FR-003 behaviour pin; the scan fails on read errors (F12)
 
 - test: `main_tests.rs::issue_source::issue_opening_the_form_loads_no_issues` (U122): open, render, switch to Existing and New, type — no `gh` located, no source built, no load or search, `issues == NotRequested`. `issues_are_requested_only_on_named_events.rs` walks with `unwrap_or_else(panic!)` on `read_dir`, entries and `read_to_string`.
-- red: `on_source_changed` loads on any source change -> U122 failed at `main_tests.rs:5646` (a `gh` lookup); the scan pointed at a missing `src-missing` dir -> both scan tests panic `cannot list …` at `:86` (the old walk returned silently and `issues_are_fetched_only_from_the_named_events` passed).
+- red: `on_source_changed` loads on any source change -> U122 failed on its first check (a `gh` lookup was made); the scan pointed at a missing `src-missing` dir -> both scan tests panic `cannot list …` (the old walk returned silently and `issues_are_fetched_only_from_the_named_events` passed).
 - green: restored -> `cargo test -p micold-client --test issues_are_requested_only_on_named_events` 2 passed.
 
 ## Cycle R-C6: T105 (client half) — messages, eager-test splits, the shipped fake (F14, F16)
@@ -744,8 +744,8 @@ failed before the implementation.
 
 ## Cycle R-14: T104 (core half) — no fixed sleep in `process_run_bounded` (F13)
 
-- test: `a_child_past_the_bound_is_killed_and_reported` uses a heartbeat child and polls until the heartbeat stays unchanged for 500 ms (10 s deadline) instead of sleeping 4 s.
-- red: `kill_process_group(pid)` removed -> failed at `process_run_bounded.rs:97` after the deadline.
+- test: `a_child_past_the_bound_is_killed_and_reported` uses a heartbeat child and polls until the heartbeat stays unchanged for 1 s (10 s deadline) instead of sleeping 4 s; the bound is 2 s so the child's first beat lands before the kill on a loaded host (close review).
+- red: `kill_process_group(pid)` removed -> failed on "the runner returns within bound + 1 s" (took about 20 s: the unkilled heartbeat child kept the pipes open).
 - green: restored -> `cargo test -p micold-core --test process_run_bounded` 5 passed.
 
 ## Cycle R-15: T105 (non-client half) — messages, splits, weak negatives (F14, F15, F17)
