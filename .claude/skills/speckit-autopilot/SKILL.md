@@ -31,7 +31,7 @@ phase file. Overview and diagrams for humans: [README.md](README.md).
 
 | Argument | Start at |
 |---|---|
-| `resume` | Run `scripts/autopilot/resume.sh` (see *Resuming*) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
+| `resume` | Follow [references/resume.md](references/resume.md) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
 | `bug: …`, or text describing broken behaviour | Bug unit |
 | anything else | Spec unit |
 
@@ -39,25 +39,6 @@ First run `git fetch origin` and check the worktree is clean. The first unit cre
 [templates/autopilot-ledger.md](templates/autopilot-ledger.md): `autopilot.md` in the feature
 directory, or `bugs/BUG-<k>.autopilot.md` beside the BUG record. Its **Worktree branch** is the exact
 output of `git branch --show-current`; `resume` finds the ledger by it.
-
-### Resuming
-
-Run `scripts/autopilot/resume.sh`. It finds this worktree's ledger (working tree first, where an
-unpushed ledger is newest; then `origin/main`) and prints its phase, next step, open escalation, and
-GitHub's state for each recorded PR.
-
-| Exit | Meaning | Do |
-|---|---|---|
-| 0 | `LEDGER …` | Resume at the first unfinished step. `HANDOVER` lines: dispatch a unit of that phase to continue from the ledger's *Handover*. |
-| 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
-| 2 | `NONE` | Say there is no run to resume here, and stop. |
-| 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
-| 4 | `RECORD-PR-PENDING <ledger> <pr\|none>` | The run finished but its record PR never merged. Wait on and merge `<pr>`; on `none`, dispatch the record unit with the ledger's last PR and its merge SHA. Then run the handoff. |
-
-**When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
-whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.
-If a commit on `main` reverted it, escalate (category 6). A non-empty *Open escalation* means the
-question was never answered: ask it again, then dispatch a fresh unit of that phase with the answer.
 
 ## Phases and units
 
@@ -84,6 +65,7 @@ name. A unit keeps its model when continued with `SendMessage`.
 | Clarify round 2 and later, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
 | Bug unit when the report already names the root cause and the fix (which code, what change) | `"sonnet"` |
 | Record | `"haiku"` |
+| Helper: read a long CI log, gate log or report and return only its failures | `"haiku"` |
 
 A ledger from an older run has **Docs-only** instead of **Tier**: `yes` is `docs`, `no` is `full`.
 A cheaper unit that returns `FAILED` is retried on the session model, with the ledger's *Handover*
@@ -173,24 +155,7 @@ PRs, visual checks, or a choice between equivalent implementations. Handle those
 
 ## Handoff: the last message
 
-First dispatch the record unit with the last PR and its merge SHA. It closes the ledger and opens
-the record PR; wait on it and merge it as any other. It is not listed in the ledger, so pass it to
-the checks.
-
-Then run `scripts/autopilot/handoff-check.sh <ledger> <record-pr>`. It checks the tree is clean,
-every commit is on `origin/main` (by patch, since rebase-merge rewrites SHAs), and every PR reads
-`MERGED`. If it prints `NOT DONE`, report exactly what remains. Otherwise send this with a `PushNotification`:
-
-```
-✅ WORK COMPLETE — <NNN-feature>
-Delivered (all merged to main):
-  M1 #<pr> — <deliverable>        (a bug: BUG-<k> #<pr> — <what now works>)
-  M2 #<pr> — <deliverable>
-Decisions: <n> made by you, <m> resolved by me from repo evidence — see <ledger path>
-Follow-ups not done: <none | list>
-This worktree has no uncommitted work, no unpushed commits and no open PRs.
-👉 You can remove this worktree in micold IDE now — that also cleans up its branch.
-```
+When the last PR has merged, read [references/handoff.md](references/handoff.md) and follow it.
 
 ## Red flags: stop and re-read this skill
 
