@@ -552,11 +552,25 @@ impl DaemonState {
     /// after every other argument. A session that cannot be bound starts without them and logs one
     /// `info` line saying why (FR-005); nothing here ever fails the start. Writes the binding file,
     /// so it runs off the state lock like [`Self::activity_launch_for`].
-    fn tool_server_launch_for(&self, id: SessionId, spec: &LaunchSpec) -> Vec<OsString> {
-        match self.tool_server_binding(id, spec) {
+    ///
+    /// A `respawn` (supervision restarting a crashed process) is the same session continuing, so it
+    /// keeps what it started with whatever the toggle says now (FR-004). A start that ends unbound
+    /// withdraws any credential and file an earlier bound start of the session left behind.
+    fn tool_server_launch_for(
+        &self,
+        id: SessionId,
+        spec: &LaunchSpec,
+        respawn: bool,
+    ) -> Vec<OsString> {
+        match self.tool_server_binding(id, spec, respawn) {
             Ok(args) => args.into_iter().map(OsString::from).collect(),
             Err(reason) => {
                 tracing::info!(session = %id.0, "no tool server: {reason}");
+                if !respawn {
+                    if let Some(server) = self.tool_server() {
+                        server.revoke(id);
+                    }
+                }
                 Vec::new()
             }
         }
@@ -566,8 +580,9 @@ impl DaemonState {
         &self,
         id: SessionId,
         spec: &LaunchSpec,
+        respawn: bool,
     ) -> Result<Vec<String>, SkipReason> {
-        if !self.lock().catalog.tool_server_enabled() {
+        if !respawn && !self.lock().catalog.tool_server_enabled() {
             return Err(SkipReason::Disabled);
         }
         let provider = spec.provider.provider();
@@ -576,6 +591,9 @@ impl DaemonState {
             return Err(SkipReason::Unsupported(reason));
         }
         let server = self.tool_server().ok_or(SkipReason::ServerUnavailable)?;
+        if respawn && !server.is_bound(id) {
+            return Err(SkipReason::UnboundAtStart);
+        }
         // Where the user's own configuration lives, as the session will see it.
         let locations = ConfigLocations {
             home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
@@ -1995,7 +2013,7 @@ impl DaemonState {
                 // it to (feature 026, T016a).
                 let mut extra = self.activity_launch_for(id, &mut spec);
                 // Last of all, so no positional argument can follow it (contracts/binding.md §4).
-                extra.extend(self.tool_server_launch_for(id, &spec));
+                extra.extend(self.tool_server_launch_for(id, &spec, false));
                 PtySession::spawn_ai_cli(
                     id,
                     &spec,
@@ -2503,7 +2521,7 @@ impl DaemonState {
                     mode: LaunchMode::Resume,
                 };
                 let mut extra = self.activity_launch_for(id, &mut spec);
-                extra.extend(self.tool_server_launch_for(id, &spec));
+                extra.extend(self.tool_server_launch_for(id, &spec, true));
                 PtySession::spawn_ai_cli(id, &spec, scrollback, size, &extra, &self.terminal_colors)
             }
             TerminalMode::Regular => PtySession::spawn_shell(

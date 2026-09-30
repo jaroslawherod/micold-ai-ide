@@ -259,7 +259,7 @@ impl Catalog {
         Ok(clamped)
     }
 
-    /// Write the five service-owned fields into `settings.json`, leaving every other field as the
+    /// Write the service-owned fields (every one `settings_wire` projects) into `settings.json`, leaving every other field as the
     /// file has it.
     ///
     /// # Why this cannot write `self.settings` whole

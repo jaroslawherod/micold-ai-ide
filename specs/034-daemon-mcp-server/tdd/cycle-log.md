@@ -433,3 +433,33 @@ was taken by stubbing that implementation out and restoring it afterwards.
   uninstalled CLI may be named only by the missing-CLI notice); the note was reworded, not the test.
   `cargo test -p micold-client`: 2080 passed, 0 failed.
 - refactor: none needed.
+
+## Cycle 17 — U220, U221, U222 (added mid-loop from M2 review A) — T026
+
+- tests: `crates/micold-daemon/tests/mcp_binding_spawn.rs` —
+  `a_session_restarted_with_the_toggle_off_loses_its_earlier_credential` (U220; the user quits the
+  stand-in with Ctrl-D so the exit is clean and the next start is a new one),
+  `a_crash_respawn_keeps_the_binding_after_the_toggle_is_turned_off` (U221),
+  `a_crash_respawn_stays_unbound_after_the_toggle_is_turned_on` (U222).
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_spawn -- a_session_restarted_with_the_toggle_off a_crash_respawn_keeps_the_binding a_crash_respawn_stays_unbound`
+  ```
+  thread 'a_crash_respawn_stays_unbound_after_the_toggle_is_turned_on' (2163704) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:768:5:
+  assertion `left == right` failed: a session started unbound stays unbound across a crash
+    left: ["--resume", "…340075", "--mcp-config", "/tmp/.tmpwx2aid/mcp/…340075.json", "--allowedTools", "mcp__micold"]
+  thread 'a_crash_respawn_keeps_the_binding_after_the_toggle_is_turned_off' (2163703) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:743:5:
+  assertion `left == right` failed: a running session keeps what it started with, across a crash: ["--resume", "…340074"]
+  ```
+  U220's first run killed the process (a crash, so supervision respawned it and the second launch
+  never came); rewritten to quit cleanly, then:
+  ```
+  thread 'a_session_restarted_with_the_toggle_off_loses_its_earlier_credential' (2164615) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:722:5:
+  assertion `left == right` failed: a session started unbound must not keep the credential of its earlier start
+    left: 200
+   right: 401
+  ```
+- green: `tool_server_launch_for(id, spec, respawn)`. A start (not a respawn) that ends unbound
+  revokes the session's credential and binding file (`ToolServer::revoke`). A respawn skips the
+  toggle and binds iff the session still holds a credential (`ToolServer::is_bound`, backed by
+  `Credentials::is_issued`), else skips with the new `SkipReason::UnboundAtStart` ("not bound when
+  it started", pinned in `mcp_binding_plan.rs`). mcp_binding_spawn 18 passed.
+- refactor: none needed.

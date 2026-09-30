@@ -42,6 +42,11 @@ impl Credentials {
         self.lock().by_credential.get(credential).copied()
     }
 
+    /// Whether `session` holds a credential, without issuing one.
+    pub fn is_issued(&self, session: SessionId) -> bool {
+        self.lock().by_session.contains_key(&session)
+    }
+
     /// Withdraw `session`'s credential. Returns whether it had one.
     pub fn revoke(&self, session: SessionId) -> bool {
         let mut maps = self.lock();

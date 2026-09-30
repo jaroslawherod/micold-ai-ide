@@ -42,6 +42,9 @@ pub enum SkipReason {
     ServerUnavailable,
     /// The binding file could not be written.
     WriteFailed(String),
+    /// A crash respawn of a session that was not bound when it started: it keeps what it started
+    /// with (FR-004).
+    UnboundAtStart,
 }
 
 impl fmt::Display for SkipReason {
@@ -56,6 +59,7 @@ impl fmt::Display for SkipReason {
             ),
             SkipReason::ServerUnavailable => f.write_str("tool server unavailable"),
             SkipReason::WriteFailed(error) => write!(f, "could not write the binding: {error}"),
+            SkipReason::UnboundAtStart => f.write_str("not bound when it started"),
         }
     }
 }
