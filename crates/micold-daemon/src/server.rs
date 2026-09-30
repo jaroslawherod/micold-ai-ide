@@ -630,6 +630,10 @@ where
 
         match msg {
             ClientMsg::Ping { nonce } => state.send(id, DaemonMsg::Pong { nonce }),
+            // The first answer to an agent's destructive request decides (feature 034, FR-014).
+            ClientMsg::ConfirmationAnswer { id: prompt, allow } => {
+                state.answer_confirmation(prompt, allow)
+            }
             ClientMsg::Goodbye => break,
             // Every session reads it when a program asks for its colours (`006` FR-003a, BUG-007).
             ClientMsg::TerminalColorScheme { scheme } => state.terminal_colors().set(scheme),
