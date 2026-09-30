@@ -40,12 +40,9 @@ use std::path::{Path, PathBuf};
 ///
 /// Feature 027's entries — the resource limits and the network posture — landed with T086 and
 /// T087, and [`a_deferred_setting_that_arrived_is_stale`] is what made deleting them a step rather
-/// than an oversight. Feature 034's label-to-type mapping is stored from milestone M4 and gets its
-/// editor in M5.
-const DEFERRED: &[(&str, &str)] = &[(
-    "issue_label_types",
-    "034 T059 (Settings → GitHub issues mapping editor, milestone M5)",
-)];
+/// than an oversight. Feature 034's label-to-type mapping, stored from its milestone M4, left it
+/// the same way when M5's GitHub issues section claimed it.
+const DEFERRED: &[(&str, &str)] = &[];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

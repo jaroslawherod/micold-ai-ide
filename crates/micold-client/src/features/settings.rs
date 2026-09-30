@@ -1011,13 +1011,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlacementChangeConfirmed => placement_change_confirmed(state),
         Msg::PlacementChangeCancelled => placement_change_cancelled(state),
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
-        Msg::IssueMappingLabelChanged(index, label) => {
-            edit_mapping(state, |entries| {
-                if let Some(entry) = entries.get_mut(index) {
-                    entry.label = label;
-                }
-            })
-        }
+        Msg::IssueMappingLabelChanged(index, label) => edit_mapping(state, |entries| {
+            if let Some(entry) = entries.get_mut(index) {
+                entry.label = label;
+            }
+        }),
         Msg::IssueMappingTypeChanged(index, type_) => edit_mapping(state, |entries| {
             if let Some(entry) = entries.get_mut(index) {
                 entry.type_ = type_;

@@ -1340,6 +1340,47 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[0, 0, 1, 0, 0, 0],
             }],
         },
+        // Settings → GitHub issues (feature 034, T060; contract §4a): three entries, the middle one
+        // a duplicate of the first ignoring case, so the fixture records a row carrying the refused
+        // save's message and the move buttons disabled at both ends.
+        CoveredState {
+            name: "settings-view-github-issues",
+            build: || {
+                use micold_core::issue_types::LabelTypeEntry;
+                use micold_core::naming::ConventionalType;
+                let entry = |label: &str, type_| LabelTypeEntry {
+                    label: label.to_string(),
+                    type_,
+                };
+                let mut state = with_project();
+                state.settings.settings_draft = Some(SettingsDraft {
+                    github: micold_client::features::settings::GithubDraft {
+                        entries: vec![
+                            entry("bug", ConventionalType::Fix),
+                            entry("Bug", ConventionalType::Chore),
+                            entry("documentation", ConventionalType::Docs),
+                        ],
+                    },
+                    section: SettingsSection::GithubIssues,
+                    appearance: AppearanceDraft::default(),
+                    terminal: TerminalDraft {
+                        scrollback_lines: "12000".to_string(),
+                    },
+                    environment: EnvironmentDraft::default(),
+                    daemon: DaemonDraft::default(),
+                    error: Some(FieldError {
+                        field: FieldId::IssueMappingLabel(1),
+                        section: SettingsSection::GithubIssues,
+                        message: "Entry 1 already maps this label.".to_string(),
+                    }),
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
     ]
 }
 

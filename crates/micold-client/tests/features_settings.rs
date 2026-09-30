@@ -514,7 +514,10 @@ mod issue_mapping {
             Some(&(String::new(), ConventionalType::Feat)),
             "Add entry appends a blank label typed `feat` (FR-018)"
         );
-        update(&mut state, Msg::IssueMappingLabelChanged(3, "defect".into()));
+        update(
+            &mut state,
+            Msg::IssueMappingLabelChanged(3, "defect".into()),
+        );
         update(
             &mut state,
             Msg::IssueMappingTypeChanged(3, ConventionalType::Fix),
@@ -576,7 +579,13 @@ mod issue_mapping {
         let mut state = open_with(vec![entry("defect", ConventionalType::Fix)]);
         update(&mut state, Msg::IssueMappingDefaultsRestored);
         assert_eq!(
-            state.settings.settings_draft.as_ref().unwrap().github.entries,
+            state
+                .settings
+                .settings_draft
+                .as_ref()
+                .unwrap()
+                .github
+                .entries,
             default_mapping(),
             "Restore defaults returns the draft to the default table (AS6)"
         );
@@ -605,7 +614,10 @@ mod issue_mapping {
             "the duplicate is reported on the later entry (AS5, FR-019)"
         );
 
-        update(&mut state, Msg::IssueMappingLabelChanged(1, "defect".into()));
+        update(
+            &mut state,
+            Msg::IssueMappingLabelChanged(1, "defect".into()),
+        );
         let saved = state
             .settings
             .settings_draft

@@ -611,3 +611,31 @@ failed before the implementation.
   `tests/icons.rs` forbids a shared one, so both move glyphs are the `keyboard_arrow_*` pair
   (contract §4 and PROVENANCE.md updated).
 - commit: the commit that adds this entry
+
+## Cycle 26: A18–A23 — Settings → GitHub issues through the shell, and its page (M5)
+
+- tests: `crates/micold-client/src/main_tests.rs::issue_source` — `issue_settings_shows_the_mapping` (A18),
+  `issue_an_added_entry_types_the_next_pick` (A19), `issue_edited_mapping_types_the_next_pick` (A20),
+  `issue_the_mapping_survives_a_restart` (A21), `issue_an_invalid_mapping_is_not_saved` (A22),
+  `issue_restore_defaults_returns_the_default_mapping` (A23); a real `JsonFileSettingsStore` in a temp
+  dir, a fresh store over the same file for A21.
+- red: none observed — **test-after**. The six were written after cycle 25 had already made the
+  messages and validation they drive, so they passed at their first run
+  (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` -> 31 passed).
+  Deliberate mutants instead (validate without `mapping()`, Add / Restore / move as no-ops,
+  `from_settings` seeding the default) -> 25 passed, 6 failed: A19 `:5891:9`, A22 `:5980:14`,
+  A20 `:5921:9`, A23 `:6026:9`, A18 `:5859:9`, A21 `:5957:9`; restored, 31 passed.
+- red (T059, the page): with `ui/settings/github.rs` declaring `issue_label_types` and `DEFERRED` still
+  listing it, `scripts/build-lock.sh cargo test -p micold-client --test settings_sections` -> 13 passed,
+  1 failed: `a_deferred_setting_that_arrived_is_stale` `:283:5`.
+- green: `DEFERRED` emptied; the page (contract §4: blurb, one row per entry — label `TextField` with
+  its `FieldError`, type `Select`, move up/down disabled at the ends, delete — **Add entry**,
+  **Restore defaults**, the empty-mapping caption) wired into `settings_view`; covered state
+  `settings-view-github-issues` registered and `layout_snapshot.txt` regenerated
+  (`UPDATE_LAYOUT_SNAPSHOT=1`; every Settings state's rail gained its fifth row) ->
+  `settings_sections` 14, `layout_snapshot` 43, `layout_text_overflow` 4, `features_settings` 60,
+  `--bin micold-ai-ide issue` 31 passed.
+- refactor: none needed.
+- notes: A18 checks the draft the page renders plus that the view builds; what the rows *look* like
+  is the layout fixture's and quickstart §B12's.
+- commit: the commit that adds this entry

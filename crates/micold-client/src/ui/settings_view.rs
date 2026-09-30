@@ -25,7 +25,7 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{ScriptCheck, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
-use crate::ui::settings::{appearance, daemon, environment, terminal};
+use crate::ui::settings::{appearance, daemon, environment, github, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
@@ -95,7 +95,7 @@ pub fn view<'a>(
             r,
         ),
         SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
-        SettingsSection::GithubIssues => iced::widget::Space::new().into(),
+        SettingsSection::GithubIssues => github::view(draft, focused, r),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while

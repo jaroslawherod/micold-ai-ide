@@ -5884,4 +5884,267 @@ mod issue_source {
             "with no settings store the default mapping applies"
         );
     }
+    // --- US3: the mapping is edited in Settings → GitHub issues (feature 034 M5) ----------------
+
+    use micold_client::features::settings::SettingsSection;
+    use micold_core::settings::JsonFileSettingsStore;
+
+    /// A rig whose settings live in a real `settings.json` holding `mapping`, with the form not yet
+    /// opened. The temp dir must outlive the rig.
+    fn file_rig(
+        issues: Vec<Issue>,
+        mapping: Vec<LabelTypeEntry>,
+    ) -> (IssueRig, Arc<JsonFileSettingsStore>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(JsonFileSettingsStore::at(dir.path().join("settings.json")));
+        store
+            .save(&micold_core::settings::Settings {
+                issue_label_types: mapping,
+                ..Default::default()
+            })
+            .expect("seed settings.json");
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues)),
+        );
+        rig.app.caps = rig
+            .app
+            .caps
+            .clone()
+            .with_settings(store.clone())
+            .with_env_include(Arc::new(
+                micold_core::env_include::FakeEnvIncludeResolver::default(),
+            ));
+        (rig, store, dir)
+    }
+
+    fn settings(app: &mut App, msg: SettingsMsg) {
+        let work = update_inner(app, Message::Settings(msg));
+        settle(app, work);
+    }
+
+    /// Open Settings on the GitHub issues section.
+    fn open_github_section(app: &mut App) {
+        settings(app, SettingsMsg::Opened);
+        settings(
+            app,
+            SettingsMsg::SectionShown(SettingsSection::GithubIssues),
+        );
+    }
+
+    fn shown(app: &App) -> Vec<(String, ConventionalType)> {
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("Settings is open")
+            .github
+            .entries
+            .iter()
+            .map(|e| (e.label.clone(), e.type_))
+            .collect()
+    }
+
+    fn stored(store: &JsonFileSettingsStore) -> Vec<LabelTypeEntry> {
+        store.load().settings.issue_label_types
+    }
+
+    /// Open the form, choose the issue source, and pick issue `number` by its row.
+    fn open_and_pick(rig: &mut IssueRig, number: u64) -> Option<ConventionalType> {
+        open_with(rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        pick_row(&mut rig.app, number);
+        form(&rig.app).type_
+    }
+
+    fn labelled() -> Vec<Issue> {
+        vec![
+            issue(11, "Button misaligned", &["defect"]),
+            issue(12, "Both kinds", &["bug", "question"]),
+        ]
+    }
+
+    /// A18 — opening Settings → GitHub issues shows the stored mapping as ordered label → type
+    /// entries (US3-1).
+    #[test]
+    fn issue_settings_shows_the_mapping() {
+        let (mut rig, _store, _dir) = file_rig(
+            labelled(),
+            vec![
+                entry("defect", ConventionalType::Fix),
+                entry("question", ConventionalType::Chore),
+            ],
+        );
+        open_github_section(&mut rig.app);
+        let draft = rig.app.core.settings.settings_draft.as_ref().unwrap();
+        assert_eq!(draft.section, SettingsSection::GithubIssues);
+        assert_eq!(
+            shown(&rig.app),
+            vec![
+                ("defect".to_string(), ConventionalType::Fix),
+                ("question".to_string(), ConventionalType::Chore),
+            ],
+            "the section lists the stored entries in order"
+        );
+        let _ = view(&rig.app);
+    }
+
+    /// A19 — adding `defect → fix` and saving types the next pick of a `defect` issue, with no
+    /// restart (US3-2, SC-005).
+    #[test]
+    fn issue_an_added_entry_types_the_next_pick() {
+        let (mut rig, store, _dir) =
+            file_rig(labelled(), micold_core::issue_types::default_mapping());
+        open_github_section(&mut rig.app);
+        settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingLabelChanged(3, "defect".into()),
+        );
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingTypeChanged(3, ConventionalType::Fix),
+        );
+        settings(&mut rig.app, SettingsMsg::Saved);
+        assert!(
+            rig.app.core.settings.settings_draft.is_none(),
+            "the save went through"
+        );
+        assert_eq!(
+            stored(&store).last(),
+            Some(&entry("defect", ConventionalType::Fix))
+        );
+        assert_eq!(open_and_pick(&mut rig, 11), Some(ConventionalType::Fix));
+    }
+
+    /// A20 — changing, removing and reordering entries, then saving, types the next pick by the new
+    /// mapping (US3-3).
+    #[test]
+    fn issue_edited_mapping_types_the_next_pick() {
+        let (mut rig, store, _dir) = file_rig(
+            labelled(),
+            vec![
+                entry("bug", ConventionalType::Fix),
+                entry("defect", ConventionalType::Fix),
+                entry("question", ConventionalType::Docs),
+            ],
+        );
+        open_github_section(&mut rig.app);
+        settings(&mut rig.app, SettingsMsg::IssueMappingRemoved(1));
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingTypeChanged(1, ConventionalType::Chore),
+        );
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingMoved(1, Direction::Prev),
+        );
+        settings(&mut rig.app, SettingsMsg::Saved);
+        assert_eq!(
+            stored(&store),
+            vec![
+                entry("question", ConventionalType::Chore),
+                entry("bug", ConventionalType::Fix),
+            ]
+        );
+        assert_eq!(
+            open_and_pick(&mut rig, 12),
+            Some(ConventionalType::Chore),
+            "`question` now comes first, so it wins over `bug`"
+        );
+        pick_row(&mut rig.app, 11);
+        assert_eq!(
+            form(&rig.app).type_,
+            None,
+            "the removed `defect` entry no longer types anything"
+        );
+    }
+
+    /// A21 — a saved mapping is read back from `settings.json` by a fresh store (US3-4, FR-020).
+    #[test]
+    fn issue_the_mapping_survives_a_restart() {
+        let (mut rig, store, _dir) =
+            file_rig(labelled(), micold_core::issue_types::default_mapping());
+        open_github_section(&mut rig.app);
+        settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingLabelChanged(3, "defect".into()),
+        );
+        settings(&mut rig.app, SettingsMsg::Saved);
+
+        let restarted = JsonFileSettingsStore::at(_dir.path().join("settings.json"));
+        let mut expected = micold_core::issue_types::default_mapping();
+        expected.push(entry("defect", ConventionalType::Feat));
+        assert_eq!(stored(&restarted), expected);
+        assert_eq!(stored(&restarted), stored(&store));
+    }
+
+    /// A22 — a blank label, or `Bug` beside `bug`, refuses the save with an error on that entry, and
+    /// the file is unchanged (US3-5, FR-019).
+    #[test]
+    fn issue_an_invalid_mapping_is_not_saved() {
+        use micold_client::features::window::FieldId;
+        let (mut rig, store, dir) =
+            file_rig(labelled(), micold_core::issue_types::default_mapping());
+        let path = dir.path().join("settings.json");
+        let before = std::fs::read(&path).expect("settings.json");
+
+        open_github_section(&mut rig.app);
+        settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
+        settings(&mut rig.app, SettingsMsg::Saved);
+        let draft = rig
+            .app
+            .core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("a refused save leaves Settings open");
+        let error = draft.error.as_ref().expect("the refusal is reported");
+        assert_eq!(
+            (error.field, error.section),
+            (FieldId::IssueMappingLabel(3), SettingsSection::GithubIssues),
+            "the blank entry is the one marked"
+        );
+
+        settings(
+            &mut rig.app,
+            SettingsMsg::IssueMappingLabelChanged(3, "Bug".into()),
+        );
+        settings(&mut rig.app, SettingsMsg::Saved);
+        let draft = rig.app.core.settings.settings_draft.as_ref().unwrap();
+        assert_eq!(
+            draft.error.as_ref().map(|e| e.field),
+            Some(FieldId::IssueMappingLabel(3)),
+            "`Bug` duplicates `bug` ignoring case"
+        );
+        assert_eq!(
+            std::fs::read(&path).expect("settings.json"),
+            before,
+            "nothing was written"
+        );
+        assert_eq!(stored(&store), micold_core::issue_types::default_mapping());
+    }
+
+    /// A23 — a never-edited mapping shows the default three entries; after edits, Restore defaults
+    /// returns them (US3-6).
+    #[test]
+    fn issue_restore_defaults_returns_the_default_mapping() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(JsonFileSettingsStore::at(dir.path().join("settings.json")));
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        rig.app.caps = rig.app.caps.clone().with_settings(store.clone());
+        open_github_section(&mut rig.app);
+        let defaults: Vec<_> = micold_core::issue_types::default_mapping()
+            .into_iter()
+            .map(|e| (e.label, e.type_))
+            .collect();
+        assert_eq!(shown(&rig.app), defaults, "never edited shows the defaults");
+
+        settings(&mut rig.app, SettingsMsg::IssueMappingRemoved(0));
+        settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
+        assert_ne!(shown(&rig.app), defaults);
+        settings(&mut rig.app, SettingsMsg::IssueMappingDefaultsRestored);
+        assert_eq!(shown(&rig.app), defaults, "Restore defaults returns them");
+    }
 }

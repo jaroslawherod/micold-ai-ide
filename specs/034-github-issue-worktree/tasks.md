@@ -254,22 +254,22 @@ reorder and restore defaults, refusing blank or duplicate labels.
 - [X] T054 [P] [US3] [U87] [U88] [U89] [U90] [U91] [U92] Extend `crates/micold-client/tests/features_settings.rs`: `SettingsSection::GithubIssues` is 5th in `ALL` with label "GitHub issues" (AS1); the draft loads the stored mapping, or the default when never edited (AS6); `IssueMappingAdded` appends `("", Feat)`, `IssueMappingLabelChanged`, `IssueMappingTypeChanged`, `IssueMappingRemoved`, `IssueMappingMoved(i, Up/Down)` (no-op at the ends) and `IssueMappingDefaultsRestored` edit the draft (AS2, AS3, AS6, FR-018); a blank or duplicate label refuses the save with `FieldError { field: FieldId::IssueMappingLabel(i), section: GithubIssues }` and writes nothing (AS5); a valid save writes the mapping in order (AS4, FR-020). Update `crates/micold-client/tests/settings_sections.rs` and `settings_rail.rs` for the fifth section.
 - [X] T055 [P] [US3] [U93] Extend `crates/micold-client/tests/icons_font.rs` coverage to `Icon::IssueMapping` (`label`), `Icon::MoveUp` (`arrow_upward`), `Icon::MoveDown` (`arrow_downward`) in the shipped font.
 
-- [ ] T086 [US3] [A18] [A19] [A20] [A21] [A22] [A23] Write acceptance tests A18–A23 in `crates/micold-client/src/main_tests.rs` (Settings messages through `update_inner`, a temp settings store, a fresh store for A21); confirm each fails before T056.
+- [X] T086 [US3] [A18] [A19] [A20] [A21] [A22] [A23] Write acceptance tests A18–A23 in `crates/micold-client/src/main_tests.rs` (Settings messages through `update_inner`, a temp settings store, a fresh store for A21); confirm each fails before T056.
 
 ### Implementation for User Story 3
 
 - [X] T056 [P] [US3] [U79] In `crates/micold-core/src/issue_types.rs`, add `validate_mapping`, `MappingError` and `MappingErrorKind`.
 - [X] T057 [P] [US3] [U93] In `crates/micold-client/src/icons.rs`, add `Icon::IssueMapping`, `Icon::MoveUp`, `Icon::MoveDown` on the existing Material Symbols glyphs.
 - [X] T058 [US3] [U87] [U88] [U89] [U90] [U91] [U92] In `crates/micold-client/src/features/settings.rs` and `crates/micold-client/src/features/window.rs`, add `SettingsSection::GithubIssues`, `SettingsDraft.github: GithubDraft { entries: Vec<(String, ConventionalType)> }`, the six `IssueMapping…` messages, `FieldId::IssueMappingLabel(usize)`, and `validate_mapping` inside `SettingsDraft::validate`; `ValidSettings` now takes the mapping from the draft.
-- [ ] T059 [US3] [A18] [A22] [A23] Create `crates/micold-client/src/ui/settings/github.rs` and wire it in `crates/micold-client/src/ui/settings/mod.rs` per contracts/issue-picker-ui.md §4: explanatory text, one row per entry (`TextField` with its `FieldError`, `Select<ConventionalType>`, `IconButton` MoveUp/MoveDown disabled at the ends, Delete), **Add entry**, **Restore defaults**, the empty-mapping caption; Save/Cancel stay the view's.
-- [ ] T060 [US3] Register the covered state "Settings, GitHub issues with three entries and one offending entry" in `crates/micold-client/tests/support/covered_states.rs` and regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`.
+- [X] T059 [US3] [A18] [A22] [A23] Create `crates/micold-client/src/ui/settings/github.rs` and wire it in `crates/micold-client/src/ui/settings/mod.rs` per contracts/issue-picker-ui.md §4: explanatory text, one row per entry (`TextField` with its `FieldError`, `Select<ConventionalType>`, `IconButton` MoveUp/MoveDown disabled at the ends, Delete), **Add entry**, **Restore defaults**, the empty-mapping caption; Save/Cancel stay the view's.
+- [X] T060 [US3] Register the covered state "Settings, GitHub issues with three entries and one offending entry" in `crates/micold-client/tests/support/covered_states.rs` and regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`.
 - [ ] T061 [US3] Add the "GitHub issues" section to `docs/user-guide/settings.md` and link it from the labels section of `docs/user-guide/worktrees-and-sessions.md`.
-- [ ] T087 [US3] [A18] Outer loop green: A18 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T088 [US3] [A19] Outer loop green: A19 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T089 [US3] [A20] Outer loop green: A20 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T090 [US3] [A21] Outer loop green: A21 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T091 [US3] [A22] Outer loop green: A22 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T092 [US3] [A23] Outer loop green: A23 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T087 [US3] [A18] Outer loop green: A18 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T088 [US3] [A19] Outer loop green: A19 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T089 [US3] [A20] Outer loop green: A20 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T090 [US3] [A21] Outer loop green: A21 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T091 [US3] [A22] Outer loop green: A22 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
+- [X] T092 [US3] [A23] Outer loop green: A23 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [ ] T062 [US3] Run quickstart §B12 with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
 
 **Checkpoint**: All three stories work; `mise run gate` passes.
