@@ -386,6 +386,17 @@ wr='{"type":"tool_use","name":"Bash","input":{"command":"cargo test"}}'
 check "autopilot-tokens counts unbatched reads" 0 '^\| orchestrator \(main session\) \| x \| 7 \| [^|]+\| [^|]+\| [^|]+\| 0 \| 2 \|' \
   "$(dirname "$S")/autopilot-tokens.py" "$d/b.jsonl"
 
+check "autopilot-tokens classifies shell reads and writes" 0 '^ok$' python3 - "$(dirname "$S")/autopilot-tokens.py" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("t", sys.argv[1]); t = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(t)
+cases = {"cd /a/b && git status -sb": True, "git -C d log --oneline": True, "env X=1 grep -n a b": True,
+         "grep x f 2>/dev/null | head": True, "cat > f <<EOF": False, "find . -delete": False,
+         "git branch -D x": False, "ls; cargo build": False, "sed -i s/a/b/ f": False, "mise run gate": False}
+bad = [c for c, want in cases.items() if t.read_only_bash(c) != want]
+print("ok" if not bad else "misclassified: %s" % bad)
+PY
+
 # checkpoint.sh: one call reports branch, changes, unmerged commits, the ledger and the context.
 d="$(new_repo)"; cd "$d/wt"
 proj="$d/home/.claude/projects/$(pwd -P | sed 's/[^A-Za-z0-9]/-/g')"
@@ -400,6 +411,15 @@ check "checkpoint reports changed files" 3 '^  \?\? dirty\.txt' env HOME="$d/hom
 check "checkpoint reports the ledger phase" 3 '^PHASE 4-milestones$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 check "checkpoint prints no escalation while it reads None" 0 '^ok$' bash -c \
   "out=\$(HOME='$d/home' AUTOPILOT_CONTEXT_CAP=900000 '$K' 'Milestone M1 042' specs/042-x/autopilot.md) && ! grep -q '^OPEN_ESCALATION' <<<\"\$out\" && echo ok"
+python3 - specs/042-x/autopilot.md <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace("## Open escalation\n\nNone.", "## Handover\n\nM1: gate green, next review B.\n\n## Open escalation\n\nWhich locale wins?")
+open(p, "w").write(s)
+PY
+check "checkpoint reports an open handover" 3 '^HANDOVER M1: gate green, next review B\.$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint reports an open escalation" 3 '^OPEN_ESCALATION Which locale wins\?$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint reports the next step" 3 '^NEXT open PR 2$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 cd "$ROOT"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
