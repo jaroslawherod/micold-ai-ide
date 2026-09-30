@@ -158,6 +158,8 @@ Tests in `crates/micold-client/src/main_tests.rs`.
 | U61 | `on_settings_opened` makes no env-include resolver call (`FakeEnvIncludeResolver::calls()` empty) | FR-014 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::showing_settings_sources_nothing` |
 | U62 | Across open, check and save from a missing path, no environment-include setting changes other than what the user drafted | FR-008 | example | PENDING | |
 | U64 | A save whose settings write failed prepares no check and posts no path notice: only the failed write is reported (added in M2 after review A) | FR-004 (T2) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_whose_write_failed_posts_no_notice_about_the_path` |
+| U65 | On + `NotReadable` + `MissingScript` → the not-readable caution and `Note(ON)` only; 011's line is merged (N7) | FR-005 (review A M3) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_on::on_and_not_readable_after_a_missing_script_attempt_says_it_once_by_path` |
+| U66 | S1 keeps the previous answer only for the same stored path and enabled flag: after another window's save, a re-check shows no stale answer | FR-009, Edge Cases multi-window (review A M3) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::a_check_of_another_path_or_state_does_not_keep_showing_the_previous_answer` |
 
 ## Invariants and edge cases still to place
 
