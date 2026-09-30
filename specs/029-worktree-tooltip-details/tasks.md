@@ -275,7 +275,7 @@ the copy is correct for today's count (BUG-003 § tasks.md).
   the harness pass `WINDOW`. Move the stray doc paragraph above `SETTLE_FRAMES` ("Press the node at
   `path` the way a person would…") onto `press_and_settle`, where it belongs. T040's tests build and
   pass
-- [ ] T042 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
+- [x] T042 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
 
 **Order**: T040 → T041 → T042. T040 must be seen failing before T041 starts (Principle I).
 
