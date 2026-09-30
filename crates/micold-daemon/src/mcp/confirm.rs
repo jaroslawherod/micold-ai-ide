@@ -148,9 +148,7 @@ impl Registry {
     /// Resolve every pending prompt that `session` is the caller or the target of as
     /// [`ConfirmOutcome::TargetGone`], returning the withdrawals to broadcast.
     pub fn session_gone(&mut self, session: SessionId) -> Vec<DaemonMsg> {
-        self.resolve_where(|r| {
-            r.caller == session || r.target == ConfirmTarget::Session(session)
-        })
+        self.resolve_where(|r| r.caller == session || r.target == ConfirmTarget::Session(session))
     }
 
     /// Resolve every pending prompt whose target is `project`'s worktree `dir_name` as

@@ -390,7 +390,10 @@ async fn a_window_answers_over_the_wire() {
     let id = prompt_id(&next_on_wire(&mut client).await);
 
     client
-        .send(Frame::Control(ClientMsg::ConfirmationAnswer { id, allow: true }))
+        .send(Frame::Control(ClientMsg::ConfirmationAnswer {
+            id,
+            allow: true,
+        }))
         .await
         .unwrap();
 
