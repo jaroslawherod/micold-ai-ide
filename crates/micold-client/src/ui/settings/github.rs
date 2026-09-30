@@ -14,7 +14,7 @@ use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Button, IconButton, Select, TextField, Tooltip};
 use crate::ui::settings::{note, page};
-use iced::widget::{container, row};
+use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::tokens::{spacing, Roles};
@@ -84,18 +84,19 @@ pub fn view<'a>(
             roles,
         );
 
-        controls.push(
-            row![
-                container(label).width(Length::FillPortion(3)),
-                container(type_).width(Length::FillPortion(2)),
-                up,
-                down,
-                delete,
-            ]
+        // The label over its type, with the entry's three buttons stacked beside them. Side by side
+        // the five controls do not fit the page's narrowest width (520 px with the rail open, the
+        // §B12 pass), and stacked the two fields keep the full column less one button.
+        let fields = column![label, type_]
             .spacing(spacing::XS)
-            .align_y(Alignment::Start)
-            .width(Length::Fill)
-            .into(),
+            .width(Length::Fill);
+        let actions = column![up, down, delete].spacing(spacing::XS);
+        controls.push(
+            row![fields, actions]
+                .spacing(spacing::XS)
+                .align_y(Alignment::Start)
+                .width(Length::Fill)
+                .into(),
         );
     }
 

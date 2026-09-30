@@ -62,3 +62,26 @@ Date 2026-09-30, commit d721635b, dev build (client + daemon built in one invoca
 - No defects found for the M4 behaviour. Dark scheme only; light scheme not run.
 - Once the Type is empty the preview (Directory/Branch) disappears and Create is disabled; nothing names the missing field beyond the empty Type box.
 - After picking, the Issue field still shows the typed query (D2 above), unchanged by M4.
+
+## §B12 — the mapping in Settings (milestone M5)
+
+Date 2026-09-30, commit d1a67cf4, dev build (client + daemon built in one invocation, copied to ~/vp/b12bin; the pair connected). Private Xvfb :98 + lavapipe, NOT a real display, on a loaded machine (input and redraw lag of several seconds). Private XDG data/runtime dirs (the user's settings.json untouched). Project /tmp/issue-demo (shallow clone of cli/cli, 1,037 open issues). Substitution: cli/cli has no issue labelled `question`, so the mapping also got `tech-debt → chore`, and #13016 (labels `enhancement`, `tech-debt`) stood in for the `question` issue.
+
+| # | Criterion | Verdict | Notes / screenshots (evidence/) |
+|---|---|---|---|
+| 1 | Settings → GitHub issues is the 5th rail entry (`label` icon); default three entries shown | PASS | bug→fix, enhancement→feat, documentation→docs; up disabled on the first row, down disabled on the last. `b12-defaults-dark.png` |
+| 2 | Add entry `question` / `chore`, move to top with the up arrows; up disabled on first, down on last | PASS | Row moved one step per click, keeping its type; final order question, bug, enhancement, documentation. "Move up" and "Delete entry" tooltips seen. `b12-reordered-dark.png` |
+| 3 | Save; create-worktree form, GitHub issue source, pick an issue with a mapped label: Type follows the mapping | PASS (with substitution) | No `question` issue exists in cli/cli. Added `tech-debt → chore` above `enhancement` (question, tech-debt, bug, enhancement, documentation); picked #13016 (`enhancement, tech-debt`): Type `chore`, Ticket 13016, Directory `.claude/worktrees/chore-13016_enable-medium-low-effort-linters`, i.e. the higher entry wins over `enhancement→feat`. settings.json held `issue_label_types` in the saved order. `b12-picked-chore-dark.png` |
+| 4 | Restart the client; reopen Settings → GitHub issues: order persisted | PASS | Client and daemon restarted; `question` still first, then `tech-debt`, bug, enhancement, documentation. `b12-persisted-dark.png` |
+| 5 | Blank label: Save refused, Settings jumps to GitHub issues, row's field shows an error | PASS | Row error "Enter a label, or remove this entry." and red label. Also tried from Appearance: Save jumped to GitHub issues with the same error. `b12-blank-refused-dark.png` |
+| 6 | Label changed to `Bug`: refused with “bug” is already mapped above. | PASS | Error text `“bug” is already mapped above.` on that row (case-insensitive match against `bug`). The blank-label error cleared as soon as the field was edited. `b12-duplicate-refused-dark.png` |
+| 7 | Restore defaults → the three defaults | PASS | Six draft rows became bug, enhancement, documentation. `b12-restored-defaults-dark.png` |
+| 8 | Cancel discards the draft | PASS | After Cancel, settings.json still held the 5 saved entries. |
+| 9 | 520 px wide, dark and light: nothing clipped, tooltips on move/delete | FAIL (with rail expanded), PASS (rail collapsed) | Rail expanded at 520 px: label/type fields collapse to ~10 px slivers, their floating labels ("Label", "Type") overlap and the up arrow overlaps "Type" (D1). Rail collapsed: all five rows fit, nothing clipped, in dark and light; tooltips "Move up", "Move down", "Delete entry" show. `b12-narrow-520-dark.png` (expanded, broken), `b12-narrow-520-collapsed-dark.png`, `b12-narrow-520-tooltip-dark.png`, `b12-narrow-520-light.png` |
+
+### B12 observations
+- D1 (defect): at a 520 px window with the Settings rail expanded, the GitHub issues rows are unusable: the content column is about 180 px, the two fields shrink to slivers and the row controls overlap them. Other Settings pages wrap their text and stay legible at this width; this one needs the row to wrap (fields on one line, buttons below) or a minimum field width.
+- The first and last rows' arrow buttons sit a few px off the middle rows' (a disabled arrow is placed differently), so the Type field of rows 1 and 5 is slightly wider than in the middle rows (visible in every screenshot). Cosmetic.
+- Save from another Settings page jumps to GitHub issues on a bad row, as required.
+- Not run: light scheme at full width; error rows in light; Save with mapping errors at 520 px; no worktree was created.
+- Harness note: clicking the sidebar "+" starts a Claude session in the project root (not the create-worktree form); the form is the header icon left of it. That session was stopped with the daemon.

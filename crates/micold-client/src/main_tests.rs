@@ -6055,7 +6055,9 @@ mod issue_source {
         );
     }
 
-    /// A21 — a saved mapping is read back from `settings.json` by a fresh store (US3-4, FR-020).
+    /// A21 — the saved mapping comes back when the settings are read again: what the save wrote,
+    /// through its JSON form (US3-4, FR-020). The on-disk file round trip is
+    /// `micold-core/tests/settings_issue_mapping.rs`.
     #[test]
     fn issue_the_mapping_survives_a_restart() {
         let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
