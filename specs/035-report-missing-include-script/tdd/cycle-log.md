@@ -253,3 +253,41 @@ existed and failed before the implementation.
   `tests::script_path_report::a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on`
   (A5) ok, with U56, U58 and U64. (The first gate, at 1b667643, stopped at `cargo fmt --check`;
   fixed in the `style(035)` commit.)
+
+## M3 baseline
+
+- suite: `scripts/build-lock.sh cargo test --workspace` at d044d567 (origin/main fae88e6c plus the
+  ledger commit) -> 3804 passed, 0 failed.
+
+## Cycle 13 (M3): A6–A8 and U46–U54, the on-state rows (T034, T022, T024)
+
+- tests: `crates/micold-client/src/main_tests.rs` `tests::script_path_report::` A6
+  `on_with_a_missing_stored_path_the_page_says_it_was_not_found_once_and_that_the_feature_is_on`,
+  A7 `switching_the_feature_off_and_saving_keeps_the_same_not_found_report`, A8
+  `creating_the_missing_file_clears_the_report_and_with_the_feature_on_says_how_to_source_it`;
+  `crates/micold-client/tests/features_settings.rs` new module `script_path_notice_on` (U46–U54,
+  plus the FR-002 on-state invariant and the no-path 011 line).
+- test change before the implementation (T022, contracts §2 "011(o)"): the `script_path_notice_off`
+  helper `lines_011` takes the checked path, so N8/N9 expect 011's `MissingScript` line as
+  `Script not found: P`. U63's test `until_m3_the_on_state_page_is_exactly_011s` deleted as T024
+  plans; U63 marked DROPPED.
+- red (outer): `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report`
+  -> 11 passed; 2 failed: A6 `left: [Caution("Script not found")]` vs
+  `right: [Caution("Script not found: /tmp/does-not-exist.sh"), Note("Environment include is on, …")]`;
+  A8 `left: [Caution("Script not found")]` vs `right: [Caution("The last attempt could not find the script"), …]`.
+  A7 passed at once: M1 already shipped the off rows (mutant below).
+- red (inner): `scripts/build-lock.sh cargo test -p micold-client --test features_settings script_path_notice`
+  -> 10 passed; 10 failed, e.g. U46 `left: [Caution("Script not found")]`, U47
+  `left: [Caution("Exited with an error"), Note("env.sh: line 3: nvm: command not found")]`, N8
+  `left: [Note("Relative path: …"), Caution("Script not found")]`, U53 `left: None` vs
+  `right: Some(Caution("Script not found: /tmp/does-not-exist.sh"))`. U54 passed at once (the
+  interim gate guaranteed it; mutant below).
+- green: `script_path_notice` drops the interim gate, adds NOTICE_ON and rows N3, N4, N5 (on),
+  N7 and N10; `lines_011` takes the checked path -> features_settings 49 passed; script_path_report
+  13 passed.
+- mutants (each applied alone from a backup copy and restored):
+  - NotFound with the feature off returns 011(last) -> A7 failed at `main_tests.rs:4492` (and A1).
+  - 011's line after the path's caution also when last is `MissingScript` -> U54 failed at
+    `features_settings.rs:1050`, U46 at `:916`, U48 at `:939`.
+- refactor: none beyond `cargo fmt`.
+- commit: 30b37e4a
