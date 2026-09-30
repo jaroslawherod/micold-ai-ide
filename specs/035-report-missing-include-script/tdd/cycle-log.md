@@ -338,3 +338,24 @@ existed and failed before the implementation.
   (review A F5); the moved comment no longer points at "`Welcome` below" (F8). Contract §1 S1 and
   §2 N7 updated.
 - commit: 179c1bb9
+
+## Cycle 16 (M4): A9, A10, U62, test-after by design (T028)
+
+- tests: `crates/micold-client/src/main_tests.rs`
+  `tests::script_path_report::typing_an_existing_path_and_saving_clears_the_report_without_a_notice`
+  (A9), `clearing_the_path_and_saving_clears_the_report_without_a_notice` (A10),
+  `nothing_recovers_on_its_own_only_the_users_draft_is_saved` (U62).
+- red: none on arrival, as D19 and T036 predicted: US3 adds no production code; its behaviour
+  shipped with M1/M2 (T018, T038). `scripts/build-lock.sh cargo test -p micold-client --bin
+  micold-ai-ide script_path_report` -> 19 passed. Red recorded by deliberate mutants instead,
+  each applied alone from a scratchpad copy and restored:
+  - `save_and_prepare_check`: `written.then(..)` -> `(written && false).then(..)` (the `Saved`
+    trigger T038 added removed) -> A9 failed at `main_tests.rs:4679` and A10 at `main_tests.rs:4721`
+    (also A5 and U58); 15 passed, 4 failed.
+  - `on_script_path_checked`: `None => ScriptCheck::Idle` -> `None => settings.script_check.clone()`
+    (a blank save keeps the old report) -> A10 failed at `main_tests.rs:4721`; 18 passed, 1 failed.
+  - `open_settings`: `app.env_include_enabled = false;` after seeding the draft (an automatic
+    "turn it off" recovery) -> U62 failed at `main_tests.rs:4759`; 15 passed, 4 failed.
+- green: no production change. After restoring every mutant: 19 passed.
+- refactor: none (one unneeded `mut` removed from the test helper).
+- commit: see T036 entry

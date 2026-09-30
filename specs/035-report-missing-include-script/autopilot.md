@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M3 PR #473 open; wait for `ci complete`, merge, then M4.
+- **Next step**: M4 in progress (T028–T031, T036).
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | merged | f954674d |
 | #466 | M1: report a missing path while the feature is off | merged | 4ef54b2d |
 | #471 | M2: notify when a save leaves a missing script path | merged | fae88e6c |
-| #473 | M3: the same report with the feature on or off | open | — |
+| #473 | M3: the same report with the feature on or off | merged | b0432747 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|
 | M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | merged |
 | M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | #471 | merged |
-| M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | #473 | PR open |
-| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | pending |
+| M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | #473 | merged |
+| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | in progress |
 
 ## Decisions
 
@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D30 | 4-M3 | Review A round 1 (code-review high) | 8 findings: 4 fixed (NotReadable + `MissingScript` merged, U65; a re-check drops the previous answer when path or enabled changed, U66, `ScriptPathCheckStarted` carries both; shared `adopt_daemon_settings`; stale comment), 4 declined (below). | agent-resolved | code-review skill; snapshot 3255686e:3d355f29 |
 | D31 | 4-M3 | Review B round 1 (conformance) | CLEAN, 2 MINOR, both the same issues as review A F1/F2 and fixed with them. Verify at 3d355f29: features_settings 49 passed; script_path_report 16 passed. | agent-resolved | reviewer subagent; snapshot 3255686e:3d355f29 |
 | D32 | 4-M3 | Visual pass B4, B5, B6 (T027) | All three pass (dark theme, Xvfb :78, pinned pair from 36015322). Evidence in `visual-pass/B4-*`, `B5-*`, `B6-*`. | agent-resolved | visual-pass skill |
+| D34 | 4-M4 | M3/#473 merged at b0432747; branch start | `branch-start.sh 473` reset `fix/github-issues` to `origin/main` (b0432747) cleanly. | agent-resolved | branch-start.sh output |
 | D33 | 4-M3 | Review A round 2 and review B round 2 (sonnet, fix diff) | Both CLEAN. A: fixes 1, 2, 5, 8 hold; declines 3, 4, 6, 7 stand; one MINOR (a kept same-path answer can still pair with a pre-save outcome), covered by the declined F6. B: Verify features_settings 51 passed, script_path_report 16 passed; contract S1/N7 match. Gate at a731366b: GATE_EXIT=0, 3822 passed. | agent-resolved | reviewer subagents; snapshot 3b624194:a731366b |
 
 ## Declined review findings
