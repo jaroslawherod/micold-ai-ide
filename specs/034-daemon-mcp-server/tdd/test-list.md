@@ -104,17 +104,17 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U6 | A request with an `id` parses as a request carrying that id and method | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U7 | A message without an `id` parses as a notification | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U8 | Malformed JSON answers error `-32700` with `id: null` | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U9 | An unknown method answers error `-32601` | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U10 | `initialize` echoes each of `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28` when the client sends it | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U11 | `initialize` with any other `protocolVersion` answers `2026-07-28` | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U12 | `initialize` declares `capabilities.tools.listChanged = false` and `serverInfo.name = "micold"` | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U13 | `ping` answers `{}` | FR-001 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U14 | A success result serialises as `content[0].text` + `structuredContent` + `isError: false` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U15 | A failure serialises as `"<category>: <message>"` text + `structuredContent.error{category,message}` + `isError: true` | FR-013 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
-| U16 | Each of the six categories serialises as its snake_case name | FR-013, SC-010 | example | PENDING | planned: `crates/micold-core/tests/mcp_jsonrpc.rs` |
+| U6 | A request with an `id` parses as a request carrying that id and method | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::a_message_with_an_id_parses_as_a_request` |
+| U7 | A message without an `id` parses as a notification | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::{a_message_without_an_id_parses_as_a_notification, a_notification_is_accepted_without_a_reply}` |
+| U8 | Malformed JSON answers error `-32700` with `id: null` | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::malformed_json_answers_a_parse_error_with_a_null_id` |
+| U9 | An unknown method answers error `-32601` | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::an_unknown_method_answers_method_not_found` |
+| U10 | `initialize` echoes each of `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28` when the client sends it | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::initialize_echoes_each_supported_protocol_version` |
+| U11 | `initialize` with any other `protocolVersion` answers `2026-07-28` | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::initialize_answers_the_latest_version_for_any_other` |
+| U12 | `initialize` declares `capabilities.tools.listChanged = false` and `serverInfo.name = "micold"` | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::initialize_declares_tools_without_list_changes_and_names_the_server` |
+| U13 | `ping` answers `{}` | FR-001 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::ping_answers_an_empty_object` |
+| U14 | A success result serialises as `content[0].text` + `structuredContent` + `isError: false` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::a_success_result_carries_text_structured_content_and_is_not_an_error` |
+| U15 | A failure serialises as `"<category>: <message>"` text + `structuredContent.error{category,message}` + `isError: true` | FR-013 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::a_failure_result_names_its_category_and_message` |
+| U16 | Each of the six categories serialises as its snake_case name | FR-013, SC-010 | example | DONE | `crates/micold-core/tests/mcp_jsonrpc.rs::every_category_serialises_as_its_snake_case_name` |
 
 ### `crates/micold-daemon/src/mcp/server.rs`, `credentials.rs` (T005, T010)
 

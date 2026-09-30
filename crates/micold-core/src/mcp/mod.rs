@@ -7,3 +7,6 @@
 //!
 //! Contracts: `specs/034-daemon-mcp-server/contracts/binding.md` (endpoint, authentication, launch
 //! wiring) and `contracts/mcp-tools.md` (tools, rows, results).
+
+pub mod errors;
+pub mod jsonrpc;
