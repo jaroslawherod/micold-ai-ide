@@ -336,7 +336,10 @@ fn validated_draft(app: &mut App) -> Option<ValidSettings> {
 /// confirmation leave *neither* of them done.
 fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
     let (survival, check) = save_and_prepare_check(app, valid);
-    Task::batch([survival, crate::shell::env_include::run_script_path_check(check)])
+    Task::batch([
+        survival,
+        crate::shell::env_include::run_script_path_check(check),
+    ])
 }
 
 /// [`apply_save`]'s body, with the save's script path check (spec 035 T2) prepared rather than
@@ -409,9 +412,9 @@ pub(crate) fn save_and_prepare_check(
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
     app.core.update(Message::Settings(SettingsMsg::Saved)); // closes the view
-    // Spec 035 T2: check the path as just saved, on every save, changed or not (FR-004, FR-009).
-    // After the write and 011's refresh, so the job reads the stored values; the reducer turns a
-    // missing or unreadable answer into the save's one notification (S5).
+                                                            // Spec 035 T2: check the path as just saved, on every save, changed or not (FR-004, FR-009).
+                                                            // After the write and 011's refresh, so the job reads the stored values; the reducer turns a
+                                                            // missing or unreadable answer into the save's one notification (S5).
     let check = crate::shell::env_include::prepare_script_path_check(
         app,
         micold_client::features::settings::CheckOrigin::Saved,
