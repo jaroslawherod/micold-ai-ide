@@ -26,13 +26,8 @@
 use crate::context_menu_anchor::{sidebar_row, with_worktrees};
 use crate::support::layout::{self as lay, LayoutRecord};
 use iced::Size;
-use micold_client::app::State;
+use micold_client::app::{State, MIN_WINDOW_SIZE};
 use micold_client::features::connection::ConnectionStatus;
-
-/// The smallest window the application allows: `shell/startup.rs`'s `MIN_WINDOW_SIZE`, restated
-/// because it lives in the binary crate, which no test can reach. The worst case for this bug: the
-/// least room on every side of every row.
-const SMALLEST_WINDOW: Size = Size::new(640.0, 480.0);
 
 /// Half a pixel, matching every geometry gate beside this one.
 const TOLERANCE: f32 = 0.5;
@@ -453,7 +448,7 @@ fn the_last_row_keeps_its_tooltip_off_itself() {
 /// The same, in the smallest window the application allows (T032).
 #[test]
 fn the_last_row_keeps_its_tooltip_off_itself_in_the_smallest_window() {
-    assert_last_row_keeps_its_tooltip_off_itself(SMALLEST_WINDOW);
+    assert_last_row_keeps_its_tooltip_off_itself(MIN_WINDOW_SIZE);
 }
 
 /// Unchanged behaviour: a row with room below it gets its tooltip below it, clear of it (T032).
@@ -485,7 +480,7 @@ fn a_row_with_room_below_gets_its_tooltip_below_it() {
 /// where it is laid out, which the unscrolled cases above never exercise.
 #[test]
 fn the_last_row_of_a_scrolled_list_keeps_its_tooltip_off_itself() {
-    for size in [lay::WINDOW, Size::new(1280.0, 720.0), SMALLEST_WINDOW] {
+    for size in [lay::WINDOW, Size::new(1280.0, 720.0), MIN_WINDOW_SIZE] {
         let state = with_worktrees(Vec::new(), OVERFLOWING_LIST, size);
         let hovered = hover_row(&state, OVERFLOWING_LIST, size, Scroll::ToEnd);
         let row = &hovered.row;
