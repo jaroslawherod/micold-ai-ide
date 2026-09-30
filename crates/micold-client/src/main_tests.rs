@@ -5587,4 +5587,177 @@ mod issue_source {
         assert_eq!(form(&rig.app).ticket, "1100");
         assert_eq!(form(&rig.app).name, "Beyond the cap");
     }
+
+    // --- US2: the issue's labels choose the type (feature 034 M4) ------------------------------
+
+    use micold_core::issue_types::LabelTypeEntry;
+    use micold_core::settings::{FakeSettingsStore, SettingsStore};
+
+    fn entry(label: &str, type_: ConventionalType) -> LabelTypeEntry {
+        LabelTypeEntry {
+            label: label.to_string(),
+            type_,
+        }
+    }
+
+    /// Store `mapping` as the application's label-to-type mapping and hand the store to the app.
+    fn with_mapping(rig: &mut IssueRig, mapping: Vec<LabelTypeEntry>) -> Arc<FakeSettingsStore> {
+        let store = Arc::new(FakeSettingsStore::loaded(micold_core::settings::Settings {
+            issue_label_types: mapping,
+            ..Default::default()
+        }));
+        rig.app.caps = rig.app.caps.clone().with_settings(store.clone());
+        store
+    }
+
+    /// A rig with issues `issues` loaded and `mapping` in the settings store.
+    fn mapped_rig(issues: Vec<Issue>, mapping: Vec<LabelTypeEntry>) -> IssueRig {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues)),
+        );
+        with_mapping(&mut rig, mapping);
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        rig
+    }
+
+    /// Pick issue `number` the way the list does: by its row, through the shell.
+    fn pick_row(app: &mut App, number: u64) {
+        send(app, FormMsg::IssueQueryChanged(String::new()));
+        let row = offered(app)
+            .iter()
+            .position(|n| *n == number)
+            .expect("the issue is offered");
+        send(app, FormMsg::IssueRowPicked(row));
+        assert_eq!(form(app).ticket, number.to_string(), "the row was picked");
+    }
+
+    fn default_rig() -> IssueRig {
+        mapped_rig(issues(), micold_core::issue_types::default_mapping())
+    }
+
+    /// A11 — with the default mapping, an issue labelled `bug` selects `fix` (US2-1).
+    #[test]
+    fn issue_a_bug_label_selects_fix() {
+        let mut rig = default_rig();
+        pick_row(&mut rig.app, 42);
+        assert_eq!(form(&rig.app).type_, Some(ConventionalType::Fix));
+    }
+
+    /// A12 — the mapping entry listed first wins, whatever order the issue lists its labels in
+    /// (US2-2).
+    #[test]
+    fn issue_the_first_mapping_entry_wins() {
+        let mut rig = mapped_rig(
+            vec![issue(5, "Both kinds", &["enhancement", "bug"])],
+            vec![
+                entry("bug", ConventionalType::Fix),
+                entry("enhancement", ConventionalType::Feat),
+            ],
+        );
+        pick_row(&mut rig.app, 5);
+        assert_eq!(form(&rig.app).type_, Some(ConventionalType::Fix));
+    }
+
+    /// A13 — picking an issue with no mapped label clears a selected type, and the form asks for
+    /// one as it does today (US2-3).
+    #[test]
+    fn issue_an_unmapped_issue_clears_the_type() {
+        let mut rig = default_rig();
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Chore));
+        pick_row(&mut rig.app, 7);
+        let f = form(&rig.app);
+        assert_eq!(f.type_, None, "no type carries over from earlier input");
+        assert!(!f.can_submit(), "submitting needs a type again");
+        assert!(f.preview().is_err(), "the preview reports the missing type");
+    }
+
+    /// A14 — a type chosen after a label-selected one is the one the create request uses (US2-4).
+    #[test]
+    fn issue_a_label_type_can_be_overridden() {
+        let mut rig = default_rig();
+        pick_row(&mut rig.app, 42);
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Feat));
+        let _ = remote_lists_sent(&mut rig.rx);
+        send(&mut rig.app, FormMsg::Submitted);
+        assert_eq!(
+            preflights_sent(&mut rig.rx),
+            vec!["feat/42_crash-when-opening-empty-project".to_string()]
+        );
+    }
+
+    /// A15 — a mapping entry `Bug` matches an issue label `bug` (US2-5).
+    #[test]
+    fn issue_label_matching_ignores_case() {
+        let mut rig = mapped_rig(issues(), vec![entry("Bug", ConventionalType::Perf)]);
+        pick_row(&mut rig.app, 42);
+        assert_eq!(form(&rig.app).type_, Some(ConventionalType::Perf));
+    }
+
+    /// A16 — a selected type is replaced by the picked issue's mapped one (US2-6).
+    #[test]
+    fn issue_a_mapped_label_replaces_the_selected_type() {
+        let mut rig = default_rig();
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Chore));
+        pick_row(&mut rig.app, 108);
+        assert_eq!(form(&rig.app).type_, Some(ConventionalType::Docs));
+    }
+
+    /// A17 — an issue row's text shows its labels, so the type it will get is visible before the
+    /// pick (US2-7). A regression pin: slice B's `row_text` already carries them.
+    #[test]
+    fn issue_rows_show_labels() {
+        let rig = default_rig();
+        let f = form(&rig.app);
+        let row = f
+            .issues
+            .held()
+            .into_iter()
+            .find(|i| i.number() == 42)
+            .expect("issue 42 is loaded")
+            .row_text()
+            .to_string();
+        assert!(
+            row.contains("bug"),
+            "the row shows the `bug` label: {row:?}"
+        );
+    }
+
+    /// U85 — the shell reads the mapping from the settings store at the pick: a later change to the
+    /// stored mapping reaches the next pick and not the one already made; with no store the
+    /// default applies (FR-014a).
+    #[test]
+    fn issue_the_pick_reads_the_stored_mapping() {
+        let mut rig = loaded_rig();
+        let store = with_mapping(&mut rig, vec![entry("bug", ConventionalType::Chore)]);
+        pick_row(&mut rig.app, 42);
+        assert_eq!(form(&rig.app).type_, Some(ConventionalType::Chore));
+
+        store
+            .save(&micold_core::settings::Settings {
+                issue_label_types: vec![entry("bug", ConventionalType::Perf)],
+                ..Default::default()
+            })
+            .expect("the fake saves");
+        assert_eq!(
+            form(&rig.app).type_,
+            Some(ConventionalType::Chore),
+            "editing the mapping does not change the issue already picked"
+        );
+        pick_row(&mut rig.app, 42);
+        assert_eq!(
+            form(&rig.app).type_,
+            Some(ConventionalType::Perf),
+            "the next pick reads the mapping as it is now"
+        );
+
+        let mut bare = loaded_rig();
+        pick_row(&mut bare.app, 42);
+        assert_eq!(
+            form(&bare.app).type_,
+            Some(ConventionalType::Fix),
+            "with no settings store the default mapping applies"
+        );
+    }
 }

@@ -387,6 +387,37 @@ fn turning_the_binding_toggle_off_reaches_what_save_writes() {
     );
 }
 
+// --- Feature 034: the label-to-type mapping rides along with every save (U86) ------------------
+
+#[test]
+fn the_mapping_survives_other_saves() {
+    use micold_core::issue_types::LabelTypeEntry;
+    use micold_core::naming::ConventionalType;
+
+    // FR-016, FR-020: the client's save writes its whole half of the document, so the mapping must
+    // be in what it writes or a theme change would reset it to nothing.
+    let stored = Settings {
+        issue_label_types: vec![LabelTypeEntry {
+            label: "perf".to_string(),
+            type_: ConventionalType::Perf,
+        }],
+        ..Settings::default()
+    };
+    let mut draft = SettingsDraft::from_settings(&stored);
+    draft.show(SettingsSection::Appearance);
+    draft.appearance.theme = ThemePreference::Dark;
+
+    let saved = draft
+        .validate()
+        .expect("a theme change is valid")
+        .into_settings();
+    assert_eq!(saved.theme, ThemePreference::Dark);
+    assert_eq!(
+        saved.issue_label_types, stored.issue_label_types,
+        "a save that changes only the theme keeps the stored mapping"
+    );
+}
+
 // --- Spec 035: the script path check, in the reducer (contracts/settings-indication.md §1) -------
 
 mod script_path_check {

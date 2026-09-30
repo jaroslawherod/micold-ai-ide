@@ -54,6 +54,7 @@ use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::issue_types::{default_mapping, LabelTypeEntry};
 use micold_core::overlay::Layer;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
@@ -335,6 +336,25 @@ pub struct EnvironmentDraft {
     pub tool_server_enabled: bool,
 }
 
+/// The label-to-type mapping the draft carries (feature 034, FR-016).
+///
+/// Seeded from what is stored and written back whole by a save, so that a save changing anything
+/// else keeps the mapping. No view edits it yet; the GitHub issues section arrives with US3.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GithubDraft {
+    /// The mapping, in order.
+    pub entries: Vec<LabelTypeEntry>,
+}
+
+impl Default for GithubDraft {
+    /// The default table, as a never-edited mapping reads (FR-021).
+    fn default() -> Self {
+        Self {
+            entries: default_mapping(),
+        }
+    }
+}
+
 /// The Session service section's fields (feature 027, FR-028).
 ///
 /// The sandbox profile is held whole rather than field by field, so that a setting this section
@@ -418,6 +438,8 @@ pub struct ValidSettings {
     pub tool_server_enabled: bool,
     /// Session service.
     pub daemon: DaemonConfig,
+    /// GitHub issues: the label-to-type mapping (feature 034).
+    pub issue_label_types: Vec<LabelTypeEntry>,
 }
 
 impl ValidSettings {
@@ -433,7 +455,7 @@ impl ValidSettings {
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
             daemon: self.daemon,
-            issue_label_types: micold_core::issue_types::default_mapping(),
+            issue_label_types: self.issue_label_types,
         }
     }
 }
@@ -455,6 +477,8 @@ pub struct SettingsDraft {
     pub environment: EnvironmentDraft,
     /// Session service.
     pub daemon: DaemonDraft,
+    /// GitHub issues (feature 034).
+    pub github: GithubDraft,
     /// The last validation failure shown after a rejected save.
     pub error: Option<FieldError>,
 }
@@ -540,6 +564,7 @@ impl SettingsDraft {
                 placement: self.daemon.placement,
                 sandbox: profile,
             },
+            issue_label_types: self.github.entries.clone(),
         })
     }
 
@@ -755,6 +780,9 @@ impl SettingsDraft {
                 // lands — `Settings` has never heard of it and must not learn.
                 capabilities: None,
                 unshared_sign_in: None,
+            },
+            github: GithubDraft {
+                entries: settings.issue_label_types.clone(),
             },
             error: None,
         }

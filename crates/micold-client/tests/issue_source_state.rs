@@ -481,7 +481,13 @@ fn a_pick_fills_ticket_and_name() {
     send(&mut state, Msg::Submitted);
     send(&mut state, Msg::IssueFocused);
 
-    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 42,
+            mapping: vec![],
+        },
+    );
 
     let f = form(&state);
     assert_eq!(f.ticket, "42");
@@ -507,12 +513,24 @@ fn a_pick_fills_ticket_and_name() {
 fn a_stale_pick_is_ignored() {
     let mut state = loaded();
     send(&mut state, Msg::NameChanged("mine".into()));
-    send(&mut state, Msg::IssuePicked { number: 9999, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 9999,
+            mapping: vec![],
+        },
+    );
     assert_eq!(form(&state).name, "mine");
     assert_eq!(form(&state).picked_issue, None);
 
     let (mut state, _) = loading();
-    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 42,
+            mapping: vec![],
+        },
+    );
     assert_eq!(form(&state).ticket, "");
     assert_eq!(form(&state).picked_issue, None);
 }
@@ -521,7 +539,13 @@ fn a_stale_pick_is_ignored() {
 #[test]
 fn issue_source_previews_as_new() {
     let mut state = loaded();
-    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 42,
+            mapping: vec![],
+        },
+    );
     let as_issue = form(&state).clone();
     assert!(
         !as_issue.can_submit(),
@@ -629,7 +653,13 @@ fn the_mapping_is_read_at_the_pick() {
 #[test]
 fn leaving_the_source_forgets_the_pick() {
     let mut state = loaded();
-    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 42,
+            mapping: vec![],
+        },
+    );
     send(&mut state, Msg::SourceChanged(BranchSource::New));
     assert_eq!(form(&state).picked_issue, None);
     assert_eq!(
@@ -796,7 +826,13 @@ fn a_newer_keystroke_discards_an_older_search() {
         1,
         "a searched issue already loaded is shown once (invariant 4)"
     );
-    send(&mut state, Msg::IssuePicked { number: 1200, mapping: vec![] });
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 1200,
+            mapping: vec![],
+        },
+    );
     assert_eq!(
         form(&state).ticket,
         "1200",
