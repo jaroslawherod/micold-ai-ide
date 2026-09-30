@@ -169,6 +169,10 @@ Tests: `crates/micold-client/tests/issue_source_state.rs` (new).
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U96 | `Opened` starts with `github = Checking` and `issues = NotRequested`; `source_caption()` gives the Checking text, the Unavailable reason, or — while `Available` and the source is not `Issue` — the opt-in notice naming `owner/name`; `issue_notice()` names `owner/name` while the source is `Issue` | FR-002, FR-025 | example | DONE | `issue_source_state.rs::captions_follow_availability` |
+| U103 | Leaving the issue source forgets the picked issue (added in M2 review A #5) | FR-003 | example | DONE | `issue_source_state.rs::leaving_the_source_forgets_the_pick` |
+| U104 | `issue_cap_caption()` counts the loaded and the open issues when the listing is not complete, and is `None` when it is (added in M2 review A #2, B F4) | FR-004 | example | DONE | `issue_source_state.rs::the_cap_caption_counts_the_loaded_and_the_open` |
+| U105 | A Typeahead row pick (`IssueRowPicked(row)`) resolves to that row's issue and fills ticket and name (added in M2 review B F1) | FR-006 | example | DONE | `main_tests.rs::issue_source::issue_a_row_pick_resolves_to_its_issue` |
+| U106 | Opening the form with no project open ends `Checking` with an `Unavailable` reason (added in M2 review A #3) | FR-002 | example | DONE | `main_tests.rs::issue_source::issue_no_project_is_not_left_checking` |
 | U44 | `RemotesListed(Ok)` → `Available(repo)`; no GitHub remote → `Unavailable("This repository has no GitHub remote.")`; `Err(d)` → `Unavailable("Couldn't read this repository's remotes: d")` | FR-002 | example | DONE | `issue_source_state.rs::remotes_decide_availability` |
 | U45 | `SourceChanged(Issue)` is refused while `Checking` or `Unavailable`, accepted while `Available` → `Loading { seq }` | FR-003, inv. 1 | example | DONE | `issue_source_state.rs::the_source_is_chosen_only_when_available` |
 | U46 | `IssuesLoaded` with the awaited seq applies; with any other seq is dropped; with no form open is dropped | FR-007a, inv. 2 | example | DONE | `issue_source_state.rs::only_the_awaited_result_applies` |

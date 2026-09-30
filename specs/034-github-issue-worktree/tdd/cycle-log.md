@@ -341,3 +341,24 @@ failed before the implementation.
   dialog's fields, so the `add-worktree-dialog-type-menu-open` press path and anchor moved with it,
   and `layout_snapshot.txt` was regenerated with four new covered states (T030).
 - commit: the commit that adds this entry
+
+## Cycle 13: U103–U106 — M2 review round 1 (code-review A, conformance B)
+
+- red: `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state` against a
+  stub `issue_cap_caption` returning `None` -> 15 passed, 2 failed:
+  `issue_source_state.rs:557:5 left: Some(42) right: None` (U103) and
+  `issue_source_state.rs:584:5 left: None right: Some("Showing the 3 most recently updated of 1,234 open issues.")`
+  (U104). `--bin micold-ai-ide issue_source` -> 14 passed, 1 failed:
+  `main_tests.rs:4478:9 left: Checking right: Unavailable("Couldn't read this repository's remotes: no project is open")`
+  (U106).
+- test-after, pinned by a mutant: U105 (`issue_a_row_pick_resolves_to_its_issue`) passed at first
+  run against the existing `on_issue_row_picked`; A3 now picks through `IssueRowPicked` too. With
+  the mutant `issue_number_at(index + 1)` both failed (13 passed, 2 failed), then it was restored.
+- green: `reset_issues` clears `picked_issue`; `issue_cap_caption` in the reducer with `thousands`
+  moved beside it, and the UI reads it; `on_form_opened` answers `RemotesListed(Err("no project is
+  open"))` when no project is active. -> 17 passed, 15 passed, 2 passed.
+- also fixed without a new behaviour test (review A): the load's snapshot no longer overwrites a
+  newer cache entry (`entry().or_insert`, #1); an unexpected answer to `RemoteList` becomes an
+  error instead of leaving `Checking` (#4); rows and the selected row come from `held()` in one
+  pass (#6, #7); the snapshot is resolved through `resolve_env_include` (#10).
+- commit: the commit that adds this entry

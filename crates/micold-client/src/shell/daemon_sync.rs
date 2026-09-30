@@ -734,11 +734,14 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // Feature 034: the remotes decide whether the GitHub issue source can be chosen. The same
             // staleness guard as the branch listing.
             Some(PendingOp::RemoteList { project: asked_for }) => {
-                if let OperationResult::RemoteList { remotes } = result {
-                    if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
-                        app.core
-                            .update(Message::WorktreeForm(FormMsg::RemotesListed(Ok(remotes))));
-                    }
+                if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
+                    // Any other answer would leave the form checking forever: say so instead.
+                    let listed = match result {
+                        OperationResult::RemoteList { remotes } => Ok(remotes),
+                        _ => Err("the daemon sent an unexpected answer".to_string()),
+                    };
+                    app.core
+                        .update(Message::WorktreeForm(FormMsg::RemotesListed(listed)));
                 }
             }
             // Feature 027 (research R2 part 2): the open-project gate, answered by the side
