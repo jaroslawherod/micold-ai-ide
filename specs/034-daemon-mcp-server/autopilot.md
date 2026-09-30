@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M1
-- **Next step**: Unit: M1 remaining: T100 real-CLI evidence, then gate, reviews, open PR. Done: T001–T014, T016–T020, T022; read tools (T015, T021) green except U127, see Follow-ups
+- **Next step**: Unit: M1 gate, cross-checks, reviews A and B, open PR. All M1 tasks done except T015/T021 (U127 blocked, see Follow-ups) and the T078–T082 acceptance ticks after the gate
 
 ## Pull requests
 
