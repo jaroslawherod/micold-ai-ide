@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: Wait for M4's PR CI and merge; then run milestone M5 (T053–T062, T086–T092).
+- **Next step**: M5 in progress — implementation committed (T053–T061, T086–T092); gate, review A, review B and the §B12 visual pass (T062) next.
 
 ## Pull requests
 
@@ -24,9 +24,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | #460 | merged (454c716c) |
 | M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | #468 | merged (a17e6cde) |
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | #472 | merged (691510de) |
-| M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | #478 | open — rebased onto main (tool-server `tool_server_enabled` merged beside `issue_label_types`), gate green |
-| M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | — | pending |
-| M6 | T063–T065 | Architecture doc + quickstart §B10, B11, B13 recorded | — | pending |
+| M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | #478 | merged (e201a04e) |
+| M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | — | in-progress |
+| M6 | T063–T065 | Architecture doc + quickstart §B10, B11, B13 recorded | — | split: M6a (T063, T064 §B10 Linux + §B11) runs in parallel with M5 in a separate worktree on branch feat/034-m6a-close-out at user request 2026-09-30; M6b (T064 §B13 + macOS/Windows §B10, T065) after M5 |
 
 Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free core + RPC, UI unreachable per rule 6; M2 completes it) and M2, plus M3 along AS10. M2 stays whole (~25 tasks, 9 of them outer-loop-green ticks): an acceptance-scenario split would put a list on `main` that cannot be picked from.
 
