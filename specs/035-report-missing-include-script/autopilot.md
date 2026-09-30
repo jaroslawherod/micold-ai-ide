@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M1 merged (#466 at 4ef54b2d). M2 in progress: implement T013, T016, T037–T042.
+- **Next step**: M2 code done (T013, T016, T037–T039, T041, T042); gate re-run for T040, then open the M2 PR.
 
 ## Pull requests
 

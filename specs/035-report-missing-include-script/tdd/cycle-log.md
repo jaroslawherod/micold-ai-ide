@@ -227,3 +227,22 @@ existed and failed before the implementation.
   -> U58 failed at `main_tests.rs:4378`; reverted.
 - refactor: none needed.
 - commit: 2f94f598
+
+## Cycle 12 (M2): U64 a failed write posts no path notice (review A); mutants for A5 and U56 (review B)
+
+- test: `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_whose_write_failed_posts_no_notice_about_the_path` (new, U64, added to the list after review A found the
+  save's check ran after a failed write).
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report` -> 9 passed; 1 failed:
+  `got [Notification { level: Error, message: "Couldn't save your settings: fake: save refused" }, Notification { level: Info, message: "The environment-include script was not found: /tmp/does-not-exist.sh" }]`
+- green: `save_and_prepare_check` returns `Option<ScriptPathCheckJob>`, `None` when the write
+  failed; `apply_save` runs the job only when there is one -> 10 passed.
+- refactor (same commit): the save tests share `saving_app`, which also swaps in
+  `FakeEnvIncludeResolver` so the feature-on save never runs a real shell over the temp dir;
+  `opened()` removed for the existing `open_and_check`; U58's test renamed to what it asserts.
+  `save_notice` made private; the contract names its `Option<String>` return.
+- mutants for the tests that went red only through Cycle 11's `todo!` stub (review B F2), each
+  applied alone and reverted with `git checkout`:
+  - the save prepares its check with `CheckOrigin::Opened` -> A5 failed at `main_tests.rs:4341`
+    (no notice), U56 at `:4368` (origin)
+  - the save checks only when the path changed -> U56 failed at `:4358` (no job), A5 at `:4341`
+- commit: 811b8faa
