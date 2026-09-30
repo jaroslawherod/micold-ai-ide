@@ -135,8 +135,9 @@ This section holds three fields:
   again.
 - **Script path**: the file to source. Any path is accepted and never rejected at save time. Each
   time you open Settings, the path is checked (without running the script), and while environment
-  include is off, a path that names no readable file is reported below the fields — see
-  [If the script path names no file](#if-the-script-path-names-no-file).
+  include is off, a path that names no readable file is reported below the fields. A save that
+  leaves such a path is saved as usual and then posts a notification naming it, whether the feature
+  is on or off — see [If the script path names no file](#if-the-script-path-names-no-file).
 - **Timeout (seconds)**: how long sourcing may run before being treated as hung. **Default**: 10
   seconds. **Range**: 1 – 60 seconds; out-of-range or non-numeric input is rejected with a message
   and not saved (same as the scrollback field).
@@ -181,6 +182,22 @@ Also while it is off, a few paths are reported differently:
 - If the check has no answer within 2 seconds — for example, the path is on a network drive that
   is not responding — the page says **Couldn't check the script path** rather than waiting.
 - A blank path, or a path that names a readable file, shows nothing.
+
+#### When you save
+
+Saving always goes through: a missing script never stops the other settings from being saved.
+Because Save closes Settings, every save that leaves a path naming no readable file then posts a
+notification naming it — with **Source a script before each session** on or off, and even if the
+save did not change the path:
+
+- **The environment-include script was not found: `<path>`** — nothing exists at that path. For a
+  path starting with `~`, it adds **(~ is not expanded; use a full path)**.
+- **The environment-include script is not a readable file: `<path>`** — something is there, but it
+  is a directory or a file you are not allowed to read.
+
+A blank path, a relative path, a readable file, or a check with no answer within 2 seconds posts no
+notification. Nothing else reports a missing script: opening a session does not, and neither does
+the main window.
 
 To fix it, edit **Script path** to the full path of a readable file, or clear it, and save.
 
