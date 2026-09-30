@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M4 PR open; wait for `ci complete`, merge, then Phase 5 (close).
+- **Next step**: M4 PR #477 open; wait for `ci complete`, merge, then Phase 5 (close).
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #466 | M1: report a missing path while the feature is off | merged | 4ef54b2d |
 | #471 | M2: notify when a save leaves a missing script path | merged | fae88e6c |
 | #473 | M3: the same report with the feature on or off | merged | b0432747 |
+| #477 | M4: recovery by the user's own edit, architecture doc, full §B pass | open | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | merged |
 | M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | #471 | merged |
 | M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | #473 | merged |
-| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | PR open |
+| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | #477 | PR open |
 
 ## Decisions
 
@@ -73,6 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D35 | 4-M4 | Review A round 1 (code-review high) | 10 findings, all MINOR/nit on tests and records: 9 fixed (fixture comment; A9 installs its own probe and asserts it probed the typed path once; A9/A10 reopen Settings and assert no lines; U62 drafts a timeout change and asserts it applied while path and flag stay; cycle 16's commit and line numbers recorded in a follow-up entry; D34 order; imports; doc rewrap), 1 declined (below). Gate 1 failed on `cargo fmt --check` only; fixed. | agent-resolved | code-review skill; snapshot 3320e6e4 |
 | D36 | 4-M4 | Review B round 1 (conformance) | CLEAN, 2 MINOR: F1 (cycle 16 points at a T036 entry) closed by writing the T036 entry; F2 (A9's path is never created) declined, the test says the fake probe stands in for the file. Verify at 1ed44b44: script_path_report 19 passed. Gate at 1ed44b44: GATE_EXIT=0, 3941 passed. | agent-resolved | reviewer subagent; snapshot b73ae694:1ed44b44 |
 | D37 | 4-M4 | Visual pass B1–B11, dark and light (T029, T031) | All 22 PASS; no line overflows the column. B9/B10: no notification, nothing below Timeout on reopen. Evidence `visual-pass/M4-*.png`, table in `visual-pass/README.md`. | agent-resolved | visual-pass skill (Xvfb :91, binaries from 1ed44b44) |
+| D38 | 4-M4 | PR title prefix for M4 | `test(035)`, not `feat`: M4 adds tests, a doc line and the visual record, no behaviour; `feat` would put a feature line in the changelog. | agent-resolved | pr-and-merge.md §4 (release-please builds the changelog from the prefix) |
 
 ## Declined review findings
 
