@@ -721,9 +721,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::daemon_sync::on_session_remove_confirmed(app)
         }
         // Feature 034 (FR-014): the answer goes on the wire, which the pure reducer cannot do.
-        Message::AgentConfirm(
-            micold_client::features::agent_confirm::Msg::Answered { id, allow },
-        ) => shell::daemon_sync::on_agent_confirm_answered(app, id, allow),
+        Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Answered {
+            id,
+            allow,
+        }) => shell::daemon_sync::on_agent_confirm_answered(app, id, allow),
         // Feature 031: opening is I/O on a blocking task, so the reducer's `OpenLink` is performed
         // here rather than dropped by the root.
         Message::Session(msg @ SessionMsg::LinkActivated(_)) => {

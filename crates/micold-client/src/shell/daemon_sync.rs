@@ -1021,15 +1021,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             target_label,
             ..
         } => {
-            app.core.update(Message::AgentConfirm(AgentConfirmMsg::Requested(
-                micold_client::features::agent_confirm::Prompt {
-                    id,
-                    project,
-                    caller_label,
-                    operation,
-                    target_label,
-                },
-            )));
+            app.core
+                .update(Message::AgentConfirm(AgentConfirmMsg::Requested(
+                    micold_client::features::agent_confirm::Prompt {
+                        id,
+                        project,
+                        caller_label,
+                        operation,
+                        target_label,
+                    },
+                )));
         }
         DaemonMsg::ConfirmationWithdrawn { id } => {
             app.core
@@ -1487,11 +1488,14 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 pub fn on_agent_confirm_answered(app: &mut App, id: u64, allow: bool) -> Task<Message> {
     if app.core.agent_confirm.is_pending(id) {
         if let Some(d) = &app.daemon {
-            let _ = (d, allow); // red: not yet sent
+            d.send(ClientMsg::ConfirmationAnswer { id, allow });
         }
     }
     app.core
-        .update(Message::AgentConfirm(AgentConfirmMsg::Answered { id, allow }));
+        .update(Message::AgentConfirm(AgentConfirmMsg::Answered {
+            id,
+            allow,
+        }));
     Task::none()
 }
 
@@ -3210,7 +3214,9 @@ pub(crate) mod tests {
         }
     }
 
-    fn drain_sent(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
+    fn drain_sent(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<ClientMsg> {
         let mut sent = Vec::new();
         while let Ok(msg) = rx.try_recv() {
             sent.push(msg);
@@ -3225,7 +3231,10 @@ pub(crate) mod tests {
         for allow in [true, false] {
             let (mut app, mut rx) = connected_app();
             let _ = on_daemon_event(&mut app, confirmation_requested(41));
-            assert!(app.core.agent_confirm.is_pending(41), "the request is shown");
+            assert!(
+                app.core.agent_confirm.is_pending(41),
+                "the request is shown"
+            );
             let _ = drain_sent(&mut rx);
 
             let _ = on_agent_confirm_answered(&mut app, 41, allow);
@@ -3248,7 +3257,10 @@ pub(crate) mod tests {
         let (mut app, mut rx) = connected_app();
         let _ = on_daemon_event(&mut app, confirmation_requested(41));
         let _ = on_daemon_event(&mut app, DaemonMsg::ConfirmationWithdrawn { id: 41 });
-        assert!(app.core.agent_confirm.pending.is_empty(), "withdrawn closes it");
+        assert!(
+            app.core.agent_confirm.pending.is_empty(),
+            "withdrawn closes it"
+        );
         let _ = drain_sent(&mut rx);
 
         let _ = on_agent_confirm_answered(&mut app, 41, true);

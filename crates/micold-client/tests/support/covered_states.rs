@@ -1361,10 +1361,16 @@ pub fn covered_states() -> &'static [CoveredState] {
                     }];
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "dialog.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[6, 0, 0, 1],
+                },
+            ],
         },
     ]
 }
