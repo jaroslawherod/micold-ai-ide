@@ -55,7 +55,7 @@ target or caller gone → `not_found`.
 ready for input (research R12; "output settled" = the primary terminal produced output and then
 none for 1.5 s), or with `prompt_delivered: false` 60 s after the request or on a
 failed start (FR-017). When the CLI's own trust record shows it would first ask whether to trust
-the session's folder, nothing is typed and the call returns at once with `prompt_delivered: false`
+the session's folder, nothing is typed and the call returns as soon as the session has started, with `prompt_delivered: false`
 (R12). `prompt_reason` is present exactly when `prompt_delivered` is `false`, and says which of the
 three happened.
 

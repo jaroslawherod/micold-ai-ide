@@ -154,9 +154,17 @@ impl GitCli {
     }
 
     /// Whether git accepts `branch` as a branch name (`git check-ref-format --branch`); the error
-    /// carries git's own message (feature 034, EC-3).
+    /// carries git's own message (feature 034, EC-3). git expands a shorthand such as `@{-1}` to
+    /// the branch it stands for and accepts it, so a name that comes back changed is refused too.
     pub fn check_branch_name(&self, repo: &Path, branch: &str) -> io::Result<()> {
-        run_git(repo, &["check-ref-format", "--branch", branch]).map(|_| ())
+        let normal = run_git(repo, &["check-ref-format", "--branch", branch])?;
+        if normal.trim_end_matches(['\r', '\n']) != branch {
+            return Err(io::Error::other(format!(
+                "'{branch}' is not a valid branch name: git reads it as a shorthand for '{}'",
+                normal.trim()
+            )));
+        }
+        Ok(())
     }
 }
 

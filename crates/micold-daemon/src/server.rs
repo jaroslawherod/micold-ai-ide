@@ -573,15 +573,6 @@ where
     result
 }
 
-/// An event from a connection's own spawned work back to its message loop.
-///
-/// The loop owns state no other task may touch — the view stream — so work that now finishes
-/// elsewhere reports back rather than reaching in (BUG-009, T125).
-enum Internal {
-    /// A session start this connection asked for has concluded (successfully or not).
-    SessionStarted(micold_core::session::SessionId),
-}
-
 /// The per-connection message loop. Every push back to the client goes through the shared state's
 /// per-client channel so other connections can reach this one too.
 async fn route<St>(
@@ -602,10 +593,10 @@ where
     // `view_stream` alone cannot answer that: a client may ask to view a session whose start is
     // still running, and the stream can only be built once the session exists.
     let mut viewing: Option<micold_core::session::SessionId> = None;
-    // Events from this connection's own spawned work back to its loop. The loop owns `view_stream`
-    // and is the only thing that may touch it, so work that finishes elsewhere — a session start,
-    // now that starts no longer block the loop — reports back here rather than reaching in.
-    let (internal_tx, mut internal_rx) = tokio::sync::mpsc::unbounded_channel::<Internal>();
+    // Every finished session start, whoever asked for it (this window, another, or an agent's
+    // `create_session`). The loop owns `view_stream` and is the only thing that may touch it, so a
+    // start that finishes elsewhere reports here rather than reaching in (BUG-009, T125).
+    let mut started_rx = state.subscribe_session_started();
 
     loop {
         let msg = tokio::select! {
@@ -617,18 +608,20 @@ where
                 Some(Err(e)) => return Err(io::Error::other(e)),
                 None => break, // EOF
             },
-            Some(event) = internal_rx.recv() => {
-                match event {
-                    // A start this connection asked for has finished. If the client is waiting to
-                    // view that session, this is the moment its stream can exist.
-                    Internal::SessionStarted(session) => {
-                        if viewing == Some(session) {
-                            if let Some((pty, framer)) =
-                                state.live_session(session).zip(state.session_framer(session))
-                            {
-                                restart_view(state, id, &mut view_stream, pty, framer);
-                            }
-                        }
+            started = started_rx.recv() => {
+                // A session start has concluded. If the client is waiting to view that session,
+                // this is the moment its stream can exist. Missed announcements (the receiver
+                // lagged) may include it, so a viewed session is rechecked then.
+                let concerns_view = match started {
+                    Ok(session) => viewing == Some(session),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => viewing.is_some(),
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => false,
+                };
+                if let Some(session) = viewing.filter(|_| concerns_view) {
+                    if let Some((pty, framer)) =
+                        state.live_session(session).zip(state.session_framer(session))
+                    {
+                        restart_view(state, id, &mut view_stream, pty, framer);
                     }
                 }
                 continue;
@@ -773,13 +766,7 @@ where
                 // liveness deadline. `begin_start` holds any input typed meanwhile so nothing is
                 // lost to the gap it opens (protocol.md §7).
                 state.begin_start(session);
-                spawn_session_start(
-                    state,
-                    session,
-                    LaunchMode::Resume,
-                    None,
-                    internal_tx.clone(),
-                );
+                spawn_session_start(state, session, LaunchMode::Resume, None);
             }
             ClientMsg::ScrollbackRequest {
                 session,
@@ -842,13 +829,7 @@ where
                         // client cannot type into an id it has not been told yet), kept for one
                         // rule rather than two.
                         state.begin_start(session);
-                        spawn_session_start(
-                            state,
-                            session,
-                            LaunchMode::Fresh,
-                            Some((id, req)),
-                            internal_tx.clone(),
-                        );
+                        spawn_session_start(state, session, LaunchMode::Fresh, Some((id, req)));
                     }
                     Err(e) => state.send(
                         id,
@@ -869,7 +850,7 @@ where
                     // Not live *yet* is the ordinary case now: the client sends `SessionStart` and
                     // `SetViewedSession` back to back, and the start no longer completes before this
                     // arrives (BUG-009, T125). `viewing` above records the intent, and the
-                    // `Internal::SessionStarted` arm builds the stream when the session exists.
+                    // session-started arm builds the stream when the session exists.
                     None => {
                         if let Some(prev) = view_stream.take() {
                             prev.abort();
@@ -1636,11 +1617,6 @@ where
     Ok(())
 }
 
-/// Render leftover paths for one log field: `path (uid N)`, comma-separated.
-///
-/// The owner is what makes the line actionable — a foreign uid means the daemon cannot unlink the
-/// entry no matter how often the user retries, and points straight at the cause (typically a
-/// container that wrote build output through a bind mount as root).
 /// Re-discover a project's worktrees from git (off the async runtime, never under the state lock) and
 /// push the refreshed catalog to every client, so a worktree mutation propagates to all windows
 /// without further user action (FR-011, T053).
@@ -1840,15 +1816,12 @@ fn spawn_session_start(
     session: micold_core::session::SessionId,
     launch: LaunchMode,
     reply: Option<(crate::state::ClientId, u64)>,
-    done: tokio::sync::mpsc::UnboundedSender<Internal>,
 ) {
     let started = ops::start_session(state, session, launch);
     let task_state = Arc::clone(state);
     tokio::spawn(async move {
+        // `ops::start_session` announces the finished start to every connection loop.
         let _ = started.await;
-        // Tell the connection loop, which owns the view stream and may have been waiting to build
-        // one for this session. A closed channel just means the client has gone.
-        let _ = done.send(Internal::SessionStarted(session));
         if let Some((client, req)) = reply {
             task_state.send(
                 client,

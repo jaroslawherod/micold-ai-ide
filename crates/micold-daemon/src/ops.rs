@@ -357,7 +357,6 @@ pub fn rename_worktree(
     Ok(())
 }
 
-/// Leftover paths for a log line, each with its owner when it is not this account.
 /// Start `session`'s process off the async runtime and report whether it is running (T125,
 /// feature 034). The caller has already called [`DaemonState::begin_start`], so input typed while
 /// this runs is held and replayed.
@@ -400,10 +399,18 @@ pub fn start_session(
             }
         };
         state.finish_start(session);
+        // Every window's connection hears of it, whoever asked for the start: one already viewing
+        // the session builds its stream now (an agent's `create_session` has no connection).
+        state.announce_session_started(session);
         started
     })
 }
 
+/// Render leftover paths for one log field: `path (uid N)`, comma-separated.
+///
+/// The owner is what makes the line actionable — a foreign uid means the daemon cannot unlink the
+/// entry no matter how often the user retries, and points straight at the cause (typically a
+/// container that wrote build output through a bind mount as root).
 pub fn describe_leftovers(leftovers: &[Leftover]) -> String {
     leftovers
         .iter()

@@ -444,6 +444,11 @@ each group that changes existing code.
 | U225 | Pi never asks | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::pi_never_asks` |
 | U226 | Through `POST /mcp`, a Claude or Copilot session in an untrusted folder gets nothing typed; the call returns at once with `prompt_delivered: false` and a `prompt_reason` naming the CLI and the trust question | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt` |
 | U227 | Pi gets its first prompt without any trust record | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::pi_gets_its_first_prompt_without_a_trust_record` |
+| U228 | A bracketed submission drops paste markers inside the text, so it cannot end the paste early | FR-017 | boundary | DONE | `crates/micold-core/tests/input_readiness.rs::paste_markers_inside_the_text_cannot_end_the_paste_early` |
+| U229 | `create_worktree` with a reflog shorthand (`@{-1}`) that git would expand is `invalid_input`, nothing changes | EC-3 | boundary | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_previous_branch_shorthand_is_invalid_input` |
+| U230 | The first prompt goes to the primary process, judged on its output, even with a shell attached meanwhile | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached` |
+| U231 | Every connection hears that an agent-created session went live (a window viewing it builds its stream) | FR-009, SC-003 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::every_connection_hears_that_an_agent_created_session_went_live` |
+| U232 | Pi without its `session_start` event is ready once its output settles | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::pi_without_its_event_is_ready_once_its_output_settles` |
 
 ## Invariants and edge cases still to place
 

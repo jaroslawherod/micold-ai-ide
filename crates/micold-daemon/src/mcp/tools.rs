@@ -285,7 +285,7 @@ async fn create_session(
     .await?;
     let cli = match ai_cli {
         Some(cli) => cli,
-        None => state.welcome_payload().1.default_ai_cli,
+        None => state.default_ai_cli(),
     };
     let operation = Operation::CreateSession {
         worktree: worktree.clone(),
@@ -391,7 +391,7 @@ async fn deliver_first_prompt(
     if !state.wait_ready_for_input(session, deadline).await {
         return false;
     }
-    let Some(pty) = state.live_session(session) else {
+    let Some(pty) = state.primary_pty(session) else {
         return false;
     };
     let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);

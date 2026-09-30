@@ -20,13 +20,22 @@ const PASTE_START: &[u8] = b"\x1b[200~";
 const PASTE_END: &[u8] = b"\x1b[201~";
 
 /// The bytes that type `text` and submit it once. Trailing line breaks are dropped, so the single
-/// closing carriage return is the only submission.
+/// closing carriage return is the only submission. When bracketed, paste markers inside `text` are
+/// dropped too: an inner end marker would end the paste early and type the rest as keystrokes.
 pub fn encode_submission(text: &str, bracketed: bool) -> Vec<u8> {
     let body = text.trim_end_matches(['\r', '\n']).as_bytes();
     let mut out = Vec::with_capacity(body.len() + PASTE_START.len() + PASTE_END.len() + 1);
     if bracketed {
         out.extend_from_slice(PASTE_START);
-        out.extend_from_slice(body);
+        let mut rest = body;
+        while !rest.is_empty() {
+            if rest.starts_with(PASTE_START) || rest.starts_with(PASTE_END) {
+                rest = &rest[PASTE_END.len()..];
+            } else {
+                out.push(rest[0]);
+                rest = &rest[1..];
+            }
+        }
         out.extend_from_slice(PASTE_END);
     } else {
         out.extend_from_slice(body);
