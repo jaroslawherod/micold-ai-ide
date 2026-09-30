@@ -53,10 +53,11 @@ sends you there.
   |---|---|
   | Finding code, tracing a call path, listing uses of a symbol | `Explore` (Haiku) |
   | A multi-step git job: rebase onto `origin/main` and resolve conflicts in files this flow owns, find which commit changed a line, compare branches by patch | `general-purpose`, `"sonnet"` |
+  | A straightforward implementation task in a `full` milestone: tasks.md or the BUG record names the file and the change, and it copies a pattern that exists in the repo | `general-purpose`, `"sonnet"`, with the task ID, the files, the pattern to copy and the test that must pass. Run that test yourself afterwards. |
   | Checking static text: a doc or checklist against the spec, cross-references between spec artifacts, a log or report summarised to its failures | `general-purpose`, `"sonnet"` (`"haiku"` for a pure search or count) |
 
   Keep one-command operations (`git status`, a single commit or push) in your own context: a
-  subagent costs more than one call. Keep code changes, debugging and review findings on your own
+  subagent costs more than one call. Keep design choices, debugging and review findings on your own
   model. Tell the subagent exactly what to return and in how many lines, and check any change it
   made with `git diff --stat`.
 - **Hand over at 150k.** A large context makes every later call costly. At each checkpoint (a
