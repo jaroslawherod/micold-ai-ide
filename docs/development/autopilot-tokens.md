@@ -114,12 +114,12 @@ What the skill does about it:
 
 ## Tool-call batching
 
-Over the same 53 sessions (29,547 requests), 85% of requests made exactly one tool call and 7.5%
-made several. 32% made one read-only call (`Read`, `grep`, `cat`, `git status`, `gh … view` and the
-like). 1,540 runs of two or more such requests in a row add up to 434M tokens of context re-read by
-the requests after each run's first: about 43M `cost_eq` at the cache-read price, an upper bound,
-since some of those reads needed the one before. The report's `unbatched` column counts them per
-unit.
+Over the same 53 sessions (29,574 requests), 85% of requests made exactly one tool call and 9% made
+several. 25% made one read-only call (`Read`, or a shell command whose every step reads: `grep`,
+`cat`, `git status`, `gh … view` and the like). 1,131 runs of two or more such requests in a row add
+up to 270M tokens of context re-read by the requests after each run's first: about 27M `cost_eq`
+at the cache-read price, an upper bound, since some of those reads needed the one before. The
+report's `unbatched` column counts them per unit.
 
 What the skill does about it:
 
