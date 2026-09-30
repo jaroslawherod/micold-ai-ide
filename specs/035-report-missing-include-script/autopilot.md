@@ -63,6 +63,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D26 | 4-M2 | Review B round 1 (conformance) | CLEAN, 3 MINOR, all applied: contract §1 names `save_notice`'s `Option<String>`; mutants recorded for A5 and U56 (cycle 12); ledger next step. Verify: features_settings 39 passed; script_path_report 9 passed. | agent-resolved | reviewer subagent |
 | D28 | 4-M2 | Review A round 2 (sonnet, fix diff) | CLEAN: fixes 1, 4, 5, 7, 8 hold; declines 2, 3, 6 stand. Gate at 07d0a75a: GATE_EXIT=0, 3767 passed. | agent-resolved | reviewer subagent; snapshot 923f9dcb:07d0a75a |
 | D27 | 4-M2 | Visual pass B11 (T042) | PASS: one Info notice `The environment-include script was not found: /tmp/does-not-exist.sh`, not truncated; reopening shows B1's page. Evidence in `visual-pass/B11-*.png`. | agent-resolved | visual-pass skill |
+| D29 | 4-M3 | M2/#471 merged at fae88e6c; branch reset | `branch-start.sh 471` stopped on a rebase conflict: the branch's two M2 commits were merged under new SHAs (after a fmt commit), so `git cherry` did not match them. Confirmed the 035 files at the old tip equal `origin/main`, aborted the rebase and reset the branch to `origin/main`. | agent-resolved | git diff ORIG_HEAD origin/main |
+| D30 | 4-M3 | Review A round 1 (code-review high) | 8 findings: 4 fixed (NotReadable + `MissingScript` merged, U65; a re-check drops the previous answer when path or enabled changed, U66, `ScriptPathCheckStarted` carries both; shared `adopt_daemon_settings`; stale comment), 4 declined (below). | agent-resolved | code-review skill; snapshot 3255686e:3d355f29 |
+| D31 | 4-M3 | Review B round 1 (conformance) | CLEAN, 2 MINOR, both the same issues as review A F1/F2 and fixed with them. Verify at 3d355f29: features_settings 49 passed; script_path_report 16 passed. | agent-resolved | reviewer subagent; snapshot 3255686e:3d355f29 |
+| D32 | 4-M3 | Visual pass B4, B5, B6 (T027) | All three pass (dark theme, Xvfb :78, pinned pair from 36015322). Evidence in `visual-pass/B4-*`, `B5-*`, `B6-*`. | agent-resolved | visual-pass skill |
 
 ## Declined review findings
 
@@ -78,6 +82,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A | The save's check probes the client host, not a sandbox container's filesystem | D12, research R1–R4: the check runs in the client on the host, like 011's own Settings resolution; the daemon side is #454, out of scope. |
 | M2 | A | A save's check updates `script_check` after Save closed Settings | Contract S2/S4: only the latest check is shown, every open starts a newer one (T1), and S5 runs whether or not S2/S4 applied. |
 | M2 | A | Early `return` in one `update` arm | Taste: the other arms return `()`; the one arm with outcomes returns them explicitly. |
+| M3 | A | Another window's save re-checks the stored path while the open draft's fields still show the old values | Spec Edge Cases ("every window showing Settings shows the same result for the same stored path") and research R8: the notice describes stored values. Refreshing another window's open draft is settings-sync behaviour outside 035 (follow-up). |
+| M3 | A | `Welcome` (reconnect) adopts new settings without re-checking an open page | Contract §3 names T1–T3 only; the next open re-checks. Follow-up. |
+| M3 | A | Re-check on every `SettingsChanged`, even when path and flag are unchanged | FR-009: the indication reflects the path after every save (the file may have appeared since); the check is bounded and off the UI thread. |
+| M3 | A | NotFound + on + `NonZeroExit` still shows 011's exit-error lines | Contract row N4 specifies it (FR-005: 011's indication remains). |
 
 ## Open escalation
 
@@ -89,3 +97,5 @@ None.
   to resolve the script for a session's own directory, and tells no client. That is a defect
   against 011 as written (FR-013 with FR-020), filed as #454. It is outside #435
   and outside this spec. See `specs/011-env-include-script/bugs/BUG-006.md`, "Observations".
+- An open Settings page's draft is not refreshed when another window saves, and `Welcome` does not
+  re-check an open page (review A, M3). Settings-sync behaviour of feature 011, not 035.
