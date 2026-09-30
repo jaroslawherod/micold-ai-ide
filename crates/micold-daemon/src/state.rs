@@ -1349,6 +1349,9 @@ impl DaemonState {
         }
     }
 
+    /// Stop `session` (red stub).
+    pub fn stop_session(&self, _session: SessionId) {}
+
     /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
     /// decides; a later one, or one for an unknown id, is ignored (FR-014).
     pub fn answer_confirmation(&self, id: u64, allow: bool) {

@@ -64,7 +64,16 @@ struct Fixture {
     _store: tempfile::TempDir,
 }
 
-/// A repository with worktree `b` and a free branch `taken`; `caller` is a session in `b`.
+/// Sibling sessions of `caller` in worktree `b`: a shell the destructive tools act on, and one to
+/// delete.
+fn sibling(caller: SessionId, n: u128) -> SessionId {
+    sid(caller.0.as_u128() + n)
+}
+const SHELL: u128 = 100;
+const DOOMED: u128 = 200;
+
+/// A repository with worktrees `b` and `c` and a free branch `taken`; `caller` is a session in
+/// `b` beside its [`sibling`]s. A window answers every prompt with Allow.
 async fn fixture(caller: SessionId) -> Fixture {
     log();
     sandbox_env();
@@ -72,27 +81,53 @@ async fn fixture(caller: SessionId) -> Fixture {
     let store = tempfile::tempdir().unwrap();
     init_repo(project.path());
     add_worktree(project.path(), "b");
+    add_worktree(project.path(), "c");
     git(project.path(), &["branch", "taken"]);
     let state = state_over(
         vec![(
             project.path().to_path_buf(),
             true,
-            vec![session(
-                caller,
-                Some("b"),
-                TerminalMode::AiCli,
-                AiCli::Copilot,
-            )],
+            vec![
+                session(caller, Some("b"), TerminalMode::AiCli, AiCli::Copilot),
+                session(
+                    sibling(caller, SHELL),
+                    Some("b"),
+                    TerminalMode::Regular,
+                    AiCli::Copilot,
+                ),
+                session(
+                    sibling(caller, DOOMED),
+                    Some("b"),
+                    TerminalMode::Regular,
+                    AiCli::Copilot,
+                ),
+            ],
         )],
         store.path(),
     );
     let addr = serve_tool_server(&state, store.path().join("mcp")).await;
+    allow_every_prompt(&state);
     Fixture {
         state,
         addr,
         _project: project,
         _store: store,
     }
+}
+
+/// A window that allows every prompt it is shown (FR-014), so a destructive call can succeed.
+fn allow_every_prompt(state: &Arc<DaemonState>) {
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::DaemonMsg;
+    let mut rx = fake_window(state);
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            if let Frame::Control(DaemonMsg::ConfirmationRequested { id, .. }) = frame {
+                state.answer_confirmation(id, true);
+            }
+        }
+    });
 }
 
 impl Fixture {
@@ -128,12 +163,18 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
         "rename_worktree" => json!({"worktree": "b", "display_name": "Audited"}),
         "create_session" => json!({"worktree": "b", "ai_cli": "copilot"}),
         "start_session" => json!({"session": caller.0.to_string()}),
+        // An idle session: a no-op success, asked of nobody.
+        "stop_session" => json!({"session": sibling(caller, SHELL).0.to_string()}),
+        // Running: `prepare` starts it.
+        "interrupt_session" => json!({"session": sibling(caller, SHELL).0.to_string()}),
+        "delete_session" => json!({"session": sibling(caller, DOOMED).0.to_string()}),
+        "delete_worktree" => json!({"worktree": "c"}),
         other => panic!("no successful call for the mutating tool {other}: add one here"),
     }
 }
 
-/// Arguments with which `tool` fails, and the category it fails with.
-fn failing_call(tool: &str) -> Vec<(Value, ErrorCategory)> {
+/// Arguments with which `tool` fails for `caller`, and the category it fails with.
+fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
     match tool {
         "create_worktree" => vec![
             (json!({}), ErrorCategory::InvalidInput),
@@ -150,6 +191,22 @@ fn failing_call(tool: &str) -> Vec<(Value, ErrorCategory)> {
         "start_session" => vec![(
             json!({"session": sid(99).0.to_string()}),
             ErrorCategory::NotFound,
+        )],
+        "delete_worktree" => vec![
+            (json!({"worktree": "nope"}), ErrorCategory::NotFound),
+            // The caller's own worktree (FR-015).
+            (json!({"worktree": "b"}), ErrorCategory::RefusedByPolicy),
+        ],
+        "stop_session" | "delete_session" => vec![
+            (
+                json!({"session": sid(99).0.to_string()}),
+                ErrorCategory::NotFound,
+            ),
+            (json!({"session": caller.0.to_string()}), ErrorCategory::RefusedByPolicy),
+        ],
+        "interrupt_session" => vec![(
+            json!({"session": caller.0.to_string()}),
+            ErrorCategory::InvalidInput,
         )],
         other => panic!("no failing call for the mutating tool {other}: add one here"),
     }
@@ -176,6 +233,11 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     let tools = f.mutating_tools(caller).await;
     assert!(!tools.is_empty(), "M3 ships mutating tools");
     for tool in &tools {
+        if tool == "interrupt_session" {
+            // Only a running session can be interrupted; starting it is not what is counted.
+            let started = f.call(caller, "start_session", good_call(tool, caller)).await;
+            assert_eq!(started["isError"], json!(false), "{started}");
+        }
         let before = audit_lines(caller).len();
         let result = f.call(caller, tool, good_call(tool, caller)).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
@@ -198,7 +260,7 @@ async fn every_failed_mutating_call_writes_one_line_with_its_category() {
     let caller = sid(72);
     let f = fixture(caller).await;
     for tool in f.mutating_tools(caller).await {
-        for (args, category) in failing_call(&tool) {
+        for (args, category) in failing_call(&tool, caller) {
             let before = audit_lines(caller).len();
             let result = f.call(caller, &tool, args.clone()).await;
             assert_eq!(result["isError"], json!(true), "{tool} {args}: {result}");
@@ -241,7 +303,7 @@ async fn every_logged_failure_carries_one_of_the_six_categories() {
     let caller = sid(74);
     let f = fixture(caller).await;
     for tool in f.mutating_tools(caller).await {
-        for (args, _) in failing_call(&tool) {
+        for (args, _) in failing_call(&tool, caller) {
             f.call(caller, &tool, args).await;
         }
         // Arguments of the wrong type.

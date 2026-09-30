@@ -430,3 +430,203 @@ async fn a_window_that_connects_while_a_prompt_is_pending_receives_it_with_the_t
     }
     pending.abort();
 }
+
+// ---------------------------------------------------------------------------------------------
+// End to end through `POST /mcp` and the real delete and stop paths (T050, U181–U184).
+// ---------------------------------------------------------------------------------------------
+
+mod through_the_tool_server {
+    use super::*;
+    use mcp_support::{credential, serve_tool_server, session};
+    use micold_core::session::{AiCli, TerminalMode};
+    use serde_json::{json, Value};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    const AGENT: u128 = 11;
+    const OTHER: u128 = 12;
+
+    struct Fixture {
+        state: Arc<DaemonState>,
+        addr: std::net::SocketAddr,
+        _project: tempfile::TempDir,
+        _store: tempfile::TempDir,
+    }
+
+    async fn fixture() -> Fixture {
+        let project = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = state_over(
+            vec![(
+                project.path().to_path_buf(),
+                false,
+                vec![
+                    session(sid(AGENT), None, TerminalMode::AiCli, AiCli::ClaudeCode),
+                    session(sid(OTHER), None, TerminalMode::AiCli, AiCli::ClaudeCode),
+                ],
+            )],
+            store.path(),
+        );
+        let addr = serve_tool_server(&state, store.path().join("mcp")).await;
+        Fixture {
+            state,
+            addr,
+            _project: project,
+            _store: store,
+        }
+    }
+
+    fn request(addr: std::net::SocketAddr, bearer: &str, tool: &str, args: Value) -> Vec<u8> {
+        let body = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": tool, "arguments": args}
+        })
+        .to_string();
+        format!(
+            "POST /mcp HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nAccept: \
+             application/json, text/event-stream\r\nAuthorization: Bearer {bearer}\r\n\
+             Content-Length: {}\r\n\r\n{body}",
+            body.len()
+        )
+        .into_bytes()
+    }
+
+    /// A `delete_session` of OTHER by AGENT, left waiting on a task; returns the call's result.
+    fn delete_other(f: &Fixture) -> tokio::task::JoinHandle<Value> {
+        let (addr, key) = (f.addr, credential(&f.state, sid(AGENT)));
+        tokio::spawn(async move {
+            mcp_support::call_tool(
+                addr,
+                &key,
+                "delete_session",
+                json!({"session": sid(OTHER).0.to_string()}),
+            )
+            .await
+        })
+    }
+
+    async fn within<T>(what: &str, fut: impl std::future::Future<Output = T>) -> T {
+        tokio::time::timeout(Duration::from_secs(5), fut)
+            .await
+            .unwrap_or_else(|_| panic!("{what} within 5 s"))
+    }
+
+    fn category(result: &Value) -> &str {
+        result["structuredContent"]["error"]["category"]
+            .as_str()
+            .unwrap_or_default()
+    }
+
+    fn exists(state: &DaemonState, session: SessionId) -> bool {
+        state
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .any(|p| p.sessions.iter().any(|s| s.id == session))
+    }
+
+    /// U184 (contracts/mcp-tools.md): the agent hangs up while waiting; the prompt is withdrawn
+    /// from every window, and a late Allow performs nothing.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn closing_the_agents_connection_abandons_the_request_and_changes_nothing() {
+        let f = fixture().await;
+        let mut a = window(&f.state);
+        let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+        let key = credential(&f.state, sid(AGENT));
+        stream
+            .write_all(&request(
+                f.addr,
+                &key,
+                "delete_session",
+                json!({"session": sid(OTHER).0.to_string()}),
+            ))
+            .await
+            .unwrap();
+        let id = within("the prompt", async { prompt_id(&next(&mut a).await) }).await;
+
+        drop(stream);
+
+        assert_eq!(
+            within("the withdrawal", next(&mut a)).await,
+            DaemonMsg::ConfirmationWithdrawn { id }
+        );
+        f.state.answer_confirmation(id, true);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(exists(&f.state, sid(OTHER)), "nothing was deleted");
+    }
+
+    /// U181 through the real path: the user deletes the target while the agent waits.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_user_deleting_the_target_while_pending_fails_the_request_not_found() {
+        let f = fixture().await;
+        let mut a = window(&f.state);
+        let call = delete_other(&f);
+        let id = within("the prompt", async { prompt_id(&next(&mut a).await) }).await;
+
+        f.state.delete_session(sid(OTHER)).unwrap();
+
+        let result = within("the reply", call).await.unwrap();
+        assert_eq!(category(&result), "not_found", "{result}");
+        assert_eq!(
+            within("the withdrawal", next(&mut a)).await,
+            DaemonMsg::ConfirmationWithdrawn { id }
+        );
+    }
+
+    /// U182, U183 through the real paths: the caller is deleted, or stopped, while it waits.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_caller_deleted_or_stopped_while_pending_fails_the_request_not_found() {
+        for delete in [false, true] {
+            let f = fixture().await;
+            let mut a = window(&f.state);
+            let call = delete_other(&f);
+            let id = within("the prompt", async { prompt_id(&next(&mut a).await) }).await;
+
+            if delete {
+                f.state.delete_session(sid(AGENT)).unwrap();
+            } else {
+                f.state.stop_session(sid(AGENT));
+            }
+
+            let result = within("the reply", call).await.unwrap();
+            assert_eq!(category(&result), "not_found", "delete={delete}: {result}");
+            let withdrawn = within("the withdrawal", async {
+                loop {
+                    if let DaemonMsg::ConfirmationWithdrawn { id: w } = next(&mut a).await {
+                        return w;
+                    }
+                }
+            })
+            .await;
+            assert_eq!(withdrawn, id);
+            assert!(exists(&f.state, sid(OTHER)), "the target was not deleted");
+        }
+    }
+
+    /// U173 end to end: an Allow performs the operation and the agent's open connection gets the
+    /// reply.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_allowed_request_is_performed_and_answered_on_its_connection() {
+        let f = fixture().await;
+        let mut a = window(&f.state);
+        let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+        let key = credential(&f.state, sid(AGENT));
+        stream
+            .write_all(&request(
+                f.addr,
+                &key,
+                "delete_session",
+                json!({"session": sid(OTHER).0.to_string()}),
+            ))
+            .await
+            .unwrap();
+        let id = within("the prompt", async { prompt_id(&next(&mut a).await) }).await;
+        f.state.answer_confirmation(id, true);
+        let mut response = Vec::new();
+        within("the reply", stream.read_to_end(&mut response))
+            .await
+            .unwrap();
+        let text = String::from_utf8_lossy(&response);
+        assert!(text.starts_with("HTTP/1.1 200"), "{text}");
+        assert!(!exists(&f.state, sid(OTHER)), "deleted");
+    }
+}

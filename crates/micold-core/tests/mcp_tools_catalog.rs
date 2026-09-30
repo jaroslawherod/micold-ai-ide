@@ -21,8 +21,8 @@ const READ_TOOLS: [&str; 5] = [
     "get_session",
 ];
 
-/// The tools whose handlers ship by milestone M4, in catalog order.
-const SHIPPED: [&str; 9] = [
+/// The tools whose handlers ship by milestone M5, in catalog order.
+const SHIPPED: [&str; 13] = [
     "whoami",
     "list_worktrees",
     "list_branches",
@@ -30,8 +30,12 @@ const SHIPPED: [&str; 9] = [
     "get_session",
     "create_worktree",
     "rename_worktree",
+    "delete_worktree",
     "create_session",
     "start_session",
+    "stop_session",
+    "interrupt_session",
+    "delete_session",
 ];
 
 /// The tools FR-014 classifies as destructive (U85).
@@ -313,11 +317,15 @@ fn destructive_hint_is_set_on_exactly_the_destructive_tools() {
 }
 
 #[test]
-fn a_tool_whose_handler_has_not_shipped_is_unknown() {
+fn the_destructive_tools_are_callable_from_m5() {
     for name in DESTRUCTIVE {
         let message = invalid(name, json!({}));
-        assert!(message.contains("unknown tool"), "{name}: {message}");
+        assert!(!message.contains("unknown tool"), "{name}: {message}");
     }
+    assert_eq!(
+        parse_call("stop_session", &json!({"session": S})).unwrap(),
+        Operation::StopSession { session: s7() },
+    );
 }
 
 #[test]
