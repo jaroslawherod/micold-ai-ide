@@ -255,3 +255,24 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `service_capability_fakes.rs` (FR-016 of feature 021) fails. It now answers from a
   `tool_server` field, and `every_cli_answers_its_tool_server_support_through_the_seam` checks a
   Minimal configured with `McpConfigArg` answers that.
+
+## Cycle 11 — PR #469 Windows CI: 431 lost to a reset — T005
+
+- symptom (CI run 36679270799, `build + test (windows-latest)`): `mcp_endpoint.rs::a_head_over_8_kib_is_refused_with_431`
+  ```
+  thread 'a_head_over_8_kib_is_refused_with_431' (6956) panicked at crates\micold-daemon\tests\mcp_endpoint.rs:138:5:
+  assertion `left == right` failed
+    left: 0
+   right: 431
+  ```
+- root cause: `http::read_head` returned `TooLarge` with the rest of the head unread; closing with
+  unread bytes makes Windows reset the connection, and the peer loses the 431 (the BUG-010 pattern
+  that `read_body` already drains for on 413). Not one of the Windows follow-ups in the ledger.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib http::`
+  ```
+  thread 'http::tests::an_over_bound_head_is_drained_before_it_is_refused' (1132921) panicked at crates/micold-daemon/src/http.rs:322:9:
+  the refused head must be drained
+  test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 70 filtered out
+  ```
+- green: `read_head` drains (bounded by `MAX_DRAIN` and `DRAIN_TIMEOUT`) before returning
+  `TooLarge`; this covers the hook receiver's 431 too. http 8 passed, mcp_endpoint 17, hooks_receiver 5.
