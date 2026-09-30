@@ -37,7 +37,7 @@ quickstart §B visual pass (T021, T042, T027, T029).
 | A2  | Feature off, stored path an existing regular file: after the check lands, the page has no lines below the timeout field | US1-AS2, SC-002 | example | PENDING | |
 | A3  | Feature off, stored path blank: the page has no lines, and the probe is never called | US1-AS3, FR-011 | example | PENDING | |
 | A4  | Feature off with a missing stored path: a session launch makes no probe call and no resolver call, and the launch proceeds as before | US1-AS4, FR-003, FR-006, SC-004 | example | PENDING | |
-| A5  | A save with a missing stored path, the feature off and then on: the settings are written, and exactly one Info notification names the path and says it was not found, for each save | US1-AS5, FR-004 | example | PENDING | |
+| A5  | A save with a missing stored path, the feature off and then on: the settings are written, and exactly one Info notification names the path and says it was not found, for each save | US1-AS5, FR-004 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on` |
 | A6  | Feature on, stored path missing, last outcome `MissingScript`: the page shows exactly one `Script not found: <path>` caution, then the ON note | US2-AS1, FR-005 | example | PENDING | |
 | A7  | From A6, the user unticks the feature and saves, then reopens Settings: the same `Script not found: <path>` caution, now followed by the OFF note | US2-AS2, FR-005, SC-003 | example | PENDING | |
 | A8  | A missing path is reported, then the file is created and Settings is reopened. With the feature on (last outcome still `MissingScript`), the page shows FR-014's caution and the note that the file exists now and saving or restarting a session will source it. With it off, the page has no lines | US2-AS3, FR-009, FR-014 | example | PENDING | |
@@ -105,14 +105,14 @@ Tests in `crates/micold-client/tests/features_settings.rs`, through `update` and
 | U26 | A `ScriptPathChecked` whose `seq` matches sets `Done(c)` | FR-009 (S2) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::the_current_checks_answer_is_shown` |
 | U27 | A matching `ScriptPathChecked` with `result: None` sets `Idle` | FR-011 (S3) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::a_blank_paths_answer_leaves_nothing_to_show` |
 | U28 | A `ScriptPathChecked` with an older `seq` leaves `script_check` unchanged | FR-009, Edge Cases multi-window (S4) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::an_older_checks_answer_is_dropped` |
-| U29 | `Saved` + `NotFound { tilde: false }` returns exactly one Info `NotificationRaised` reading `The environment-include script was not found: <path>` | FR-004 (S5) | example | PENDING | |
-| U30 | `Saved` + `NotFound { tilde: true }` appends ` (~ is not expanded; use a full path)` | FR-004, Edge Cases `~` (S5) | example | PENDING | |
-| U31 | `Saved` + `NotReadable` reads `The environment-include script is not a readable file: <path>` | FR-004 (S5) | example | PENDING | |
-| U32 | `Saved` + `Present`, `Relative`, `Unchecked` or `result: None` returns no notification | FR-004 (S6) | example | PENDING | |
-| U33 | `Opened` + `NotFound` returns no notification | FR-007 (S7) | example | PENDING | |
-| U34 | A `Saved` result whose display was superseded by a newer `Opened` check still notifies | FR-004 (S5) | example | PENDING | |
-| U35 | An older save's result, after a newer save started, does not notify | FR-004 (S5) | example | PENDING | |
-| U36 | The same `Saved` result delivered twice notifies once | FR-004 (S5) | example | PENDING | |
+| U29 | `Saved` + `NotFound { tilde: false }` returns exactly one Info `NotificationRaised` reading `The environment-include script was not found: <path>` | FR-004 (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_save_leaving_a_missing_path_posts_one_notice_naming_it` |
+| U30 | `Saved` + `NotFound { tilde: true }` appends ` (~ is not expanded; use a full path)` | FR-004, Edge Cases `~` (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_missing_path_starting_with_a_tilde_says_the_tilde_is_not_expanded` |
+| U31 | `Saved` + `NotReadable` reads `The environment-include script is not a readable file: <path>` | FR-004 (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_path_that_is_not_a_readable_file_says_so` |
+| U32 | `Saved` + `Present`, `Relative`, `Unchecked` or `result: None` returns no notification | FR-004 (S6) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_save_with_nothing_wrong_to_report_posts_nothing` |
+| U33 | `Opened` + `NotFound` returns no notification | FR-007 (S7) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::opening_settings_never_posts_a_notice` |
+| U34 | A `Saved` result whose display was superseded by a newer `Opened` check still notifies | FR-004 (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_saves_notice_is_posted_even_when_a_newer_open_took_over_the_page` |
+| U35 | An older save's result, after a newer save started, does not notify | FR-004 (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::an_older_saves_answer_is_not_reported_once_a_newer_save_started` |
+| U36 | The same `Saved` result delivered twice notifies once | FR-004 (S5) | example | DONE | `crates/micold-client/tests/features_settings.rs` `script_path_check::a_saves_answer_delivered_twice_is_reported_once` |
 | U37 | Neither message changes `settings_draft` or any setting | FR-008, FR-010 (S8) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::neither_check_message_touches_the_draft_or_a_setting` |
 
 ### `crates/micold-client/src/features/settings.rs`: `script_path_notice` (feature off, and shared rows)
@@ -150,9 +150,9 @@ Tests in `crates/micold-client/src/main_tests.rs`.
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U55 | `on_settings_opened` leaves the draft seeded and `script_check` `Pending`, and its job carries the stored path and stored enabled flag with origin `Opened` | FR-006, FR-009 (T1); research R8 | example | PENDING | |
-| U56 | `apply_save` prepares a `Saved` job for the saved path, including when the path did not change | FR-004, FR-009 (T2) | example | PENDING | |
+| U56 | `apply_save` prepares a `Saved` job for the saved path, including when the path did not change | FR-004, FR-009 (T2) | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_checks_the_saved_path_even_when_the_path_did_not_change` |
 | U57 | A terminal restart (`TerminalRestartRequested`) makes no probe call | FR-006, SC-004 | example | PENDING | |
-| U58 | After a save with a missing path, the written `Settings` holds the enabled flag, path and timeout as drafted, and nothing else is added for environment-include | FR-010, SC-005 | example | PENDING | |
+| U58 | After a save with a missing path, the written `Settings` holds the enabled flag, path and timeout as drafted, and nothing else is added for environment-include | FR-010, SC-005 | example | DONE | `crates/micold-client/src/main_tests.rs` `tests::script_path_report::a_save_with_a_missing_path_writes_only_the_three_environment_include_settings` |
 | U59 | `DaemonMsg::SettingsChanged` with a new path while `settings_draft` is `Some` prepares an `Opened` job for the new path | FR-009, Edge Cases multi-window (T3) | example | PENDING | |
 | U60 | `DaemonMsg::SettingsChanged` while Settings is closed prepares no job: the other side of U59 | FR-006 (T3) | example | PENDING | |
 | U61 | `on_settings_opened` makes no env-include resolver call (`FakeEnvIncludeResolver::calls()` empty) | FR-014 | example | PENDING | |

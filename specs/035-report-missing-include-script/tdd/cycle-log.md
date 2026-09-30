@@ -180,3 +180,50 @@ existed and failed before the implementation.
   - (U55 also failed, under the `classify` mutant: `left: [path, path] right: [path]`.)
 - full suite: `mise run gate` at 58b43cd8, and again at 7e7e3885 after the review fixes -> GATE_EXIT=0 both times; 3755 passed, 0 failed across the
   workspace; all six `tests::script_path_report` tests (A1–A4, U55, U57) ok.
+
+## Cycle 10 (M2): U29–U36 the save-time notice in the reducer (T013, T016)
+
+- test: `crates/micold-client/tests/features_settings.rs`, module `script_path_check`, eight tests
+  (new): U29 `a_save_leaving_a_missing_path_posts_one_notice_naming_it`, U30
+  `a_missing_path_starting_with_a_tilde_says_the_tilde_is_not_expanded`, U31
+  `a_path_that_is_not_a_readable_file_says_so`, U32 `a_save_with_nothing_wrong_to_report_posts_nothing`,
+  U33 `opening_settings_never_posts_a_notice`, U34
+  `a_saves_notice_is_posted_even_when_a_newer_open_took_over_the_page`, U35
+  `an_older_saves_answer_is_not_reported_once_a_newer_save_started`, U36
+  `a_saves_answer_delivered_twice_is_reported_once`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings script_path_check`
+  -> 9 passed; 5 failed. U29, U30, U31, U34, U36 each `left: [] right: [NotificationRaised(Notification
+  { level: Info, message: "The environment-include script was not found: /tmp/does-not-exist.sh" })]`
+  (U31: `... is not a readable file: ...`; U30: `... (~ is not expanded; use a full path)`). U32, U33
+  and U35 assert an absence and passed on arrival (mutants below).
+- green: `save_notice(&CheckedScriptPath) -> Option<String>` and S5–S7 in `script_path_checked`,
+  which now returns `notifications::info(..)` as an `Outcome` from `update` -> features_settings 39
+  passed. `save_notice` returns `Option` rather than the contract's `String`, so the three states
+  with nothing to report are answered by the same match instead of an `unreachable!`.
+- mutants (each applied alone after committing green at 44738fa7, then reverted with `git checkout`):
+  - `let reports = true;` -> U33, U35, U36 failed (`features_settings.rs:597`, `:634`, `:656`)
+  - `let reports = origin == CheckOrigin::Saved;` (no sequence gate) -> U35, U36 failed
+  - `ScriptPathState::Present => Some(path.clone())` in `save_notice` -> U32 failed (`:578`)
+  - drop `script_check_save_seq = None` -> U36 failed (`:656`)
+- refactor: none needed.
+- commit: 44738fa7
+
+## Cycle 11 (M2): A5, U56, U58 every save checks and reports (T037, T038, T039)
+
+- test: `crates/micold-client/src/main_tests.rs`, module `tests::script_path_report`, three tests
+  (new): A5 `a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on`,
+  U56 `a_save_checks_the_saved_path_even_when_the_path_did_not_change`, U58
+  `a_save_with_a_missing_path_writes_only_the_three_environment_include_settings`. Seam:
+  `Capabilities::with_settings` (test-only) for a `FakeSettingsStore`, and `apply_save`'s body moved
+  into `save_and_prepare_check(app, valid) -> (Task, ScriptPathCheckJob)`, with the job stubbed
+  `todo!("T038")`.
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report`
+  -> 6 passed; 3 failed, each `panicked at crates/micold-client/src/shell/persist.rs:412:64` (the
+  `todo!("T038")` stub).
+- green: `save_and_prepare_check` prepares `prepare_script_path_check(app, CheckOrigin::Saved)` after
+  the write, 011's refresh and `Msg::Saved`; `apply_save` batches the survival task with
+  `run_script_path_check(job)` -> 9 passed.
+- mutant for U58 (it went red only through the stub): the write adds 1 to `env_include_timeout_secs`
+  -> U58 failed at `main_tests.rs:4378`; reverted.
+- refactor: none needed.
+- commit: 2f94f598
