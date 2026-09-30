@@ -147,7 +147,7 @@ pub struct Settings {
     #[serde(default = "default_tool_server_enabled")]
     pub tool_server_enabled: bool,
     /// The ordered label-to-type mapping an issue pick reads (feature 034, FR-016, FR-017).
-    #[serde(default = "default_mapping")]
+    #[serde(default = "default_mapping", deserialize_with = "known_entries")]
     pub issue_label_types: Vec<LabelTypeEntry>,
 }
 
@@ -391,16 +391,20 @@ struct StoredSettings {
     issue_label_types: Vec<LabelTypeEntry>,
 }
 
-/// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped.
+/// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
+/// (R10). A value that is not a list at all reads as the default table, as an absent one does: one
+/// bad hand edit must not send the whole document to `.bak`.
 fn known_entries<'de, D>(deserializer: D) -> Result<Vec<LabelTypeEntry>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let raw = Vec::<serde_json::Value>::deserialize(deserializer)?;
-    Ok(raw
-        .into_iter()
-        .filter_map(|entry| serde_json::from_value(entry).ok())
-        .collect())
+    Ok(match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::Array(entries) => entries
+            .into_iter()
+            .filter_map(|entry| serde_json::from_value(entry).ok())
+            .collect(),
+        _ => default_mapping(),
+    })
 }
 
 impl StoredSettings {

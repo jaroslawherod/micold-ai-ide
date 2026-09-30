@@ -558,3 +558,17 @@ failed before the implementation.
   labels). The theme-only half of U86 is also pinned by `persist.rs::saving_a_theme_keeps_every_other_setting`,
   whose stored settings now carry a non-default mapping.
 - commit: 4e2c6d97
+
+## Cycle 23: U81 (extended) — M4 review A round 1
+
+- test: `crates/micold-core/tests/settings_issue_mapping.rs::a_mapping_that_is_not_a_list_reads_as_the_default`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test settings_issue_mapping` -> 3 passed, 1 failed:
+  `:197:9 left: Recovered right: Loaded` (`"issue_label_types": null` sent the whole file to `.bak`).
+- green: `known_entries` reads a `serde_json::Value`; a list keeps its parseable entries, anything
+  else reads as the default table; `Settings` itself uses the same `deserialize_with`, so both read
+  paths agree (review A #2, #6). -> `settings_issue_mapping` 4 passed.
+- refactor: `open_settings` reads one stored `Settings` with `unwrap_or_default()` instead of
+  re-spelling the defaults (review A #7).
+- notes: the gate also caught `settings_sections::every_persisted_setting_is_claimed_or_recorded_as_deferred`;
+  `issue_label_types` is recorded in `DEFERRED` against T059 (M5 adds its editor).
+- commit: the commit that adds this entry

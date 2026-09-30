@@ -38,12 +38,14 @@ use std::path::{Path, PathBuf};
 /// Settings this feature renders in a later phase, and the task that does it. Keyed by the same
 /// dotted path the persisted shape produces.
 ///
-/// **Empty, and kept.** Both entries — the resource limits and the network posture — landed with
-/// T086 and T087, and [`a_deferred_setting_that_arrived_is_stale`] is what made deleting them a
-/// step rather than an oversight. The list stays because the next field added to `SandboxProfile`
-/// needs somewhere to be recorded on the day it has no control yet, and rebuilding this machinery
-/// then is how it does not get built.
-const DEFERRED: &[(&str, &str)] = &[];
+/// Feature 027's entries — the resource limits and the network posture — landed with T086 and
+/// T087, and [`a_deferred_setting_that_arrived_is_stale`] is what made deleting them a step rather
+/// than an oversight. Feature 034's label-to-type mapping is stored from milestone M4 and gets its
+/// editor in M5.
+const DEFERRED: &[(&str, &str)] = &[(
+    "issue_label_types",
+    "034 T059 (Settings → GitHub issues mapping editor, milestone M5)",
+)];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
