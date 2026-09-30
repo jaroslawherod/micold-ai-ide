@@ -120,7 +120,6 @@ fn hover_row(state: &State, index: usize, size: Size, scroll: Scroll) -> Hovered
     let mut node = element
         .as_widget_mut()
         .layout(&mut tree, &renderer, &limits);
-    let viewport = Rectangle::with_size(size);
 
     // Hand over the frames an entrance needs before it takes input, at this window's size.
     lay::settle(
@@ -132,6 +131,7 @@ fn hover_row(state: &State, index: usize, size: Size, scroll: Scroll) -> Hovered
         0..lay::SETTLE_FRAMES,
         size,
     );
+    let viewport = Rectangle::with_size(size);
     let mut ignored = Vec::new();
 
     let path = sidebar_row(index);
