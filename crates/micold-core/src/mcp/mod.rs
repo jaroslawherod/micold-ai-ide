@@ -11,3 +11,4 @@
 pub mod errors;
 pub mod jsonrpc;
 pub mod binding;
+pub mod tools;

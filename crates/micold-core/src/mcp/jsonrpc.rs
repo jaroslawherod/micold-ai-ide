@@ -91,6 +91,7 @@ pub fn route(message: Message, server_version: &str) -> Route {
     match method.as_str() {
         "initialize" => Route::Reply(result(id, initialize_result(&params, server_version))),
         "ping" => Route::Reply(result(id, json!({}))),
+        "tools/list" => Route::Reply(result(id, super::tools::list_result())),
         "tools/call" => {
             let Some(name) = params.get("name").and_then(Value::as_str) else {
                 return Route::Reply(error(id, INVALID_PARAMS, "tools/call needs a tool name"));

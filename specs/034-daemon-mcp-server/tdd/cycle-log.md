@@ -122,3 +122,21 @@ was taken by stubbing that implementation out and restoring it afterwards.
   stub by construction. Mutant check: `names_micold` changed to "any server at all" made
   `a_server_with_another_name_is_not_taken` fail (11 passed; 1 failed); restored.
 - refactor: none.
+
+## Cycle 6 — U83, U84, U86–U89 — T014, T019
+
+- tests: `crates/micold-core/tests/mcp_tools_catalog.rs` (8 tests; also
+  `an_unknown_argument_or_a_non_string_worktree_is_invalid_input` for `additionalProperties: false`)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test mcp_tools_catalog`, against a stub
+  catalog (empty `tools`, `parse_call` always `Whoami`, `WorktreeRef::parse` always `Default`)
+  ```
+  thread 'tools_list_names_exactly_the_shipped_tools' panicked at crates/micold-core/tests/mcp_tools_catalog.rs:39:5:
+    left: []
+   right: ["whoami", "list_worktrees", "list_branches", "list_sessions", "get_session"]
+  test result: FAILED. 1 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `mcp/tools.rs` (catalog of the five read tools, `Operation`, `WorktreeRef`, `SessionRef`,
+  `parse_call`); `jsonrpc::route` answers `tools/list` from it. 8 + 13 (`mcp_jsonrpc`) passed.
+- refactor: none.
+- notes: the passing test at red (`every_tool_has_an_object_input_schema…`) iterates an empty list;
+  it now asserts over five entries.
