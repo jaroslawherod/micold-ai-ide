@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M2
-- **Next step**: M2 unit: implement T023–T028, T083, T101 (Settings toggle). T015/T021 from M1 remain unticked (U127 blocked)
+- **Next step**: M2: gate re-run after review A fixes, review A round 2 (sonnet), then push and open the PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
-| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | planned |
+| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | implemented; reviews A r1 fixed, B r1 CLEAN |
 | M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
@@ -57,6 +57,13 @@ deliverable (tasks.md Notes).
 | D17 | design | Resolve the Principle II conflict how: justified violation, MINOR amendment, or default `Off`? | Option 1, justified violation; no constitution amendment | decided by user | Coordinator relay of the user's decision on the escalation |
 | D18 | design | Milestones M1–M7 as cut? | Ship as cut, M1 through M7 in order, no changes | decided by user | Coordinator relay of the user's decision |
 
+## Review rounds
+
+| Milestone | Review | Round | Snapshot | Result |
+|---|---|---|---|---|
+| M2 | A (code-review high) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | 2 fixed (unbound start revokes old credential; crash respawn keeps its start's binding), 1 doc fix, 5 declined |
+| M2 | B (conformance) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | CLEAN, 2 MINOR (ledger row fixed; persistence visual check declined) |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -76,6 +83,12 @@ deliverable (tasks.md Notes).
 | M1 | A round 1 | Fixed temp name `.{file}.tmp` in `write_owner_only` can race | The file name is per session and one session's spawns are serialized; no concurrent writer of the same file exists |
 | M1 | B round 1 | Sweep stale binding files at bind | Optional per the reviewer; two service instances (a dev run and the user's) can share the data directory, and a sweep would delete the other's live files. Stale files hold only credentials a restart already invalidated |
 | M1 | B round 1 | Spawn tests are unix-only | Stand-ins are `#!/bin/sh`; porting needs Windows stand-ins. Follow-up below; the Windows cross-check covers compilation |
+| M2 | A round 1 | `SettingsSet` chain short-circuits on the first failing setter | Pre-existing pattern shared by every service-owned field (scrollback, env-include, default CLI, Pi switch); M2 adds one link to it. Follow-up below |
+| M2 | A round 1 | Catalog setter mutates memory before a failing persist | Same pre-existing pattern as `set_pi_activity_component` / `set_default_ai_cli`; not introduced here. Follow-up below |
+| M2 | A round 1 | A save while disconnected is reverted on reconnect by `Welcome` | Pre-existing for every service-owned field (feature 026's design: the daemon's value is the one in force). Follow-up below |
+| M2 | A round 1 | One more locked settings write + `SettingsChanged` broadcast per save | Follows the existing per-field pattern; batching `SettingsSet` into one update is a refactor of all fields. Follow-up below |
+| M2 | A round 1 | `set_tool_server_enabled` duplicates the lock/persist/broadcast setter shape | Cosmetic; same as the four sibling setters. Covered by the batching follow-up |
+| M2 | B round 1 | Visual pass did not check the toggle persists across Save | MINOR; persistence is pinned by `turning_the_binding_toggle_off_and_saving_tells_the_service`, `turning_the_binding_toggle_off_reaches_what_save_writes` and `turning_the_tool_server_binding_off_survives_a_save_and_load` |
 | M1 | B round 2 | No endpoint-level test for `discard_body` before 401/404/405 | Optional per the reviewer; the unit test pins the bound, and loopback socket buffers absorb any test-sized body, so an endpoint test would pass with or without the drain |
 
 ## Open escalation
@@ -91,3 +104,5 @@ None.
 - Tool-server listener read timeouts (slowloris), shared with the hook receiver through `http.rs` (M1 review A).
 - Windows: verify the `.claude.json` project-key form the collision check uses (M1 review A).
 - Windows: port `mcp_binding_spawn.rs` (unix `#!/bin/sh` stand-ins) to Windows stand-ins (M1 review B).
+- Daemon `SettingsSet`: apply all fields as one catalog update with one persist and one `SettingsChanged` (today each field short-circuits, persists and broadcasts separately, and a failed persist leaves memory changed). Pre-existing across all service-owned settings (M2 review A).
+- Client: a Settings save made while disconnected is overwritten by the daemon's `Welcome` on reconnect, for every service-owned field (M2 review A).
