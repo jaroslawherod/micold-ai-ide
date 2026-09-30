@@ -178,5 +178,5 @@ existed and failed before the implementation.
   - run a check from the `TerminalRestartRequested` handler -> U57 panicked at `main_tests.rs:4243`
     (`a restart must not check the path`)
   - (U55 also failed, under the `classify` mutant: `left: [path, path] right: [path]`.)
-- full suite: `mise run gate` at 58b43cd8 -> GATE_EXIT=0; 3755 passed, 0 failed across the
+- full suite: `mise run gate` at 58b43cd8, and again at 7e7e3885 after the review fixes -> GATE_EXIT=0 both times; 3755 passed, 0 failed across the
   workspace; all six `tests::script_path_report` tests (A1–A4, U55, U57) ok.
