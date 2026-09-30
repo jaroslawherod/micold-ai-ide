@@ -26,12 +26,19 @@
 use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::env_include::EnvIncludeSnapshot;
+use micold_core::git::GitRemote;
+use micold_core::github::{
+    choose_remote, GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
+};
+use micold_core::naming::name_from_title;
 use micold_core::naming::{
     derive, dir_name_from_branch, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
 };
 use micold_core::overlay::Layer;
 use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
+use std::path::PathBuf;
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -55,6 +62,24 @@ pub struct State {
     /// arrives — with no form to land on. This is what says the outcome is owed a notification,
     /// and what the form knew about the create that the notification has to repeat.
     pub cancelled_create: Option<CancelledCreate>,
+    /// The last issue-load seq handed out (feature 034, FR-007a). Lives here, not on the form, so
+    /// it outlives a closed form and a late result can never match a new form's request.
+    pub issue_request_seq: u64,
+}
+
+impl State {
+    /// The issue number of row `index` of the shown results, if there is such a row.
+    pub fn issue_number_at(&self, index: usize) -> Option<u64> {
+        self.form.as_ref()?.issue_number_at(index)
+    }
+
+    /// The seq the open form is waiting for, when a load is in flight.
+    pub fn awaited_issue_load(&self) -> Option<u64> {
+        match self.form.as_ref()?.issues {
+            IssueList::Loading { seq } => Some(seq),
+            _ => None,
+        }
+    }
 }
 
 /// What a form cancelled mid-create knew about its create (feature 013, FR-010b).
@@ -99,6 +124,62 @@ pub enum BranchSource {
     New,
     /// Pick from the branches that already exist (User Story 2).
     Existing,
+    /// Pick an open GitHub issue; its number and title fill the new-branch inputs (feature 034).
+    Issue,
+}
+
+/// Whether this repository has a GitHub remote the issue source can read (feature 034,
+/// data-model §5). Decided once per form, from the daemon's `RemoteList` answer.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum GithubAvailability {
+    /// The remotes are still being read.
+    #[default]
+    Checking,
+    /// The source cannot be chosen, and this says why.
+    Unavailable(String),
+    /// The source can be chosen and reads this repository.
+    Available(GithubRepo),
+}
+
+/// The issue source's list, from first choice to a loaded listing (feature 034, data-model §5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum IssueList {
+    /// Nothing asked for: the source was never chosen on this form, or was left.
+    #[default]
+    NotRequested,
+    /// A load is in flight; only the result carrying `seq` applies (FR-007a).
+    Loading { seq: u64 },
+    /// The load failed; Retry starts another.
+    Failed { error: IssueLoadError },
+    /// The open issues, and the `gh` that read them (kept for the search beyond the cap, M3).
+    Loaded {
+        listing: IssueListing,
+        gh: PathBuf,
+        /// Issues GitHub search found beyond the loaded ones. Empty until the search slice.
+        searched: Vec<Issue>,
+        /// Where that search is.
+        search: SearchState,
+    },
+}
+
+impl IssueList {
+    /// Every issue held, loaded first and then searched: the order `issue_matches` indexes.
+    fn held(&self) -> Vec<&Issue> {
+        match self {
+            IssueList::Loaded {
+                listing, searched, ..
+            } => listing.issues.iter().chain(searched.iter()).collect(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// The search beyond the loaded issues (feature 034, FR-005a). Only `Idle` until slice C.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SearchState {
+    /// No search pending or running.
+    #[default]
+    Idle,
 }
 
 /// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
@@ -196,9 +277,82 @@ pub struct WorktreeForm {
     /// second or two and `State::set_worktrees` reports its outcome unconditionally, so a notice
     /// living on the error line is one the user gets no chance to read.
     pub interrupted: Option<String>,
+    /// Whether the issue source may be chosen (feature 034, FR-002).
+    pub github: GithubAvailability,
+    /// The issue source's list (feature 034).
+    pub issues: IssueList,
+    /// The issue search text, exactly as typed (FR-005).
+    pub issue_query: String,
+    /// Which loaded issues match `issue_query`, in order. Indices address the listing's issues.
+    pub issue_matches: Vec<(usize, Match)>,
+    /// Whether the issue result list is showing.
+    pub issue_list_open: bool,
+    /// Where the keyboard is, as an index into `issue_matches`.
+    pub issue_highlight: Option<usize>,
+    /// The issue last picked, if any (FR-010a).
+    pub picked_issue: Option<u64>,
 }
 
 impl WorktreeForm {
+    /// The issue number of row `index` of `issue_matches`.
+    pub fn issue_number_at(&self, index: usize) -> Option<u64> {
+        let (held, _) = self.issue_matches.get(index)?;
+        self.issues.held().get(*held).map(|issue| issue.number())
+    }
+
+    /// The caption under the source switch (FR-002, FR-025): why the issue chip is disabled, or —
+    /// before it is chosen — which repository choosing it reads from GitHub. `None` once the issue
+    /// source is chosen, when [`Self::issue_notice`] says it instead.
+    pub fn source_caption(&self) -> Option<String> {
+        match &self.github {
+            GithubAvailability::Checking => Some("Checking for a GitHub remote…".to_string()),
+            GithubAvailability::Unavailable(reason) => Some(reason.clone()),
+            GithubAvailability::Available(_) if self.source == BranchSource::Issue => None,
+            GithubAvailability::Available(repo) => Some(format!(
+                "GitHub issue reads open issues of {repo} from GitHub."
+            )),
+        }
+    }
+
+    /// The issue source's own notice, naming the repository it reads (FR-025).
+    pub fn issue_notice(&self) -> Option<String> {
+        match (&self.github, self.source) {
+            (GithubAvailability::Available(repo), BranchSource::Issue) => {
+                Some(format!("Reads open issues of {repo} from GitHub."))
+            }
+            _ => None,
+        }
+    }
+
+    /// The repository the issue source reads, once known.
+    pub fn github_repo(&self) -> Option<&GithubRepo> {
+        match &self.github {
+            GithubAvailability::Available(repo) => Some(repo),
+            _ => None,
+        }
+    }
+
+    /// Re-rank the held issues against `issue_query`, re-seating the highlight (invariant 3).
+    fn rematch_issues(&mut self) {
+        let held = self.issues.held();
+        let query = Query::new(&self.issue_query);
+        self.issue_matches = rank(&held, |issue| issue.row_text(), &query);
+        self.issue_highlight = match self.issue_highlight {
+            Some(_) if self.issue_matches.is_empty() => None,
+            Some(i) if i >= self.issue_matches.len() => Some(0),
+            other => other,
+        };
+    }
+
+    /// Forget the issues and their search: the source was left, so any load in flight is stale.
+    fn reset_issues(&mut self) {
+        self.issues = IssueList::NotRequested;
+        self.issue_query.clear();
+        self.issue_matches.clear();
+        self.issue_list_open = false;
+        self.issue_highlight = None;
+    }
+
     /// Recompute the search results from `candidates` and `branch_query`, and re-seat the keyboard
     /// highlight so it cannot point past the end (feature 021, data-model §2 invariants 1–3).
     ///
@@ -256,7 +410,9 @@ impl WorktreeForm {
     /// be created before committing to it.
     pub fn preview(&self) -> Result<DerivedNames, NamingError> {
         match self.source {
-            BranchSource::New => derive(&WorktreeNaming {
+            // The issue source only fills the new-branch inputs; it names nothing of its own
+            // (FR-012).
+            BranchSource::New | BranchSource::Issue => derive(&WorktreeNaming {
                 type_: self.type_,
                 ticket: if self.ticket.trim().is_empty() {
                     None
@@ -478,14 +634,144 @@ pub fn submitted(state: &mut crate::app::State) {
 /// Leaving the picker drops its selection, so no stale branch can be submitted from the new-branch
 /// inputs — and takes the search with it, so returning never resumes someone else's half-finished
 /// query.
+///
+/// The issue source can be chosen only once the repository is known to be on GitHub (invariant 1):
+/// choosing it hands out a fresh load seq, and leaving it forgets the issues, so a load still in
+/// flight becomes stale (invariant 7). Choosing the issue source while it is already chosen changes
+/// nothing, so a second press cannot start a second load.
 pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut started = false;
     while_editing_unprompted(state, |form| {
+        if source == BranchSource::Issue
+            && (form.source == BranchSource::Issue || form.github_repo().is_none())
+        {
+            return;
+        }
         form.source = source;
         form.error = None;
-        if source == BranchSource::New {
+        if source != BranchSource::Existing {
             form.selected_branch = None;
         }
         form.reset_branch_search();
+        form.reset_issues();
+        if source == BranchSource::Issue {
+            form.issues = IssueList::Loading { seq: next_seq };
+            started = true;
+        }
+    });
+    if started {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
+}
+
+/// The daemon answered the form's `RemoteList` (feature 034, FR-002).
+pub fn remotes_listed(state: &mut crate::app::State, remotes: Result<Vec<GitRemote>, String>) {
+    with_form(state, |form| {
+        form.github = match remotes {
+            Ok(remotes) => match choose_remote(&remotes) {
+                RemoteChoice::Github { repo, .. } => GithubAvailability::Available(repo),
+                RemoteChoice::NoGithubRemote => GithubAvailability::Unavailable(
+                    "This repository has no GitHub remote.".to_string(),
+                ),
+            },
+            Err(detail) => GithubAvailability::Unavailable(format!(
+                "Couldn't read this repository's remotes: {detail}"
+            )),
+        };
+    });
+}
+
+/// An issue load finished. Only the awaited one applies (invariant 2, FR-007a).
+pub fn issues_loaded(
+    state: &mut crate::app::State,
+    seq: u64,
+    result: Result<(IssueListing, PathBuf), IssueLoadError>,
+) {
+    with_form(state, |form| {
+        if form.issues != (IssueList::Loading { seq }) {
+            return;
+        }
+        match result {
+            Ok((listing, gh)) => {
+                form.issues = IssueList::Loaded {
+                    listing,
+                    gh,
+                    searched: Vec::new(),
+                    search: SearchState::Idle,
+                };
+                form.issue_list_open = true;
+                form.rematch_issues();
+            }
+            Err(error) => form.issues = IssueList::Failed { error },
+        }
+    });
+}
+
+/// Retry a failed load with a fresh seq. Nothing else is retried: a first load is started by
+/// choosing the source, never from here.
+pub fn issue_retry(state: &mut crate::app::State) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut started = false;
+    while_editing_unprompted(state, |form| {
+        if form.source == BranchSource::Issue && matches!(form.issues, IssueList::Failed { .. }) {
+            form.issues = IssueList::Loading { seq: next_seq };
+            started = true;
+        }
+    });
+    if started {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
+}
+
+/// The issue search text changed (FR-005). Local only: nothing is asked of GitHub here.
+pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
+    while_editing_unprompted(state, |form| {
+        form.issue_query = text;
+        form.issue_list_open = true;
+        form.rematch_issues();
+    });
+}
+
+/// The issue search field took focus.
+pub fn issue_focused(state: &mut crate::app::State) {
+    while_editing_unprompted(state, |form| form.issue_list_open = true);
+}
+
+/// The keyboard moved through the issue results (saturating, like the branch picker).
+pub fn issue_highlight_moved(state: &mut crate::app::State, direction: Direction) {
+    with_form(state, |form| {
+        if let Some(next) =
+            move_highlight(form.issue_highlight, direction, form.issue_matches.len())
+        {
+            form.issue_highlight = Some(next);
+        }
+    });
+}
+
+/// The issue list closed without a pick.
+pub fn issue_dismissed(state: &mut crate::app::State) {
+    with_form(state, |form| form.issue_list_open = false);
+}
+
+/// An issue was picked: its number becomes the ticket and its title the name, replacing whatever
+/// was there (FR-009, FR-010, FR-010a). A number the listing does not hold changes nothing.
+pub fn issue_picked(state: &mut crate::app::State, number: u64) {
+    while_editing_unprompted(state, |form| {
+        let Some(title) = form
+            .issues
+            .held()
+            .into_iter()
+            .find(|issue| issue.number() == number)
+            .map(|issue| issue.title().to_string())
+        else {
+            return;
+        };
+        form.ticket = number.to_string();
+        form.name = name_from_title(&title);
+        form.error = None;
+        form.picked_issue = Some(number);
+        form.issue_list_open = false;
     });
 }
 
@@ -801,6 +1087,31 @@ pub enum Msg {
     /// The connection carrying an in-flight create dropped, so its outcome is unknown (BUG-020);
     /// stop showing it as running and say so, keeping the form and its inputs.
     CreateInterrupted(String),
+    /// The daemon answered the form's `RemoteList`, or it could not be asked (feature 034, FR-002).
+    RemotesListed(Result<Vec<GitRemote>, String>),
+    /// An issue load finished (feature 034). Applies only while the form awaits `seq`.
+    /// `resolved_env` is the environment-include snapshot the load resolved on a cache miss, for
+    /// the shell to keep; the reducer ignores it.
+    IssuesLoaded {
+        seq: u64,
+        result: Result<(IssueListing, PathBuf), IssueLoadError>,
+        resolved_env: Option<(PathBuf, EnvIncludeSnapshot)>,
+    },
+    /// Retry a failed issue load (FR-007).
+    IssueRetry,
+    /// The issue search text changed (FR-005).
+    IssueQueryChanged(String),
+    /// The issue search field took focus.
+    IssueFocused,
+    /// The keyboard moved through the issue results.
+    IssueHighlightMoved(Direction),
+    /// The issue list closed without a pick.
+    IssueDismissed,
+    /// Row `index` of the shown issue results was picked; the shell resolves it to a number
+    /// through [`State::issue_number_at`] and dispatches [`Msg::IssuePicked`].
+    IssueRowPicked(usize),
+    /// An issue was picked: its number and title fill ticket and name (FR-009, FR-010).
+    IssuePicked { number: u64 },
 }
 
 /// The form's own reducer: one entry point, twenty-two answers (FR-004a).
@@ -833,6 +1144,16 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::Created(worktree) => return created(state, worktree),
         Msg::CreateFailed(message) => return create_failed(state, message),
         Msg::CreateInterrupted(message) => create_interrupted(state, message),
+        Msg::RemotesListed(remotes) => remotes_listed(state, remotes),
+        Msg::IssuesLoaded { seq, result, .. } => issues_loaded(state, seq, result),
+        Msg::IssueRetry => issue_retry(state),
+        Msg::IssueQueryChanged(text) => issue_query_changed(state, text),
+        Msg::IssueFocused => issue_focused(state),
+        Msg::IssueHighlightMoved(direction) => issue_highlight_moved(state, direction),
+        Msg::IssueDismissed => issue_dismissed(state),
+        // Resolved by the shell, which holds the index and the results together.
+        Msg::IssueRowPicked(_) => {}
+        Msg::IssuePicked { number } => issue_picked(state, number),
     }
     Vec::new()
 }

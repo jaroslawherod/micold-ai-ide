@@ -198,6 +198,8 @@ fn the_only_excluded_implementations_are_fakes() {
         "FakeAiCliProvider",
         // Spec 035's (T005), registered before the client took the capability.
         "FakeScriptPathProbe",
+        // Feature 034's, beside `IssueSource`.
+        "FakeIssueSource",
     ]
     .iter()
     .map(|s| s.to_string())

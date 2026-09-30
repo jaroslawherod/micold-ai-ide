@@ -215,7 +215,7 @@ pub fn checkbox<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
     )
 }
 
-/// `ToggleChip` — active and inactive, and with an explicit accent.
+/// `ToggleChip` — active and inactive, with an explicit accent, and disabled (feature 034).
 pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -237,6 +237,11 @@ pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
                         roles.tag(ConventionalType::Fix).0,
                         roles.tag(ConventionalType::Fix).1,
                     ),
+                roles,
+            ),
+            posed(
+                "disabled",
+                material::ToggleChip::new("GitHub issue", Message::NoOp, roles).disabled(true),
                 roles,
             ),
         ],

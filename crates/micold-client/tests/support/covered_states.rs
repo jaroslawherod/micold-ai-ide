@@ -25,7 +25,10 @@ use micold_client::features::settings::{
 };
 use micold_client::features::window::FieldId;
 use micold_client::features::worktree::WorktreeMenu;
-use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
+use micold_client::features::worktree_form::{
+    BranchSource, GithubAvailability, IssueList, SearchState, WorktreeForm,
+};
+use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
 use micold_core::project::Availability;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
@@ -34,6 +37,35 @@ use micold_core::typeahead::{rank, Query};
 use micold_core::worktree::{BranchCandidate, BranchOrigin, Worktree, WorktreeStatus};
 
 use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
+
+/// The repository the issue-source states read (feature 034).
+fn github_repo() -> GithubAvailability {
+    GithubAvailability::Available(
+        GithubRepo::from_remote_url("git@github.com:octo/widgets.git").expect("a GitHub URL"),
+    )
+}
+
+/// A form on the issue source, its list in `issues`.
+fn issue_form(issues: IssueList) -> WorktreeForm {
+    WorktreeForm {
+        source: BranchSource::Issue,
+        github: github_repo(),
+        issues,
+        ..WorktreeForm::default()
+    }
+}
+
+/// The two action anchors every add-worktree state names.
+const ADD_WORKTREE_ANCHORS: &[Anchor] = &[
+    Anchor {
+        name: "dialog.root",
+        path: &[],
+    },
+    Anchor {
+        name: "dialog.actions",
+        path: &[6, 0, 0, 1],
+    },
+];
 
 /// A fixed project path. Never canonicalised against a real directory.
 const PROJECT: &str = "/fixture/project";
@@ -415,6 +447,81 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // Feature 034: the GitHub issue chip, disabled, with the reason under the switch.
+        CoveredState {
+            name: "add-worktree-dialog-github-unavailable",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(WorktreeForm {
+                    github: GithubAvailability::Unavailable(
+                        "This repository has no GitHub remote.".to_string(),
+                    ),
+                    ..WorktreeForm::default()
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-issue-loading",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(issue_form(IssueList::Loading { seq: 1 }));
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-issue-failed",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(issue_form(IssueList::Failed {
+                    error: IssueLoadError::NotSignedIn,
+                }));
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Rows, a long title, and the cap caption: more open issues than the load holds.
+        CoveredState {
+            name: "add-worktree-dialog-issue-loaded",
+            build: || {
+                let mut state = with_project();
+                let issue = |number: u64, title: &str, labels: &[&str]| {
+                    Issue::new(
+                        number,
+                        title.to_string(),
+                        labels.iter().map(|l| l.to_string()).collect(),
+                        "2026-09-29T00:00:00Z".to_string(),
+                    )
+                };
+                let issues = vec![
+                    issue(1234, LONG_NAME, &["bug", "good first issue"]),
+                    issue(42, "Crash when opening empty project", &["bug"]),
+                    issue(7, "Sidebar flickers on resize", &[]),
+                ];
+                // Derived the way the application derives it, as the branch picker's state does.
+                let issue_matches = rank(&issues, |i| i.row_text(), &Query::new(""));
+                let mut form = issue_form(IssueList::Loaded {
+                    listing: IssueListing {
+                        issues,
+                        total_open: 1_234,
+                        complete: false,
+                    },
+                    gh: std::path::PathBuf::from("/usr/bin/gh"),
+                    searched: Vec::new(),
+                    search: SearchState::Idle,
+                });
+                form.issue_matches = issue_matches;
+                form.type_ = None;
+                form.ticket = "42".to_string();
+                form.name = "Crash when opening empty project".to_string();
+                form.picked_issue = Some(42);
+                state.worktree_form.form = Some(form);
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         CoveredState {
             name: "worktree-menu-open",
             build: || {
@@ -607,7 +714,9 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 2])
+                // Index 3: the heading, the source switch, then the caption under it (feature 034),
+                // then the select.
+                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 3])
             },
             anchors: &[
                 Anchor {
@@ -616,7 +725,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[6, 0, 0, 0, 2],
+                    path: &[6, 0, 0, 0, 3],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.

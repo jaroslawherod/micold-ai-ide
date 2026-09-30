@@ -12,7 +12,7 @@ use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+    BranchSource, GithubAvailability, IssueList, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
@@ -44,44 +44,24 @@ pub fn modal<'a>(
 
     let mut fields = material::dialog::fields(column![heading, source_switch(form, r)]);
 
-    // Source-specific inputs (feature 016, FR-010): the original type/ticket/name fields, or the
-    // existing-branch picker.
+    // Why the GitHub issue chip is disabled, or — before it is chosen — which repository choosing
+    // it reads from GitHub (feature 034, FR-002, FR-025).
+    if let Some(caption) = form.source_caption() {
+        fields = fields.push(Text::new(caption, TypeRole::Caption, r).muted());
+    }
+
+    // Source-specific inputs (feature 016, FR-010): the original type/ticket/name fields, the
+    // existing-branch picker, or the issue picker above those same fields (feature 034).
     match form.source {
         BranchSource::New => {
-            // Type selector: a Material select list, not a row of buttons (feature 013,
-            // FR-001–FR-004).
-            let type_select = Select::new(
-                ConventionalType::ALL,
-                form.type_,
-                |a0| Message::WorktreeForm(FormMsg::TypeSelected(a0)),
-                r,
-            )
-            .placeholder("Select a type…")
-            // §7.7: the label moves *inside* the control's container, where every other field
-            // carries its own. It used to be a free-standing muted line above the select, which is
-            // the arrangement FR-031a replaces.
-            .label("Type");
-
-            // No placeholder: §7.7's migration table moves the whole of the old one into the label
-            // and the supporting text. Keeping the example in the placeholder as well would print
-            // it twice on an empty field — once greyed inside the container and once beneath it.
-            let ticket = TextField::new("", &form.ticket, r)
-                .label("Ticket")
-                .supporting("Optional — e.g. ABC-123")
-                .track_focus(FieldId::AddWorktreeTicket, focused)
-                .on_input(|a0| Message::WorktreeForm(FormMsg::TicketChanged(a0)));
-
-            let name = TextField::new("", &form.name, r)
-                .label("Name")
-                .supporting("e.g. login page")
-                .track_focus(FieldId::AddWorktreeName, focused)
-                .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
-                .on_submit(Message::WorktreeForm(FormMsg::Submitted));
-
-            fields = fields.push(type_select).push(ticket).push(name);
+            fields = naming_inputs(fields, form, r, focused);
         }
         BranchSource::Existing => {
             fields = fields.push(branch_picker(form, r));
+        }
+        BranchSource::Issue => {
+            fields = fields.push(issue_picker(form, r));
+            fields = naming_inputs(fields, form, r, focused);
         }
     }
 
@@ -153,6 +133,47 @@ pub fn modal<'a>(
     dialog.into()
 }
 
+/// The Type / Ticket / Name inputs, shared by the new-branch and the issue sources (feature 034,
+/// FR-011): a pick fills these very fields, so what the user sees filled is what they can edit.
+fn naming_inputs<'a>(
+    fields: iced::widget::Column<'a, Message>,
+    form: &'a WorktreeForm,
+    r: Roles,
+    focused: Option<FieldId>,
+) -> iced::widget::Column<'a, Message> {
+    // Type selector: a Material select list, not a row of buttons (feature 013,
+    // FR-001–FR-004).
+    let type_select = Select::new(
+        ConventionalType::ALL,
+        form.type_,
+        |a0| Message::WorktreeForm(FormMsg::TypeSelected(a0)),
+        r,
+    )
+    .placeholder("Select a type…")
+    // §7.7: the label moves *inside* the control's container, where every other field
+    // carries its own. It used to be a free-standing muted line above the select, which is
+    // the arrangement FR-031a replaces.
+    .label("Type");
+
+    // No placeholder: §7.7's migration table moves the whole of the old one into the label
+    // and the supporting text. Keeping the example in the placeholder as well would print
+    // it twice on an empty field — once greyed inside the container and once beneath it.
+    let ticket = TextField::new("", &form.ticket, r)
+        .label("Ticket")
+        .supporting("Optional — e.g. ABC-123")
+        .track_focus(FieldId::AddWorktreeTicket, focused)
+        .on_input(|a0| Message::WorktreeForm(FormMsg::TicketChanged(a0)));
+
+    let name = TextField::new("", &form.name, r)
+        .label("Name")
+        .supporting("e.g. login page")
+        .track_focus(FieldId::AddWorktreeName, focused)
+        .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
+        .on_submit(Message::WorktreeForm(FormMsg::Submitted));
+
+    fields.push(type_select).push(ticket).push(name)
+}
+
 /// The new-branch / existing-branch switch (feature 016, FR-010), built from the shared
 /// `ToggleChip` primitive rather than a bespoke control (Constitution Principle VIII).
 fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
@@ -169,6 +190,15 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
             r
         )
         .active(form.source == BranchSource::Existing),
+        // Feature 034: disabled until the repository is known to be on GitHub; the caption under
+        // the switch says why (FR-002).
+        ToggleChip::new(
+            "GitHub issue",
+            Message::WorktreeForm(FormMsg::SourceChanged(BranchSource::Issue)),
+            r
+        )
+        .active(form.source == BranchSource::Issue)
+        .disabled(!matches!(form.github, GithubAvailability::Available(_))),
     ]
     .spacing(spacing::SM)
     .into()
@@ -278,6 +308,102 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
     }
 
     col.into()
+}
+
+/// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
+/// repository, then the picker as far as the load has got.
+fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
+    let mut col = column![].spacing(spacing::XS);
+    if let Some(notice) = form.issue_notice() {
+        col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
+    }
+    let Some(repo) = form.github_repo() else {
+        return col.into();
+    };
+    match &form.issues {
+        IssueList::NotRequested => {}
+        // The switch and the inputs below stay live while this runs (FR-006).
+        IssueList::Loading { .. } => {
+            col = col.push(StageProgress::new("Loading issues from GitHub…", r));
+        }
+        IssueList::Failed { error } => {
+            col = col
+                .push(Text::new(error.message(repo), TypeRole::Caption, r).tint(r.error))
+                .push(
+                    Button::text("Retry", r).on_press(Message::WorktreeForm(FormMsg::IssueRetry)),
+                );
+        }
+        IssueList::Loaded { listing, .. } if listing.issues.is_empty() => {
+            col = col.push(
+                Text::new(format!("{repo} has no open issues."), TypeRole::Caption, r).muted(),
+            );
+        }
+        IssueList::Loaded { listing, .. } => {
+            // The mapping, exactly the branch picker's: one row per match, its label the issue's
+            // row text, the emphasis spans the matcher found in that same text. `issue_matches`
+            // indexes the listing's issues (searched issues follow them once search exists).
+            let rows: Vec<TypeaheadRow> = form
+                .issue_matches
+                .iter()
+                .filter_map(|(index, matched)| {
+                    let issue = listing.issues.get(*index)?;
+                    Some(TypeaheadRow::new(
+                        issue.row_text().to_string(),
+                        matched.spans.clone(),
+                    ))
+                })
+                .collect();
+            let selected = form.picked_issue.and_then(|picked| {
+                (0..form.issue_matches.len()).find(|&row| form.issue_number_at(row) == Some(picked))
+            });
+            col = col.push(
+                material::Typeahead::new(
+                    &form.issue_query,
+                    rows,
+                    |a0| Message::WorktreeForm(FormMsg::IssueQueryChanged(a0)),
+                    r,
+                )
+                .placeholder("Search by number, title or label")
+                .label("Issue")
+                .open(form.issue_list_open)
+                .highlighted(form.issue_highlight)
+                .selected(selected)
+                .empty_message("No open issue matches.")
+                .on_focus(Message::WorktreeForm(FormMsg::IssueFocused))
+                .on_move(|a0| Message::WorktreeForm(FormMsg::IssueHighlightMoved(a0)))
+                .on_dismiss(Message::WorktreeForm(FormMsg::IssueDismissed))
+                .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index))),
+            );
+            // FR-004: say the list is capped rather than presenting a part as the whole.
+            if !listing.complete {
+                col = col.push(
+                    Text::new(
+                        format!(
+                            "Showing the 1,000 most recently updated of {} open issues.",
+                            thousands(listing.total_open)
+                        ),
+                        TypeRole::Caption,
+                        r,
+                    )
+                    .muted(),
+                );
+            }
+        }
+    }
+    col.into()
+}
+
+/// `1234567` as "1,234,567", for a count the user reads.
+fn thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// The ordinary Create / Cancel row.

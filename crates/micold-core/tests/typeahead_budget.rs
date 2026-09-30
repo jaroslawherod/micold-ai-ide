@@ -284,3 +284,45 @@ fn ci_runs_the_frame_budget_in_a_release_build() {
          build at all (BUG-003)"
     );
 }
+
+/// Feature 034's budget (SC-003): the issue picker ranks every loaded issue on every keystroke, and
+/// it may hold 1,000 of them.
+const ISSUE_BUDGET_MS: f64 = 50.0;
+
+/// 1,000 issue rows shaped as `Issue::row_text` writes them: `#<number> <title>  ·  <labels>`.
+fn issue_rows() -> Vec<String> {
+    let titles = [
+        "Crash when opening an empty project",
+        "Sidebar flickers while the window is resized",
+        "Document the sandbox placement for Windows hosts",
+        "Terminal loses its scrollback after a reconnect",
+        "Settings save drops the environment-include timeout",
+        "Branch picker ignores remote-only branches",
+    ];
+    let labels = ["bug", "enhancement", "documentation, good first issue", ""];
+    (0..micold_core::github::ISSUE_LOAD_CAP)
+        .map(|i| {
+            let labels = labels[i % labels.len()];
+            let mut row = format!("#{} {} ({})", 12_000 - i, titles[i % titles.len()], i % 97);
+            if !labels.is_empty() {
+                row.push_str("  ·  ");
+                row.push_str(labels);
+            }
+            row
+        })
+        .collect()
+}
+
+/// SC-003: ranking the 1,000 loaded issues for a 3-character query fits the 50 ms budget in a
+/// release build.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "a release-build budget (BUG-003)")]
+fn ranking_1000_issue_rows_for_a_short_query_fits_the_budget() {
+    let rows = issue_rows();
+    let took = millis(&rows, "cra");
+
+    assert!(
+        took < ISSUE_BUDGET_MS,
+        "ranking 1,000 issue rows for \"cra\" took {took:.2}ms, over SC-003's {ISSUE_BUDGET_MS}ms"
+    );
+}

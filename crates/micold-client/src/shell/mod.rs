@@ -21,6 +21,7 @@ pub mod clipboard;
 pub mod connection;
 pub mod daemon_sync;
 pub mod env_include;
+pub mod issues;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;

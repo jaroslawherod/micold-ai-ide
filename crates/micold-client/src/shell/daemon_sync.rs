@@ -104,6 +104,12 @@ pub enum PendingOp {
     BranchList {
         project: PathBuf,
     },
+    /// A read-only `RemoteList` asked when the add-worktree form opens, to decide whether the
+    /// GitHub issue source can be chosen (feature 034, FR-002). Carries the project so an answer
+    /// for a project that is no longer active is dropped.
+    RemoteList {
+        project: PathBuf,
+    },
     /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
     /// client has no git view of the daemon's filesystem (feature 027, research R2 part 2).
     /// Carries the folder it was asked about, so an answer that outlived the question (the user
@@ -146,6 +152,7 @@ impl PendingOp {
             }
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
+            PendingOp::RemoteList { .. } => "read the repository's remotes".into(),
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
             }
@@ -292,6 +299,14 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
                 app.core.notify_error(text);
                 app.core
                     .update(Message::Worktree(WorktreeMsg::RefreshFinished));
+            }
+            // Feature 034: a read changed nothing, so there is no "may or may not have taken
+            // effect" to report; the form's caption says the remotes could not be read.
+            PendingOp::RemoteList { .. } => {
+                app.core
+                    .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(
+                        crate::shell::issues::NOT_CONNECTED.to_string(),
+                    ))));
             }
             _ => app.core.notify_error(text),
         }
@@ -716,6 +731,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     }
                 }
             }
+            // Feature 034: the remotes decide whether the GitHub issue source can be chosen. The same
+            // staleness guard as the branch listing.
+            Some(PendingOp::RemoteList { project: asked_for }) => {
+                if let OperationResult::RemoteList { remotes } = result {
+                    if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
+                        app.core
+                            .update(Message::WorktreeForm(FormMsg::RemotesListed(Ok(remotes))));
+                    }
+                }
+            }
             // Feature 027 (research R2 part 2): the open-project gate, answered by the side
             // that has a filesystem view of the project. The path is compared, not assumed —
             // see `workspace::on_repo_root_answer`.
@@ -818,6 +843,14 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 Some(PendingOp::BranchList { .. }) => {
                     app.core.worktree_form.worktree_error =
                         Some(format!("Could not list branches: {message}"));
+                }
+                // Feature 034: the caption under the source switch says why the issue source is
+                // unavailable. A toast would land under the modal's scrim, unseen.
+                Some(PendingOp::RemoteList { project }) => {
+                    if app.core.workspace.active.as_deref() == Some(project.as_path()) {
+                        app.core
+                            .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(message))));
+                    }
                 }
                 // Feature 029: the failure notice is the generic one below — "Couldn't refresh
                 // the worktree list: …" reads correctly and names the reason (FR-008). What this
