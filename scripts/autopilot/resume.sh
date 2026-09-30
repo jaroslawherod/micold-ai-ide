@@ -25,6 +25,8 @@ report() {
   echo "NEXT $(sed -n 's/^- \*\*Next step\*\*: //p' "$f" | head -1)"
   sed -n '/^## Open escalation/,/^## /p' "$f" | grep -v '^## ' | grep -vE '^\s*$|^None\.' \
     | sed 's/^/ESCALATION /' | head -5
+  sed -n '/^## Handover/,/^## /p' "$f" | grep -v '^## ' | grep -vE '^\s*$|^None\.' \
+    | sed 's/^/HANDOVER /' | head -5
   for pr in $(ledger_prs "$f"); do
     echo "PR #$pr $(gh pr view "$pr" --json state -q .state 2>/dev/null || echo UNKNOWN)"
   done
