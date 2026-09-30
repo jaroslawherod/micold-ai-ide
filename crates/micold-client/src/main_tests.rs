@@ -4700,8 +4700,7 @@ mod script_path_report {
         Arc<FakeScriptPathProbe>,
         Arc<micold_core::settings::FakeSettingsStore>,
     ) {
-        let (app, probe, store) =
-            saving_app(path, micold_core::settings::FakeSettingsStore::new());
+        let (app, probe, store) = saving_app(path, micold_core::settings::FakeSettingsStore::new());
         assert_eq!(
             app.core.settings.script_check,
             micold_client::features::settings::ScriptCheck::Done(
