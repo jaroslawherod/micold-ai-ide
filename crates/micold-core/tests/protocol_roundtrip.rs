@@ -14,8 +14,8 @@ use micold_core::protocol::grid::{
     WireStyle,
 };
 use micold_core::protocol::messages::{
-    ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg, DaemonMsg,
-    DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult, ProjectSnapshot,
+    ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg, ConfirmOperation,
+    DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult, ProjectSnapshot,
     RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
@@ -248,6 +248,9 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             directives: "micold_daemon=debug".into(),
         },
         ClientMsg::Ping { nonce: 0xdead_beef },
+        // Feature 034 M5 (FR-014): a window's answer to an agent's destructive request.
+        ClientMsg::ConfirmationAnswer { id: 7, allow: true },
+        ClientMsg::ConfirmationAnswer { id: 8, allow: false },
     ]
 }
 
@@ -467,6 +470,57 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             message: "worktree create failed".into(),
             detail: Some("fatal: branch 'feat/x' already exists".into()),
         },
+        // Feature 034 M5 (FR-014): the prompt every window shows, once per operation kind, and
+        // its withdrawal.
+        DaemonMsg::ConfirmationRequested {
+            id: 1,
+            project: PathBuf::from("/a"),
+            caller: sid(),
+            caller_label: "planner".into(),
+            operation: ConfirmOperation::DeleteWorktree {
+                stop_sessions: true,
+                delete_branch: false,
+            },
+            target_label: "feat-x".into(),
+            expires_in_ms: 60_000,
+        },
+        DaemonMsg::ConfirmationRequested {
+            id: 2,
+            project: PathBuf::from("/a"),
+            caller: sid(),
+            caller_label: "planner".into(),
+            operation: ConfirmOperation::DeleteSession,
+            target_label: "reviewer".into(),
+            expires_in_ms: 59_000,
+        },
+        DaemonMsg::ConfirmationRequested {
+            id: 3,
+            project: PathBuf::from("/a"),
+            caller: sid(),
+            caller_label: "planner".into(),
+            operation: ConfirmOperation::StopSession,
+            target_label: "reviewer".into(),
+            expires_in_ms: 1,
+        },
+        DaemonMsg::ConfirmationRequested {
+            id: 4,
+            project: PathBuf::from("/a"),
+            caller: sid(),
+            caller_label: "planner".into(),
+            operation: ConfirmOperation::InterruptSession,
+            target_label: "reviewer".into(),
+            expires_in_ms: 0,
+        },
+        DaemonMsg::ConfirmationRequested {
+            id: 5,
+            project: PathBuf::from("/a"),
+            caller: sid(),
+            caller_label: "planner".into(),
+            operation: ConfirmOperation::SendInput,
+            target_label: "reviewer".into(),
+            expires_in_ms: 30_000,
+        },
+        DaemonMsg::ConfirmationWithdrawn { id: 1 },
         DaemonMsg::LogLocation {
             req: 10,
             path: Some(PathBuf::from("/var/log/micold/daemon.log")),
@@ -620,5 +674,20 @@ fn a_worktree_snapshot_without_the_provenance_flag_decodes_as_not_user_created()
         !decoded.user_created,
         "absent means 'not known to be the user's', which is the safe reading for a payload \
          that predates the record"
+    );
+}
+
+#[test]
+fn a_send_input_confirmation_has_no_field_that_can_carry_the_input_text() {
+    // Feature 034 (FR-018): the prompt names the operation and its target only. `SendInput` is a
+    // unit variant, so there is nowhere on the wire for the text an agent wants to type.
+    assert_eq!(
+        serde_json::to_value(ConfirmOperation::SendInput).expect("encode"),
+        serde_json::json!("SendInput")
+    );
+    let with_text = r#"{"SendInput":{"text":"rm -rf /"}}"#;
+    assert!(
+        serde_json::from_str::<ConfirmOperation>(with_text).is_err(),
+        "a SendInput carrying text must not decode"
     );
 }
