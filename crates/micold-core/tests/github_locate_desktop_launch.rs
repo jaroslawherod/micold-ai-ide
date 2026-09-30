@@ -6,8 +6,9 @@
 //! where that platform's installer put it, and it resolves `gh` the way the client does
 //! (`micold_core::github::locate_gh_on_host`, which `shell/capabilities.rs` calls) — except that
 //! `PATH` is the one a desktop launcher hands the app instead of the terminal's, and the
-//! environment include contributes nothing (off, or a profile that does not set `PATH`). That is the macOS and Windows arms of §B10 (Dock or
-//! Finder, Start menu); the Linux arm is also recorded by hand in `evidence/quickstart-b.md`.
+//! environment include contributes nothing (off, or a profile that does not set `PATH`). That is
+//! the macOS and Windows arms of §B10 (Dock or Finder, Start menu); the Linux arm is also recorded
+//! by hand in `evidence/quickstart-b.md`.
 //!
 //! No network and no GitHub sign-in: the only process run is `gh --version`.
 
