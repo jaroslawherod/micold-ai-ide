@@ -5678,6 +5678,11 @@ mod issue_source {
     fn issue_a_label_type_can_be_overridden() {
         let mut rig = default_rig();
         pick_row(&mut rig.app, 42);
+        assert_eq!(
+            form(&rig.app).type_,
+            Some(ConventionalType::Fix),
+            "the label pre-selected fix"
+        );
         send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Feat));
         let _ = remote_lists_sent(&mut rig.rx);
         send(&mut rig.app, FormMsg::Submitted);

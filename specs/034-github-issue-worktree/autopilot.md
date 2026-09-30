@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: Run milestone M4 (T043–T052, T078–T085).
+- **Next step**: Wait for M4's PR CI and merge; then run milestone M5 (T053–T062, T086–T092).
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | #460 | merged (454c716c) |
 | M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | #468 | merged (a17e6cde) |
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | #472 | merged (691510de) |
-| M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | — | in-progress |
+| M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | PR_PLACEHOLDER | open |
 | M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | — | pending |
 | M6 | T063–T065 | Architecture doc + quickstart §B10, B11, B13 recorded | — | pending |
 
@@ -66,6 +66,14 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M3 | code-review A r3 #7 | Cycle log records `build-lock.sh cargo test` | As r2 #10. |
 | M3 | visual pass D6 | The open result list covers the "Searching GitHub…" / search-failed lines under the field | The same Typeahead overlay behaviour M2 declined as D3; contract §2 places these lines under the picker. Visible once the list closes. Listed under Follow-ups. |
 | M3 | M1 conformance B F2 (revisited) | `parse_list_page`'s `errors[]` branch is reached only at exit 0 | Revisited with M3's partial-response rule: a non-zero exit's stdout is used only when the parser accepts it, otherwise stderr is classified, because stderr names SAML and scope refusals that GraphQL types as FORBIDDEN (review A #2, U111). Round 2: an error the answer types exactly (NOT_FOUND → `NoAccess`, RATE_LIMITED) now stands at any exit status, so the `errors[]` branch is live for real `gh`; only an `Other` goes to stderr. F2 closed. |
+| M4 | code-review A #1 | An entry dropped on read (unknown type) is gone from the file after the next write | Contract §3 and R10 prescribe the drop: the rest of the document must load, and `ConventionalType` is closed, so the entry has no meaning to keep. |
+| M4 | code-review A #3 | `labels(first: 20)` hides a mapped label past the 20th | The query shape is contract github-issue-source.md §2 (research R2); issues with more than 20 labels are outside the spec's cases. |
+| M4 | code-review A #4 | `store.load()` on the UI thread at every pick | Contract §4 and FR-014a: the mapping is read at the moment of the pick; `open_settings` reads the same small file the same way. |
+| M4 | code-review A #5 | The Settings draft snapshots the mapping at open, so a hand edit made while Settings is open is overwritten on save | The same holds for every Settings field (the draft replaces the client's half whole); M5 makes the mapping editable in the view. Comment corrected. |
+| M4 | code-review A #8 | `IssuePicked` carries the mapping rather than a resolved type | Data-model §5 and contract §4 fix the message shape `IssuePicked { number, mapping }`, so the reducer applies FR-013/FR-014 and is unit-testable. |
+| M4 | code-review A r2 #1, #2 (MINOR) | A non-list mapping reads as the default and the next save writes the default over it; a list of all-bad entries reads as `[]` | Judged MINOR: the alternative (whole file to `.bak`) loses every setting to keep one malformed value. R10's rule — drop what cannot be read, keep the rest — applied to the field as a whole; `[]` is a list the user wrote. |
+| M4 | code-review A r2 #3–#7, #9, #10 | Any parse error drops an entry; `Settings`' other fields not lenient; `Value` needs a self-describing format; `open_settings` hides a `.bak` move; three fallback spellings; cycle log uses `build-lock.sh cargo`; mid-milestone commits did not compile the client tests | MINOR or pre-existing: `Settings` is never sent over postcard; the `.bak`-on-open behaviour predates this feature; the cycle-log commands are the TDD profile's; the fixed commits land in one PR. #8 (doc comment) fixed. |
+| M4 | visual pass §B4 note | With the type cleared, no message names the missing type; Create is disabled and the preview hides | That is the form's existing "type required" behaviour, which FR-014 and AS3 say to reuse. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
 ## Review rounds
@@ -76,6 +84,10 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M3 | A (code-review high), scoped | 2 | 14dfc916:feb7b70e | 10 findings: #1 (round 1 #7 left a search stuck Pending — reverted, U110 revised), #2/#3/#8 (a typed GraphQL error stands; only `Other` goes to stderr, ListNotFound case restored), #4 (highlight falls back to the clamp), #7 (doc), #9 (branch) fixed; #5, #6, #10 declined |
 | M3 | A (code-review high), scoped | 3 (last) | a9a4807b:f7829cb2 | 7 findings: #1 (highlight cleared when its issue is dropped), #3 (GitHub's message kept over a generic `Other`), #4 (scope refusals → `NoAccess`, U112), #5/#6 (typed-error test split out, RATE_LIMITED search case) fixed; #2, #7 declined. No round 4 (limit); review B covers the fix diff. |
 | M3 | B (conformance) | 1 | d4f988e7:c1c43e14 | CLEAN (1 MINOR: U70 core half test-after, covered by the reducer's red) |
+| M4 | A (code-review high) | 1 | ecb65f49:d5ea6e7f | 8 findings: #2 (non-list mapping sent the file to `.bak`), #6 (`Settings` read strictly), #7 (fallback) fixed (cycle 23); #1, #3, #4, #5, #8 declined |
+| M4 | A (code-review high), scoped | 2 | 010fa3f4:1ce11b0e | fixes hold; 10 MINOR/low: #8 (doc) fixed, rest declined. Done. |
+| M4 | B (conformance) | 1 | 0c96ddb3:d721635b | CLEAN (1 MINOR: A14/U83 did not assert the label-set type before overriding — fixed); Verify all green |
+| M4 | visual pass §B4 | 1 | d721635b | criteria 1–4 PASS (labels on rows, bug→fix, unmapped clears after chore, enhancement→feat) |
 | M3 | visual pass §B6 | 1 | c1c43e14 | criteria 1, 3, 4 PASS; 2 partial — the issue beyond the cap appears once and is pickable, "Searching GitHub…" not caught on screen (load ~20); D6 declined |
 
 ## Open escalation
