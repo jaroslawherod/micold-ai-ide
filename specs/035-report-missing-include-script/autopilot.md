@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D30 | 4-M3 | Review A round 1 (code-review high) | 8 findings: 4 fixed (NotReadable + `MissingScript` merged, U65; a re-check drops the previous answer when path or enabled changed, U66, `ScriptPathCheckStarted` carries both; shared `adopt_daemon_settings`; stale comment), 4 declined (below). | agent-resolved | code-review skill; snapshot 3255686e:3d355f29 |
 | D31 | 4-M3 | Review B round 1 (conformance) | CLEAN, 2 MINOR, both the same issues as review A F1/F2 and fixed with them. Verify at 3d355f29: features_settings 49 passed; script_path_report 16 passed. | agent-resolved | reviewer subagent; snapshot 3255686e:3d355f29 |
 | D32 | 4-M3 | Visual pass B4, B5, B6 (T027) | All three pass (dark theme, Xvfb :78, pinned pair from 36015322). Evidence in `visual-pass/B4-*`, `B5-*`, `B6-*`. | agent-resolved | visual-pass skill |
+| D33 | 4-M3 | Review A round 2 and review B round 2 (sonnet, fix diff) | Both CLEAN. A: fixes 1, 2, 5, 8 hold; declines 3, 4, 6, 7 stand; one MINOR (a kept same-path answer can still pair with a pre-save outcome), covered by the declined F6. B: Verify features_settings 51 passed, script_path_report 16 passed; contract S1/N7 match. Gate at a731366b: GATE_EXIT=0, 3822 passed. | agent-resolved | reviewer subagents; snapshot 3b624194:a731366b |
 
 ## Declined review findings
 
