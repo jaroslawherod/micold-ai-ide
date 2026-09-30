@@ -46,6 +46,11 @@ without a valid key; the key file is readable only by you.
 A session that is not connected works exactly as before. The session service writes one line to
 its log saying why, for example `no tool server: Pi has no MCP support`.
 
+To stop connecting sessions, turn off **Let AI sessions manage worktrees and sessions** under
+Settings → Environment ([Settings](settings.md#let-ai-sessions-manage-worktrees-and-sessions)). It
+applies to sessions started afterwards; running sessions keep their connection, and each new session
+logs `no tool server: disabled in settings`.
+
 ## Your configuration is left alone
 
 The application never writes to your own Claude Code or Copilot configuration. Each session is

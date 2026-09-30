@@ -18,7 +18,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | --- | --- |
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit |
-| [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, and the script sourced before it starts |
+| [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 
 <!-- media: settings-view-light -->
@@ -109,6 +109,20 @@ fault: the session works exactly as before, the app just has no way to see wheth
 
 It is one setting for the whole app — there is no per-project or per-session copy — and it applies
 to Pi sessions started after you save. Claude Code and Copilot sessions are unaffected either way.
+
+### Let AI sessions manage worktrees and sessions
+
+On by default. Claude Code and GitHub Copilot sessions are connected to the app's own tool server,
+so the assistant in a session can see the project's worktrees, branches and sessions the way the
+sidebar shows them. [Tools for the AI in your sessions](agent-tools.md) lists what they can do.
+
+Turn it off and sessions started after you save get no connection: they start exactly as they
+did before this feature, and the session service writes one line to its log for each, saying
+`no tool server: disabled in settings`. Sessions already running keep the connection they started
+with until they stop; restart one to drop it. Turning it back on connects the next session again.
+
+It is one setting for the whole app, kept by the session service beside the default AI CLI, so
+every open window shows the same value.
 
 ### The environment a session starts in
 
