@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
-- **Next step**: M5 phase A (protocol 18, confirmation store, client dialog) cherry-picked from `worktree-agent-a743df25bf45d90b8` onto main; finish T054, T056, T050 rest, T051, T059, T090–T094, T103; gate; reviews.
+- **Next step**: ESCALATED (category 4, disk). Once at least 10 GB is free: gate, then a sonnet re-review of review A's fixes, then review B, then T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), then tick tasks.md, push and open the PR.
 
 ## Pull requests
 
@@ -109,7 +109,13 @@ deliverable (tasks.md Notes).
 
 ## Open escalation
 
-None.
+**Category 4 (environment): disk too full to run the M5 gate.** 2026-10-01.
+
+- Decision needed: free disk space so that at least 10 GB is free on `/` before `mise run gate` runs.
+- Why the unit cannot decide this: the only reclaim the unit is allowed is this worktree's own stray `target-shared/`, and there is none. The shared `target-shared/` (64 GB) is used by other worktrees' builds, and the unit must not delete it.
+- What was checked: `df -h /` shows 3.2 GB free (100%), down from 5.7 GB after M5's targeted test builds. The worktree has no private target dir. M4's gate once ran out of space and emptied source files.
+- Recommended: run `mise run sweep` with `SWEEP_ARGS='--maxsize 50GB'` from the main checkout (this freed 47 GB before), or delete `target-shared/debug/incremental`. Do this when no other worktree is building.
+- While waiting: the M5 code, tests, user guide and review A round 1 fixes are committed on the branch (not pushed). Targeted suites pass (daemon mcp_lifecycle_tools 24, mcp_confirmations 18, mcp_audit_log 4; all client tests except one, which is fixed and re-run green). Still to do: the gate, a sonnet re-review of the review A fixes, review B, the T103 real-CLI pass and §B4 visual pass, the tasks.md ticks, then push and open the PR.
 
 ## Follow-ups not done
 
