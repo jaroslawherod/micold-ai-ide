@@ -261,6 +261,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         default_ai_cli: app.core.session.default_ai_cli,
         pi_activity_component: app.core.session.pi_activity_component,
         tool_server_enabled: app.core.session.tool_server_enabled,
+        issue_label_types: micold_core::issue_types::default_mapping(),
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -853,6 +854,10 @@ mod tests {
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: false,
             tool_server_enabled: true,
+            issue_label_types: vec![micold_core::issue_types::LabelTypeEntry {
+                label: "perf".to_string(),
+                type_: micold_core::naming::ConventionalType::Perf,
+            }],
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

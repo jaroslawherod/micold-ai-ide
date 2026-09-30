@@ -31,6 +31,7 @@ use micold_core::git::GitRemote;
 use micold_core::github::{
     choose_remote, merge_searched, GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
 };
+use micold_core::issue_types::{type_for_labels, LabelTypeEntry};
 use micold_core::naming::name_from_title;
 use micold_core::naming::{
     derive, dir_name_from_branch, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
@@ -949,20 +950,28 @@ pub fn issue_dismissed(state: &mut crate::app::State) {
 }
 
 /// An issue was picked: its number becomes the ticket and its title the name, replacing whatever
-/// was there (FR-009, FR-010, FR-010a). A number the listing does not hold changes nothing.
-pub fn issue_picked(state: &mut crate::app::State, number: u64) {
+/// was there (FR-009, FR-010, FR-010a), and its labels choose the type through `mapping` — a match
+/// replaces the selected type, no match clears it (FR-013, FR-014). A number the listing does not
+/// hold changes nothing.
+pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[LabelTypeEntry]) {
     while_editing_unprompted(state, |form| {
-        let Some(title) = form
+        let Some((title, type_)) = form
             .issues
             .held()
             .into_iter()
             .find(|issue| issue.number() == number)
-            .map(|issue| issue.title().to_string())
+            .map(|issue| {
+                (
+                    issue.title().to_string(),
+                    type_for_labels(mapping, issue.labels()),
+                )
+            })
         else {
             return;
         };
         form.ticket = number.to_string();
         form.name = name_from_title(&title);
+        form.type_ = type_;
         form.error = None;
         form.picked_issue = Some(number);
         form.issue_list_open = false;
@@ -1304,8 +1313,12 @@ pub enum Msg {
     /// Row `index` of the shown issue results was picked; the shell resolves it to a number
     /// through [`State::issue_number_at`] and dispatches [`Msg::IssuePicked`].
     IssueRowPicked(usize),
-    /// An issue was picked: its number and title fill ticket and name (FR-009, FR-010).
-    IssuePicked { number: u64 },
+    /// An issue was picked: its number and title fill ticket and name (FR-009, FR-010), and its
+    /// labels choose the type through `mapping`, read by the shell at the pick (FR-013, FR-014a).
+    IssuePicked {
+        number: u64,
+        mapping: Vec<LabelTypeEntry>,
+    },
     /// The debounce after a keystroke ran out (research R9). Starts the search only while `seq` is
     /// still the pending one.
     IssueSearchDue { seq: u64 },
@@ -1355,7 +1368,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::IssueDismissed => issue_dismissed(state),
         // Resolved by the shell, which holds the index and the results together.
         Msg::IssueRowPicked(_) => {}
-        Msg::IssuePicked { number } => issue_picked(state, number),
+        Msg::IssuePicked { number, mapping } => issue_picked(state, number, &mapping),
         Msg::IssueSearchDue { seq } => issue_search_due(state, seq),
         Msg::IssueSearched { seq, result } => issue_searched(state, seq, result),
     }

@@ -151,7 +151,10 @@ pub fn on_issue_search_due(app: &mut App, seq: u64) -> Task<Message> {
 pub fn on_issue_row_picked(app: &mut App, index: usize) -> Task<Message> {
     if let Some(number) = app.core.worktree_form.issue_number_at(index) {
         app.core
-            .update(Message::WorktreeForm(FormMsg::IssuePicked { number }));
+            .update(Message::WorktreeForm(FormMsg::IssuePicked {
+                number,
+                mapping: Vec::new(),
+            }));
     }
     Task::none()
 }

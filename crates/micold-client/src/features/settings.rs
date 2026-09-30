@@ -433,6 +433,7 @@ impl ValidSettings {
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
             daemon: self.daemon,
+            issue_label_types: micold_core::issue_types::default_mapping(),
         }
     }
 }

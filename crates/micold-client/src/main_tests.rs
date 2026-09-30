@@ -5031,7 +5031,13 @@ mod issue_source {
     }
 
     fn pick(app: &mut App, number: u64) {
-        send(app, FormMsg::IssuePicked { number });
+        send(
+            app,
+            FormMsg::IssuePicked {
+                number,
+                mapping: vec![],
+            },
+        );
     }
 
     // --- T022: the shell's half -----------------------------------------------------------------
@@ -5314,8 +5320,9 @@ mod issue_source {
     #[test]
     fn issue_picked_values_stay_editable() {
         let mut rig = loaded_rig();
-        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         pick(&mut rig.app, 42);
+        // Chosen after the pick: with no mapping the pick clears the type (FR-014).
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         send(
             &mut rig.app,
             FormMsg::NameChanged("empty project crash".into()),
@@ -5345,8 +5352,9 @@ mod issue_source {
     #[test]
     fn issue_submit_creates_like_a_new_branch() {
         let mut rig = loaded_rig();
-        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         pick(&mut rig.app, 42);
+        // Chosen after the pick: with no mapping the pick clears the type (FR-014).
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         let _ = remote_lists_sent(&mut rig.rx);
         send(&mut rig.app, FormMsg::Submitted);
         assert_eq!(
