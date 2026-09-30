@@ -147,3 +147,78 @@ impl Drop for Job {
         unsafe { CloseHandle(self.0) };
     }
 }
+
+/// The Windows half of [`super::write_owner_only`]: the directory and the file each get a
+/// protected DACL whose only ACE grants the current user full access (`D:P(A;;GA;;;<sid>)`, as the
+/// daemon's pipe has). The directory's ACE is inheritable, so the temporary file is owner-only from
+/// its creation; its own protected DACL is set before it is renamed into place.
+pub(super) fn write_owner_only(
+    dir: &std::path::Path,
+    file: &str,
+    bytes: &[u8],
+) -> std::io::Result<std::path::PathBuf> {
+    let sid = micold_core::endpoint::user_sid()?;
+    std::fs::create_dir_all(dir)?;
+    set_protected_dacl(dir, &format!("D:P(A;OICI;GA;;;{sid})"))?;
+    let path = dir.join(file);
+    let tmp = dir.join(format!(".{file}.tmp"));
+    let _ = std::fs::remove_file(&tmp);
+    std::fs::write(&tmp, bytes)?;
+    set_protected_dacl(&tmp, &format!("D:P(A;;GA;;;{sid})"))?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(path)
+}
+
+/// Replace `path`'s DACL with the one `sddl` describes, protected from inheritance.
+fn set_protected_dacl(path: &std::path::Path, sddl: &str) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SetNamedSecurityInfoW,
+        SDDL_REVISION_1, SE_FILE_OBJECT,
+    };
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, ACL, DACL_SECURITY_INFORMATION,
+        PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    };
+
+    let wide_sddl: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
+    let wide_path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: both strings are NUL-terminated and outlive the calls; the descriptor is a local out
+    // pointer freed exactly once with `LocalFree`, and the DACL pointer borrowed from it is used only
+    // before that.
+    unsafe {
+        let mut sd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            wide_sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut sd,
+            std::ptr::null_mut(),
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut present = 0;
+        let mut defaulted = 0;
+        let mut dacl: *mut ACL = std::ptr::null_mut();
+        if GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted) == 0 {
+            let err = std::io::Error::last_os_error();
+            LocalFree(sd);
+            return Err(err);
+        }
+        let status = SetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null(),
+        );
+        LocalFree(sd);
+        if status != ERROR_SUCCESS {
+            return Err(std::io::Error::from_raw_os_error(status as i32));
+        }
+    }
+    Ok(())
+}

@@ -57,3 +57,25 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `mcp/jsonrpc.rs` (`parse`, `route`, `initialize` negotiation). 13 passed.
 - refactor: none.
 - notes: `tools/list` is not routed yet; it arrives with the catalog in T019 (cycle for U83).
+
+## Cycle 3 — U30–U33 — T006, T009
+
+- tests: `crates/micold-daemon/tests/mcp_binding_file_mode.rs` (`unix::*` 4 tests, `windows::*` 2)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_file_mode`, against a
+  stub `write_owner_only` that used `create_dir_all` + `fs::write`
+  ```
+  assertion `left == right` failed: the binding directory must be 0700
+    left: 509
+   right: 448
+  assertion `left == right` failed: the binding file must be 0600
+    left: 436
+   right: 384
+  test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `platform::write_owner_only` — Unix `DirBuilder::mode(0o700)` + `set_permissions`, a
+  `create_new` `mode(0o600)` temp file renamed over the target; Windows protected DACLs
+  (`D:P(A;OICI;GA;;;<sid>)` on the directory, `D:P(A;;GA;;;<sid>)` on the file) via
+  `SetNamedSecurityInfoW`. 4 passed on Linux.
+- refactor: none.
+- notes: U33 (Windows) is not runnable here; `cargo check -p micold-daemon --tests --target
+  x86_64-pc-windows-msvc` compiles it, and its red/green is the `windows-latest` CI leg.

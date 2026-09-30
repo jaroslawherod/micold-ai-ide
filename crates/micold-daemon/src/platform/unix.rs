@@ -124,3 +124,30 @@ impl ProcessTree {
         }
     }
 }
+
+/// The Unix half of [`super::write_owner_only`]: the directory `0700`, the file `0600`.
+pub(super) fn write_owner_only(
+    dir: &std::path::Path,
+    file: &str,
+    bytes: &[u8],
+) -> io::Result<std::path::PathBuf> {
+    use std::fs::{DirBuilder, OpenOptions, Permissions};
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+
+    DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+    // An existing directory keeps its mode through `create`; narrow it.
+    std::fs::set_permissions(dir, Permissions::from_mode(0o700))?;
+    let path = dir.join(file);
+    let tmp = dir.join(format!(".{file}.tmp"));
+    let _ = std::fs::remove_file(&tmp);
+    let mut out = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&tmp)?;
+    out.write_all(bytes)?;
+    drop(out);
+    std::fs::rename(&tmp, &path)?;
+    Ok(path)
+}
