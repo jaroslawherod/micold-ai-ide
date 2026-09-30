@@ -372,6 +372,7 @@ assembly point harder to express for a cost that does not exist.
 | `shell/env_include.rs` | a subprocess running the user's own script |
 | `shell/os_theme.rs` | the desktop's light/dark preference |
 | `shell/clipboard.rs` | the system clipboard |
+| `shell/issues.rs` | GitHub, through the user's own `gh` on the host (feature 034) |
 
 **One module per external system, and never per feature** (FR-019a). The question the split answers
 is "what can a change to this one outside thing reach", so the module boundary follows the system,
@@ -387,6 +388,48 @@ and `Git` together because the picker exists to find a repository and the same a
 worktrees it holds, so splitting it would put two halves of one decision in two files.
 
 If two capabilities are one conversation, one module. If one capability is reached two ways, two.
+
+### Which process runs it: the GitHub issue fetch runs in the client, on the host
+
+Most of what a project needs from outside runs in the daemon, because the daemon is where the
+project's files are: `BranchList`, worktree creation and every git write go through the protocol.
+The GitHub issue list (feature 034) deliberately does not. It is split in two, by what each half
+reads:
+
+- **The daemon answers only `RemoteList`**: the repository's remote URLs, raw, from
+  `git config --local --get-regexp ^remote\..+\.url$` (`Git::remote_list`). It is local git
+  metadata, read-only and correlated like `BranchList`, and it is asked when the add-worktree form
+  opens so the **GitHub issue** chip can be disabled with a reason before the user picks it. Which
+  remote counts, and its parse into `owner/name`, are pure `micold_core::github` functions run in
+  the client; the daemon ships the facts only.
+- **The client runs `gh`**, from `shell/issues.rs`, off the update thread, through
+  `Capabilities::issue_tooling`. It locates `gh` itself (the environment include's `PATH`, then its
+  own `PATH`, then well-known install directories — the `.desktop` or Dock launch case) and hands
+  it only `owner/name`.
+
+Why the fetch is never in the daemon: feature 027 can place the daemon in a container
+(`PlacementKind::Sandbox`). There `gh` is not in the image, the user's keychain and GitHub sign-in
+are not reachable, and the sandbox's network and credential-share settings decide what the
+container may reach. FR-026 requires the issue list to behave the same with or without the sandbox,
+and to be decided by neither its network nor its credential settings. The client always runs on
+the host, in the user's desktop session, next to their sign-in, so running `gh` there makes that
+true by placement rather than by configuration — and forwarding a GitHub credential into the
+container, a new credential share 027 keeps opt-in, is never needed.
+
+Why the remotes are not read in the client too: when the daemon does not see the project at the
+paths the client calls it by — a Linux container on a Windows host, or any remote daemon — the
+client may not run git at all (`Capabilities::without_local_git`, applied in `shell/startup.rs`). `gh` is outside
+that rule because it reads nothing from the project's filesystem — its only input is the
+`owner/name` the daemon's answer produced.
+
+Why `git config --local` and not `git remote -v`: `remote -v` applies `url.<base>.insteadOf`
+rewrites, which usually live in `~/.gitconfig`, and that file reaches a sandboxed daemon only when
+the user opts into `CredentialShare::GitConfig`. An aliased remote would then be GitHub on one
+placement and not on the other. The repository's own `.git/config` is in the mounted project on
+both, so the answer does not depend on where the daemon runs. The cost is documented for users: a
+remote spelled through a global `insteadOf` alias is not recognised as GitHub.
+
+The decision record is `specs/034-github-issue-worktree/research.md` R4 and R5.
 
 ### What you do *not* do
 
