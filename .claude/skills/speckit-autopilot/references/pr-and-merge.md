@@ -57,6 +57,8 @@ on `feat`.
 gh pr create --base main --title "<title>" --body-file "$SCRATCHPAD/pr-body.md"
 ```
 
+A run from a GitHub issue ends every body with `Refs #<n>` ([issue.md](issue.md)).
+
 Milestone body:
 
 ```markdown

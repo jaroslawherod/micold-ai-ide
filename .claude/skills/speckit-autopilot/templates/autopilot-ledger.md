@@ -5,6 +5,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - **Input**: <the user's original prompt, verbatim>
 - **Kind**: feature | bug
+- **Issue**: <#n, or none>
 - **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
 - **Phase**: 1-spec | 2-clarify | 3-design | 4-milestones | 5-close | done

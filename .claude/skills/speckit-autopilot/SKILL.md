@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
 description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
-argument-hint: "<feature description> | bug: <report> | resume"
+argument-hint: "<feature description> | bug: <report> | #<issue> | resume"
 user-invocable: true
 ---
 
@@ -32,6 +32,7 @@ phase file. Overview and diagrams for humans: [README.md](README.md).
 | Argument | Start at |
 |---|---|
 | `resume` | Follow [references/resume.md](references/resume.md) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
+| `#<n>` or an issue URL | `gh issue view <n> --json title,body,labels`, then a bug or spec unit by its content, with the issue number and text as its scope, per [references/issue.md](references/issue.md) |
 | `bug: …`, or text describing broken behaviour | Bug unit |
 | anything else | Spec unit |
 
@@ -122,7 +123,7 @@ Other sessions work in this repo at the same time. You own:
 
 - this worktree and its branch
 - the feature directory (or BUG record) this flow created
-- the PRs in the ledger
+- the PRs in the ledger, and its **Issue**
 - the subagents you spawned
 
 Everything else is outside the flow:

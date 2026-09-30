@@ -37,6 +37,9 @@ case "$1 $2" in
   "pr list") [ -f "$F/pr-list.json" ] && jq -r "$(q "$@")" "$F/pr-list.json" || echo "" ;;
   "run list") jq -r "$(q "$@")" "$F/runs.json" ;;
   "run view") echo "error[E0308]: mismatched types" ;;
+  "api user") echo me ;;
+  "issue view") jq -r "$(q "$@")" "$F/issue-$3.json" ;;
+  "issue "*|"label create") echo "$*" >> "$F/gh.log" ;;
   *) echo "gh stub: unhandled: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -422,6 +425,21 @@ check "checkpoint reports an open handover" 3 '^HANDOVER M1: gate green, next re
 check "checkpoint reports an open escalation" 3 '^OPEN_ESCALATION Which locale wins\?$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 check "checkpoint reports the next step" 3 '^NEXT open PR 2$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 cd "$ROOT"
+
+# issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
+d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
+echo '{"labels":[{"name":"bug"}],"assignees":[{"login":"me"}]}' > "$d/fx/issue-7.json"
+echo '{"labels":[{"name":"in-progress"}],"assignees":[]}' > "$d/fx/issue-8.json"
+echo '{"labels":[],"assignees":[{"login":"someone"}]}' > "$d/fx/issue-9.json"
+check "issue start claims a free issue" 0 '^ISSUE_STARTED #7$' "$I" start 7 feat/x
+check "issue start labels, assigns and comments the branch" 0 'add-label in-progress --add-assignee @me' cat "$d/fx/gh.log"
+check "issue start names the branch" 0 'issue comment 7 --body .*`feat/x`' cat "$d/fx/gh.log"
+check "issue start refuses an issue in progress" 1 '^ISSUE_TAKEN #8$' "$I" start 8 feat/x
+check "issue start refuses an issue assigned to someone else" 1 '^ISSUE_TAKEN #9$' "$I" start 9 feat/x
+check "issue start leaves a taken issue untouched" 0 '^ok$' bash -c "! grep -qE ' (8|9) ' '$d/fx/gh.log' && echo ok"
+check "issue done closes it citing every PR" 0 '^ISSUE_CLOSED #7$' "$I" done 7 11 12
+check "issue done lists the PRs" 0 'issue close 7 --reason completed --comment .*#11, #12\.' cat "$d/fx/gh.log"
+check "issue done needs a PR" 2 'usage' "$I" done 7
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

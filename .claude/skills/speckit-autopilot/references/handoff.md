@@ -6,7 +6,8 @@ the checks.
 
 Then run `scripts/autopilot/handoff-check.sh <ledger> <record-pr>`. It checks the tree is clean,
 every commit is on `origin/main` (by patch, since rebase-merge rewrites SHAs), and every PR reads
-`MERGED`. If it prints `NOT DONE`, report exactly what remains. Otherwise send this with a `PushNotification`:
+`MERGED`. If it prints `NOT DONE`, report exactly what remains. A ledger with an **Issue**: close
+it per [issue.md](issue.md). Otherwise send this with a `PushNotification`:
 
 ```
 ✅ WORK COMPLETE — <NNN-feature>
