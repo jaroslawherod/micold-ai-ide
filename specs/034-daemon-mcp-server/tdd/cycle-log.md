@@ -40,3 +40,20 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - refactor: none beyond the extraction itself.
 - notes: test-after admission — `read_body` was written in the same edit as its tests; the red was
   taken with its body stubbed to `Ok(Body::Complete(Vec::new()))`, then the drafted body restored.
+
+## Cycle 2 — U6–U16 — T004, T008
+
+- tests: `crates/micold-core/tests/mcp_jsonrpc.rs` (13 tests; U7 has two, plus
+  `tools_call_is_handed_to_the_caller_with_its_name_and_arguments` for the `tools/call` route the
+  daemon consumes)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test mcp_jsonrpc`, against stubs that
+  compile the symbols and return empty values
+  ```
+  thread 'a_failure_result_names_its_category_and_message' panicked at crates/micold-core/tests/mcp_jsonrpc.rs:157:5:
+  thread 'every_category_serialises_as_its_snake_case_name' panicked at crates/micold-core/tests/mcp_jsonrpc.rs:178:5:
+  test result: FAILED. 0 passed; 13 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `mcp/errors.rs` (`ErrorCategory`, `OpError`, `tool_success`, `tool_failure`) and
+  `mcp/jsonrpc.rs` (`parse`, `route`, `initialize` negotiation). 13 passed.
+- refactor: none.
+- notes: `tools/list` is not routed yet; it arrives with the catalog in T019 (cycle for U83).
