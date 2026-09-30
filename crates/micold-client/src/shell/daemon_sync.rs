@@ -558,6 +558,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     // own write is a courtesy to the next boot; this is the value in force.
     app.core.session.default_ai_cli = settings.default_ai_cli;
     app.core.session.pi_activity_component = settings.pi_activity_component;
+    app.core.session.tool_server_enabled = settings.tool_server_enabled;
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);

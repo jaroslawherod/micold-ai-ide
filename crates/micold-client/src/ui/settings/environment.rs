@@ -32,6 +32,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("env_include_timeout_secs", "EnvIncludeTimeoutChanged"),
     ("default_ai_cli", "DefaultAiCliChanged"),
     ("pi_activity_component", "PiActivityComponentToggled"),
+    ("tool_server_enabled", "ToolServerToggled"),
 ];
 
 /// The Environment page.
@@ -123,7 +124,22 @@ pub fn view<'a>(
         roles,
     );
 
-    let mut controls: Vec<Element<'a, Message>> = vec![cli, pi_activity];
+    // Feature 034, FR-004: whether new sessions get the service's tools. The same checkbox-and-note
+    // row as the Pi switch above; the note says it applies to sessions started afterwards.
+    let tool_server = Checkbox::new(
+        "Let AI sessions manage worktrees and sessions",
+        draft.environment.tool_server_enabled,
+        roles,
+    )
+    .track_focus(FieldId::SettingsToolServer, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::ToolServerToggled(v)));
+    let tool_server = field_note(
+        tool_server,
+        Some("New AI sessions get this app's tools. Sessions already running keep what they started with."),
+        roles,
+    );
+
+    let mut controls: Vec<Element<'a, Message>> = vec![cli, pi_activity, tool_server];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,

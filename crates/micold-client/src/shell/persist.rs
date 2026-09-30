@@ -260,7 +260,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         daemon,
         default_ai_cli: app.core.session.default_ai_cli,
         pi_activity_component: app.core.session.pi_activity_component,
-        tool_server_enabled: true,
+        tool_server_enabled: app.core.session.tool_server_enabled,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -377,6 +377,7 @@ pub(crate) fn save_and_prepare_check(
     // that has since been uninstalled is kept, not repaired (feature 026, research R11).
     app.core.session.default_ai_cli = valid.default_ai_cli;
     app.core.session.pi_activity_component = valid.pi_activity_component;
+    app.core.session.tool_server_enabled = valid.tool_server_enabled;
 
     let settings = valid.into_settings();
     let mut written = true;
@@ -412,7 +413,7 @@ pub(crate) fn save_and_prepare_check(
             env_include_timeout_secs: Some(settings.env_include_timeout_secs),
             default_ai_cli: Some(settings.default_ai_cli),
             pi_activity_component: Some(settings.pi_activity_component),
-            tool_server_enabled: None,
+            tool_server_enabled: Some(settings.tool_server_enabled),
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }

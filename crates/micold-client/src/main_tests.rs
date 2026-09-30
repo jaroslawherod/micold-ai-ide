@@ -1745,6 +1745,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             timeout_secs: "15".into(),
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: true,
+            tool_server_enabled: true,
         },
         ..SettingsDraft::default()
     });
@@ -1773,6 +1774,63 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
     assert!(rx.try_recv().is_err(), "no second message queued");
 }
 
+/// U215 (feature 034, FR-004): turning "Let AI sessions manage worktrees and sessions" off and
+/// saving tells the connected service, which is what reads it at the next spawn.
+#[test]
+fn turning_the_binding_toggle_off_and_saving_tells_the_service() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::ToolServerToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            tool_server_enabled,
+            ..
+        } => Some(*tool_server_enabled),
+        _ => None,
+    });
+    assert_eq!(
+        told,
+        Some(Some(false)),
+        "the service must be told the binding is off: {sent:?}"
+    );
+}
+
+/// U214 (feature 034, FR-004): the page shows what the service says is in force, so a toggle
+/// another window turned off opens off here.
+#[test]
+fn the_binding_toggle_opens_with_the_value_the_service_reported() {
+    let mut app = base_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                tool_server_enabled: false,
+                ..quiet_settings()
+            },
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+    assert!(
+        !app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .environment
+            .tool_server_enabled,
+        "the service said the binding is off; the page must not show it on"
+    );
+}
+
 /// The disconnected case is not an error: settings-saving already has a fully working local-only
 /// path (the direct `settings.json` write above the daemon-send in
 /// `Message::Settings(SettingsMsg::Saved)`), so
@@ -1792,6 +1850,7 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             timeout_secs: "15".into(),
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            tool_server_enabled: true,
         },
         ..SettingsDraft::default()
     });
@@ -1829,6 +1888,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             timeout_secs: "5".into(),
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            tool_server_enabled: true,
         },
         daemon: micold_client::features::settings::DaemonDraft {
             placement: chosen,
@@ -3755,6 +3815,7 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             timeout_secs: settings.env_include_timeout_secs.to_string(),
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
+            tool_server_enabled: settings.tool_server_enabled,
         },
         ..SettingsDraft::default()
     });

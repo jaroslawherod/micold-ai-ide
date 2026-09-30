@@ -371,3 +371,65 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - green: the arm chains `state.set_tool_server_enabled(on)` like the Pi switch.
   `cargo test -p micold-daemon`: 451 passed, 0 failed.
 - refactor: none needed.
+
+## Cycle 15 — U214, U215 — T025, T026 (client plumbing)
+
+- tests: `crates/micold-client/tests/features_settings.rs` —
+  `the_binding_toggle_is_seeded_from_the_stored_setting` (U214),
+  `turning_the_binding_toggle_off_reaches_what_save_writes` (U215, draft half);
+  `crates/micold-client/src/main_tests.rs` —
+  `the_binding_toggle_opens_with_the_value_the_service_reported` (U214, from `SettingsChanged`),
+  `turning_the_binding_toggle_off_and_saving_tells_the_service` (U215, `SettingsSet`).
+- red, with stubs `EnvironmentDraft.tool_server_enabled` seeded `true` and a no-op
+  `SettingsMsg::ToolServerToggled`:
+  `scripts/build-lock.sh cargo test -p micold-client --test features_settings binding_toggle`
+  ```
+  thread 'the_binding_toggle_is_seeded_from_the_stored_setting' (2029210) panicked at crates/micold-client/tests/features_settings.rs:365:5:
+  a user who turned the binding off must see it off when the page opens
+  thread 'turning_the_binding_toggle_off_reaches_what_save_writes' (2029211) panicked at crates/micold-client/tests/features_settings.rs:384:5:
+  the toggle the user turned off must be what Save writes
+  test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 39 filtered out
+  ```
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide binding_toggle`
+  ```
+  thread 'tests::the_binding_toggle_opens_with_the_value_the_service_reported' (2035338) panicked at crates/micold-client/src/main_tests.rs:1822:5:
+  the service said the binding is off; the page must not show it on
+  thread 'tests::turning_the_binding_toggle_off_and_saving_tells_the_service' (2035339) panicked at crates/micold-client/src/main_tests.rs:1799:5:
+  assertion `left == right` failed: the service must be told the binding is off: [...]
+    left: Some(None)
+   right: Some(Some(false))
+  test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 274 filtered out
+  ```
+- green: mirrored exactly like `pi_activity_component` — `SessionState.tool_server_enabled` (seeded
+  at startup from `settings.json`, then from `Welcome`/`SettingsChanged`), the draft seeded by
+  `from_settings`, `ValidSettings` carrying it into `Settings`, the save applying it locally and
+  sending `SettingsSet { tool_server_enabled: Some(_) }`, `tool_server_toggled` reducer. 4 passed.
+- refactor: none needed.
+
+## Cycle 16 — U218 — T025 (covered state), T027 (the row)
+
+- red (the row): `scripts/build-lock.sh cargo test -p micold-client --test settings_sections`, once
+  the setting existed with no control
+  ```
+  thread 'every_persisted_setting_is_claimed_or_recorded_as_deferred' (2039315) panicked at crates/micold-client/tests/settings_sections.rs:264:5:
+  these persisted settings are rendered by no section and recorded as deferred by nothing: ["tool_server_enabled"]
+  test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- red (covered state): `settings-view-environment` registered in
+  `crates/micold-client/tests/support/covered_states.rs` (appended, toggle shown off) —
+  `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot the_layout_matches_the_committed_fixture`
+  ```
+  the resolved layout differs from tests/fixtures/layout_snapshot.txt
+    in covered state: settings-view-environment
+      element : path 0
+  ```
+  (First registered mid-list, which shifted every later state's records; moved to the end so the
+  fixture change is additions only.)
+- green: the Environment page's "Let AI sessions manage worktrees and sessions" checkbox with a
+  `field_note`, the same components as the Pi row; `FieldId::SettingsToolServer`; `SETTINGS` claims
+  `("tool_server_enabled", "ToolServerToggled")`. Fixture accepted with `UPDATE_LAYOUT_SNAPSHOT=1`:
+  180 lines added, none changed. First note text named "Claude Code and Copilot", which
+  `provider_choice_surfaces.rs::the_settings_select_lists_only_the_installed_clis` rejects (an
+  uninstalled CLI may be named only by the missing-CLI notice); the note was reworded, not the test.
+  `cargo test -p micold-client`: 2080 passed, 0 failed.
+- refactor: none needed.

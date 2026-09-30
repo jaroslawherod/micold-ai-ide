@@ -329,6 +329,10 @@ pub struct EnvironmentDraft {
     /// (feature 029, FR-012e). One application-wide switch — there is no per-project or
     /// per-session form of it. Holds the value only; the default-on comes from `Settings`.
     pub pi_activity_component: bool,
+    /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
+    /// Application-wide and service-owned like the Pi switch above it; the default-on comes from
+    /// `Settings`.
+    pub tool_server_enabled: bool,
 }
 
 /// The Session service section's fields (feature 027, FR-028).
@@ -410,6 +414,8 @@ pub struct ValidSettings {
     pub default_ai_cli: AiCli,
     /// Environment.
     pub pi_activity_component: bool,
+    /// Environment.
+    pub tool_server_enabled: bool,
     /// Session service.
     pub daemon: DaemonConfig,
 }
@@ -425,7 +431,7 @@ impl ValidSettings {
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
-            tool_server_enabled: true,
+            tool_server_enabled: self.tool_server_enabled,
             daemon: self.daemon,
         }
     }
@@ -528,6 +534,7 @@ impl SettingsDraft {
             env_include_timeout_secs,
             default_ai_cli: self.environment.default_ai_cli,
             pi_activity_component: self.environment.pi_activity_component,
+            tool_server_enabled: self.environment.tool_server_enabled,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
                 sandbox: profile,
@@ -699,6 +706,7 @@ impl SettingsDraft {
                 timeout_secs: settings.env_include_timeout_secs.to_string(),
                 default_ai_cli: settings.default_ai_cli,
                 pi_activity_component: settings.pi_activity_component,
+                tool_server_enabled: settings.tool_server_enabled,
             },
             daemon: DaemonDraft {
                 placement: settings.daemon.placement,
@@ -816,6 +824,9 @@ pub enum Msg {
     DefaultAiCliChanged(AiCli),
     /// The Settings **Pi activity component** switch was toggled (feature 029, FR-012e).
     PiActivityComponentToggled(bool),
+    /// The Settings **Let AI sessions manage worktrees and sessions** switch was toggled
+    /// (feature 034, FR-004).
+    ToolServerToggled(bool),
     /// Where the session service runs (feature 027, FR-001).
     PlacementChanged(PlacementKind),
     /// Which container runtime drives the sandbox (feature 027, FR-021).
@@ -917,6 +928,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::EnvIncludeTimeoutChanged(text) => env_include_timeout_changed(state, text),
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
+        Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
         Msg::ImageKindChanged(kind) => image_kind_changed(state, kind),
@@ -1054,6 +1066,11 @@ pub fn default_ai_cli_changed(state: &mut crate::app::State, which: AiCli) {
 /// Environment: the **Pi activity component** switch was toggled (feature 029, FR-012e).
 pub fn pi_activity_component_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.pi_activity_component = on);
+}
+
+/// Environment: bind new sessions to the service's tool server (feature 034, FR-004).
+pub fn tool_server_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.environment.tool_server_enabled = on);
 }
 
 /// Session service: where sessions run (feature 027, FR-001).
