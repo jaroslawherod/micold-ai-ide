@@ -330,3 +330,44 @@ was taken by stubbing that implementation out and restoring it afterwards.
   them). `mise run test-core`: 1381 passed, 0 failed; `cargo check --workspace --all-targets` clean.
   Full workspace suite deferred to the milestone's `mise run gate`.
 - refactor: none needed.
+
+## Cycle 14 — A6, U71 — T024, T026 (daemon)
+
+- tests: `crates/micold-daemon/tests/mcp_binding_spawn.rs` —
+  `with_the_toggle_off_a_new_session_starts_unbound_and_a_running_one_keeps_answering` (A6),
+  `turning_the_toggle_back_on_binds_the_next_session_again` (U71);
+  `crates/micold-daemon/tests/daemon_lifecycle.rs` —
+  `turning_the_tool_server_binding_off_over_the_wire_reaches_every_client` (T026's `SettingsSet` arm).
+- red (A6), with a no-op `DaemonState::set_tool_server_enabled` stub:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_spawn with_the_toggle_off`
+  ```
+  thread 'with_the_toggle_off_a_new_session_starts_unbound_and_a_running_one_keeps_answering' (1830318) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:635:5:
+  assertion `left == right` failed: a session started with the toggle off carries no binding arguments
+    left: ["--session-id", "00000000-0000-0000-0000-000000340071", "--mcp-config", "/tmp/.tmpAl2fU3/mcp/00000000-0000-0000-0000-000000340071.json", "--allowedTools", "mcp__micold"]
+   right: ["--session-id", "00000000-0000-0000-0000-000000340071"]
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out
+  ```
+- green (A6): `Catalog::{tool_server_enabled, set_tool_server_enabled}` (persisted through
+  `persist_service_settings`, the service-owned field set), `DaemonState::set_tool_server_enabled`
+  broadcasting `SettingsChanged`, and `tool_server_binding` returning `SkipReason::Disabled` ("disabled
+  in settings") first when the setting is off. Read at spawn only, so the running session's
+  credential still answers `whoami`. mcp_binding_spawn 14 passed.
+- U71 passed on first run (the setter is not a latch by construction). Deliberate mutant:
+  `self.settings.tool_server_enabled = false && on;` in `Catalog::set_tool_server_enabled` →
+  ```
+  thread 'turning_the_toggle_back_on_binds_the_next_session_again' (1847106) panicked at crates/micold-daemon/tests/mcp_binding_spawn.rs:671:5:
+  assertion `left == right` failed: re-enabled, the next session is bound again: ["--session-id", "00000000-0000-0000-0000-000000340072"]
+  ```
+  restored.
+- red (server arm), with the arm ignoring the field (`tool_server_enabled: _`):
+  `scripts/build-lock.sh cargo test -p micold-daemon --test daemon_lifecycle turning_the_tool_server`
+  ```
+  thread 'turning_the_tool_server_binding_off_over_the_wire_reaches_every_client' (1888862) panicked at crates/micold-daemon/tests/daemon_lifecycle.rs:205:10:
+  the second window was never told the toggle changed: Elapsed(())
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out
+  ```
+  (The first attempt had no timeout and hung; the test got a 5 s `tokio::time::timeout` before the
+  red was recorded.)
+- green: the arm chains `state.set_tool_server_enabled(on)` like the Pi switch.
+  `cargo test -p micold-daemon`: 451 passed, 0 failed.
+- refactor: none needed.

@@ -567,6 +567,9 @@ impl DaemonState {
         id: SessionId,
         spec: &LaunchSpec,
     ) -> Result<Vec<String>, SkipReason> {
+        if !self.lock().catalog.tool_server_enabled() {
+            return Err(SkipReason::Disabled);
+        }
         let provider = spec.provider.provider();
         let support = provider.tool_server_support();
         if let ToolServerSupport::Unsupported { reason } = support {
@@ -1100,6 +1103,19 @@ impl DaemonState {
         let settings = {
             let mut inner = self.lock();
             inner.catalog.set_pi_activity_component(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Turn the tool-server binding on or off for sessions started afterwards (feature 034, FR-004).
+    /// Running sessions keep the binding they were started with. Pushes `SettingsChanged` to every
+    /// client.
+    pub fn set_tool_server_enabled(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_tool_server_enabled(on)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });

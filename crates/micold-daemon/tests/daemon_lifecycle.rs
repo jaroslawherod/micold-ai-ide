@@ -178,6 +178,40 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
     }
 }
 
+/// Feature 034, FR-004: the Settings toggle reaches the service over the wire, and every window
+/// learns the new value.
+#[tokio::test]
+async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client() {
+    let state = new_state();
+    let mut a = connect(&state, "client-a").await;
+    let mut b = connect(&state, "client-b").await;
+    wait_until(|| state.client_count() == 2).await;
+
+    a.send(Frame::Control(ClientMsg::SettingsSet {
+        req: 1,
+        scrollback_lines: None,
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
+        default_ai_cli: None,
+        pi_activity_component: None,
+        tool_server_enabled: Some(false),
+    }))
+    .await
+    .unwrap();
+
+    let told = tokio::time::timeout(std::time::Duration::from_secs(5), b.next())
+        .await
+        .expect("the second window was never told the toggle changed");
+    match told.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::SettingsChanged { settings }) => assert!(
+            !settings.tool_server_enabled,
+            "the toggle the user turned off must be what the other window is told"
+        ),
+        other => panic!("expected SettingsChanged on the second client, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
     let state = new_state();

@@ -973,7 +973,7 @@ where
                 env_include_timeout_secs,
                 default_ai_cli,
                 pi_activity_component,
-                tool_server_enabled: _,
+                tool_server_enabled,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -999,6 +999,10 @@ where
                 })
                 .and_then(|()| match pi_activity_component {
                     Some(on) => state.set_pi_activity_component(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match tool_server_enabled {
+                    Some(on) => state.set_tool_server_enabled(on),
                     None => Ok(()),
                 });
                 match result {

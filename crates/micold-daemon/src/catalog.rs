@@ -294,6 +294,7 @@ impl Catalog {
                 on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
                 on_disk.pi_activity_component = self.settings.pi_activity_component;
+                on_disk.tool_server_enabled = self.settings.tool_server_enabled;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -356,6 +357,18 @@ impl Catalog {
     /// Applies to the next Pi session started; a running one keeps what it was launched with.
     pub fn set_pi_activity_component(&mut self, on: bool) -> io::Result<()> {
         self.settings.pi_activity_component = on;
+        self.persist_service_settings()
+    }
+
+    /// Whether sessions started now are bound to the tool server (feature 034, FR-004). Read at
+    /// spawn, so a running session keeps what it was started with.
+    pub fn tool_server_enabled(&self) -> bool {
+        self.settings.tool_server_enabled
+    }
+
+    /// Turn the tool-server binding on or off, persisting atomically (feature 034, FR-004).
+    pub fn set_tool_server_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.tool_server_enabled = on;
         self.persist_service_settings()
     }
 

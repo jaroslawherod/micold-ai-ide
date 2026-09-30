@@ -612,3 +612,66 @@ async fn an_unwritable_binding_starts_the_session_unbound_and_says_so_once() {
         "{lines:?}"
     );
 }
+
+/// A6 (US1-AS6, FR-004, FR-005). With the toggle off, a new session starts unbound and the log says
+/// why; a session bound before the change keeps its binding and still answers.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn with_the_toggle_off_a_new_session_starts_unbound_and_a_running_one_keeps_answering() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let (running, new) = (sid(0x34_0070), sid(0x34_0071));
+    let state = sandbox.state(vec![claude(0x34_0070, None), claude(0x34_0071, Some("b"))]);
+    let addr = serve_tool_server(&state, sandbox.binding_dir()).await;
+
+    state.start_session(running, LaunchMode::Fresh).unwrap();
+    sandbox.launch(AiCli::ClaudeCode, 0).await;
+    let (_, bearer) = binding_of(&sandbox.binding_dir().join(format!("{}.json", running.0)));
+
+    state.set_tool_server_enabled(false).unwrap();
+    state.start_session(new, LaunchMode::Fresh).unwrap();
+    let args = sandbox.launch(AiCli::ClaudeCode, 1).await;
+    kill(&state, new);
+
+    assert_eq!(
+        args,
+        ["--session-id", new.0.to_string().as_str()],
+        "a session started with the toggle off carries no binding arguments"
+    );
+    let lines = skip_lines(new);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].contains("INFO") && lines[0].contains("no tool server: disabled in settings"),
+        "the log says the binding was skipped and why: {lines:?}"
+    );
+    let who = call_ok(addr, &bearer, "whoami", json!({})).await;
+    kill(&state, running);
+    assert_eq!(
+        who["session"],
+        running.0.to_string(),
+        "turning the toggle off affects sessions started afterwards only"
+    );
+}
+
+/// U71 (FR-004). Turning the toggle back on binds the next session again: off is a setting, not a
+/// latch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn turning_the_toggle_back_on_binds_the_next_session_again() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let id = sid(0x34_0072);
+    let state = sandbox.state(vec![claude(0x34_0072, None)]);
+    serve_tool_server(&state, sandbox.binding_dir()).await;
+
+    state.set_tool_server_enabled(false).unwrap();
+    state.set_tool_server_enabled(true).unwrap();
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    let args = sandbox.launch(AiCli::ClaudeCode, 0).await;
+    kill(&state, id);
+
+    assert_eq!(
+        args.get(2).map(String::as_str),
+        Some("--mcp-config"),
+        "re-enabled, the next session is bound again: {args:?}"
+    );
+    assert!(skip_lines(id).is_empty());
+}
