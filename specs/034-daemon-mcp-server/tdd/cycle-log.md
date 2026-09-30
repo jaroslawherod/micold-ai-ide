@@ -621,3 +621,28 @@ was taken by stubbing that implementation out and restoring it afterwards.
   T040 makes it a readiness signal, so that assertion now expects `HookClass::SessionStart` (a
   requirement change, stated here, not a weakening). `pi_event` keeps ignoring `session_start`
   (`pi_activity.rs` unchanged); the tail uses the wrapper instead.
+
+## Cycle 22 — U202, U203, U204, U205 — T072, T073
+
+- tests: `crates/micold-daemon/tests/mcp_audit_log.rs` (unix; a stand-in `copilot` and a throwaway
+  home set once for the binary) — `every_successful_mutating_call_writes_one_info_line` (U202),
+  `every_failed_mutating_call_writes_one_line_with_its_category` (U203),
+  `a_prompt_never_reaches_the_log` (U204), `every_logged_failure_carries_one_of_the_six_categories`
+  (U205). The mutating tools come from `tools/list` (`readOnlyHint: false`); `good_call` and
+  `failing_call` panic naming any listed tool they have no arguments for, so later milestones must
+  extend them. Each test calls as its own session and counts only lines with its caller id.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_audit_log`
+  ```
+  thread 'every_successful_mutating_call_writes_one_info_line' panicked at crates/micold-daemon/tests/mcp_audit_log.rs:165:9:
+  assertion `left == right` failed: exactly one line for create_worktree: []
+    left: 0
+  test result: FAILED. 0 passed; 4 failed
+  ```
+  (U204 failed on its line-count precondition; its "marker never logged" assertion is a guard that
+  holds with or without the audit line.)
+- green: `mcp::tools::call` parses once, runs `dispatch`, and for `is_mutating_tool(name)` (new in
+  core, keyed on the tool name so a call whose arguments fail to parse is audited too) writes one
+  `tracing::info!(target: "micold::mcp", caller, op, target, outcome)` with `ok` or the category.
+  First run: `outcome` was a `&str` field, which fmt prints quoted; now `%outcome`.
+  `cargo test -p micold-daemon`: 483 passed, 0 failed.
+- refactor: none (no per-handler logging existed to remove).

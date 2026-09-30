@@ -402,10 +402,10 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U202 | Every successful mutating call writes exactly one `info` line with caller, op, target and `outcome=ok` | FR-018, SC-010 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_audit_log.rs` |
-| U203 | Every failed mutating call writes exactly one `info` line whose outcome is its category | FR-018, SC-010, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_audit_log.rs` |
-| U204 | No `prompt` or `text` value appears in the log at any level | FR-018, SC-010 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_audit_log.rs` |
-| U205 | Every failure produced by the acceptance tests carries one of the six categories | SC-010, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_audit_log.rs` |
+| U202 | Every successful mutating call writes exactly one `info` line with caller, op, target and `outcome=ok` | FR-018, SC-010 | example | DONE | `crates/micold-daemon/tests/mcp_audit_log.rs::every_successful_mutating_call_writes_one_info_line` |
+| U203 | Every failed mutating call writes exactly one `info` line whose outcome is its category | FR-018, SC-010, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_audit_log.rs::every_failed_mutating_call_writes_one_line_with_its_category` |
+| U204 | No `prompt` or `text` value appears in the log at any level | FR-018, SC-010 | example | DONE | `crates/micold-daemon/tests/mcp_audit_log.rs::a_prompt_never_reaches_the_log` |
+| U205 | Every failure produced by the acceptance tests carries one of the six categories | SC-010, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_audit_log.rs::every_logged_failure_carries_one_of_the_six_categories` |
 
 ### Timing and placement (T074, T075)
 
