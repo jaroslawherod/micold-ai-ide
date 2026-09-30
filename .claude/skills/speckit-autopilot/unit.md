@@ -25,8 +25,9 @@ sends you there.
   number in the ledger at once.
 - **Batch tool calls.** Independent reads and probes go in one message.
 - **Wait once.** Your prompt cache expires after 5 idle minutes; the next call then re-writes your
-  whole context. Start long jobs together (gate, reviewers, `visual-pass`, other subagents) and
-  wait for all of them in one wait, not one after another.
+  whole context. Run work that needs no build (a review, a subagent) while the gate builds, and
+  wait for what runs together in one wait, not one after another. A job waiting on the build lock
+  idles too: do not start it until the build is done.
 - **Read only what you need.** Everything you read is re-read on each later call of the unit.
   - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
     not the whole file.
