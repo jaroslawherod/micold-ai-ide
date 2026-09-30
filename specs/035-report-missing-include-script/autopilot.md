@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone
-- **Next step**: M4 in progress (T028–T031, T036).
+- **Next step**: M4 PR open; wait for `ci complete`, merge, then Phase 5 (close).
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | #466 | merged |
 | M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | #471 | merged |
 | M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | #473 | merged |
-| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | in progress |
+| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | PR open |
 
 ## Decisions
 
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D33 | 4-M3 | Review A round 2 and review B round 2 (sonnet, fix diff) | Both CLEAN. A: fixes 1, 2, 5, 8 hold; declines 3, 4, 6, 7 stand; one MINOR (a kept same-path answer can still pair with a pre-save outcome), covered by the declined F6. B: Verify features_settings 51 passed, script_path_report 16 passed; contract S1/N7 match. Gate at a731366b: GATE_EXIT=0, 3822 passed. | agent-resolved | reviewer subagents; snapshot 3b624194:a731366b |
 | D34 | 4-M4 | M3/#473 merged at b0432747; branch start | `branch-start.sh 473` reset `fix/github-issues` to `origin/main` (b0432747) cleanly. | agent-resolved | branch-start.sh output |
 | D35 | 4-M4 | Review A round 1 (code-review high) | 10 findings, all MINOR/nit on tests and records: 9 fixed (fixture comment; A9 installs its own probe and asserts it probed the typed path once; A9/A10 reopen Settings and assert no lines; U62 drafts a timeout change and asserts it applied while path and flag stay; cycle 16's commit and line numbers recorded in a follow-up entry; D34 order; imports; doc rewrap), 1 declined (below). Gate 1 failed on `cargo fmt --check` only; fixed. | agent-resolved | code-review skill; snapshot 3320e6e4 |
+| D36 | 4-M4 | Review B round 1 (conformance) | CLEAN, 2 MINOR: F1 (cycle 16 points at a T036 entry) closed by writing the T036 entry; F2 (A9's path is never created) declined, the test says the fake probe stands in for the file. Verify at 1ed44b44: script_path_report 19 passed. Gate at 1ed44b44: GATE_EXIT=0, 3941 passed. | agent-resolved | reviewer subagent; snapshot b73ae694:1ed44b44 |
+| D37 | 4-M4 | Visual pass B1–B11, dark and light (T029, T031) | All 22 PASS; no line overflows the column. B9/B10: no notification, nothing below Timeout on reopen. Evidence `visual-pass/M4-*.png`, table in `visual-pass/README.md`. | agent-resolved | visual-pass skill (Xvfb :91, binaries from 1ed44b44) |
 
 ## Declined review findings
 
@@ -90,6 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | `Welcome` (reconnect) adopts new settings without re-checking an open page | Contract §3 names T1–T3 only; the next open re-checks. Follow-up. |
 | M3 | A | Re-check on every `SettingsChanged`, even when path and flag are unchanged | FR-009: the indication reflects the path after every save (the file may have appeared since); the check is bounded and off the UI thread. |
 | M3 | A | NotFound + on + `NonZeroExit` still shows 011's exit-error lines | Contract row N4 specifies it (FR-005: 011's indication remains). |
+| M4 | B | A9's typed path is never created on disk | The fake probe stands in for the file system by design (research R9); the test comment says the typed path names a readable file. |
 | M4 | A | U62 replaces the store `on_and_missing` installed instead of the helper returning it | Taste: the replaced fake is inert, and three M3 tests use the helper's current shape. |
 
 ## Open escalation
