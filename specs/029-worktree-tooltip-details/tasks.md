@@ -254,3 +254,29 @@ would not move them (GitHub issue #431). See `bugs/BUG-002.md` and plan.md § Bu
 **Order**: T037 → T038 → T039. T037 must be seen failing before T038 starts (Principle I).
 
 **Bugfix**: 2026-09-30 — BUG-002 Added T037–T039. No task reopened. See `bugs/BUG-002.md`.
+
+## Bugfix BUG-003 — tests copied the harness's settle loop
+
+Three tests carried a verbatim copy of the layout harness's private settle loop and its frame count,
+because the harness's `settle` was private and bound to the fixed `WINDOW` (GitHub issue #432). See
+`bugs/BUG-003.md` and plan.md § Bugfix BUG-003.
+
+**No task reopened.** T031 wrote `hover_row`'s own loop because the harness's could not be called;
+the copy is correct for today's count (BUG-003 § tasks.md).
+
+- [ ] T040 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
+  (`hover_row`), `crates/micold-client/tests/gates/context_menu_anchor.rs` (`right_press_at`) and
+  `crates/micold-client/tests/session_start_press.rs` (`press_at`), replace the inline settle loop
+  and its local `SETTLE_FRAMES` with a call to `lay::settle(…, 0..lay::SETTLE_FRAMES, <size>)` —
+  the window size `hover_row` is given, `lay::WINDOW` in the other two. Run it on the unfixed tree
+  and record that the test crates fail to compile because `settle` is private
+- [ ] T041 In `crates/micold-client/tests/support/layout.rs` make `settle` and `SETTLE_FRAMES`
+  `pub`, and have `settle` take the viewport `Size` in place of the fixed `WINDOW`; its callers in
+  the harness pass `WINDOW`. Move the stray doc paragraph above `SETTLE_FRAMES` ("Press the node at
+  `path` the way a person would…") onto `press_and_settle`, where it belongs. T040's tests build and
+  pass
+- [ ] T042 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
+
+**Order**: T040 → T041 → T042. T040 must be seen failing before T041 starts (Principle I).
+
+**Bugfix**: 2026-09-30 — BUG-003 Added T040–T042. No task reopened. See `bugs/BUG-003.md`.

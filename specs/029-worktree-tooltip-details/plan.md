@@ -227,3 +227,26 @@ sits entirely inside that split — nothing new is introduced to hold it.
   before the constant moves. No other principle affected (no user-visible change, no docs change).
 
 **Bugfix**: 2026-09-30 — BUG-002 Updated from bugfix patch.
+
+## Bugfix BUG-003 — the tests call the harness's settle instead of copying it
+
+- **The harness's `settle` becomes shared apparatus.** In
+  `crates/micold-client/tests/support/layout.rs`, `settle` and `SETTLE_FRAMES` become `pub`, and
+  `settle` takes the viewport `Size` as a parameter in place of the fixed `WINDOW`. The harness's
+  own callers pass `WINDOW`; what they do is unchanged.
+- **The copies call it.** `hover_row` in `tests/gates/tooltip_clears_its_row.rs` (at the window size
+  it is given), `right_press_at` in `tests/gates/context_menu_anchor.rs` and `press_at` in
+  `tests/session_start_press.rs` (at `lay::WINDOW`) drop their inline loop and local
+  `SETTLE_FRAMES` and call `lay::settle(…, 0..lay::SETTLE_FRAMES, size)`.
+- **Left alone.** The `settle`s in `settings_rail_motion.rs`, `picker_visibility.rs` and
+  `adding_an_animation_touches_one_file.rs`, and the loop in
+  `add_worktree_form_survives_a_refusal.rs`, settle something else (a rendered surface, an overlay
+  until it is gone with the frame count asserted, a value model, an overlay ticked each frame); see
+  `bugs/BUG-003.md` § Description.
+- **Test layer.** No new test: the regression check is compile-level. With the three tests calling
+  `lay::settle` with a size, the test crates do not build on `origin/main` (E0603, private
+  function), and build once the helper is public and takes the size. The gates then run unchanged.
+- **Constitution**: I — the calls are written and seen failing to compile before the helper
+  changes. No other principle affected (no user-visible change, no docs change).
+
+**Bugfix**: 2026-09-30 — BUG-003 Updated from bugfix patch.
