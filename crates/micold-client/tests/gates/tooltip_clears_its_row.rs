@@ -122,26 +122,17 @@ fn hover_row(state: &State, index: usize, size: Size, scroll: Scroll) -> Hovered
         .layout(&mut tree, &renderer, &limits);
     let viewport = Rectangle::with_size(size);
 
-    // Hand over the frames an entrance needs before it takes input — the same settle
-    // `context_menu_anchor` gives a press, for the same reason.
-    const SETTLE_FRAMES: u32 = 8;
-    let origin = std::time::Instant::now();
+    // Hand over the frames an entrance needs before it takes input, at this window's size.
+    lay::settle(
+        &mut element,
+        &mut tree,
+        &node,
+        &renderer,
+        std::time::Instant::now(),
+        0..lay::SETTLE_FRAMES,
+        size,
+    );
     let mut ignored = Vec::new();
-    for frame in 0..SETTLE_FRAMES {
-        let mut shell = Shell::new(&mut ignored);
-        element.as_widget_mut().update(
-            &mut tree,
-            &iced::Event::Window(iced::window::Event::RedrawRequested(
-                origin + lay::FRAME * frame,
-            )),
-            Layout::new(&node),
-            mouse::Cursor::Unavailable,
-            &renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &viewport,
-        );
-    }
 
     let path = sidebar_row(index);
     let records = lay::walk(Layout::new(&node), lay::Layer::Base);
