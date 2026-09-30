@@ -203,3 +203,7 @@ edge, and SC-006; amended the position Assumption. No other requirement changed.
 **Bugfix**: 2026-09-30 — BUG-002 No requirement changed. The gates that prove FR-013 / SC-006 at
 the smallest supported window restated 640×480 instead of reading the application's minimum window
 size; the fix ties them to it (GitHub issue #431). See `bugs/BUG-002.md`.
+
+**Bugfix**: 2026-09-30 — BUG-003 No requirement changed. The gate that proves FR-013 / SC-006, and
+two other tests, carried their own copy of the layout harness's settle loop; the fix has them call
+the harness's (GitHub issue #432). See `bugs/BUG-003.md`.
