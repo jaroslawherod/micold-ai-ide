@@ -155,4 +155,4 @@ worktree's branch.
 - [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
 - [references/pr-and-merge.md](references/pr-and-merge.md): gate, PR, CI, merge
 - [templates/autopilot-ledger.md](templates/autopilot-ledger.md): the ledger
-- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one
+- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one; `checkpoint.sh` is a unit's one probe at each checkpoint

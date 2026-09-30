@@ -21,7 +21,8 @@ wrong thing.
 
 This session keeps the ledger, dispatches units, asks the human, waits on CI and merges. It never
 runs a phase skill, and never reads a phase file or a unit's transcript. Everything it reads is
-re-read on every later call of the run.
+re-read on every later call of the run, and every call re-reads all of it: batch independent
+probes into one message or one command.
 
 Each phase's work runs in a **unit**: a fresh subagent that reads only [unit.md](unit.md) and its own
 phase file. Overview and diagrams for humans: [README.md](README.md).

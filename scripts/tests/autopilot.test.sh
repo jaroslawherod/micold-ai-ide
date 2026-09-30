@@ -372,5 +372,35 @@ check "context reports the main session" 0 '^CONTEXT 42000 OK' env HOME="$d/home
 check "context fails for an unknown unit" 2 'no transcript' bash -c "HOME='$d/home' '$C' 'Milestone M9 042' 2>&1"
 cd "$ROOT"
 
+# autopilot-tokens.py: a lone read-only call right after another counts as unbatched; the first of
+# a run, a batched message and a write do not.
+d="$(new_repo)"
+tmsg() {  # tmsg <id> <tool json>...
+  local id="$1"; shift; local blocks; blocks="$(IFS=,; echo "$*")"
+  printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","content":[%s],"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' "$id" "$blocks"
+}
+rd='{"type":"tool_use","name":"Read","input":{"file_path":"a"}}'
+gr='{"type":"tool_use","name":"Bash","input":{"command":"grep -n x y"}}'
+wr='{"type":"tool_use","name":"Bash","input":{"command":"cargo test"}}'
+{ tmsg u1 "$rd"; tmsg u2 "$gr"; tmsg u3 "$rd"; tmsg u4 "$rd" "$gr"; tmsg u5 "$rd"; tmsg u6 "$wr"; tmsg u7 "$rd"; } > "$d/b.jsonl"
+check "autopilot-tokens counts unbatched reads" 0 '^\| orchestrator \(main session\) \| x \| 7 \| [^|]+\| [^|]+\| [^|]+\| 0 \| 2 \|' \
+  "$(dirname "$S")/autopilot-tokens.py" "$d/b.jsonl"
+
+# checkpoint.sh: one call reports branch, changes, unmerged commits, the ledger and the context.
+d="$(new_repo)"; cd "$d/wt"
+proj="$d/home/.claude/projects/$(pwd -P | sed 's/[^A-Za-z0-9]/-/g')"
+mkdir -p "$proj/s1/subagents"
+printf '{"type":"assistant","message":{"id":"a","model":"claude-x","usage":{"input_tokens":170000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' > "$proj/s1/subagents/agent-u.jsonl"
+echo '{"description":"Milestone M1 042"}' > "$proj/s1/subagents/agent-u.meta.json"
+ledger specs/042-x/autopilot.md wt 4-milestones; git add -A; git commit -qm "M1 work"; echo x > dirty.txt
+K="$S/checkpoint.sh"
+check "checkpoint exits OVER past the cap" 3 '^CONTEXT 170000 OVER' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint reports unmerged commits" 3 '^UNMERGED 1 commit' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint reports changed files" 3 '^  \?\? dirty\.txt' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint reports the ledger phase" 3 '^PHASE 4-milestones$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
+check "checkpoint prints no escalation while it reads None" 0 '^ok$' bash -c \
+  "out=\$(HOME='$d/home' AUTOPILOT_CONTEXT_CAP=900000 '$K' 'Milestone M1 042' specs/042-x/autopilot.md) && ! grep -q '^OPEN_ESCALATION' <<<\"\$out\" && echo ok"
+cd "$ROOT"
+
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

@@ -20,6 +20,9 @@ Columns:
   rebuilds    requests after a transcript's first that wrote over half of a 30k+ context to the
               cache: the cache had expired (5 min for subagents, 1 h for the main session) or the
               prefix changed (compaction, model switch)
+  unbatched   requests that made one read-only tool call (Read, Grep, Glob, or a Bash read such as
+              cat, grep, ls, git status/log/diff, gh … view) right after a request that did the
+              same: a call that could have gone into the previous message
   output      LOWER BOUND: transcripts store usage from the start of the stream, so output is
               mostly undercounted. Input and cache columns are exact.
   peak_ctx    largest context sent in one request (input + cache_w + cache_r)
@@ -34,7 +37,8 @@ from collections import defaultdict
 from pathlib import Path
 
 PROJECTS = Path.home() / ".claude" / "projects"
-FIELDS = ("calls", "input", "cache_w", "cache_r", "rebuilds", "output", "peak_ctx", "cost_eq")
+FIELDS = ("calls", "input", "cache_w", "cache_r", "rebuilds", "unbatched", "output", "peak_ctx",
+          "cost_eq")
 # A request that writes more than half of a context this large re-caches the conversation.
 REBUILD_MIN_CTX = 30_000
 
@@ -50,21 +54,39 @@ def read_jsonl(path):
                     continue
 
 
+READ_ONLY_BASH = re.compile(
+    r"^\s*(cat|sed -n|head|tail|grep|rg|ls|find|wc|git (status|log|diff|show|branch|rev-parse|cherry)"
+    r"|gh (pr|run) (view|list|checks))\b")
+
+
+def read_only(block):
+    name, args = block.get("name"), block.get("input") or {}
+    if name in ("Read", "Grep", "Glob"):
+        return True
+    return name == "Bash" and bool(READ_ONLY_BASH.match(args.get("command", "")))
+
+
 def usage_of(path):
     """Sum usage per model for one transcript. Content blocks of one message repeat its usage, so
     each message id counts once."""
     seen = set()
     first = True
     per_model = defaultdict(lambda: dict.fromkeys(FIELDS, 0))
+    tools = defaultdict(list)  # message id -> read_only() of each tool call, in order
+    order = []  # (message id, model) of counted messages
     for rec in read_jsonl(path):
         if rec.get("type") != "assistant":
             continue
         msg = rec.get("message") or {}
         u = msg.get("usage")
         mid = msg.get("id") or rec.get("requestId")
+        for block in msg.get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                tools[mid].append(read_only(block))
         if not u or mid in seen or msg.get("model") == "<synthetic>":
             continue
         seen.add(mid)
+        order.append((mid, msg.get("model", "?")))
         cc = u.get("cache_creation") or {}
         w1h = cc.get("ephemeral_1h_input_tokens", 0)
         cw = u.get("cache_creation_input_tokens", 0)
@@ -82,6 +104,12 @@ def usage_of(path):
         m["output"] += out
         m["peak_ctx"] = max(m["peak_ctx"], inp + cw + cr)
         m["cost_eq"] += inp + 1.25 * w5m + 2 * w1h + 0.1 * cr + 5 * out
+    prev_solo_read = False
+    for mid, model in order:
+        solo_read = tools[mid] == [True]
+        if solo_read and prev_solo_read:
+            per_model[model]["unbatched"] += 1
+        prev_solo_read = solo_read
     return per_model
 
 
