@@ -114,8 +114,8 @@ credential registry. Everything here ships in M1.
 - [X] T027 [US1] [U214][U215][U218] Add the toggle row "Let AI sessions manage worktrees and sessions" to `crates/micold-client/src/ui/settings/environment.rs` with its draft/message/handler in `crates/micold-client/src/features/settings.rs`, reusing the row components `pi_activity_component` uses — to pass T025
 - [X] T028 [US1] Document the toggle in `docs/user-guide/settings.md` (Environment section) and link it from `docs/user-guide/agent-tools.md`
 
-- [ ] T083 [US1] [A6] Acceptance: US1-AS6 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M2)
-- [ ] T101 [US1] Run quickstart §B6 for the toggle row with the `visual-pass` skill; save evidence under `specs/034-daemon-mcp-server/evidence/`
+- [X] T083 [US1] [A6] Acceptance: US1-AS6 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M2)
+- [X] T101 [US1] Run quickstart §B6 for the toggle row with the `visual-pass` skill; save evidence under `specs/034-daemon-mcp-server/evidence/`
 
 **Checkpoint**: a new Claude Code session calls `whoami`, `list_worktrees`, `list_sessions` with no setup (quickstart §B1–§B2).
 
