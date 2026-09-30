@@ -159,24 +159,24 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U41 | For `McpConfigArg` the plan's last arguments are `--mcp-config <file> --allowedTools mcp__micold`, with nothing after them | FR-002 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U42 | The Claude file is exactly `{"mcpServers":{"micold":{"type":"http","url":…,"headers":{"Authorization":"Bearer <cred>"},"timeout":120000}}}` | FR-002, FR-006 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U43 | For `AdditionalMcpConfig` the plan's last arguments are `--additional-mcp-config @<file> --allow-tool micold` | FR-002 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U44 | The Copilot file is the Claude entry plus `"tools":["*"]` | FR-002 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U45 | For `Unsupported` the outcome is `Skipped(Unsupported(reason))` with no arguments | FR-005, EC-13 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U46 | No plan ever contains `--strict-mcp-config` | FR-003 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
-| U47 | `mcpServers.micold` at the top level of `~/.claude.json` is detected as taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U48 | `mcpServers.micold` under the session's project path in `~/.claude.json` is detected as taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U49 | `mcpServers.micold` under a different project's path in `~/.claude.json` is not taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U50 | With `CLAUDE_CONFIG_DIR` set, an entry in `$CLAUDE_CONFIG_DIR/.claude.json` is taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U51 | With `CLAUDE_CONFIG_DIR` set, an entry only in `~/.claude.json` is not taken (assumption A-3) | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U52 | An entry in `<cwd>/.mcp.json` is taken for Claude | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U53 | An entry in Copilot's `mcp-config.json` is taken for Copilot | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U54 | A server with any other name (e.g. `micold2`) is not taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U55 | An absent file is not taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U56 | A malformed file is not taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U57 | An unreadable file is not taken | FR-003, EC-14 | example | PENDING | planned: `crates/micold-core/tests/mcp_name_collision.rs` |
-| U58 | Each `SkipReason` renders exactly its contracts/binding.md §5 text | FR-005 | example | PENDING | planned: `crates/micold-core/tests/mcp_binding_plan.rs` |
+| U41 | For `McpConfigArg` the plan's last arguments are `--mcp-config <file> --allowedTools mcp__micold`, with nothing after them | FR-002 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::claude_is_bound_by_mcp_config_and_allowed_tools_as_the_last_arguments` |
+| U42 | The Claude file is exactly `{"mcpServers":{"micold":{"type":"http","url":…,"headers":{"Authorization":"Bearer <cred>"},"timeout":120000}}}` | FR-002, FR-006 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::the_claude_file_is_exactly_one_http_server_named_micold` |
+| U43 | For `AdditionalMcpConfig` the plan's last arguments are `--additional-mcp-config @<file> --allow-tool micold` | FR-002 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::copilot_is_bound_by_additional_mcp_config_and_allow_tool` |
+| U44 | The Copilot file is the Claude entry plus `"tools":["*"]` | FR-002 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::the_copilot_file_is_the_claude_entry_plus_every_tool` |
+| U45 | For `Unsupported` the outcome is `Skipped(Unsupported(reason))` with no arguments | FR-005, EC-13 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::an_unsupported_cli_is_skipped_with_its_reason_and_no_arguments` |
+| U46 | No plan ever contains `--strict-mcp-config` | FR-003 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::no_plan_ever_passes_strict_mcp_config` |
+| U47 | `mcpServers.micold` at the top level of `~/.claude.json` is detected as taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::a_top_level_entry_in_claude_json_is_taken` |
+| U48 | `mcpServers.micold` under the session's project path in `~/.claude.json` is detected as taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::an_entry_under_the_sessions_project_path_is_taken` |
+| U49 | `mcpServers.micold` under a different project's path in `~/.claude.json` is not taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::an_entry_under_another_projects_path_is_not_taken` |
+| U50 | With `CLAUDE_CONFIG_DIR` set, an entry in `$CLAUDE_CONFIG_DIR/.claude.json` is taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::with_claude_config_dir_set_its_claude_json_is_read` |
+| U51 | With `CLAUDE_CONFIG_DIR` set, an entry only in `~/.claude.json` is not taken (assumption A-3) | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::with_claude_config_dir_set_the_home_claude_json_is_not_read` |
+| U52 | An entry in `<cwd>/.mcp.json` is taken for Claude | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::an_entry_in_the_projects_mcp_json_is_taken_for_claude` |
+| U53 | An entry in Copilot's `mcp-config.json` is taken for Copilot | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::an_entry_in_copilots_mcp_config_is_taken_for_copilot` |
+| U54 | A server with any other name (e.g. `micold2`) is not taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::a_server_with_another_name_is_not_taken` |
+| U55 | An absent file is not taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::absent_files_are_not_taken` |
+| U56 | A malformed file is not taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::a_malformed_file_is_not_taken` |
+| U57 | An unreadable file is not taken | FR-003, EC-14 | example | DONE | `crates/micold-core/tests/mcp_name_collision.rs::an_unreadable_file_is_not_taken` |
+| U58 | Each `SkipReason` renders exactly its contracts/binding.md §5 text | FR-005 | example | DONE | `crates/micold-core/tests/mcp_binding_plan.rs::each_skip_reason_renders_its_contract_text` |
 
 ### `crates/micold-daemon/src/state.rs` spawn wiring (T016, T020, T024, T026)
 

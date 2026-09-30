@@ -99,3 +99,26 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - refactor: none.
 - notes: `every_cli_has_the_snake_case_name_the_tools_report` is an added behaviour serving
   U124/U134 (the `ai_cli` strings); recorded here rather than as a new list id.
+
+## Cycle 5 — U41–U58 — T011, T012, T018
+
+- tests: `crates/micold-core/tests/mcp_binding_plan.rs` (7) and `mcp_name_collision.rs` (12)
+- red: against a stub whose `plan` returned `Err(Disabled)`, `SkipReason` displayed `""` and
+  `name_taken` returned `None`
+  - `scripts/build-lock.sh cargo test -p micold-core --test mcp_binding_plan`
+    ```
+    thread 'the_claude_file_is_exactly_one_http_server_named_micold' panicked at crates/micold-core/tests/mcp_binding_plan.rs:43:81:
+    test result: FAILED. 0 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out
+    ```
+  - `scripts/build-lock.sh cargo test -p micold-core --test mcp_name_collision`
+    ```
+      left: None
+     right: Some("/tmp/.tmpP6bzOz/home/.claude.json")
+    test result: FAILED. 7 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out
+    ```
+- green: `mcp/binding.rs` (`plan`, `SkipReason` with the §5 texts, `ConfigLocations`,
+  `name_taken`). 7 + 12 passed.
+- mutant: the seven "not taken" tests (U49, U51, U54–U57, unsupported) pass against the `None`
+  stub by construction. Mutant check: `names_micold` changed to "any server at all" made
+  `a_server_with_another_name_is_not_taken` fail (11 passed; 1 failed); restored.
+- refactor: none.
