@@ -151,9 +151,9 @@ each group that changes existing code.
 | U35 | Claude's `tool_server_support()` is `McpConfigArg` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::claude_is_bound_through_an_mcp_config_argument` |
 | U36 | Copilot's `tool_server_support()` is `AdditionalMcpConfig` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::copilot_is_bound_through_an_additional_mcp_config` |
 | U37 | Pi's `tool_server_support()` is `Unsupported { reason: "Pi has no MCP support" }` | FR-002, FR-005, EC-13 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::{pi_is_unsupported_because_it_has_no_mcp, every_cli_answers_its_tool_server_support_through_the_seam}` |
-| U38 | Claude's `input_readiness()` is `HookSessionStart` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U39 | Pi's `input_readiness()` is `ExtensionEvent("session_start")` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U40 | Copilot's `input_readiness()` is `OutputSettled` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
+| U38 | Claude's `input_readiness()` is `HookSessionStart` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::claude_is_ready_on_its_session_start_hook` |
+| U39 | Pi's `input_readiness()` is `ExtensionEvent("session_start")` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::pi_is_ready_on_its_components_session_start_event` |
+| U40 | Copilot's `input_readiness()` is `OutputSettled` | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::copilot_is_ready_once_its_output_has_settled` |
 
 ### `crates/micold-core/src/mcp/binding.rs` (T011, T012, T018)
 
@@ -226,11 +226,11 @@ each group that changes existing code.
 | U87 | `list_worktrees` with a non-boolean `include_hidden` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_non_boolean_include_hidden_is_invalid_input` |
 | U88 | A `session` that is not a UUID string fails `invalid_input` | FR-008, EC-2 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_session_that_is_not_a_uuid_string_is_invalid_input` |
 | U89 | `WorktreeRef` parses `default` as the project root and any other name as a named worktree | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::{worktree_ref_default_is_the_project_root_and_anything_else_is_named, the_read_tools_parse_their_arguments}` |
-| U90 | `create_worktree` without `mode` means `new_branch` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U91 | `create_worktree` with `mode: track_remote` and no `remote` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U92 | `create_worktree` with an `overwrite` field fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U93 | `create_worktree` without `branch` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U94 | `create_session` accepts `ai_cli` of `claude_code`, `copilot`, `pi` and rejects any other value as `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U90 | `create_worktree` without `mode` means `new_branch` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_worktree_without_a_mode_starts_a_new_branch` |
+| U91 | `create_worktree` with `mode: track_remote` and no `remote` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::track_remote_needs_the_remote_to_track` |
+| U92 | `create_worktree` with an `overwrite` field fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_worktree_offers_no_way_to_overwrite_a_branch` |
+| U93 | `create_worktree` without `branch` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_worktree_needs_a_branch` |
+| U94 | `create_session` accepts `ai_cli` of `claude_code`, `copilot`, `pi` and rejects any other value as `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_session_accepts_exactly_the_three_ai_clis` |
 | U95 | `rename_worktree` or `delete_worktree` targeting `default` fails `invalid_input` | FR-008 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U96 | `delete_worktree` defaults to `stop_sessions: false`, `delete_branch: true` | FR-008, FR-009 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
 | U97 | `read_session_output` without `lines` means 200 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
@@ -245,8 +245,8 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U104 | `create_worktree` from a Default caller is `refused_by_policy` naming Principle III | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U105 | `create_worktree` from a worktree caller proceeds | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
+| U104 | `create_worktree` from a Default caller is `refused_by_policy` naming Principle III | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_create_worktree_naming_principle_iii` |
+| U105 | `create_worktree` from a worktree caller proceeds | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_worktree_caller_may_create_a_worktree` |
 | U106 | `rename_worktree` from a Default caller is refused; from a worktree caller it proceeds | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
 | U107 | `delete_worktree` from a Default caller is refused before any confirmation | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
 | U108 | Every non-worktree operation from a Default caller is decided exactly as from a worktree caller | FR-015a | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
@@ -264,12 +264,12 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U118 | Bracketed encoding is `ESC[200~ text ESC[201~ \r` | FR-017, US4-AS2 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U119 | Unbracketed encoding is `text \r` | FR-017, US4-AS2 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U120 | A multi-line text encodes with exactly one trailing `\r` | US4-AS2 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U121 | With no output yet, the settled rule never reports ready | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U122 | 1.5 s of silence after output reports ready; 1.499 s does not | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
-| U123 | New output during the silence window restarts it | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
+| U118 | Bracketed encoding is `ESC[200~ text ESC[201~ \r` | FR-017, US4-AS2 | example | DONE | `crates/micold-core/tests/input_readiness.rs::a_bracketed_submission_is_wrapped_in_paste_markers_then_submitted` |
+| U119 | Unbracketed encoding is `text \r` | FR-017, US4-AS2 | example | DONE | `crates/micold-core/tests/input_readiness.rs::an_unbracketed_submission_is_the_text_then_a_carriage_return` |
+| U120 | A multi-line text encodes with exactly one trailing `\r` | US4-AS2 | example | DONE | `crates/micold-core/tests/input_readiness.rs::a_multi_line_prompt_is_submitted_exactly_once` |
+| U121 | With no output yet, the settled rule never reports ready | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::with_no_output_yet_the_terminal_is_never_settled` |
+| U122 | 1.5 s of silence after output reports ready; 1.499 s does not | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::a_second_and_a_half_of_silence_after_output_is_settled` |
+| U123 | New output during the silence window restarts it | FR-017 | example | DONE | `crates/micold-core/tests/input_readiness.rs::new_output_during_the_silence_restarts_it` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` read-only handlers (T015, T021)
 
