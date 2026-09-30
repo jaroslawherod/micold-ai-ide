@@ -4255,6 +4255,137 @@ mod script_path_report {
             "a restart must not check the path (FR-006, SC-004)"
         );
     }
+
+    // --- M2: the save-time notification (contracts/settings-indication.md §1 S5–S7, §3 T2) ---
+
+    /// Open Settings and let its check land, so a later save starts from a settled page.
+    fn opened(app: &mut App) {
+        let job = crate::shell::persist::open_settings(app);
+        app.core.update(job.run());
+    }
+
+    /// The open draft as validated settings, the way Save sees it.
+    fn valid_draft(app: &App) -> micold_client::features::settings::ValidSettings {
+        app.core
+            .settings
+            .settings_draft
+            .clone()
+            .expect("Settings is open")
+            .validate()
+            .expect("the draft is valid")
+    }
+
+    /// Save the open draft through the shell and let the save's check land.
+    fn save_and_check(app: &mut App) {
+        let valid = valid_draft(app);
+        let (_survival, job) = crate::shell::persist::save_and_prepare_check(app, valid);
+        app.core.update(job.run());
+    }
+
+    /// Every notification raised so far, oldest first, taking each off the queue.
+    fn drain_notifications(app: &mut App) -> Vec<micold_core::notify::Notification> {
+        let mut raised = Vec::new();
+        while let Some(visible) = app.core.notifications.queue.visible().cloned() {
+            raised.push(visible);
+            app.core.notifications.queue.dismiss();
+        }
+        raised
+    }
+
+    #[test]
+    fn a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on()
+    {
+        let path = stored_path();
+        let (mut app, _probe) = app_with(&path, ProbeAnswer::Missing);
+        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
+        app.caps = app.caps.clone().with_settings(store.clone());
+        let notice = micold_core::notify::Notification::new(
+            micold_core::notify::Level::Info,
+            format!("The environment-include script was not found: {path}"),
+        );
+
+        for enabled in [false, true] {
+            opened(&mut app);
+            let _ = drain_notifications(&mut app);
+            app.core
+                .settings
+                .settings_draft
+                .as_mut()
+                .expect("Settings is open")
+                .environment
+                .enabled = enabled;
+
+            save_and_check(&mut app);
+
+            assert_eq!(
+                store
+                    .saves()
+                    .last()
+                    .map(|s| (s.env_include_enabled, s.env_include_script_path.clone())),
+                Some((enabled, path.clone())),
+                "the save goes through with the path missing (FR-004), enabled = {enabled}"
+            );
+            assert_eq!(
+                drain_notifications(&mut app),
+                vec![notice.clone()],
+                "US1 scenario 5: one Info notice per save, naming the path, enabled = {enabled}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_save_checks_the_saved_path_even_when_the_path_did_not_change() {
+        let path = stored_path();
+        let (mut app, probe) = app_with(&path, ProbeAnswer::Missing);
+        opened(&mut app);
+        let before = probe.calls().len();
+
+        let valid = valid_draft(&app);
+        let (_survival, job) = crate::shell::persist::save_and_prepare_check(&mut app, valid);
+
+        let Message::Settings(SettingsMsg::ScriptPathChecked {
+            seq,
+            origin,
+            result,
+        }) = job.run()
+        else {
+            panic!("a check reports through the settings reducer");
+        };
+        assert_eq!(
+            origin,
+            micold_client::features::settings::CheckOrigin::Saved
+        );
+        assert_eq!(
+            app.core.settings.script_check_save_seq,
+            Some(seq),
+            "the save's own check is the one to report on"
+        );
+        assert_eq!(
+            probe.calls()[before..],
+            [PathBuf::from(&path)],
+            "every save checks the stored path, changed or not (FR-004, FR-009)"
+        );
+        assert_eq!(result.map(|c| c.path), Some(path));
+    }
+
+    #[test]
+    fn a_save_with_a_missing_path_writes_only_the_three_environment_include_settings() {
+        let path = stored_path();
+        let (mut app, _probe) = app_with(&path, ProbeAnswer::Missing);
+        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
+        app.caps = app.caps.clone().with_settings(store.clone());
+        opened(&mut app);
+        let expected = valid_draft(&app).into_settings();
+
+        save_and_check(&mut app);
+
+        assert_eq!(
+            store.saves(),
+            vec![expected],
+            "one write, holding exactly what was drafted; the check's answer is never persisted \
+             (FR-010, SC-005)"
+        );
+    }
 }
 
 // --- feature 034: the GitHub issue source, through the shell (T022, T066) --------------------

@@ -335,6 +335,16 @@ fn validated_draft(app: &mut App) -> Option<ValidSettings> {
 /// running service is [`apply_placement`]'s job, and keeping the two apart is what lets a declined
 /// confirmation leave *neither* of them done.
 fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
+    let (survival, check) = save_and_prepare_check(app, valid);
+    Task::batch([survival, crate::shell::env_include::run_script_path_check(check)])
+}
+
+/// [`apply_save`]'s body, with the save's script path check (spec 035 T2) prepared rather than
+/// started, so a test can run the job synchronously. Returns the survival work and the job.
+pub(crate) fn save_and_prepare_check(
+    app: &mut App,
+    valid: ValidSettings,
+) -> (Task<Message>, crate::shell::env_include::ScriptPathCheckJob) {
     // Read before the write, because the decision below is about a *change*: see
     // [`survival_step`]. `unwrap_or_default` treats "no settings file" as "never opted in", which
     // is what a machine with no settings file is.
@@ -399,13 +409,20 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
     app.core.update(Message::Settings(SettingsMsg::Saved)); // closes the view
+    // Spec 035 T2: check the path as just saved, on every save, changed or not (FR-004, FR-009).
+    // After the write and 011's refresh, so the job reads the stored values; the reducer turns a
+    // missing or unreadable answer into the save's one notification (S5).
+    let check = crate::shell::env_include::prepare_script_path_check(
+        app,
+        micold_client::features::settings::CheckOrigin::Saved,
+    );
 
     // The one thing in this form that is not just a value written to a file: making sessions
     // survive logout has to be *arranged*, and since feature 028 removed the host-process
     // mechanism (FR-005) the container runtime is the only thing that can arrange it — so the
     // other placements owe the user an explanation instead (FR-014d). Saved first, then reported —
     // the file is what the next launch reads, so this must not lose the user's choice.
-    match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
+    let survival = match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
         SurvivalStep::Leave => Task::none(),
         step => {
             // Feature 028, FR-022a: both halves of the opt-in — the restart policy and the idle
@@ -419,7 +436,8 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
                 step == SurvivalStep::Enable,
             )
         }
-    }
+    };
+    (survival, check)
 }
 
 /// What a save owes the logout-survival opt-in (feature 027, FR-014d).
