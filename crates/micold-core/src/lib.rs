@@ -24,6 +24,7 @@ pub mod input;
 pub mod install_location;
 pub mod link;
 pub mod logout_survival;
+pub mod mcp;
 pub mod metadata;
 pub mod naming;
 pub mod notify;

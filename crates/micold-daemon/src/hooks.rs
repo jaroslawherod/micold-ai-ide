@@ -23,17 +23,13 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use uuid::Uuid;
 
 use crate::activity::{ActivityEvent, HookKind};
+use crate::http::{self, respond, Body, HeadRead};
 use crate::state::DaemonState;
 use micold_core::session::SessionId;
-
-/// Maximum bytes read for the request head (request line + headers). A hook request's head is a few
-/// hundred bytes; this is generous but bounds a hostile/looping sender.
-const MAX_HEAD: usize = 8 * 1024;
 
 /// Maximum request-body size accepted (contracts/hooks.md §5). Anything larger is rejected with
 /// `413` rather than buffered.
@@ -52,18 +48,6 @@ const MAX_HEAD: usize = 8 * 1024;
 /// growth, while still bounding what one connection can make the daemon buffer. Only
 /// `hook_event_name` — a few dozen bytes — is ever read out of the body.
 pub const MAX_BODY: usize = 4 * 1024 * 1024;
-
-/// How much of an over-bound body to read and discard before answering `413`, so the peer's write
-/// completes and it can actually read the status line instead of hitting `ECONNRESET` (BUG-010).
-/// Draining is not buffering: bytes are discarded a chunk at a time, so this costs O(chunk) memory
-/// no matter how much arrives. The cap stops a sender that would keep writing forever.
-const MAX_DRAIN: usize = 8 * 1024 * 1024;
-
-/// How long the drain above may wait. A byte cap alone is not enough: a peer that declares a large
-/// `Content-Length` and then sends nothing (without closing its write half) would park the handler
-/// forever. Over loopback a legitimate sender pushes megabytes in milliseconds, so a short deadline
-/// costs a real hook nothing and bounds a stalled one.
-const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The shared token registry: session uuid → its per-session bearer secret.
 type Tokens = Arc<Mutex<HashMap<Uuid, String>>>;
@@ -155,15 +139,6 @@ pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState
     }
 }
 
-/// A parsed HTTP request head (request line + the headers we care about).
-#[derive(Debug, PartialEq, Eq)]
-struct Head {
-    method: String,
-    path: String,
-    content_length: usize,
-    bearer: Option<String>,
-}
-
 /// The classification of a hook payload's `hook_event_name`.
 #[derive(Debug, PartialEq, Eq)]
 enum HookClass {
@@ -183,25 +158,14 @@ async fn handle_connection(
     state: Arc<DaemonState>,
 ) -> io::Result<()> {
     // 1. Read the head, bounded, up to the blank line that terminates it.
-    let mut buf = Vec::with_capacity(1024);
-    let head_end = loop {
-        if let Some(pos) = find_head_end(&buf) {
-            break pos;
+    let (head, rest) = match http::read_head(&mut stream).await? {
+        HeadRead::Complete { head, rest } => (head, rest),
+        HeadRead::TooLarge => {
+            return respond(&mut stream, 431, "Request Header Fields Too Large").await
         }
-        if buf.len() >= MAX_HEAD {
-            return respond(&mut stream, 431, "Request Header Fields Too Large").await;
-        }
-        let mut chunk = [0u8; 1024];
-        let n = stream.read(&mut chunk).await?;
-        if n == 0 {
-            // Connection closed before a complete head — nothing to answer.
-            return Ok(());
-        }
-        buf.extend_from_slice(&chunk[..n]);
-    };
-
-    let Some(head) = parse_head(&buf[..head_end]) else {
-        return respond(&mut stream, 400, "Bad Request").await;
+        HeadRead::Malformed => return respond(&mut stream, 400, "Bad Request").await,
+        // Connection closed before a complete head — nothing to answer.
+        HeadRead::Closed => return Ok(()),
     };
 
     // 2. Only POST /hook/<uuid> is a route; anything else is a flat 404 (no capability surface).
@@ -223,28 +187,12 @@ async fn handle_connection(
         return respond(&mut stream, 403, "Forbidden").await;
     }
 
-    // 4. Bound the body — after authentication, but still before a byte of it is buffered.
-    if head.content_length > MAX_BODY {
-        // Drain first: closing mid-body costs the peer the response entirely (it sees ECONNRESET on
-        // its remaining write), so it cannot report *why* the hook failed. Discarded, never buffered.
-        drain(&mut stream, buf.len() - head_end).await;
-        return respond(&mut stream, 413, "Payload Too Large").await;
-    }
-
-    // 5. Read the (bounded) body. The head read may have already pulled some of it in.
-    let mut body = buf[head_end..].to_vec();
-    while body.len() < head.content_length {
-        let mut chunk = [0u8; 1024];
-        let n = stream.read(&mut chunk).await?;
-        if n == 0 {
-            break;
-        }
-        body.extend_from_slice(&chunk[..n]);
-        if body.len() > MAX_BODY {
-            return respond(&mut stream, 413, "Payload Too Large").await;
-        }
-    }
-    body.truncate(head.content_length);
+    // 4. Bound and read the body — after authentication, but still before a byte of an over-bound
+    //    body is buffered (it is drained, never kept).
+    let body = match http::read_body(&mut stream, rest, head.content_length, MAX_BODY).await? {
+        Body::Complete(body) => body,
+        Body::TooLarge => return respond(&mut stream, 413, "Payload Too Large").await,
+    };
 
     // 6. Map the hook to an activity transition. The body is NEVER logged (contract §6).
     let body_str = std::str::from_utf8(&body).unwrap_or("");
@@ -259,85 +207,6 @@ async fn handle_connection(
         HookClass::Ignored => respond(&mut stream, 200, "OK").await,
         HookClass::Invalid => respond(&mut stream, 400, "Bad Request").await,
     }
-}
-
-/// Read and discard up to [`MAX_DRAIN`] bytes of a body we are about to refuse, so the peer's write
-/// can complete and it reads our status rather than an `ECONNRESET` (BUG-010). `already` counts the
-/// body bytes the head read pulled in. Best-effort: a read error or a sender that exceeds the cap
-/// just means we answer and close, which is the behaviour this exists to improve on, not a failure.
-/// Bytes are dropped as they arrive — never accumulated, never logged (contract §6). Bounded by both
-/// [`MAX_DRAIN`] bytes and [`DRAIN_TIMEOUT`]; whichever comes first, we stop and answer.
-async fn drain(stream: &mut TcpStream, already: usize) {
-    let mut discarded = already;
-    let mut sink = [0u8; 8 * 1024];
-    let _ = tokio::time::timeout(DRAIN_TIMEOUT, async {
-        while discarded < MAX_DRAIN {
-            match stream.read(&mut sink).await {
-                Ok(0) | Err(_) => return,
-                Ok(n) => discarded += n,
-            }
-        }
-    })
-    .await;
-}
-
-/// Write a minimal HTTP/1.1 response with an empty body and close-after semantics.
-async fn respond(stream: &mut TcpStream, status: u16, reason: &str) -> io::Result<()> {
-    let head =
-        format!("HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-    stream.write_all(head.as_bytes()).await?;
-    stream.flush().await
-}
-
-/// The index just past the `\r\n\r\n` that ends the request head, if present.
-fn find_head_end(buf: &[u8]) -> Option<usize> {
-    buf.windows(4).position(|w| w == b"\r\n\r\n").map(|p| p + 4)
-}
-
-/// Parse the request line + the `Content-Length` and `Authorization: Bearer` headers from a request
-/// head. Header names are matched case-insensitively (HTTP allows any casing). Returns `None` if the
-/// request line is malformed.
-fn parse_head(head: &[u8]) -> Option<Head> {
-    let text = std::str::from_utf8(head).ok()?;
-    let mut lines = text.split("\r\n");
-    let request_line = lines.next()?;
-    let mut parts = request_line.split(' ');
-    let method = parts.next()?.to_string();
-    let path = parts.next()?.to_string();
-    // A third field (HTTP version) must exist for a well-formed request line.
-    parts.next()?;
-    if method.is_empty() || path.is_empty() {
-        return None;
-    }
-
-    let mut content_length = 0usize;
-    let mut bearer = None;
-    for line in lines {
-        if line.is_empty() {
-            continue;
-        }
-        let Some((name, value)) = line.split_once(':') else {
-            continue;
-        };
-        let name = name.trim().to_ascii_lowercase();
-        let value = value.trim();
-        match name.as_str() {
-            "content-length" => content_length = value.parse().unwrap_or(0),
-            "authorization" => {
-                bearer = value
-                    .strip_prefix("Bearer ")
-                    .or_else(|| value.strip_prefix("bearer "))
-                    .map(|t| t.trim().to_string());
-            }
-            _ => {}
-        }
-    }
-    Some(Head {
-        method,
-        path,
-        content_length,
-        bearer,
-    })
 }
 
 /// Extract the session uuid from a `/hook/<uuid>` path (ignoring any query string). `None` if the
@@ -470,32 +339,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_a_well_formed_hook_request_head() {
-        let head = b"POST /hook/abc HTTP/1.1\r\nHost: x\r\nContent-Length: 42\r\nAuthorization: Bearer secret-token\r\n\r\n";
-        let end = find_head_end(head).unwrap();
-        let parsed = parse_head(&head[..end]).unwrap();
-        assert_eq!(parsed.method, "POST");
-        assert_eq!(parsed.path, "/hook/abc");
-        assert_eq!(parsed.content_length, 42);
-        assert_eq!(parsed.bearer.as_deref(), Some("secret-token"));
-    }
-
-    #[test]
-    fn header_names_are_case_insensitive() {
-        let head =
-            b"POST /hook/x HTTP/1.1\r\ncontent-length: 7\r\nAUTHORIZATION: bearer tok\r\n\r\n";
-        let parsed = parse_head(head).unwrap();
-        assert_eq!(parsed.content_length, 7);
-        assert_eq!(parsed.bearer.as_deref(), Some("tok"));
-    }
-
-    #[test]
-    fn a_malformed_request_line_is_rejected() {
-        assert!(parse_head(b"GARBAGE\r\n\r\n").is_none());
-        assert!(parse_head(b"POST\r\n\r\n").is_none());
-    }
-
-    #[test]
     fn extracts_the_session_uuid_from_the_path() {
         let uuid = Uuid::from_u128(0x1234);
         let path = format!("/hook/{uuid}");
@@ -574,11 +417,5 @@ mod tests {
                 "{hook}'s matcher-group must have a non-empty nested hooks array"
             );
         }
-    }
-
-    #[test]
-    fn find_head_end_needs_the_blank_line() {
-        assert_eq!(find_head_end(b"POST / HTTP/1.1\r\n"), None);
-        assert_eq!(find_head_end(b"POST / HTTP/1.1\r\n\r\n"), Some(19));
     }
 }

@@ -95,10 +95,10 @@ each group that changes existing code.
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U1 | The hook receiver's end-to-end behaviour (auth, bounds, activity, `SessionStart` accepted without a transition) is unchanged | INV-1 | characterization | BASELINE | `crates/micold-daemon/tests/hooks_receiver.rs` (whole file, existing) |
-| U2 | A well-formed head parses method, path and case-insensitive headers; a malformed request line is rejected | INV-1 | characterization | BASELINE | `crates/micold-daemon/src/hooks.rs::tests::{parses_a_well_formed_hook_request_head, header_names_are_case_insensitive, a_malformed_request_line_is_rejected}` (existing; move to `http.rs`) |
-| U3 | `find_head_end` reports no head until the blank line arrives | INV-1 | characterization | BASELINE | `crates/micold-daemon/src/hooks.rs::tests::find_head_end_needs_the_blank_line` (existing; move to `http.rs`) |
-| U4 | A body exactly at the caller-chosen limit is read in full | FR-001 | example | PENDING | planned: `crates/micold-daemon/src/http.rs` tests |
-| U5 | A body one byte over the caller-chosen limit is refused as too large and drained | FR-001 | example | PENDING | planned: `crates/micold-daemon/src/http.rs` tests |
+| U2 | A well-formed head parses method, path and case-insensitive headers; a malformed request line is rejected | INV-1 | characterization | BASELINE | `crates/micold-daemon/src/http.rs::tests::{parses_a_well_formed_hook_request_head, header_names_are_case_insensitive, a_malformed_request_line_is_rejected}` (moved from `hooks.rs`) |
+| U3 | `find_head_end` reports no head until the blank line arrives | INV-1 | characterization | BASELINE | `crates/micold-daemon/src/http.rs::tests::find_head_end_needs_the_blank_line` (moved from `hooks.rs`) |
+| U4 | A body exactly at the caller-chosen limit is read in full | FR-001 | example | DONE | `crates/micold-daemon/src/http.rs::tests::a_body_exactly_at_the_limit_is_read_in_full` |
+| U5 | A body one byte over the caller-chosen limit is refused as too large and drained | FR-001 | example | DONE | `crates/micold-daemon/src/http.rs::tests::a_body_one_byte_over_the_limit_is_refused_and_drained` |
 
 ### `crates/micold-core/src/mcp/jsonrpc.rs`, `errors.rs` (T004, T008)
 
