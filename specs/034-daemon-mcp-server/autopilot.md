@@ -68,7 +68,8 @@ deliverable (tasks.md Notes).
 | M2 | A (code-review high) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | 2 fixed (unbound start revokes old credential; crash respawn keeps its start's binding), 1 doc fix, 5 declined |
 | M2 | B (conformance) | 1 | 3aed1d03b23b2894bec54e460f20359a00bd9751:bc68ca30a914ace0e6cd86002796e4462ce945ff | CLEAN, 2 MINOR (ledger row fixed; persistence visual check declined) |
 | M2 | A (sonnet re-review) | 2 | 6ad850082b956db79b824cda29517a5172665dba:4c3b01ae36397dc436b511995f71ef7ced33322d | CLEAN; fixes hold, declines stand |
-| M4 | A (code-review high) | 1 | d60651b2f4fd809dee2612cd097776c8547cdd48:ca68d3837395b780eb1ccda1f1cf3b538d44db9f | CHANGES: F1 BLOCKER fmt (fixed), F2 MAJOR failed start answered success (fixed: service_error with the recorded reason), F3/F4 MINOR fixed, F5 MINOR declined |
+| M4 | A (code-review high) | 1 | d60651b2f4fd809dee2612cd097776c8547cdd48:ca68d3837395b780eb1ccda1f1cf3b538d44db9f | CHANGES: F1 BLOCKER fmt (fixed), F2 MAJOR failed start answered success (fixed: service_error with the recorded reason), F3 MINOR fixed, F4/F5 MINOR declined |
+| M4 | A (sonnet re-review) | 2 | 1882e06044be9f66f4b5bc1ad8b239d5237956bd:29e38622b60e5a1c9ff48c67d972cca5661cf3d1 | CLEAN |
 
 ## Declined review findings
 
@@ -95,6 +96,7 @@ deliverable (tasks.md Notes).
 | M2 | A round 1 | One more locked settings write + `SettingsChanged` broadcast per save | Follows the existing per-field pattern; batching `SettingsSet` into one update is a refactor of all fields. Follow-up below |
 | M2 | A round 1 | `set_tool_server_enabled` duplicates the lock/persist/broadcast setter shape | Cosmetic; same as the four sibling setters. Covered by the batching follow-up |
 | M2 | B round 1 | Visual pass did not check the toggle persists across Save | MINOR; persistence is pinned by `turning_the_binding_toggle_off_and_saving_tells_the_service`, `turning_the_binding_toggle_off_reaches_what_save_writes` and `turning_the_tool_server_binding_off_survives_a_save_and_load` |
+| M4 | A round 1 | F4: only agent starts broadcast `Starting`; the sidebar's `SessionStart` does not | Tried (broadcast in `ops::start_session`): feature 026's `resume_failure_reported` pins that the first lifecycle announced after a sidebar `SessionStart` is its outcome, and went red. The sidebar's announcements stay as they were; the overlay still shows `Starting` in any broadcast made during a sidebar start |
 | M4 | A round 1 | F5: the `starting` marker is not reference-counted, so of two concurrent starts the second runs without the overlay/held input | Pre-existing semantics of `begin_start`/`finish_start` shared with the sidebar's `SessionStart` (feature 026 T125); the tool already skips a session the snapshot shows `Starting`, and the per-session gate still serializes the spawns |
 | M1 | B round 2 | No endpoint-level test for `discard_body` before 401/404/405 | Optional per the reviewer; the unit test pins the bound, and loopback socket buffers absorb any test-sized body, so an endpoint test would pass with or without the drain |
 

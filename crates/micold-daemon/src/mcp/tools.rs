@@ -375,6 +375,7 @@ async fn start_session(
         // The sidebar's `SessionStart`: bringing an existing session back is a resume. Every
         // window sees it `Starting` while the start runs.
         state.begin_start(session);
+        state.broadcast_catalog();
         let started = ops::start_session(state, session, LaunchMode::Resume)
             .await
             .unwrap_or(false);
@@ -480,6 +481,7 @@ async fn create_session(
         .create_session(&project.path, &dir, cli)
         .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
     state.begin_start(session);
+    state.broadcast_catalog();
     let started = ops::start_session(state, session, LaunchMode::Fresh)
         .await
         .unwrap_or(false);
