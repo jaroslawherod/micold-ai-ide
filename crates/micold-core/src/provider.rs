@@ -104,6 +104,23 @@ pub enum ActivitySource {
     None,
 }
 
+/// How a CLI's sessions are bound to the session service's tool server (feature 034, FR-002,
+/// contracts/binding.md §4). Each variant names a launch mechanism; the daemon builds the arguments
+/// and the file from it, so no code outside this module asks which CLI a session runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolServerSupport {
+    /// `--mcp-config <file> --allowedTools mcp__micold`: the file adds a server to the user's own.
+    McpConfigArg,
+    /// `--additional-mcp-config @<file> --allow-tool micold`: the file augments the user's config.
+    AdditionalMcpConfig,
+    /// The CLI cannot reach an MCP server; its sessions start unbound and the reason is logged
+    /// (FR-005).
+    Unsupported {
+        /// Why, as the log line and the user guide state it.
+        reason: &'static str,
+    },
+}
+
 /// Abstraction over an AI coding CLI. Consolidates every provider-specific detail: identity,
 /// availability, the launch command + argument shape, how the app-owned session id is passed and
 /// resumed, where the conversation record lives, how a recorded conversation is detected, how the
@@ -217,9 +234,24 @@ pub trait AiCliProvider {
     /// How this provider's busy/idle events reach the daemon for one session. Pure, like every
     /// other derivation here — which is why [`ActivitySource::Hooks`] carries nothing.
     fn activity_source(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> ActivitySource;
+
+    // --- tool server (feature 034) ---
+
+    /// How a session of this CLI is bound to the session service's tool server at launch (FR-002),
+    /// or why it cannot be (FR-005).
+    fn tool_server_support(&self) -> ToolServerSupport;
 }
 
 impl AiCli {
+    /// The name the tool server reports for this CLI (`ai_cli` in contracts/mcp-tools.md).
+    pub fn tool_name(self) -> &'static str {
+        match self {
+            AiCli::ClaudeCode => "claude_code",
+            AiCli::Copilot => "copilot",
+            AiCli::Pi => "pi",
+        }
+    }
+
     /// The implementation behind this name.
     ///
     /// An **exhaustive match**, not a map: the map made the lookup partial by type while every
@@ -515,6 +547,11 @@ impl AiCliProvider for ClaudeProvider {
             .exists()
     }
 
+    fn tool_server_support(&self) -> ToolServerSupport {
+        // `claude --mcp-config <file>` adds servers on top of the user's own (research R1).
+        ToolServerSupport::McpConfigArg
+    }
+
     fn activity_source(
         &self,
         _config_dir: &Path,
@@ -768,6 +805,11 @@ impl AiCliProvider for CopilotProvider {
 
     fn is_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
         self.archived_marker_path(config_dir, session_id).exists()
+    }
+
+    fn tool_server_support(&self) -> ToolServerSupport {
+        // `copilot --additional-mcp-config @<file>` augments the user's config (research R3).
+        ToolServerSupport::AdditionalMcpConfig
     }
 
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
@@ -1097,6 +1139,13 @@ impl AiCliProvider for PiProvider {
             .exists()
     }
 
+    fn tool_server_support(&self) -> ToolServerSupport {
+        // Pi has no MCP client at all (research R4), so FR-002's condition does not hold.
+        ToolServerSupport::Unsupported {
+            reason: "Pi has no MCP support",
+        }
+    }
+
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
         // Pi reports busy/idle only to code loaded into its own process, so the source names the
         // log that code writes and the daemon supplies the code at spawn. Beside `sessions/`, never
@@ -1315,6 +1364,12 @@ impl AiCliProvider for FakeAiCliProvider {
             .archived
             .borrow()
             .contains(&(cwd.to_path_buf(), session_id))
+    }
+
+    fn tool_server_support(&self) -> ToolServerSupport {
+        ToolServerSupport::Unsupported {
+            reason: "the fake CLI has no MCP support",
+        }
     }
 
     fn activity_source(

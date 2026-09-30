@@ -36,7 +36,9 @@
 
 mod support;
 
-use micold_core::provider::{ActivitySource, AiCliProvider, FakeAiCliProvider, PiProvider};
+use micold_core::provider::{
+    ActivitySource, AiCliProvider, FakeAiCliProvider, PiProvider, ToolServerSupport,
+};
 use micold_core::session::AiCli;
 use micold_core::terminal::LaunchMode;
 use std::cell::RefCell;
@@ -284,6 +286,11 @@ impl AiCliProvider for MinimalProvider {
     fn is_archived(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> bool {
         self.archived.borrow().contains(&id)
     }
+    fn tool_server_support(&self) -> ToolServerSupport {
+        ToolServerSupport::Unsupported {
+            reason: "Minimal has no tool server",
+        }
+    }
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
         // Copilot's `session-state/<uuid>/`.
@@ -502,3 +509,55 @@ fn pi_derives_no_label_because_its_title_already_is_the_first_message() {
 // `crates/micold-core/tests/copilot_provider.rs` and the acceptance tests in
 // `crates/micold-daemon/tests/untitled_session_labels.rs`, so the placeholder assertion that stood
 // here — "Copilot derives no label yet" — is gone rather than inverted.
+
+// ---------------------------------------------------------------------------------------
+// Feature 034 (T013) — how each CLI is bound to the session service's tool server (FR-002, FR-005)
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn claude_is_bound_through_an_mcp_config_argument() {
+    assert_eq!(
+        AiCli::ClaudeCode.provider().tool_server_support(),
+        ToolServerSupport::McpConfigArg
+    );
+}
+
+#[test]
+fn copilot_is_bound_through_an_additional_mcp_config() {
+    assert_eq!(
+        AiCli::Copilot.provider().tool_server_support(),
+        ToolServerSupport::AdditionalMcpConfig
+    );
+}
+
+#[test]
+fn pi_is_unsupported_because_it_has_no_mcp() {
+    assert_eq!(
+        AiCli::Pi.provider().tool_server_support(),
+        ToolServerSupport::Unsupported {
+            reason: "Pi has no MCP support"
+        }
+    );
+}
+
+#[test]
+fn every_cli_answers_its_tool_server_support_through_the_seam() {
+    // Asked of every provider, including one that is not a real CLI: the daemon never decides this
+    // by which CLI a session runs.
+    let minimal = MinimalProvider::new("/minimal");
+    let port: &dyn AiCliProvider = &minimal;
+    assert!(matches!(
+        port.tool_server_support(),
+        ToolServerSupport::Unsupported { .. }
+    ));
+    for which in AiCli::ALL {
+        let _ = which.provider().tool_server_support();
+    }
+}
+
+#[test]
+fn every_cli_has_the_snake_case_name_the_tools_report() {
+    assert_eq!(AiCli::ClaudeCode.tool_name(), "claude_code");
+    assert_eq!(AiCli::Copilot.tool_name(), "copilot");
+    assert_eq!(AiCli::Pi.tool_name(), "pi");
+}
