@@ -487,3 +487,74 @@ failed before the implementation.
   -> `github_classify` 5, `github_gh_cli` 5, `github_parse` 7, `github_search` 2, `github_load` 4,
   `issue_source_state` 25 passed.
 - commit: the commit that adds this entry
+
+## Cycle 19: U76, U77, U78 — the label-to-type mapping (M4)
+
+- test: `crates/micold-core/tests/issue_types.rs` — `default_mapping`, `mapping_order_wins`, `case_and_no_match`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test issue_types` against stubs (`default_mapping` empty,
+  `type_for_labels` → `None`) -> 0 passed, 3 failed: `default_mapping` `:20:5 left: [] right: [LabelTypeEntry { label: "bug", type_: Fix }, …]`;
+  `mapping_order_wins` `:34:5 left: None right: Some(Fix)`; `case_and_no_match` `:60:5 left: None right: Some(Fix)`.
+- green: `default_mapping` builds the three stock entries; `type_for_labels` walks the mapping and
+  compares `trim().to_lowercase()` on both sides -> `issue_types` 3 passed.
+- refactor: none needed.
+- notes: three single-assertion-group tests written together, each observed red on its own
+  assertion before the implementation existed.
+- commit: b269de5b
+
+## Cycle 20: U80, U81, U82 — the mapping in settings.json (M4)
+
+- test: `crates/micold-core/tests/settings_issue_mapping.rs` — `round_trip_and_default`,
+  `unknown_type_is_dropped`, `other_writers_preserve_the_mapping`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test settings_issue_mapping` with the field on
+  `Settings` but not on `StoredSettings` -> 0 passed, 3 failed: `:47:5 left: [] right: [LabelTypeEntry { label: "Regression", … }]`;
+  `:113:5 left: [] right: [… "bug" …, … "docs" …]`; `:150:5 left: [] right: [LabelTypeEntry { label: "perf", type_: Perf }]`.
+- green: `StoredSettings.issue_label_types` with `#[serde(default = "default_mapping", deserialize_with = "known_entries")]`
+  (entries that fail to parse are skipped); `LabelTypeEntry` stores `type_` as `"type"`;
+  `ConventionalType` serialises as its lowercase token; `Settings::default()` carries the default table.
+  -> `settings_issue_mapping` 3, `issue_types` 3, `settings_roundtrip` 7, `settings_ai_cli` 3 passed;
+  `cargo test -p micold-core --all-targets` green.
+- refactor: none needed.
+- commit: a0bdae03
+
+## Cycle 21: U83, U84 — the pick sets or clears the type (M4)
+
+- test: `crates/micold-client/tests/issue_source_state.rs` — `the_pick_sets_or_clears_the_type`, `the_mapping_is_read_at_the_pick`
+- structural step first: `IssuePicked { number }` → `{ number, mapping }`, mapping ignored; every
+  existing construction passes `mapping: vec![]`; suite unchanged.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state` -> 25 passed, 2 failed:
+  `:569:5 left: None right: Some(Fix)`; `:609:5 left: None right: Some(Chore)`.
+- green: `issue_picked` sets `type_ = type_for_labels(mapping, issue.labels())`. -> `issue_source_state` 27 passed;
+  `--bin micold-ai-ide issue` 17 passed.
+- notes: three existing assertions encoded slice B's "the pick leaves the type alone", which
+  FR-014 supersedes. U55 (`a_pick_fills_ticket_and_name`) now expects the type cleared under its
+  empty mapping; the shell tests A5 (`issue_picked_values_stay_editable`) and A6
+  (`issue_submit_creates_like_a_new_branch`) choose their type after the pick instead of before, so
+  their assertions are unchanged. Each change was made after its failure was seen and is the
+  requirement, not a loosening.
+- commit: b69eddaa
+
+## Cycle 22: U86, U85, A11–A17 — the shell reads the stored mapping (M4)
+
+- tests: `crates/micold-client/tests/features_settings.rs::the_mapping_survives_other_saves`;
+  `crates/micold-client/src/main_tests.rs` — `issue_a_bug_label_selects_fix` (A11),
+  `issue_the_first_mapping_entry_wins` (A12), `issue_an_unmapped_issue_clears_the_type` (A13),
+  `issue_a_label_type_can_be_overridden` (A14), `issue_label_matching_ignores_case` (A15),
+  `issue_a_mapped_label_replaces_the_selected_type` (A16), `issue_rows_show_labels` (A17),
+  `issue_the_pick_reads_the_stored_mapping` (U85).
+- red (U86): `scripts/build-lock.sh cargo test -p micold-client --test features_settings mapping` with
+  `into_settings` stubbed to the default table -> `:373:5 left: [… "bug" …, … "enhancement" …, … "documentation" …] right: [LabelTypeEntry { label: "perf", type_: Perf }]`.
+- green (U86): `SettingsDraft.github: GithubDraft { entries }` (default table when never seeded),
+  seeded by `from_settings`, copied by `validate` into `ValidSettings.issue_label_types`, which
+  `into_settings` writes; `open_settings` seeds it from the store. -> `features_settings` 52 passed.
+- red (shell): `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` with the
+  shell still passing an empty mapping -> 20 passed, 5 failed: A11 `:5410:9 left: None right: Some(Fix)`,
+  A12 `:5425:9 left: None right: Some(Fix)`, A15 `:5460:9 left: None right: Some(Perf)`,
+  A16 `:5469:9 left: None right: Some(Docs)`, U85 `:5497:9 left: None right: Some(Chore)`.
+- green: `on_issue_row_picked` fills `mapping` from `caps.settings().load().settings.issue_label_types`,
+  or `default_mapping()` with no store. -> `--bin micold-ai-ide issue` 25 passed.
+- notes: A13, A14 and A17 passed at the red run. A13 rests on U83's reducer rule (an empty
+  mapping already clears), which was observed red in cycle 21; A14 is FR-015, existing behaviour
+  once the pick sets a type; A17 is the regression pin T078 expected (slice B's `row_text` carries
+  labels). The theme-only half of U86 is also pinned by `persist.rs::saving_a_theme_keeps_every_other_setting`,
+  whose stored settings now carry a non-default mapping.
+- commit: 4e2c6d97

@@ -323,7 +323,7 @@ outcome: the name of the new worktree, or the error and the step where it failed
 With **GitHub issue** selected, the form lists the repository's open issues. Pick one and its
 number becomes the **Ticket** and its title becomes the **Name**. Everything else works as for a
 new branch: the same preview, the same create, the same prompt when the branch name is already
-taken. Choose the **Type** yourself.
+taken. The issue's labels choose the **Type** (see below); you can change it before you create.
 
 **What you need.** The app reads issues through the GitHub CLI, `gh`, so install it from
 [cli.github.com](https://cli.github.com) and sign in once with `gh auth login` in a terminal. The app
@@ -369,6 +369,29 @@ open issues says "*owner/name* has no open issues."
 | "GitHub's rate limit was reached. Wait a minute, then retry." | Wait a minute, then retry. |
 | "GitHub didn't answer within 10 seconds." | Retry. If it keeps happening, check `gh` works from a terminal. |
 | "Couldn't read issues: …" | Read the detail `gh` reported, then retry. |
+
+### The issue's labels choose the type
+
+Picking an issue also sets the **Type** from its labels, through one label-to-type mapping that
+applies to every project. Until you change it, the mapping is:
+
+| Issue label | Type |
+|---|---|
+| `bug` | fix |
+| `enhancement` | feat |
+| `documentation` | docs |
+
+GitHub's other stock labels, such as `question` or `good first issue`, choose no type. Labels match
+whatever their letter case, so `Bug` counts as `bug`. When an issue carries several mapped labels,
+the entry listed first in the mapping wins: an issue labelled both `enhancement` and `bug` becomes
+a fix. Each row in the list shows the issue's labels, so you can tell which type a pick will give.
+
+A pick replaces the type you had selected. When none of the issue's labels is in the mapping, the
+pick clears the type, and the form asks you to choose one before it creates the worktree. Either
+way, the **Type** stays yours to change afterwards. The mapping is read at the moment you pick, so
+changing it later does not change the type of an issue you already picked. It is kept in the app's
+`settings.json`, together with your other settings, and holds only labels and types, never anything
+from an issue.
 
 ### Searching beyond the 1,000 loaded issues
 
