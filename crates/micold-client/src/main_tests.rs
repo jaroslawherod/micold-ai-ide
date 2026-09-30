@@ -4163,4 +4163,86 @@ mod script_path_report {
             "nor source the script with the feature off (FR-003)"
         );
     }
+
+    // --- T014: the triggers (contracts/settings-indication.md §3, T1) ---
+
+    #[test]
+    fn opening_settings_seeds_the_draft_at_once_and_checks_the_stored_path_as_it_is_stored() {
+        let path = stored_path();
+        let (mut app, probe) = app_with(&path, ProbeAnswer::Missing);
+        app.env_include_enabled = true;
+
+        let job = crate::shell::persist::open_settings(&mut app);
+
+        assert_eq!(
+            app.core
+                .settings
+                .settings_draft
+                .as_ref()
+                .map(|d| d.environment.script_path.as_str()),
+            Some(path.as_str()),
+            "the page opens without waiting for the check (FR-006)"
+        );
+        assert!(
+            matches!(
+                app.core.settings.script_check,
+                micold_client::features::settings::ScriptCheck::Pending { .. }
+            ),
+            "the check is under way, got {:?}",
+            app.core.settings.script_check
+        );
+        assert!(probe.calls().is_empty(), "nothing is examined on the UI thread");
+
+        let Message::Settings(SettingsMsg::ScriptPathChecked { origin, result, .. }) = job.run()
+        else {
+            panic!("a check reports through the settings reducer");
+        };
+        assert_eq!(
+            origin,
+            micold_client::features::settings::CheckOrigin::Opened
+        );
+        assert_eq!(
+            probe.calls(),
+            vec![PathBuf::from(&path)],
+            "the stored path, exactly as stored"
+        );
+        assert_eq!(
+            result.map(|c| (c.path, c.enabled)),
+            Some((path, true)),
+            "the answer describes the stored path and the stored enabled flag (research R8)"
+        );
+    }
+
+    #[test]
+    fn a_terminal_restart_does_not_check_the_path() {
+        let project = std::env::temp_dir();
+        let project_text = project.to_str().expect("utf-8 temp dir").to_string();
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+        app.core.workspace.active = Some(project);
+        let id = SessionId::new();
+        let _ = connect(
+            &mut app,
+            snapshot_with(&project_text, vec![summary(id, "s", WireLifecycle::Running)]),
+        );
+        app.core.session.active = Some(id);
+        app.env_include_cache.clear();
+
+        let _ = update_inner(
+            &mut app,
+            Message::Session(SessionMsg::TerminalRestartRequested),
+        );
+
+        assert!(
+            !app.env_include_cache.is_empty(),
+            "the restart took its path: it re-resolved the session's directory"
+        );
+        assert!(
+            probe.calls().is_empty(),
+            "a restart must not check the path (FR-006, SC-004)"
+        );
+    }
 }
