@@ -9,4 +9,4 @@
    `git branch --show-current`.
 3. A fresh reviewer checks spec.md against the spec rubric.
 4. Open **PR 1** (`docs(NNN): specify <feature>`). Docs-only: the local gate is
-   `scripts/tests/*.test.sh`.
+   `mise run test-scripts`.

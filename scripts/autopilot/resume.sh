@@ -5,7 +5,8 @@
 # GitHub wins over the ledger: a PR the ledger calls merged that GitHub reports OPEN is a step to redo.
 #
 # Exit: 0 one unfinished ledger · 2 none · 3 several (each printed; ask the user) ·
-#       4 a finished ledger whose record PR never merged (open or merge it, then hand off).
+#       4 a finished ledger whose record PR never merged: prints its open PR or `none`
+#         (merge the PR, or dispatch the record unit to open it, then hand off).
 set -uo pipefail
 
 b="$(git branch --show-current)"
@@ -41,7 +42,8 @@ git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
   done_ledger="$(ledgers | head -1)"
   if [ -n "$done_ledger" ]; then
-    echo "RECORD-PR-PENDING $done_ledger"
+    pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number' 2>/dev/null)"
+    echo "RECORD-PR-PENDING $done_ledger ${pr:-none}"
     exit 4
   fi
 fi

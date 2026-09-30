@@ -11,7 +11,8 @@ sends you there.
   to `origin/main`, or rebases unmerged work from an earlier unit (clarify rounds, a BUG record,
   close-phase milestones) onto it. On `CONFLICT`, resolve, run the gate, `git rebase --continue`.
 - **Stay in scope.** Do only your unit's work, then return. The orchestrator waits on CI and merges.
-- **Ledger first.** Update the ledger before every commit and before you return. The orchestrator
+- **Ledger first.** Record the previous PR's merge SHA the orchestrator passed you. Update the
+  ledger before every commit and before you return. The orchestrator
   reads the ledger, not your transcript.
 - **Scratch files** (debug notes, probe scripts, logs) go in the session scratchpad, never the
   worktree.

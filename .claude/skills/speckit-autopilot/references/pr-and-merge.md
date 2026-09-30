@@ -1,6 +1,6 @@
 # From a green local gate to merged on `main`
 
-Every PR (spec, design, each milestone, close) follows this path.
+Every PR (spec, design, each milestone, close, record) follows this path.
 
 ## 1. Branch
 
@@ -25,12 +25,12 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 - **Detach it.** A plain background task can be killed while it waits on the build lock. Use
   `Monitor` with an until-loop on `grep -q GATE_EXIT= "$log"`, then read the exit code.
 - **Order is CI's:** fmt → clippy (core, then workspace) → `cargo test --workspace` →
-  `scripts/tests/*.test.sh`. `mise run test` alone is not the gate.
+  `mise run test-scripts`. `mise run test` alone is not the gate.
 - **Changed a `cfg(target_os = …)` arm?** Also run
   `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`.
 - **Changed how something looks?** Run the `visual-pass` skill. Save its evidence in the spec
   directory.
-- **Docs- and specs-only PRs** (PR 1, PR 2, and a close PR that touches no code or tests): run `scripts/tests/*.test.sh` only.
+- **Docs- and specs-only PRs** (PR 1, PR 2, a close PR that touches no code or tests, the record PR): run `mise run test-scripts` only.
 
 ## 3. Commit and push
 
@@ -48,6 +48,7 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 | Design | `docs(NNN): clarify, plan and cut milestones for <feature>` |
 | Milestone | `feat(NNN): <deliverable, imperative>`, or `fix(NNN): …` for a bug |
 | Close | `docs(NNN): close the spec` |
+| Record | `docs(NNN): record the autopilot run` (a bug appends ` (BUG-<k>)`; NNN is the owning spec) |
 
 Keep the prefix exact: release-please builds the changelog from it, and CI's user-guide gate fires
 on `feat`.
@@ -129,4 +130,4 @@ gh pr view <n> --json state -q .state   # trust this, not the exit status
 | Branch has a merge commit from `main` | Squash the green head: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. |
 | "base branch policy prohibits the merge" | Usually a missing `workflow` token scope on a PR touching `.github/workflows`. Escalate (category 4) with the user's command: `gh auth refresh -s workflow`. |
 
-After merging, record the merge SHA in the ledger. It is committed with the next PR.
+After merging, the next unit records the merge SHA in the ledger. It is committed with the next PR.
