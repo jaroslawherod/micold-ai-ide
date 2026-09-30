@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M1
-- **Next step**: Coordinator: wait for #469's checks (Windows fix attempt 1 pushed: 431 head drain, cycle 11) and merge it; then M2. T015/T021 unticked (U127 blocked)
+- **Phase**: 4-milestone M2
+- **Next step**: M2 unit: implement T023–T028, T083, T101 (Settings toggle). T015/T021 from M1 remain unticked (U127 blocked)
 
 ## Pull requests
 
@@ -16,13 +16,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #455 | Spec | merged | 8ff6e0561386ba21219411bc16f828f08b177961 |
 | #465 | Design (PR 2) | merged | a5fcc795294b6dcd2972ab5e3d31a814b41d8fb7 |
-| #469 | M1: bound sessions with the read tools | open | — |
+| #469 | M1: bound sessions with the read tools | merged | 3c8d332ddc4f4497d0caa1764ae2fbf2c301c6f3 |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | PR open |
+| M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | — | planned |
 | M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
