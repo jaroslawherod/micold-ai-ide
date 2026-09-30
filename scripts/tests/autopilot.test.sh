@@ -442,6 +442,34 @@ check "measure-skill shows the delta against a ref" 0 '^unit:1-spec +300 +400 +\
 check "measure-skill refuses an unknown ref" 2 'unknown ref' "$M" no-such-ref
 cd "$ROOT"
 
+# gate-hook.sh: the PreToolUse hook that enforces the hard rules inside an autopilot worktree.
+hook() { jq -n --arg c "$1" --arg d "${2:-$PWD}" '{tool_input:{command:$c},cwd:$d}' | "$S/gate-hook.sh"; }
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+check "hook ignores a branch without a ledger" 0 '' hook "gh pr merge 5 --admin"
+ledger specs/042-x/autopilot.md wt 4-milestones 11; git add -A; git commit -qm ledger
+echo '{"headRefName":"wt"}' > "$d/fx/pr-12.json"; echo '{"headRefName":"other"}' > "$d/fx/pr-13.json"
+check "hook blocks --delete-branch" 2 'never pass --delete-branch' hook "gh pr merge 11 --rebase --delete-branch"
+check "hook blocks -d" 2 'never pass --delete-branch' hook "gh pr merge 11 -d"
+check "hook reads -d only from the merge's own arguments" 0 '' hook "test -d x && gh pr merge 11 --rebase"
+check "hook blocks --admin" 2 'never merge with --admin' hook "gh pr merge 11 --admin"
+check "hook blocks removing the worktree" 2 'never remove a worktree' hook "git worktree remove ."
+check "hook allows a PR in the ledger" 0 '' hook "scripts/autopilot/wait-merge.sh 11"
+check "hook allows a PR from this branch" 0 '' hook "gh pr merge 12 --rebase"
+check "hook blocks another flow's PR" 2 '#13 is not this flow' hook "gh pr comment 13 --body hi"
+check "hook blocks waiting on another flow's PR" 2 '#13 is not this flow' hook "scripts/autopilot/wait-merge.sh 13"
+check "hook blocks a merge through gh api" 2 'do not merge through gh api' hook "gh api -X PUT repos/o/r/pulls/11/merge"
+check "hook allows pushing docs without a gate" 0 '' hook "git push -u origin wt"
+echo 'fn main() {}' > main.rs; git add -A; git commit -qm code
+check "hook blocks pushing code no gate saw" 2 'has not passed .mise run gate' hook "git push -u origin wt"
+check "hook judges the repo git -C names" 0 '' hook "git -C $d push" "$d/wt"
+git rev-parse 'HEAD^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"
+check "hook allows pushing code the gate saw" 0 '' hook "git push -u origin wt"
+echo more >> specs/042-x/autopilot.md; git commit -qam "ledger after gate"
+check "hook allows docs committed after the gate" 0 '' hook "git push"
+echo 'fn x() {}' >> main.rs; git commit -qam "code after gate"
+check "hook blocks code committed after the gate" 2 'has not passed' hook "cd . && git push"
+cd "$ROOT"
+
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
 d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
 echo '{"labels":[{"name":"bug"}],"assignees":[{"login":"me"}]}' > "$d/fx/issue-7.json"

@@ -26,6 +26,9 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
   `Monitor` with an until-loop on `grep -q GATE_EXIT= "$log"`, then read the exit code.
 - **Order is CI's:** fmt → clippy (core, then workspace) → `cargo test --workspace` →
   `mise run test-scripts`. `mise run test` alone is not the gate.
+- **Push only what the gate saw.** A green gate records the tree it ran on, and a hook blocks
+  `git push` of code no green gate saw. Commit the tree the gate ran on; only docs, specs and the
+  ledger may change after it.
 - **Changed a `cfg(target_os = …)` arm?** Also run
   `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`.
 - **Changed how something looks?** Run the `visual-pass` skill. Save its evidence in the spec

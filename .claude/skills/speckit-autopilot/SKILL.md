@@ -119,7 +119,10 @@ tail -6 "$log"
 
 ## Ownership: only this flow's work
 
-Other sessions work in this repo at the same time. You own:
+Other sessions work in this repo at the same time. A PreToolUse hook
+([scripts/autopilot/gate-hook.sh](../../../scripts/autopilot/gate-hook.sh)) blocks the worst breaches:
+another flow's PR, `--delete-branch`, `--admin`, removing the worktree, and pushing code no green
+gate saw. A block is a rule you broke, not an obstacle: never work around it. You own:
 
 - this worktree and its branch
 - the feature directory (or BUG record) this flow created
