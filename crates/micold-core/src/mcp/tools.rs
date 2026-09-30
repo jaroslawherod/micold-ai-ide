@@ -2,7 +2,8 @@
 //!
 //! `tools/list` answers [`list_result`]; `tools/call` arguments are turned into an [`Operation`] by
 //! [`parse_call`] before the daemon touches anything, so malformed input fails `invalid_input` with
-//! nothing changed (FR-013). Only the tools whose handlers ship are listed.
+//! nothing changed (FR-013). The catalog holds every tool of the contract; only the tools whose
+//! handlers ship are listed or callable.
 //!
 //! `create_worktree` offers `new_branch`, `existing_local` and `track_remote` and never `overwrite`:
 //! overwriting discards a branch, and no create is among the operations FR-014 confirms
@@ -12,6 +13,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use super::errors::OpError;
+use crate::project::{validate_rename, RenameError};
 use crate::session::AiCli;
 use crate::worktree::CreateMode;
 
@@ -83,6 +85,31 @@ pub enum Operation {
         ai_cli: Option<AiCli>,
         prompt: Option<String>,
     },
+    /// Start an idle, failed or resumable session, as the sidebar does.
+    StartSession {
+        session: SessionRef,
+    },
+    StopSession {
+        session: SessionRef,
+    },
+    InterruptSession {
+        session: SessionRef,
+    },
+    DeleteSession {
+        session: SessionRef,
+    },
+    /// Give a worktree (never `default`) a new display name; `display_name` is trimmed and
+    /// non-blank, as the rename dialog requires.
+    RenameWorktree {
+        worktree: WorktreeRef,
+        display_name: String,
+    },
+    /// Delete a worktree (never `default`).
+    DeleteWorktree {
+        worktree: WorktreeRef,
+        stop_sessions: bool,
+        delete_branch: bool,
+    },
 }
 
 impl Operation {
@@ -96,6 +123,12 @@ impl Operation {
             Operation::GetSession { .. } => "get_session",
             Operation::CreateWorktree { .. } => "create_worktree",
             Operation::CreateSession { .. } => "create_session",
+            Operation::StartSession { .. } => "start_session",
+            Operation::StopSession { .. } => "stop_session",
+            Operation::InterruptSession { .. } => "interrupt_session",
+            Operation::DeleteSession { .. } => "delete_session",
+            Operation::RenameWorktree { .. } => "rename_worktree",
+            Operation::DeleteWorktree { .. } => "delete_worktree",
         }
     }
 
@@ -109,11 +142,17 @@ impl Operation {
                 .as_ref()
                 .map(|w| w.as_str().to_string())
                 .unwrap_or_default(),
-            Operation::GetSession { session } => session.0.to_string(),
+            Operation::GetSession { session }
+            | Operation::StartSession { session }
+            | Operation::StopSession { session }
+            | Operation::InterruptSession { session }
+            | Operation::DeleteSession { session } => session.0.to_string(),
             Operation::CreateWorktree { branch, name, .. } => {
                 name.clone().unwrap_or_else(|| branch.clone())
             }
-            Operation::CreateSession { worktree, .. } => worktree.as_str().to_string(),
+            Operation::CreateSession { worktree, .. }
+            | Operation::RenameWorktree { worktree, .. }
+            | Operation::DeleteWorktree { worktree, .. } => worktree.as_str().to_string(),
         }
     }
 }
@@ -128,12 +167,18 @@ struct Tool {
     required: &'static [&'static str],
     /// Whether the tool only reads (the `readOnlyHint` annotation; FR-018 audits the others).
     read_only: bool,
+    /// Whether FR-014 classifies it as destructive (the `destructiveHint` annotation).
+    destructive: bool,
+    /// Whether its handler ships: only these are listed and callable.
+    shipped: bool,
 }
 
 /// Whether `tool` is a shipped tool that changes anything, and so is audited (FR-018). Named by
 /// the tool, not the parsed operation, so a call whose arguments fail to parse is audited too.
 pub fn is_mutating_tool(tool: &str) -> bool {
-    TOOLS.iter().any(|t| t.name == tool && !t.read_only)
+    TOOLS
+        .iter()
+        .any(|t| t.name == tool && t.shipped && !t.read_only)
 }
 
 fn no_properties() -> Value {
@@ -142,6 +187,12 @@ fn no_properties() -> Value {
 
 fn session_property() -> Value {
     json!({"session": {"type": "string", "format": "uuid", "description": "A session id from list_sessions."}})
+}
+
+/// The `worktree` argument of a tool that changes a worktree: `default` is not one.
+fn worktree_property() -> Value {
+    json!({"type": "string", "minLength": 1,
+        "description": "A worktree ref from list_worktrees (not \"default\")."})
 }
 
 /// The shipped tools, in the order `tools/list` names them.
@@ -153,6 +204,8 @@ const TOOLS: &[Tool] = &[
         properties: no_properties,
         required: &[],
         read_only: true,
+        destructive: false,
+        shipped: true,
     },
     Tool {
         name: "list_worktrees",
@@ -166,6 +219,8 @@ const TOOLS: &[Tool] = &[
         },
         required: &[],
         read_only: true,
+        destructive: false,
+        shipped: true,
     },
     Tool {
         name: "list_branches",
@@ -174,6 +229,8 @@ const TOOLS: &[Tool] = &[
         properties: no_properties,
         required: &[],
         read_only: true,
+        destructive: false,
+        shipped: true,
     },
     Tool {
         name: "list_sessions",
@@ -185,6 +242,8 @@ const TOOLS: &[Tool] = &[
         },
         required: &[],
         read_only: true,
+        destructive: false,
+        shipped: true,
     },
     Tool {
         name: "get_session",
@@ -193,6 +252,8 @@ const TOOLS: &[Tool] = &[
         properties: session_property,
         required: &["session"],
         read_only: true,
+        destructive: false,
+        shipped: true,
     },
     Tool {
         name: "create_worktree",
@@ -217,6 +278,45 @@ const TOOLS: &[Tool] = &[
         },
         required: &["branch"],
         read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "rename_worktree",
+        description: "Give a worktree a new display name, as the sidebar's rename does; its \
+            directory and branch are unchanged. \"default\" cannot be renamed. A session running \
+            in the project root (Default) is refused.",
+        properties: || {
+            json!({
+                "worktree": worktree_property(),
+                "display_name": {"type": "string", "minLength": 1,
+                    "description": "The new name; leading and trailing whitespace is dropped."},
+            })
+        },
+        required: &["worktree", "display_name"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "delete_worktree",
+        description: "Delete a worktree and, unless delete_branch is false, its branch, after the \
+            user confirms in an app window. A worktree with live sessions is refused unless \
+            stop_sessions is true. \"default\" and the calling session's own worktree cannot be \
+            deleted; a session running in the project root (Default) is refused.",
+        properties: || {
+            json!({
+                "worktree": worktree_property(),
+                "stop_sessions": {"type": "boolean", "default": false,
+                    "description": "Stop the worktree's live sessions first."},
+                "delete_branch": {"type": "boolean", "default": true,
+                    "description": "Also delete the worktree's branch."},
+            })
+        },
+        required: &["worktree"],
+        read_only: false,
+        destructive: true,
+        shipped: false,
     },
     Tool {
         name: "create_session",
@@ -235,13 +335,65 @@ const TOOLS: &[Tool] = &[
         },
         required: &["worktree"],
         read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "start_session",
+        description: "Start an idle, failed or resumable session, as the sidebar's start does (a \
+            resumable session resumes its conversation). A session that is already starting, \
+            running or restarting is left as it is. Returns the session's lifecycle.",
+        properties: session_property,
+        required: &["session"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "stop_session",
+        description: "Stop another session of the project after the user confirms in an app \
+            window: its processes end, it becomes idle and stays resumable. A session cannot stop \
+            itself.",
+        properties: session_property,
+        required: &["session"],
+        read_only: false,
+        destructive: true,
+        shipped: false,
+    },
+    Tool {
+        name: "interrupt_session",
+        description: "Send an interrupt keystroke to another running session after the user \
+            confirms in an app window; it keeps running. A session cannot interrupt itself.",
+        properties: session_property,
+        required: &["session"],
+        read_only: false,
+        destructive: true,
+        shipped: false,
+    },
+    Tool {
+        name: "delete_session",
+        description: "Delete another session of the project after the user confirms in an app \
+            window. A session cannot delete itself.",
+        properties: session_property,
+        required: &["session"],
+        read_only: false,
+        destructive: true,
+        shipped: false,
     },
 ];
 
-/// The `tools/list` result.
+/// The `tools/list` result: the shipped tools.
 pub fn list_result() -> Value {
-    let tools: Vec<Value> = TOOLS
-        .iter()
+    listing(TOOLS.iter().filter(|t| t.shipped))
+}
+
+/// Every catalogued tool, listed as `tools/list` would list it, whether or not its handler ships.
+pub fn catalog() -> Value {
+    listing(TOOLS.iter())
+}
+
+fn listing<'a>(tools: impl Iterator<Item = &'a Tool>) -> Value {
+    let tools: Vec<Value> = tools
         .map(|tool| {
             json!({
                 "name": tool.name,
@@ -252,18 +404,30 @@ pub fn list_result() -> Value {
                     "required": tool.required,
                     "additionalProperties": false,
                 },
-                "annotations": {"readOnlyHint": tool.read_only, "destructiveHint": false},
+                "annotations": {"readOnlyHint": tool.read_only, "destructiveHint": tool.destructive},
             })
         })
         .collect();
     json!({ "tools": tools })
 }
 
-/// Validate a `tools/call` into an [`Operation`]. An unknown tool, an unknown argument, or an
-/// argument of the wrong type fails `invalid_input`.
+/// Validate a `tools/call` into an [`Operation`]. An unknown tool, a tool whose handler has not
+/// shipped, an unknown argument, or an argument of the wrong type fails `invalid_input`.
 pub fn parse_call(name: &str, arguments: &Value) -> Result<Operation, OpError> {
+    if !TOOLS.iter().any(|t| t.name == name && t.shipped) {
+        return Err(unknown_tool(name));
+    }
+    parse_operation(name, arguments)
+}
+
+fn unknown_tool(name: &str) -> OpError {
+    OpError::invalid_input(format!("unknown tool \"{name}\""))
+}
+
+/// Validate the arguments of any catalogued tool, shipped or not, into an [`Operation`].
+pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpError> {
     let Some(tool) = TOOLS.iter().find(|t| t.name == name) else {
-        return Err(OpError::invalid_input(format!("unknown tool \"{name}\"")));
+        return Err(unknown_tool(name));
     };
     let empty = Map::new();
     let args = match arguments {
@@ -303,6 +467,27 @@ pub fn parse_call(name: &str, arguments: &Value) -> Result<Operation, OpError> {
             ai_cli: optional_ai_cli(args, "ai_cli")?,
             prompt: optional_text(args, "prompt")?,
         },
+        "start_session" => Operation::StartSession {
+            session: required_session(args, "session")?,
+        },
+        "stop_session" => Operation::StopSession {
+            session: required_session(args, "session")?,
+        },
+        "interrupt_session" => Operation::InterruptSession {
+            session: required_session(args, "session")?,
+        },
+        "delete_session" => Operation::DeleteSession {
+            session: required_session(args, "session")?,
+        },
+        "rename_worktree" => Operation::RenameWorktree {
+            worktree: named_worktree(args, "worktree", "renamed")?,
+            display_name: display_name(args, "display_name")?,
+        },
+        "delete_worktree" => Operation::DeleteWorktree {
+            worktree: named_worktree(args, "worktree", "deleted")?,
+            stop_sessions: optional_bool(args, "stop_sessions")?.unwrap_or(false),
+            delete_branch: optional_bool(args, "delete_branch")?.unwrap_or(true),
+        },
         _ => unreachable!("every catalog entry is parsed above"),
     })
 }
@@ -323,6 +508,35 @@ fn optional_worktree(args: &Map<String, Value>, key: &str) -> Result<Option<Work
             "{key} must be a worktree ref from list_worktrees, or \"default\""
         ))),
     }
+}
+
+/// A worktree that is not the project root, which cannot be `verb` (U95).
+fn named_worktree(
+    args: &Map<String, Value>,
+    key: &str,
+    verb: &str,
+) -> Result<WorktreeRef, OpError> {
+    match optional_worktree(args, key)? {
+        Some(WorktreeRef::Named(name)) => Ok(WorktreeRef::Named(name)),
+        Some(WorktreeRef::Default) => Err(OpError::invalid_input(format!(
+            "\"default\" is the project root, not a worktree; it cannot be {verb}"
+        ))),
+        None => Err(OpError::invalid_input(format!(
+            "{key} must be a worktree ref from list_worktrees"
+        ))),
+    }
+}
+
+/// A new display name, checked and trimmed as the rename dialog does.
+fn display_name(args: &Map<String, Value>, key: &str) -> Result<String, OpError> {
+    let text = optional_text(args, key)?
+        .ok_or_else(|| OpError::invalid_input(format!("{key} must be a string")))?;
+    validate_rename(&text).map_err(|e| {
+        OpError::invalid_input(match e {
+            RenameError::Empty => format!("{key} cannot be empty"),
+            RenameError::Whitespace => format!("{key} cannot be only whitespace"),
+        })
+    })
 }
 
 fn required_session(args: &Map<String, Value>, key: &str) -> Result<SessionRef, OpError> {

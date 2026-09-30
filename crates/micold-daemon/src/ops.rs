@@ -389,16 +389,19 @@ pub fn start_session(
             Ok(Ok(())) => true,
             Ok(Err(err)) => {
                 tracing::warn!(session = %session.0, %err, "session start failed");
-                state.broadcast_catalog();
                 false
             }
             Err(join) => {
                 tracing::warn!(session = %session.0, error = %join, "session start task failed");
-                state.broadcast_catalog();
                 false
             }
         };
         state.finish_start(session);
+        // After `finish_start`: while the start is in flight the catalog shows the session
+        // `Starting`, so the failure is announced once that has ended.
+        if !started {
+            state.broadcast_catalog();
+        }
         // Every window's connection hears of it, whoever asked for the start: one already viewing
         // the session builds its stream now (an agent's `create_session` has no connection).
         state.announce_session_started(session);

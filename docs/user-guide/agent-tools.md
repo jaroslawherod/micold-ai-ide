@@ -2,7 +2,8 @@
 
 Every Claude Code and GitHub Copilot session the application starts can see your project the way the
 sidebar shows it: which worktrees exist, which branches are free, and which sessions are running
-where. It can also create a worktree and start a session in it, as you would from the sidebar. The session service provides this through a small tool server named `micold`, and each
+where. It can also create and rename a worktree and create or start a session, as you would from
+the sidebar. The session service provides this through a small tool server named `micold`, and each
 session is connected to it automatically. You do not install or configure anything.
 
 Ask the assistant in a session something like *"which worktrees does this project have?"* or *"is
@@ -30,15 +31,18 @@ These tools make changes, exactly as the sidebar does:
 | Tool | What it does |
 |---|---|
 | `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch |
+| `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session |
+| `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
 
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch
 name git does not accept. Nothing is created when a request fails. When several requests race for
 the same branch, one succeeds and the others are told the branch is taken.
 
-A session running in the project folder itself (`default`) cannot create worktrees. Work in the
-project folder is kept separate from worktrees, and an assistant there is refused with that reason.
+A session running in the project folder itself (`default`) cannot create or rename worktrees. Work
+in the project folder is kept separate from worktrees, and an assistant there is refused with that
+reason. It can still list everything and create and start sessions.
 
 ### The first prompt
 
