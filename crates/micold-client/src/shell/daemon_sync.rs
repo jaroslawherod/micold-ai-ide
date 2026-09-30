@@ -546,6 +546,43 @@ fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::Cat
     app.sandbox.mounts_changed();
 }
 
+/// Apply a `SettingsChanged` push (this client's own `SettingsSet` echoed back, or another
+/// window's, FR-011), and prepare a check of the stored script path when Settings is showing
+/// (spec 035 T3). Split from [`on_daemon_event`] so a test can run the job it prepared.
+pub(crate) fn on_settings_changed(
+    app: &mut App,
+    settings: micold_core::protocol::messages::DaemonSettings,
+) -> Option<crate::shell::env_include::ScriptPathCheckJob> {
+    app.scrollback_lines = settings.scrollback_lines;
+    app.env_include_enabled = settings.env_include_enabled;
+    app.env_include_script_path = settings.env_include_script_path;
+    app.env_include_timeout_secs = settings.env_include_timeout_secs;
+    // Service-owned, so the daemon's echo is what applies it — here and in
+    // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
+    // to the next boot; this is the value in force.
+    app.core.session.default_ai_cli = settings.default_ai_cli;
+    app.core.session.pi_activity_component = settings.pi_activity_component;
+    app.env_include_cache.clear();
+    let cwd = default_resolution_cwd(&app.core);
+    refresh_env_include(app, &cwd);
+    // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
+    // holds, so a change to it re-asks every answer. Compared against what the answers were
+    // asked under, not against `app`'s fields — this window's own save overwrote those
+    // before its echo arrived, so they would never differ here (research R6).
+    let echoed = env_include_settings(app);
+    if app.core.session.availability.env_include_changed(&echoed) {
+        refresh_cli_availability(app);
+    }
+    // Spec 035 T3: every window showing Settings shows the answer for the stored path, whichever
+    // window saved it (Edge Cases, "Several sessions and several open windows"). Opened, not
+    // Saved: only the window that saved posts the save's notice (FR-007).
+    app.core.settings.settings_draft.as_ref()?;
+    Some(crate::shell::env_include::prepare_script_path_check(
+        app,
+        micold_client::features::settings::CheckOrigin::Opened,
+    ))
+}
+
 pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
     // Almost every arm here resolves entirely into `app`, which is why this function returned
     // `Task::none()` unconditionally for its whole life. The open-project gate is the first reply
@@ -570,25 +607,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // (T100): the enabled/path/timeout settings may have changed, so every previously
         // cached directory's snapshot is stale.
         DaemonMsg::SettingsChanged { settings } => {
-            app.scrollback_lines = settings.scrollback_lines;
-            app.env_include_enabled = settings.env_include_enabled;
-            app.env_include_script_path = settings.env_include_script_path;
-            app.env_include_timeout_secs = settings.env_include_timeout_secs;
-            // Service-owned, so the daemon's echo is what applies it — here and in
-            // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
-            // to the next boot; this is the value in force.
-            app.core.session.default_ai_cli = settings.default_ai_cli;
-            app.core.session.pi_activity_component = settings.pi_activity_component;
-            app.env_include_cache.clear();
-            let cwd = default_resolution_cwd(&app.core);
-            refresh_env_include(app, &cwd);
-            // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
-            // holds, so a change to it re-asks every answer. Compared against what the answers were
-            // asked under, not against `app`'s fields — this window's own save overwrote those
-            // before its echo arrived, so they would never differ here (research R6).
-            let echoed = env_include_settings(app);
-            if app.core.session.availability.env_include_changed(&echoed) {
-                refresh_cli_availability(app);
+            if let Some(job) = on_settings_changed(app, settings) {
+                follow_up = crate::shell::env_include::run_script_path_check(job);
             }
         }
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).

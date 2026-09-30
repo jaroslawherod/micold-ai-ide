@@ -4459,6 +4459,101 @@ mod script_path_report {
             .with_script_path_probe(Arc::new(FakeScriptPathProbe::answering(ProbeAnswer::File)));
     }
 
+    /// What another window saved: environment include on, `path` stored (spec 035 T3).
+    fn settings_saved_elsewhere(path: &str) -> micold_core::protocol::messages::DaemonSettings {
+        micold_core::protocol::messages::DaemonSettings {
+            default_ai_cli: AiCli::ClaudeCode,
+            scrollback_lines: 5_000,
+            env_include_enabled: true,
+            env_include_script_path: path.to_string(),
+            env_include_timeout_secs: 10,
+            pi_activity_component: false,
+        }
+    }
+
+    #[test]
+    fn another_windows_save_rechecks_the_new_path_while_settings_is_open() {
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+        let _ = open_and_check(&mut app);
+        let new_path = std::env::temp_dir()
+            .join("saved-elsewhere.sh")
+            .to_str()
+            .expect("utf-8 temp dir")
+            .to_string();
+        let before = probe.calls().len();
+
+        let job = crate::shell::daemon_sync::on_settings_changed(
+            &mut app,
+            settings_saved_elsewhere(&new_path),
+        )
+        .expect("an open Settings page is re-checked (T3)");
+
+        assert!(
+            matches!(
+                app.core.settings.script_check,
+                micold_client::features::settings::ScriptCheck::Pending { .. }
+            ),
+            "the check is under way, got {:?}",
+            app.core.settings.script_check
+        );
+        let Message::Settings(SettingsMsg::ScriptPathChecked { origin, result, .. }) = job.run()
+        else {
+            panic!("a check reports through the settings reducer");
+        };
+        assert_eq!(
+            origin,
+            micold_client::features::settings::CheckOrigin::Opened,
+            "only this window's own save notifies (FR-007)"
+        );
+        assert_eq!(
+            probe.calls()[before..],
+            [PathBuf::from(&new_path)],
+            "every window showing Settings shows the stored path's answer (Edge Cases)"
+        );
+        assert_eq!(result.map(|c| (c.path, c.enabled)), Some((new_path, true)));
+    }
+
+    #[test]
+    fn another_windows_save_checks_nothing_while_settings_is_closed() {
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+
+        let job = crate::shell::daemon_sync::on_settings_changed(
+            &mut app,
+            settings_saved_elsewhere(&stored_path()),
+        );
+
+        assert!(job.is_none(), "no page, no check (FR-006)");
+        assert_eq!(
+            app.core.settings.script_check,
+            micold_client::features::settings::ScriptCheck::Idle
+        );
+        assert!(probe.calls().is_empty());
+    }
+
+    #[test]
+    fn showing_settings_sources_nothing() {
+        let (mut app, _probe) = app_with(&stored_path(), ProbeAnswer::File);
+        let resolver = Arc::new(FakeEnvIncludeResolver::default());
+        app.caps = app.caps.clone().with_env_include(resolver.clone());
+        app.env_include_enabled = true;
+        app.env_include_last_outcome = micold_core::env_include::EnvIncludeOutcome::MissingScript;
+
+        let _ = crate::shell::persist::on_settings_opened(&mut app);
+
+        assert!(
+            resolver.calls().is_empty(),
+            "showing Settings must not re-source the script (FR-014)"
+        );
+    }
+
     #[test]
     fn on_with_a_missing_stored_path_the_page_says_it_was_not_found_once_and_that_the_feature_is_on(
     ) {
