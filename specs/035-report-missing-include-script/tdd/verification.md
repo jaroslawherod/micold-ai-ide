@@ -1,6 +1,6 @@
 ---
 feature: 035-report-missing-include-script
-verdict: FAIL
+verdict: FAIL # at 02ae3dc6; remediation T043–T048 done in b12a8828, mutants M1–M4 and M7 now killed (cycle-log "Close")
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against (no override or preset exists)
 verified_at: 02ae3dc6 # tree was clean when audited, and restored clean after the mutants
 behaviors: 76 # 75 live rows, plus U63 (DROPPED, superseded by U46-U54)
