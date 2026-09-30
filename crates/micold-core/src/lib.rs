@@ -22,6 +22,7 @@ pub mod git;
 pub mod github;
 pub mod input;
 pub mod install_location;
+pub mod issue_types;
 pub mod link;
 pub mod logout_survival;
 pub mod mcp;
