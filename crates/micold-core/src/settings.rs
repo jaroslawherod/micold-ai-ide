@@ -147,6 +147,9 @@ pub struct Settings {
     #[serde(default = "default_tool_server_enabled")]
     pub tool_server_enabled: bool,
     /// The ordered label-to-type mapping an issue pick reads (feature 034, FR-016, FR-017).
+    ///
+    /// Read leniently, as the stored document is: an entry that does not parse is dropped and the
+    /// rest kept; a value that is not a list reads as the default table (see `known_entries`).
     #[serde(default = "default_mapping", deserialize_with = "known_entries")]
     pub issue_label_types: Vec<LabelTypeEntry>,
 }
@@ -384,8 +387,9 @@ struct StoredSettings {
     #[serde(default = "default_tool_server_enabled")]
     tool_server_enabled: bool,
     /// Missing in pre-034 files → the default table (FR-021); `[]` stays `[]`. An entry naming a
-    /// type this build does not know is dropped on read and the rest kept (R10): one hand-edited
-    /// entry must not send the whole document to `.bak`. Additive and defaulted, so
+    /// type this build does not know (or that does not parse at all) is dropped on read and the
+    /// rest kept (R10), and a value that is not a list reads as the default table: one hand edit
+    /// must not send the whole document to `.bak`. Additive and defaulted, so
     /// `settings_version` does not move for it.
     #[serde(default = "default_mapping", deserialize_with = "known_entries")]
     issue_label_types: Vec<LabelTypeEntry>,
