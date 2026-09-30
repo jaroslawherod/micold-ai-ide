@@ -772,3 +772,69 @@ was taken by stubbing that implementation out and restoring it afterwards.
   the start reads the record's `InterruptedResumable` to decide whether the conversation is gone;
   `ops::start_session` now announces a failed start after `finish_start`, so a failure is never
   left showing `Starting` (`a_start_that_fails_is_reported_failed_not_left_starting`).
+
+## Cycle 29 — M5 phase A protocol: U80–U82 (T049 → T053)
+
+Built by a parallel unit from an older `main` (branch `worktree-agent-a743df25bf45d90b8`) and
+cherry-picked onto `main` after M4 merged; `PROTOCOL_VERSION` on `main` was still 17.
+
+- red: `1077cd7f` (cherry-pick of `3435d163`): `protocol_roundtrip` for `ConfirmationRequested`,
+  `ConfirmationWithdrawn`, `ConfirmationAnswer`, `ConfirmOperation::SendInput` without a text field;
+  `schema_hash` pinned at 18.
+- green: `6935a6ab` (of `646ece7b`): the three messages and `ConfirmOperation`; protocol 17 → 18
+  with its changelog line; `protocol_auth` moved to match.
+
+## Cycle 30 — M5 phase A registry: U172–U185 (T050 part → T055)
+
+- red: `5ff9edb0` (of `84635367`): `mcp_confirmations.rs` against `DaemonState::confirm` on the
+  paused clock (every window, first answer, 60 s, no window, gone, abandoned, replay).
+- green: `5d71caa4` (of `f21d1038`): `mcp/confirm.rs` `Registry` inside the state lock,
+  `DaemonState::confirm` / `answer_confirmation` / `confirmations_*_gone`, and the
+  `ConfirmationAnswer` arm.
+
+## Cycle 31 — M5 phase A client: U207–U213 (T052 → T057, T058)
+
+- red: `4d8ca597` (of `e6f1d718`): `features_agent_confirm.rs` and the `agent-confirm-dialog`
+  covered state.
+- green: `de7b9651` (of `8773b3c5`): `features/agent_confirm.rs`, `ui/confirm_agent_request.rs`,
+  the `daemon_sync` arms. The layout fixture conflicted with `main`'s; it was regenerated on this
+  branch (199 lines added, none changed) in `be70ca3f`.
+
+## Cycle 32 — M5 destructive tools: A13–A18, U168–U171, U181–U193 (T050 rest, T051 → T054, T056)
+
+- red: `35e1debc`, `scripts/build-lock.sh cargo test -p micold-daemon --no-fail-fast --test
+  mcp_lifecycle_tools --test mcp_confirmations --test mcp_audit_log` and `-p micold-core --test
+  mcp_tools_catalog`, with `DaemonState::stop_session` a no-op stub:
+  ```
+  mcp_lifecycle_tools: 8 passed; 15 failed (each: `unknown tool "stop_session"` / "delete_worktree" …;
+    the_protocol_session_stop_ends_the_processes_and_broadcasts_idle: never Idle)
+  mcp_confirmations: 14 passed; 4 failed (through_the_tool_server::*: no prompt within 5 s)
+  mcp_tools_catalog: tools_list_names_exactly_the_shipped_tools, the_destructive_tools_are_callable_from_m5 FAILED
+  mcp_audit_log: 4 passed (the tools were not listed yet; it covers them once they are)
+  ```
+- green: `7f369f2e`. The four tools are shipped; each handler checks scope → policy → conflicts
+  and no-ops → `ask_user` (`state.confirm`, or abandoned on hang-up) → effect, and maps M4's
+  `ConfirmedOp` to the wire `ConfirmOperation`. `DaemonState::stop_session` takes the live entry,
+  kills off the lock, marks the record `Idle`, keeps the credential, broadcasts; the protocol
+  `SessionStop` uses it. Every archive path withdraws prompts naming the archived sessions
+  (`revoke_tool_credentials`), a stop withdraws the prompts its session asked for
+  (`Registry::caller_stopped`), `ops::delete_worktree` withdraws prompts for the deleted worktree.
+  `mcp/server.rs` watches the agent's socket while a call runs and cancels a waiting confirmation
+  when it closes. First green run: `an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running`
+  failed because the user's login shell was still reading its startup files; the test now waits
+  for the shell to run a command, and `od` prints `^C 03`. 23 + 18 + 4 + 19 passed.
+
+## Cycle 33 — M5 phase A open points (client)
+
+Design change from phase A's two open points, with its tests in the same commit `be70ca3f` (no
+separate red run; the red evidence is the changed assertions in `overlay_registry.rs` and
+`features_agent_confirm.rs`, which fail against phase A's reducer):
+
+- A prompt arriving while another dialog is open is **held** behind it (`agent_confirm::release`
+  after every root update) instead of closing it through `clear_for_dialog`, so an unsaved form is
+  kept (`agent_confirm_waits_behind_dialogs.rs`,
+  `overlay_registry.rs::an_agent_prompt_waits_behind_the_open_dialog_rather_than_closing_it`).
+- Escape, the scrim, or displacement **declines** the shown prompt: its id is queued in
+  `agent_confirm.declined`, and `shell::daemon_sync::send_agent_confirm_declines` sends
+  `ConfirmationAnswer { allow: false }` after every message
+  (`daemon_sync::tests::dismissing_the_prompt_sends_one_decline`).
