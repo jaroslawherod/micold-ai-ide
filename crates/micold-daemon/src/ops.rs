@@ -250,8 +250,7 @@ pub async fn delete_worktree(
         Ok(Ok((branch_delete_failed, mut leftovers))) => {
             // Gated on the git delete having succeeded (main `d88c7a1`): only now archive the
             // worktree's sessions durably and kill their live processes (outside the lock).
-            let killed_any = match state.archive_and_remove_worktree_sessions(&project, &dir_name)
-            {
+            let killed_any = match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
                 Ok(ptys) => {
                     let killed_any = !ptys.is_empty();
                     for pty in ptys {

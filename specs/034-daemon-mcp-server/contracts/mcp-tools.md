@@ -36,7 +36,7 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `create_worktree` | `{branch, name?, mode?: new_branch|existing_local|track_remote = new_branch, remote?}` | `WorktreeRow` | Default caller → refused_by_policy (FR-015a); invalid name → invalid_input with the dialog's message; pre-flight mismatch → conflict naming the situation |
 | `rename_worktree` | `{worktree, display_name}` | `WorktreeRow` | Default caller → refused_by_policy; `default` → invalid_input |
 | `delete_worktree` | `{worktree, stop_sessions?: bool=false, delete_branch?: bool=true}` | `{removed: ref, branch_deleted: bool, leftovers:[path]}` | Default caller → refused_by_policy; caller's own worktree → refused_by_policy (FR-015); `default` → invalid_input; live sessions and `!stop_sessions` → conflict naming them; then **confirm** (FR-014) |
-| `create_session` | `{worktree, ai_cli?: claude_code|copilot|pi, prompt?: string}` | `{session, lifecycle, prompt_delivered: bool|null}` | CLI availability checked **before** the record is created: not installed → service_error naming it, no record (US2 s5); `null` when no prompt was given |
+| `create_session` | `{worktree, ai_cli?: claude_code|copilot|pi, prompt?: string}` | `{session, lifecycle, prompt_delivered: bool|null, prompt_reason?: string}` | CLI availability checked **before** the record is created: not installed → service_error naming it, no record (US2 s5); `null` when no prompt was given |
 | `start_session` | `{session}` | `{lifecycle}` | already Starting/Running/Restarting → success, unchanged (FR-012a) |
 | `stop_session` | `{session}` | `{lifecycle}` | self → refused_by_policy (FR-015); Idle → success, unchanged; other session → **confirm**; effect: processes end, record `idle`, catalog broadcast |
 | `interrupt_session` | `{session}` | `{}` | self → invalid_input (FR-015); not running → conflict (FR-012a); other session → **confirm** |
@@ -54,7 +54,10 @@ target or caller gone → `not_found`.
 `create_session` with `prompt`: returns once the prompt is written when the session first reports
 ready for input (research R12; "output settled" = the primary terminal produced output and then
 none for 1.5 s), or with `prompt_delivered: false` 60 s after the request or on a
-failed start (FR-017).
+failed start (FR-017). When the CLI's own trust record shows it would first ask whether to trust
+the session's folder, nothing is typed and the call returns at once with `prompt_delivered: false`
+(R12). `prompt_reason` is present exactly when `prompt_delivered` is `false`, and says which of the
+three happened.
 
 If the agent's HTTP connection closes while a request waits for confirmation, the request is
 abandoned: the prompt is withdrawn and nothing changes.

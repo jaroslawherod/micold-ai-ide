@@ -65,9 +65,9 @@ pub fn decide(
     _access: CrossSessionAccess,
 ) -> PolicyDecision {
     match operation {
-        Operation::CreateWorktree { .. } if caller.is_default() => PolicyDecision::Refuse(
-            OpError::new(ErrorCategory::RefusedByPolicy, PRINCIPLE_III),
-        ),
+        Operation::CreateWorktree { .. } if caller.is_default() => {
+            PolicyDecision::Refuse(OpError::new(ErrorCategory::RefusedByPolicy, PRINCIPLE_III))
+        }
         _ => PolicyDecision::Proceed,
     }
 }

@@ -14,3 +14,4 @@ pub mod jsonrpc;
 pub mod policy;
 pub mod submission;
 pub mod tools;
+pub mod trust;

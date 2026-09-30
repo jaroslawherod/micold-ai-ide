@@ -43,7 +43,9 @@ A second provider method, `input_readiness() -> InputReadiness { ExtensionEvent(
 OutputSettled }`, says how a fresh session shows it is ready for its first prompt (FR-017,
 research R12): Pi `ExtensionEvent("session_start")` (falling back to `OutputSettled` when the
 component is declined), Claude and Copilot `OutputSettled` (Claude posts no `SessionStart` over
-HTTP; `evidence/m3-real-cli.md`). The live
+HTTP; `evidence/m3-real-cli.md`). A third, `folder_trust() -> FolderTrust { NeverAsks,
+ClaudeProjects, CopilotTrustedFolders }`, names the record in which the CLI keeps the folders it
+trusts; with a trust question pending the first prompt is not typed (FR-017, R12). The live
 session carries a `ready: bool` set by that signal; it never touches the activity FSM.
 
 `BindingPlan { args: Vec<OsString>, config_file: PathBuf }` is what the spawn path appends, built

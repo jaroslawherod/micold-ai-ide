@@ -60,10 +60,16 @@ pub struct SessionRef(pub Uuid);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Whoami,
-    ListWorktrees { include_hidden: bool },
+    ListWorktrees {
+        include_hidden: bool,
+    },
     ListBranches,
-    ListSessions { worktree: Option<WorktreeRef> },
-    GetSession { session: SessionRef },
+    ListSessions {
+        worktree: Option<WorktreeRef>,
+    },
+    GetSession {
+        session: SessionRef,
+    },
     /// A new worktree on `branch`, in directory `name` (derived from the branch when absent).
     CreateWorktree {
         branch: String,

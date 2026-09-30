@@ -318,9 +318,23 @@ provider seam (`AiCliProvider::input_readiness() -> InputReadiness`):
   never for the activity badge, so `activity.rs`'s rule that activity never becomes `AwaitingInput`
   from terminal evidence still holds.
 
+**Folder trust (quickstart §B3, `evidence/m3-real-cli.md` finding 4)**: the plan assumed settled
+output means the CLI is ready for input. That is false in a folder the CLI has not trusted yet:
+Claude Code and Copilot first show a trust question and their output settles on it, so the
+prompt's Enter would answer it (Copilot: "Yes", trusting the folder for that session and losing the
+prompt; Claude: "No, exit"). Before any wait, the service therefore reads the CLI's own trust
+record, read-only and where the session would see it (`AiCliProvider::folder_trust() ->
+FolderTrust`, `micold_core::mcp::trust::would_ask_trust`): Claude `.claude.json`
+(`$CLAUDE_CONFIG_DIR` or home) `projects[<path>].hasTrustDialogAccepted: true`, Copilot
+`config.json` in its config directory, `trustedFolders` (its leading `//` lines skipped). A trusted
+folder trusts every folder below it, which matches the probe: worktrees under
+`<project>/.claude/worktrees/` inherit the project's trust. Pi asks no trust question. When the CLI
+would ask, nothing is typed and the call returns at once with `prompt_delivered: false` and a
+`prompt_reason` saying to trust the project in that CLI first. Decided by the user (ledger D20).
+
 The tool call then writes the submission. The 60 s bound counts from the `create_session` request
-(so with R1's 120 s per-server timeout the call always answers in time); on timeout or a failed start
-it returns `prompt_delivered: false` and a later signal delivers nothing. **Probe**: quickstart
+(so with R1's 120 s per-server timeout the call always answers in time); on timeout, a failed start or a
+pending trust question it returns `prompt_delivered: false` with a `prompt_reason` and a later signal delivers nothing. **Probe**: quickstart
 §B3 per CLI.
 
 **Alternatives rejected**: *a prompt argument at launch* (`claude "<prompt>"`, `copilot -i`): the

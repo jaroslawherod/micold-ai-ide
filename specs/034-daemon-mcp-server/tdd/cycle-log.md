@@ -673,3 +673,31 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `SessionStart`). `cargo test -p micold-core --all-targets` + `-p micold-daemon`: 1888 passed.
 - refactor: `mcp_create_session.rs` lost its now-unused `new_session` helper; `mcp_audit_log.rs`'s
   `// unix-only:` reason fits on the line above the gate (`daemon_tests_gate_with_reason.rs`).
+
+## Cycle 24 — U220–U227 — T102 follow-up (folder trust, ledger D20)
+
+- trigger: quickstart §B3 finding 4 (a trust question settles output and the prompt's Enter
+  answers it); the user chose to check the CLI's own trust record read-only and type nothing when it
+  would ask (D20).
+- red (core): `scripts/build-lock.sh cargo test -p micold-core --test folder_trust`
+  ```
+  error[E0432]: unresolved import `micold_core::mcp::trust`
+  error[E0432]: unresolved import `micold_core::provider::FolderTrust`
+  error[E0599]: no method named `folder_trust` found for reference `&'static (dyn AiCliProvider + 'static)` in the current scope
+  ```
+- green (core): `FolderTrust` + `AiCliProvider::folder_trust()`; `mcp::trust::would_ask_trust`
+  reads `.claude.json` `projects[..].hasTrustDialogAccepted` / Copilot `config.json`
+  `trustedFolders` (leading `//` lines skipped), ancestor match by path component. 23 passed.
+- red (daemon): the `Sandbox` fixture now writes both trust records for its project (as the probe
+  had it); new U226/U227 and `prompt_reason` assertions on the timeout and failed-start tests:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_create_session`
+  ```
+  test a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt ... FAILED
+  test a_session_that_fails_to_start_reports_the_prompt_undelivered ... FAILED
+  test no_ready_signal_by_the_bound_is_not_delivered_and_a_late_one_types_nothing ... FAILED
+  test result: FAILED. 12 passed; 3 failed
+  ```
+- green (daemon): `DaemonState::cli_would_ask_trust` builds the config locations from the session's
+  launch environment; `create_session` checks it before `deliver_first_prompt` and returns
+  `prompt_reason` whenever `prompt_delivered` is false. 15 passed.
+- refactor: `session_dir_var` takes the environment slice, shared by the binding and the trust read.

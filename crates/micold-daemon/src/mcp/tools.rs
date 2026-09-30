@@ -11,11 +11,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use micold_core::git::GitCli;
 use alacritty_terminal::term::TermMode;
+use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
-use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
+use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, WorktreeRef};
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
@@ -133,7 +133,10 @@ fn read_call(
 }
 
 /// The caller as policy sees it, and its project. **Blocking.**
-fn resolve_caller(state: &DaemonState, caller: SessionId) -> Result<(Caller, ProjectSnapshot), OpError> {
+fn resolve_caller(
+    state: &DaemonState,
+    caller: SessionId,
+) -> Result<(Caller, ProjectSnapshot), OpError> {
     let project = caller_project(state, caller)?;
     let me = project
         .sessions
@@ -300,7 +303,8 @@ async fn create_session(
 
     // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5).
     let st = Arc::clone(state);
-    let available = blocking(move || Ok(st.ai_clis_available_in(&cwd))).await?;
+    let place = cwd.clone();
+    let available = blocking(move || Ok(st.ai_clis_available_in(&place))).await?;
     if !available.contains(&cli) {
         let provider = cli.provider();
         return Err(OpError::service_error(format!(
@@ -323,12 +327,33 @@ async fn create_session(
         .await
         .unwrap_or(false);
 
-    let prompt_delivered = match prompt {
-        None => Value::Null,
-        Some(_) if !started => json!(false),
-        Some(text) => json!(deliver_first_prompt(state, session, &text, asked).await),
+    let display = cli.provider().display_name();
+    let prompt_given = prompt.is_some();
+    let undelivered = match prompt {
+        None => None,
+        Some(_) if !started => {
+            Some("the session did not start, so the prompt was not typed".to_string())
+        }
+        Some(text) => {
+            let st = Arc::clone(state);
+            let place = cwd.clone();
+            if blocking(move || Ok(st.cli_would_ask_trust(&place, cli))).await? {
+                // Its first screen is the trust question; the prompt's Enter would answer it.
+                Some(format!(
+                    "{display} would first ask whether to trust this folder, so the prompt was not \
+                     typed; trust the project in {display} first"
+                ))
+            } else if deliver_first_prompt(state, session, &text, asked).await {
+                None
+            } else {
+                Some(format!(
+                    "{display} was not ready for input within {} s of the request, so the prompt \
+                     was not typed",
+                    state.first_prompt_bound().as_secs()
+                ))
+            }
+        }
     };
-
     let st = Arc::clone(state);
     let lifecycle = blocking(move || {
         let project = caller_project(&st, caller)?;
@@ -342,11 +367,15 @@ async fn create_session(
     })
     .await?["lifecycle"]
         .clone();
-    Ok(json!({
+    let mut out = json!({
         "session": session.0.to_string(),
         "lifecycle": lifecycle,
-        "prompt_delivered": prompt_delivered,
-    }))
+        "prompt_delivered": prompt_given.then_some(undelivered.is_none()),
+    });
+    if let Some(reason) = undelivered {
+        out["prompt_reason"] = json!(reason);
+    }
+    Ok(out)
 }
 
 /// Type `text` into `session` as one submission once its CLI is ready for it, if that happens
@@ -365,11 +394,7 @@ async fn deliver_first_prompt(
     let Some(pty) = state.live_session(session) else {
         return false;
     };
-    let bracketed = pty
-        .term()
-        .lock()
-        .mode()
-        .contains(TermMode::BRACKETED_PASTE);
+    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
     pty.write_input(&encode_submission(text, bracketed)).is_ok()
 }
 
@@ -394,9 +419,9 @@ fn checked_dir_name(name: &str) -> Result<String, OpError> {
 /// The pre-flight's situation in the dialog's words, with the mode that fits it (US2 s2).
 fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
     match situation {
-        BranchSituation::Free => format!(
-            "branch '{branch}' does not exist yet; use mode new_branch to create it"
-        ),
+        BranchSituation::Free => {
+            format!("branch '{branch}' does not exist yet; use mode new_branch to create it")
+        }
         BranchSituation::LocalAvailable { branch } => format!(
             "branch '{branch}' already exists locally and no worktree has it checked out; use \
              mode existing_local to check it out"
@@ -414,9 +439,9 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
 /// A create the shared operation refused or could not complete.
 fn create_failure(failure: ops::CreateFailure) -> OpError {
     match failure {
-        ops::CreateFailure::NotARepository => OpError::invalid_input(
-            "this project is not a git repository, so it has no worktrees",
-        ),
+        ops::CreateFailure::NotARepository => {
+            OpError::invalid_input("this project is not a git repository, so it has no worktrees")
+        }
         ops::CreateFailure::Create(CreateError::BranchInUse { branch, reason }) => {
             OpError::new(ErrorCategory::Conflict, reason.explain(&branch))
         }

@@ -52,10 +52,18 @@ service knows the CLI is ready depends on the CLI:
 | Pi Coding Agent | Pi reports that its session has started, through the activity reporter the application loads into it. If you turned off **Show activity for Pi sessions**, it is ready once its screen has stopped changing for 1.5 seconds |
 | GitHub Copilot | Its screen has shown something and then stopped changing for 1.5 seconds |
 
-The service waits at most 60 seconds from the request. If the CLI is not ready by then, or the
-session failed to start, the prompt is not typed at all, not even later, and the result says
-`prompt_delivered: false`. The session itself is still there; type into it yourself or ask the
-assistant to try again.
+Claude Code and GitHub Copilot ask whether you trust a folder the first time they run in it. The
+service never answers that question for you: before it waits, it reads the CLI's own record of the
+folders you trust (it never changes it), and if the CLI would ask, the prompt is not typed. The
+session starts and waits at the question for you. **Trust the project in that CLI first**: run
+Claude Code or Copilot once in the project folder and accept its question. Worktrees inside the
+project are then trusted too, and first prompts arrive. Pi asks no such question.
+
+The service waits at most 60 seconds from the request. If the CLI is not ready by then, the session
+failed to start, or the CLI would ask about trusting the folder, the prompt is not typed at all,
+not even later. The result says `prompt_delivered: false`, and `prompt_reason` says which of these
+happened. The session itself is still there; type into it yourself or ask the assistant to try
+again.
 
 If the AI CLI is not installed where the session would run, `create_session` fails, names the CLI,
 and leaves no session behind.

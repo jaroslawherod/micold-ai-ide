@@ -77,7 +77,12 @@ async fn fixture(caller: SessionId) -> Fixture {
         vec![(
             project.path().to_path_buf(),
             true,
-            vec![session(caller, Some("b"), TerminalMode::AiCli, AiCli::Copilot)],
+            vec![session(
+                caller,
+                Some("b"),
+                TerminalMode::AiCli,
+                AiCli::Copilot,
+            )],
         )],
         store.path(),
     );
@@ -147,7 +152,8 @@ fn audit_lines(caller: SessionId) -> Vec<String> {
 
 fn field<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     let key = format!("{name}=");
-    line.split_whitespace().find_map(|w| w.strip_prefix(key.as_str()))
+    line.split_whitespace()
+        .find_map(|w| w.strip_prefix(key.as_str()))
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -161,7 +167,11 @@ async fn every_successful_mutating_call_writes_one_info_line() {
         let result = f.call(caller, tool, good_call(tool)).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
         let lines = audit_lines(caller);
-        assert_eq!(lines.len(), before + 1, "exactly one line for {tool}: {lines:#?}");
+        assert_eq!(
+            lines.len(),
+            before + 1,
+            "exactly one line for {tool}: {lines:#?}"
+        );
         let line = lines.last().unwrap();
         assert!(line.contains(" INFO "), "logged at info: {line}");
         assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");
@@ -180,7 +190,11 @@ async fn every_failed_mutating_call_writes_one_line_with_its_category() {
             let result = f.call(caller, &tool, args.clone()).await;
             assert_eq!(result["isError"], json!(true), "{tool} {args}: {result}");
             let lines = audit_lines(caller);
-            assert_eq!(lines.len(), before + 1, "exactly one line for {tool} {args}");
+            assert_eq!(
+                lines.len(),
+                before + 1,
+                "exactly one line for {tool} {args}"
+            );
             let line = lines.last().unwrap();
             assert!(line.contains(" INFO "), "logged at info: {line}");
             assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");

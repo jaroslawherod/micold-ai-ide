@@ -1071,38 +1071,33 @@ where
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
                     let state = &task_state;
-                    let reply = match ops::create_worktree(
-                        state,
-                        project,
-                        names,
-                        mode,
-                        Some(progress),
-                    )
-                    .await
-                    {
-                        Ok(()) => DaemonMsg::OperationOk {
-                            req,
-                            result: OperationResult::WorktreeCreated { dir_name },
-                        },
-                        Err(ops::CreateFailure::Create(e)) => {
-                            let (kind, message, detail) = describe_create_error(e);
-                            DaemonMsg::OperationError {
+                    let reply =
+                        match ops::create_worktree(state, project, names, mode, Some(progress))
+                            .await
+                        {
+                            Ok(()) => DaemonMsg::OperationOk {
                                 req,
-                                kind,
-                                message,
-                                detail,
+                                result: OperationResult::WorktreeCreated { dir_name },
+                            },
+                            Err(ops::CreateFailure::Create(e)) => {
+                                let (kind, message, detail) = describe_create_error(e);
+                                DaemonMsg::OperationError {
+                                    req,
+                                    kind,
+                                    message,
+                                    detail,
+                                }
                             }
-                        }
-                        Err(ops::CreateFailure::NotARepository) => DaemonMsg::OperationError {
-                            req,
-                            kind: ErrorKind::NotFound,
-                            message: "unknown project".into(),
-                            detail: None,
-                        },
-                        Err(ops::CreateFailure::Task(join)) => {
-                            task_failed(req, "worktree create", &join)
-                        }
-                    };
+                            Err(ops::CreateFailure::NotARepository) => DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::NotFound,
+                                message: "unknown project".into(),
+                                detail: None,
+                            },
+                            Err(ops::CreateFailure::Task(join)) => {
+                                task_failed(req, "worktree create", &join)
+                            }
+                        };
                     state.send(id, reply);
                 });
             }
