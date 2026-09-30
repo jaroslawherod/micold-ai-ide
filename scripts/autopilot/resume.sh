@@ -11,7 +11,7 @@ set -uo pipefail
 
 b="$(git branch --show-current)"
 line="- **Worktree branch**: $b"
-ledgers() { grep -lxF -- "$line" specs/*/autopilot.md specs/*/bugs/*.autopilot.md 2>/dev/null; }
+ledgers() { grep -lxF -- "$line" specs/*/autopilot.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null; }
 # PR numbers from the ledger's "Pull requests" and "Milestones" tables only.
 ledger_prs() {
   sed -n '/^## Pull requests/,/^## Decisions/p' "$1" | grep -oE '#[0-9]+' | tr -d '#' | sort -un
@@ -42,7 +42,7 @@ esac
 
 git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
-  done_ledger="$(ledgers | head -1)"
+  done_ledger="$(ledgers | grep -v '^specs/quick/' | head -1)"  # a quick run has no record PR
   if [ -n "$done_ledger" ]; then
     pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number // empty' 2>/dev/null)"
     echo "RECORD-PR-PENDING $done_ledger ${pr:-none}"

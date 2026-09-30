@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
 description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
-argument-hint: "<feature description> | bug: <report> | #<issue> | resume"
+argument-hint: "<feature description> | bug: <report> | quick: <task> | #<issue> | resume"
 user-invocable: true
 ---
 
@@ -32,7 +32,8 @@ phase file. Overview and diagrams for humans: [README.md](README.md).
 | Argument | Start at |
 |---|---|
 | `resume` | Follow [references/resume.md](references/resume.md) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
-| `#<n>` or an issue URL | `gh issue view <n> --json title,body,labels`, then a bug or spec unit by its content, with the issue number and text as its scope, per [references/issue.md](references/issue.md) |
+| `#<n>` or an issue URL | `gh issue view <n> --json title,body,labels`, then a quick, bug or spec unit by its content, with the issue number and text as its scope, per [references/issue.md](references/issue.md) |
+| `quick: …`, or small work that meets [phases/Q-quick.md](phases/Q-quick.md)'s criteria | Quick unit |
 | `bug: …`, or text describing broken behaviour | Bug unit |
 | anything else | Spec unit |
 
@@ -45,6 +46,7 @@ output of `git branch --show-current`; `resume` finds the ledger by it.
 
 | # | Phase | Unit and file | Ends with |
 |---|---|---|---|
+| Q | **Quick** | Quick: [phases/Q-quick.md](phases/Q-quick.md) | One PR, then the **handoff** without a record unit. Or `NEXT: bug` (Phase 0) or `NEXT: feature` (Phase 1), with what it found as the scope. |
 | 0 | **Bug** | Bug: [phases/0-bug.md](phases/0-bug.md) | Patched BUG record, reviewed. Then one milestone unit ships record, patch, regression test and fix in **one PR**, then the **handoff**. Or the unit returns `SWITCH: feature` and the flow goes to Phase 1. |
 | 1 | **Spec** | Spec: [phases/1-spec.md](phases/1-spec.md) | **PR 1**: the spec |
 | 2 | **Clarify**, in rounds | Clarify round: [phases/2-clarify.md](phases/2-clarify.md) | Dispatch rounds until one returns `CLEAN` as its first summary line. Answers ship in PR 2. A fifth round is an escalation (category 5). |
@@ -65,6 +67,7 @@ name. A unit keeps its model when continued with `SendMessage`.
 | Spec, clarify round 1, design, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
 | Clarify round 2 and later, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
 | Bug unit when the report already names the root cause and the fix (which code, what change) | `"sonnet"` |
+| Quick | `"sonnet"` |
 | Record | `"haiku"` |
 | Helper: read a long CI log, gate log or report and return only its failures | `"haiku"` |
 

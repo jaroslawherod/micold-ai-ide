@@ -170,6 +170,14 @@ git switch -q main; ledger specs/042-x/autopilot.md wt-longer 4-milestones; git 
 git push -q origin main; git switch -q wt
 check "resume does not match another branch by prefix" 2 '^NONE' "$S/resume.sh"
 
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+ledger specs/quick/2026-09-30-flaky.autopilot.md wt 4-milestones
+check "resume finds a quick run's local ledger" 0 '^LEDGER specs/quick/2026-09-30-flaky\.autopilot\.md$' "$S/resume.sh"
+
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+ledger specs/quick/2026-09-30-flaky.autopilot.md wt done; echo fix > fix.txt; git add -A; git commit -qm fix
+check "resume expects no record PR for a quick run" 2 '^NONE' "$S/resume.sh"
+
 # --- handoff-check.sh --------------------------------------------------------------------------
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger "$d/ledger.md" wt done 10
