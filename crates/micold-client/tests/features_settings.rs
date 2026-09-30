@@ -500,6 +500,165 @@ mod script_path_check {
              (FR-008, FR-010)"
         );
     }
+
+    // --- S5–S7: the save-time notification (FR-004, FR-007) ---------------------------------
+
+    use micold_client::features::Outcome;
+    use micold_core::notify::{Level, Notification};
+
+    const NOT_FOUND: &str = "The environment-include script was not found: /tmp/does-not-exist.sh";
+
+    fn info(message: &str) -> Vec<Outcome> {
+        vec![Outcome::NotificationRaised(Notification::new(
+            Level::Info,
+            message,
+        ))]
+    }
+
+    /// What `update` returns when a check with `seq` lands.
+    fn landed(
+        state: &mut State,
+        seq: u64,
+        origin: CheckOrigin,
+        result: Option<CheckedScriptPath>,
+    ) -> Vec<Outcome> {
+        update(
+            state,
+            Msg::ScriptPathChecked {
+                seq,
+                origin,
+                result,
+            },
+        )
+    }
+
+    /// A save's check, started and landed with `state`, and what `update` returned.
+    fn saved_with(state: ScriptPathState) -> Vec<Outcome> {
+        let mut app = State::default();
+        let seq = start(&mut app, CheckOrigin::Saved);
+        landed(&mut app, seq, CheckOrigin::Saved, Some(checked(state)))
+    }
+
+    #[test]
+    fn a_save_leaving_a_missing_path_posts_one_notice_naming_it() {
+        assert_eq!(
+            saved_with(ScriptPathState::NotFound { tilde: false }),
+            info(NOT_FOUND),
+            "US1 scenario 5: the save goes through and one Info notice names the path (FR-004)"
+        );
+    }
+
+    #[test]
+    fn a_missing_path_starting_with_a_tilde_says_the_tilde_is_not_expanded() {
+        assert_eq!(
+            saved_with(ScriptPathState::NotFound { tilde: true }),
+            info(&format!(
+                "{NOT_FOUND} (~ is not expanded; use a full path)"
+            )),
+        );
+    }
+
+    #[test]
+    fn a_path_that_is_not_a_readable_file_says_so() {
+        assert_eq!(
+            saved_with(ScriptPathState::NotReadable),
+            info(
+                "The environment-include script is not a readable file: /tmp/does-not-exist.sh"
+            ),
+        );
+    }
+
+    #[test]
+    fn a_save_with_nothing_wrong_to_report_posts_nothing() {
+        for state in [
+            ScriptPathState::Present,
+            ScriptPathState::Relative,
+            ScriptPathState::Unchecked,
+        ] {
+            assert_eq!(
+                saved_with(state.clone()),
+                Vec::<Outcome>::new(),
+                "{state:?} has nothing to report at save time (S6)"
+            );
+        }
+        let mut app = State::default();
+        let seq = start(&mut app, CheckOrigin::Saved);
+        assert_eq!(
+            landed(&mut app, seq, CheckOrigin::Saved, None),
+            Vec::<Outcome>::new(),
+            "a blank path is not checked, so there is nothing to report (S6)"
+        );
+    }
+
+    #[test]
+    fn opening_settings_never_posts_a_notice() {
+        let mut app = State::default();
+        let seq = start(&mut app, CheckOrigin::Opened);
+        assert_eq!(
+            landed(
+                &mut app,
+                seq,
+                CheckOrigin::Opened,
+                Some(checked(ScriptPathState::NotFound { tilde: false })),
+            ),
+            Vec::<Outcome>::new(),
+            "the report outside a save stays on the Settings page (FR-007, S7)"
+        );
+    }
+
+    #[test]
+    fn a_saves_notice_is_posted_even_when_a_newer_open_took_over_the_page() {
+        let mut app = State::default();
+        let save = start(&mut app, CheckOrigin::Saved);
+        let _open = start(&mut app, CheckOrigin::Opened);
+
+        assert_eq!(
+            landed(
+                &mut app,
+                save,
+                CheckOrigin::Saved,
+                Some(checked(ScriptPathState::NotFound { tilde: false })),
+            ),
+            info(NOT_FOUND),
+            "Save closed Settings, so the notice is the only report this save gets (S5 runs \
+             whether or not S4 applied)"
+        );
+    }
+
+    #[test]
+    fn an_older_saves_answer_is_not_reported_once_a_newer_save_started() {
+        let mut app = State::default();
+        let older = start(&mut app, CheckOrigin::Saved);
+        let _newer = start(&mut app, CheckOrigin::Saved);
+
+        assert_eq!(
+            landed(
+                &mut app,
+                older,
+                CheckOrigin::Saved,
+                Some(checked(ScriptPathState::NotFound { tilde: false })),
+            ),
+            Vec::<Outcome>::new(),
+            "the newer save's own check reports on the path as it is now"
+        );
+    }
+
+    #[test]
+    fn a_saves_answer_delivered_twice_is_reported_once() {
+        let mut app = State::default();
+        let seq = start(&mut app, CheckOrigin::Saved);
+        let missing = Some(checked(ScriptPathState::NotFound { tilde: false }));
+
+        let first = landed(&mut app, seq, CheckOrigin::Saved, missing.clone());
+        let second = landed(&mut app, seq, CheckOrigin::Saved, missing);
+
+        assert_eq!(first, info(NOT_FOUND));
+        assert_eq!(
+            second,
+            Vec::<Outcome>::new(),
+            "one save, one notice"
+        );
+    }
 }
 
 // --- Spec 035: what the Environment page says, feature off (contracts/settings-indication.md §2) --
