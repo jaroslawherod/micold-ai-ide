@@ -867,6 +867,15 @@ impl Catalog {
         Some((project, action, cwd, mode, provider))
     }
 
+    /// Record that `id` was stopped on request (feature 034, FR-009): → `Idle`, record and
+    /// conversation kept, no auto-restart. Lifecycle is not persisted (S3), so nothing is written.
+    /// Returns the owning project, or `None` for an unknown session.
+    pub fn mark_session_stopped(&mut self, id: SessionId) -> Option<PathBuf> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        session.lifecycle = SessionLifecycle::Idle;
+        Some(project)
+    }
+
     /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
     /// stayed up for `RESTART_STABLE_AFTER` is now healthy (the caller checks the window, `005`
     /// BUG-004), which resets the crash-loop

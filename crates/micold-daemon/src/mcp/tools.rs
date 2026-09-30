@@ -7,6 +7,11 @@
 //! The read tools answer from the same catalog snapshot the sidebar renders, so an agent and the
 //! user see the same worktrees and sessions. The mutating tools call the same operations the
 //! sidebar's protocol messages do ([`crate::ops`]), so an agent's change is the user's (FR-009).
+//!
+//! The destructive tools (`stop_session`, `interrupt_session`, `delete_session`,
+//! `delete_worktree`) check in the contract's order: scope, policy, state conflicts and no-ops,
+//! then the user's confirmation in every window (FR-014), and only then the effect. So a refused,
+//! conflicting or no-op request never shows a prompt.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -14,13 +19,15 @@ use std::sync::Arc;
 use alacritty_terminal::term::TermMode;
 use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
-use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
+use micold_core::mcp::policy::{
+    self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
+};
 use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, SessionRef, WorktreeRef};
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
-    ActivitySignal, ProjectSnapshot, SessionSummary, WireLifecycle, WorktreeSnapshot,
-    WorktreeStatus,
+    ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
+    WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::terminal::LaunchMode;
@@ -29,7 +36,9 @@ use micold_core::worktree::{
     CreateMode, ProvenanceView, Worktree, WorktreeOwner,
 };
 use serde_json::{json, Value};
+use tokio_util::sync::CancellationToken;
 
+use crate::mcp::confirm::{ConfirmOutcome, ConfirmRequest, ConfirmTarget};
 use crate::ops;
 use crate::state::DaemonState;
 
@@ -41,11 +50,15 @@ const DEFAULT_DISPLAY_NAME: &str = "Default";
 ///
 /// A mutating tool writes exactly one audit line here, whatever its outcome (FR-018): the caller,
 /// the operation, its target and `ok` or the failure's category. Never its input text.
+///
+/// `hangup` is cancelled when the agent's connection closes: a request still waiting for the
+/// user's confirmation is then abandoned, withdrawn from every window, and changes nothing.
 pub async fn call(
     state: Arc<DaemonState>,
     caller: SessionId,
     name: String,
     arguments: Value,
+    hangup: CancellationToken,
 ) -> Result<Value, OpError> {
     // The first-prompt bound is counted from here, the request (FR-017).
     let asked = tokio::time::Instant::now();
@@ -57,7 +70,7 @@ pub async fn call(
             .unwrap_or_default()
     });
     let result = match parsed {
-        Ok(operation) => dispatch(state, caller, operation, asked).await,
+        Ok(operation) => dispatch(state, caller, operation, asked, &hangup).await,
         Err(error) => Err(error),
     };
     if let Some(object) = audited {
@@ -82,6 +95,7 @@ async fn dispatch(
     caller: SessionId,
     operation: Operation,
     asked: tokio::time::Instant,
+    hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
     match operation {
         Operation::CreateWorktree { branch, name, mode } => {
@@ -97,6 +111,28 @@ async fn dispatch(
             worktree,
             display_name,
         } => rename_worktree(&state, caller, worktree, display_name).await,
+        Operation::StopSession { session } => stop_session(&state, caller, session, hangup).await,
+        Operation::InterruptSession { session } => {
+            interrupt_session(&state, caller, session, hangup).await
+        }
+        Operation::DeleteSession { session } => {
+            delete_session(&state, caller, session, hangup).await
+        }
+        Operation::DeleteWorktree {
+            worktree,
+            stop_sessions,
+            delete_branch,
+        } => {
+            delete_worktree(
+                &state,
+                caller,
+                worktree,
+                stop_sessions,
+                delete_branch,
+                hangup,
+            )
+            .await
+        }
         read => blocking(move || read_call(&state, caller, read)).await,
     }
 }
@@ -134,14 +170,12 @@ fn read_call(
         Operation::CreateWorktree { .. }
         | Operation::CreateSession { .. }
         | Operation::StartSession { .. }
-        | Operation::RenameWorktree { .. } => {
-            unreachable!("mutating tools are dispatched by call")
-        }
-        Operation::StopSession { .. }
+        | Operation::RenameWorktree { .. }
+        | Operation::StopSession { .. }
         | Operation::InterruptSession { .. }
         | Operation::DeleteSession { .. }
         | Operation::DeleteWorktree { .. } => {
-            unreachable!("parse_call refuses a tool whose handler has not shipped")
+            unreachable!("mutating tools are dispatched by call")
         }
     }
 }
@@ -169,22 +203,341 @@ fn resolve_caller(
     Ok((who, project))
 }
 
-/// What policy says about `operation` from `who`, as a result: a refusal is the call's failure. No
-/// shipped tool waits for a confirmation yet, so one that would is refused as needing it (FR-014).
-fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
+/// What policy says about `operation` from `who`: `None` to go ahead, `Some` to ask the user
+/// first (FR-014), or the refusal that is the call's failure.
+fn policy_for(who: &Caller, operation: &Operation) -> Result<Option<ConfirmedOp>, OpError> {
     match policy::decide(
         who,
         operation,
         &TargetFacts::default(),
         CrossSessionAccess::default(),
     ) {
-        PolicyDecision::Proceed => Ok(()),
+        PolicyDecision::Proceed => Ok(None),
+        PolicyDecision::Confirm(op) => Ok(Some(op)),
         PolicyDecision::Refuse(error) => Err(error),
-        PolicyDecision::Confirm(_) => Err(OpError::new(
+    }
+}
+
+/// [`policy_for`] for a tool that never waits for a confirmation; one that would is refused as
+/// needing it, rather than performed unasked.
+fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
+    match policy_for(who, operation)? {
+        None => Ok(()),
+        Some(_) => Err(OpError::new(
             ErrorCategory::NeedsConfirmation,
             "this operation needs the user's confirmation in an app window",
         )),
     }
+}
+
+/// The wire form of a confirmed operation, as the prompt names it.
+fn wire_operation(op: ConfirmedOp) -> ConfirmOperation {
+    match op {
+        ConfirmedOp::DeleteWorktree {
+            stop_sessions,
+            delete_branch,
+        } => ConfirmOperation::DeleteWorktree {
+            stop_sessions,
+            delete_branch,
+        },
+        ConfirmedOp::DeleteSession => ConfirmOperation::DeleteSession,
+        ConfirmedOp::StopSession => ConfirmOperation::StopSession,
+        ConfirmedOp::InterruptSession => ConfirmOperation::InterruptSession,
+    }
+}
+
+/// Ask the user, in every window, to allow `op` on `target` (FR-014), naming the calling session,
+/// the operation and the target. `Ok` means allowed; every other answer is the call's failure. An
+/// agent that hangs up meanwhile abandons the request: the prompt is withdrawn and nothing is done.
+async fn ask_user(
+    state: &DaemonState,
+    who: &Caller,
+    project: &ProjectSnapshot,
+    op: ConfirmedOp,
+    target: ConfirmTarget,
+    target_label: String,
+    hangup: &CancellationToken,
+) -> Result<(), OpError> {
+    let caller_label = project
+        .sessions
+        .iter()
+        .find(|s| s.id == who.session)
+        .map(|s| s.title.display().to_string())
+        .unwrap_or_default();
+    let request = ConfirmRequest {
+        project: project.path.clone(),
+        caller: who.session,
+        caller_label,
+        operation: wire_operation(op),
+        target,
+        target_label,
+    };
+    tokio::select! {
+        outcome = state.confirm(request) => outcome.into_result(),
+        () = hangup.cancelled() => ConfirmOutcome::Abandoned.into_result(),
+    }
+}
+
+/// The caller, its project, and `session` in it (`not_found` outside it). **Blocking.**
+fn resolve_session_target(
+    state: &DaemonState,
+    caller: SessionId,
+    session: SessionId,
+) -> Result<(Caller, ProjectSnapshot, SessionSummary), OpError> {
+    let (who, project) = resolve_caller(state, caller)?;
+    let target = project
+        .sessions
+        .iter()
+        .find(|s| s.id == session)
+        .cloned()
+        .ok_or_else(|| OpError::not_found(format!("no session {} in this project", session.0)))?;
+    Ok((who, project, target))
+}
+
+/// `stop_session` (contracts/mcp-tools.md): scope, then policy (a session may not stop itself,
+/// FR-015), then the no-op for a session with no process (FR-012a), then the user's confirmation,
+/// then the sidebar's own stop: processes end, the record is `Idle` in every window, and the
+/// conversation stays resumable (US3 s2).
+async fn stop_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let (who, project, summary) =
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let confirm = policy_for(&who, &Operation::StopSession { session: target })?;
+    if state.session_ptys(session).is_empty() {
+        return Ok(json!({ "lifecycle": lifecycle_name(&summary.lifecycle) }));
+    }
+    if let Some(op) = confirm {
+        let label = summary.title.display().to_string();
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Session(session),
+            label,
+            hangup,
+        )
+        .await?;
+    }
+    if !state.stop_session(session) {
+        return Err(OpError::not_found(format!(
+            "session {} was deleted while waiting for confirmation",
+            session.0
+        )));
+    }
+    Ok(json!({ "lifecycle": "idle" }))
+}
+
+/// `interrupt_session` (contracts/mcp-tools.md): scope, then policy (a session may not interrupt
+/// itself, FR-015), then the conflict for a session that is not running (FR-012a), then the
+/// user's confirmation, then `Ctrl-C` (`0x03`) typed into its primary terminal, as the sidebar's
+/// interrupt does. The session keeps running (US3 s2).
+async fn interrupt_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let (who, project, summary) =
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let confirm = policy_for(&who, &Operation::InterruptSession { session: target })?;
+    let not_running = || {
+        OpError::new(
+            ErrorCategory::Conflict,
+            format!(
+                "session {} is not running, so there is nothing to interrupt",
+                session.0
+            ),
+        )
+    };
+    if summary.lifecycle != WireLifecycle::Running || state.primary_pty(session).is_none() {
+        return Err(not_running());
+    }
+    if let Some(op) = confirm {
+        let label = summary.title.display().to_string();
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Session(session),
+            label,
+            hangup,
+        )
+        .await?;
+    }
+    let pty = state.primary_pty(session).ok_or_else(not_running)?;
+    pty.write_input(&[0x03])
+        .map_err(|e| OpError::service_error(format!("could not type the interrupt: {e}")))?;
+    Ok(json!({}))
+}
+
+/// `delete_session` (contracts/mcp-tools.md): scope, then policy (a session may not delete
+/// itself, FR-015), then the user's confirmation, then the sidebar's own delete: the record is
+/// archived, its processes end, its credential is revoked, and every window is told.
+async fn delete_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let (who, project, summary) =
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    if let Some(op) = policy_for(&who, &Operation::DeleteSession { session: target })? {
+        let label = summary.title.display().to_string();
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Session(session),
+            label,
+            hangup,
+        )
+        .await?;
+    }
+    let st = Arc::clone(state);
+    let (owner, ptys) = blocking(move || {
+        st.delete_session(session)
+            .map_err(|e| OpError::service_error(format!("could not delete the session: {e}")))
+    })
+    .await?;
+    for pty in ptys {
+        let _ = pty.kill();
+    }
+    if owner.is_none() {
+        return Err(OpError::not_found(format!(
+            "session {} was deleted while waiting for confirmation",
+            session.0
+        )));
+    }
+    state.broadcast_catalog();
+    Ok(json!({}))
+}
+
+/// `delete_worktree` (contracts/mcp-tools.md): scope, then policy (Principle III for a Default
+/// caller, FR-015a; the caller's own worktree, FR-015), then the live-session conflict unless
+/// `stop_sessions` (US3 s3), then the user's confirmation, then the sidebar's own delete.
+async fn delete_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    worktree: WorktreeRef,
+    stop_sessions: bool,
+    delete_branch: bool,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let WorktreeRef::Named(dir_name) = worktree.clone() else {
+        return Err(OpError::invalid_input(
+            "\"default\" is the project root, not a worktree; it cannot be deleted",
+        ));
+    };
+    let st = Arc::clone(state);
+    let name = dir_name.clone();
+    let (who, project, wt) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let wt = project
+            .worktrees
+            .iter()
+            .find(|wt| wt.dir_name == name)
+            .cloned()
+            .ok_or_else(|| OpError::not_found(format!("no worktree \"{name}\" in this project")))?;
+        Ok((who, project, wt))
+    })
+    .await?;
+    let confirm = policy_for(
+        &who,
+        &Operation::DeleteWorktree {
+            worktree,
+            stop_sessions,
+            delete_branch,
+        },
+    )?;
+    let live = state.worktree_live_sessions(&project.path, &dir_name);
+    if !live.is_empty() && !stop_sessions {
+        return Err(live_sessions_conflict(&project, &dir_name, &live));
+    }
+    if let Some(op) = confirm {
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Worktree {
+                dir_name: dir_name.clone(),
+            },
+            wt.display_name.clone(),
+            hangup,
+        )
+        .await?;
+    }
+    match ops::delete_worktree(
+        state,
+        project.path.clone(),
+        dir_name.clone(),
+        stop_sessions,
+        delete_branch,
+    )
+    .await
+    {
+        Ok(deleted) => Ok(json!({
+            "removed": dir_name,
+            "branch_deleted": delete_branch && wt.branch.is_some() && !deleted.branch_delete_failed,
+            "leftovers": deleted
+                .leftovers
+                .iter()
+                .map(|l| native(&l.path))
+                .collect::<Vec<_>>(),
+        })),
+        Err(ops::DeleteFailure::LiveSessions(live)) => {
+            Err(live_sessions_conflict(&project, &dir_name, &live))
+        }
+        Err(ops::DeleteFailure::NotARepository) => Err(OpError::invalid_input(
+            "this project is not a git repository, so it has no worktrees",
+        )),
+        Err(ops::DeleteFailure::Git(e)) => Err(OpError::service_error(format!(
+            "git failed to remove the worktree: {e}"
+        ))),
+        Err(ops::DeleteFailure::Task(e)) => Err(OpError::service_error(format!(
+            "the worktree delete failed: {e}"
+        ))),
+    }
+}
+
+/// The refusal for a worktree whose sessions are live, naming each (US3 s3).
+fn live_sessions_conflict(
+    project: &ProjectSnapshot,
+    dir_name: &str,
+    live: &[SessionId],
+) -> OpError {
+    let names: Vec<String> = live
+        .iter()
+        .map(|id| {
+            let label = project
+                .sessions
+                .iter()
+                .find(|s| s.id == *id)
+                .map(|s| s.title.display().to_string())
+                .unwrap_or_default();
+            format!("\"{label}\" ({})", id.0)
+        })
+        .collect();
+    OpError::new(
+        ErrorCategory::Conflict,
+        format!(
+            "worktree \"{dir_name}\" has live sessions: {}; stop them first or pass              stop_sessions: true",
+            names.join(", ")
+        ),
+    )
 }
 
 /// `create_worktree` (contracts/mcp-tools.md): scope, then the naming rules and git's ref check,

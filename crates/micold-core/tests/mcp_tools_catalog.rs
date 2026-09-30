@@ -95,7 +95,7 @@ fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
         );
         assert_eq!(
             tool["annotations"]["destructiveHint"],
-            json!(false),
+            json!(DESTRUCTIVE.contains(&name)),
             "{name}"
         );
     }

@@ -282,6 +282,9 @@ pub async fn delete_worktree(
                 }
             }
             state.invalidate_env_include(&cache_path);
+            // A confirmation still waiting to delete this worktree has nothing left to delete
+            // (FR-014, EC-4): it fails `not_found` instead of reaching git.
+            state.confirmations_worktree_gone(&project, &dir_name);
             // Feature 029 FR-018: the record dies with the worktree, and only once git has released
             // it. A directory name is reusable, so a record that outlived its worktree would hand
             // the next thing created at that path an ownership nobody granted it.
