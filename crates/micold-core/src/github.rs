@@ -303,6 +303,21 @@ pub fn locate_gh(inputs: &LocateInputs) -> Option<PathBuf> {
         .find(|candidate| (inputs.exists)(candidate))
 }
 
+/// [`locate_gh`] on this machine: its OS, its home directory, its environment and its files,
+/// with `process_path` standing for this process's `PATH` — the client passes its own, and the
+/// desktop-launch test passes the one a launcher would hand it.
+pub fn locate_gh_on_host(env_include_path: Option<&str>, process_path: &str) -> Option<PathBuf> {
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    locate_gh(&LocateInputs {
+        os: HostOs::current(),
+        env_include_path,
+        process_path,
+        home: home.as_deref(),
+        env: &|name| std::env::var(name).ok(),
+        exists: &|path| path.is_file(),
+    })
+}
+
 /// One open issue, as the picker shows and ranks it (data-model §2).
 ///
 /// Held only in the open form (FR-023). No `Serialize`, so no code path can persist it (SC-006).
