@@ -313,3 +313,11 @@ existed and failed before the implementation.
     `on_settings_opened` runs the same `open_settings`).
 - refactor: none beyond `cargo fmt`.
 - commit: 3de463df
+
+## T035: A6–A8 at the full suite
+
+- `mise run gate` at 36015322 -> GATE_EXIT=0; 3820 passed, 0 failed across the workspace; A6
+  `on_with_a_missing_stored_path_the_page_says_it_was_not_found_once_and_that_the_feature_is_on`,
+  A7 `switching_the_feature_off_and_saving_keeps_the_same_not_found_report` and A8
+  `creating_the_missing_file_clears_the_report_and_with_the_feature_on_says_how_to_source_it` ok;
+  scripts suite 15 cases, 0 failures.
