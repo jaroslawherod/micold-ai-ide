@@ -217,3 +217,41 @@ was taken by stubbing that implementation out and restoring it afterwards.
   U67.
 - refactor: `cargo fmt --all` reformatted the feature's earlier files too (cycles 2–8 were
   committed unformatted); formatting only.
+
+## Cycle 10 — review round 1 fixes (A4, U-series endpoint), FR-016 gate — T005, T016, T020
+
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_endpoint`, new
+  `a_pruned_sessions_credential_and_binding_file_are_gone` (both reviews' MAJOR: pruning empty
+  sessions did not revoke)
+  ```
+  thread 'a_pruned_sessions_credential_and_binding_file_are_gone' (737496) panicked at crates/micold-daemon/tests/mcp_endpoint.rs:255:5:
+  assertion `left == right` failed
+    left: 200
+   right: 401
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out
+  ```
+- green: `prune_empty_sessions` revokes the archived ids outside the lock. 16 passed.
+- red: `unparseable_json_is_answered_200_with_a_parse_error` (contract §1: 200 or 202 only)
+  ```
+  thread 'unparseable_json_is_answered_200_with_a_parse_error' (763323) panicked at crates/micold-daemon/tests/mcp_endpoint.rs:169:5:
+  assertion `left == right` failed
+    left: 400
+   right: 200
+  ```
+  and `http::tests::a_refused_requests_declared_body_is_read_off_and_nothing_past_it`
+  ```
+  error[E0425]: cannot find function `discard_body` in this scope
+  ```
+- green: a parse error answers 200 with the -32700 response; `http::discard_body` reads off the
+  declared body (bounded by `MAX_DRAIN` and `DRAIN_TIMEOUT`, never past `Content-Length`) before
+  a 401/404/405. mcp_endpoint 17 passed; http 7 passed.
+- test-after, mutant killed: `a_collision_in_the_copilot_home_the_session_environment_sets_is_found`
+  (an environment-include script sets `COPILOT_HOME`). The fix reads `COPILOT_HOME` from the
+  session's launch environment first, like `CLAUDE_CONFIG_DIR`. Mutant (provider's process-env
+  `config_dir()` only) failed it at mcp_binding_spawn.rs:426; restored.
+- regression guard: `bound_spawns_create_no_user_configuration_file_that_was_absent` (A4's
+  absent-stays-absent variant, review B); passes by construction.
+- gate fix: `MinimalProvider::tool_server_support` returned a constant, which
+  `service_capability_fakes.rs` (FR-016 of feature 021) fails. It now answers from a
+  `tool_server` field, and `every_cli_answers_its_tool_server_support_through_the_seam` checks a
+  Minimal configured with `McpConfigArg` answers that.

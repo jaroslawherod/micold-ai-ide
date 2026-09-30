@@ -203,6 +203,9 @@ struct MinimalProvider {
     /// When set, this provider reports activity only through a component the application supplies
     /// at launch, and this is the directory the component's log goes under (feature 029, FR-012a).
     component_logs: Option<PathBuf>,
+    /// How this provider's sessions reach the tool server (feature 034). Its own answer, so the
+    /// daemon asks rather than deciding per CLI.
+    tool_server: ToolServerSupport,
 }
 
 impl MinimalProvider {
@@ -218,6 +221,9 @@ impl MinimalProvider {
             labels: BTreeMap::new(),
             env: Vec::new(),
             component_logs: None,
+            tool_server: ToolServerSupport::Unsupported {
+                reason: "Minimal has no tool server",
+            },
         }
     }
 
@@ -287,9 +293,7 @@ impl AiCliProvider for MinimalProvider {
         self.archived.borrow().contains(&id)
     }
     fn tool_server_support(&self) -> ToolServerSupport {
-        ToolServerSupport::Unsupported {
-            reason: "Minimal has no tool server",
-        }
+        self.tool_server
     }
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
@@ -550,6 +554,12 @@ fn every_cli_answers_its_tool_server_support_through_the_seam() {
         port.tool_server_support(),
         ToolServerSupport::Unsupported { .. }
     ));
+    let bound = MinimalProvider {
+        tool_server: ToolServerSupport::McpConfigArg,
+        ..MinimalProvider::new("/minimal")
+    };
+    let port: &dyn AiCliProvider = &bound;
+    assert_eq!(port.tool_server_support(), ToolServerSupport::McpConfigArg);
     for which in AiCli::ALL {
         let _ = which.provider().tool_server_support();
     }

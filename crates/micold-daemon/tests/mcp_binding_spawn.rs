@@ -4,9 +4,9 @@
 //! Stand-in `claude`, `copilot` and `pi` on `PATH` record their arguments, and the test reads that
 //! record — then uses the binding file it names to call the tool server exactly as the CLI would.
 
-// unix-only: the stand-in CLIs are `#!/bin/sh` scripts, the owner-only check reads Unix modes, and
-// the user's configuration is redirected through `HOME`/`XDG_DATA_HOME`, which the Windows known
-// folders ignore.
+// The owner-only check reads Unix modes, and the user's configuration is redirected through
+// `HOME`/`XDG_DATA_HOME`, which the Windows known folders ignore.
+// unix-only: the stand-in CLIs are `#!/bin/sh` scripts (Windows port is a recorded follow-up).
 #![cfg(unix)]
 
 #[path = "support/mcp.rs"]
@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use mcp_support::*;
 use micold_core::session::{AiCli, Session, SessionId, SessionLifecycle, TerminalMode};
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::terminal::LaunchMode;
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -368,6 +369,40 @@ async fn bound_spawns_leave_every_user_configuration_file_byte_identical() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bound_spawns_create_no_user_configuration_file_that_was_absent() {
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let home = sandbox.home.path();
+    let absent = [
+        home.join(".claude.json"),
+        home.join(".claude/settings.json"),
+        sandbox.repo().join(".mcp.json"),
+        home.join(".copilot/mcp-config.json"),
+    ];
+    let claude = sid(0x34_0200);
+    let copilot = sid(0x34_0201);
+    let state = sandbox.state(vec![
+        session(claude, None, TerminalMode::AiCli, AiCli::ClaudeCode),
+        session(copilot, None, TerminalMode::AiCli, AiCli::Copilot),
+    ]);
+    serve_tool_server(&state, sandbox.binding_dir()).await;
+    for (id, cli) in [(claude, AiCli::ClaudeCode), (copilot, AiCli::Copilot)] {
+        state.start_session(id, LaunchMode::Fresh).unwrap();
+        let args = sandbox.launch(cli, 0).await;
+        kill(&state, id);
+        assert!(
+            args.iter()
+                .any(|a| a == "--mcp-config" || a == "--additional-mcp-config"),
+            "{cli:?} was bound: {args:?}"
+        );
+    }
+
+    for file in absent {
+        assert!(!file.exists(), "{file:?} was created");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_name_collision_spawns_unbound_and_logs_the_colliding_file() {
     let _guard = ENV.lock().await;
     let sandbox = Sandbox::new();
@@ -389,6 +424,46 @@ async fn a_name_collision_spawns_unbound_and_logs_the_colliding_file() {
         taken.display()
     );
     assert!(lines[0].contains(&expected), "{lines:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_collision_in_the_copilot_home_the_session_environment_sets_is_found() {
+    // The environment-include script relocates Copilot's store for this session only; the
+    // service's own environment does not name it, so only the session's view finds the collision.
+    let _guard = ENV.lock().await;
+    let sandbox = Sandbox::new();
+    let relocated = sandbox.home.path().join("relocated-copilot");
+    std::fs::create_dir_all(&relocated).unwrap();
+    let taken = relocated.join("mcp-config.json");
+    std::fs::write(&taken, r#"{"mcpServers":{"micold":{"command":"mine"}}}"#).unwrap();
+    let script = sandbox.home.path().join("env-include.sh");
+    std::fs::write(
+        &script,
+        format!("export COPILOT_HOME='{}'\n", relocated.display()),
+    )
+    .unwrap();
+    JsonFileSettingsStore::at(sandbox.store.path().join("settings.json"))
+        .save(&Settings {
+            env_include_enabled: true,
+            env_include_script_path: script.to_string_lossy().into_owned(),
+            ..Settings::default()
+        })
+        .unwrap();
+    let id = sid(0x34_0064);
+    let state = sandbox.state(vec![session(id, None, TerminalMode::AiCli, AiCli::Copilot)]);
+    serve_tool_server(&state, sandbox.binding_dir()).await;
+
+    state.start_session(id, LaunchMode::Fresh).unwrap();
+    let args = sandbox.launch(AiCli::Copilot, 0).await;
+    kill(&state, id);
+
+    assert!(
+        !args.iter().any(|a| a == "--additional-mcp-config"),
+        "{args:?}"
+    );
+    let lines = skip_lines(id);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains(&taken.display().to_string()), "{lines:?}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

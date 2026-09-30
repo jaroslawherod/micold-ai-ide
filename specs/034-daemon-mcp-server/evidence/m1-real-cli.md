@@ -25,6 +25,16 @@ prompt, so a successful call also shows the pre-approval works.
 | B2 Copilot calls the tools | Pass: `--additional-mcp-config @<file> --allow-tool micold` with `"tools":["*"]` in the entry; all three tools answered, `whoami` names S2 and `a`. Copilot stays bound (no switch to `Unsupported`) |
 | Service log | 3 lines, no credential and no request body |
 
+## Deviations from quickstart §B1
+
+- The sessions were started by a probe test driving `DaemonState::start_session`, not from the
+  app's sidebar; the argv and files are the service's own, but no window was involved.
+- The real CLIs ran in print mode (`-p`) with the recorded binding arguments rather than as the
+  session's own interactive process, so the answer could be captured verbatim.
+- Claude ran with `--model haiku` to keep the run short; the model does not affect the binding.
+- B1.4 checked the files the service could write (see the table) instead of a whole-home diff,
+  because Claude Code rewrites `~/.claude.json` on every run.
+
 ## Probe report (verbatim)
 
 ## hashes before

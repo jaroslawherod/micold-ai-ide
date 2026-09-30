@@ -161,6 +161,17 @@ async fn a_body_over_1_mib_is_refused_with_413() {
 }
 
 #[tokio::test]
+async fn unparseable_json_is_answered_200_with_a_parse_error() {
+    // Contract §1: every reply to an authorized POST is 200 with one JSON-RPC response, or 202.
+    let s = served().await;
+    let cred = credential(&s.state, sid(1));
+    let (status, body) = post_mcp(s.addr, Some(&cred), "{not json").await;
+    assert_eq!(status, 200);
+    let response: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(response["error"]["code"], -32700);
+}
+
+#[tokio::test]
 async fn the_initialized_notification_is_accepted_with_an_empty_202() {
     let s = served().await;
     let cred = credential(&s.state, sid(1));
@@ -234,6 +245,26 @@ async fn a_worktree_deletes_sessions_lose_their_credentials() {
         200,
         "a session outside the worktree keeps its credential"
     );
+}
+
+#[tokio::test]
+async fn a_pruned_sessions_credential_and_binding_file_are_gone() {
+    let s = served().await;
+    let cred = credential(&s.state, sid(1));
+    let file = s
+        .state
+        .tool_server()
+        .unwrap()
+        .write_binding(sid(1), b"{}")
+        .unwrap();
+    assert_eq!(post_mcp(s.addr, Some(&cred), PING).await.0, 200);
+
+    // Neither session ever recorded a conversation, so pruning archives both.
+    let pruned = s.state.prune_empty_sessions(s.project.path()).unwrap();
+    assert!(pruned.contains(&sid(1)), "{pruned:?}");
+
+    assert_eq!(post_mcp(s.addr, Some(&cred), PING).await.0, 401);
+    assert!(!file.exists());
 }
 
 #[tokio::test]

@@ -139,6 +139,29 @@ pub async fn drain<S: AsyncRead + Unpin>(stream: &mut S, already: usize) {
     .await;
 }
 
+/// Read off and discard the rest of a declared body of `content_length` bytes, `already` of which
+/// the head read pulled in, before refusing a request on its head alone (`401`, `404`, `405`). The
+/// peer's write then completes and it reads the status rather than an `ECONNRESET`. Never reads past
+/// the declared length; bounded by [`MAX_DRAIN`] bytes and [`DRAIN_TIMEOUT`] like [`drain`].
+pub async fn discard_body<S: AsyncRead + Unpin>(
+    stream: &mut S,
+    already: usize,
+    content_length: usize,
+) {
+    let mut remaining = content_length.min(MAX_DRAIN).saturating_sub(already);
+    let mut sink = [0u8; 8 * 1024];
+    let _ = tokio::time::timeout(DRAIN_TIMEOUT, async {
+        while remaining > 0 {
+            let want = remaining.min(sink.len());
+            match stream.read(&mut sink[..want]).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => remaining -= n,
+            }
+        }
+    })
+    .await;
+}
+
 /// Write a minimal HTTP/1.1 response with an empty body and close-after semantics.
 pub async fn respond<S: AsyncWrite + Unpin>(
     stream: &mut S,
@@ -277,5 +300,13 @@ mod tests {
             .unwrap();
         assert_eq!(read, Body::TooLarge);
         assert!(stream.is_empty(), "the refused body must be drained");
+    }
+
+    #[tokio::test]
+    async fn a_refused_requests_declared_body_is_read_off_and_nothing_past_it() {
+        // 3 body bytes arrived with the head; 5 more are declared; 2 bytes follow the body.
+        let mut stream: &[u8] = b"45678NEXT";
+        discard_body(&mut stream, 3, 8).await;
+        assert_eq!(stream, b"NEXT");
     }
 }
