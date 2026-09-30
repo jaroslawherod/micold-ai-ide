@@ -15,6 +15,7 @@
 - [Appearance & theming](user-guide/appearance-theming.md)
 - [Icons](user-guide/icons.md)
 - [Worktrees & sessions](user-guide/worktrees-and-sessions.md)
+- [Tools for the AI in your sessions](user-guide/agent-tools.md)
 - [Settings](user-guide/settings.md)
 - [Running the session service in a container](user-guide/sandboxed-daemon.md)
 

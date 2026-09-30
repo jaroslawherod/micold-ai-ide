@@ -101,6 +101,15 @@ lacks one, that CLI is not offered, and **Settings → Session service** names i
 reference*. A session that already runs it fails to start and says to choose an image that provides
 it — see [When a CLI isn't installed](worktrees-and-sessions.md#when-a-cli-isnt-installed).
 
+### The AI's tools work the same way
+
+Sandboxed Claude Code and Copilot sessions are connected to the application's tools exactly as they
+are outside the container — see [Tools for the AI in your sessions](agent-tools.md). The tool server
+runs inside the container beside the sessions and listens on the container's own loopback address,
+and each session's key file lives in the service's data directory there. The check for a server
+you already named `micold` reads the configuration the session sees inside the container, not the
+files in your own home directory.
+
 ## Credentials
 
 Nothing of yours is shared unless you say so. Each item is a separate opt-in:
