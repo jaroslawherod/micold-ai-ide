@@ -65,6 +65,17 @@ run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-tar
 # test, which a branch can pass for ever while CI stops at `cargo fmt --check` -- the first step of
 # `lint`, which `ci complete` gates every other job on. The shell suites need no build, so they run
 # after the lock is released.
+[tasks.test-scripts]
+description = "Run every scripts/tests/*.test.sh (the docs-only local gate)"
+dir = "{{config_root}}"
+run = """
+set -e
+for t in scripts/tests/*.test.sh; do
+  echo "== $t"
+  "$t"
+done
+"""
+
 [tasks.gate]
 description = "Run CI's merge gate locally: fmt, clippy (core + workspace), workspace tests, shell suites [build-locked]"
 dir = "{{config_root}}"

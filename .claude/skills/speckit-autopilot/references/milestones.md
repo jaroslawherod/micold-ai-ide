@@ -44,6 +44,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US1 acceptance scenarios 1–3; FR-001, FR-002, FR-004
 - **Verify**: <the command, test name or quickstart section a reviewer runs to see the deliverable>
 - **Depends on**: —
+- **Docs-only**: no
 
 ### M2 — <short name>
 
@@ -52,7 +53,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US2 acceptance scenarios 1–2; FR-003
 - **Verify**: …
 - **Depends on**: M1
+- **Docs-only**: no
 ```
+
+**Docs-only** is `yes` only when every task's file paths are docs or spec files (no code, tests,
+scripts, CI or build config). When unsure, `no`.
 
 Task lists need not be contiguous. When rule 4 pulls a user-guide task forward, list it
 (`T001–T020, T030`) and pass the same list to `speckit-implement`.

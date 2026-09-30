@@ -51,7 +51,7 @@ GitHub's state for each recorded PR.
 | 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
 | 2 | `NONE` | Say there is no run to resume here, and stop. |
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
-| 4 | `RECORD-PR-PENDING` | The run finished but its record PR never merged. Merge it if open, else dispatch the record unit; then run the handoff. |
+| 4 | `RECORD-PR-PENDING <ledger> <pr\|none>` | The run finished but its record PR never merged. Wait on and merge `<pr>`; on `none`, dispatch the record unit. Then run the handoff. |
 
 **When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
 whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.
@@ -79,8 +79,8 @@ name. A unit keeps its model when continued with `SendMessage`.
 
 | Unit | `model` |
 |---|---|
-| Spec, clarify round 1, design, bug, close, and a milestone that touches code or tests | omit (session model) |
-| Clarify round 2 and later, and a milestone whose tasks touch only docs or specs | `"sonnet"` |
+| Spec, clarify, design, bug, close, and a milestone the ledger does not mark **Docs-only** `yes` | omit (session model) |
+| A milestone the ledger marks **Docs-only** `yes` | `"sonnet"` |
 | Record | `"haiku"` |
 
 A cheaper unit that returns `FAILED` is retried on the session model.
@@ -117,7 +117,7 @@ tail -6 "$log"
 
 | Last line | Do |
 |---|---|
-| `MERGED <n> <sha>` | Record the SHA in the ledger, dispatch the next unit. |
+| `MERGED <n> <sha>` | Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. |
 | `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
 | `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
