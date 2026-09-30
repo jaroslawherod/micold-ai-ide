@@ -426,6 +426,22 @@ check "checkpoint reports an open escalation" 3 '^OPEN_ESCALATION Which locale w
 check "checkpoint reports the next step" 3 '^NEXT open PR 2$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 cd "$ROOT"
 
+# measure-skill.sh: tokens per role, and the delta against a ref.
+d="$(new_repo)"; cd "$d/wt"; M="$S/measure-skill.sh"; k=.claude/skills/speckit-autopilot
+mkdir -p $k/phases $k/references $k/tests
+printf -- '---\ndescription: %s\n---\n%s\n' "$(printf 'd%.0s' $(seq 1 39))" "$(printf 'o%.0s' $(seq 1 391))" > $k/SKILL.md
+printf '%0400d' 0 > $k/unit.md; printf '%0800d' 0 > $k/phases/1-spec.md
+printf '%0400d' 0 > $k/references/r.md; printf '%09000d' 0 > $k/README.md; printf '%09000d' 0 > $k/tests/t.md
+git add -A; git commit -qm skill
+check "measure-skill counts the description" 0 '^description +10$' "$M"
+check "measure-skill counts SKILL.md for the orchestrator" 0 '^orchestrator +113$' "$M"
+check "measure-skill adds unit.md to each phase file" 0 '^unit:1-spec +300$' "$M"
+check "measure-skill leaves README and tests out of on-demand" 0 '^on-demand +100$' "$M"
+printf '%0400d' 0 >> $k/phases/1-spec.md
+check "measure-skill shows the delta against a ref" 0 '^unit:1-spec +300 +400 +\+100$' "$M" HEAD
+check "measure-skill refuses an unknown ref" 2 'unknown ref' "$M" no-such-ref
+cd "$ROOT"
+
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
 d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
 echo '{"labels":[{"name":"bug"}],"assignees":[{"login":"me"}]}' > "$d/fx/issue-7.json"

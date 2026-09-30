@@ -166,3 +166,23 @@ What they show:
 - **Milestone cost per task shows no clear change.** How hard a feature is outweighs the skill
   changes (034 daemon-mcp M2: 0.46M per task over 8 tasks). Batching had not merged: milestone units
   still made 117 and 166 lone reads right after another read.
+
+## Skill size
+
+What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every
+unit call re-reads `unit.md` plus its phase file. `mise run autopilot-skill-size` estimates each
+role's share in tokens (bytes / 4), and `scripts/autopilot/measure-skill.sh <git-ref>` shows the
+delta against a ref, so a change to the skill states what it adds to every call.
+
+Against 65c6906c (all nine steps merged), after moving *Resuming* and *Handoff* to
+`references/` and adding the model tiers and the delegation table:
+
+| Role | 65c6906c | Now | Delta |
+|---|---:|---:|---:|
+| orchestrator | 3,078 | 2,664 | −414 |
+| unit (milestone) | 2,368 | 2,773 | +405 |
+| unit (other phases) | ~1,800 | ~2,150 | ~+357 |
+| on-demand | 5,843 | 6,754 | +911 |
+
+The unit's +357 is the delegation table in `unit.md`. It pays off when a unit delegates one
+multi-call job instead of running it in its own context.
