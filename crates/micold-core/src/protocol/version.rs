@@ -65,7 +65,10 @@
 /// Bumped 16 → 17 for feature 034's `tool_server_enabled` on `DaemonSettings` and
 /// `ClientMsg::SettingsSet` (FR-004): the Settings toggle that turns the tool-server binding off.
 /// An older peer would fail to decode either field.
-pub const PROTOCOL_VERSION: u32 = 17;
+/// Bumped 17 → 18 for feature 034's confirmations (FR-014): `DaemonMsg::ConfirmationRequested`,
+/// `DaemonMsg::ConfirmationWithdrawn` and `ClientMsg::ConfirmationAnswer`, with `ConfirmOperation`.
+/// An older peer would fail to decode any of them.
+pub const PROTOCOL_VERSION: u32 = 18;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
