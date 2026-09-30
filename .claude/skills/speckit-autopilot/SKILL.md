@@ -51,7 +51,7 @@ GitHub's state for each recorded PR.
 | 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
 | 2 | `NONE` | Say there is no run to resume here, and stop. |
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
-| 4 | `RECORD-PR-PENDING <ledger> <pr\|none>` | The run finished but its record PR never merged. Wait on and merge `<pr>`; on `none`, dispatch the record unit. Then run the handoff. |
+| 4 | `RECORD-PR-PENDING <ledger> <pr\|none>` | The run finished but its record PR never merged. Wait on and merge `<pr>`; on `none`, dispatch the record unit with the ledger's last PR and its merge SHA. Then run the handoff. |
 
 **When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
 whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.
@@ -89,8 +89,8 @@ A cheaper unit that returns `FAILED` is retried on the session model.
   it.
 - **Prompt:** keep this opening fixed for every unit, so the prompt cache reuses it:
   `You are a speckit-autopilot unit. Read .claude/skills/speckit-autopilot/unit.md and follow it.`
-  Then the phase file, ledger path (`none yet` for the first unit), worktree path and branch, and
-  the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
+  Then the phase file, ledger path (`none yet` for the first unit), worktree path and branch, the
+  previous PR and its merge SHA (none for the first unit), and the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
   repro and correct behaviour the bug unit returned; for a milestone, its ID and task IDs (and
   `BUG-<k>` for a bug).
 - **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED`, a PR number if it opened one,
