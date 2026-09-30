@@ -29,7 +29,7 @@ the machine's git config rewrites https://github.com to ssh, so `git remote -v` 
 - D3: while the list is open it covers Type/Ticket/Name; the dialog also moves vertically as its content changes (loading -> list -> picked).
 - D4: the selected source chip has no outline and the unselected ones do, so the selected state is only a faint difference (`t2` state, all screenshots). Check against the design if intended.
 - D5: Type dropdown list is clipped at "ci" with a scrollbar (8 of the types visible); minor.
-- Not run: "no request before choosing" observation (B2), B6, B10–B12, full B13 (light scheme covered only for B1, B9 and the pre-choice caption `b13-caption-light.png`; error + Retry covered in both schemes: B7/B8 dark, B9 light). No clipping or overlap seen at the 520 px dialog width in any capture.
+- Not run: "no request before choosing" observation (B2), B6, B10–B12, full B13 (all recorded in later sections below; light scheme covered only for B1, B9 and the pre-choice caption `b13-caption-light.png`; error + Retry covered in both schemes: B7/B8 dark, B9 light). No clipping or overlap seen at the 520 px dialog width in any capture.
 
 ## §B6 — search beyond the 1,000 loaded issues (milestone M3)
 
@@ -149,6 +149,22 @@ run's private `settings.json`. Projects: /tmp/issue-demo (shallow clone of cli/c
   No chrome, label or control is clipped. Accepted.
 - Dark: the open issue list's surface is close to the page background where it hangs below the dialog, so its
   bottom edge is faint. Legible; not a defect.
+- Light, `b13-loading-light.png`: the selected "GitHub issue" chip shows a small grey blob behind "issue"
+  and no clear container. The pointer was left on the chip after the click, so this is its hover state layer
+  as lavapipe rasterises it; the dark capture, and the chip's selected style elsewhere, show no such blob.
+  Not app behaviour.
+- Settings at 520 px: the description paragraph's right edge runs up to the content scrollbar in both schemes
+  (text touches, is not cut). Legible; accepted. Only the first rows fit on screen; the lower rows, Add and
+  Restore defaults were checked scrolled in §B12's re-check above (Restore defaults wraps, noted there).
 - M3's D6 is still visible in both schemes: the open list covers the status line under the Issue field until
   the list closes. It stays under *Follow-ups not done* in the ledger.
 - Earlier light-scheme captures (B1, B9, `b13-caption-light.png`) and dark ones (B1–B8) agree with this run.
+
+## §A — automated rows (T065, milestone M6b)
+
+Date 2026-09-30, tree 1025e85e (origin/main cf1bdc53 + ledger; the later M6b commits change only docs and
+screenshots). `mise run gate` → `GATE_EXIT=0` (fmt, clippy core + workspace `-D warnings`, `cargo test
+--workspace`, `scripts/tests/*.test.sh`); then `scripts/build-lock.sh cargo test --release -p micold-core
+--test typeahead_budget` → 9 passed, `BUDGET_EXIT=0` (SC-003). Every test file in quickstart §A's table
+exists and none is `#[ignore]`d, so the gate's workspace test run covers each §A row; `typeahead_budget.rs`
+also ran in release as above.

@@ -109,6 +109,8 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M6a | B (conformance) | 1 | — | CLEAN |
 | M6a | B (conformance), scoped | 2 | — | CLEAN |
 | M6b | visual pass §B13 | 1 | 1025e85e | all five elements PASS in dark and light at 520 px; D-B13-1 declined; D6 still visible (follow-up) |
+| M6b | A (code-review high) | 1 | cf1bdc53:0f7fc572 | 5 findings: #1 MAJOR (stale SC-001 follow-up) fixed — reworded as carried forward with reason; #2–#5 MINOR (lavapipe chip blob, Settings description/scrollbar + lower rows, T065 record, M2 "Not run" pointer) fixed as evidence notes |
+| M6b | B (conformance) | 1 | cf1bdc53:0f7fc572 | CLEAN (2 MINOR: T065 record, stale SC-001 follow-up — both fixed with A's) |
 
 ## Open escalation
 
@@ -117,5 +119,5 @@ None.
 ## Follow-ups not done
 
 - Visual pass D6 (M3): while the issue list is open, its overlay hides the search status line under the field. A status position that stays visible (above the field, or in the list's empty/footer row) would need a contract §2 change; §B13 (M6b) confirmed it is still visible in both schemes.
-- SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2; re-time §B2–B5 on a release build in M6 (T063–T065).
+- SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2. Not re-timed in M6: M6b's run on the same loaded machine (Xvfb + lavapipe) took ~60 s for the load alone, so a timing there would measure the harness, not the app. Carried forward: re-time §B2–B5 on a release build on a real, idle display after the feature closes.
 - Quickstart §B5's second attempt with the same ticket and name shows the folder-collision error, not a reuse prompt, because the branch is held by the existing worktree. That is the existing FR-021 path; the reuse prompt itself is covered by A6.
