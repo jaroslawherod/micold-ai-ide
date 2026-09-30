@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 5-close
-- **Next step**: close unit running: converge, tdd-verify, docguard, close PR.
+- **Next step**: close PR open; wait for `ci complete`, merge. Then the flow is done.
 
 ## Pull requests
 
@@ -76,6 +76,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D37 | 4-M4 | Visual pass B1–B11, dark and light (T029, T031) | All 22 PASS; no line overflows the column. B9/B10: no notification, nothing below Timeout on reopen. Evidence `visual-pass/M4-*.png`, table in `visual-pass/README.md`. | agent-resolved | visual-pass skill (Xvfb :91, binaries from 1ed44b44) |
 | D38 | 4-M4 | PR title prefix for M4 | `test(035)`, not `feat`: M4 adds tests, a doc line and the visual record, no behaviour; `feat` would put a feature line in the changelog. | agent-resolved | pr-and-merge.md §4 (release-please builds the changelog from the prefix) |
 | D39 | 5-close | M4/#477 merged at 2f0714da; branch start | `branch-start.sh 477` reset `fix/github-issues` to `origin/main` (2f0714da) cleanly, after freeing disk (root was at 221M: removed `target-shared/debug/incremental`, `mise run sweep` with `--maxsize 40GB`). | agent-resolved | branch-start.sh output |
+| D40 | 5-close | `speckit-converge` | Converged: FR-001–FR-014, SC-001–SC-006, US1–US3 scenarios and edge cases all met; tasks.md unchanged by converge. No unbuilt behaviour. | agent-resolved | converge subagent |
+| D41 | 5-close | `speckit-tdd-verify` | FAIL at 02ae3dc6: the real handlers' job start was untested (6 of 8 hand mutants survived); remediation T043–T048 (Phase 7), all test-strength or docs, no unbuilt behaviour. All six done in b12a8828: the five mutants named in the tasks are now killed (cycle log, "Close"); test-list has no PENDING row. | agent-resolved | `tdd/verification.md`; `tdd/cycle-log.md` |
+| D42 | 5-close | `speckit-docguard-guard` | FAIL 1082/2769, all repo-wide (6 `STR001` for `docs-canonical/*` scaffolding). The only 035 findings are 21 `TRC004` (`@req` annotations), a convention no feature here uses (031 D65, 033 D14). Nothing changed. | agent-resolved | `docguard-cli@latest guard`, filtered to 035 |
 
 ## Declined review findings
 

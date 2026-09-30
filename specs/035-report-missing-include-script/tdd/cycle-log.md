@@ -378,3 +378,25 @@ existed and failed before the implementation.
   - `app.env_include_timeout_secs = valid.env_include_timeout_secs;` dropped from
     `save_and_prepare_check` -> U62 panicked at `main_tests.rs:4785:9`; 18 passed, 1 failed.
 - green after restoring: 19 passed.
+
+## Close: tdd-verify remediation (T043–T048)
+
+- T043: three tests drive the real handlers' `Task` to completion (`messages`) and assert the one
+  `ScriptPathChecked` it reports: `opening_settings_hands_back_work_that_runs_the_check` (T1),
+  `saving_settings_hands_back_work_that_runs_the_saves_check` (T2),
+  `another_windows_save_hands_back_work_that_runs_the_recheck` (T3).
+- T045: `a_check_with_no_answer_gives_up_at_the_bound_and_reports_unchecked` runs a prepared job
+  over `FakeScriptPathProbe::blocking()` and asserts `Unchecked` after at least
+  `SCRIPT_PATH_CHECK_BOUND` and less than bound + 3 s. No production change.
+- T046: U53's loop asserts off + `Present` + `MissingScript` is N11 (`Script not found: P`) before
+  it skips the pair. T047: N8/N9 spell `MissingScript`'s line as a literal (`literal_011`).
+- T048: the two root-only early returns in `crates/micold-core/tests/script_path_check.rs` print
+  `SKIPPED <test>: running as root ...`.
+- mutants (each applied alone to b12a8828 and restored with `git checkout`):
+  - M1 `on_settings_opened` returns `{ let _ = job; Task::none() }` -> KILLED (script_path_report)
+  - M2 the same in `apply_save`'s batch -> KILLED
+  - M3 the same in `on_daemon_event`'s `SettingsChanged` arm -> KILLED
+  - M4 `SCRIPT_PATH_CHECK_BOUND` -> `Duration::from_secs(60)` in `ScriptPathCheckJob::run` -> KILLED
+  - M7 `checked.enabled &&` dropped in `script_path_notice` -> KILLED (features_settings)
+- green after restoring: script_path_report 23 passed; features_settings 53 passed; core
+  script_path_check 22 passed.

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Closed 2026-09-30 — shipped in PRs #457, #462, #466, #471, #473, #477
 
 **Input**: Bug report `BUG-006` in feature 011
 (`specs/011-env-include-script/bugs/BUG-006.md`), from GitHub issue #435, "An
