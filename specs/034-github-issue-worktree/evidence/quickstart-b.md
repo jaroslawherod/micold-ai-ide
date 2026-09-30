@@ -101,3 +101,24 @@ D1 is fixed. Observations:
 - The disabled arrow (up on the first row, down on the last) sits a few px left of the enabled ones (cosmetic, as noted in the earlier observations).
 - At 1000 px the stacked fields are very wide (about 600 px each); sensible but roomy. Not a defect.
 - Not run: light scheme at 1000 px; Save with errors on several rows; the tooltips (unchanged by the fix).
+
+## §B10 (Linux arm) and §B11 — desktop launch and sandbox placement (milestone M6a)
+
+Date 2026-09-30, commit 4988665a (tree = origin/main + M6a docs/test; no app code changed), dev build
+(client + daemon built in one locked invocation and copied to ~/vp/m6a/bin, since another worktree was
+building into target-shared concurrently). Sandbox image `micold-daemon:m6a` (a private tag, so no other
+worktree's `:dev` could swap it) built from the same tree by `MICOLD_IMAGE_TAG=micold-daemon:m6a mise run image`.
+Private Xvfb :91 + lavapipe, NOT a real display. Private XDG data/runtime dirs per run. Project
+/tmp/issue-demo (shallow clone of cli/cli, origin https://github.com/cli/cli.git). `gh` exists on this host
+only at `~/bin/gh`, signed in. Run 1 is the control (terminal launch) the other two are compared with.
+
+| Run | Row | Verdict | Notes / screenshots (evidence/) |
+|---|---|---|---|
+| 1 | control: terminal launch, B2 | PASS | Caption before choosing "GitHub issue reads open issues of cli/cli from GitHub."; after choosing "Loading issues from GitHub…" then the list within ~30 s. Top rows #14015 "Support Discussion Templates", #14554 "Literal "ESC" text corrupts colorized table and --json output", #14223 "gh pr merge --squash --delete-branch: …". Closed-list caption "Showing the 1,000 most recently updated of 1,036 open issues — search also looks on GitHub." `b10-terminal-list-dark.png` |
+| 2 | §B10 Linux: `.desktop` launch, B2 | PASS | A copy of `packaging/micold-ai-ide.desktop` (Exec = the pinned binary) in the run's `$XDG_DATA_HOME/applications`, launched by `gtk-launch micold-m6a` under `env -i` with `PATH=/usr/local/bin:/usr/bin:/bin` (no `~/bin`); `/proc/<client>/environ` confirmed that `PATH`. No "gh isn't installed" error; same top rows and the same "1,000 … of 1,036" caption as run 1. Default settings (environment include on, the user's `~/.bashrc` does not put `~/bin` on `PATH`), so `gh` came from the well-known-directory step. The app rendered light (no theme setting under `env -i`, follows the system). `b10-desktop-list-light.png` |
+| 3 | §B11: sandbox placement, B2 | PASS | `settings.json` seeded with `daemon.placement = local_sandbox`, image `local_build` / `micold-daemon:m6a`, network `no_outbound`, no credential shares. `docker ps` showed container `38470b3ca2fe` (`micold-sandbox`, image `micold-daemon:m6a`; no `gh` inside it). Daemon log: `client attached to daemon client_build=micold-ai-ide/0.15.0`; no VersionMismatch. The chip was enabled with the cli/cli caption (`RemoteList` answered by the sandboxed daemon) and the list matched run 1 (same top rows, "1,000 … of 1,036") although the sandbox has no outbound network and no GitHub credential: the fetch runs in the client on the host. `b11-sandbox-caption-dark.png`, `b11-sandbox-list-dark.png` |
+
+### B10/B11 observations
+- §B10's macOS and Windows arms are not in this file: they are `crates/micold-core/tests/github_locate_desktop_launch.rs` on CI's macOS and Windows runners (T095, quickstart §B10 note).
+- Harness: stopping run 3's container hung once (`docker rm -f` reported "removal already in progress"); it was gone when checked later. Not app behaviour.
+- A first stray click on "+" opened a Claude session tab in run 1; harmless, closed with the client.
