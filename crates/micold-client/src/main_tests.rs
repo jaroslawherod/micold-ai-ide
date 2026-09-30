@@ -4258,10 +4258,26 @@ mod script_path_report {
 
     // --- M2: the save-time notification (contracts/settings-indication.md §1 S5–S7, §3 T2) ---
 
-    /// Open Settings and let its check land, so a later save starts from a settled page.
-    fn opened(app: &mut App) {
-        let job = crate::shell::persist::open_settings(app);
-        app.core.update(job.run());
+    /// Environment include off, `path` stored, a probe that finds nothing there, a recording
+    /// settings store, and a resolver that sources nothing: a save with the feature on must not
+    /// run a real shell over the shared temp directory. Settings is open and its check has landed.
+    fn saving_app(
+        path: &str,
+        store: micold_core::settings::FakeSettingsStore,
+    ) -> (
+        App,
+        Arc<FakeScriptPathProbe>,
+        Arc<micold_core::settings::FakeSettingsStore>,
+    ) {
+        let (mut app, probe) = app_with(path, ProbeAnswer::Missing);
+        let store = Arc::new(store);
+        app.caps = app
+            .caps
+            .clone()
+            .with_settings(store.clone())
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+        let _ = open_and_check(&mut app);
+        (app, probe, store)
     }
 
     /// The open draft as validated settings, the way Save sees it.
@@ -4279,7 +4295,9 @@ mod script_path_report {
     fn save_and_check(app: &mut App) {
         let valid = valid_draft(app);
         let (_survival, job) = crate::shell::persist::save_and_prepare_check(app, valid);
-        app.core.update(job.run());
+        if let Some(job) = job {
+            app.core.update(job.run());
+        }
     }
 
     /// Every notification raised so far, oldest first, taking each off the queue.
@@ -4296,16 +4314,15 @@ mod script_path_report {
     fn a_save_with_a_missing_path_saves_and_posts_one_notice_naming_it_with_the_feature_off_or_on()
     {
         let path = stored_path();
-        let (mut app, _probe) = app_with(&path, ProbeAnswer::Missing);
-        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
-        app.caps = app.caps.clone().with_settings(store.clone());
+        let (mut app, _probe, store) =
+            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
         let notice = micold_core::notify::Notification::new(
             micold_core::notify::Level::Info,
             format!("The environment-include script was not found: {path}"),
         );
 
         for enabled in [false, true] {
-            opened(&mut app);
+            let _ = open_and_check(&mut app);
             let _ = drain_notifications(&mut app);
             app.core
                 .settings
@@ -4336,12 +4353,13 @@ mod script_path_report {
     #[test]
     fn a_save_checks_the_saved_path_even_when_the_path_did_not_change() {
         let path = stored_path();
-        let (mut app, probe) = app_with(&path, ProbeAnswer::Missing);
-        opened(&mut app);
+        let (mut app, probe, _store) =
+            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
         let before = probe.calls().len();
 
         let valid = valid_draft(&app);
         let (_survival, job) = crate::shell::persist::save_and_prepare_check(&mut app, valid);
+        let job = job.expect("a save that was written checks the path");
 
         let Message::Settings(SettingsMsg::ScriptPathChecked {
             seq,
@@ -4369,12 +4387,10 @@ mod script_path_report {
     }
 
     #[test]
-    fn a_save_with_a_missing_path_writes_only_the_three_environment_include_settings() {
+    fn a_save_with_a_missing_path_writes_exactly_the_drafted_settings_and_nothing_of_the_check() {
         let path = stored_path();
-        let (mut app, _probe) = app_with(&path, ProbeAnswer::Missing);
-        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
-        app.caps = app.caps.clone().with_settings(store.clone());
-        opened(&mut app);
+        let (mut app, _probe, store) =
+            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
         let expected = valid_draft(&app).into_settings();
 
         save_and_check(&mut app);
@@ -4384,6 +4400,31 @@ mod script_path_report {
             vec![expected],
             "one write, holding exactly what was drafted; the check's answer is never persisted \
              (FR-010, SC-005)"
+        );
+    }
+
+    #[test]
+    fn a_save_whose_write_failed_posts_no_notice_about_the_path() {
+        let path = stored_path();
+        let (mut app, _probe, _store) = saving_app(
+            &path,
+            micold_core::settings::FakeSettingsStore::new()
+                .failing_save(std::io::ErrorKind::PermissionDenied),
+        );
+
+        save_and_check(&mut app);
+
+        let raised = drain_notifications(&mut app);
+        assert!(
+            raised
+                .iter()
+                .all(|n| n.level == micold_core::notify::Level::Error),
+            "the path was never stored, so only the failed write is reported, got {raised:?}"
+        );
+        assert_eq!(
+            raised.len(),
+            1,
+            "the failed write is reported, got {raised:?}"
         );
     }
 }

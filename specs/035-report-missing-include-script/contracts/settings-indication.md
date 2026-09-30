@@ -21,12 +21,12 @@ ScriptPathChecked { seq: u64, origin: CheckOrigin, result: Option<CheckedScriptP
 | S2 | `script_check_seq == seq` | `ScriptPathChecked { seq, result: Some(c) }` | `script_check = Done(c)` |
 | S3 | `script_check_seq == seq` | `ScriptPathChecked { seq, result: None }` | `script_check = Idle` |
 | S4 | `script_check_seq != seq` | `ScriptPathChecked { .. }` | `script_check` unchanged |
-| S5 | `origin == Saved`, `script_check_save_seq == Some(seq)`, `c.state` is `NotFound{..}` or `NotReadable` | `ScriptPathChecked` | `update` returns `notifications::info(save_notice(&c))` once (an `Outcome`, never a direct `notify_info`); `script_check_save_seq = None` (runs whether or not S2 or S4 applied) |
+| S5 | `origin == Saved`, `script_check_save_seq == Some(seq)`, `c.state` is `NotFound{..}` or `NotReadable` | `ScriptPathChecked` | `update` returns `notifications::info(..)` of `save_notice(&c)` once (an `Outcome`, never a direct `notify_info`); `script_check_save_seq = None` (runs whether or not S2 or S4 applied) |
 | S6 | `origin == Saved`, state `Present`, `Relative` or `Unchecked`, or `result: None` | `ScriptPathChecked` | no notification; `script_check_save_seq = None` if it matched |
 | S7 | `origin == Opened` | `ScriptPathChecked` | never a notification (FR-007) |
 | S8 | any | either message | no setting and no draft field changes (FR-008, FR-010) |
 
-`save_notice` wording (research R6):
+`save_notice(&CheckedScriptPath) -> Option<String>` wording (research R6); it answers `None` for the S6 states, so one match decides both whether and what to report:
 
 - `NotFound { tilde: false }`: `The environment-include script was not found: <path>`
 - `NotFound { tilde: true }`: the same, followed by ` (~ is not expanded; use a full path)`

@@ -1211,7 +1211,7 @@ pub fn script_path_checked(
 /// FR-004, research R6), or `None` when the check found nothing to report.
 ///
 /// There is no "Settings saved." prefix: the notice is posted for the path, not for the write.
-pub fn save_notice(checked: &CheckedScriptPath) -> Option<String> {
+fn save_notice(checked: &CheckedScriptPath) -> Option<String> {
     use micold_core::script_path_check::ScriptPathState;
     let path = &checked.path;
     match checked.state {
