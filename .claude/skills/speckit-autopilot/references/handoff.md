@@ -1,5 +1,7 @@
 # Handoff: the last message
 
+A quick run has no record unit: its ledger is not committed. Skip to `handoff-check.sh <ledger>`.
+
 First dispatch the record unit with the last PR and its merge SHA. It closes the ledger and opens
 the record PR; wait on it and merge it as any other. It is not listed in the ledger, so pass it to
 the checks.

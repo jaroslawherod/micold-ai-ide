@@ -2,7 +2,7 @@
 # PreToolUse(Bash) hook: enforces speckit-autopilot's hard rules in code, not just in prose.
 #
 # A no-op unless the command's directory is on a branch that an autopilot ledger names
-# (specs/*/autopilot.md or specs/*/bugs/*.autopilot.md). There it blocks, with exit 2 and the
+# (specs/*/autopilot.md, specs/*/bugs/*.autopilot.md or specs/quick/*.autopilot.md). There it blocks, with exit 2 and the
 # reason on stderr (Claude Code shows it to the agent):
 #   gh pr merge --delete-branch or --admin     the IDE owns cleanup; --admin bypasses the gate
 #   git worktree remove                        the user removes the worktree
@@ -25,7 +25,7 @@ if [[ $cmd =~ $re_gitdir ]]; then cd "${BASH_REMATCH[1]}" 2>/dev/null || exit 0;
 top=$(git rev-parse --show-toplevel 2>/dev/null) && cd "$top" || exit 0
 b=$(git branch --show-current 2>/dev/null)
 [ -n "$b" ] || exit 0
-ledger=$(grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md 2>/dev/null | head -1)
+ledger=$(grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null | head -1)
 [ -n "$ledger" ] || exit 0
 
 deny() { printf 'autopilot gate: %s\n' "$*" >&2; exit 2; }

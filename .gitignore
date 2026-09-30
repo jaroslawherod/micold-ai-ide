@@ -38,3 +38,6 @@ Thumbs.db
 # in it at all, they are downloaded to a cache outside the repository.
 /site/checks/node_modules/
 __pycache__/
+
+# speckit-autopilot quick runs keep their ledger local (phases/Q-quick.md).
+/specs/quick/

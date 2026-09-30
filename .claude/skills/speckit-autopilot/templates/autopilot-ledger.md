@@ -4,7 +4,7 @@ Kept by the `speckit-autopilot` skill. Records what this flow owns and how far i
 finds this file by its **Worktree branch** line. Keep it true.
 
 - **Input**: <the user's original prompt, verbatim>
-- **Kind**: feature | bug
+- **Kind**: feature | bug | quick
 - **Issue**: <#n, or none>
 - **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
