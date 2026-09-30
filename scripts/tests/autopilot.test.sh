@@ -318,5 +318,18 @@ check "brief: section stops at a sibling heading" 0 '^ok$' bash -c "out=\$('$B' 
 check "brief: items by ID" 0 '^- \*\*SC-001' "$B" items "$d/f/spec.md" FR-002 SC-001
 check "brief: missing item fails" 1 'not found.*FR-009' "$B" items "$d/f/spec.md" FR-009
 
+# review-snapshot.sh: a snapshot takes uncommitted and untracked files, and leaves the index alone.
+R="$S/review-snapshot.sh"
+d="$(new_repo)"; cd "$d/wt"
+echo one > seed.txt; echo new > added.txt
+snap="$("$R")"
+echo two > seed.txt; echo later > later.txt
+check "review-snapshot diffs a changed file" 0 '^\+two$' "$R" diff "$snap"
+check "review-snapshot diffs an untracked file added after" 0 '^\+later$' "$R" diff "$snap"
+check "review-snapshot leaves out what the snapshot already held" 0 '^ok$' \
+  bash -c "! '$R' diff '$snap' | grep -q '^+new\$' && echo ok"
+check "review-snapshot leaves the index alone" 0 '^ok$' bash -c '[ -z "$(git diff --cached --name-only)" ] && echo ok'
+check "review-snapshot refuses an unknown snapshot" 2 'UNKNOWN-SNAPSHOT' bash -c "'$R' diff 0123456789abcdef0123456789abcdef01234567 2>&1"
+
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
