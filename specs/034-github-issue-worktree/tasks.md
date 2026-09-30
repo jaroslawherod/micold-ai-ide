@@ -279,9 +279,9 @@ reorder and restore defaults, refusing blank or duplicate labels.
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [x] T063 [P] Add to `docs/development/architecture.md` where the issue fetch runs (client, on the host) and why the daemon only answers `RemoteList` (research R4, R5).
-- [ ] T064 Run quickstart §B10 (desktop launch), §B11 (sandbox placement) and §B13 (both colour schemes) and record them in `specs/034-github-issue-worktree/evidence/quickstart-b.md`; §B10's Linux arm is recorded by hand; its macOS and Windows arms are T095's CI test.
+- [x] T064 Run quickstart §B10 (desktop launch), §B11 (sandbox placement) and §B13 (both colour schemes) and record them in `specs/034-github-issue-worktree/evidence/quickstart-b.md`; §B10's Linux arm is recorded by hand; its macOS and Windows arms are T095's CI test.
 - [x] T095 [P] Add `crates/micold-core/tests/github_locate_desktop_launch.rs`: on every CI OS, `locate_gh` over the real files and environment, with the `PATH` a desktop launcher hands the app (macOS `launchd`'s `/usr/bin:/bin:/usr/sbin:/sbin`, Linux systemd's default, Windows' fresh-install machine `PATH`) and no environment-include `PATH`, finds a working `gh` (`gh --version`) through `micold_core::github::locate_gh_on_host`, the lookup the client calls. No network or sign-in. Off CI it skips with a printed reason when `gh` is nowhere the lookup knows, or only where the environment include alone could see it (a version manager); on CI (`CI` set, not `0`/`false`) it fails instead of skipping (quickstart §B10's macOS and Windows arms; FR-026).
-- [ ] T065 Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; confirm every quickstart §A row passes.
+- [x] T065 Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; confirm every quickstart §A row passes.
 
 ---
 
