@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M2
-- **Next step**: Coordinator: wait for #474's checks and merge it; then M3
+- **Next step**: Coordinator: wait for #474's checks and merge it; then M3. (#474 rebased onto origin/main after a conflict in `daemon_sync.rs` with feature 035's `adopt_daemon_settings`; PROTOCOL_VERSION on main still 16, so no renumbering; gate green at d53d2242, 3951 passed)
 
 ## Pull requests
 
