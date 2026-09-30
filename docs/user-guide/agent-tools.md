@@ -2,8 +2,9 @@
 
 Every Claude Code and GitHub Copilot session the application starts can see your project the way the
 sidebar shows it: which worktrees exist, which branches are free, and which sessions are running
-where. It can also create and rename a worktree and create or start a session, as you would from
-the sidebar. The session service provides this through a small tool server named `micold`, and each
+where. It can also create, rename and delete a worktree and create, start, stop, interrupt and
+delete a session; the ones that stop or remove something wait for you
+to allow them first. The session service provides this through a small tool server named `micold`, and each
 session is connected to it automatically. You do not install or configure anything.
 
 Ask the assistant in a session something like *"which worktrees does this project have?"* or *"is
@@ -40,9 +41,36 @@ branch that already exists or is checked out elsewhere, a name the naming rules 
 name git does not accept. Nothing is created when a request fails. When several requests race for
 the same branch, one succeeds and the others are told the branch is taken.
 
-A session running in the project folder itself (`default`) cannot create or rename worktrees. Work
-in the project folder is kept separate from worktrees, and an assistant there is refused with that
-reason. It can still list everything and create and start sessions.
+A session running in the project folder itself (`default`) cannot create, rename or delete
+worktrees. Work in the project folder is kept separate from worktrees, and an assistant there is
+refused with that reason. It can still list everything and create, start, stop and delete sessions.
+
+### Requests that wait for you
+
+These tools stop or remove something, so each request waits until you allow it:
+
+| Tool | What it does once you allow it |
+|---|---|
+| `stop_session` | Stops another session: its processes end, every window shows it idle, and its conversation can be resumed later with `start_session`. A session that is already stopped is left as it is, and nobody is asked |
+| `interrupt_session` | Types **Ctrl-C** into another running session, as if you pressed it in its terminal. The session keeps running. A session that is not running is refused, and nobody is asked |
+| `delete_session` | Removes another session, as removing it from the sidebar does |
+| `delete_worktree` | Deletes a worktree and, unless the assistant asks to keep it, its branch. A worktree with running sessions is refused, naming them, unless the assistant asks to stop them (`stop_sessions`); nobody is asked then |
+
+When the assistant asks, **every open window** shows a dialog naming the session that asks, what it
+wants to do, and to what. **Allow** does it; **Deny** refuses it, and the assistant is told you
+declined. Escape or a click outside the dialog counts as Deny. The first answer from any window
+counts, and the dialog closes in every other window. If you are in another dialog at that moment
+(say, halfway through a new-worktree form), the request waits until you close it, so nothing you
+typed is lost.
+
+Nothing changes until you allow it. The request fails with *needs confirmation* if no window is open
+to ask, or if nobody answers within 60 seconds. It fails with *not found* if the session or worktree,
+or the session that asked, goes away while the dialog is open; the dialog then closes by itself. If
+the assistant gives up waiting (its session is stopped, or it cancels the request), the dialog closes
+and nothing is done.
+
+Requests that would be refused anyway never show a dialog. A session cannot stop, interrupt or
+delete itself, or delete the worktree it runs in; ask from another session, or use the sidebar.
 
 ### The first prompt
 
