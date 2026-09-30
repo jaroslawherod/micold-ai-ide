@@ -83,8 +83,9 @@ requests after a transcript's first that re-wrote more than half of a context of
 
 What the skill does about it:
 
-- **Wait once.** A unit starts its long jobs together (gate, reviewers, `visual-pass`) and waits
-  for all of them in one wait, instead of idling past 5 minutes between them.
+- **Wait once.** A milestone unit runs review A while the gate builds, then review B and
+  `visual-pass` together on the green build, so fewer of its waits run past 5 minutes. A job that
+  needs the build lock never starts while the gate holds it, since it would idle there too.
 - **Fixed prompt prefixes.** Every unit prompt opens with the same line, and reviewer prompts put
   role, reading rules, output contract and rubric before anything that varies.
 - **One model per context.** Units and reviewers pick their model when dispatched; nothing switches

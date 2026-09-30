@@ -13,25 +13,24 @@ For milestone K:
    test that fails on `origin/main` for the reported reason. If it asks "proceed anyway?", never
    answer "yes": close the checklist item as in Phase 3 (confirm, or fix the spec or plan), and
    escalate only when it needs a user decision.
-2. **Gate and reviews, started together** (see *Wait once* in unit.md), then one wait for all:
-   - `mise run gate`, detached as in [../references/pr-and-merge.md](../references/pr-and-merge.md)
-     §2. If `cfg(target_os)` code changed, also
-     `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`.
-   - If anything visible changed, the `visual-pass` skill. It is a forked Sonnet subagent that sees
-     only its arguments: pass the worktree path, the quickstart section or change to check, and
-     what counts as a pass.
-   - Reviews A and B (step 3): dispatch B as a background subagent, then run A while the rest
-     works.
-3. **Code review. Two reviews:**
-   - **A**: the `code-review` skill at `high` on `origin/main...HEAD`.
-   - **B**: a fresh subagent checks the diff against the milestone's deliverable, its acceptance
-     scenarios and the constitution (conformance rubric).
+2. **Gate, with review A in its shadow.** Start `mise run gate` detached, as in
+   [../references/pr-and-merge.md](../references/pr-and-merge.md) §2 (if `cfg(target_os)` code
+   changed, also `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`).
+   While it builds, run review **A**: the `code-review` skill at `high` on `origin/main...HEAD`. It
+   builds nothing, so it does not wait on the build lock. Then wait for the gate.
+   - **Red:** fix, start the gate again, and give A a scoped round on the fix diff while it runs.
+3. **Green gate: review B and the visual pass, together.** Dispatch **B** in the background: a
+   fresh subagent checks the diff against the milestone's deliverable, its acceptance scenarios and
+   the constitution (conformance rubric). Its **Verify** reuses the gate's build. If anything
+   visible changed, run the `visual-pass` skill meanwhile. It is a forked Sonnet subagent that sees
+   only its arguments: pass the worktree path, the quickstart section or change to check, and what
+   counts as a pass.
 
-   Verify each finding against the code first. Fix real ones, then start the gate again together with a
-   next round of each review whose last round had a real BLOCKER or MAJOR. B also runs a next
-   (scoped) round when A's fixes changed code after B's last round. What counts toward the round
-   limit: [../references/review-rubrics.md](../references/review-rubrics.md) *After it returns*. Decline a finding that contradicts the spec, and
-   record why in the ledger.
+   Verify each finding against the code first. Fix real ones, then back to step 2 with a next round
+   of each review whose last round had a real BLOCKER or MAJOR. Any review whose snapshot predates
+   a fix gets a scoped round on the fix diff (B after A's fixes, A after a gate fix). What counts
+   toward the round limit: [../references/review-rubrics.md](../references/review-rubrics.md)
+   *After it returns*. Decline a finding that contradicts the spec, and record why in the ledger.
 4. Check the ticks from step 1, update the ledger, commit, push, and open the PR. Title
    `feat(NNN): <deliverable>`, or `fix(NNN): … (BUG-<k>)` for a bug.
 

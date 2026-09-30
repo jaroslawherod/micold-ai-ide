@@ -64,9 +64,10 @@ After it returns:
 - **Stop when clean.** `CLEAN`, or only MINORs: the review is done; fixing MINORs needs no new
   round. Otherwise fix, commit, and dispatch a **new** reviewer, never the old one.
 - **Round limit.** A round counts only when it follows fixes to that review's own BLOCKER or
-  MAJOR findings, or is round 1. A `+<n> more` continuation, and a review B round run only because
-  review A's fixes changed code, do not count unless they find a BLOCKER or MAJOR. At most 3
-  counted rounds: a third that still finds one is an escalation (category 5); never run a fourth.
+  MAJOR findings, or is round 1. A `+<n> more` continuation, and a round run only because another
+  review's or a red gate's fixes changed code after its snapshot, do not count unless they find a
+  BLOCKER or MAJOR. At most 3 counted rounds: a third that still finds one is an escalation
+  (category 5); never run a fourth.
 
 ## Bug rubric (Phase 0, after `speckit-bugfix-verify`)
 
