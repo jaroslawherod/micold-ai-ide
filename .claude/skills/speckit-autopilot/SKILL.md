@@ -89,18 +89,21 @@ A cheaper unit that returns `FAILED` is retried on the session model.
   it.
 - **Prompt:** keep this opening fixed for every unit, so the prompt cache reuses it:
   `You are a speckit-autopilot unit. Read .claude/skills/speckit-autopilot/unit.md and follow it.`
-  Then the phase file, ledger path (`none yet` for the first unit), worktree path and branch, the
-  previous PR and its merge SHA (none for the first unit), and the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
+  Then the unit's description (the unit passes it to `context.py`), the phase file, ledger path
+  (`none yet` for the first unit), worktree path and branch, the previous PR and its merge SHA
+  (none for the first unit), and the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
   repro and correct behaviour the bug unit returned; for a milestone, its ID and task IDs (and
   `BUG-<k>` for a bug).
-- **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED | HANDOVER`, a PR number if it opened one,
-  and at most five lines. Read the ledger, not the transcript.
+- **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED | HANDOVER`, a PR number if it
+  opened one, and at most five lines. Read the ledger, not the transcript.
 - **`ESCALATE`:** subagents have no `AskUserQuestion`. Ask the returned questions yourself (see
   *Asking the human*), then continue **the same** subagent with `SendMessage` and the answers.
 - **`FAILED`:** read the ledger and the five lines. Retry once with a fresh unit, or escalate.
 - **`HANDOVER`:** its context passed 150k. Dispatch a fresh unit of the same phase, model and scope,
   with `part <n>` added to the description and `Continue from the ledger's Handover.` in the
-  prompt. A fourth part for one unit is an escalation (category 5).
+  prompt. A fourth part for one unit is an escalation (category 5). If it had opened its PR, the
+  new part finishes the work on that PR; wait on and merge it as usual, and send any `RED` log to
+  the latest part.
 
 ### Waiting and merging
 
@@ -121,7 +124,7 @@ tail -6 "$log"
 | Last line | Do |
 |---|---|
 | `MERGED <n> <sha>` | Run `scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. |
-| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
+| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR (its latest part) with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
 | `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
 | `CLOSED <n>` | Someone closed the PR. Escalate (category 1); never reopen it unasked. |
