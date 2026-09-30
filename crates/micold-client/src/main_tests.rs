@@ -4688,6 +4688,167 @@ mod script_path_report {
             "US2 scenario 3, feature off: a path that became valid is no longer reported (FR-009)"
         );
     }
+
+    // --- M4: recovery is the user's own edit (A9, A10, U62, US3) ---
+
+    /// Settings open on a stored missing path whose check has landed `NotFound`, and its first
+    /// save's notice already taken off the queue: the not-found indication is showing.
+    fn reporting_a_missing_path(
+        path: &str,
+    ) -> (
+        App,
+        Arc<FakeScriptPathProbe>,
+        Arc<micold_core::settings::FakeSettingsStore>,
+    ) {
+        let (app, probe, store) =
+            saving_app(path, micold_core::settings::FakeSettingsStore::new());
+        assert_eq!(
+            app.core.settings.script_check,
+            micold_client::features::settings::ScriptCheck::Done(
+                micold_core::script_path_check::CheckedScriptPath {
+                    path: path.to_string(),
+                    enabled: false,
+                    state: micold_core::script_path_check::ScriptPathState::NotFound {
+                        tilde: false
+                    },
+                }
+            ),
+            "the not-found indication is showing"
+        );
+        (app, probe, store)
+    }
+
+    /// The user types `path` into the open draft's Script path field.
+    fn type_path(app: &mut App, path: &str) {
+        app.core
+            .settings
+            .settings_draft
+            .as_mut()
+            .expect("Settings is open")
+            .environment
+            .script_path = path.to_string();
+    }
+
+    #[test]
+    fn typing_an_existing_path_and_saving_clears_the_report_without_a_notice() {
+        let (mut app, _probe, _store) = reporting_a_missing_path(&stored_path());
+        let existing = std::env::temp_dir()
+            .join("exists.sh")
+            .to_str()
+            .expect("utf-8 temp dir")
+            .to_string();
+        type_path(&mut app, &existing);
+        create_the_file(&mut app);
+
+        save_and_check(&mut app);
+
+        assert_eq!(
+            app.core.settings.script_check,
+            micold_client::features::settings::ScriptCheck::Done(
+                micold_core::script_path_check::CheckedScriptPath {
+                    path: existing,
+                    enabled: false,
+                    state: micold_core::script_path_check::ScriptPathState::Present,
+                }
+            ),
+            "the save's check describes the new path (FR-009)"
+        );
+        assert_eq!(
+            script_path_notice(
+                &app.core.settings.script_check,
+                &app.env_include_last_outcome
+            ),
+            Vec::<NoticeLine>::new(),
+            "US3 scenario 1: the indication is gone"
+        );
+        assert_eq!(
+            drain_notifications(&mut app),
+            Vec::new(),
+            "a save leaving no missing path posts nothing (SC-006)"
+        );
+    }
+
+    #[test]
+    fn clearing_the_path_and_saving_clears_the_report_without_a_notice() {
+        let (mut app, probe, store) = reporting_a_missing_path(&stored_path());
+        let probed_before = probe.calls().len();
+        type_path(&mut app, "");
+
+        save_and_check(&mut app);
+
+        assert_eq!(
+            store
+                .saves()
+                .last()
+                .map(|s| s.env_include_script_path.clone()),
+            Some(String::new()),
+            "the blank path is what was saved"
+        );
+        assert_eq!(
+            app.core.settings.script_check,
+            micold_client::features::settings::ScriptCheck::Idle,
+            "a blank path is not checked (FR-011)"
+        );
+        assert_eq!(probe.calls().len(), probed_before, "nothing is examined");
+        assert_eq!(
+            script_path_notice(
+                &app.core.settings.script_check,
+                &app.env_include_last_outcome
+            ),
+            Vec::<NoticeLine>::new(),
+            "US3 scenario 2: the indication is gone"
+        );
+        assert_eq!(
+            drain_notifications(&mut app),
+            Vec::new(),
+            "a blank path is not a missing script, so nothing is posted (FR-011)"
+        );
+    }
+
+    #[test]
+    fn nothing_recovers_on_its_own_only_the_users_draft_is_saved() {
+        let path = stored_path();
+        let mut app = on_and_missing(&path);
+        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
+        app.caps = app.caps.clone().with_settings(store.clone());
+        app.env_include_timeout_secs = 7;
+        let stored = |app: &App| {
+            (
+                app.env_include_enabled,
+                app.env_include_script_path.clone(),
+                app.env_include_timeout_secs,
+            )
+        };
+        let before = stored(&app);
+
+        let _ = open_and_check(&mut app);
+        assert_eq!(
+            stored(&app),
+            before,
+            "opening and checking changes no environment-include setting (FR-008)"
+        );
+        assert!(store.saves().is_empty(), "and writes nothing");
+
+        let draft = valid_draft(&app).into_settings();
+        save_and_check(&mut app);
+        let _ = open_and_check(&mut app);
+
+        assert_eq!(
+            store.saves(),
+            vec![draft.clone()],
+            "only the user's own save writes, and it writes the draft (FR-008)"
+        );
+        assert_eq!(
+            stored(&app),
+            (
+                draft.env_include_enabled,
+                draft.env_include_script_path,
+                draft.env_include_timeout_secs
+            ),
+            "no default path, no blanking, no switching off: the missing path stays as drafted"
+        );
+        assert_eq!(stored(&app), before);
+    }
 }
 
 // --- feature 034: the GitHub issue source, through the shell (T022, T066) --------------------

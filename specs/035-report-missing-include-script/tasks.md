@@ -146,7 +146,7 @@ No production code: the behaviour is FR-009's check on open and after every save
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T028 [US3] [A9] [A10] [U62] Write shell tests in `crates/micold-client/src/main_tests.rs` with a `FakeScriptPathProbe`, starting from a stored missing path whose check is `Done(NotFound)`. US3 scenario 1: saving an existing absolute path gives a `Saved` check that resolves to `Done(Present)` and posts no notification. US3 scenario 2: saving a blank path gives `script_check` `Idle` and posts no notification (FR-011). FR-008: across open, check and save, no environment-include setting is changed except by the user's own draft (enabled flag, path and timeout equal the saved draft).
+- [X] T028 [US3] [A9] [A10] [U62] Write shell tests in `crates/micold-client/src/main_tests.rs` with a `FakeScriptPathProbe`, starting from a stored missing path whose check is `Done(NotFound)`. US3 scenario 1: saving an existing absolute path gives a `Saved` check that resolves to `Done(Present)` and posts no notification. US3 scenario 2: saving a blank path gives `script_check` `Idle` and posts no notification (FR-011). FR-008: across open, check and save, no environment-include setting is changed except by the user's own draft (enabled flag, path and timeout equal the saved draft).
 - [ ] T036 [US3] [A9] [A10] Confirm A9–A10 from T028 are green with the full suite (`mise run gate`). If a test passes on arrival, record in `specs/035-report-missing-include-script/tdd/cycle-log.md` a deliberate mutant that turns it red (for example, remove the `Saved` trigger T038 added to `apply_save`), then revert it.
 - [ ] T029 [US3] Run quickstart §B steps B9 and B10 with the `visual-pass` skill. Save the evidence under `specs/035-report-missing-include-script/visual-pass/`.
 
@@ -156,7 +156,7 @@ No production code: the behaviour is FR-009's check on open and after every save
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T030 [P] Add `ScriptPathProbe` to the capability examples in `docs/development/architecture.md` (the "Declare the trait in the core" list: `script_path_check.rs` holds `ScriptPathProbe`).
+- [X] T030 [P] Add `ScriptPathProbe` to the capability examples in `docs/development/architecture.md` (the "Declare the trait in the core" list: `script_path_check.rs` holds `ScriptPathProbe`).
 - [ ] T031 Run quickstart Part A (`mise run test-core`, `mise run gate`) and the whole of Part B (B1–B11; B12 was M1's interim, light and dark themes, no line overflowing the column) with the `visual-pass` skill, and record the result in `specs/035-report-missing-include-script/visual-pass/README.md`.
 
 ---
