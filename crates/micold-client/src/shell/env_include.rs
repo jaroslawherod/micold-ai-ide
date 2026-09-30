@@ -98,7 +98,7 @@ pub(crate) fn refresh_env_include(app: &mut App, cwd: &Path) {
 /// Everything it needs is copied out of `App` when it is prepared, so running it touches no UI
 /// state: the stored path exactly as stored, the stored enabled flag at the start (research R8),
 /// and the probe. Tests call [`ScriptPathCheckJob::run`] directly; the app runs it through
-/// [`start_script_path_check`].
+/// [`run_script_path_check`].
 pub(crate) struct ScriptPathCheckJob {
     seq: u64,
     origin: CheckOrigin,
