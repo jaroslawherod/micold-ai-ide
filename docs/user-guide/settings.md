@@ -163,17 +163,19 @@ at once, and the result appears below the fields a moment later. The check only 
 it never runs or sources it, and it is not saved anywhere. Opening a session or restarting a
 terminal does no check at all, so a bad path never slows a launch.
 
-While **Source a script before each session** is off, the page tells you when the path would not
-work if you turned it on:
+Whether **Source a script before each session** is on or off, the page tells you when the path
+does not name a readable file, in the same words either way:
 
 - **Script not found: `<path>`** — nothing exists at that path.
 - **Not a readable file: `<path>`** — something is there, but it is a directory or a file you are
   not allowed to read.
 
-Either line is followed by a note that environment include is off, so no script is sourced now,
-and that turning it on will not source one until the path names a readable file.
+Either line is followed by a note that says what that means in the current state. While environment
+include is off: no script is sourced now, and turning it on will not source one until the path names
+a readable file. While it is on: the script cannot be sourced until the path names a readable file.
+Switching the feature on or off changes only this note, never the line about the path.
 
-Also while it is off, a few paths are reported differently:
+A few paths are reported differently, in either state:
 
 - A path starting with `~` is taken literally: `~` is **not** expanded to your home directory, so
   `~/.bashrc` is reported as not found, with a note saying to use a full path.
@@ -181,7 +183,14 @@ Also while it is off, a few paths are reported differently:
   found depends on each session's directory. The page says so instead.
 - If the check has no answer within 2 seconds — for example, the path is on a network drive that
   is not responding — the page says **Couldn't check the script path** rather than waiting.
-- A blank path, or a path that names a readable file, shows nothing.
+- A blank path, or a path that names a readable file, shows nothing about the path.
+
+If you create the missing file while environment include is on, the page says **The last attempt
+could not find the script**, followed by a note that the file exists now and that saving Settings or
+restarting a session will source it. Opening Settings never sources the script by itself.
+
+If you save Settings in another window while this one shows Settings, this page checks the newly
+stored path too, so both windows say the same thing about it.
 
 #### When you save
 
@@ -209,7 +218,10 @@ shown at the bottom of this section whenever it didn't succeed — since resolut
 directory, this reflects whichever directory was most recently (re-)resolved (typically your active
 project, or the one you just restarted a session in), not necessarily every project you have open:
 
-- **Script not found** — the configured path doesn't exist.
+- **Script not found: `<path>`** — the configured path doesn't exist. It is the same line the
+  path check shows, and it appears once, not twice. It reads the same with the feature on or off
+  (see [If the script path names no file](#if-the-script-path-names-no-file)), so switching the
+  feature off does not hide it.
 - **Exited with an error** — the script ran but failed; the script's own output is shown verbatim
   underneath, to help you see what went wrong.
 - **Timed out** — sourcing didn't finish within the configured timeout and was abandoned.
