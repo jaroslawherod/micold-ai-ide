@@ -24,6 +24,9 @@ sends you there.
 - **PRs.** Open them per [references/pr-and-merge.md](references/pr-and-merge.md) §2–4. Record the PR
   number in the ledger at once.
 - **Batch tool calls.** Independent reads and probes go in one message.
+- **Wait once.** Your prompt cache expires after 5 idle minutes; the next call then re-writes your
+  whole context. Start long jobs together (gate, reviewers, `visual-pass`, other subagents) and
+  wait for all of them in one wait, not one after another.
 - **Read only what you need.** Everything you read is re-read on each later call of the unit.
   - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
     not the whole file.

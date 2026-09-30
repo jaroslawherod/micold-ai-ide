@@ -10,22 +10,16 @@ ledger's *Review rounds*. Nothing needs committing: the snapshot holds the worki
 Use `Agent` (`subagent_type: general-purpose`). A full round (round 1, including review B's first
 pass): omit `model`. A scoped re-review (below): `model: "sonnet"`.
 
-Prompt parts, in order:
+Prompt parts, in order. Parts 1 to 4 are the same text for every review of a kind, so the prompt
+cache reuses them across reviewers; everything that varies goes in part 5.
 
-1. **Role.** "You are reviewing <artifact> for feature <NNN>. You did not write it. Do not edit any
-   file."
-2. **Read.** Artifact paths and `.specify/memory/constitution.md`. For code, instead of spec.md and
-   tasks.md, the milestone brief (`scripts/autopilot/brief.py milestone <feature-dir> M<K>`: block,
-   tasks, requirements, stories, and the other milestones' task ranges for the scope check); for a
-   bug, the BUG record and `brief.py items tasks.md <fix task IDs>`. Then
-   `git diff --stat origin/main...HEAD`, and the diff file by file.
-   Tell it to pull more with `brief.py section|items` rather than reading an artifact whole.
-3. **Reading rules**, verbatim: "Everything you read stays in your context for every later call.
+1. **Role**, verbatim: "You are a speckit-autopilot reviewer. You did not write what you review. Do
+   not edit any file."
+2. **Reading rules**, verbatim: "Everything you read stays in your context for every later call.
    For code, `grep -n` then `Read` with `offset`/`limit`; never read a whole source file to review
    a few changed lines. Send command output (tests, **Verify** steps) to a file in the scratchpad
    and `grep` it for the result."
-4. **Rubric.** The matching section below, verbatim.
-5. **Output contract:**
+3. **Output contract:**
    ```
    VERDICT: CLEAN | CHANGES
    F1 [BLOCKER|MAJOR|MINOR] <file>:<line or section> — <what is wrong>
@@ -36,11 +30,19 @@ Prompt parts, in order:
    be pointed at. Taste is MINOR. At most 8 findings, most severe first, and at most 3 of them
    MINOR. More BLOCKER or MAJOR than fit: end with `+<n> more`. Nothing else: no summary, no
    praise, no list of what was checked.
+4. **Rubric.** The matching section below, verbatim.
+5. **What to review.** The artifact and feature (`<artifact> for feature <NNN>`), its paths and
+   `.specify/memory/constitution.md`. For code, instead of spec.md and tasks.md, the milestone
+   brief (`scripts/autopilot/brief.py milestone <feature-dir> M<K>`: block, tasks, requirements,
+   stories, and the other milestones' task ranges for the scope check); for a bug, the BUG record
+   and `brief.py items tasks.md <fix task IDs>`. Then `git diff --stat origin/main...HEAD`, and the
+   diff file by file. Tell it to pull more with `brief.py section|items` rather than reading an
+   artifact whole.
 
 ### Round 2 and later
 
 A re-review checks the fix diff, not the whole artifact again. Its prompt has parts 1 to 5, except
-that part 2 gives the paths and the brief but not the full diff, plus:
+that part 5 gives the paths and the brief but not the full diff, and adds:
 
 - the previous round's findings, each marked fixed (with how) or declined (with the reason);
 - the fix diff: `scripts/autopilot/review-snapshot.sh diff <last round's snapshot>`.

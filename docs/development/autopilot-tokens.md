@@ -67,3 +67,27 @@ What changed in response:
   for spec 031's spec.md and tasks.md.
 - `unit.md` rules: read artifacts by section (`brief.py section|items`), code by `grep -n` then
   `Read` with `offset`/`limit`, and `grep` saved tool results and logs instead of reading them.
+
+## Prompt cache
+
+Measured over 53 sessions that ran `speckit-autopilot` (27,816 requests): cache writes are a third
+of `cost_eq`, in the main session and in subagents alike. The report's `rebuilds` column counts
+requests after a transcript's first that re-wrote more than half of a context of 30k tokens or more.
+
+| Cause | Rebuilds | Cache-write `cost_eq` |
+|---|---:|---:|
+| Subagent idle 5 min to 1 h: its cache lives 5 min | 163 | 27.6M |
+| Main session idle over 1 h: its cache lives 1 h | 117 | 23.9M |
+| Compaction | 163 | 14.0M |
+| Other (shorter gaps, prefix changes, subagent idle over 1 h) | 71 | 12.2M |
+
+What the skill does about it:
+
+- **Wait once.** A unit starts its long jobs together (gate, reviewers, `visual-pass`) and waits
+  for all of them in one wait, instead of idling past 5 minutes between them.
+- **Fixed prompt prefixes.** Every unit prompt opens with the same line, and reviewer prompts put
+  role, reading rules, output contract and rubric before anything that varies.
+- **One model per context.** Units and reviewers pick their model when dispatched; nothing switches
+  model inside a running context.
+
+Compaction is the next step: units that stay small never compact.

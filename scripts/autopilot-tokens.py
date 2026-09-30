@@ -17,6 +17,9 @@ Columns:
   input       uncached input tokens
   cache_w     tokens written to the prompt cache
   cache_r     tokens read from the prompt cache
+  rebuilds    requests after a transcript's first that wrote over half of a 30k+ context to the
+              cache: the cache had expired (5 min for subagents, 1 h for the main session) or the
+              prefix changed (compaction, model switch)
   output      LOWER BOUND: transcripts store usage from the start of the stream, so output is
               mostly undercounted. Input and cache columns are exact.
   peak_ctx    largest context sent in one request (input + cache_w + cache_r)
@@ -31,7 +34,9 @@ from collections import defaultdict
 from pathlib import Path
 
 PROJECTS = Path.home() / ".claude" / "projects"
-FIELDS = ("calls", "input", "cache_w", "cache_r", "output", "peak_ctx", "cost_eq")
+FIELDS = ("calls", "input", "cache_w", "cache_r", "rebuilds", "output", "peak_ctx", "cost_eq")
+# A request that writes more than half of a context this large re-caches the conversation.
+REBUILD_MIN_CTX = 30_000
 
 
 def read_jsonl(path):
@@ -49,6 +54,7 @@ def usage_of(path):
     """Sum usage per model for one transcript. Content blocks of one message repeat its usage, so
     each message id counts once."""
     seen = set()
+    first = True
     per_model = defaultdict(lambda: dict.fromkeys(FIELDS, 0))
     for rec in read_jsonl(path):
         if rec.get("type") != "assistant":
@@ -69,6 +75,10 @@ def usage_of(path):
         m["input"] += inp
         m["cache_w"] += cw
         m["cache_r"] += cr
+        ctx = inp + cw + cr
+        if not first and ctx >= REBUILD_MIN_CTX and cw > ctx / 2:
+            m["rebuilds"] += 1
+        first = False
         m["output"] += out
         m["peak_ctx"] = max(m["peak_ctx"], inp + cw + cr)
         m["cost_eq"] += inp + 1.25 * w5m + 2 * w1h + 0.1 * cr + 5 * out
