@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: Run milestone M3 (T033–T036, T094, T076, T037–T042, T077).
+- **Next step**: Merge the M3 PR on green CI, then run milestone M4 (T043–T052, T078–T085).
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | #460 | merged (454c716c) |
 | M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | #468 | merged (a17e6cde) |
-| M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | — | in-progress |
+| M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | (PR pending) | review |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | — | pending |
 | M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | — | pending |
 | M6 | T063–T065 | Architecture doc + quickstart §B10, B11, B13 recorded | — | pending |
@@ -64,6 +64,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M3 | code-review A r2 #10 | Cycle log records `build-lock.sh cargo test` instead of a mise task | `.specify/memory/tdd-profile.md` names these single-target commands; `mise run gate` runs the suite. |
 | M3 | code-review A r3 #2 | A debounce ending while a create runs or a prompt is up still searches | Round 2 showed the guarded alternative leaves the search Pending for good. The keystroke is the named event (FR-003); the answer only re-ranks a closed list and never touches type, ticket or name, which is what the prompt resolves. Re-arming on return to editing is new wiring the plan did not name. |
 | M3 | code-review A r3 #7 | Cycle log records `build-lock.sh cargo test` | As r2 #10. |
+| M3 | visual pass D6 | The open result list covers the "Searching GitHub…" / search-failed lines under the field | The same Typeahead overlay behaviour M2 declined as D3; contract §2 places these lines under the picker. Visible once the list closes. Listed under Follow-ups. |
 | M3 | M1 conformance B F2 (revisited) | `parse_list_page`'s `errors[]` branch is reached only at exit 0 | Revisited with M3's partial-response rule: a non-zero exit's stdout is used only when the parser accepts it, otherwise stderr is classified, because stderr names SAML and scope refusals that GraphQL types as FORBIDDEN (review A #2, U111). Round 2: an error the answer types exactly (NOT_FOUND → `NoAccess`, RATE_LIMITED) now stands at any exit status, so the `errors[]` branch is live for real `gh`; only an `Other` goes to stderr. F2 closed. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
@@ -74,6 +75,8 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M3 | A (code-review high) | 1 | 0b3a3df2:7c1231e2 | 10 findings: #1, #2, #4, #6, #7, #10 (doc, double parse) fixed (U107–U111); #3, #5, #8, #9 declined |
 | M3 | A (code-review high), scoped | 2 | 14dfc916:feb7b70e | 10 findings: #1 (round 1 #7 left a search stuck Pending — reverted, U110 revised), #2/#3/#8 (a typed GraphQL error stands; only `Other` goes to stderr, ListNotFound case restored), #4 (highlight falls back to the clamp), #7 (doc), #9 (branch) fixed; #5, #6, #10 declined |
 | M3 | A (code-review high), scoped | 3 (last) | a9a4807b:f7829cb2 | 7 findings: #1 (highlight cleared when its issue is dropped), #3 (GitHub's message kept over a generic `Other`), #4 (scope refusals → `NoAccess`, U112), #5/#6 (typed-error test split out, RATE_LIMITED search case) fixed; #2, #7 declined. No round 4 (limit); review B covers the fix diff. |
+| M3 | B (conformance) | 1 | d4f988e7:c1c43e14 | CLEAN (1 MINOR: U70 core half test-after, covered by the reducer's red) |
+| M3 | visual pass §B6 | 1 | c1c43e14 | criteria 1, 3, 4 PASS; 2 partial — the issue beyond the cap appears once and is pickable, "Searching GitHub…" not caught on screen (load ~20); D6 declined |
 
 ## Open escalation
 
@@ -81,5 +84,6 @@ None.
 
 ## Follow-ups not done
 
+- Visual pass D6 (M3): while the issue list is open, its overlay hides the search status line under the field. A status position that stays visible (above the field, or in the list's empty/footer row) would need a contract §2 change; raise it with M6's §B13 pass.
 - SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2; re-time §B2–B5 on a release build in M6 (T063–T065).
 - Quickstart §B5's second attempt with the same ticket and name shows the folder-collision error, not a reuse prompt, because the branch is held by the existing worktree. That is the existing FR-021 path; the reuse prompt itself is covered by A6.
