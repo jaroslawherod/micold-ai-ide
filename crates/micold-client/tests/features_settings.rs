@@ -363,7 +363,14 @@ mod script_path_check {
     }
 
     fn start(state: &mut State, origin: CheckOrigin) -> u64 {
-        update(state, Msg::ScriptPathCheckStarted { origin });
+        update(
+            state,
+            Msg::ScriptPathCheckStarted {
+                origin,
+                path: MISSING.to_string(),
+                enabled: false,
+            },
+        );
         state.settings.script_check_seq
     }
 
@@ -389,6 +396,8 @@ mod script_path_check {
             &mut state,
             Msg::ScriptPathCheckStarted {
                 origin: CheckOrigin::Opened,
+                path: MISSING.to_string(),
+                enabled: false,
             },
         );
 
@@ -404,6 +413,31 @@ mod script_path_check {
             },
             "a re-check must not blank the notice while it runs"
         );
+    }
+
+    #[test]
+    fn a_check_of_another_path_or_state_does_not_keep_showing_the_previous_answer() {
+        let previous = checked(ScriptPathState::Present);
+        for (path, enabled) in [("/tmp/saved-elsewhere.sh", false), (MISSING, true)] {
+            let mut state = State::default();
+            state.settings.script_check = ScriptCheck::Done(previous.clone());
+
+            update(
+                &mut state,
+                Msg::ScriptPathCheckStarted {
+                    origin: CheckOrigin::Opened,
+                    path: path.to_string(),
+                    enabled,
+                },
+            );
+
+            assert_eq!(
+                state.settings.script_check,
+                ScriptCheck::Pending { seq: 1, last: None },
+                "an answer about {MISSING} (off) says nothing true about {path} (enabled = \
+                 {enabled}): another window's save changed what is stored (review A)"
+            );
+        }
     }
 
     #[test]
@@ -963,6 +997,19 @@ mod script_path_notice_on {
                 note(DIAGNOSTIC),
             ],
             "N7: a directory gets both notes (Edge Cases)"
+        );
+    }
+
+    #[test]
+    fn on_and_not_readable_after_a_missing_script_attempt_says_it_once_by_path() {
+        assert_eq!(
+            script_path_notice(
+                &done(ScriptPathState::NotReadable, true),
+                &EnvIncludeOutcome::MissingScript
+            ),
+            vec![caution(&format!("Not a readable file: {P}")), note(ON)],
+            "N7: a path the probe cannot read that the resolver did not find is one problem, not \
+             two contradicting cautions (FR-005, review A)"
         );
     }
 

@@ -146,6 +146,8 @@ pub(crate) fn prepare_script_path_check(app: &mut App, origin: CheckOrigin) -> S
     app.core
         .update(Message::Settings(SettingsMsg::ScriptPathCheckStarted {
             origin,
+            path: app.env_include_script_path.clone(),
+            enabled: app.env_include_enabled,
         }));
     ScriptPathCheckJob {
         seq: app.core.settings.script_check_seq,

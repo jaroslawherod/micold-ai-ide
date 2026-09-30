@@ -879,6 +879,10 @@ pub enum Msg {
     ScriptPathCheckStarted {
         /// Why it was started.
         origin: CheckOrigin,
+        /// The stored path it checks.
+        path: String,
+        /// The stored enabled flag at the start (research R8).
+        enabled: bool,
     },
     /// A check of the stored script path finished (spec 035 FR-009).
     ScriptPathChecked {
@@ -930,7 +934,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
-        Msg::ScriptPathCheckStarted { origin } => script_path_check_started(state, origin),
+        Msg::ScriptPathCheckStarted {
+            origin,
+            path,
+            enabled,
+        } => script_path_check_started(state, origin, &path, enabled),
         Msg::ScriptPathChecked {
             seq,
             origin,
@@ -1159,7 +1167,15 @@ pub fn saved(state: &mut crate::app::State) {
 /// It takes the next sequence number, so only its own answer will be shown, and keeps the previous
 /// answer on the page meanwhile: a re-check that blanked the notice for the moment it ran would
 /// make the page flicker on every open. A save's check is also marked as the one to report on.
-pub fn script_path_check_started(state: &mut crate::app::State, origin: CheckOrigin) {
+///
+/// The previous answer is kept only while it is about the same stored path and enabled flag: after
+/// another window's save it would describe what is no longer stored.
+pub fn script_path_check_started(
+    state: &mut crate::app::State,
+    origin: CheckOrigin,
+    path: &str,
+    enabled: bool,
+) {
     let settings = &mut state.settings;
     settings.script_check_seq += 1;
     let seq = settings.script_check_seq;
@@ -1167,7 +1183,8 @@ pub fn script_path_check_started(state: &mut crate::app::State, origin: CheckOri
         ScriptCheck::Done(checked) => Some(checked),
         ScriptCheck::Pending { last, .. } => last,
         ScriptCheck::Idle => None,
-    };
+    }
+    .filter(|checked| checked.path == path && checked.enabled == enabled);
     settings.script_check = ScriptCheck::Pending { seq, last };
     if origin == CheckOrigin::Saved {
         settings.script_check_save_seq = Some(seq);
@@ -1386,7 +1403,7 @@ pub fn script_path_notice(
         )
     };
     // 011's lines follow the path's with the feature on, except a `MissingScript` line, which the
-    // path's caution already says (N3).
+    // path's caution already says (N3, N7).
     let after_on = || {
         if checked.enabled && *last != EnvIncludeOutcome::MissingScript {
             last_011()
@@ -1409,9 +1426,7 @@ pub fn script_path_notice(
                 NoticeLine::Caution(format!("Not a readable file: {path}")),
                 effect(),
             ];
-            if checked.enabled {
-                lines.extend(last_011());
-            }
+            lines.extend(after_on());
             lines
         }
         ScriptPathState::Relative => {
