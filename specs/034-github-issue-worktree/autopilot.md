@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
-- **Phase**: 5-close
-- **Next step**: Merge the close PR (`docs(034): close the spec`), then the record PR.
+- **Phase**: done
+- **Next step**: Record the run (Phase 6).
 
 ## Pull requests
 
@@ -16,6 +16,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #452 | Spec (PR 1) — reviewed: round 1 CHANGES (10 findings, all fixed), round 2 CLEAN (4 MINOR, fixed) | merged | d6c2f33e |
 | #459 | Design (PR 2) — plan review r1 CHANGES (18, 17 fixed, F10 declined), r2 CHANGES (4 LOW, fixed); analyze 0 critical/high (fixed); tasks review r1 CHANGES (11, fixed), r2 CHANGES (2 LOW, fixed) | merged | 13967080 |
+| #511 | Close — Phase 5 close unit. No production code changes: only tests and spec artifacts. converge DONE, tdd-verify FAIL remediated (T096–T106), docguard repo-convention findings fixed, spec set to Closed. Review r1 CLEAN, r2 CLEAN. | merged | 300c361f |
 
 ## Milestones
 
@@ -126,3 +127,21 @@ None.
 - Visual pass D6 (M3): while the issue list is open, its overlay hides the search status line under the field. A status position that stays visible (above the field, or in the list's empty/footer row) would need a contract §2 change; §B13 (M6b) confirmed it is still visible in both schemes.
 - SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2. Not re-timed in M6: M6b's run on the same loaded machine (Xvfb + lavapipe) took ~60 s for the load alone, so a timing there would measure the harness, not the app. Carried forward: re-time §B2–B5 on a release build on a real, idle display after the feature closes.
 - Quickstart §B5's second attempt with the same ticket and name shows the folder-collision error, not a reuse prompt, because the branch is held by the existing worktree. That is the existing FR-021 path; the reuse prompt itself is covered by A6.
+- Flaky daemon tests (follow-ups outside this flow): `mcp_create_session.rs:305` on macOS (`launches("copilot")` 0 vs 1) and `idle_teardown.rs:74` on ubuntu (daemon not listening within 30 s on cycle 1) both pass locally and on main; seen on #511\'s first CI run 36781657622. Tests not written by this flow.
+## Token usage
+
+### 15a89ee7-f4bd-4f8c-9c96-ff22a3f87f3b
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| orchestrator (main session) | opus-5-5 | 171 | 342 | 818k | 18.1M | 7 | 6 | 61k | 175k | 3.8M | 9% |
+| &nbsp;&nbsp;Record 034 | haiku-4-5 | 4 | 34 | 36k | 95k | 0 | 0 | 12 | 36k | 55k | 0% |
+| &nbsp;&nbsp;Milestone M4 034 | opus-5-5 | 131 | 264 | 1.1M | 17.6M | 6 | 13 | 3k | 218k | 3.2M | 8% |
+| **Total** | | **2k** | **5k** | **13.7M** | **238.0M** | **65** | **359** | **129k** | **267k** | **42.2M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 2k | 4k | 12.0M | 210.3M | 63 | 326 | 115k | 267k | 37.2M |
+| sonnet-5-5 | 466 | 932 | 1.7M | 27.7M | 2 | 33 | 14k | 183k | 5.0M |
+| haiku-4-5 | 4 | 34 | 36k | 95k | 0 | 0 | 12 | 36k | 55k |
+
