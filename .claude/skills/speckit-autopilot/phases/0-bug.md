@@ -19,5 +19,10 @@ Scope: reproduce, report, patch, verify, review. Do not fix code; a milestone un
 5. **Size it.** If the fix adds behaviour the spec never intended, or the patch adds more than 10
    tasks: set the bug ledger's **Phase** to `done` with the note `promoted to a feature`, commit the
    BUG record and ledger, and return `DONE` with `SWITCH: feature`. The new spec cites `BUG-<k>` as
-   input. Otherwise
-   commit the BUG record, patch and ledger (do not push) and return `DONE` with the fix's task IDs.
+   input. Otherwise set the fix's **Tier** in the ledger's milestone row (step 6), commit the BUG
+   record, patch and ledger (do not push), and return `DONE` with the fix's task IDs and
+   `TIER: light` or `TIER: full`.
+6. **Tier of the fix.** `light` (Sonnet ships it) when the solution is already known: the BUG record
+   names a confirmed root cause and the exact code to change, the fix is a few tasks besides the
+   regression test, and it meets `light` in [../references/milestones.md](../references/milestones.md)
+   *Tier*. Otherwise, or when unsure, `full`.

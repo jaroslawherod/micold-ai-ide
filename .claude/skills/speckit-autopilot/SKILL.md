@@ -82,6 +82,7 @@ name. A unit keeps its model when continued with `SendMessage`.
 |---|---|
 | Spec, clarify round 1, design, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
 | Clarify round 2 and later, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
+| Bug unit when the report already names the root cause and the fix (which code, what change) | `"sonnet"` |
 | Record | `"haiku"` |
 
 A ledger from an older run has **Docs-only** instead of **Tier**: `yes` is `docs`, `no` is `full`.
