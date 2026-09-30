@@ -237,6 +237,7 @@ fn boot() -> (App, Task<Message>) {
     // FR-003).
     core.session.default_ai_cli = loaded.settings.default_ai_cli;
     core.session.pi_activity_component = loaded.settings.pi_activity_component;
+    core.session.tool_server_enabled = loaded.settings.tool_server_enabled;
     // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions
     // are not on the host. Every directory's answer stays unknown ("nobody has said yet") until its

@@ -427,11 +427,11 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U214 | The Environment draft carries `tool_server_enabled` from `DaemonSettings` | FR-004 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
-| U215 | Toggling the row sends `SettingsSet { tool_server_enabled: Some(_) }` | FR-004 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
+| U214 | The Environment draft carries `tool_server_enabled` from `DaemonSettings` | FR-004 | example | DONE | `crates/micold-client/tests/features_settings.rs::the_binding_toggle_is_seeded_from_the_stored_setting`, `crates/micold-client/src/main_tests.rs::the_binding_toggle_opens_with_the_value_the_service_reported` |
+| U215 | Toggling the row sends `SettingsSet { tool_server_enabled: Some(_) }` | FR-004 | example | DONE | `crates/micold-client/src/main_tests.rs::turning_the_binding_toggle_off_and_saving_tells_the_service`, `crates/micold-client/tests/features_settings.rs::turning_the_binding_toggle_off_reaches_what_save_writes` |
 | U216 | The Environment draft carries `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
-| U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | PENDING | planned: `crates/micold-client/tests/support/covered_states.rs` + `layout_snapshot.rs` |
+| U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | DONE | `crates/micold-client/tests/support/covered_states.rs` (`settings-view-environment`) + `layout_snapshot.rs`; M6 adds the FR-016 row to the same state and re-records it |
 | U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
 
 ## Invariants and edge cases still to place

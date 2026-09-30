@@ -812,6 +812,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         timeout_secs: "5".to_string(),
                         default_ai_cli: micold_core::session::AiCli::ClaudeCode,
                         pi_activity_component: true,
+                        tool_server_enabled: true,
                     },
                     daemon: DaemonDraft::default(),
                     error: None,
@@ -871,6 +872,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         timeout_secs: "5".to_string(),
                         default_ai_cli: micold_core::session::AiCli::ClaudeCode,
                         pi_activity_component: true,
+                        tool_server_enabled: true,
                     },
                     daemon: DaemonDraft::default(),
                     error: None,
@@ -1300,6 +1302,40 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[4, 0],
                 },
             ],
+        },
+        // The Environment page (feature 034, U218): it gained the "Let AI sessions manage worktrees
+        // and sessions" row, and no state here had laid that page out at all. The toggle is shown
+        // off — the non-default value — so the fixture records the row as a user who turned it off
+        // sees it, and every other value is invented and fixed like the states above.
+        CoveredState {
+            name: "settings-view-environment",
+            build: || {
+                let mut state = with_project();
+                state.settings.settings_draft = Some(SettingsDraft {
+                    section: SettingsSection::Environment,
+                    appearance: AppearanceDraft {
+                        theme: micold_core::theme::ThemePreference::Dark,
+                    },
+                    terminal: TerminalDraft {
+                        scrollback_lines: "12000".to_string(),
+                    },
+                    environment: EnvironmentDraft {
+                        enabled: true,
+                        script_path: "~/.config/micold/session-env.sh".to_string(),
+                        timeout_secs: "5".to_string(),
+                        default_ai_cli: micold_core::session::AiCli::ClaudeCode,
+                        pi_activity_component: true,
+                        tool_server_enabled: false,
+                    },
+                    daemon: DaemonDraft::default(),
+                    error: None,
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
         },
     ]
 }

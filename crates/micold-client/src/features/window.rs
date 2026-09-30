@@ -135,6 +135,8 @@ pub enum FieldId {
     SettingsSurviveLogout,
     /// Settings: the "report Pi activity" checkbox (feature 029, FR-012e).
     SettingsPiActivityComponent,
+    /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
+    SettingsToolServer,
     /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
     SettingsCpuLimit,
     /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).

@@ -345,6 +345,48 @@ fn turning_the_pi_activity_switch_off_is_a_choice_not_a_fault() {
     assert!(!saved.pi_activity_component);
 }
 
+// ---------------------------------------------------------------------------------------
+// The tool server's binding toggle (feature 034, T025 — FR-004)
+// ---------------------------------------------------------------------------------------
+
+/// U214. The Environment page shows the stored value: on unless the user turned it off.
+#[test]
+fn the_binding_toggle_is_seeded_from_the_stored_setting() {
+    assert!(
+        SettingsDraft::from_settings(&Settings::default())
+            .environment
+            .tool_server_enabled,
+        "the binding is on until the user turns it off (FR-004)"
+    );
+    let off = Settings {
+        tool_server_enabled: false,
+        ..Settings::default()
+    };
+    assert!(
+        !SettingsDraft::from_settings(&off)
+            .environment
+            .tool_server_enabled,
+        "a user who turned the binding off must see it off when the page opens"
+    );
+}
+
+/// U215 (the draft half). Turning the row off is a valid preference, and it is what Save writes.
+#[test]
+fn turning_the_binding_toggle_off_reaches_what_save_writes() {
+    let mut draft = valid();
+    draft.show(SettingsSection::Environment);
+    draft.environment.tool_server_enabled = false;
+
+    let saved = draft
+        .validate()
+        .expect("an off toggle is a valid setting")
+        .into_settings();
+    assert!(
+        !saved.tool_server_enabled,
+        "the toggle the user turned off must be what Save writes"
+    );
+}
+
 // --- Spec 035: the script path check, in the reducer (contracts/settings-indication.md §1) -------
 
 mod script_path_check {
