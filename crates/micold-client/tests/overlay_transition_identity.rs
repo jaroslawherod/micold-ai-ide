@@ -87,6 +87,9 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
             link: a_sandboxed_link(),
         })
     }),
+    ("confirm_agent_request", |state| {
+        state.agent_confirm.pending = vec![an_agent_request()]
+    }),
 ];
 
 /// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
@@ -184,7 +187,7 @@ fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `DIALOGS`.
     assert_eq!(
         every_snapshot().len(),
-        9,
+        10,
         "a dialog was added or removed — update DIALOGS"
     );
 }
@@ -227,4 +230,15 @@ fn a_snapshot_does_not_follow_the_state_it_came_from() {
         closing.state().help.about_open,
         "the snapshot must keep the state as it was, not track the live one"
     );
+}
+
+/// An agent's destructive request, pending an answer (feature 034, FR-014).
+fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
+    micold_client::features::agent_confirm::Prompt {
+        id: 1,
+        project: PathBuf::from("/p"),
+        caller_label: "planner".to_string(),
+        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
+        target_label: "reviewer".to_string(),
+    }
 }

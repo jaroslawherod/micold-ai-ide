@@ -160,7 +160,8 @@ fn every_popover_is_in_the_table() {
     // sessions run (BUG-003, FR-032), which is a floating surface even though the form is not. Ten
     // with `confirm_link_open`, the question a sandboxed file link asks before this machine opens
     // it (FR-018a).
-    const DIALOGS: usize = 10;
+    // Eleven with `confirm_agent_request`, an agent's destructive request (034 FR-014).
+    const DIALOGS: usize = 11;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

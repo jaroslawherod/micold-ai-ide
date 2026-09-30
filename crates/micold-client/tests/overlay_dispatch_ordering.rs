@@ -102,6 +102,11 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
         },
         Message::Session(SessionMsg::LinkOpenDeclined),
     ),
+    (
+        "confirm_agent_request",
+        |s| s.agent_confirm.pending = vec![an_agent_request()],
+        Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Dismissed),
+    ),
 ];
 
 /// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
@@ -327,5 +332,16 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
             state.sidebar.filters, chosen,
             "cancelling {name} reached into the sidebar's filters, which it does not own"
         );
+    }
+}
+
+/// An agent's destructive request, pending an answer (feature 034, FR-014).
+fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
+    micold_client::features::agent_confirm::Prompt {
+        id: 1,
+        project: PathBuf::from("/p"),
+        caller_label: "planner".to_string(),
+        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
+        target_label: "reviewer".to_string(),
     }
 }
