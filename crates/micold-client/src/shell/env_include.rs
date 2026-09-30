@@ -29,10 +29,10 @@ use std::time::Duration;
 use iced::Task;
 use micold_client::app::{Message, State};
 use micold_client::features::settings::{CheckOrigin, Msg as SettingsMsg};
+use micold_core::env_include::{self, EnvIncludeResolver, EnvIncludeSnapshot};
 use micold_core::script_path_check::{
     check_bounded, CheckedScriptPath, ScriptPathProbe, ScriptPathState, SCRIPT_PATH_CHECK_BOUND,
 };
-use micold_core::env_include::{self, EnvIncludeResolver, EnvIncludeSnapshot};
 
 use crate::{session_cwd_mode_and_active_shell, App};
 
@@ -144,7 +144,9 @@ impl ScriptPathCheckJob {
 /// never a session launch or a terminal restart (FR-006, SC-004).
 pub(crate) fn prepare_script_path_check(app: &mut App, origin: CheckOrigin) -> ScriptPathCheckJob {
     app.core
-        .update(Message::Settings(SettingsMsg::ScriptPathCheckStarted { origin }));
+        .update(Message::Settings(SettingsMsg::ScriptPathCheckStarted {
+            origin,
+        }));
     ScriptPathCheckJob {
         seq: app.core.settings.script_check_seq,
         origin,

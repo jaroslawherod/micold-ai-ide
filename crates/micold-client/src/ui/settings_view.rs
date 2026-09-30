@@ -22,7 +22,7 @@
 use crate::app::Message;
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::settings::{ScriptCheck, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
 use crate::ui::settings::{appearance, daemon, environment, terminal};
@@ -40,9 +40,14 @@ use micold_core::tokens::{self, spacing};
 const SHARING: &str = "Sharing";
 
 /// The whole Settings surface: the rail, the current section, and the two actions.
+// Each argument is a separate piece of state the pages read, as in `ui::view`; the script path
+// check (spec 035) made it eight.
+#[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
+    // The latest check of the stored script path (spec 035), shown beside the outcome above.
+    script_check: &'a ScriptCheck,
     // Where sessions run **now**, which is not always what the draft or the file says — the
     // Session service section reports it (FR-035b, BUG-003).
     in_force: PlacementKind,
@@ -81,9 +86,14 @@ pub fn view<'a>(
     let page: Element<'a, Message> = match draft.section {
         SettingsSection::Appearance => appearance::view(draft, r),
         SettingsSection::Terminal => terminal::view(draft, focused, r),
-        SettingsSection::Environment => {
-            environment::view(draft, env_include_outcome, availability, focused, r)
-        }
+        SettingsSection::Environment => environment::view(
+            draft,
+            env_include_outcome,
+            script_check,
+            availability,
+            focused,
+            r,
+        ),
         SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
     };
 

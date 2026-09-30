@@ -4191,7 +4191,10 @@ mod script_path_report {
             "the check is under way, got {:?}",
             app.core.settings.script_check
         );
-        assert!(probe.calls().is_empty(), "nothing is examined on the UI thread");
+        assert!(
+            probe.calls().is_empty(),
+            "nothing is examined on the UI thread"
+        );
 
         let Message::Settings(SettingsMsg::ScriptPathChecked { origin, result, .. }) = job.run()
         else {
@@ -4226,7 +4229,10 @@ mod script_path_report {
         let id = SessionId::new();
         let _ = connect(
             &mut app,
-            snapshot_with(&project_text, vec![summary(id, "s", WireLifecycle::Running)]),
+            snapshot_with(
+                &project_text,
+                vec![summary(id, "s", WireLifecycle::Running)],
+            ),
         );
         app.core.session.active = Some(id);
         app.env_include_cache.clear();

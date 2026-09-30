@@ -10,7 +10,9 @@
 use crate::app::Message;
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
+use crate::features::settings::{
+    missing_cli_notice, script_path_notice, NoticeLine, ScriptCheck, SettingsDraft, SettingsSection,
+};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
@@ -32,23 +34,11 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("pi_activity_component", "PiActivityComponentToggled"),
 ];
 
-/// The failure category and its diagnostic for the most recent resolution attempt, or `None` when
-/// it succeeded or the feature is off (FR-012/FR-013).
-fn failure(outcome: &EnvIncludeOutcome) -> Option<(&'static str, &str)> {
-    match outcome {
-        EnvIncludeOutcome::Disabled | EnvIncludeOutcome::Success => None,
-        EnvIncludeOutcome::MissingScript => Some(("Script not found", "")),
-        EnvIncludeOutcome::NonZeroExit { diagnostic, .. } => {
-            Some(("Exited with an error", diagnostic))
-        }
-        EnvIncludeOutcome::TimedOut { diagnostic } => Some(("Timed out", diagnostic)),
-    }
-}
-
 /// The Environment page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     outcome: &'a EnvIncludeOutcome,
+    script_check: &'a ScriptCheck,
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     roles: Roles,
@@ -136,12 +126,17 @@ pub fn view<'a>(
     let mut controls: Vec<Element<'a, Message>> = vec![cli, pi_activity];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
-    if let Some((label, diagnostic)) = failure(outcome) {
-        controls.push(caution(label, roles));
-        if !diagnostic.is_empty() {
-            controls.push(note(diagnostic, roles));
-        }
-    }
+    // What the stored path's check found, and how the last resolution went (spec 035,
+    // contracts/settings-indication.md §2). The wording is decided in the reducer's module; this
+    // only picks the tone for each line.
+    controls.extend(
+        script_path_notice(script_check, outcome)
+            .into_iter()
+            .map(|line| match line {
+                NoticeLine::Caution(text) => caution(text, roles),
+                NoticeLine::Note(text) => note(text, roles),
+            }),
+    );
 
     page(
         "Environment",
