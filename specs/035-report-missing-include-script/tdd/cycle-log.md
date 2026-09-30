@@ -321,3 +321,20 @@ existed and failed before the implementation.
   A7 `switching_the_feature_off_and_saving_keeps_the_same_not_found_report` and A8
   `creating_the_missing_file_clears_the_report_and_with_the_feature_on_says_how_to_source_it` ok;
   scripts suite 15 cases, 0 failures.
+
+## Cycle 15 (M3): U65, U66 from review A
+
+- tests: `crates/micold-client/tests/features_settings.rs`
+  `script_path_notice_on::on_and_not_readable_after_a_missing_script_attempt_says_it_once_by_path`
+  (U65) and `script_path_check::a_check_of_another_path_or_state_does_not_keep_showing_the_previous_answer`
+  (U66). Stub so they compile: `Msg::ScriptPathCheckStarted` gains `path` and `enabled`, ignored by
+  the reducer; the shell fills them from the stored values.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings` -> 49 passed;
+  2 failed: U66 `left: Pending { seq: 1, last: Some(CheckedScriptPath { path: "/tmp/does-not-exist.sh", enabled: false, state: Present }) }`
+  vs `right: Pending { seq: 1, last: None }`; U65 `left: [Caution("Not a readable file: …"), Note(ON), Caution("Script not found: /tmp/does-not-exist.sh")]`.
+- green: S1 keeps `last` only when its path and enabled flag match the message's; the NotReadable
+  row uses the same `after_on` as NotFound -> features_settings 51 passed; client bin 280 passed.
+- refactor (same commit): `adopt_daemon_settings` shared by `SettingsChanged` and `Welcome`
+  (review A F5); the moved comment no longer points at "`Welcome` below" (F8). Contract §1 S1 and
+  §2 N7 updated.
+- commit: 179c1bb9
