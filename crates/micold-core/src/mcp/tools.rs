@@ -129,6 +129,12 @@ struct Tool {
     read_only: bool,
 }
 
+/// Whether `tool` is a shipped tool that changes anything, and so is audited (FR-018). Named by
+/// the tool, not the parsed operation, so a call whose arguments fail to parse is audited too.
+pub fn is_mutating_tool(tool: &str) -> bool {
+    TOOLS.iter().any(|t| t.name == tool && !t.read_only)
+}
+
 /// Whether `tool` is one of the read-only tools.
 fn is_read_only(tool: &str) -> bool {
     TOOLS.iter().any(|t| t.name == tool && t.read_only)

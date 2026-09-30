@@ -16,7 +16,7 @@ use alacritty_terminal::term::TermMode;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::policy::{self, Caller, CrossSessionAccess, PolicyDecision, TargetFacts};
-use micold_core::mcp::tools::{parse_call, Operation, WorktreeRef};
+use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, WorktreeRef};
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
     ActivitySignal, ProjectSnapshot, SessionSummary, WireLifecycle, WorktreeSnapshot,
@@ -38,6 +38,9 @@ const DEFAULT_DISPLAY_NAME: &str = "Default";
 
 /// Validate and run one tool call made by `caller`. Read tools run on a blocking thread (they may
 /// run git or fill the worktree cache); mutating tools await the shared operations in [`crate::ops`].
+///
+/// A mutating tool writes exactly one audit line here, whatever its outcome (FR-018): the caller,
+/// the operation, its target and `ok` or the failure's category. Never its input text.
 pub async fn call(
     state: Arc<DaemonState>,
     caller: SessionId,
@@ -46,7 +49,40 @@ pub async fn call(
 ) -> Result<Value, OpError> {
     // The first-prompt bound is counted from here, the request (FR-017).
     let asked = tokio::time::Instant::now();
-    let operation = parse_call(&name, &arguments)?;
+    let parsed = parse_call(&name, &arguments);
+    let audited = is_mutating_tool(&name).then(|| {
+        parsed
+            .as_ref()
+            .map(Operation::audit_target)
+            .unwrap_or_default()
+    });
+    let result = match parsed {
+        Ok(operation) => dispatch(state, caller, operation, asked).await,
+        Err(error) => Err(error),
+    };
+    if let Some(object) = audited {
+        let outcome = match &result {
+            Ok(_) => "ok",
+            Err(error) => error.category.as_str(),
+        };
+        tracing::info!(
+            target: "micold::mcp",
+            caller = %caller.0,
+            op = %name,
+            target = %object,
+            outcome = %outcome,
+            "tool call"
+        );
+    }
+    result
+}
+
+async fn dispatch(
+    state: Arc<DaemonState>,
+    caller: SessionId,
+    operation: Operation,
+    asked: tokio::time::Instant,
+) -> Result<Value, OpError> {
     match operation {
         Operation::CreateWorktree { branch, name, mode } => {
             create_worktree(&state, caller, branch, name, mode).await
