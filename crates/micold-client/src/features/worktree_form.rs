@@ -918,11 +918,11 @@ pub fn issue_searched(
             .issue_highlight
             .and_then(|row| form.issue_number_at(row));
         form.rematch_issues();
-        // An issue the answer dropped leaves the highlight where `rematch_issues` clamped it.
-        if let Some(row) = highlighted.and_then(|number| {
-            (0..form.issue_matches.len()).find(|row| form.issue_number_at(*row) == Some(number))
-        }) {
-            form.issue_highlight = Some(row);
+        // An issue the answer dropped takes the highlight with it: a row the user never chose must
+        // not be under Enter.
+        if let Some(number) = highlighted {
+            form.issue_highlight = (0..form.issue_matches.len())
+                .find(|row| form.issue_number_at(*row) == Some(number));
         }
     });
 }
