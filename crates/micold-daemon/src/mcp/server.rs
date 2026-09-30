@@ -178,15 +178,7 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             name,
             arguments,
         } => {
-            let outcome = tokio::task::spawn_blocking(move || {
-                super::tools::call(&state, caller, &name, &arguments)
-            })
-            .await
-            .unwrap_or_else(|_| {
-                Err(micold_core::mcp::errors::OpError::service_error(
-                    "the tool call failed unexpectedly",
-                ))
-            });
+            let outcome = super::tools::call(state, caller, name, arguments).await;
             let result = match outcome {
                 Ok(output) => tool_success(&output),
                 Err(error) => tool_failure(&error),

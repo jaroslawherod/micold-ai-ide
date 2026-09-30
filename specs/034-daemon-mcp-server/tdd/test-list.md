@@ -67,8 +67,8 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 | A4 | After bound spawns, fixture `~/.claude.json`, `~/.claude/settings.json`, `<project>/.mcp.json` and `~/.copilot/mcp-config.json` hash identically to before | US1-AS4, FR-003, SC-002 | example | DONE | `mcp_binding_spawn.rs::bound_spawns_leave_every_user_configuration_file_byte_identical`, `::bound_spawns_create_no_user_configuration_file_that_was_absent` |
 | A5 | A Pi session spawns with exactly its pre-feature argv and one `info` line "no tool server: Pi has no MCP support" (the user-guide half is not testable, see *Out of scope*) | US1-AS5, FR-005, EC-13 | example | DONE | `mcp_binding_spawn.rs::a_pi_session_spawns_with_its_pre_feature_argv_and_one_skip_line` |
 | A6 | With `tool_server_enabled = false` a new session spawns unbound with "disabled in settings" logged, and a session bound before the change still answers `whoami` | US1-AS6, FR-004, EC-18 | example | DONE | `crates/micold-daemon/tests/mcp_binding_spawn.rs::with_the_toggle_off_a_new_session_starts_unbound_and_a_running_one_keeps_answering` |
-| A7 | `create_worktree {branch: feat-x}` from a worktree session creates `.claude/worktrees/feat-x` recorded app-created, a fake window receives `CatalogChanged` holding it within 2 s, and the result carries its ref, branch and path | US2-AS1, FR-009, FR-011, SC-003 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| A8 | `create_worktree` for a branch that exists or is checked out elsewhere fails `conflict` naming the pre-flight situation, and the worktree list and directory tree are unchanged | US2-AS2, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
+| A7 | `create_worktree {branch: feat-x}` from a worktree session creates `.claude/worktrees/feat-x` recorded app-created, a fake window receives `CatalogChanged` holding it within 2 s, and the result carries its ref, branch and path | US2-AS1, FR-009, FR-011, SC-003 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it` |
+| A8 | `create_worktree` for a branch that exists or is checked out elsewhere fails `conflict` naming the pre-flight situation, and the worktree list and directory tree are unchanged | US2-AS2, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::an_existing_or_checked_out_branch_is_a_conflict_and_nothing_changes` |
 | A9 | `create_worktree` then `create_session {worktree: feat-x, ai_cli, prompt}` (two calls) creates and starts a session a fake window sees, and the stand-in CLI receives the prompt as its first submitted input after its ready signal (`prompt_delivered: true`) | US2-AS3, FR-017, SC-007 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_session.rs` |
 | A10 | `create_session` without `ai_cli` creates a session running the Settings `default_ai_cli` | US2-AS4 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_session.rs` |
 | A11 | `create_session` with a CLI not on the session environment's `PATH` fails `service_error` naming that CLI, and no session record exists afterwards | US2-AS5, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_session.rs` |
@@ -306,12 +306,12 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U145 | Without `name`, the worktree directory is `naming::dir_name_from_branch(branch)` | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| U146 | A name the naming rules reject fails `invalid_input` with the dialog's `NamingError` message and creates nothing | EC-3, FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| U148 | A branch name git rejects fails `invalid_input` with git's message and creates nothing | EC-3 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| U149 | `mode: existing_local` on an existing free branch succeeds | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| U150 | Ten concurrent creates of one branch from ten sessions give exactly one success, nine `conflict`, one worktree on disk | SC-005, EC-4 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
-| U151 | Back-to-back creates of distinct branches from one caller all succeed (no cap) | EC-15 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
+| U145 | Without `name`, the worktree directory is `naming::dir_name_from_branch(branch)` | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::without_a_name_the_directory_is_derived_from_the_branch` |
+| U146 | A name the naming rules reject fails `invalid_input` with the dialog's `NamingError` message and creates nothing | EC-3, FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_name_the_naming_rules_reject_is_invalid_input_and_creates_nothing` |
+| U148 | A branch name git rejects fails `invalid_input` with git's message and creates nothing | EC-3 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_branch_name_git_rejects_is_invalid_input_with_gits_message` |
+| U149 | `mode: existing_local` on an existing free branch succeeds | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::existing_local_checks_out_a_free_branch` |
+| U150 | Ten concurrent creates of one branch from ten sessions give exactly one success, nine `conflict`, one worktree on disk | SC-005, EC-4 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::ten_concurrent_creates_of_one_branch_leave_one_worktree` |
+| U151 | Back-to-back creates of distinct branches from one caller all succeed (no cap) | EC-15 | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::back_to_back_creates_from_one_caller_all_succeed` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` `create_session`, `state.rs` readiness (T034, T040, T041)
 
@@ -435,7 +435,7 @@ each group that changes existing code.
 | U216 | The Environment draft carries `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | DONE | `crates/micold-client/tests/support/covered_states.rs` (`settings-view-environment`) + `layout_snapshot.rs`; M6 adds the FR-016 row to the same state and re-records it |
-| U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
+| U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_default_session_is_refused_by_principle_iii_and_nothing_changes` |
 
 ## Invariants and edge cases still to place
 

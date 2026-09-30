@@ -15,8 +15,8 @@ use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
 use micold_core::session::SessionId;
 use micold_core::worktree::{
-    create_worktree as git_create_worktree, remove_worktree, remove_worktree_dir, CreateError,
-    CreateMode, CreateProgressEvent, Leftover, ProvenanceView,
+    create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
+    BranchSituation, CreateError, CreateMode, CreateProgressEvent, Leftover, ProvenanceView,
 };
 
 use crate::server::refresh_worktrees_and_broadcast;
@@ -62,6 +62,44 @@ pub enum DeleteFailure {
 pub enum RenameFailure {
     Invalid(RenameError),
     Io(io::Error),
+}
+
+/// What the create dialog's pre-flight finds for `names` (feature 016): whether the branch is
+/// free, exists locally or on a remote, is checked out somewhere, or the directory is taken.
+/// Never mutates; `None` when the project is not a git repository.
+pub async fn branch_situation(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    names: &DerivedNames,
+) -> Option<io::Result<BranchSituation>> {
+    let Some((repo, true)) = state.project_repo(project) else {
+        return None;
+    };
+    let included = state.included_worktrees(project);
+    let (created, unreadable) = state.provenance(project);
+    let names = names.clone();
+    let situation = tokio::task::spawn_blocking(move || {
+        let target = repo.join(".claude/worktrees").join(&names.dir_name);
+        let target_exists = target.exists()
+            && std::fs::read_dir(&target)
+                .map(|mut d| d.next().is_some())
+                .unwrap_or(false);
+        preflight(
+            &GitCli::new(),
+            &repo,
+            &target,
+            &names.branch,
+            target_exists,
+            &included,
+            &ProvenanceView {
+                records: &created,
+                state_unreadable: unreadable,
+            },
+        )
+    })
+    .await
+    .unwrap_or_else(|join| Err(io::Error::other(join.to_string())));
+    Some(situation)
 }
 
 /// Create worktree `names.dir_name` on `names.branch` under `<project>/.claude/worktrees/`, record
