@@ -325,7 +325,8 @@ async fn stop_session(
         )
         .await?;
     }
-    if !state.stop_session(session) {
+    let st = Arc::clone(state);
+    if !blocking(move || Ok(st.stop_session(session))).await? {
         return Err(OpError::not_found(format!(
             "session {} was deleted while waiting for confirmation",
             session.0
@@ -358,9 +359,12 @@ async fn interrupt_session(
             ),
         )
     };
-    if summary.lifecycle != WireLifecycle::Running || state.primary_pty(session).is_none() {
+    if summary.lifecycle != WireLifecycle::Running {
         return Err(not_running());
     }
+    // The process the user is asked about: a restart while the prompt waits is another process,
+    // and the approval does not carry over to it.
+    let asked_about = state.primary_pty(session).ok_or_else(not_running)?;
     if let Some(op) = confirm {
         let label = summary.title.display().to_string();
         ask_user(
@@ -375,6 +379,9 @@ async fn interrupt_session(
         .await?;
     }
     let pty = state.primary_pty(session).ok_or_else(not_running)?;
+    if !Arc::ptr_eq(&pty, &asked_about) {
+        return Err(not_running());
+    }
     pty.write_input(&[0x03])
         .map_err(|e| OpError::service_error(format!("could not type the interrupt: {e}")))?;
     Ok(json!({}))
@@ -405,6 +412,9 @@ async fn delete_session(
             hangup,
         )
         .await?;
+        // Archiving is idempotent, so a record deleted while the prompt waited is caught here.
+        let st = Arc::clone(state);
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
     }
     let st = Arc::clone(state);
     let (owner, ptys) = blocking(move || {
@@ -534,7 +544,7 @@ fn live_sessions_conflict(
     OpError::new(
         ErrorCategory::Conflict,
         format!(
-            "worktree \"{dir_name}\" has live sessions: {}; stop them first or pass              stop_sessions: true",
+            "worktree \"{dir_name}\" has live sessions: {}; stop them first or pass stop_sessions: true",
             names.join(", ")
         ),
     )

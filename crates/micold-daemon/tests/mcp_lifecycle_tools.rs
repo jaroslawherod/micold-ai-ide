@@ -856,3 +856,25 @@ async fn the_protocol_session_stop_ends_the_processes_and_broadcasts_idle() {
     assert!(f.state.live_session(sid(IDLE)).is_none(), "no process left");
     drop(client);
 }
+
+/// Review A: stopping a `Failed` session keeps it `Failed` with its reason, and stopping a deleted
+/// (archived) session reports it unknown instead of reviving its lifecycle.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_keeps_a_failed_session_failed_and_does_not_touch_a_deleted_one() {
+    let f = Fixture::new().await;
+
+    assert!(
+        f.state.stop_session(sid(FAILED)),
+        "a failed session is known"
+    );
+    assert!(matches!(
+        lifecycle_in(&f.state.catalog_snapshot(), sid(FAILED)),
+        Some(WireLifecycle::Failed { .. })
+    ));
+
+    f.state.delete_session(sid(IDLE)).unwrap();
+    assert!(
+        !f.state.stop_session(sid(IDLE)),
+        "a deleted session is not stopped"
+    );
+}
