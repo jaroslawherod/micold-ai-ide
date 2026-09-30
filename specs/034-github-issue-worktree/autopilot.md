@@ -42,6 +42,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | 6 | 2-clarify r1 | What does the issue picker's search cover? | Type-ahead like 021 (keyboard too) over number, title, labels of loaded issues; when the list is capped, also GitHub search for open issues beyond the cap (FR-005, FR-005a) | user | user messages 2026-09-29: "allow to search items", "I mean search issues" |
 | 7 | 2-clarify r2 | Show a beyond-cap search result that matched only in its body/comments? | No — held to FR-005's rule (number, title, labels) | agent-resolved | spec.md#FR-005; specs/021-branch-typeahead-search (one matching rule) |
 | 8 | 2-clarify r3 | Any critical ambiguity left? | None — clarify round 3 reported no critical ambiguities; Phase 2 done | agent-resolved | spec.md coverage scan, all categories Clear or deferred to plan |
+| 9 | 4-milestones M6 | How to record §B10 (desktop launch) on macOS and Windows? | A CI test on the macOS and Windows runners that launches with a minimal launcher-like PATH and checks gh is found; no real Dock/Start-menu launch | user | AskUserQuestion 2026-09-30 |
 
 ## Declined review findings
 
@@ -74,6 +75,12 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M4 | code-review A r2 #1, #2 (MINOR) | A non-list mapping reads as the default and the next save writes the default over it; a list of all-bad entries reads as `[]` | Judged MINOR: the alternative (whole file to `.bak`) loses every setting to keep one malformed value. R10's rule — drop what cannot be read, keep the rest — applied to the field as a whole; `[]` is a list the user wrote. |
 | M4 | code-review A r2 #3–#7, #9, #10 | Any parse error drops an entry; `Settings`' other fields not lenient; `Value` needs a self-describing format; `open_settings` hides a `.bak` move; three fallback spellings; cycle log uses `build-lock.sh cargo`; mid-milestone commits did not compile the client tests | MINOR or pre-existing: `Settings` is never sent over postcard; the `.bak`-on-open behaviour predates this feature; the cycle-log commands are the TDD profile's; the fixed commits land in one PR. #8 (doc comment) fixed. |
 | M4 | visual pass §B4 note | With the type cleared, no message names the missing type; Create is disabled and the preview hides | That is the form's existing "type required" behaviour, which FR-014 and AS3 say to reuse. |
+| M5 | code-review A #5 | The stored mapping is not validated on load, so a hand-edited duplicate refuses an unrelated save | R10's lenient read keeps what parses; the refusal names the entry and jumps to its section, where one edit fixes it. Rewriting a user's file on load to drop a duplicate would decide for them which entry wins. |
+| M5 | code-review A #6 (MINOR) | Focus and error ids are row indices, so a remove or move re-points them | A button press moves the pointer focus off the field; the error is cleared by any edit (`edited`). No stale-focus path found through the view. |
+| M5 | code-review A #7 | `IssueMappingMoved` reuses `typeahead::Direction` | Data-model §6 fixes the message as `IssueMappingMoved(usize, Direction)`. |
+| M5 | code-review A #8 (MINOR) | `validate_mapping` is O(n²) | Mappings are a handful of entries, checked once per Save. |
+| M5 | code-review A #9 (MINOR) | Row controls are top-aligned | Top alignment keeps the buttons level with the fields when one row grows an error line; centring would move them. |
+| M5 | contract §4 glyphs | `MoveUp`/`MoveDown` are `keyboard_arrow_up/down`, not `arrow_upward/downward` | `arrow_upward` is `Icon::NavigateUp`'s codepoint and `tests/icons.rs` forbids two icons on one; contract §4 amended. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
 ## Review rounds
@@ -88,6 +95,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M4 | A (code-review high), scoped | 2 | 010fa3f4:1ce11b0e | fixes hold; 10 MINOR/low: #8 (doc) fixed, rest declined. Done. |
 | M4 | B (conformance) | 1 | 0c96ddb3:d721635b | CLEAN (1 MINOR: A14/U83 did not assert the label-set type before overriding — fixed); Verify all green |
 | M4 | visual pass §B4 | 1 | d721635b | criteria 1–4 PASS (labels on rows, bug→fix, unmapped clears after chore, enhancement→feat) |
+| M5 | A (code-review high) | 1 | 3699a996:7b00d5f2 | 9 findings: #1 (doc placement), #2 (labels saved untrimmed), #3 (duplicate message named an entry number), #4 (tooltips) fixed (cycle 27); #5–#9 declined. Gate also caught `JsonFileSettingsStore` in `main_tests.rs` (fixed). |
 | M3 | visual pass §B6 | 1 | c1c43e14 | criteria 1, 3, 4 PASS; 2 partial — the issue beyond the cap appears once and is pickable, "Searching GitHub…" not caught on screen (load ~20); D6 declined |
 
 ## Open escalation
