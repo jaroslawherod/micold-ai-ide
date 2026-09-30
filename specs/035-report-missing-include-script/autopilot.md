@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature (from bug BUG-006)
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
-- **Phase**: 5-close
-- **Next step**: close PR #480 open; wait for `ci complete`, merge. Then the flow is done.
+- **Phase**: done
+- **Next step**: none. #480 merged at e1c42ab6; the run is complete.
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #471 | M2: notify when a save leaves a missing script path | merged | fae88e6c |
 | #473 | M3: the same report with the feature on or off | merged | b0432747 |
 | #477 | M4: recovery by the user's own edit, architecture doc, full §B pass | merged | 2f0714da |
-| #480 | Close: converge, tdd-verify remediation T043–T048, docguard, spec Closed | open | — |
+| #480 | Close: converge, tdd-verify remediation T043–T048, docguard, spec Closed | merged | e1c42ab6 |
 
 ## Milestones
 
@@ -117,3 +117,41 @@ None.
   Settings-sync behaviour of feature 011, not 035. Filed as #475.
 - Reconnect (`Welcome`) does not re-check the script path on an open Settings page (review A, M3).
   Filed as #476.
+
+## Token usage
+
+From `mise run autopilot-tokens` at close (2026-09-30), one block per session that worked in this worktree. The last session also ran 027 BUG-007 (#444).
+
+**Session 5a8df2bf-d34c-4d21-85fc-cbeffbb7da97**
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Total** | | **292** | **590** | **1.2M** | **29.3M** | **3** | **18k** | **266k** | **4.5M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 207 | 420 | 927k | 24.8M | 3 | 13k | 266k | 3.7M |
+| sonnet-5 | 85 | 170 | 260k | 4.5M | 0 | 5k | 71k | 796k |
+
+**Session d95097b9-55c5-4728-912f-e465aa06f2d4**
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Total** | | **329** | **674** | **1.2M** | **34.3M** | **2** | **29k** | **262k** | **5.2M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 305 | 626 | 1.0M | 33.3M | 2 | 25k | 262k | 4.8M |
+| sonnet-5-5 | 24 | 48 | 185k | 1.1M | 0 | 5k | 83k | 361k |
+
+**Session 659828b4-b09c-49db-b5df-3c7aead1907e**
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Total** | | **794** | **2k** | **4.0M** | **61.6M** | **23** | **48k** | **193k** | **11.6M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | output | peak_ctx | cost_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 655 | 1k | 3.2M | 53.7M | 18 | 39k | 193k | 9.8M |
+| sonnet-5-5 | 128 | 258 | 746k | 7.5M | 5 | 7k | 177k | 1.7M |
+| sonnet-5 | 11 | 22 | 78k | 395k | 0 | 1k | 53k | 143k |
