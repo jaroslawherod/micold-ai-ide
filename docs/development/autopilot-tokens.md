@@ -128,3 +128,41 @@ What the skill does about it:
   `Read`.
 - **`scripts/autopilot/checkpoint.sh`**: at each checkpoint a unit gets branch, changes, unmerged
   commits, ledger state and context size from one call.
+
+## First runs with the changes, 2026-09-30
+
+Three runs were in flight while the optimizations merged: spec 034 `github-issue-worktree`, spec
+034 `daemon-mcp-server`, and spec 035 `report-missing-include-script`. They mix skill versions.
+Each orchestrator loaded the old `SKILL.md` when it started on 09-29 and kept it, while each unit
+read `unit.md` and its phase file from disk when it started. Read these numbers as indicative;
+a run started after the last change is the clean measurement.
+
+Per unit kind, in `cost_eq` (baseline per unit is its share of the baseline total over its unit
+count, so it is approximate):
+
+| | Baseline | 034 github-issue | 034 daemon-mcp | 035 |
+|---|---:|---:|---:|---:|
+| Orchestrator per run | ~5.3M | 2.9M (6 milestones) | 1.9M (5 milestones) | not separable (shared session) |
+| Reviewer | ~0.27M | 0.18M | 0.14M | 0.04–0.23M |
+| `code-review` skill | ~0.25M | 0.15M | 0.26M | 0.10–0.19M |
+| Milestone unit | ~3.3M | 2.97M | 3.04M | 0.98–2.04M |
+| Milestone peak context | 266k | 266k, then 123k | 266k, then 139–172k | 233k, then 132–192k |
+
+Milestone units by the skill version they started on:
+
+| Started | Units | `cost_eq` per task |
+|---|---|---|
+| Before steps 3–8 | 034 github-issue M1, M2 | 0.19–0.20M |
+| After the per-step reads, model tiering, reviewer and cache changes | 034 github-issue M3–M5, 034 daemon-mcp M1–M3, 035 M2–M4 | 0.13–0.46M, mostly near 0.2M |
+| After the 150k handover | 034 github-issue M6a, 034 daemon-mcp M5 (unfinished) | 0.95M and 1.75M in total, peak under 172k |
+
+What they show:
+
+- **Peak context fell** once the handover landed: 123–172k, against 214–266k before. No unit has
+  handed over yet; none reached the cap at a checkpoint.
+- **Reviewers cost 30–85% less** each. Scoped re-reviews on Sonnet cost 0.05–0.08M.
+- **The orchestrator costs about half the baseline** per run. It still followed the old
+  `SKILL.md`, so this comes from moving work into units and scripts.
+- **Milestone cost per task shows no clear change.** How hard a feature is outweighs the skill
+  changes (034 daemon-mcp M2: 0.46M per task over 8 tasks). Batching had not merged: milestone units
+  still made 117 and 166 lone reads right after another read.
