@@ -511,3 +511,37 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `OutputSettled` in `mcp/submission.rs`. The daemon's `call` answers the two create tools
   `service_error` until their handlers land in the next cycles. `mise run test-core`: 1405 passed.
 - refactor: none needed.
+
+## Cycle 19 — U142, U143, U144 — T029, T035
+
+- tests: `crates/micold-daemon/tests/ops_extraction.rs` —
+  `create_without_a_client_matches_the_protocol_create` (U142),
+  `delete_without_a_client_matches_the_protocol_delete` (U143),
+  `rename_without_a_client_matches_the_protocol_rename` (U144). Each runs the protocol message on
+  one project and `ops::*` on an identical one, then compares the catalog's worktrees, the
+  provenance records and the directories under `.claude/worktrees/`. U141 stays `BASELINE`
+  (the existing `mutation_semantics.rs`, `mutation_atomicity.rs`, `worktree_provenance_rpc.rs`).
+  Stub: `ops.rs` with the three signatures returning `Err(Stub)`.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test ops_extraction`
+  ```
+  thread 'rename_without_a_client_matches_the_protocol_rename' panicked at crates/micold-daemon/tests/ops_extraction.rs:233:5:
+  Err(Stub)
+  thread 'create_without_a_client_matches_the_protocol_create' panicked at crates/micold-daemon/tests/ops_extraction.rs:165:5:
+  Err(Stub)
+  thread 'delete_without_a_client_matches_the_protocol_delete' panicked at crates/micold-daemon/tests/ops_extraction.rs:203:5:
+  Err(Stub)
+  test result: FAILED. 0 passed; 3 failed
+  ```
+  (The protocol half of each test had already passed its own assertions.)
+- green: the bodies of the `WorktreeCreate`, `WorktreeDelete` and `WorktreeRename` arms moved into
+  `ops::{create_worktree, delete_worktree, rename_worktree}` returning `Result<_, CreateFailure |
+  DeleteFailure | RenameFailure>`; create takes an `Option<ProgressSink>` (the arm's throttled
+  `OperationProgress` sender moved into the sink). `route()` keeps its non-repo check and maps each
+  failure to the reply it sent before; the FR-045 delete logs moved with the body.
+  `refresh_worktrees_and_broadcast` is `pub(crate)`; `describe_leftovers` moved to `ops`.
+  `cargo test -p micold-daemon`: 457 passed, 0 failed (ops_extraction 3, mutation_semantics 27,
+  mutation_atomicity 1, worktree_provenance_rpc 13).
+- refactor: none beyond the move itself.
+- note: the shared target ran out of disk mid-cycle (`No space left on device` truncated an edit to
+  `server.rs`); `target-shared/debug/incremental` was deleted under the build lock, the file
+  restored from git and the edit re-applied.

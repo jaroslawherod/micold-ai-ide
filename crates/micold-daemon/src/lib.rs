@@ -18,6 +18,7 @@ pub mod http;
 pub mod idle;
 pub mod logging;
 pub mod mcp;
+pub mod ops;
 pub mod platform;
 pub mod progress;
 pub mod server;
