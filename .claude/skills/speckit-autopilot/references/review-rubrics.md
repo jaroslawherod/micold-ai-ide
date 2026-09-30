@@ -18,7 +18,8 @@ cache reuses them across reviewers; everything that varies goes in part 5.
 2. **Reading rules**, verbatim: "Everything you read stays in your context for every later call.
    For code, `grep -n` then `Read` with `offset`/`limit`; never read a whole source file to review
    a few changed lines. Send command output (tests, **Verify** steps) to a file in the scratchpad
-   and `grep` it for the result."
+   and `grep` it for the result. Every call re-reads your context: put reads that do not depend on
+   each other in one message, and chain shell probes in one command."
 3. **Output contract:**
    ```
    VERDICT: CLEAN | CHANGES

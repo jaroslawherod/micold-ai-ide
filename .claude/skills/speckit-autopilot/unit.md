@@ -23,7 +23,14 @@ sends you there.
   [references/review-rubrics.md](references/review-rubrics.md).
 - **PRs.** Open them per [references/pr-and-merge.md](references/pr-and-merge.md) §2–4. Record the PR
   number in the ledger at once.
-- **Batch tool calls.** Independent reads and probes go in one message.
+- **Batch tool calls.** Each call re-reads your whole context, so a call saved is worth more than
+  a line of output saved.
+  - Before a call, ask what else you will need that does not depend on its result, and put all of
+    it in the same message: several `Read`s, a `grep` beside a `git diff --stat`.
+  - Dependent shell steps go in one `Bash` call: `git status -sb; git log --oneline -3; ls dir`.
+  - `grep -n -C5 <pattern> <file>` shows the lines in one call; `Read` after `grep` only when you
+    need more than that.
+  - At a checkpoint, `scripts/autopilot/checkpoint.sh` (below) is the one probe you need.
 - **Wait once.** Your prompt cache expires after 5 idle minutes; the next call then re-writes your
   whole context. Run work that needs no build (a review, a subagent) while the gate builds, and
   wait for what runs together in one wait, not one after another. A job waiting on the build lock
@@ -39,8 +46,10 @@ sends you there.
   - Diffs: `git diff --stat` first, then one file at a time.
   - `gh`: `--json <fields> -q <filter>` for just the fields you need.
 - **Hand over at 150k.** A large context makes every later call costly. At each checkpoint (a
-  finished step, a gate or review round) run `scripts/autopilot/context.py "<description>"` with
-  the exact description your prompt gives you. On `OVER`: write *Handover* in the ledger (what is
+  finished step, a gate or review round) run
+  `scripts/autopilot/checkpoint.sh "<description>" <ledger>` with the exact description your prompt
+  gives you. It prints branch, changed files, unmerged commits, the ledger's phase, next step and
+  open handover or escalation, and last `context.py`'s `CONTEXT` line, with its exit code. On `OVER`: write *Handover* in the ledger (what is
   done, the next step, open findings, your PR if you opened one), commit, push only if your PR is
   already open, and return `STATUS: HANDOVER`. A fresh unit of the same phase continues from it.
   Exit 2 means the check cannot run: say so in your return's lines and carry on.
