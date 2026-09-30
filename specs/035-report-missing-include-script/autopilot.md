@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 5-close
-- **Next step**: close PR open; wait for `ci complete`, merge. Then the flow is done.
+- **Next step**: close PR #480 open; wait for `ci complete`, merge. Then the flow is done.
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #471 | M2: notify when a save leaves a missing script path | merged | fae88e6c |
 | #473 | M3: the same report with the feature on or off | merged | b0432747 |
 | #477 | M4: recovery by the user's own edit, architecture doc, full §B pass | merged | 2f0714da |
+| #480 | Close: converge, tdd-verify remediation T043–T048, docguard, spec Closed | open | — |
 
 ## Milestones
 
@@ -79,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D40 | 5-close | `speckit-converge` | Converged: FR-001–FR-014, SC-001–SC-006, US1–US3 scenarios and edge cases all met; tasks.md unchanged by converge. No unbuilt behaviour. | agent-resolved | converge subagent |
 | D41 | 5-close | `speckit-tdd-verify` | FAIL at 02ae3dc6: the real handlers' job start was untested (6 of 8 hand mutants survived); remediation T043–T048 (Phase 7), all test-strength or docs, no unbuilt behaviour. All six done in b12a8828: the five mutants named in the tasks are now killed (cycle log, "Close"); test-list has no PENDING row. | agent-resolved | `tdd/verification.md`; `tdd/cycle-log.md` |
 | D42 | 5-close | `speckit-docguard-guard` | FAIL 1082/2769, all repo-wide (6 `STR001` for `docs-canonical/*` scaffolding). The only 035 findings are 21 `TRC004` (`@req` annotations), a convention no feature here uses (031 D65, 033 D14). Nothing changed. | agent-resolved | `docguard-cli@latest guard`, filtered to 035 |
+| D43 | 5-close | Close diff review and gate | Review CLEAN, 3 MINOR all fixed (T046 wording, remediation note in `verification.md`, rebase onto `origin/main` e201a04e). Gate at ca575603: GATE_EXIT=0, 3976 passed. PR body says `Closes #435`: the client-side report, save notice and recovery resolve it; the daemon side is #454. | agent-resolved | reviewer subagent; gate log |
 
 ## Declined review findings
 
