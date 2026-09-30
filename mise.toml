@@ -49,6 +49,10 @@ run = "scripts/screenshot-session.py"
 description = "Report token usage per autopilot unit from this worktree's Claude Code sessions"
 run = "scripts/autopilot-tokens.py --worktree"
 
+[tasks.autopilot-skill-size]
+description = "Estimate the tokens each autopilot role loads; pass a git ref to see the delta against it"
+run = "scripts/autopilot/measure-skill.sh"
+
 [tasks.fixture]
 description = "Build the 20-worktree reference scene for the frame-time measurement (018 §B8)"
 run = "scripts/reference-scene.sh"
