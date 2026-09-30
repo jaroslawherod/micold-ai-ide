@@ -819,6 +819,7 @@ pub fn classify(outcome: &crate::process::RunOutcome) -> IssueLoadError {
         "http 403",
         "saml",
         "resource not accessible",
+        "required scopes",
         "not_found",
     ]) {
         IssueLoadError::NoAccess
@@ -905,9 +906,13 @@ impl GhCli {
                 code: 0, stdout, ..
             } => parse(stdout),
             // An error the answer types exactly (NOT_FOUND, RATE_LIMITED) stands; one it only
-            // names (`Other`) is classified from stderr, which knows SAML and scope refusals.
+            // names (`Other`) is classified from stderr, which knows SAML and scope refusals, and
+            // keeps GitHub's own words when stderr adds nothing better.
             crate::process::RunOutcome::Exited { stdout, .. } => match parse(stdout) {
-                Err(IssueLoadError::Other(_)) => Err(classify(&outcome)),
+                Err(named @ IssueLoadError::Other(_)) => match classify(&outcome) {
+                    IssueLoadError::Other(_) if !stdout.is_empty() => Err(named),
+                    typed => Err(typed),
+                },
                 answer => answer,
             },
             _ => Err(classify(&outcome)),

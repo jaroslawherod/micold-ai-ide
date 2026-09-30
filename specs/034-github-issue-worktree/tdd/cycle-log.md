@@ -470,3 +470,20 @@ failed before the implementation.
   25, `--bin micold-ai-ide issue` 17 passed.
 - notes: U110's first form (cycle 16) is superseded, with the reason above; the log keeps both.
 - commit: the commit that adds this entry
+
+## Cycle 18: U111 (extended), U112 — M3 review A round 3
+
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-core --test github_gh_cli --test github_classify`
+  -> `github_classify` 4 passed, 1 failed: `no_access` `:63:9 left: Other("GraphQL: Your token has
+  not been granted the required scopes …") right: NoAccess` (U112); `github_gh_cli` 4 passed, 1
+  failed: `a_typed_error_stands_at_any_exit_status` `:285:5 left: Other("gh exited with status 1")
+  right: Other("Something GitHub says")` (U111). The list NOT_FOUND and search RATE_LIMITED cases
+  of the new test passed at once: they pin cycle 17's rule, moved here from
+  `a_partial_response_is_parsed` so a failure names what broke.
+- green: `classify` knows "required scopes"; `GhCli::run` keeps the parser's `Other` when
+  `classify` has only a generic `Other` for a non-empty stdout; the search answer clears the
+  highlight when its issue is gone (round 2's clamp could leave Enter on an issue never chosen; no
+  new test: the one-line revert restores round 1's tested rule).
+  -> `github_classify` 5, `github_gh_cli` 5, `github_parse` 7, `github_search` 2, `github_load` 4,
+  `issue_source_state` 25 passed.
+- commit: the commit that adds this entry

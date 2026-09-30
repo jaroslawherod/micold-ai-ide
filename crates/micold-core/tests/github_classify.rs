@@ -58,6 +58,7 @@ fn no_access() {
         "http_403",
         "saml",
         "graphql_forbidden",
+        "insufficient_scopes",
     ] {
         assert_eq!(
             classify(&exited(1, fixture)),

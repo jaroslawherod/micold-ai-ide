@@ -62,6 +62,8 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M3 | code-review A r2 #5 | A whitespace-only keystroke cannot recover a skipped search | With r2 #1 fixed no search is left Pending; a failed one has Retry. |
 | M3 | code-review A r2 #6 | Re-seat the highlight by issue inside `rematch_issues` for every caller | A keystroke's re-rank keeps 021's index rule (parity, as M2 declined for the branch picker); only the search answer, which re-ranks without the user acting, re-seats by issue. |
 | M3 | code-review A r2 #10 | Cycle log records `build-lock.sh cargo test` instead of a mise task | `.specify/memory/tdd-profile.md` names these single-target commands; `mise run gate` runs the suite. |
+| M3 | code-review A r3 #2 | A debounce ending while a create runs or a prompt is up still searches | Round 2 showed the guarded alternative leaves the search Pending for good. The keystroke is the named event (FR-003); the answer only re-ranks a closed list and never touches type, ticket or name, which is what the prompt resolves. Re-arming on return to editing is new wiring the plan did not name. |
+| M3 | code-review A r3 #7 | Cycle log records `build-lock.sh cargo test` | As r2 #10. |
 | M3 | M1 conformance B F2 (revisited) | `parse_list_page`'s `errors[]` branch is reached only at exit 0 | Revisited with M3's partial-response rule: a non-zero exit's stdout is used only when the parser accepts it, otherwise stderr is classified, because stderr names SAML and scope refusals that GraphQL types as FORBIDDEN (review A #2, U111). Round 2: an error the answer types exactly (NOT_FOUND → `NoAccess`, RATE_LIMITED) now stands at any exit status, so the `errors[]` branch is live for real `gh`; only an `Other` goes to stderr. F2 closed. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
@@ -71,6 +73,7 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 |---|---|---|---|---|
 | M3 | A (code-review high) | 1 | 0b3a3df2:7c1231e2 | 10 findings: #1, #2, #4, #6, #7, #10 (doc, double parse) fixed (U107–U111); #3, #5, #8, #9 declined |
 | M3 | A (code-review high), scoped | 2 | 14dfc916:feb7b70e | 10 findings: #1 (round 1 #7 left a search stuck Pending — reverted, U110 revised), #2/#3/#8 (a typed GraphQL error stands; only `Other` goes to stderr, ListNotFound case restored), #4 (highlight falls back to the clamp), #7 (doc), #9 (branch) fixed; #5, #6, #10 declined |
+| M3 | A (code-review high), scoped | 3 (last) | a9a4807b:f7829cb2 | 7 findings: #1 (highlight cleared when its issue is dropped), #3 (GitHub's message kept over a generic `Other`), #4 (scope refusals → `NoAccess`, U112), #5/#6 (typed-error test split out, RATE_LIMITED search case) fixed; #2, #7 declined. No round 4 (limit); review B covers the fix diff. |
 
 ## Open escalation
 

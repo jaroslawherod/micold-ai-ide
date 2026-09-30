@@ -1,0 +1,1 @@
+GraphQL: Your token has not been granted the required scopes to execute this query. The 'number' field requires one of the following scopes: ['read:project'], but your token has only been granted the: ['repo'] scopes. Please modify your token's scopes at: https://github.com/settings/tokens.

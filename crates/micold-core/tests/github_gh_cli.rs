@@ -38,6 +38,10 @@ enum Then {
     SamlRefused,
     /// Print a repository NOT_FOUND answer, nothing on stderr, and exit 1.
     ListNotFound,
+    /// Print a RATE_LIMITED answer, nothing on stderr, and exit 1.
+    RateLimitedAnswer,
+    /// Print an answer whose error has no known type, nothing on stderr, and exit 1.
+    OddAnswer,
     /// Print an unknown failure to stderr, nothing on stdout, and exit 1.
     FailWithoutJson,
 }
@@ -49,12 +53,18 @@ fn copy_fixtures(dir: &Path) {
         r#"{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource protected by organization SAML enforcement."}]}"#,
     )
     .unwrap();
+    std::fs::write(
+        dir.join("odd.json"),
+        r#"{"data":null,"errors":[{"type":"SOMETHING_NEW","message":"Something GitHub says"}]}"#,
+    )
+    .unwrap();
     for (from, to) in [
         ("list_page.json", "page.json"),
         ("not_logged_in.stderr", "login.stderr"),
         ("search_pr_number.json", "partial.json"),
         ("saml.stderr", "saml.stderr"),
         ("list_not_found.json", "not_found.json"),
+        ("list_rate_limited.json", "rate_limited.json"),
         ("unknown.stderr", "unknown.stderr"),
     ] {
         std::fs::copy(fixture(from), dir.join(to)).unwrap();
@@ -75,6 +85,8 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::PartialSearch => "cat \"$dir/partial.json\"; exit 1",
         Then::SamlRefused => "cat \"$dir/saml.json\"; cat \"$dir/saml.stderr\" >&2; exit 1",
         Then::ListNotFound => "cat \"$dir/not_found.json\"; exit 1",
+        Then::RateLimitedAnswer => "cat \"$dir/rate_limited.json\"; exit 1",
+        Then::OddAnswer => "cat \"$dir/odd.json\"; exit 1",
         Then::FailWithoutJson => "cat \"$dir/unknown.stderr\" >&2; exit 1",
     };
     let script = format!(
@@ -108,6 +120,8 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::NotLoggedIn => "type \"%~dp0login.stderr\" 1>&2\r\nexit /b 4",
         Then::PartialSearch => "type \"%~dp0partial.json\"\r\nexit /b 1",
         Then::ListNotFound => "type \"%~dp0not_found.json\"\r\nexit /b 1",
+        Then::RateLimitedAnswer => "type \"%~dp0rate_limited.json\"\r\nexit /b 1",
+        Then::OddAnswer => "type \"%~dp0odd.json\"\r\nexit /b 1",
         Then::SamlRefused => {
             "type \"%~dp0saml.json\"\r\ntype \"%~dp0saml.stderr\" 1>&2\r\nexit /b 1"
         }
@@ -251,10 +265,26 @@ fn a_partial_response_is_parsed() {
     let dir = tempfile::tempdir().unwrap();
     let listed = GhCli::new(stub(dir.path(), Then::SamlRefused)).list_open(&repo(), None);
     assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
+}
 
-    // An error the answer itself types exactly is kept, even when stderr says nothing (review A
-    // round 2 #3).
+/// U111 — an error the answer types exactly stands at any exit status, for the list and the
+/// search alike; one it only names keeps GitHub's words when stderr adds nothing (review A rounds 2
+/// and 3).
+#[test]
+fn a_typed_error_stands_at_any_exit_status() {
     let dir = tempfile::tempdir().unwrap();
     let listed = GhCli::new(stub(dir.path(), Then::ListNotFound)).list_open(&repo(), None);
     assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
+
+    let dir = tempfile::tempdir().unwrap();
+    let searched = GhCli::new(stub(dir.path(), Then::RateLimitedAnswer)).search_open(&repo(), "x");
+    assert_eq!(searched.unwrap_err(), IssueLoadError::RateLimited);
+
+    let dir = tempfile::tempdir().unwrap();
+    let odd = GhCli::new(stub(dir.path(), Then::OddAnswer)).search_open(&repo(), "x");
+    assert_eq!(
+        odd.unwrap_err(),
+        IssueLoadError::Other("Something GitHub says".into()),
+        "not `gh exited with status 1`"
+    );
 }
