@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M4
-- **Next step**: M4 (T043–T048, T089): implement start_session / rename_worktree and the policy rows, gate, reviews A/B, open the PR.
+- **Next step**: M4 PR open (see Pull requests); gate green at HEAD (after one flaky rerun: `github_gh_cli::a_typed_error_stands_at_any_exit_status` got ToolMissing, feature outside this flow, passed on rerun). Wait for CI, then merge (rebase) and start M5.
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | #469 | merged |
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
 | M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
-| M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | in progress |
+| M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | (pending) | PR open; gate green; reviews A (2 rounds) and B clean |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | planned |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
@@ -70,6 +70,7 @@ deliverable (tasks.md Notes).
 | M2 | A (sonnet re-review) | 2 | 6ad850082b956db79b824cda29517a5172665dba:4c3b01ae36397dc436b511995f71ef7ced33322d | CLEAN; fixes hold, declines stand |
 | M4 | A (code-review high) | 1 | d60651b2f4fd809dee2612cd097776c8547cdd48:ca68d3837395b780eb1ccda1f1cf3b538d44db9f | CHANGES: F1 BLOCKER fmt (fixed), F2 MAJOR failed start answered success (fixed: service_error with the recorded reason), F3 MINOR fixed, F4/F5 MINOR declined |
 | M4 | A (sonnet re-review) | 2 | 1882e06044be9f66f4b5bc1ad8b239d5237956bd:29e38622b60e5a1c9ff48c67d972cca5661cf3d1 | CLEAN |
+| M4 | B (conformance) | 1 | 0e3d56ded2112ab8955dac9cdbb45e6215c2396e:a18955332115b3bc228c76e32100a90b6f61e72c | CLEAN; Verify green (mcp_policy 12, mcp_tools_catalog 19, mcp_lifecycle_tools 8); 1 MINOR declined |
 
 ## Declined review findings
 
@@ -97,6 +98,7 @@ deliverable (tasks.md Notes).
 | M2 | A round 1 | `set_tool_server_enabled` duplicates the lock/persist/broadcast setter shape | Cosmetic; same as the four sibling setters. Covered by the batching follow-up |
 | M2 | B round 1 | Visual pass did not check the toggle persists across Save | MINOR; persistence is pinned by `turning_the_binding_toggle_off_and_saving_tells_the_service`, `turning_the_binding_toggle_off_reaches_what_save_writes` and `turning_the_tool_server_binding_off_survives_a_save_and_load` |
 | M4 | A round 1 | F4: only agent starts broadcast `Starting`; the sidebar's `SessionStart` does not | Tried (broadcast in `ops::start_session`): feature 026's `resume_failure_reported` pins that the first lifecycle announced after a sidebar `SessionStart` is its outcome, and went red. The sidebar's announcements stay as they were; the overlay still shows `Starting` in any broadcast made during a sidebar start |
+| M4 | B round 1 | F1: `rename_worktree`'s own `default` check is unreachable after `parse_call` | Kept as a defensive `invalid_input` rather than a panic on the request path; same wording as the parser's |
 | M4 | A round 1 | F5: the `starting` marker is not reference-counted, so of two concurrent starts the second runs without the overlay/held input | Pre-existing semantics of `begin_start`/`finish_start` shared with the sidebar's `SessionStart` (feature 026 T125); the tool already skips a session the snapshot shows `Starting`, and the per-session gate still serializes the spawns |
 | M1 | B round 2 | No endpoint-level test for `discard_body` before 401/404/405 | Optional per the reviewer; the unit test pins the bound, and loopback socket buffers absorb any test-sized body, so an endpoint test would pass with or without the drain |
 
@@ -116,4 +118,6 @@ None.
 - Windows: verify the `.claude.json` project-key form the collision check uses (M1 review A).
 - Windows: port `mcp_binding_spawn.rs` (unix `#!/bin/sh` stand-ins) to Windows stand-ins (M1 review B).
 - Daemon `SettingsSet`: apply all fields as one catalog update with one persist and one `SettingsChanged` (today each field short-circuits, persists and broadcasts separately, and a failed persist leaves memory changed). Pre-existing across all service-owned settings (M2 review A).
+- Flaky: `crates/micold-core/tests/github_gh_cli.rs::a_typed_error_stands_at_any_exit_status` failed once with `ToolMissing` (stub executable race) during the M4 gate; passed on rerun. Not this feature's code.
+- M5 merge note: M4 added `policy::ConfirmedOp` and `PolicyDecision::Confirm`; M5's prebuilt protocol `ConfirmOperation` should be mapped from it.
 - Client: a Settings save made while disconnected is overwritten by the daemon's `Welcome` on reconnect, for every service-owned field (M2 review A).
