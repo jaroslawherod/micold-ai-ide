@@ -15,6 +15,7 @@ use micold_client::features::worktree_form::{
 };
 use micold_core::git::GitRemote;
 use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
+use micold_core::issue_types::{default_mapping, LabelTypeEntry};
 use micold_core::naming::ConventionalType;
 use micold_core::typeahead::Direction;
 
@@ -471,8 +472,8 @@ fn issue_number_at_bounds() {
     assert_eq!(State::default().worktree_form.issue_number_at(0), None);
 }
 
-/// U55 — a pick fills the ticket (no `#`) and the name from the title, clears the error, closes
-/// the list and leaves the type alone in this slice (FR-009, FR-010).
+/// U55 — a pick fills the ticket (no `#`) and the name from the title, clears the error and closes
+/// the list (FR-009, FR-010). The type follows the mapping (U83); here the mapping is empty.
 #[test]
 fn a_pick_fills_ticket_and_name() {
     let mut state = loaded();
@@ -480,7 +481,7 @@ fn a_pick_fills_ticket_and_name() {
     send(&mut state, Msg::Submitted);
     send(&mut state, Msg::IssueFocused);
 
-    send(&mut state, Msg::IssuePicked { number: 42 });
+    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
 
     let f = form(&state);
     assert_eq!(f.ticket, "42");
@@ -489,9 +490,8 @@ fn a_pick_fills_ticket_and_name() {
     assert_eq!(f.picked_issue, Some(42));
     assert!(!f.issue_list_open, "a pick closes the list");
     assert_eq!(
-        f.type_,
-        Some(ConventionalType::Chore),
-        "the type is chosen by hand until labels choose it (M4)"
+        f.type_, None,
+        "with no mapping entry for the issue's labels the pick clears the type (FR-014)"
     );
 
     send(&mut state, Msg::NameChanged("edited".into()));
@@ -507,12 +507,12 @@ fn a_pick_fills_ticket_and_name() {
 fn a_stale_pick_is_ignored() {
     let mut state = loaded();
     send(&mut state, Msg::NameChanged("mine".into()));
-    send(&mut state, Msg::IssuePicked { number: 9999 });
+    send(&mut state, Msg::IssuePicked { number: 9999, mapping: vec![] });
     assert_eq!(form(&state).name, "mine");
     assert_eq!(form(&state).picked_issue, None);
 
     let (mut state, _) = loading();
-    send(&mut state, Msg::IssuePicked { number: 42 });
+    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
     assert_eq!(form(&state).ticket, "");
     assert_eq!(form(&state).picked_issue, None);
 }
@@ -521,7 +521,7 @@ fn a_stale_pick_is_ignored() {
 #[test]
 fn issue_source_previews_as_new() {
     let mut state = loaded();
-    send(&mut state, Msg::IssuePicked { number: 42 });
+    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
     let as_issue = form(&state).clone();
     assert!(
         !as_issue.can_submit(),
@@ -545,6 +545,83 @@ fn issue_source_previews_as_new() {
     );
 }
 
+// --- US2: the labels choose the type -----------------------------------------------------------
+
+fn entry(label: &str, type_: ConventionalType) -> LabelTypeEntry {
+    LabelTypeEntry {
+        label: label.to_string(),
+        type_,
+    }
+}
+
+fn pick(state: &mut State, number: u64, mapping: Vec<LabelTypeEntry>) {
+    send(state, Msg::IssuePicked { number, mapping });
+}
+
+/// U83 — a pick sets the type from the first matching mapping entry, replaces a selected type, and
+/// clears it when no label matches, so the existing "type required" validation applies (AS1, AS3,
+/// AS6, FR-013, FR-014).
+#[test]
+fn the_pick_sets_or_clears_the_type() {
+    let mut state = loaded();
+    pick(&mut state, 42, default_mapping());
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Fix),
+        "an issue labelled `bug` selects `fix` (AS1)"
+    );
+
+    send(&mut state, Msg::TypeSelected(ConventionalType::Chore));
+    pick(&mut state, 108, default_mapping());
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Docs),
+        "a mapped label replaces the selected type (AS6)"
+    );
+
+    pick(&mut state, 7, default_mapping());
+    assert_eq!(
+        form(&state).type_,
+        None,
+        "no mapped label clears the type; nothing carries over (AS3, FR-014)"
+    );
+    assert!(
+        !form(&state).can_submit(),
+        "with the type cleared the form asks for one, as it does today"
+    );
+
+    pick(&mut state, 42, default_mapping());
+    send(&mut state, Msg::TypeSelected(ConventionalType::Refactor));
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Refactor),
+        "a type chosen by hand after the pick is kept (AS4, FR-015)"
+    );
+}
+
+/// U84 — the mapping is the one handed over at the pick: a second pick under a different mapping
+/// uses that mapping, and nothing recomputes the first pick's type (FR-014a).
+#[test]
+fn the_mapping_is_read_at_the_pick() {
+    let mut state = loaded();
+    pick(&mut state, 42, vec![entry("bug", ConventionalType::Chore)]);
+    assert_eq!(form(&state).type_, Some(ConventionalType::Chore));
+
+    send(&mut state, Msg::IssueQueryChanged("crash".into()));
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Chore),
+        "no later message recomputes the picked issue's type"
+    );
+
+    pick(&mut state, 42, vec![entry("BUG", ConventionalType::Perf)]);
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Perf),
+        "the next pick uses the mapping it carries"
+    );
+}
+
 // --- review follow-ups ------------------------------------------------------------------------
 
 /// U103 — leaving the issue source forgets which issue was picked, so returning never marks a row
@@ -552,7 +629,7 @@ fn issue_source_previews_as_new() {
 #[test]
 fn leaving_the_source_forgets_the_pick() {
     let mut state = loaded();
-    send(&mut state, Msg::IssuePicked { number: 42 });
+    send(&mut state, Msg::IssuePicked { number: 42, mapping: vec![] });
     send(&mut state, Msg::SourceChanged(BranchSource::New));
     assert_eq!(form(&state).picked_issue, None);
     assert_eq!(
@@ -719,7 +796,7 @@ fn a_newer_keystroke_discards_an_older_search() {
         1,
         "a searched issue already loaded is shown once (invariant 4)"
     );
-    send(&mut state, Msg::IssuePicked { number: 1200 });
+    send(&mut state, Msg::IssuePicked { number: 1200, mapping: vec![] });
     assert_eq!(
         form(&state).ticket,
         "1200",
