@@ -544,3 +544,49 @@ fn issue_source_previews_as_new() {
         Ok("fix/42_crash-when-opening-empty-project".to_string())
     );
 }
+
+// --- review follow-ups ------------------------------------------------------------------------
+
+/// U103 — leaving the issue source forgets which issue was picked, so returning never marks a row
+/// the ticket and name no longer come from (Review A).
+#[test]
+fn leaving_the_source_forgets_the_pick() {
+    let mut state = loaded();
+    send(&mut state, Msg::IssuePicked { number: 42 });
+    send(&mut state, Msg::SourceChanged(BranchSource::New));
+    assert_eq!(form(&state).picked_issue, None);
+    assert_eq!(
+        form(&state).ticket,
+        "42",
+        "the filled fields themselves stay"
+    );
+}
+
+/// U104 — the cap caption counts what was loaded and what is open, and is absent when every open
+/// issue is held (FR-004, Review A/B).
+#[test]
+fn the_cap_caption_counts_the_loaded_and_the_open() {
+    let state = loaded();
+    assert_eq!(form(&state).issue_cap_caption(), None, "a complete listing");
+
+    let (mut state, seq) = loading();
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                IssueListing {
+                    issues: issues(),
+                    total_open: 1_234,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    assert_eq!(
+        form(&state).issue_cap_caption().as_deref(),
+        Some("Showing the 3 most recently updated of 1,234 open issues.")
+    );
+}

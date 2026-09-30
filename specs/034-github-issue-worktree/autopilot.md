@@ -51,6 +51,11 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M1 | code-review A #4 | `load_listing` does not de-duplicate across pages, and `complete` can read true while an issue updated mid-load was skipped | The picker holds a snapshot taken at form open (FR-004, data-model §2); the window is the ~1 s between two page requests, and reopening the form reloads. De-duplicating would hide the drift without closing it; a consistent read needs a GitHub API the plan did not choose. |
 | M1 | code-review A #9 | `GitCli::remote_list` repeats `run_git`'s spawn and error formatting | It differs in exit semantics (1 means "no remotes", not a failure); widening `run_git` for one caller changes every other caller's contract. Duplication is eight lines. |
 | M1 | conformance B F2 | `parse_list_page`'s `errors[]` branch is reachable only when `gh` exits 0 | Follows contract §3 (a non-zero exit goes to `classify`); `parse_list_page` stays total over any GraphQL answer. Revisit with M3's search rule. |
+| M2 | code-review A #3 (part) | Remotes are not asked again after the daemon reconnects while the form is open | The disconnect arm ends `Checking` with "not connected"; closing and reopening the form asks again. A reconnect hook for one open dialog is new behaviour the plan did not name. The no-project half was fixed (U106). |
+| M2 | code-review A #8 | `IssuesLoaded` carries `resolved_env`, shell data, through the reducer's `Msg` | T027 and contract §4 specify it: the snapshot resolved on the blocking thread reaches the shell's cache through the same message; the reducer ignores the field. |
+| M2 | code-review A #9 | A row pick round-trips through the shell (`IssueRowPicked` then `IssuePicked`) | T024/T027 specify it: the Typeahead reports a row, the shell resolves it with `issue_number_at`, the reducer only sees issue numbers. U105 covers the path. |
+| M2 | conformance B F3 / visual pass D1, D2 | Highlight after retyping, and the Issue field keeping the typed query after a pick | Parity with 021's branch picker, which the spec says to follow (FR-005): the same `rematch` re-seats the highlight and the same field keeps the query. A change belongs to both pickers, not to this one. |
+| M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
 ## Open escalation
 
@@ -58,4 +63,5 @@ None.
 
 ## Follow-ups not done
 
-None.
+- SC-001 (form to created worktree under 20 s) not demonstrated in M2's visual pass: the 1,000-issue load alone took ~20 s on a loaded machine with a dev build, and `gh issue list -L 1000` alone took 8 s there. Accepted as a measurement-environment deviation for M2; re-time §B2–B5 on a release build in M6 (T063–T065).
+- Quickstart §B5's second attempt with the same ticket and name shows the folder-collision error, not a reuse prompt, because the branch is held by the existing worktree. That is the existing FR-021 path; the reuse prompt itself is covered by A6.

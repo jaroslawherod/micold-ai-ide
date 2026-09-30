@@ -164,7 +164,7 @@ pub enum IssueList {
 
 impl IssueList {
     /// Every issue held, loaded first and then searched: the order `issue_matches` indexes.
-    fn held(&self) -> Vec<&Issue> {
+    pub fn held(&self) -> Vec<&Issue> {
         match self {
             IssueList::Loaded {
                 listing, searched, ..
@@ -172,6 +172,19 @@ impl IssueList {
             _ => Vec::new(),
         }
     }
+}
+
+/// `1234567` as "1,234,567", for a count the user reads.
+fn thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// The search beyond the loaded issues (feature 034, FR-005a). Only `Idle` until slice C.
@@ -324,6 +337,19 @@ impl WorktreeForm {
         }
     }
 
+    /// The caption under a list that does not hold every open issue (FR-004): how many were loaded
+    /// and how many are open. `None` when every open issue is held.
+    pub fn issue_cap_caption(&self) -> Option<String> {
+        match &self.issues {
+            IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
+                "Showing the {} most recently updated of {} open issues.",
+                thousands(listing.issues.len() as u64),
+                thousands(listing.total_open)
+            )),
+            _ => None,
+        }
+    }
+
     /// The repository the issue source reads, once known.
     pub fn github_repo(&self) -> Option<&GithubRepo> {
         match &self.github {
@@ -351,6 +377,7 @@ impl WorktreeForm {
         self.issue_matches.clear();
         self.issue_list_open = false;
         self.issue_highlight = None;
+        self.picked_issue = None;
     }
 
     /// Recompute the search results from `candidates` and `branch_query`, and re-seat the keyboard

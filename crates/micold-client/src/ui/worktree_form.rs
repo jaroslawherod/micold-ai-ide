@@ -338,24 +338,27 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
                 Text::new(format!("{repo} has no open issues."), TypeRole::Caption, r).muted(),
             );
         }
-        IssueList::Loaded { listing, .. } => {
+        IssueList::Loaded { .. } => {
             // The mapping, exactly the branch picker's: one row per match, its label the issue's
             // row text, the emphasis spans the matcher found in that same text. `issue_matches`
-            // indexes the listing's issues (searched issues follow them once search exists).
-            let rows: Vec<TypeaheadRow> = form
-                .issue_matches
-                .iter()
-                .filter_map(|(index, matched)| {
-                    let issue = listing.issues.get(*index)?;
-                    Some(TypeaheadRow::new(
-                        issue.row_text().to_string(),
-                        matched.spans.clone(),
-                    ))
-                })
-                .collect();
-            let selected = form.picked_issue.and_then(|picked| {
-                (0..form.issue_matches.len()).find(|&row| form.issue_number_at(row) == Some(picked))
-            });
+            // indexes every held issue: the listing's, then the searched ones.
+            // One pass builds the rows and finds the picked one; a row's position is its place in
+            // `issue_matches`, the index `IssueRowPicked` carries back.
+            let held = form.issues.held();
+            let mut selected = None;
+            let mut rows: Vec<TypeaheadRow> = Vec::with_capacity(form.issue_matches.len());
+            for (row, (index, matched)) in form.issue_matches.iter().enumerate() {
+                let Some(issue) = held.get(*index) else {
+                    continue;
+                };
+                if form.picked_issue == Some(issue.number()) {
+                    selected = Some(row);
+                }
+                rows.push(TypeaheadRow::new(
+                    issue.row_text().to_string(),
+                    matched.spans.clone(),
+                ));
+            }
             col = col.push(
                 material::Typeahead::new(
                     &form.issue_query,
@@ -375,35 +378,12 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
                 .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index))),
             );
             // FR-004: say the list is capped rather than presenting a part as the whole.
-            if !listing.complete {
-                col = col.push(
-                    Text::new(
-                        format!(
-                            "Showing the 1,000 most recently updated of {} open issues.",
-                            thousands(listing.total_open)
-                        ),
-                        TypeRole::Caption,
-                        r,
-                    )
-                    .muted(),
-                );
+            if let Some(caption) = form.issue_cap_caption() {
+                col = col.push(Text::new(caption, TypeRole::Caption, r).muted());
             }
         }
     }
     col.into()
-}
-
-/// `1234567` as "1,234,567", for a count the user reads.
-fn thousands(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// The ordinary Create / Cancel row.

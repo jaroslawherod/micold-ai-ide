@@ -4655,8 +4655,46 @@ mod issue_source {
             .worktree_form
             .issue_number_at(highlighted)
             .expect("the highlight is a row");
-        pick(&mut rig.app, number);
+        // Enter picks the highlighted row, as the list reports it: by index.
+        send(&mut rig.app, FormMsg::IssueRowPicked(highlighted));
         assert_eq!(form(&rig.app).ticket, number.to_string());
+    }
+
+    /// U105 — a row pick resolves its index to that row's issue, and an index past the rows picks
+    /// nothing (Review B F1).
+    #[test]
+    fn issue_a_row_pick_resolves_to_its_issue() {
+        let mut rig = loaded_rig();
+        send(
+            &mut rig.app,
+            FormMsg::IssueQueryChanged("documentation".into()),
+        );
+        send(&mut rig.app, FormMsg::IssueRowPicked(1));
+        assert_eq!(
+            form(&rig.app).ticket,
+            "",
+            "one past the last row picks nothing"
+        );
+        send(&mut rig.app, FormMsg::IssueRowPicked(0));
+        assert_eq!(form(&rig.app).ticket, "108");
+        assert_eq!(form(&rig.app).picked_issue, Some(108));
+    }
+
+    /// U106 — with no project open there are no remotes to read, and the caption says so rather
+    /// than checking for ever (Review A).
+    #[test]
+    fn issue_no_project_is_not_left_checking() {
+        use micold_client::features::worktree_form::GithubAvailability;
+        let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
+        rig.app.core.workspace.active = None;
+        send(&mut rig.app, FormMsg::Opened);
+        assert_eq!(
+            form(&rig.app).github,
+            GithubAvailability::Unavailable(
+                "Couldn't read this repository's remotes: no project is open".into()
+            )
+        );
+        assert!(remote_lists_sent(&mut rig.rx).is_empty());
     }
 
     /// A4 — a pick fills ticket and name; the preview is the new-branch one (US1-4).

@@ -19,16 +19,16 @@
 //! handed back in `IssuesLoaded` for the shell to cache, rather than stalling the update thread.
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
-use micold_core::env_include::{self, EnvIncludeSnapshot};
+use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{env_include_path, load_listing, IssueListing, IssueLoadError};
 use micold_core::protocol::messages::ClientMsg;
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
+use crate::shell::env_include::resolve_env_include;
 use crate::App;
 
 /// Why the remotes could not be read while the session service is unreachable.
@@ -41,6 +41,10 @@ pub(crate) const NOT_CONNECTED: &str = "not connected to the session service";
 pub fn on_form_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
     let Some(project) = app.core.workspace.active.clone() else {
+        app.core
+            .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(
+                "no project is open".to_string(),
+            ))));
         return Task::none();
     };
     if app.daemon.is_none() {
@@ -98,8 +102,10 @@ pub fn on_issues_loaded(
     result: Result<(IssueListing, PathBuf), IssueLoadError>,
     resolved_env: Option<(PathBuf, EnvIncludeSnapshot)>,
 ) -> Task<Message> {
+    // Keep an entry already there: a terminal restart or a Settings save may have refreshed it
+    // while this load ran, and that snapshot is newer than the one resolved here.
     if let Some((cwd, snapshot)) = resolved_env {
-        app.env_include_cache.insert(cwd, snapshot);
+        app.env_include_cache.entry(cwd).or_insert(snapshot);
     }
     app.core
         .update(Message::WorktreeForm(FormMsg::IssuesLoaded {
@@ -141,7 +147,7 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     let resolver = app.caps.env_include_shared();
     let enabled = app.env_include_enabled;
     let script = app.env_include_script_path.clone();
-    let timeout = Duration::from_secs(app.env_include_timeout_secs);
+    let timeout_secs = app.env_include_timeout_secs;
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
@@ -149,7 +155,7 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
                     Some(_) => None,
                     None => {
                         let snapshot =
-                            env_include::snapshot_for(&*resolver, enabled, &script, timeout, &cwd);
+                            resolve_env_include(&*resolver, enabled, &script, timeout_secs, &cwd);
                         Some((cwd, snapshot))
                     }
                 };
