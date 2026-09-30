@@ -340,5 +340,13 @@ git add -A; git commit -qm wip; git reset -q --hard HEAD~2; echo rebased > seed.
 check "review-snapshot refuses a snapshot a rebase made stale" 2 'STALE-SNAPSHOT' bash -c "'$R' diff '$snap' 2>&1"
 cd "$d/wt"
 
+# autopilot-tokens.py: a request that re-writes most of a large context counts as a rebuild; the
+# first request, a cached one and a small one do not.
+d="$(new_repo)"
+msg() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usage":{"input_tokens":1,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s,"output_tokens":1}}}\n' "$@"; }
+{ msg m1 40000 0; msg m2 500 40000; msg m3 41000 0; msg m3 41000 0; msg m4 9000 1000; } > "$d/s.jsonl"
+check "autopilot-tokens counts one cache rebuild" 0 '^\| orchestrator \(main session\) \| x \| 4 \| [^|]+\| [^|]+\| [^|]+\| 1 \|' \
+  "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
+
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
