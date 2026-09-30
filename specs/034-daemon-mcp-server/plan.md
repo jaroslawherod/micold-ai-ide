@@ -135,7 +135,7 @@ requirement's testable form, and no complexity to track.
 | FR-014 | `mcp/confirm.rs` (TM5); protocol-delta §2; client `features/agent_confirm.rs` |
 | FR-015, FR-015a | `policy::decide` |
 | FR-016 | setting `cross_session_access`; `policy::decide`; protocol-delta §3 |
-| FR-017 | `InputReadiness` seam + `create_session` prompt wait; R12 |
+| FR-017 | `InputReadiness` + `FolderTrust` seams, read-only trust-record check, `create_session` prompt wait; R12 |
 | FR-018 | audit line (TM7) |
 | FR-019 | `docs/user-guide/agent-tools.md` + settings.md |
 
@@ -182,7 +182,8 @@ crates/micold-core/src/
 │   ├── errors.rs           # ErrorCategory, OpError
 │   ├── binding.rs          # BindingPlan from ToolServerSupport + url + credential; collision check
 │   └── submission.rs       # bracketed-paste + CR encoding; output-settled readiness rule
-├── provider.rs             # ToolServerSupport, InputReadiness + their AiCliProvider methods
+│   └── trust.rs            # would_ask_trust(): the CLI's own folder-trust record, read-only (R12)
+├── provider.rs             # ToolServerSupport, InputReadiness, FolderTrust + their AiCliProvider methods
 ├── settings.rs             # tool_server_enabled, cross_session_access
 └── protocol/{messages,version}.rs   # DaemonSettings/SettingsSet fields; confirmation messages
 
@@ -199,7 +200,7 @@ crates/micold-daemon/src/
 ├── framer.rs               # plain_tail()
 ├── state.rs                # tool server handle; binding at spawn; primary-process write/read;
 │                           #   stop_session(); ready-for-input marks
-├── hooks.rs / event_log.rs # SessionStart / Pi session_start also mark ready (R12)
+├── event_log.rs            # Pi session_start marks ready (R12; Claude's SessionStart never arrives)
 ├── server.rs               # binds the listener; route() calls ops.rs; ConfirmationAnswer arm
 ├── catalog.rs              # the two settings
 └── platform/{mod,unix,windows}.rs   # write_owner_only()

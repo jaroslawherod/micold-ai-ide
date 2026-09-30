@@ -120,6 +120,18 @@ pub enum InputReadiness {
     OutputSettled,
 }
 
+/// Where a CLI records the folders it trusts, so a first prompt is never typed into its trust
+/// question (feature 034, FR-017, research R12). A trusted folder trusts every folder below it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderTrust {
+    /// This CLI asks no trust question (`pi`).
+    NeverAsks,
+    /// `.claude.json`'s `projects[<path>].hasTrustDialogAccepted` (`claude`).
+    ClaudeProjects,
+    /// `config.json`'s `trustedFolders` in the config directory (`copilot`).
+    CopilotTrustedFolders,
+}
+
 /// How a CLI's sessions are bound to the session service's tool server (feature 034, FR-002,
 /// contracts/binding.md §4). Each variant names a launch mechanism; the daemon builds the arguments
 /// and the file from it, so no code outside this module asks which CLI a session runs.
@@ -261,6 +273,11 @@ pub trait AiCliProvider {
     /// research R12). A fresh session never reports "awaiting input" before that prompt, so this
     /// is a separate signal, and it never moves the activity badge.
     fn input_readiness(&self) -> InputReadiness;
+
+    /// Where this CLI records the folders it trusts without asking (FR-017, research R12). In a
+    /// folder it has not trusted it shows a trust question first, and a first prompt typed then
+    /// would answer it.
+    fn folder_trust(&self) -> FolderTrust;
 }
 
 impl AiCli {
@@ -578,6 +595,10 @@ impl AiCliProvider for ClaudeProvider {
         InputReadiness::OutputSettled
     }
 
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::ClaudeProjects
+    }
+
     fn activity_source(
         &self,
         _config_dir: &Path,
@@ -841,6 +862,10 @@ impl AiCliProvider for CopilotProvider {
     fn input_readiness(&self) -> InputReadiness {
         // Copilot writes nothing to its event log before the first user message (feature 026).
         InputReadiness::OutputSettled
+    }
+
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::CopilotTrustedFolders
     }
 
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
@@ -1181,6 +1206,10 @@ impl AiCliProvider for PiProvider {
         InputReadiness::ExtensionEvent(PI_SESSION_START)
     }
 
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::NeverAsks
+    }
+
     fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
         // Pi reports busy/idle only to code loaded into its own process, so the source names the
         // log that code writes and the daemon supplies the code at spawn. Beside `sessions/`, never
@@ -1409,6 +1438,10 @@ impl AiCliProvider for FakeAiCliProvider {
 
     fn input_readiness(&self) -> InputReadiness {
         InputReadiness::OutputSettled
+    }
+
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::NeverAsks
     }
 
     fn activity_source(

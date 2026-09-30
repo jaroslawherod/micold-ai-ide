@@ -59,7 +59,13 @@ impl Side {
     }
 
     /// What the operation left behind, in a form two projects can be compared by.
-    fn outcome(&self) -> (Vec<(String, Option<String>, String)>, Vec<String>, Vec<String>) {
+    fn outcome(
+        &self,
+    ) -> (
+        Vec<(String, Option<String>, String)>,
+        Vec<String>,
+        Vec<String>,
+    ) {
         self.state.refresh_worktrees(self.repo());
         let snapshot = self.state.catalog_snapshot();
         let project = snapshot
@@ -146,10 +152,7 @@ async fn create_without_a_client_matches_the_protocol_create() {
         },
     )
     .await;
-    assert!(
-        matches!(reply, DaemonMsg::OperationOk { .. }),
-        "{reply:?}"
-    );
+    assert!(matches!(reply, DaemonMsg::OperationOk { .. }), "{reply:?}");
 
     let created = ops::create_worktree(
         &agent.state,
@@ -187,10 +190,7 @@ async fn delete_without_a_client_matches_the_protocol_delete() {
         },
     )
     .await;
-    assert!(
-        matches!(reply, DaemonMsg::OperationOk { .. }),
-        "{reply:?}"
-    );
+    assert!(matches!(reply, DaemonMsg::OperationOk { .. }), "{reply:?}");
 
     let deleted = ops::delete_worktree(
         &agent.state,
@@ -224,10 +224,7 @@ async fn rename_without_a_client_matches_the_protocol_rename() {
         },
     )
     .await;
-    assert!(
-        matches!(reply, DaemonMsg::OperationOk { .. }),
-        "{reply:?}"
-    );
+    assert!(matches!(reply, DaemonMsg::OperationOk { .. }), "{reply:?}");
 
     let renamed = ops::rename_worktree(&agent.state, agent.repo(), "a", "Alpha");
     assert!(renamed.is_ok(), "{renamed:?}");

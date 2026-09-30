@@ -44,8 +44,10 @@ inside a Claude Code session and the application's service does not.
      `trustedFolders` was not changed.
    A worktree inherits trust from its project: with only the project root trusted (a private
    `CLAUDE_CONFIG_DIR` / `COPILOT_HOME` copy naming it), no question appeared in
-   `.claude/worktrees/<name>` and every prompt below was delivered. This is escalated (see the
-   ledger's *Open escalation*): whether to check the CLI's trust record before typing.
+   `.claude/worktrees/<name>` and every prompt below was delivered. Resolved (ledger D20, decided
+   by the user): before waiting, the service reads the CLI's own trust record, read-only, and when
+   the CLI would ask it types nothing and returns `prompt_delivered: false` with a `prompt_reason`
+   (cycle 24).
 
 ## Results (project trusted by each CLI)
 

@@ -68,12 +68,13 @@ impl Drop for Env {
     }
 }
 
-/// Stand-in CLIs on a `PATH` that holds nothing else of the user's, a fake home, a project with
-/// worktrees `b` and `gone` (whose directory has been removed), S1 in the project root and S3 in `b`.
+/// Stand-in CLIs on a `PATH` that holds nothing else of the user's, a fake home whose Claude and
+/// Copilot records trust the project, a project with worktrees `b` and `gone` (whose directory has
+/// been removed), S1 in the project root and S3 in `b`.
 struct Sandbox {
     _env: Env,
     bin: tempfile::TempDir,
-    _home: tempfile::TempDir,
+    home: tempfile::TempDir,
     _project: tempfile::TempDir,
     store: tempfile::TempDir,
     state: Arc<DaemonState>,
@@ -93,6 +94,7 @@ impl Sandbox {
         add_worktree(project.path(), "b");
         let gone = add_worktree(project.path(), "gone");
         std::fs::remove_dir_all(gone).unwrap();
+        trust_project(home.path(), project.path());
         let mut path = vec![bin.path().to_path_buf()];
         path.extend(["/usr/bin", "/bin"].map(PathBuf::from));
         let env = Env::set(&[
@@ -122,7 +124,7 @@ impl Sandbox {
         Self {
             _env: env,
             bin,
-            _home: home,
+            home,
             _project: project,
             store,
             state,
@@ -167,6 +169,12 @@ impl Sandbox {
             .unwrap_or(0)
     }
 
+    /// Remove the Claude and Copilot trust records, so both would ask about every folder.
+    fn distrust(&self) {
+        std::fs::remove_file(self.home.path().join(".claude.json")).unwrap();
+        std::fs::remove_file(self.home.path().join(".copilot/config.json")).unwrap();
+    }
+
     fn set_pi_delay(&self, seconds: f64) {
         std::fs::write(self.bin.path().join("pi.delay"), seconds.to_string()).unwrap();
     }
@@ -199,6 +207,20 @@ impl Drop for Sandbox {
         self.kill_all();
         let _ = &self.store;
     }
+}
+
+/// Each CLI's own record that it trusts `project` (and so every worktree below it), as the real
+/// ones write it: `~/.claude.json` and `~/.copilot/config.json` with its leading comment.
+fn trust_project(home: &Path, project: &Path) {
+    let claude = json!({"projects": {project.to_str().unwrap(): {"hasTrustDialogAccepted": true}}});
+    std::fs::write(home.join(".claude.json"), claude.to_string()).unwrap();
+    std::fs::create_dir_all(home.join(".copilot")).unwrap();
+    let copilot = json!({"trustedFolders": [project]});
+    std::fs::write(
+        home.join(".copilot/config.json"),
+        format!("// This file is managed automatically.\n{copilot}"),
+    )
+    .unwrap();
 }
 
 /// A stand-in CLI: records its launch; `draws` makes it print a prompt; Pi reports `session_start`
@@ -307,7 +329,9 @@ async fn a_session_in_default_runs_in_the_project_root() {
         .ok(json!({"worktree": "default", "ai_cli": "copilot"}))
         .await;
     let id = Sandbox::created(&out);
-    let summary = session_in(&s.state.catalog_snapshot(), id).cloned().unwrap();
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
     assert_eq!(summary.worktree_dir, None, "the project root");
 }
 
@@ -316,7 +340,9 @@ async fn an_unknown_worktree_is_not_found_and_creates_no_record() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     let before = s.session_ids();
-    let error = s.err(json!({"worktree": "nope", "ai_cli": "copilot"})).await;
+    let error = s
+        .err(json!({"worktree": "nope", "ai_cli": "copilot"}))
+        .await;
     assert_eq!(error["category"], "not_found", "{error}");
     assert_eq!(s.session_ids(), before);
 }
@@ -346,6 +372,11 @@ async fn a_ready_signal_inside_the_bound_delivers_the_prompt() {
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
     assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
+    assert_eq!(
+        out.get("prompt_reason"),
+        None,
+        "no reason when delivered: {out}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -359,6 +390,10 @@ async fn no_ready_signal_by_the_bound_is_not_delivered_and_a_late_one_types_noth
         .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(false), "{out}");
+    assert!(
+        out["prompt_reason"].as_str().unwrap().contains("ready"),
+        "says why: {out}"
+    );
     assert!(
         asked.elapsed() < Duration::from_secs(2),
         "answers at the bound, not at the late signal"
@@ -379,6 +414,13 @@ async fn a_session_that_fails_to_start_reports_the_prompt_undelivered() {
         .ok(json!({"worktree": "gone", "ai_cli": "copilot", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(false), "{out}");
+    assert!(
+        out["prompt_reason"]
+            .as_str()
+            .unwrap()
+            .contains("did not start"),
+        "says why: {out}"
+    );
     assert_eq!(out["lifecycle"], "failed", "{out}");
 }
 
@@ -406,7 +448,10 @@ async fn with_the_hook_receiver_running_claude_is_ready_once_its_output_settles(
         .ok(json!({"worktree": "b", "ai_cli": "claude_code", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
-    assert!(asked.elapsed() >= SETTLE_AFTER, "not before its output settled");
+    assert!(
+        asked.elapsed() >= SETTLE_AFTER,
+        "not before its output settled"
+    );
     assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
 
     let id = Sandbox::created(&out);
@@ -424,7 +469,9 @@ async fn with_the_hook_receiver_running_claude_is_ready_once_its_output_settles(
     );
     let (status, _) = raw_request(hook_addr, request.as_bytes()).await;
     assert_eq!(status, 200);
-    let summary = session_in(&s.state.catalog_snapshot(), id).cloned().unwrap();
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
     assert_eq!(
         summary.activity,
         ActivitySignal::Unknown,
@@ -471,4 +518,50 @@ async fn claude_without_a_hook_receiver_is_ready_once_its_output_settles() {
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
     assert!(asked.elapsed() >= SETTLE_AFTER);
     assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
+}
+
+/// A CLI that would first ask whether to trust the folder gets nothing typed: the prompt's Enter
+/// would answer that question for the user (quickstart §B3, `evidence/m3-real-cli.md` finding 4).
+/// The call says so at once instead of waiting, and the session keeps running at the question.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.distrust();
+    for (cli, command, name) in [
+        ("claude_code", "claude", "Claude Code"),
+        ("copilot", "copilot", "GitHub Copilot"),
+    ] {
+        let asked = Instant::now();
+        let out = s
+            .ok(json!({"worktree": "b", "ai_cli": cli, "prompt": PROMPT}))
+            .await;
+        assert_eq!(out["prompt_delivered"], json!(false), "{out}");
+        let reason = out["prompt_reason"].as_str().unwrap_or_default();
+        assert!(
+            reason.contains("trust") && reason.contains(name),
+            "names the CLI and the trust question: {out}"
+        );
+        assert!(
+            asked.elapsed() < SETTLE_AFTER,
+            "does not wait for a ready signal: {:?}",
+            asked.elapsed()
+        );
+        assert_ne!(out["lifecycle"], "failed", "{out}");
+        tokio::time::sleep(SETTLE_AFTER + Duration::from_millis(500)).await;
+        assert_eq!(s.typed(command), "", "nothing is typed into {command}");
+    }
+}
+
+/// Pi asks no trust question, so it gets its prompt without any trust record.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pi_gets_its_first_prompt_without_a_trust_record() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.distrust();
+    let out = s
+        .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
+        .await;
+    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }

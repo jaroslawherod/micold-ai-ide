@@ -332,9 +332,8 @@ const COPILOT_HOME_VAR: &str = "COPILOT_HOME";
 
 /// A directory named by `var` as the session will see it: its launch environment first (an
 /// environment-include script may set it), then this process's. Empty counts as unset.
-fn session_dir_var(spec: &LaunchSpec, var: &str) -> Option<PathBuf> {
-    spec.env
-        .iter()
+fn session_dir_var(env: &[(String, String)], var: &str) -> Option<PathBuf> {
+    env.iter()
         .find(|(name, _)| name == var)
         .map(|(_, value)| OsString::from(value))
         .or_else(|| std::env::var_os(var))
@@ -624,9 +623,11 @@ impl DaemonState {
         // Where the user's own configuration lives, as the session will see it.
         let locations = ConfigLocations {
             home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
-            claude_config_dir: session_dir_var(spec, CLAUDE_CONFIG_DIR_VAR),
+            claude_config_dir: session_dir_var(&spec.env, CLAUDE_CONFIG_DIR_VAR),
             copilot_config_dir: matches!(support, ToolServerSupport::AdditionalMcpConfig)
-                .then(|| session_dir_var(spec, COPILOT_HOME_VAR).or_else(|| provider.config_dir()))
+                .then(|| {
+                    session_dir_var(&spec.env, COPILOT_HOME_VAR).or_else(|| provider.config_dir())
+                })
                 .flatten(),
         };
         if let Some(path) = mcp_binding::name_taken(support, &locations, &spec.cwd) {
@@ -756,6 +757,28 @@ impl DaemonState {
             .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
             .map(|(_, value)| std::ffi::OsString::from(value))
             .unwrap_or_else(micold_core::provider::process_path)
+    }
+
+    /// Whether `cli`, started in `cwd`, would first ask the user to trust that folder (feature
+    /// 034, FR-017, research R12): its own trust record, read where the session would see it
+    /// (`CLAUDE_CONFIG_DIR` / `COPILOT_HOME` from its launch environment first). Read-only; the
+    /// CLI's configuration is never written.
+    pub fn cli_would_ask_trust(&self, cwd: &Path, cli: AiCli) -> bool {
+        use micold_core::provider::FolderTrust;
+        let provider = cli.provider();
+        let trust = provider.folder_trust();
+        if trust == FolderTrust::NeverAsks {
+            return false;
+        }
+        let env = self.ai_cli_env_for(cwd, cli);
+        let locations = ConfigLocations {
+            home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
+            claude_config_dir: session_dir_var(&env, CLAUDE_CONFIG_DIR_VAR),
+            copilot_config_dir: (trust == FolderTrust::CopilotTrustedFolders)
+                .then(|| session_dir_var(&env, COPILOT_HOME_VAR).or_else(|| provider.config_dir()))
+                .flatten(),
+        };
+        micold_core::mcp::trust::would_ask_trust(trust, &locations, cwd)
     }
 
     /// Which AI CLIs a session spawned in `cwd` would find (feature 029, BUG-001, FR-003b) — the
@@ -2476,7 +2499,11 @@ impl DaemonState {
     }
 
     /// The output-settled rule over `session`'s attached terminal, sampled every 100 ms.
-    async fn wait_output_settled(&self, session: SessionId, deadline: tokio::time::Instant) -> bool {
+    async fn wait_output_settled(
+        &self,
+        session: SessionId,
+        deadline: tokio::time::Instant,
+    ) -> bool {
         use micold_core::mcp::submission::OutputSettled;
         const SAMPLE: std::time::Duration = std::time::Duration::from_millis(100);
         let mut rule = OutputSettled::new();

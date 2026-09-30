@@ -118,7 +118,7 @@ pub struct ConfigLocations {
 impl ConfigLocations {
     /// The `.claude.json` Claude reads: `$CLAUDE_CONFIG_DIR/.claude.json` when that is set, else
     /// `~/.claude.json`.
-    fn claude_json(&self) -> Option<PathBuf> {
+    pub fn claude_json(&self) -> Option<PathBuf> {
         match &self.claude_config_dir {
             Some(dir) => Some(dir.join(".claude.json")),
             None => self.home.as_ref().map(|home| home.join(".claude.json")),
@@ -171,7 +171,7 @@ fn names_micold(object: &Value) -> bool {
         .is_some_and(|servers| servers.contains_key(SERVER_NAME))
 }
 
-fn read_json(path: &Path) -> Option<Value> {
+pub(crate) fn read_json(path: &Path) -> Option<Value> {
     let bytes = std::fs::read(path).ok()?;
     serde_json::from_slice(&bytes).ok()
 }

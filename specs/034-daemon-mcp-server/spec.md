@@ -385,9 +385,12 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 - **FR-017**: `create_session` MUST accept an optional initial prompt and deliver it to the new
   session's primary process as its first submitted input when the session first reports that it
   is ready for input (for a CLI that reports no such signal, when its terminal output has settled
-  after startup). If that has not happened within 60 seconds of the `create_session` request, or
-  the session fails to start, the operation MUST report that the prompt was not delivered, and the
-  prompt MUST NOT be delivered later. With a prompt, `create_session` returns only once the prompt
+  after startup). If the CLI's own record shows it would first ask the user whether to trust the
+  session's folder, the prompt MUST NOT be typed (its Enter would answer that question on the
+  user's behalf); the record is only read, never written. If the prompt is not typed for that
+  reason, or readiness has not happened within 60 seconds of the `create_session` request, or the
+  session fails to start, the operation MUST report that the prompt was not delivered and why, and
+  the prompt MUST NOT be delivered later. With a prompt, `create_session` returns only once the prompt
   is delivered or that bound has passed; without one, it returns once the session is created.
 - **FR-018**: The service MUST log every mutating operation at its default log level with the
   calling session, the operation and its target, and MUST NOT log prompt or input text (FR-047 of

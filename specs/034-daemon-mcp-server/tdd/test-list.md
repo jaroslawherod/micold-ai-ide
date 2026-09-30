@@ -436,6 +436,14 @@ each group that changes existing code.
 | U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | DONE | `crates/micold-client/tests/support/covered_states.rs` (`settings-view-environment`) + `layout_snapshot.rs`; M6 adds the FR-016 row to the same state and re-records it |
 | U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_default_session_is_refused_by_principle_iii_and_nothing_changes` |
+| U220 | Each CLI names its trust record: Claude `ClaudeProjects`, Copilot `CopilotTrustedFolders`, Pi `NeverAsks` | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::each_cli_names_its_trust_record` |
+| U221 | Claude does not ask in a project `.claude.json` records as accepted, nor in a worktree below it | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::claude_does_not_ask_below_an_accepted_project` |
+| U222 | Claude asks with no file, `hasTrustDialogAccepted: false`, or a sibling that only shares the name prefix | FR-017 | boundary | DONE | `crates/micold-core/tests/folder_trust.rs::claude_asks_without_an_accepted_record` |
+| U223 | With `CLAUDE_CONFIG_DIR` set, its `.claude.json` is the record | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::claude_reads_the_record_under_its_config_dir` |
+| U224 | Copilot does not ask below a `trustedFolders` entry (commented `config.json`), asks elsewhere | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::copilot_does_not_ask_below_a_trusted_folder` |
+| U225 | Pi never asks | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::pi_never_asks` |
+| U226 | Through `POST /mcp`, a Claude or Copilot session in an untrusted folder gets nothing typed; the call returns at once with `prompt_delivered: false` and a `prompt_reason` naming the CLI and the trust question | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt` |
+| U227 | Pi gets its first prompt without any trust record | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::pi_gets_its_first_prompt_without_a_trust_record` |
 
 ## Invariants and edge cases still to place
 
