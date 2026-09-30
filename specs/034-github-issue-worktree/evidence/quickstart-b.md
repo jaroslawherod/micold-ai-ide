@@ -150,9 +150,11 @@ run's private `settings.json`. Projects: /tmp/issue-demo (shallow clone of cli/c
 - Dark: the open issue list's surface is close to the page background where it hangs below the dialog, so its
   bottom edge is faint. Legible; not a defect.
 - Light, `b13-loading-light.png`: the selected "GitHub issue" chip shows a small grey blob behind "issue"
-  and no clear container. The pointer was left on the chip after the click, so this is its hover state layer
-  as lavapipe rasterises it; the dark capture, and the chip's selected style elsewhere, show no such blob.
-  Not app behaviour.
+  and no clear container. Probably the hover state layer (the pointer was left on the chip after the click)
+  as lavapipe rasterises it; not confirmed by a capture with the pointer moved away. The light selected chip
+  is faint in the other light captures too (M2's declined D4, existing `ToggleChip` style).
+- The 1,000-issue load took ~60 s on this loaded machine (Xvfb + lavapipe, dev build), so the loading line
+  was captured a few seconds after the click; no SC-001 timing is drawn from this run.
 - Settings at 520 px: the description paragraph's right edge runs up to the content scrollbar in both schemes
   (text touches, is not cut). Legible; accepted. Only the first rows fit on screen; the lower rows, Add and
   Restore defaults were checked scrolled in §B12's re-check above (Restore defaults wraps, noted there).
