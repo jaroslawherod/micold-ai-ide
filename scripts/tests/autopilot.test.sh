@@ -392,7 +392,8 @@ spec = importlib.util.spec_from_file_location("t", sys.argv[1]); t = importlib.u
 spec.loader.exec_module(t)
 cases = {"cd /a/b && git status -sb": True, "git -C d log --oneline": True, "env X=1 grep -n a b": True,
          "grep x f 2>/dev/null | head": True, "cat > f <<EOF": False, "find . -delete": False,
-         "git branch -D x": False, "ls; cargo build": False, "sed -i s/a/b/ f": False, "mise run gate": False}
+         "git branch -D x": False, "ls; cargo build": False, "sed -i s/a/b/ f": False, "mise run gate": False,
+         "grep -n 'a|b -> c' f": True, 'grep -rn "a\\|b; c" .': True, 'echo "x" > f': False}
 bad = [c for c, want in cases.items() if t.read_only_bash(c) != want]
 print("ok" if not bad else "misclassified: %s" % bad)
 PY
