@@ -396,7 +396,15 @@ fn press_and_settle<'a, M: 'a>(
     // insufficient the control would stay shut, and the covered state would produce no overlay
     // records — which `every_overlay_state_records_an_overlay` fails on.
     let origin = std::time::Instant::now();
-    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES, WINDOW);
+    settle(
+        element,
+        tree,
+        node,
+        renderer,
+        origin,
+        0..SETTLE_FRAMES,
+        WINDOW,
+    );
 
     let target = walk(Layout::new(node), Layer::Base)
         .into_iter()
@@ -1049,7 +1057,15 @@ fn scroll_and_settle<'a, M: 'a>(
     const LINES: f32 = 10_000.0;
 
     let origin = std::time::Instant::now();
-    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES, WINDOW);
+    settle(
+        element,
+        tree,
+        node,
+        renderer,
+        origin,
+        0..SETTLE_FRAMES,
+        WINDOW,
+    );
 
     let mut messages: Vec<M> = Vec::new();
     let mut shell = Shell::new(&mut messages);
