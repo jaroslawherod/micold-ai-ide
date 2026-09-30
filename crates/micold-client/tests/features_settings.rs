@@ -660,17 +660,19 @@ mod script_path_notice_off {
     use micold_core::env_include::EnvIncludeOutcome;
     use micold_core::script_path_check::{CheckedScriptPath, ScriptPathState};
 
-    const P: &str = "/tmp/does-not-exist.sh";
-    const OFF: &str = "Environment include is off, so no script is sourced. Turning it on will \
+    pub(super) const P: &str = "/tmp/does-not-exist.sh";
+    pub(super) const OFF: &str =
+        "Environment include is off, so no script is sourced. Turning it on will \
                        not source one until this path names a readable file.";
-    const TILDE: &str = "~ is not expanded. Use a full path.";
-    const REL: &str = "Relative path: whether the script is found depends on each session's \
+    pub(super) const TILDE: &str = "~ is not expanded. Use a full path.";
+    pub(super) const REL: &str =
+        "Relative path: whether the script is found depends on each session's \
                        directory.";
     const HUNG: &str =
         "No answer within 2 seconds. The file may be on a drive that is not responding.";
-    const DIAGNOSTIC: &str = "env.sh: line 3: nvm: command not found";
+    pub(super) const DIAGNOSTIC: &str = "env.sh: line 3: nvm: command not found";
 
-    fn done(state: ScriptPathState, enabled: bool) -> ScriptCheck {
+    pub(super) fn done(state: ScriptPathState, enabled: bool) -> ScriptCheck {
         ScriptCheck::Done(CheckedScriptPath {
             path: P.to_string(),
             enabled,
@@ -678,32 +680,36 @@ mod script_path_notice_off {
         })
     }
 
-    fn caution(text: &str) -> NoticeLine {
+    pub(super) fn caution(text: &str) -> NoticeLine {
         NoticeLine::Caution(text.to_string())
     }
 
-    fn note(text: &str) -> NoticeLine {
+    pub(super) fn note(text: &str) -> NoticeLine {
         NoticeLine::Note(text.to_string())
     }
 
-    fn non_zero_exit() -> EnvIncludeOutcome {
+    pub(super) fn non_zero_exit() -> EnvIncludeOutcome {
         EnvIncludeOutcome::NonZeroExit {
             code: 1,
             diagnostic: DIAGNOSTIC.to_string(),
         }
     }
 
-    fn timed_out() -> EnvIncludeOutcome {
+    pub(super) fn timed_out() -> EnvIncludeOutcome {
         EnvIncludeOutcome::TimedOut {
             diagnostic: DIAGNOSTIC.to_string(),
         }
     }
 
-    /// 011's lines for `outcome`, as the page showed them before spec 035 (FR-013 of 011).
-    fn lines_011(outcome: &EnvIncludeOutcome) -> Vec<NoticeLine> {
+    /// 011's lines for `outcome` (FR-013 of 011). From M3 its `MissingScript` line names the
+    /// path whenever a check has named one (spec 035 FR-005, contracts §2 "011(o)").
+    pub(super) fn lines_011(outcome: &EnvIncludeOutcome, path: Option<&str>) -> Vec<NoticeLine> {
         match outcome {
             EnvIncludeOutcome::Disabled | EnvIncludeOutcome::Success => vec![],
-            EnvIncludeOutcome::MissingScript => vec![caution("Script not found")],
+            EnvIncludeOutcome::MissingScript => match path {
+                Some(path) => vec![caution(&format!("Script not found: {path}"))],
+                None => vec![caution("Script not found")],
+            },
             EnvIncludeOutcome::NonZeroExit { diagnostic, .. } => {
                 vec![caution("Exited with an error"), note(diagnostic)]
             }
@@ -713,7 +719,7 @@ mod script_path_notice_off {
         }
     }
 
-    fn every_outcome() -> Vec<EnvIncludeOutcome> {
+    pub(super) fn every_outcome() -> Vec<EnvIncludeOutcome> {
         vec![
             EnvIncludeOutcome::Disabled,
             EnvIncludeOutcome::Success,
@@ -723,7 +729,7 @@ mod script_path_notice_off {
         ]
     }
 
-    fn every_state() -> Vec<ScriptPathState> {
+    pub(super) fn every_state() -> Vec<ScriptPathState> {
         vec![
             ScriptPathState::Present,
             ScriptPathState::NotFound { tilde: false },
@@ -782,7 +788,7 @@ mod script_path_notice_off {
                 &ScriptCheck::Pending { seq: 1, last: None },
                 &non_zero_exit()
             ),
-            lines_011(&non_zero_exit()),
+            lines_011(&non_zero_exit(), None),
             "with no previous answer, the page is 011's (N1)"
         );
     }
@@ -831,11 +837,11 @@ mod script_path_notice_off {
     fn a_relative_path_says_it_is_not_checked_then_011s_note() {
         for outcome in every_outcome() {
             let mut expected = vec![note(REL)];
-            expected.extend(lines_011(&outcome));
+            expected.extend(lines_011(&outcome, Some(P)));
             assert_eq!(
                 script_path_notice(&done(ScriptPathState::Relative, false), &outcome),
                 expected,
-                "N8 with {outcome:?}: 011's lines keep 011's wording in the interim"
+                "N8 with {outcome:?}: 011's lines, naming the path the check knows"
             );
         }
     }
@@ -847,7 +853,7 @@ mod script_path_notice_off {
                 caution(&format!("Couldn't check the script path: {P}")),
                 note(HUNG),
             ];
-            expected.extend(lines_011(&outcome));
+            expected.extend(lines_011(&outcome, Some(P)));
             assert_eq!(
                 script_path_notice(&done(ScriptPathState::Unchecked, false), &outcome),
                 expected,
@@ -869,20 +875,6 @@ mod script_path_notice_off {
     }
 
     #[test]
-    fn until_m3_the_on_state_page_is_exactly_011s() {
-        for state in every_state() {
-            for outcome in every_outcome() {
-                assert_eq!(
-                    script_path_notice(&done(state.clone(), true), &outcome),
-                    lines_011(&outcome),
-                    "interim (U63): with the feature on, {state:?} with {outcome:?} must read as \
-                     today's page, so nothing is said twice between the merges"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn every_off_state_problem_names_the_path_and_says_the_feature_is_off_once() {
         let problems = [
             ScriptPathState::NotFound { tilde: false },
@@ -900,6 +892,200 @@ mod script_path_notice_off {
                     lines.iter().filter(|l| **l == note(OFF)).count(),
                     1,
                     "{state:?} with {outcome:?}: the OFF note appears exactly once"
+                );
+            }
+        }
+    }
+}
+
+// --- Spec 035: what the Environment page says, feature on (contracts/settings-indication.md §2) --
+
+mod script_path_notice_on {
+    use super::script_path_notice_off::{
+        caution, done, every_outcome, every_state, lines_011, non_zero_exit, note, DIAGNOSTIC, OFF,
+        P, REL, TILDE,
+    };
+    use micold_client::features::settings::{script_path_notice, NoticeLine, ScriptCheck};
+    use micold_core::env_include::EnvIncludeOutcome;
+    use micold_core::script_path_check::ScriptPathState;
+
+    const ON: &str = "Environment include is on, but the script cannot be sourced until this path \
+                      names a readable file.";
+    const NOT_FOUND: ScriptPathState = ScriptPathState::NotFound { tilde: false };
+
+    #[test]
+    fn on_and_not_found_after_a_missing_script_attempt_says_it_once_by_path() {
+        assert_eq!(
+            script_path_notice(&done(NOT_FOUND, true), &EnvIncludeOutcome::MissingScript),
+            vec![caution(&format!("Script not found: {P}")), note(ON)],
+            "N3: 011's line is merged into the path's, not repeated (FR-005)"
+        );
+    }
+
+    #[test]
+    fn on_and_not_found_after_another_failure_keeps_011s_note_after_the_path() {
+        assert_eq!(
+            script_path_notice(&done(NOT_FOUND, true), &non_zero_exit()),
+            vec![
+                caution(&format!("Script not found: {P}")),
+                note(ON),
+                caution("Exited with an error"),
+                note(DIAGNOSTIC),
+            ],
+            "N4"
+        );
+    }
+
+    #[test]
+    fn on_and_a_tilde_path_explains_that_tilde_is_not_expanded() {
+        assert_eq!(
+            script_path_notice(
+                &done(ScriptPathState::NotFound { tilde: true }, true),
+                &EnvIncludeOutcome::MissingScript
+            ),
+            vec![
+                caution(&format!("Script not found: {P}")),
+                note(TILDE),
+                note(ON)
+            ],
+            "N5, feature on"
+        );
+    }
+
+    #[test]
+    fn on_and_not_readable_shows_the_path_caution_then_011s_note() {
+        assert_eq!(
+            script_path_notice(&done(ScriptPathState::NotReadable, true), &non_zero_exit()),
+            vec![
+                caution(&format!("Not a readable file: {P}")),
+                note(ON),
+                caution("Exited with an error"),
+                note(DIAGNOSTIC),
+            ],
+            "N7: a directory gets both notes (Edge Cases)"
+        );
+    }
+
+    #[test]
+    fn on_and_present_after_a_missing_script_attempt_says_the_file_exists_now() {
+        assert_eq!(
+            script_path_notice(
+                &done(ScriptPathState::Present, true),
+                &EnvIncludeOutcome::MissingScript
+            ),
+            vec![
+                caution("The last attempt could not find the script"),
+                note(&format!(
+                    "{P} exists now. Save Settings or restart a session to source it."
+                )),
+            ],
+            "N10 (FR-014)"
+        );
+    }
+
+    #[test]
+    fn on_and_present_after_a_successful_attempt_says_nothing() {
+        assert_eq!(
+            script_path_notice(
+                &done(ScriptPathState::Present, true),
+                &EnvIncludeOutcome::Success
+            ),
+            vec![],
+            "N11, the other side of N10 (SC-002)"
+        );
+    }
+
+    #[test]
+    fn a_relative_path_after_a_missing_script_attempt_names_the_path_in_011s_line() {
+        for enabled in [false, true] {
+            assert_eq!(
+                script_path_notice(
+                    &done(ScriptPathState::Relative, enabled),
+                    &EnvIncludeOutcome::MissingScript
+                ),
+                vec![note(REL), caution(&format!("Script not found: {P}"))],
+                "N8, enabled = {enabled}"
+            );
+        }
+    }
+
+    #[test]
+    fn without_a_checked_path_011s_missing_script_line_reads_as_before() {
+        assert_eq!(
+            script_path_notice(&ScriptCheck::Idle, &EnvIncludeOutcome::MissingScript),
+            lines_011(&EnvIncludeOutcome::MissingScript, None),
+            "no check has named the path, so 011's line cannot either"
+        );
+    }
+
+    #[test]
+    fn switching_the_feature_changes_only_what_is_said_about_its_effect() {
+        for state in every_state() {
+            for outcome in every_outcome() {
+                if state == ScriptPathState::Present && outcome == EnvIncludeOutcome::MissingScript
+                {
+                    // N10: a stale attempt, which only the feature-on page has; not a not-found
+                    // indication (SC-002).
+                    continue;
+                }
+                let first_caution = |enabled| {
+                    script_path_notice(&done(state.clone(), enabled), &outcome)
+                        .into_iter()
+                        .find(|l| matches!(l, NoticeLine::Caution(_)))
+                };
+                assert_eq!(
+                    first_caution(true),
+                    first_caution(false),
+                    "SC-003: {state:?} with {outcome:?} reads the same on and off"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_page_says_script_not_found_twice() {
+        let mut checks = vec![ScriptCheck::Idle];
+        for state in every_state() {
+            for enabled in [false, true] {
+                checks.push(done(state.clone(), enabled));
+            }
+        }
+        for check in &checks {
+            for outcome in every_outcome() {
+                let lines = script_path_notice(check, &outcome);
+                assert!(
+                    lines
+                        .iter()
+                        .filter(|l| matches!(l, NoticeLine::Caution(c) if c.starts_with("Script not found")))
+                        .count()
+                        <= 1,
+                    "FR-005: {check:?} with {outcome:?} gave {lines:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_on_state_problem_names_the_path_and_says_the_feature_is_on_once() {
+        let problems = [
+            NOT_FOUND,
+            ScriptPathState::NotFound { tilde: true },
+            ScriptPathState::NotReadable,
+        ];
+        for state in problems {
+            for outcome in every_outcome() {
+                let lines = script_path_notice(&done(state.clone(), true), &outcome);
+                assert!(
+                    matches!(lines.first(), Some(NoticeLine::Caution(c)) if c.ends_with(P)),
+                    "{state:?}: the first line names the path (FR-002), got {lines:?}"
+                );
+                assert_eq!(
+                    (
+                        lines.iter().filter(|l| **l == note(ON)).count(),
+                        lines.iter().filter(|l| **l == note(OFF)).count()
+                    ),
+                    (1, 0),
+                    "{state:?} with {outcome:?}: exactly one ON note and no OFF note"
                 );
             }
         }

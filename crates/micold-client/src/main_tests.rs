@@ -4427,6 +4427,106 @@ mod script_path_report {
             "the failed write is reported, got {raised:?}"
         );
     }
+
+    // --- M3: the same report with the feature on or off (A6–A8, US2) ---
+
+    /// The ON note (contracts/settings-indication.md §2).
+    const ON: &str = "Environment include is on, but the script cannot be sourced until this path \
+                      names a readable file.";
+
+    /// Environment include on with `path` stored and missing, 011's last attempt `MissingScript`
+    /// (a resolver that keeps answering so), a recording store, and Settings not yet opened.
+    fn on_and_missing(path: &str) -> App {
+        let (mut app, _probe) = app_with(path, ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_settings(Arc::new(micold_core::settings::FakeSettingsStore::new()))
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::answering(
+                Vec::new(),
+                micold_core::env_include::EnvIncludeOutcome::MissingScript,
+            )));
+        app.env_include_enabled = true;
+        app.env_include_last_outcome = micold_core::env_include::EnvIncludeOutcome::MissingScript;
+        app
+    }
+
+    /// The file at the stored path has been created since the last check.
+    fn create_the_file(app: &mut App) {
+        app.caps = app
+            .caps
+            .clone()
+            .with_script_path_probe(Arc::new(FakeScriptPathProbe::answering(ProbeAnswer::File)));
+    }
+
+    #[test]
+    fn on_with_a_missing_stored_path_the_page_says_it_was_not_found_once_and_that_the_feature_is_on(
+    ) {
+        let path = stored_path();
+        let mut app = on_and_missing(&path);
+
+        assert_eq!(
+            open_and_check(&mut app),
+            vec![
+                NoticeLine::Caution(format!("Script not found: {path}")),
+                NoticeLine::Note(ON.to_string()),
+            ],
+            "US2 scenario 1: 011's note and the path check say it once, by path (FR-005)"
+        );
+    }
+
+    #[test]
+    fn switching_the_feature_off_and_saving_keeps_the_same_not_found_report() {
+        let path = stored_path();
+        let mut app = on_and_missing(&path);
+        let _ = open_and_check(&mut app);
+        app.core
+            .settings
+            .settings_draft
+            .as_mut()
+            .expect("Settings is open")
+            .environment
+            .enabled = false;
+        save_and_check(&mut app);
+
+        assert_eq!(
+            open_and_check(&mut app),
+            vec![
+                NoticeLine::Caution(format!("Script not found: {path}")),
+                NoticeLine::Note(OFF.to_string()),
+            ],
+            "US2 scenario 2: switching off does not hide the report (SC-003)"
+        );
+    }
+
+    #[test]
+    fn creating_the_missing_file_clears_the_report_and_with_the_feature_on_says_how_to_source_it() {
+        let path = stored_path();
+        let mut on = on_and_missing(&path);
+        let _ = open_and_check(&mut on);
+        create_the_file(&mut on);
+
+        assert_eq!(
+            open_and_check(&mut on),
+            vec![
+                NoticeLine::Caution("The last attempt could not find the script".to_string()),
+                NoticeLine::Note(format!(
+                    "{path} exists now. Save Settings or restart a session to source it."
+                )),
+            ],
+            "US2 scenario 3, feature on: the stale attempt is explained, not re-sourced (FR-014)"
+        );
+
+        let (mut off, _probe) = app_with(&path, ProbeAnswer::Missing);
+        let _ = open_and_check(&mut off);
+        create_the_file(&mut off);
+
+        assert_eq!(
+            open_and_check(&mut off),
+            Vec::<NoticeLine>::new(),
+            "US2 scenario 3, feature off: a path that became valid is no longer reported (FR-009)"
+        );
+    }
 }
 
 // --- feature 034: the GitHub issue source, through the shell (T022, T066) --------------------

@@ -1328,6 +1328,9 @@ pub enum NoticeLine {
 /// The feature is off, and says what that means for a path that names nothing (spec 035, OFF).
 const NOTICE_OFF: &str = "Environment include is off, so no script is sourced. Turning it on \
                           will not source one until this path names a readable file.";
+/// The feature is on, and cannot source a script until the path names a readable file (ON).
+const NOTICE_ON: &str = "Environment include is on, but the script cannot be sourced until this \
+                         path names a readable file.";
 /// `~` is taken literally, as resolution takes it (TILDE).
 const NOTICE_TILDE: &str = "~ is not expanded. Use a full path.";
 /// A relative path is not checked (REL).
@@ -1348,13 +1351,14 @@ const _: () = assert!(micold_core::script_path_check::SCRIPT_PATH_CHECK_BOUND.as
 /// Pure, beside [`missing_cli_notice`], for the reason that one is: the view can be looked at, and
 /// these lines can be asserted.
 ///
-/// **Interim (M1–M2).** Only the feature-off rows are here. With the feature on, the page is
-/// exactly 011's note, in 011's wording, until M3 merges the two, so between the merges the on
-/// state never says "Script not found" twice.
+/// The same path reads the same whether the feature is on or off (SC-003); only the note about its
+/// effect on sessions changes. With the feature on, 011's "Script not found" is merged into the
+/// path's caution rather than repeated (FR-005).
 pub fn script_path_notice(
     check: &ScriptCheck,
     last: &micold_core::env_include::EnvIncludeOutcome,
 ) -> Vec<NoticeLine> {
+    use micold_core::env_include::EnvIncludeOutcome;
     use micold_core::script_path_check::ScriptPathState;
 
     let checked = match check {
@@ -1364,28 +1368,55 @@ pub fn script_path_notice(
             last: Some(checked),
             ..
         } => checked,
-        ScriptCheck::Idle | ScriptCheck::Pending { last: None, .. } => return lines_011(last),
+        ScriptCheck::Idle | ScriptCheck::Pending { last: None, .. } => {
+            return lines_011(last, None)
+        }
     };
-    if checked.enabled {
-        return lines_011(last);
-    }
     let path = &checked.path;
+    let last_011 = || lines_011(last, Some(path));
+    // What a path that names no readable file means for sessions, in the feature's state.
+    let effect = || {
+        NoticeLine::Note(
+            if checked.enabled {
+                NOTICE_ON
+            } else {
+                NOTICE_OFF
+            }
+            .to_string(),
+        )
+    };
+    // 011's lines follow the path's with the feature on, except a `MissingScript` line, which the
+    // path's caution already says (N3).
+    let after_on = || {
+        if checked.enabled && *last != EnvIncludeOutcome::MissingScript {
+            last_011()
+        } else {
+            Vec::new()
+        }
+    };
     match checked.state {
         ScriptPathState::NotFound { tilde } => {
             let mut lines = vec![NoticeLine::Caution(format!("Script not found: {path}"))];
             if tilde {
                 lines.push(NoticeLine::Note(NOTICE_TILDE.to_string()));
             }
-            lines.push(NoticeLine::Note(NOTICE_OFF.to_string()));
+            lines.push(effect());
+            lines.extend(after_on());
             lines
         }
-        ScriptPathState::NotReadable => vec![
-            NoticeLine::Caution(format!("Not a readable file: {path}")),
-            NoticeLine::Note(NOTICE_OFF.to_string()),
-        ],
+        ScriptPathState::NotReadable => {
+            let mut lines = vec![
+                NoticeLine::Caution(format!("Not a readable file: {path}")),
+                effect(),
+            ];
+            if checked.enabled {
+                lines.extend(last_011());
+            }
+            lines
+        }
         ScriptPathState::Relative => {
             let mut lines = vec![NoticeLine::Note(NOTICE_RELATIVE.to_string())];
-            lines.extend(lines_011(last));
+            lines.extend(last_011());
             lines
         }
         ScriptPathState::Unchecked => {
@@ -1393,22 +1424,42 @@ pub fn script_path_notice(
                 NoticeLine::Caution(format!("Couldn't check the script path: {path}")),
                 NoticeLine::Note(NOTICE_HUNG.to_string()),
             ];
-            lines.extend(lines_011(last));
+            lines.extend(last_011());
             lines
         }
-        ScriptPathState::Present => lines_011(last),
+        // FR-014: the file is there now, but the attempt in force could not find it.
+        ScriptPathState::Present
+            if checked.enabled && *last == EnvIncludeOutcome::MissingScript =>
+        {
+            vec![
+                NoticeLine::Caution("The last attempt could not find the script".to_string()),
+                NoticeLine::Note(format!(
+                    "{path} exists now. Save Settings or restart a session to source it."
+                )),
+            ]
+        }
+        ScriptPathState::Present => last_011(),
     }
 }
 
-/// Feature 011's lines for the most recent resolution attempt, unchanged (011 FR-012/FR-013): the
-/// failure category, then its diagnostic when there is one. Nothing when it succeeded or the
-/// feature is off.
-fn lines_011(outcome: &micold_core::env_include::EnvIncludeOutcome) -> Vec<NoticeLine> {
+/// Feature 011's lines for the most recent resolution attempt (011 FR-012/FR-013): the failure
+/// category, then its diagnostic when there is one. Nothing when it succeeded or the feature is
+/// off. `MissingScript` names the path when a check has named one (spec 035 FR-005).
+fn lines_011(
+    outcome: &micold_core::env_include::EnvIncludeOutcome,
+    path: Option<&str>,
+) -> Vec<NoticeLine> {
     use micold_core::env_include::EnvIncludeOutcome;
 
     let (category, diagnostic) = match outcome {
         EnvIncludeOutcome::Disabled | EnvIncludeOutcome::Success => return Vec::new(),
-        EnvIncludeOutcome::MissingScript => ("Script not found", ""),
+        EnvIncludeOutcome::MissingScript => {
+            let category = match path {
+                Some(path) => format!("Script not found: {path}"),
+                None => "Script not found".to_string(),
+            };
+            return vec![NoticeLine::Caution(category)];
+        }
         EnvIncludeOutcome::NonZeroExit { diagnostic, .. } => {
             ("Exited with an error", &**diagnostic)
         }
