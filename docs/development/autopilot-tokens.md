@@ -92,3 +92,21 @@ What the skill does about it:
   model inside a running context.
 
 Compaction is the next step: units that stay small never compact.
+
+## Context size
+
+Over the same 53 sessions, 100 of 490 subagents and 25 of 53 main sessions passed 150k tokens of
+context. Requests above 150k cost 134M `cost_eq` in subagents (40% of their total) and 76M in main
+sessions (37%). Each of those requests re-reads the whole context.
+
+What the skill does about it:
+
+- **Units hand over at 150k.** At each checkpoint a unit runs `scripts/autopilot/context.py
+  "<its description>"`, which reads the size of its own last request from its transcript. Past the
+  cap it writes a *Handover* into the ledger, commits locally and returns `HANDOVER`; the
+  orchestrator starts a fresh unit of the same phase that continues from it.
+- **Milestones implement in slices** of about five tasks, so there is a checkpoint before a unit
+  grows far past the cap.
+- **The orchestrator** checks its own size after each merge and, past the cap, tells the user that
+  `/clear` then `/speckit-autopilot resume` would restart it small. The ledger is current at every
+  merge, so nothing is lost.

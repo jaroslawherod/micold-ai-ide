@@ -134,6 +134,11 @@ check "resume finds the one ledger" 0 '^LEDGER specs/042-x/autopilot.md' "$S/res
 check "resume reports GitHub's PR state" 0 '^PR #11 OPEN' "$S/resume.sh"
 check "resume ignores PR refs outside the PR tables" 0 '^PHASE 3-design' \
   bash -c "out=\$('$S/resume.sh'); ! grep -q '#999' <<<\"\$out\" && echo \"\$out\""
+printf '\n## Handover\n\nNone.\n' >> specs/042-x/autopilot.md
+check "resume prints no handover while it reads None" 0 '^ok$' \
+  bash -c "out=\$('$S/resume.sh') && ! grep -q '^HANDOVER' <<<\"\$out\" && echo ok"
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace('## Handover\n\nNone.', '## Handover\n\nM2: T010 done, next T011.'))" specs/042-x/autopilot.md
+check "resume prints an open handover" 0 '^HANDOVER M2: T010 done, next T011\.$' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/042-x/autopilot.md other-branch 3-design
@@ -347,6 +352,25 @@ msg() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usa
 { msg m1 40000 0; msg m2 500 40000; msg m3 41000 0; msg m3 41000 0; msg m4 9000 1000; } > "$d/s.jsonl"
 check "autopilot-tokens counts one cache rebuild" 0 '^\| orchestrator \(main session\) \| x \| 4 \| [^|]+\| [^|]+\| [^|]+\| 1 \|' \
   "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
+
+# context.py: finds a unit's transcript by its description (the newest one) under a fake HOME,
+# and reports the last request's context against the cap.
+d="$(new_repo)"; cd "$d/wt"
+proj="$d/home/.claude/projects/$(pwd -P | sed 's/[^A-Za-z0-9]/-/g')"
+mkdir -p "$proj/s1/subagents"
+cmsg() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usage":{"input_tokens":%s,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' "$@"; }
+{ cmsg a 200000; cmsg b 90000; } > "$proj/s1/subagents/agent-old.jsonl"
+echo '{"description":"Milestone M2 042"}' > "$proj/s1/subagents/agent-old.meta.json"
+{ cmsg c 100000; cmsg d 160000; } > "$proj/s1/subagents/agent-new.jsonl"
+echo '{"description":"Milestone M2 042"}' > "$proj/s1/subagents/agent-new.meta.json"
+touch -d '1 hour ago' "$proj/s1/subagents/agent-old.jsonl"
+cmsg e 42000 > "$proj/s1.jsonl"
+C="$S/context.py"
+check "context reports the newest unit's last request" 3 '^CONTEXT 160000 OVER 150000$' env HOME="$d/home" "$C" Milestone M2 042
+check "context honours the cap setting" 0 '^CONTEXT 160000 OK 200000$' env HOME="$d/home" AUTOPILOT_CONTEXT_CAP=200000 "$C" "Milestone M2 042"
+check "context reports the main session" 0 '^CONTEXT 42000 OK' env HOME="$d/home" "$C"
+check "context fails for an unknown unit" 2 'no transcript' bash -c "HOME='$d/home' '$C' 'Milestone M9 042' 2>&1"
+cd "$ROOT"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

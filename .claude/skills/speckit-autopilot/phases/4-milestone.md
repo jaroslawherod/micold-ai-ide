@@ -7,8 +7,10 @@ For milestone K:
    spec.md or tasks.md whole; pull anything else with `brief.py section <file> <heading>` or
    `brief.py items <file> FR-012 T031`. **For a bug** there is no milestone block: read the BUG
    record, then `brief.py items tasks.md <fix task IDs>` and the patched requirements by ID.
-1. `speckit-implement` with `Milestone MK only: tasks T0xx–T0yy. Do not start any other task. Stop
-   when these are done.` Afterwards confirm every task in the range is ticked and none outside it. Its
+1. `speckit-implement` in slices of about five tasks, in task order:
+   `Milestone MK only: tasks T0xx–T0yy. Do not start any other task. Stop when these are done.`
+   Check your context between slices (unit.md, *Hand over at 150k*). Afterwards confirm every task
+   in the range is ticked and none outside it. Its
    mandatory `tdd.run` hook drives red → green → refactor. For a bug, the first task is a regression
    test that fails on `origin/main` for the reported reason. If it asks "proceed anyway?", never
    answer "yes": close the checklist item as in Phase 3 (confirm, or fix the spec or plan), and

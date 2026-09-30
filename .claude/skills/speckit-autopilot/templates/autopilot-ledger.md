@@ -40,6 +40,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
+## Handover
+
+None. <or, when a unit handed over: what is done, the next step, open findings with their review
+snapshots. The next unit sets it back to None.>
+
 ## Open escalation
 
 None. <or: the banner as sent, and when>

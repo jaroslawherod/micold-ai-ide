@@ -47,7 +47,7 @@ GitHub's state for each recorded PR.
 
 | Exit | Meaning | Do |
 |---|---|---|
-| 0 | `LEDGER …` | Resume at the first unfinished step. |
+| 0 | `LEDGER …` | Resume at the first unfinished step. `HANDOVER` lines: dispatch a unit of that phase to continue from the ledger's *Handover*. |
 | 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
 | 2 | `NONE` | Say there is no run to resume here, and stop. |
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
@@ -93,11 +93,14 @@ A cheaper unit that returns `FAILED` is retried on the session model.
   previous PR and its merge SHA (none for the first unit), and the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
   repro and correct behaviour the bug unit returned; for a milestone, its ID and task IDs (and
   `BUG-<k>` for a bug).
-- **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED`, a PR number if it opened one,
+- **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED | HANDOVER`, a PR number if it opened one,
   and at most five lines. Read the ledger, not the transcript.
 - **`ESCALATE`:** subagents have no `AskUserQuestion`. Ask the returned questions yourself (see
   *Asking the human*), then continue **the same** subagent with `SendMessage` and the answers.
 - **`FAILED`:** read the ledger and the five lines. Retry once with a fresh unit, or escalate.
+- **`HANDOVER`:** its context passed 150k. Dispatch a fresh unit of the same phase, model and scope,
+  with `part <n>` added to the description and `Continue from the ledger's Handover.` in the
+  prompt. A fourth part for one unit is an escalation (category 5).
 
 ### Waiting and merging
 
@@ -117,7 +120,7 @@ tail -6 "$log"
 
 | Last line | Do |
 |---|---|
-| `MERGED <n> <sha>` | Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. |
+| `MERGED <n> <sha>` | Run `scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. |
 | `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
 | `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
