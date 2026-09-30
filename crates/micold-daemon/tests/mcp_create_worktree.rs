@@ -159,7 +159,7 @@ async fn create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it() {
             "ref": "feat-x",
             "display_name": row["display_name"],
             "branch": "feat-x",
-            "path": native(f.repo().join(".claude/worktrees/feat-x")),
+            "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
             "status": "clean",
             "app_created": true,
             "assistant_owned": false,
