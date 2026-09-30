@@ -9,5 +9,19 @@
   },
   "enabledPlugins": {
     "caveman@caveman": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/autopilot/gate-hook.sh\"; [ -x \"$f\" ] || exit 0; exec \"$f\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
