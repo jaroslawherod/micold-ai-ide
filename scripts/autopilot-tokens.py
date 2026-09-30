@@ -65,7 +65,8 @@ WRITES = re.compile(r">|-delete\b|-exec\b|\bsed -i|\bbranch -[dDmM]\b")
 def read_only_bash(command):
     """True when every step of a shell command only reads: `cd d && git status | head` is a read,
     `ls; cargo build` and `cat > f` are not."""
-    cmd = re.sub(r"\d?>\s*/dev/null|\d?>&\d", "", command)
+    cmd = re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", "''", command)  # patterns may hold | ; >
+    cmd = re.sub(r"\d?>\s*/dev/null|\d?>&\d", "", cmd)
     if WRITES.search(cmd):
         return False
     steps = [st.strip() for st in re.split(r"&&|\|\||;|\||\n", cmd) if st.strip()]
