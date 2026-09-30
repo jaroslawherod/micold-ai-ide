@@ -1371,7 +1371,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     error: Some(FieldError {
                         field: FieldId::IssueMappingLabel(1),
                         section: SettingsSection::GithubIssues,
-                        message: "Entry 1 already maps this label.".to_string(),
+                        message: "“bug” is already mapped above.".to_string(),
                     }),
                 });
                 StateUnderTest::new(state)

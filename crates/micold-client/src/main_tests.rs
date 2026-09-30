@@ -5887,22 +5887,18 @@ mod issue_source {
     // --- US3: the mapping is edited in Settings → GitHub issues (feature 034 M5) ----------------
 
     use micold_client::features::settings::SettingsSection;
-    use micold_core::settings::JsonFileSettingsStore;
 
-    /// A rig whose settings live in a real `settings.json` holding `mapping`, with the form not yet
-    /// opened. The temp dir must outlive the rig.
+    /// A rig whose settings store holds `mapping`, with the form not yet opened. The store is the
+    /// fake: only the shell may name the real one (`no_concrete_implementations.rs`), and the file
+    /// round trip is `micold-core`'s `settings_issue_mapping.rs`.
     fn file_rig(
         issues: Vec<Issue>,
         mapping: Vec<LabelTypeEntry>,
-    ) -> (IssueRig, Arc<JsonFileSettingsStore>, tempfile::TempDir) {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let store = Arc::new(JsonFileSettingsStore::at(dir.path().join("settings.json")));
-        store
-            .save(&micold_core::settings::Settings {
-                issue_label_types: mapping,
-                ..Default::default()
-            })
-            .expect("seed settings.json");
+    ) -> (IssueRig, Arc<FakeSettingsStore>) {
+        let store = Arc::new(FakeSettingsStore::loaded(micold_core::settings::Settings {
+            issue_label_types: mapping,
+            ..Default::default()
+        }));
         let mut rig = issue_rig(
             Some(FAKE_GH),
             FakeIssueSource::new().with_page(page(issues)),
@@ -5915,7 +5911,7 @@ mod issue_source {
             .with_env_include(Arc::new(
                 micold_core::env_include::FakeEnvIncludeResolver::default(),
             ));
-        (rig, store, dir)
+        (rig, store)
     }
 
     fn settings(app: &mut App, msg: SettingsMsg) {
@@ -5945,7 +5941,7 @@ mod issue_source {
             .collect()
     }
 
-    fn stored(store: &JsonFileSettingsStore) -> Vec<LabelTypeEntry> {
+    fn stored(store: &FakeSettingsStore) -> Vec<LabelTypeEntry> {
         store.load().settings.issue_label_types
     }
 
@@ -5968,7 +5964,7 @@ mod issue_source {
     /// entries (US3-1).
     #[test]
     fn issue_settings_shows_the_mapping() {
-        let (mut rig, _store, _dir) = file_rig(
+        let (mut rig, _store) = file_rig(
             labelled(),
             vec![
                 entry("defect", ConventionalType::Fix),
@@ -5993,8 +5989,7 @@ mod issue_source {
     /// restart (US3-2, SC-005).
     #[test]
     fn issue_an_added_entry_types_the_next_pick() {
-        let (mut rig, store, _dir) =
-            file_rig(labelled(), micold_core::issue_types::default_mapping());
+        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
         open_github_section(&mut rig.app);
         settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
         settings(
@@ -6021,7 +6016,7 @@ mod issue_source {
     /// mapping (US3-3).
     #[test]
     fn issue_edited_mapping_types_the_next_pick() {
-        let (mut rig, store, _dir) = file_rig(
+        let (mut rig, store) = file_rig(
             labelled(),
             vec![
                 entry("bug", ConventionalType::Fix),
@@ -6063,8 +6058,7 @@ mod issue_source {
     /// A21 — a saved mapping is read back from `settings.json` by a fresh store (US3-4, FR-020).
     #[test]
     fn issue_the_mapping_survives_a_restart() {
-        let (mut rig, store, _dir) =
-            file_rig(labelled(), micold_core::issue_types::default_mapping());
+        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
         open_github_section(&mut rig.app);
         settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
         settings(
@@ -6073,11 +6067,15 @@ mod issue_source {
         );
         settings(&mut rig.app, SettingsMsg::Saved);
 
-        let restarted = JsonFileSettingsStore::at(_dir.path().join("settings.json"));
+        // A restart reads the document back: what was written, through its on-disk JSON form.
+        let written = store.saves().pop().expect("the save wrote settings");
+        let json = serde_json::to_string(&written).expect("settings serialise");
+        let restarted: micold_core::settings::Settings =
+            serde_json::from_str(&json).expect("settings read back");
         let mut expected = micold_core::issue_types::default_mapping();
         expected.push(entry("defect", ConventionalType::Feat));
-        assert_eq!(stored(&restarted), expected);
-        assert_eq!(stored(&restarted), stored(&store));
+        assert_eq!(restarted.issue_label_types, expected);
+        assert_eq!(stored(&store), expected);
     }
 
     /// A22 — a blank label, or `Bug` beside `bug`, refuses the save with an error on that entry, and
@@ -6085,10 +6083,7 @@ mod issue_source {
     #[test]
     fn issue_an_invalid_mapping_is_not_saved() {
         use micold_client::features::window::FieldId;
-        let (mut rig, store, dir) =
-            file_rig(labelled(), micold_core::issue_types::default_mapping());
-        let path = dir.path().join("settings.json");
-        let before = std::fs::read(&path).expect("settings.json");
+        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
 
         open_github_section(&mut rig.app);
         settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
@@ -6118,11 +6113,7 @@ mod issue_source {
             Some(FieldId::IssueMappingLabel(3)),
             "`Bug` duplicates `bug` ignoring case"
         );
-        assert_eq!(
-            std::fs::read(&path).expect("settings.json"),
-            before,
-            "nothing was written"
-        );
+        assert!(store.saves().is_empty(), "nothing was written");
         assert_eq!(stored(&store), micold_core::issue_types::default_mapping());
     }
 
@@ -6130,8 +6121,7 @@ mod issue_source {
     /// returns them (US3-6).
     #[test]
     fn issue_restore_defaults_returns_the_default_mapping() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let store = Arc::new(JsonFileSettingsStore::at(dir.path().join("settings.json")));
+        let store = Arc::new(FakeSettingsStore::new());
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         rig.app.caps = rig.app.caps.clone().with_settings(store.clone());
         open_github_section(&mut rig.app);

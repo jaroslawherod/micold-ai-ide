@@ -12,7 +12,7 @@ use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, IconButton, Select, TextField};
+use crate::ui::material::{Button, IconButton, Select, TextField, Tooltip};
 use crate::ui::settings::{note, page};
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length};
@@ -62,14 +62,27 @@ pub fn view<'a>(
         )
         .label("Type");
 
-        let up = IconButton::new(Icon::MoveUp, roles).on_press_maybe((index > 0).then_some(
-            Message::Settings(SettingsMsg::IssueMappingMoved(index, Direction::Prev)),
-        ));
-        let down = IconButton::new(Icon::MoveDown, roles).on_press_maybe((index < last).then_some(
-            Message::Settings(SettingsMsg::IssueMappingMoved(index, Direction::Next)),
-        ));
-        let delete = IconButton::new(Icon::Delete, roles)
-            .on_press(Message::Settings(SettingsMsg::IssueMappingRemoved(index)));
+        // Icon-only, so each says what it does on hover, as the sidebar's icon buttons do.
+        let up = Tooltip::new(
+            IconButton::new(Icon::MoveUp, roles).on_press_maybe((index > 0).then_some(
+                Message::Settings(SettingsMsg::IssueMappingMoved(index, Direction::Prev)),
+            )),
+            "Move up",
+            roles,
+        );
+        let down = Tooltip::new(
+            IconButton::new(Icon::MoveDown, roles).on_press_maybe((index < last).then_some(
+                Message::Settings(SettingsMsg::IssueMappingMoved(index, Direction::Next)),
+            )),
+            "Move down",
+            roles,
+        );
+        let delete = Tooltip::new(
+            IconButton::new(Icon::Delete, roles)
+                .on_press(Message::Settings(SettingsMsg::IssueMappingRemoved(index))),
+            "Delete entry",
+            roles,
+        );
 
         controls.push(
             row![
