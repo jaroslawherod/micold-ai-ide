@@ -133,8 +133,10 @@ This section holds three fields:
 - **Source a script before each session** — turn environment-include off entirely (no script is
   sourced) or back on. Turning it off keeps the path, so re-enabling it doesn't mean typing it
   again.
-- **Script path**: the file to source. Any path is accepted — whether it resolves to a usable
-  script is only discovered when it's actually used, never rejected at save time.
+- **Script path**: the file to source. Any path is accepted and never rejected at save time. Each
+  time you open Settings, the path is checked (without running the script), and a path that names
+  no readable file is reported below the fields — see
+  [If the script path names no file](#if-the-script-path-names-no-file).
 - **Timeout (seconds)**: how long sourcing may run before being treated as hung. **Default**: 10
   seconds. **Range**: 1 – 60 seconds; out-of-range or non-numeric input is rejected with a message
   and not saved (same as the scrollback field).
@@ -152,6 +154,35 @@ asks nothing.
 variables the script resolves — and any diagnostic text captured while troubleshooting a failure
 — are held in memory for the running app only and are never written to your settings file, since
 they may include secrets (e.g. exported API keys).
+
+### If the script path names no file
+
+Each time you open Settings, the stored script path is checked in the background: the page opens
+at once, and the result appears below the fields a moment later. The check only looks at the file;
+it never runs or sources it, and it is not saved anywhere. Opening a session or restarting a
+terminal does no check at all, so a bad path never slows a launch.
+
+While **Source a script before each session** is off, the page tells you when the path would not
+work if you turned it on:
+
+- **Script not found: `<path>`** — nothing exists at that path.
+- **Not a readable file: `<path>`** — something is there, but it is a directory or a file you are
+  not allowed to read.
+
+Either line is followed by a note that environment include is off, so no script is sourced now,
+and that turning it on will not source one until the path names a readable file.
+
+Also while it is off, a few paths are reported differently:
+
+- A path starting with `~` is taken literally: `~` is **not** expanded to your home directory, so
+  `~/.bashrc` is reported as not found, with a note saying to use a full path.
+- A relative path (such as `env.sh` or `scripts/env.sh`) is not checked, because whether it is
+  found depends on each session's directory. The page says so instead.
+- If the check has no answer within 2 seconds — for example, the path is on a network drive that
+  is not responding — the page says **Couldn't check the script path** rather than waiting.
+- A blank path, or a path that names a readable file, shows nothing.
+
+To fix it, edit **Script path** to the full path of a readable file, or clear it, and save.
 
 ### If the script fails
 
