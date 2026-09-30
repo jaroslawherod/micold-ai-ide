@@ -68,8 +68,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D30 | 4-M3 | Review A round 1 (code-review high) | 8 findings: 4 fixed (NotReadable + `MissingScript` merged, U65; a re-check drops the previous answer when path or enabled changed, U66, `ScriptPathCheckStarted` carries both; shared `adopt_daemon_settings`; stale comment), 4 declined (below). | agent-resolved | code-review skill; snapshot 3255686e:3d355f29 |
 | D31 | 4-M3 | Review B round 1 (conformance) | CLEAN, 2 MINOR, both the same issues as review A F1/F2 and fixed with them. Verify at 3d355f29: features_settings 49 passed; script_path_report 16 passed. | agent-resolved | reviewer subagent; snapshot 3255686e:3d355f29 |
 | D32 | 4-M3 | Visual pass B4, B5, B6 (T027) | All three pass (dark theme, Xvfb :78, pinned pair from 36015322). Evidence in `visual-pass/B4-*`, `B5-*`, `B6-*`. | agent-resolved | visual-pass skill |
-| D34 | 4-M4 | M3/#473 merged at b0432747; branch start | `branch-start.sh 473` reset `fix/github-issues` to `origin/main` (b0432747) cleanly. | agent-resolved | branch-start.sh output |
 | D33 | 4-M3 | Review A round 2 and review B round 2 (sonnet, fix diff) | Both CLEAN. A: fixes 1, 2, 5, 8 hold; declines 3, 4, 6, 7 stand; one MINOR (a kept same-path answer can still pair with a pre-save outcome), covered by the declined F6. B: Verify features_settings 51 passed, script_path_report 16 passed; contract S1/N7 match. Gate at a731366b: GATE_EXIT=0, 3822 passed. | agent-resolved | reviewer subagents; snapshot 3b624194:a731366b |
+| D34 | 4-M4 | M3/#473 merged at b0432747; branch start | `branch-start.sh 473` reset `fix/github-issues` to `origin/main` (b0432747) cleanly. | agent-resolved | branch-start.sh output |
+| D35 | 4-M4 | Review A round 1 (code-review high) | 10 findings, all MINOR/nit on tests and records: 9 fixed (fixture comment; A9 installs its own probe and asserts it probed the typed path once; A9/A10 reopen Settings and assert no lines; U62 drafts a timeout change and asserts it applied while path and flag stay; cycle 16's commit and line numbers recorded in a follow-up entry; D34 order; imports; doc rewrap), 1 declined (below). Gate 1 failed on `cargo fmt --check` only; fixed. | agent-resolved | code-review skill; snapshot 3320e6e4 |
 
 ## Declined review findings
 
@@ -89,6 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | `Welcome` (reconnect) adopts new settings without re-checking an open page | Contract §3 names T1–T3 only; the next open re-checks. Follow-up. |
 | M3 | A | Re-check on every `SettingsChanged`, even when path and flag are unchanged | FR-009: the indication reflects the path after every save (the file may have appeared since); the check is bounded and off the UI thread. |
 | M3 | A | NotFound + on + `NonZeroExit` still shows 011's exit-error lines | Contract row N4 specifies it (FR-005: 011's indication remains). |
+| M4 | A | U62 replaces the store `on_and_missing` installed instead of the helper returning it | Taste: the replaced fake is inert, and three M3 tests use the helper's current shape. |
 
 ## Open escalation
 
