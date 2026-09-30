@@ -121,11 +121,13 @@ impl Fixture {
     }
 }
 
-/// Arguments with which `tool` succeeds for a caller in worktree `b`.
-fn good_call(tool: &str) -> Value {
+/// Arguments with which `tool` succeeds for `caller`, a session in worktree `b`.
+fn good_call(tool: &str, caller: SessionId) -> Value {
     match tool {
         "create_worktree" => json!({"branch": "audit-ok"}),
+        "rename_worktree" => json!({"worktree": "b", "display_name": "Audited"}),
         "create_session" => json!({"worktree": "b", "ai_cli": "copilot"}),
+        "start_session" => json!({"session": caller.0.to_string()}),
         other => panic!("no successful call for the mutating tool {other}: add one here"),
     }
 }
@@ -137,7 +139,18 @@ fn failing_call(tool: &str) -> Vec<(Value, ErrorCategory)> {
             (json!({}), ErrorCategory::InvalidInput),
             (json!({"branch": "taken"}), ErrorCategory::Conflict),
         ],
+        "rename_worktree" => vec![
+            (json!({"worktree": "b"}), ErrorCategory::InvalidInput),
+            (
+                json!({"worktree": "nope", "display_name": "X"}),
+                ErrorCategory::NotFound,
+            ),
+        ],
         "create_session" => vec![(json!({"worktree": "nope"}), ErrorCategory::NotFound)],
+        "start_session" => vec![(
+            json!({"session": sid(99).0.to_string()}),
+            ErrorCategory::NotFound,
+        )],
         other => panic!("no failing call for the mutating tool {other}: add one here"),
     }
 }
@@ -164,7 +177,7 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     assert!(!tools.is_empty(), "M3 ships mutating tools");
     for tool in &tools {
         let before = audit_lines(caller).len();
-        let result = f.call(caller, tool, good_call(tool)).await;
+        let result = f.call(caller, tool, good_call(tool, caller)).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
         let lines = audit_lines(caller);
         assert_eq!(
