@@ -1340,6 +1340,32 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[0, 0, 1, 0, 0, 0],
             }],
         },
+        // An agent's destructive request (feature 034, FR-014, U213): the confirmation every
+        // window shows, over the main shell. The worktree delete with its branch and its sessions
+        // is the longest headline the dialog can carry, so it is the one recorded.
+        CoveredState {
+            name: "agent-confirm-dialog",
+            build: || {
+                let mut state = with_project();
+                state.agent_confirm.pending =
+                    vec![micold_client::features::agent_confirm::Prompt {
+                        id: 1,
+                        project: PathBuf::from(PROJECT),
+                        caller_label: "planner".to_string(),
+                        operation:
+                            micold_core::protocol::messages::ConfirmOperation::DeleteWorktree {
+                                stop_sessions: true,
+                                delete_branch: true,
+                            },
+                        target_label: "feat-login-page".to_string(),
+                    }];
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "dialog.root",
+                path: &[],
+            }],
+        },
     ]
 }
 

@@ -93,6 +93,8 @@ pub const READERS: &[&str] = &[
     "get",
     "home",
     "is_empty",
+    // `agent_confirm.is_pending` asks whether a prompt is still waiting here (feature 034).
+    "is_pending",
     "is_none",
     "is_some_and",
     "is_some",

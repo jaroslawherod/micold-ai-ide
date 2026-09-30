@@ -51,6 +51,7 @@ use micold_client::app::Message;
 // Moved to the library (see `micold_client::catalog_sync` for why): the fold has to be reachable
 // from `tests/`, and a binary-crate function is not.
 use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
+use micold_client::features::agent_confirm::Msg as AgentConfirmMsg;
 use micold_client::features::session::{
     AvailabilityKey, AvailabilitySource, CliAvailability, EnvIncludeSettings,
 };
@@ -1010,6 +1011,30 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::Attached { project, .. } => {
             app.displaced.remove(&project);
         }
+        // An agent's destructive request (feature 034, FR-014): every window shows it until one
+        // answers or the daemon withdraws it.
+        DaemonMsg::ConfirmationRequested {
+            id,
+            project,
+            caller_label,
+            operation,
+            target_label,
+            ..
+        } => {
+            app.core.update(Message::AgentConfirm(AgentConfirmMsg::Requested(
+                micold_client::features::agent_confirm::Prompt {
+                    id,
+                    project,
+                    caller_label,
+                    operation,
+                    target_label,
+                },
+            )));
+        }
+        DaemonMsg::ConfirmationWithdrawn { id } => {
+            app.core
+                .update(Message::AgentConfirm(AgentConfirmMsg::Withdrawn(id)));
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
@@ -1450,6 +1475,23 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     });
     app.core
         .update(Message::Session(SessionMsg::CloseRequested(id)));
+    Task::none()
+}
+
+/// The user answered an agent's request (feature 034, FR-014): put exactly one
+/// `ConfirmationAnswer` on the wire, then forget the prompt.
+///
+/// Only for a prompt still pending here. One the daemon has already withdrawn — answered in
+/// another window, or expired between the click and this arm — sends nothing: the daemon would
+/// ignore it, and saying nothing is the honest account of a click that decided nothing.
+pub fn on_agent_confirm_answered(app: &mut App, id: u64, allow: bool) -> Task<Message> {
+    if app.core.agent_confirm.is_pending(id) {
+        if let Some(d) = &app.daemon {
+            let _ = (d, allow); // red: not yet sent
+        }
+    }
+    app.core
+        .update(Message::AgentConfirm(AgentConfirmMsg::Answered { id, allow }));
     Task::none()
 }
 
@@ -3150,5 +3192,67 @@ pub(crate) mod tests {
             )),
             "and the attachment follows it, so the keyboard drives what is displayed. Sent: {sent:?}"
         );
+    }
+
+    /// A `ConfirmationRequested` for a delete-worktree request, as the daemon sends it.
+    fn confirmation_requested(id: u64) -> DaemonMsg {
+        DaemonMsg::ConfirmationRequested {
+            id,
+            project: PathBuf::from("/repo/p"),
+            caller: SessionId::new(),
+            caller_label: "planner".to_string(),
+            operation: micold_core::protocol::messages::ConfirmOperation::DeleteWorktree {
+                stop_sessions: false,
+                delete_branch: true,
+            },
+            target_label: "feat-x".to_string(),
+            expires_in_ms: 60_000,
+        }
+    }
+
+    fn drain_sent(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        sent
+    }
+
+    /// U210/U211 (feature 034, FR-014): the answer goes on the wire exactly once, with the id the
+    /// daemon asked under, and the prompt closes.
+    #[test]
+    fn an_answer_sends_exactly_one_confirmation_answer_and_closes_the_prompt() {
+        for allow in [true, false] {
+            let (mut app, mut rx) = connected_app();
+            let _ = on_daemon_event(&mut app, confirmation_requested(41));
+            assert!(app.core.agent_confirm.is_pending(41), "the request is shown");
+            let _ = drain_sent(&mut rx);
+
+            let _ = on_agent_confirm_answered(&mut app, 41, allow);
+
+            assert_eq!(
+                drain_sent(&mut rx),
+                vec![ClientMsg::ConfirmationAnswer { id: 41, allow }],
+                "exactly one answer, carrying the user's choice"
+            );
+            assert!(
+                app.core.agent_confirm.pending.is_empty(),
+                "and the prompt is gone from this window"
+            );
+        }
+    }
+
+    /// A withdrawal that lands before the click: the prompt is gone, and the late click says nothing.
+    #[test]
+    fn answering_a_withdrawn_prompt_sends_nothing() {
+        let (mut app, mut rx) = connected_app();
+        let _ = on_daemon_event(&mut app, confirmation_requested(41));
+        let _ = on_daemon_event(&mut app, DaemonMsg::ConfirmationWithdrawn { id: 41 });
+        assert!(app.core.agent_confirm.pending.is_empty(), "withdrawn closes it");
+        let _ = drain_sent(&mut rx);
+
+        let _ = on_agent_confirm_answered(&mut app, 41, true);
+
+        assert_eq!(drain_sent(&mut rx), Vec::<ClientMsg>::new());
     }
 }

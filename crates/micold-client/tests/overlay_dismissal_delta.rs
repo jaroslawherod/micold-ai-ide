@@ -252,6 +252,11 @@ fn escape_still_reaches_exactly_what_it_used_to() {
             },
             Message::Session(SessionMsg::LinkOpenDeclined),
         ),
+        (
+            "confirm_agent_request",
+            |s| s.agent_confirm.pending = vec![an_agent_request()],
+            Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Dismissed),
+        ),
     ];
 
     for (name, open, expected) in dialogs {
@@ -296,5 +301,16 @@ fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
         display: "/home/u/p/a.md".to_string(),
         target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
         needs_confirmation: true,
+    }
+}
+
+/// An agent's destructive request, pending an answer (feature 034, FR-014).
+fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
+    micold_client::features::agent_confirm::Prompt {
+        id: 1,
+        project: PathBuf::from("/p"),
+        caller_label: "planner".to_string(),
+        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
+        target_label: "reviewer".to_string(),
     }
 }

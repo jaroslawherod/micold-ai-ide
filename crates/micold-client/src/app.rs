@@ -33,6 +33,9 @@ pub enum Message {
     /// The Help menu and the About dialog it opens (feature 028, FR-001). Three variants moved
     /// behind this one; see [`crate::features::help::Msg`].
     Help(crate::features::help::Msg),
+    /// An agent's destructive request awaiting the user's answer (feature 034, FR-014); see
+    /// [`crate::features::agent_confirm::Msg`].
+    AgentConfirm(crate::features::agent_confirm::Msg),
     /// Everything the user or the folder browser can say about a project (feature 028,
     /// FR-001). Nineteen variants moved behind this one; see
     /// [`crate::features::project::Msg`].
@@ -138,6 +141,8 @@ pub enum Message {
 pub struct State {
     /// What the help feature remembers -- see [`crate::features::help::State`].
     pub help: crate::features::help::State,
+    /// What the agent_confirm feature remembers -- see [`crate::features::agent_confirm::State`].
+    pub agent_confirm: crate::features::agent_confirm::State,
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
     ///
@@ -404,6 +409,10 @@ impl State {
             Message::Connection(_) | Message::Sandbox(_) | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::AgentConfirm(msg) => {
+                let outcomes = crate::features::agent_confirm::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Project(msg) => {
