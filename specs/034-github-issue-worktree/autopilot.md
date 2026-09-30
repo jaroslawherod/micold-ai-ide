@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
 - **Phase**: 4-milestones
-- **Next step**: Wait for M5's PR #495 CI and merge; then run milestone M6 (T063–T065).
+- **Next step**: M6b in progress: T064 §B13 (both colour schemes) and T065 (gate, typeahead budget, §A rows); then open M6b's PR.
 
 ## Pull requests
 
@@ -25,8 +25,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | #468 | merged (a17e6cde) |
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | #472 | merged (691510de) |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | #478 | merged (e201a04e) |
-| M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | #495 | open — gate green at push, reviews A and B done, §B12 PASS |
-| M6 | T063–T065 | Architecture doc + quickstart §B10, B11, B13 recorded | — | split: M6a (T063, T064 §B10 Linux + §B11) runs in parallel with M5 in a separate worktree on branch feat/034-m6a-close-out at user request 2026-09-30; M6b (T064 §B13 + macOS/Windows §B10, T065) after M5 |
+| M5 | T053–T062, T086–T092 | Settings → GitHub issues mapping editor | #495 | merged (8d7707f7) |
+| M6 | T063–T065, T095 | Architecture doc + quickstart §B10, B11, B13 recorded | #496 (M6a) | M6a #496 merged (cf1bdc53): T063, T095, §B10 Linux, §B11; M6b in progress: T064 §B13 (+ tick T064; §B10 macOS/Windows = T095 CI test, Decisions row 9), T065 |
 
 Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free core + RPC, UI unreachable per rule 6; M2 completes it) and M2, plus M3 along AS10. M2 stays whole (~25 tasks, 9 of them outer-loop-green ticks): an acceptance-scenario split would put a list on `main` that cannot be picked from.
 
@@ -81,6 +81,9 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M5 | code-review A #8 (MINOR) | `validate_mapping` is O(n²) | Mappings are a handful of entries, checked once per Save. |
 | M5 | code-review A #9 (MINOR) | Row controls are top-aligned | Top alignment keeps the buttons level with the fields when one row grows an error line; centring would move them. |
 | M5 | contract §4 glyphs | `MoveUp`/`MoveDown` are `keyboard_arrow_up/down`, not `arrow_upward/downward` | `arrow_upward` is `Icon::NavigateUp`'s codepoint and `tests/icons.rs` forbids two icons on one; contract §4 amended. |
+| M6a | code-review A F4 | Linux §B10 run kept the environment include on | That is §B10's default setup; the evidence names the unprobed lookup step; T095's test covers the no-include fallback. |
+| M6a | code-review A F5 | macOS/Windows §B10 are a CI test, not a real Dock/Start-menu launch | User decision, Decisions row 9. |
+| M6a | code-review A F7 | tasks.md M6 "Satisfies FR-026 on every OS" while §B13 is missing | §B13 and T064 are M6b; T064 stays unticked in M6a. |
 | M2 | visual pass D3–D5 | Open list covers the fields below; selected chip lacks an outline; Type menu scrolls after 8 rows | Existing component behaviour (Typeahead overlay, `ToggleChip` selected style, Select menu height) unchanged by this feature. |
 
 ## Review rounds
@@ -100,6 +103,10 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | M5 | visual pass §B12 | 1 | d1a67cf4 | criteria 1–8 PASS (`tech-debt`→`chore` stood in for `question`: cli/cli has no such label); 9 FAIL: D1, rows unusable at 520 px with the rail open — fixed (cycle 28, stacked row) |
 | M5 | visual pass §B12 re-check | 2 | 0baf811a | criterion 9 PASS at 520 px (rail open, both schemes) and ~1000 px; D1 fixed, no new defects |
 | M3 | visual pass §B6 | 1 | c1c43e14 | criteria 1, 3, 4 PASS; 2 partial — the issue beyond the cap appears once and is pickable, "Searching GitHub…" not caught on screen (load ~20); D6 declined |
+| M6a | A (code-review high) | 1 | — | 8 findings: 5 fixed, 3 declined (F4, F5, F7) |
+| M6a | A (code-review high), scoped | 2 | — | CLEAN |
+| M6a | B (conformance) | 1 | — | CLEAN |
+| M6a | B (conformance), scoped | 2 | — | CLEAN |
 
 ## Open escalation
 
