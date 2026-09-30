@@ -73,12 +73,12 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 | A10 | `create_session` without `ai_cli` creates a session running the Settings `default_ai_cli` | US2-AS4 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::without_ai_cli_the_session_runs_the_default_cli_from_settings` |
 | A11 | `create_session` with a CLI not on the session environment's `PATH` fails `service_error` naming that CLI, and no session record exists afterwards | US2-AS5, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record` |
 | A12 | `start_session` on an `Idle`, a `Failed` and an `InterruptedResumable` session moves each through `Starting` to `Running`, as the protocol start does | US3-AS1, FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::start_session_moves_an_idle_failed_or_resumable_session_through_starting_to_running` |
-| A13 | An allowed `stop_session` on a `Running` sibling ends its processes, every fake window receives it as `Idle`, and a later `start_session` resumes its conversation | US3-AS2, FR-009, FR-011 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| A14 | An allowed `interrupt_session` on a `Running` sibling writes `0x03` to its primary PTY and it stays `Running` | US3-AS2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| A15 | `delete_worktree` on a worktree with live sessions and no `stop_sessions` fails `conflict` naming those sessions, and the worktree, its sessions and its branch are unchanged | US3-AS3, FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| A16 | Each of `delete_worktree`, `delete_session`, `stop_session` and `interrupt_session` on another target raises a confirmation in the fake windows and changes nothing until it is answered | US3-AS4, FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| A17 | `stop_session` and `delete_session` on the caller, and `delete_worktree` of the caller's hosting worktree, fail `refused_by_policy` with no confirmation raised and nothing changed | US3-AS5, FR-015 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| A18 | From a Default session, `create_worktree`, `rename_worktree` and `delete_worktree` each fail `refused_by_policy` naming Principle III and nothing changes | US3-AS6, FR-015a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
+| A13 | An allowed `stop_session` on a `Running` sibling ends its processes, every fake window receives it as `Idle`, and a later `start_session` resumes its conversation | US3-AS2, FR-009, FR-011 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_stop_session_ends_it_shows_idle_everywhere_and_it_stays_resumable` |
+| A14 | An allowed `interrupt_session` on a `Running` sibling writes `0x03` to its primary PTY and it stays `Running` | US3-AS2 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running` |
+| A15 | `delete_worktree` on a worktree with live sessions and no `stop_sessions` fails `conflict` naming those sessions, and the worktree, its sessions and its branch are unchanged | US3-AS3, FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::delete_worktree_with_live_sessions_and_no_stop_sessions_is_a_conflict_naming_them` |
+| A16 | Each of `delete_worktree`, `delete_session`, `stop_session` and `interrupt_session` on another target raises a confirmation in the fake windows and changes nothing until it is answered | US3-AS4, FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::each_destructive_tool_waits_for_the_user_and_a_decline_changes_nothing` |
+| A17 | `stop_session` and `delete_session` on the caller, and `delete_worktree` of the caller's hosting worktree, fail `refused_by_policy` with no confirmation raised and nothing changed | US3-AS5, FR-015 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::self_targets_are_refused_without_a_prompt` |
+| A18 | From a Default session, `create_worktree`, `rename_worktree` and `delete_worktree` each fail `refused_by_policy` naming Principle III and nothing changes | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::a_default_session_is_refused_delete_worktree` |
 | A19 | At Auto and at Confirm each send, S1's `read_session_output` on sibling S2 returns S2's last N primary-terminal lines as plain text with no confirmation raised | US4-AS1, FR-012, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
 | A20 | At Auto, S1's `send_session_input` to an awaiting-input S2 writes the text to S2's primary PTY as typed and submitted (ends `\r`) | US4-AS2, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
 | A21 | Every session-targeting and worktree-targeting tool aimed at another project's session or worktree fails `not_found` with the same message as an unknown ref | US4-AS3, FR-010, EC-2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
@@ -211,9 +211,9 @@ each group that changes existing code.
 | U77 | A settings file written before the field loads `Auto` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
 | U78 | `ConfirmEachSend` and `Off` each survive a save/load round trip | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
 | U79 | `DaemonSettings` and `SettingsSet` round-trip `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
-| U80 | `ConfirmationRequested`, `ConfirmationWithdrawn` and `ConfirmationAnswer` round-trip | FR-014 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
-| U81 | `ConfirmOperation::SendInput` has no field that can carry input text | FR-018 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
-| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` (pin 17) |
+| U80 | `ConfirmationRequested`, `ConfirmationWithdrawn` and `ConfirmationAnswer` round-trip | FR-014 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::every_client_message_json_round_trips`; `crates/micold-core/tests/protocol_roundtrip.rs::every_daemon_message_json_round_trips` |
+| U81 | `ConfirmOperation::SendInput` has no field that can carry input text | FR-018 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::a_send_input_confirmation_has_no_field_that_can_carry_the_input_text` |
+| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` (pin 18) |
 
 ### `crates/micold-core/src/mcp/tools.rs` catalog and validation (T014, T019, T031, T037, T044, T046, T061, T066)
 
@@ -343,42 +343,42 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U168 | `SessionStop` today kills the session's processes and drops it from the live registry | INV-1 | characterization | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` (write and see green before T054; becomes `BASELINE`) |
-| U169 | `DaemonState::stop_session` leaves the record `Idle` | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U170 | `DaemonState::stop_session` keeps the session's credential valid | FR-006 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U171 | The protocol `SessionStop` now broadcasts a `CatalogChanged` with the session `Idle` | FR-009, FR-011 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
+| U168 | `SessionStop` today kills the session's processes and drops it from the live registry | INV-1 | characterization | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::the_protocol_session_stop_ends_the_processes_and_broadcasts_idle` |
+| U169 | `DaemonState::stop_session` leaves the record `Idle` | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_stop_session_ends_it_shows_idle_everywhere_and_it_stays_resumable` |
+| U170 | `DaemonState::stop_session` keeps the session's credential valid | FR-006 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_stop_session_ends_it_shows_idle_everywhere_and_it_stays_resumable` |
+| U171 | The protocol `SessionStop` now broadcasts a `CatalogChanged` with the session `Idle` | FR-009, FR-011 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::the_protocol_session_stop_ends_the_processes_and_broadcasts_idle` |
 
 ### `crates/micold-daemon/src/mcp/confirm.rs` and `server.rs` `ConfirmationAnswer` arm (T050, T055)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U172 | Every connected fake window receives the same `ConfirmationRequested` naming caller, operation and target | FR-014, EC-5 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U173 | The first `allow` answer performs the operation | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U174 | After the first answer every window receives `ConfirmationWithdrawn` | FR-014, EC-5 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U175 | A second answer for the same id changes nothing | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U176 | An answer for an unknown id changes nothing | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U177 | A decline fails `refused_by_policy` "declined by the user" and changes nothing | FR-014, FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U178 | No answer by 60 s (paused clock) fails `needs_confirmation` and withdraws the prompt | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U179 | An allow arriving just before 60 s still performs the operation | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U180 | With no window connected the request fails `needs_confirmation` at once, with no broadcast | FR-014, EC-6 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U181 | Deleting the target while pending fails `not_found`, withdraws, changes nothing | EC-9 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U182 | Deleting the caller while pending fails `not_found`, withdraws, changes nothing | EC-9 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U183 | Stopping the caller while pending abandons the request, withdraws, changes nothing | EC-9 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U184 | Closing the agent's HTTP connection while pending abandons the request, withdraws, changes nothing | FR-014 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
-| U185 | A window handshaking while a prompt is pending receives it with the remaining time | FR-014, EC-5 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_confirmations.rs` |
+| U172 | Every connected fake window receives the same `ConfirmationRequested` naming caller, operation and target | FR-014, EC-5 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::every_window_receives_the_same_prompt_naming_caller_operation_and_target` |
+| U173 | The first `allow` answer performs the operation | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::the_first_allow_decides_and_every_window_is_withdrawn`; `crates/micold-daemon/tests/mcp_confirmations.rs::through_the_tool_server::an_allowed_request_is_performed_and_answered_on_its_connection` |
+| U174 | After the first answer every window receives `ConfirmationWithdrawn` | FR-014, EC-5 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::the_first_allow_decides_and_every_window_is_withdrawn` |
+| U175 | A second answer for the same id changes nothing | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_second_answer_for_the_same_prompt_changes_nothing` |
+| U176 | An answer for an unknown id changes nothing | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::an_answer_for_an_unknown_prompt_changes_nothing` |
+| U177 | A decline fails `refused_by_policy` "declined by the user" and changes nothing | FR-014, FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_decline_is_refused_by_policy_as_declined_by_the_user` |
+| U178 | No answer by 60 s (paused clock) fails `needs_confirmation` and withdraws the prompt | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::no_answer_within_sixty_seconds_needs_confirmation_and_withdraws` |
+| U179 | An allow arriving just before 60 s still performs the operation | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::an_allow_just_before_sixty_seconds_still_counts` |
+| U180 | With no window connected the request fails `needs_confirmation` at once, with no broadcast | FR-014, EC-6 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::with_no_window_connected_it_needs_confirmation_at_once_with_nothing_broadcast` |
+| U181 | Deleting the target while pending fails `not_found`, withdraws, changes nothing | EC-9 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_target_session_that_goes_away_while_pending_is_not_found`; `crates/micold-daemon/tests/mcp_confirmations.rs::a_target_worktree_that_goes_away_while_pending_is_not_found`; `crates/micold-daemon/tests/mcp_confirmations.rs::through_the_tool_server::the_user_deleting_the_target_while_pending_fails_the_request_not_found` |
+| U182 | Deleting the caller while pending fails `not_found`, withdraws, changes nothing | EC-9 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_caller_that_is_deleted_or_stopped_while_pending_is_not_found`; `crates/micold-daemon/tests/mcp_confirmations.rs::through_the_tool_server::the_caller_deleted_or_stopped_while_pending_fails_the_request_not_found` |
+| U183 | Stopping the caller while pending abandons the request, withdraws, changes nothing | EC-9 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_caller_that_is_deleted_or_stopped_while_pending_is_not_found`; `crates/micold-daemon/tests/mcp_confirmations.rs::through_the_tool_server::the_caller_deleted_or_stopped_while_pending_fails_the_request_not_found` |
+| U184 | Closing the agent's HTTP connection while pending abandons the request, withdraws, changes nothing | FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_request_whose_waiter_is_dropped_is_abandoned_and_withdrawn`; `crates/micold-daemon/tests/mcp_confirmations.rs::through_the_tool_server::closing_the_agents_connection_abandons_the_request_and_changes_nothing` |
+| U185 | A window handshaking while a prompt is pending receives it with the remaining time | FR-014, EC-5 | example | DONE | `crates/micold-daemon/tests/mcp_confirmations.rs::a_window_that_connects_while_a_prompt_is_pending_receives_it_with_the_time_left` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` destructive handlers (T051, T056)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U186 | `stop_session` on an `Idle` session succeeds, reports `idle`, raises no confirmation (assumption A-5) | FR-012a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U187 | `interrupt_session` on a session that is not running fails `conflict` before any confirmation | FR-013 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U188 | An allowed `delete_worktree {stop_sessions: true}` stops its sessions and removes the worktree | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U189 | An allowed `delete_worktree` with the default `delete_branch` removes the branch | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U190 | An allowed `delete_worktree {delete_branch: false}` keeps the branch | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U191 | An allowed `delete_session` archives the record | FR-009 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U192 | After an allowed `delete_session`, the deleted session's credential answers `401` | FR-006, EC-8 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
-| U193 | Of two agents deleting one worktree, the second fails `not_found` | EC-4 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` |
+| U186 | `stop_session` on an `Idle` session succeeds, reports `idle`, raises no confirmation (assumption A-5) | FR-012a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::stop_session_on_an_idle_session_succeeds_unchanged_without_a_prompt` |
+| U187 | `interrupt_session` on a session that is not running fails `conflict` before any confirmation | FR-013 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::interrupt_session_on_a_session_that_is_not_running_is_a_conflict` |
+| U188 | An allowed `delete_worktree {stop_sessions: true}` stops its sessions and removes the worktree | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_delete_worktree_stops_its_sessions_and_removes_it_and_its_branch` |
+| U189 | An allowed `delete_worktree` with the default `delete_branch` removes the branch | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_delete_worktree_stops_its_sessions_and_removes_it_and_its_branch` |
+| U190 | An allowed `delete_worktree {delete_branch: false}` keeps the branch | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_delete_worktree_without_delete_branch_keeps_the_branch` |
+| U191 | An allowed `delete_session` archives the record | FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_delete_session_archives_it_and_revokes_its_credential` |
+| U192 | After an allowed `delete_session`, the deleted session's credential answers `401` | FR-006, EC-8 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::an_allowed_delete_session_archives_it_and_revokes_its_credential` |
+| U193 | Of two agents deleting one worktree, the second fails `not_found` | EC-4 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::of_two_agents_deleting_one_worktree_the_second_is_not_found` |
 
 ### `crates/micold-daemon/src/framer.rs` `plain_tail` (T063, T068)
 
@@ -418,13 +418,13 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U207 | `ConfirmationRequested` adds a pending prompt and opens the dialog | FR-014 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U208 | `ConfirmationWithdrawn` removes that prompt | FR-014, EC-5 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U209 | `ConfirmationWithdrawn` for an unknown id changes nothing | FR-014 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U210 | Allow sends exactly one `ConfirmationAnswer { allow: true }` and closes the prompt | FR-014 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U211 | Deny sends exactly one `ConfirmationAnswer { allow: false }` and closes the prompt | FR-014 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U212 | Several pending prompts are shown in arrival order | FR-014 | example | PENDING | planned: `crates/micold-client/tests/features_agent_confirm.rs` |
-| U213 | The open dialog is a registered covered state of the geometry gates | FR-014 | example | PENDING | planned: `crates/micold-client/tests/support/covered_states.rs` + `layout_snapshot.rs` |
+| U207 | `ConfirmationRequested` adds a pending prompt and opens the dialog | FR-014 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u207_a_request_adds_a_pending_prompt_and_opens_the_dialog` |
+| U208 | `ConfirmationWithdrawn` removes that prompt | FR-014, EC-5 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u208_a_withdrawal_removes_the_prompt_and_closes_the_dialog` |
+| U209 | `ConfirmationWithdrawn` for an unknown id changes nothing | FR-014 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u209_a_withdrawal_for_an_unknown_id_changes_nothing` |
+| U210 | Allow sends exactly one `ConfirmationAnswer { allow: true }` and closes the prompt | FR-014 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u210_allowing_closes_that_prompt`; `crates/micold-client/src/shell/daemon_sync.rs::tests::an_answer_sends_exactly_one_confirmation_answer_and_closes_the_prompt` |
+| U211 | Deny sends exactly one `ConfirmationAnswer { allow: false }` and closes the prompt | FR-014 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u211_denying_closes_that_prompt`; `crates/micold-client/src/shell/daemon_sync.rs::tests::an_answer_sends_exactly_one_confirmation_answer_and_closes_the_prompt` |
+| U212 | Several pending prompts are shown in arrival order | FR-014 | example | DONE | `crates/micold-client/tests/features_agent_confirm.rs::u212_several_prompts_show_in_arrival_order` |
+| U213 | The open dialog is a registered covered state of the geometry gates | FR-014 | example | DONE | `crates/micold-client/tests/support/covered_states.rs` (`agent-confirm-dialog`); `crates/micold-client/tests/layout_snapshot.rs::the_layout_matches_the_committed_fixture` |
 
 ### `crates/micold-client/src/features/settings.rs` (T025, T027, T065, T070)
 
@@ -484,6 +484,7 @@ None. Every edge case EC-1…EC-18 has a numbered behavior above.
 - A-5: `stop_session` on an `Idle` target succeeds without a confirmation (U186): the contract lists
   "Idle → success, unchanged" before "other session → confirm".
 - A-6: US3-AS2 is two acceptance behaviors (A13 stop, A14 interrupt); both trace to US3-AS2.
+- A-7: stopping the caller while its request is pending fails the request `not_found` (the caller is gone) rather than abandoning it silently; either way the prompt is withdrawn and nothing changes (U183, M5).
 
 ## Verification commands
 
