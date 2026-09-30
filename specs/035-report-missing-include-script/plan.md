@@ -105,7 +105,7 @@ crates/micold-client/
 ├── src/shell/capabilities.rs          # + script_path_probe capability (real() names StdScriptPathProbe)
 ├── src/shell/persist.rs               # on_settings_opened / apply_save start the check
 ├── src/shell/daemon_sync.rs           # SettingsChanged re-checks while Settings is open
-├── src/shell/env_include.rs           # + start_script_path_check(app, origin) -> Task<Message>
+├── src/shell/env_include.rs           # + prepare_script_path_check(app, origin) -> job; run_script_path_check(job) -> Task<Message>
 ├── src/main.rs                        # pass the check into the view (routing needs no change:
 │                                      #   shell/settings.rs's catch-all forwards pure Msgs)
 ├── src/ui/mod.rs, src/ui/settings_view.rs   # thread the check through to the page

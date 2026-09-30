@@ -1298,6 +1298,8 @@ const NOTICE_RELATIVE: &str =
 /// [`SCRIPT_PATH_CHECK_BOUND`]: micold_core::script_path_check::SCRIPT_PATH_CHECK_BOUND
 const NOTICE_HUNG: &str =
     "No answer within 2 seconds. The file may be on a drive that is not responding.";
+// NOTICE_HUNG states the bound in words; a change to the bound must change the sentence too.
+const _: () = assert!(micold_core::script_path_check::SCRIPT_PATH_CHECK_BOUND.as_secs() == 2);
 
 /// Every line shown below the Environment page's timeout field (spec 035,
 /// contracts/settings-indication.md §2): what the check found about the stored path, then 011's

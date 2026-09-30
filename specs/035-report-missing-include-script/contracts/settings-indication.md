@@ -92,8 +92,10 @@ Invariants the tests assert:
 2. `ScriptPathCheckJob::run(self) -> Message`: `check_bounded(probe, path,
    SCRIPT_PATH_CHECK_BOUND)`, returned as `Msg::ScriptPathChecked { seq, origin, result }`. It is
    synchronous, and the tests call it directly.
-3. `start_script_path_check(app, origin) -> Task<Message>`: `Task::perform` over
-   `tokio::task::spawn_blocking(move || job.run())`. A `JoinError` becomes `result:
+3. `run_script_path_check(job) -> Task<Message>`: `Task::perform` over
+   `tokio::task::spawn_blocking(move || job.run())`. A call site starts a check with
+   `run_script_path_check(prepare_script_path_check(app, origin))`; Settings opening prepares the
+   job inside `persist::open_settings`, so a test can run it synchronously. A `JoinError` becomes `result:
    Some(CheckedScriptPath { path, enabled, state: Unchecked })`.
 
 | # | Call site | Origin | Condition |

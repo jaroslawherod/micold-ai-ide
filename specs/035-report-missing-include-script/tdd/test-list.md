@@ -170,7 +170,7 @@ default, and U7–U10 cover any absolute path.
 
 - Rendering (the order of cautions and notes on screen, theming): GUI glue under Constitution I's
   exception, validated by quickstart §B (T021, T042, T027, T029, T031), not by a cargo test.
-- The spawn_blocking `JoinError` → `Unchecked` mapping in `start_script_path_check`: glue. The job
+- The spawn_blocking `JoinError` → `Unchecked` mapping in `run_script_path_check`: glue. The job
   it wraps is tested (U55–U60), and a panic in the probe is not a spec behaviour.
 - Windows-specific unreadable files (ACL denial): no portable way to create one in a test. U13
   (directory) covers "not a readable file" on every OS.
