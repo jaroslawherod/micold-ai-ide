@@ -22,6 +22,8 @@ use std::collections::BTreeSet;
 pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 /// Maximum sidebar width in pixels (resize upper bound).
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
+/// Default sidebar width in pixels, used until the user resizes it.
+pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 
 /// The narrowest window the interface is supported at.
 ///
@@ -29,8 +31,8 @@ pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// settings surface puts a fixed 288dp rail beside a content column, and the rail never gives any
 /// of its width back — so below roughly 520dp the actions row runs off the right edge and the Save
 /// button loses first its edge and then its label, which is the primary action of the surface
-/// becoming an unlabelled circle. Every control renders at this size; see
-/// `the_window_declares_the_narrowest_size_it_supports` in `shell/startup.rs`.
+/// becoming an unlabelled circle. Every control renders at this size; the client
+/// binary's `window_settings` sets it as the window's `min_size`.
 pub const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
 
 /// The floor stays above the width the layout was seen to break at, not at it: 520dp was the last
@@ -38,9 +40,6 @@ pub const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
 /// A compile-time check rather than a test, because both sides are constants and a test of two
 /// constants is a test of nothing.
 const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
-
-/// Default sidebar width in pixels, used until the user resizes it.
-pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 
 /// Every user interaction that can change application state.
 ///
