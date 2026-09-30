@@ -47,7 +47,7 @@ sends you there.
 - **Continuing a handover.** Your prompt says so: read the ledger's *Handover*, carry on from its
   next step, and set the section back to `None.` in your first commit. If it names your unit's own
   open PR, skip `branch-start.sh`: stay on the branch as it is. Review rounds already counted in
-  *Review rounds* stay counted; a full round forced by a stale snapshot does not count.
+  *Review rounds* stay counted (the rubric's *Round limit* says what counts).
 - `systematic-debugging` is the superpowers skill. If that plugin is enabled instead of the personal
   copy, invoke `superpowers:systematic-debugging`.
 
