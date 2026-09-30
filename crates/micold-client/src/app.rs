@@ -476,6 +476,9 @@ impl State {
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
         }
+        // Feature 034: an agent's prompt that arrived while another dialog was open opens as soon
+        // as that dialog has closed, whichever message closed it.
+        crate::features::agent_confirm::release(self);
     }
 
     /// The effective sidebar width in pixels: the user's chosen width (clamped), or the

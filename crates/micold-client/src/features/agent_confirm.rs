@@ -19,14 +19,21 @@
 //! the oldest; answering it shows the next. A prompt the daemon sends twice (a replay on reconnect
 //! racing a live broadcast) is kept once.
 //!
-//! # Dismissing is not denying
+//! # A prompt waits behind a dialog the user is already in
 //!
-//! Escape, a scrim click, or another dialog opening over this one ([`Msg::Dismissed`]) takes the
-//! shown prompt off *this window* and sends nothing. The daemon keeps waiting for another window's
-//! answer, and without one the request times out and the agent is told it needs confirmation. So a
-//! dismissed prompt still changes nothing — the one outcome that performs the operation is an
-//! explicit Allow — while a user who closed the dialog by reflex has not refused on behalf of a
-//! colleague looking at another window.
+//! A prompt that arrives while another dialog is open (an Add Worktree form half filled in, say)
+//! does not close it: the prompt is **held** until no other dialog is open, and then shown
+//! ([`release`], which the root runs after every message). Nothing the user typed is lost to an
+//! agent's request, and the prompt still has the rest of its 60 s.
+//!
+//! # Dismissing is declining
+//!
+//! Escape, a scrim click, or another dialog opening over this one ([`Msg::Dismissed`]) declines the
+//! shown prompt: its id goes to [`State::declined`], which the shell sends as a `ConfirmationAnswer
+//! { allow: false }` after the message. It is the dialog's dismissive action, as Deny is, so the
+//! agent is told at once rather than after 60 s, and a prompt never vanishes from a window while
+//! the daemon still waits on it. Nothing changes either way: the one outcome that performs the
+//! operation is an explicit Allow.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;
@@ -55,12 +62,22 @@ pub struct Prompt {
 pub struct State {
     /// Oldest first. The head is the one the dialog shows.
     pub pending: Vec<Prompt>,
+    /// The prompts wait behind another open dialog; the dialog opens once that one closes.
+    pub held: bool,
+    /// Prompts this window declined by dismissing the dialog, not yet sent. The shell drains it
+    /// after every message.
+    pub declined: Vec<u64>,
 }
 
 impl State {
-    /// The prompt the dialog shows: the oldest still pending.
+    /// The prompt the dialog shows: the oldest still pending, unless it waits behind another
+    /// dialog.
     pub fn shown(&self) -> Option<&Prompt> {
-        self.pending.first()
+        if self.held {
+            None
+        } else {
+            self.pending.first()
+        }
     }
 
     /// Whether `id` is still waiting for an answer in this window.
@@ -83,7 +100,8 @@ pub enum Msg {
         /// Whether the operation may go ahead.
         allow: bool,
     },
-    /// The dialog was dismissed without an answer (Escape, scrim, or another dialog opening).
+    /// The dialog was dismissed (Escape, scrim, or another dialog opening): the shown prompt is
+    /// declined.
     Dismissed,
 }
 
@@ -120,29 +138,48 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::Requested(prompt) => requested(state, prompt),
         Msg::Withdrawn(id) | Msg::Answered { id, .. } => forget(state, id),
         Msg::Dismissed => {
-            if !state.agent_confirm.pending.is_empty() {
-                state.agent_confirm.pending.remove(0);
+            if let Some(id) = state.agent_confirm.shown().map(|p| p.id) {
+                state.agent_confirm.declined.push(id);
+                forget(state, id);
             }
         }
     }
     Vec::new()
 }
 
-/// A prompt arrived. The first one opens the dialog, through `clear_for_dialog` like every other
-/// dialog (one dialog at a time); later ones queue behind the shown one without disturbing it.
+/// A prompt arrived. The first one opens the dialog, like every other dialog (one at a time) —
+/// unless another dialog is open, which it then waits behind rather than closing. Later ones queue
+/// behind the first without disturbing it.
 fn requested(state: &mut crate::app::State, prompt: Prompt) {
     if state.agent_confirm.is_pending(prompt.id) {
         return;
     }
     if state.agent_confirm.pending.is_empty() {
-        state.clear_for_dialog();
+        if crate::overlay::registry::open_dialog(state).is_some() {
+            state.agent_confirm.held = true;
+        } else {
+            state.clear_for_dialog();
+        }
     }
     state.agent_confirm.pending.push(prompt);
+}
+
+/// Show held prompts once no other dialog is open. The root runs this after every message, so
+/// the prompt opens as the dialog it waited behind closes.
+pub fn release(state: &mut crate::app::State) {
+    if state.agent_confirm.held && crate::overlay::registry::open_dialog(state).is_none() {
+        state.agent_confirm.held = false;
+        // Opening a modal closes the lightweight popovers (FR-012), as `clear_for_dialog` does.
+        crate::overlay::registry::close_popovers(state);
+    }
 }
 
 /// Drop `id`; an id this window does not hold changes nothing.
 fn forget(state: &mut crate::app::State, id: u64) {
     state.agent_confirm.pending.retain(|p| p.id != id);
+    if state.agent_confirm.pending.is_empty() {
+        state.agent_confirm.held = false;
+    }
 }
 
 /// What the agent asks to do, in words, without its target (FR-014).

@@ -128,7 +128,7 @@ fn a_second_request_does_not_dismiss_the_one_showing() {
 }
 
 #[test]
-fn dismissing_drops_only_the_shown_prompt() {
+fn dismissing_declines_only_the_shown_prompt() {
     let mut st = State::default();
     send(&mut st, Msg::Requested(prompt(1, "a")));
     send(&mut st, Msg::Requested(prompt(2, "b")));
@@ -137,18 +137,25 @@ fn dismissing_drops_only_the_shown_prompt() {
 
     assert_eq!(shown_id(&st), Some(2));
     assert_eq!(st.agent_confirm.pending.len(), 1);
+    assert_eq!(
+        st.agent_confirm.declined,
+        vec![1],
+        "the shell sends it as a decline"
+    );
 }
 
 #[test]
-fn escape_dismisses_the_shown_prompt() {
+fn escape_declines_the_shown_prompt() {
     let mut st = State::default();
     send(&mut st, Msg::Requested(prompt(1, "a")));
 
     assert_eq!(
         registry::escape(&st),
         Some(Message::AgentConfirm(Msg::Dismissed)),
-        "Escape dismisses, it does not deny"
     );
+    st.update(Message::EscapePressed);
+    assert_eq!(st.agent_confirm.declined, vec![1]);
+    assert_eq!(open_dialog(&st), None);
 }
 
 #[test]

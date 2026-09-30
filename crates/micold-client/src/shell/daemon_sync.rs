@@ -1499,6 +1499,18 @@ pub fn on_agent_confirm_answered(app: &mut App, id: u64, allow: bool) -> Task<Me
     Task::none()
 }
 
+/// Send the prompts this window declined by dismissing the dialog (Escape, the scrim, another
+/// dialog opening over it) as `ConfirmationAnswer { allow: false }` (feature 034, FR-014). Run after
+/// every message, because a dismissal reaches the pure core by several routes, none through here.
+pub fn send_agent_confirm_declines(app: &mut App) {
+    let declined = std::mem::take(&mut app.core.agent_confirm.declined);
+    if let Some(d) = &app.daemon {
+        for id in declined {
+            d.send(ClientMsg::ConfirmationAnswer { id, allow: false });
+        }
+    }
+}
+
 /// Permanently remove a session (bugfix BUG-003, FR-015c): the same daemon `SessionDelete` —
 /// the daemon has no hard-delete, so a remove is an archive with a durable tombstone, which
 /// also suppresses any future reconciliation (FR-020c). The pure core drops the record.
@@ -3249,6 +3261,28 @@ pub(crate) mod tests {
                 "and the prompt is gone from this window"
             );
         }
+    }
+
+    /// Escape (or the scrim) declines the shown prompt on the wire, once.
+    #[test]
+    fn dismissing_the_prompt_sends_one_decline() {
+        let (mut app, mut rx) = connected_app();
+        let _ = on_daemon_event(&mut app, confirmation_requested(41));
+        let _ = drain_sent(&mut rx);
+
+        app.core.update(Message::EscapePressed);
+        send_agent_confirm_declines(&mut app);
+        send_agent_confirm_declines(&mut app);
+
+        assert_eq!(
+            drain_sent(&mut rx),
+            vec![ClientMsg::ConfirmationAnswer {
+                id: 41,
+                allow: false
+            }],
+            "one decline"
+        );
+        assert!(app.core.agent_confirm.pending.is_empty());
     }
 
     /// A withdrawal that lands before the click: the prompt is gone, and the late click says nothing.
