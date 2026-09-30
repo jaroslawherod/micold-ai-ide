@@ -96,8 +96,8 @@ fn start_glyph(state: &State) -> Point {
 ///
 /// The frames before the press are not optional: a panel mounts at opacity zero and `Fade` declines
 /// every non-`Window` event below `HIDDEN`, so a press into a freshly built tree is swallowed and
-/// the test reads "nothing was published" about a control that answers perfectly well. The count is
-/// `support::layout`'s, for the same reason it is there.
+/// the test reads "nothing was published" about a control that answers perfectly well. The settle
+/// is `support::layout`'s, for the same reason it is there.
 fn press_at(state: &State, at: Point) -> Vec<Message> {
     let renderer = lay::renderer();
     let mut element = view(state);
@@ -107,24 +107,15 @@ fn press_at(state: &State, at: Point) -> Vec<Message> {
         .as_widget_mut()
         .layout(&mut tree, &renderer, &limits);
 
-    const SETTLE_FRAMES: u32 = 8;
-    let origin = std::time::Instant::now();
-    let mut settling: Vec<Message> = Vec::new();
-    for frame in 0..SETTLE_FRAMES {
-        let mut shell = Shell::new(&mut settling);
-        element.as_widget_mut().update(
-            &mut tree,
-            &Event::Window(iced::window::Event::RedrawRequested(
-                origin + lay::FRAME * frame,
-            )),
-            Layout::new(&node),
-            mouse::Cursor::Unavailable,
-            &renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &Rectangle::with_size(lay::WINDOW),
-        );
-    }
+    lay::settle(
+        &mut element,
+        &mut tree,
+        &node,
+        &renderer,
+        std::time::Instant::now(),
+        0..lay::SETTLE_FRAMES,
+        lay::WINDOW,
+    );
 
     // A full click: the library's button claims the press and publishes on the release.
     let mut messages: Vec<Message> = Vec::new();

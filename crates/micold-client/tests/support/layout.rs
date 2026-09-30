@@ -330,26 +330,25 @@ pub fn resolve_pressing<'a, M: 'a>(
     records
 }
 
-/// Press the node at `path` the way a person would, and leave the tree laid out as it ends up.
-///
-/// Shared by [`resolve_pressing`] and [`painted`], which ask two different questions of the same
-/// moment — where the opened control's nodes are, and what it painted — and must not answer them
-/// from two different sequences of events.
 /// How many redraws it takes for an entrance to be over.
-const SETTLE_FRAMES: u32 = 8;
+///
+/// Public so a test that builds its own tree hands over the same frames as the harness does
+/// (BUG-003): a panel mounts at opacity zero and declines input until its entrance has run.
+pub const SETTLE_FRAMES: u32 = 8;
 
-/// Hand the tree `frames` worth of redraws, timed from `origin`.
+/// Hand the tree `frames` worth of redraws, timed from `origin`, in a viewport of `viewport` size.
 ///
 /// Redraws are pumped without re-laying out between them. `Fade` is layout-neutral, so there is
 /// nothing to recompute, and eight full layouts per state per scheme would cost more than the state
-/// is worth.
-fn settle<'a, M: 'a>(
+/// is worth. Messages the redraws publish are discarded, and the cursor is unavailable throughout.
+pub fn settle<'a, M: 'a>(
     element: &mut Element<'a, M>,
     tree: &mut Tree,
     node: &layout::Node,
     renderer: &iced::Renderer,
     origin: std::time::Instant,
     frames: std::ops::Range<u32>,
+    viewport: Size,
 ) {
     use iced::advanced::{clipboard, mouse, Shell};
 
@@ -364,11 +363,16 @@ fn settle<'a, M: 'a>(
             renderer,
             &mut clipboard::Null,
             &mut shell,
-            &Rectangle::with_size(WINDOW),
+            &Rectangle::with_size(viewport),
         );
     }
 }
 
+/// Press the node at `path` the way a person would, and leave the tree laid out as it ends up.
+///
+/// Shared by [`resolve_pressing`] and [`painted`], which ask two different questions of the same
+/// moment — where the opened control's nodes are, and what it painted — and must not answer them
+/// from two different sequences of events.
 fn press_and_settle<'a, M: 'a>(
     element: &mut Element<'a, M>,
     tree: &mut Tree,
@@ -392,7 +396,7 @@ fn press_and_settle<'a, M: 'a>(
     // insufficient the control would stay shut, and the covered state would produce no overlay
     // records — which `every_overlay_state_records_an_overlay` fails on.
     let origin = std::time::Instant::now();
-    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES);
+    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES, WINDOW);
 
     let target = walk(Layout::new(node), Layer::Base)
         .into_iter()
@@ -442,6 +446,7 @@ fn press_and_settle<'a, M: 'a>(
         renderer,
         origin,
         SETTLE_FRAMES..SETTLE_FRAMES * 2,
+        WINDOW,
     );
     *node = element.as_widget_mut().layout(tree, renderer, limits);
 }
@@ -982,6 +987,7 @@ pub fn messages_after<'a, M: 'a>(
         renderer,
         origin,
         0..SETTLE_FRAMES,
+        WINDOW,
     );
     node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
 
@@ -1020,6 +1026,7 @@ pub fn messages_after<'a, M: 'a>(
             renderer,
             origin,
             start..start + SETTLE_FRAMES,
+            WINDOW,
         );
         node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
     }
@@ -1042,7 +1049,7 @@ fn scroll_and_settle<'a, M: 'a>(
     const LINES: f32 = 10_000.0;
 
     let origin = std::time::Instant::now();
-    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES);
+    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES, WINDOW);
 
     let mut messages: Vec<M> = Vec::new();
     let mut shell = Shell::new(&mut messages);
@@ -1066,6 +1073,7 @@ fn scroll_and_settle<'a, M: 'a>(
         renderer,
         origin,
         SETTLE_FRAMES..SETTLE_FRAMES * 2,
+        WINDOW,
     );
     *node = element.as_widget_mut().layout(tree, renderer, limits);
 }
@@ -1109,6 +1117,7 @@ fn painted<'a, M: 'a>(
                 &*renderer,
                 std::time::Instant::now(),
                 0..SETTLE_FRAMES,
+                WINDOW,
             );
             node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
         }

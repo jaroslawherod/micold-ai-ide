@@ -141,3 +141,24 @@ Not new behaviours; each change was re-run green, and the gate was re-proved aga
   `pub const MIN_WINDOW_SIZE` in `src/app.rs`; `shell/startup.rs` imports it. Value unchanged
   (640×480), so the gate cases run at the same sizes.
 - **Gate (T039)**: `mise run gate` exited 0 on 93f0d8ea (after review A's fixes).
+
+## BUG-003 — the tests call the harness's settle (T040–T042, issue #432)
+
+- **Red (T040)**: `hover_row` (`tests/gates/tooltip_clears_its_row.rs`), `right_press_at`
+  (`tests/gates/context_menu_anchor.rs`) and `press_at` (`tests/session_start_press.rs`) drop their
+  inline loop and local `SETTLE_FRAMES` and call `lay::settle(…, 0..lay::SETTLE_FRAMES, size)`. On
+  the unfixed harness (`cargo test -p micold-client --no-run --test layout_snapshot --test
+  session_start_press`):
+
+  ```
+  3 error[E0061]: this function takes 6 arguments but 7 arguments were supplied
+  3 error[E0603]: constant `SETTLE_FRAMES` is private
+  3 error[E0603]: function `settle` is private
+  error: could not compile `micold-client` (test "layout_snapshot") due to 6 previous errors
+  error: could not compile `micold-client` (test "session_start_press") due to 3 previous errors
+  ```
+
+- **Green (T041)**: `support/layout.rs` makes `settle` and `SETTLE_FRAMES` `pub`; `settle` takes the
+  viewport `Size` in place of the fixed `WINDOW`, and the harness's seven callers pass `WINDOW`. The
+  stray doc paragraph above `SETTLE_FRAMES` moves onto `press_and_settle`. `layout_snapshot` 43
+  passed, `session_start_press` 7 passed.

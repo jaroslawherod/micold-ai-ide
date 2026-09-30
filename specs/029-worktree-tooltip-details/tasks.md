@@ -264,13 +264,13 @@ because the harness's `settle` was private and bound to the fixed `WINDOW` (GitH
 **No task reopened.** T031 wrote `hover_row`'s own loop because the harness's could not be called;
 the copy is correct for today's count (BUG-003 § tasks.md).
 
-- [ ] T040 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
+- [x] T040 Failing check first: in `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
   (`hover_row`), `crates/micold-client/tests/gates/context_menu_anchor.rs` (`right_press_at`) and
   `crates/micold-client/tests/session_start_press.rs` (`press_at`), replace the inline settle loop
   and its local `SETTLE_FRAMES` with a call to `lay::settle(…, 0..lay::SETTLE_FRAMES, <size>)` —
   the window size `hover_row` is given, `lay::WINDOW` in the other two. Run it on the unfixed tree
   and record that the test crates fail to compile because `settle` is private
-- [ ] T041 In `crates/micold-client/tests/support/layout.rs` make `settle` and `SETTLE_FRAMES`
+- [x] T041 In `crates/micold-client/tests/support/layout.rs` make `settle` and `SETTLE_FRAMES`
   `pub`, and have `settle` take the viewport `Size` in place of the fixed `WINDOW`; its callers in
   the harness pass `WINDOW`. Move the stray doc paragraph above `SETTLE_FRAMES` ("Press the node at
   `path` the way a person would…") onto `press_and_settle`, where it belongs. T040's tests build and

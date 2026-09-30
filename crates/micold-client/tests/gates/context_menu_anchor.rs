@@ -207,25 +207,16 @@ fn right_press_at(state: &mut State, point: (f32, f32)) -> usize {
     // press dispatched into a freshly built tree is swallowed — the switcher's panel, which the
     // project row lives in, declines the click and the gate reports "the row does not answer a
     // right-click" about a row that does. `support::layout::resolve_pressing` hands over the same
-    // frames for the same reason; the count is its.
-    const SETTLE_FRAMES: u32 = 8;
-    let origin = std::time::Instant::now();
-    let mut settling: Vec<Message> = Vec::new();
-    for frame in 0..SETTLE_FRAMES {
-        let mut shell = Shell::new(&mut settling);
-        element.as_widget_mut().update(
-            &mut tree,
-            &iced::Event::Window(iced::window::Event::RedrawRequested(
-                origin + lay::FRAME * frame,
-            )),
-            Layout::new(&node),
-            mouse::Cursor::Unavailable,
-            &renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &Rectangle::with_size(lay::WINDOW),
-        );
-    }
+    // frames for the same reason, with the same helper.
+    lay::settle(
+        &mut element,
+        &mut tree,
+        &node,
+        &renderer,
+        std::time::Instant::now(),
+        0..lay::SETTLE_FRAMES,
+        lay::WINDOW,
+    );
 
     let mut messages: Vec<Message> = Vec::new();
     let mut shell = Shell::new(&mut messages);
