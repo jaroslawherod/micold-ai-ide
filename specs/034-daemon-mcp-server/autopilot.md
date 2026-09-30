@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M1
-- **Next step**: Unit: M1 gate, cross-checks, reviews A and B, open PR. All M1 tasks done except T015/T021 (U127 blocked, see Follow-ups) and the T078–T082 acceptance ticks after the gate
+- **Next step**: Unit: push the M1 branch, open the M1 PR and record its number. Gate green, reviews A and B clean at round 2; T015/T021 unticked (U127 blocked)
 
 ## Pull requests
 
@@ -66,6 +66,16 @@ deliverable (tasks.md Notes).
 | tasks | round 2 (sonnet) | none declined | CLEAN; 104/104 tasks in exactly one milestone. 2 MINOR fixed: protocol numbers shifted to main's `PROTOCOL_VERSION = 16` (M2 17, M5 18, M6 19); `mcp_audit_log` added to M5/M6 Verify. |
 | checklists | sign-off | none declined | `checklists/requirements.md`: all 16 items ticked and confirmed satisfied by the round 2 reviewer. |
 | plan | rounds 1–2 | none declined | Round 1: 1 BLOCKER (FR-017 readiness), 2 MAJOR (stop path, missing timeout probes), 8 MINOR, all fixed. Round 2 (sonnet): no BLOCKER/MAJOR, 3 MINOR fixed. |
+| M1 | A round 1 | No read timeout on the head/body reads (slowloris) | Same pattern as the hook receiver's listener, which shares `http.rs`; loopback only and credential-gated after the head. Follow-up below |
+| M1 | A round 1 | No chunked transfer encoding / 411 for a missing `Content-Length` | Both real CLIs send `Content-Length` (evidence/m1-real-cli.md); a chunked body reads as empty and gets a JSON-RPC parse error, not a hang |
+| M1 | A round 1 | Windows `.claude.json` project-key form in the collision check | Unverified on Windows; no Windows Claude Code to test against. Follow-up below |
+| M1 | A round 1 | Each read tool clones the catalog snapshot | Read latency is M7's (T074); the snapshot is small and cloned outside the lock |
+| M1 | A round 1 | Duplicate registry type | Cosmetic; no behaviour difference |
+| M1 | A round 1 | hooks.rs token file permissions | Pre-existing, outside feature 034; already a follow-up |
+| M1 | A round 1 | Fixed temp name `.{file}.tmp` in `write_owner_only` can race | The file name is per session and one session's spawns are serialized; no concurrent writer of the same file exists |
+| M1 | B round 1 | Sweep stale binding files at bind | Optional per the reviewer; two service instances (a dev run and the user's) can share the data directory, and a sweep would delete the other's live files. Stale files hold only credentials a restart already invalidated |
+| M1 | B round 1 | Spawn tests are unix-only | Stand-ins are `#!/bin/sh`; porting needs Windows stand-ins. Follow-up below; the Windows cross-check covers compilation |
+| M1 | B round 2 | No endpoint-level test for `discard_body` before 401/404/405 | Optional per the reviewer; the unit test pins the bound, and loopback socket buffers absorb any test-sized body, so an endpoint test would pass with or without the drain |
 
 ## Open escalation
 
@@ -77,3 +87,6 @@ None.
 - Pi tool-server binding via a `-e` bridge extension (research R4).
 - U127 (`list_worktrees` reports `status: locked`): the daemon cannot produce it. `micold_core::worktree::WorktreeStatus` has no locked state and `wire_worktree_status` never yields `WorktreeStatus::Locked`, so T015/T021 stay unticked on that one behavior. Needs worktree discovery to parse porcelain `locked` (core + sidebar), outside feature 034's files.
 - T002 deviation: the MCP test fixture is included by `#[path = "support/mcp.rs"]` instead of re-exported from `tests/support/mod.rs`, so the framer helpers do not become dead code (a clippy `-D warnings` failure) in the MCP test binaries.
+- Tool-server listener read timeouts (slowloris), shared with the hook receiver through `http.rs` (M1 review A).
+- Windows: verify the `.claude.json` project-key form the collision check uses (M1 review A).
+- Windows: port `mcp_binding_spawn.rs` (unix `#!/bin/sh` stand-ins) to Windows stand-ins (M1 review B).

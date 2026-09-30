@@ -314,12 +314,27 @@ fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     }
 }
 
-/// Project the core [`worktree::WorktreeStatus`] (git-discovery facts) onto the wire enum the client
-/// renders. `Invalid` (an on-disk dir git does not know) maps to `Prunable` — the actionable state
-/// telling the user git would drop it.
 /// The variable that relocates Claude Code's configuration, `.claude.json` included (research R14).
 const CLAUDE_CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 
+/// The variable that relocates Copilot's whole `~/.copilot` store, `mcp-config.json` included.
+const COPILOT_HOME_VAR: &str = "COPILOT_HOME";
+
+/// A directory named by `var` as the session will see it: its launch environment first (an
+/// environment-include script may set it), then this process's. Empty counts as unset.
+fn session_dir_var(spec: &LaunchSpec, var: &str) -> Option<PathBuf> {
+    spec.env
+        .iter()
+        .find(|(name, _)| name == var)
+        .map(|(_, value)| OsString::from(value))
+        .or_else(|| std::env::var_os(var))
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Project the core [`worktree::WorktreeStatus`] (git-discovery facts) onto the wire enum the client
+/// renders. `Invalid` (an on-disk dir git does not know) maps to `Prunable` — the actionable state
+/// telling the user git would drop it.
 fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
     match status {
         worktree::WorktreeStatus::Valid => WorktreeStatus::Clean,
@@ -558,21 +573,12 @@ impl DaemonState {
             return Err(SkipReason::Unsupported(reason));
         }
         let server = self.tool_server().ok_or(SkipReason::ServerUnavailable)?;
-        // Where the user's own configuration lives, as the session will see it: its environment
-        // first (an environment-include script may set `CLAUDE_CONFIG_DIR`), then this process's.
-        let claude_config_dir = spec
-            .env
-            .iter()
-            .find(|(name, _)| name == CLAUDE_CONFIG_DIR_VAR)
-            .map(|(_, value)| OsString::from(value))
-            .or_else(|| std::env::var_os(CLAUDE_CONFIG_DIR_VAR))
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from);
+        // Where the user's own configuration lives, as the session will see it.
         let locations = ConfigLocations {
             home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
-            claude_config_dir,
+            claude_config_dir: session_dir_var(spec, CLAUDE_CONFIG_DIR_VAR),
             copilot_config_dir: matches!(support, ToolServerSupport::AdditionalMcpConfig)
-                .then(|| provider.config_dir())
+                .then(|| session_dir_var(spec, COPILOT_HOME_VAR).or_else(|| provider.config_dir()))
                 .flatten(),
         };
         if let Some(path) = mcp_binding::name_taken(support, &locations, &spec.cwd) {
@@ -1760,7 +1766,10 @@ impl DaemonState {
             return Ok(Vec::new());
         }
         // 3. Archive under the lock, persisting once.
-        self.lock().catalog.archive_session_ids(&empty)
+        let archived = self.lock().catalog.archive_session_ids(&empty)?;
+        // An archived session no longer answers as itself (FR-011).
+        self.revoke_tool_credentials(&archived);
+        Ok(archived)
     }
 
     /// FR-006a/b: at service startup, present every session with a recorded AI-CLI conversation as

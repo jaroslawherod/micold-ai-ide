@@ -137,9 +137,11 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
 
     let path = head.path.split('?').next().unwrap_or(&head.path);
     if path != PATH {
+        http::discard_body(&mut stream, rest.len(), head.content_length).await;
         return respond(&mut stream, 404, "Not Found").await;
     }
     if head.method != "POST" {
+        http::discard_body(&mut stream, rest.len(), head.content_length).await;
         return respond(&mut stream, 405, "Method Not Allowed").await;
     }
 
@@ -149,6 +151,7 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
         .as_deref()
         .and_then(|bearer| state.tool_server()?.session_for(bearer));
     let Some(caller) = caller else {
+        http::discard_body(&mut stream, rest.len(), head.content_length).await;
         return respond(&mut stream, 401, "Unauthorized").await;
     };
 
@@ -159,7 +162,8 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
 
     let message = match jsonrpc::parse(&body) {
         Ok(message) => message,
-        Err(response) => return reply(&mut stream, 400, "Bad Request", &response).await,
+        // Contract §1: an authorized POST is answered 200 with one JSON-RPC response, errors included.
+        Err(response) => return reply(&mut stream, 200, "OK", &response).await,
     };
     match jsonrpc::route(message, env!("CARGO_PKG_VERSION")) {
         Route::Reply(response) => reply(&mut stream, 200, "OK", &response).await,
