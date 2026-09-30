@@ -4533,6 +4533,7 @@ mod script_path_report {
             env_include_script_path: path.to_string(),
             env_include_timeout_secs: 10,
             pi_activity_component: false,
+            tool_server_enabled: true,
         }
     }
 
