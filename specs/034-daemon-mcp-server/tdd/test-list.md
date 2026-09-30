@@ -148,9 +148,9 @@ each group that changes existing code.
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U34 | No code outside `provider.rs` names a concrete CLI implementation | INV-3 | characterization | BASELINE | `crates/micold-client/tests/no_concrete_implementations.rs` (existing) |
-| U35 | Claude's `tool_server_support()` is `McpConfigArg` | FR-002 | example | PENDING | planned: `crates/micold-core/tests/ai_cli_provider_seam.rs` |
-| U36 | Copilot's `tool_server_support()` is `AdditionalMcpConfig` | FR-002 | example | PENDING | planned: `crates/micold-core/tests/ai_cli_provider_seam.rs` |
-| U37 | Pi's `tool_server_support()` is `Unsupported { reason: "Pi has no MCP support" }` | FR-002, FR-005, EC-13 | example | PENDING | planned: `crates/micold-core/tests/ai_cli_provider_seam.rs` |
+| U35 | Claude's `tool_server_support()` is `McpConfigArg` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::claude_is_bound_through_an_mcp_config_argument` |
+| U36 | Copilot's `tool_server_support()` is `AdditionalMcpConfig` | FR-002 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::copilot_is_bound_through_an_additional_mcp_config` |
+| U37 | Pi's `tool_server_support()` is `Unsupported { reason: "Pi has no MCP support" }` | FR-002, FR-005, EC-13 | example | DONE | `crates/micold-core/tests/ai_cli_provider_seam.rs::{pi_is_unsupported_because_it_has_no_mcp, every_cli_answers_its_tool_server_support_through_the_seam}` |
 | U38 | Claude's `input_readiness()` is `HookSessionStart` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
 | U39 | Pi's `input_readiness()` is `ExtensionEvent("session_start")` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |
 | U40 | Copilot's `input_readiness()` is `OutputSettled` | FR-017 | example | PENDING | planned: `crates/micold-core/tests/input_readiness.rs` |

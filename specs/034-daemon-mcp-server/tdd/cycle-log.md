@@ -79,3 +79,23 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - refactor: none.
 - notes: U33 (Windows) is not runnable here; `cargo check -p micold-daemon --tests --target
   x86_64-pc-windows-msvc` compiles it, and its red/green is the `windows-latest` CI leg.
+
+## Cycle 4 — U35–U37 (U34 baseline) — T013, T017
+
+- tests: `crates/micold-core/tests/ai_cli_provider_seam.rs::{claude_is_bound_through_an_mcp_config_argument,
+  copilot_is_bound_through_an_additional_mcp_config, pi_is_unsupported_because_it_has_no_mcp,
+  every_cli_answers_its_tool_server_support_through_the_seam, every_cli_has_the_snake_case_name_the_tools_report}`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test ai_cli_provider_seam`, against a
+  stub where every provider answered `Unsupported { reason: "" }` and `tool_name` answered `""`
+  ```
+  assertion `left == right` failed
+    left: Unsupported { reason: "" }
+   right: McpConfigArg
+  test result: FAILED. 13 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `ToolServerSupport` and the required `AiCliProvider::tool_server_support()` (no default,
+  per the seam's rule) on Claude, Copilot, Pi and the fake; `AiCli::tool_name()` for the tools'
+  `ai_cli` field, the one CLI match kept inside `provider.rs` (INV-3). 17 passed.
+- refactor: none.
+- notes: `every_cli_has_the_snake_case_name_the_tools_report` is an added behaviour serving
+  U124/U134 (the `ai_cli` strings); recorded here rather than as a new list id.
