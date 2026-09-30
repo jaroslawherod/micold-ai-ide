@@ -5241,36 +5241,14 @@ mod issue_source {
         );
     }
 
-    /// A resolver that answers a fixed `PATH` and counts its calls. `Send + Sync`, because the
-    /// load resolves on a blocking thread.
-    struct PathResolver {
-        path: &'static str,
-        calls: Mutex<usize>,
-    }
-
-    impl micold_core::env_include::EnvIncludeResolver for PathResolver {
-        fn resolve(
-            &self,
-            _path: &Path,
-            _cwd: &Path,
-            _timeout: std::time::Duration,
-        ) -> (Vec<(String, String)>, EnvIncludeOutcome) {
-            *self.calls.lock().unwrap() += 1;
-            (
-                vec![("PATH".to_string(), self.path.to_string())],
-                EnvIncludeOutcome::Success,
-            )
-        }
-    }
-
     /// U60 — `gh` is looked for on the `PATH` the environment include contributes; a cache miss
     /// resolves inside the load and lands in the cache, and a hit is reused (FR-026, R3).
     #[test]
     fn issue_the_load_uses_the_env_include_path() {
-        let resolver = Arc::new(PathResolver {
-            path: "/opt/gh/bin",
-            calls: Mutex::new(0),
-        });
+        let resolver = Arc::new(micold_core::env_include::FakeEnvIncludeResolver::answering(
+            vec![("PATH".to_string(), "/opt/gh/bin".to_string())],
+            EnvIncludeOutcome::Success,
+        ));
         let mut rig = issue_rig(
             Some(FAKE_GH),
             FakeIssueSource::new()
@@ -5283,7 +5261,16 @@ mod issue_source {
         open_with(&mut rig, github_remote());
 
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
-        assert_eq!(*resolver.calls.lock().unwrap(), 1, "a miss resolves once");
+        let asked: Vec<_> = resolver
+            .calls()
+            .into_iter()
+            .map(|(script, cwd, _)| (script, cwd))
+            .collect();
+        assert_eq!(
+            asked,
+            vec![(PathBuf::from("/home/u/.include.sh"), PathBuf::from(PROJECT))],
+            "a miss resolves the include once, for the project"
+        );
         assert!(
             rig.app.env_include_cache.contains_key(Path::new(PROJECT)),
             "the snapshot the load resolved is kept"
@@ -5291,7 +5278,7 @@ mod issue_source {
 
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
-        assert_eq!(*resolver.calls.lock().unwrap(), 1, "a hit is reused");
+        assert_eq!(resolver.calls().len(), 1, "a hit is reused");
         assert_eq!(
             *rig.located_with.lock().unwrap(),
             vec![Some("/opt/gh/bin".to_string()); 2],
@@ -5324,32 +5311,71 @@ mod issue_source {
         use micold_client::features::worktree_form::GithubAvailability;
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         open_with(&mut rig, github_remote());
-        assert!(matches!(
+        assert_eq!(
             form(&rig.app).github,
-            GithubAvailability::Available(_)
-        ));
+            GithubAvailability::Available(
+                micold_core::github::GithubRepo::from_remote_url("https://github.com/o/r")
+                    .expect("a github.com URL names a repository")
+            ),
+            "origin on github.com makes the issue source available for o/r"
+        );
+        assert_eq!(
+            form(&rig.app).source_caption().as_deref(),
+            Some("GitHub issue reads open issues of o/r from GitHub."),
+            "the enabled chip's caption names the repository it reads"
+        );
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(
+            form(&rig.app).source,
+            BranchSource::Issue,
+            "with a GitHub remote the issue source can be chosen"
+        );
 
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         open_with(&mut rig, vec![]);
         assert_eq!(
             form(&rig.app).source_caption().as_deref(),
-            Some("This repository has no GitHub remote.")
+            Some("This repository has no GitHub remote."),
+            "without a GitHub remote the caption says why the chip is disabled"
         );
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
-        assert_eq!(form(&rig.app).source, BranchSource::New);
+        assert_eq!(
+            form(&rig.app).source,
+            BranchSource::New,
+            "without a GitHub remote the issue source cannot be chosen"
+        );
     }
 
     /// A2 — choosing the source loads through the source and lists its issues in its order (US1-2).
     #[test]
     fn issue_choosing_the_source_lists_open_issues() {
         let rig = loaded_rig();
-        assert_eq!(rig.source.calls(), vec![("o/r".to_string(), None)]);
+        assert_eq!(
+            rig.source.calls(),
+            vec![("o/r".to_string(), None)],
+            "one load of o/r's first page"
+        );
         assert_eq!(
             *rig.constructed.lock().unwrap(),
-            vec![PathBuf::from(FAKE_GH)]
+            vec![PathBuf::from(FAKE_GH)],
+            "the source runs the gh that was located"
         );
-        assert_eq!(offered(&rig.app), vec![7, 42, 108]);
-        assert!(form(&rig.app).issue_list_open, "the list opens on arrival");
+        let f = form(&rig.app);
+        let rows: Vec<String> = f
+            .issue_matches
+            .iter()
+            .map(|(held, _)| f.issues.held()[*held].row_text().to_string())
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                "#7 Sidebar flickers on resize  ·  ui",
+                "#42 Crash when opening empty project  ·  bug",
+                "#108 Document the sandbox placement  ·  documentation",
+            ],
+            "each row shows number, title and labels, in the source's order"
+        );
+        assert!(f.issue_list_open, "the list opens on arrival");
     }
 
     /// A3 — typing narrows locally with no source call; Down then Enter picks (US1-3).
@@ -5358,30 +5384,40 @@ mod issue_source {
         let mut rig = loaded_rig();
         let calls = rig.source.calls().len();
         send(&mut rig.app, FormMsg::IssueQueryChanged("flicker".into()));
-        assert_eq!(offered(&rig.app), vec![7]);
+        assert_eq!(offered(&rig.app), vec![7], "a title fragment narrows");
         send(
             &mut rig.app,
             FormMsg::IssueQueryChanged("documentation".into()),
         );
-        assert_eq!(offered(&rig.app), vec![108]);
+        assert_eq!(offered(&rig.app), vec![108], "a label narrows");
         send(&mut rig.app, FormMsg::IssueQueryChanged("42".into()));
-        assert_eq!(offered(&rig.app).first(), Some(&42));
+        assert_eq!(
+            offered(&rig.app).first(),
+            Some(&42),
+            "a number finds its issue first"
+        );
         assert_eq!(rig.source.calls().len(), calls, "search is local (FR-005)");
 
         send(&mut rig.app, FormMsg::IssueFocused);
         send(&mut rig.app, FormMsg::IssueHighlightMoved(Direction::Next));
-        let highlighted = form(&rig.app)
-            .issue_highlight
-            .expect("a row is highlighted");
-        let number = rig
-            .app
-            .core
-            .worktree_form
-            .issue_number_at(highlighted)
-            .expect("the highlight is a row");
+        assert_eq!(
+            form(&rig.app).issue_highlight,
+            Some(0),
+            "Down from the field lands on the first match"
+        );
+        assert_eq!(
+            rig.app.core.worktree_form.issue_number_at(0),
+            Some(42),
+            "the first match for `42` is #42"
+        );
         // Enter picks the highlighted row, as the list reports it: by index.
-        send(&mut rig.app, FormMsg::IssueRowPicked(highlighted));
-        assert_eq!(form(&rig.app).ticket, number.to_string());
+        send(&mut rig.app, FormMsg::IssueRowPicked(0));
+        assert_eq!(form(&rig.app).ticket, "42", "Enter picked #42");
+        assert_eq!(
+            form(&rig.app).name,
+            "Crash when opening empty project",
+            "Enter filled #42's title"
+        );
     }
 
     /// U105 — a row pick resolves its index to that row's issue, and an index past the rows picks
@@ -5425,14 +5461,33 @@ mod issue_source {
     #[test]
     fn issue_a_pick_fills_ticket_and_name() {
         let mut rig = loaded_rig();
-        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         pick(&mut rig.app, 42);
+        // Chosen after the pick: with no mapping the pick clears the type (FR-014), and a preview
+        // with no type is an error on both sources, which would compare equal whatever it said.
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
         let as_issue = form(&rig.app).clone();
-        assert_eq!(as_issue.ticket, "42");
-        assert_eq!(as_issue.name, "Crash when opening empty project");
+        assert_eq!(as_issue.ticket, "42", "the pick fills the number, no `#`");
+        assert_eq!(
+            as_issue.name, "Crash when opening empty project",
+            "the pick fills the title"
+        );
+        let preview = as_issue.preview();
+        assert!(
+            preview.is_ok(),
+            "a picked issue with a type previews a branch: {preview:?}"
+        );
+        assert_eq!(
+            preview.as_ref().map(|d| d.branch.as_str()),
+            Ok("fix/42_crash-when-opening-empty-project"),
+            "the preview is the branch the picked values name"
+        );
         let mut as_new = as_issue.clone();
         as_new.source = BranchSource::New;
-        assert_eq!(as_issue.preview(), as_new.preview());
+        assert_eq!(
+            preview,
+            as_new.preview(),
+            "the issue source previews exactly as the new-branch source (FR-012)"
+        );
     }
 
     /// A5 — picked values stay editable, and the preview follows the edit (US1-5).
@@ -5571,6 +5626,47 @@ mod issue_source {
         assert_eq!(rig.source.calls().len(), 1);
     }
 
+    /// U122 — opening the form, rendering it and moving between the other sources contact GitHub
+    /// never: no `gh` is located, no source built, no load or search run (FR-003). The behaviour
+    /// half of U62's caller scan.
+    #[test]
+    fn issue_opening_the_form_loads_no_issues() {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues())),
+        );
+        open_with(&mut rig, github_remote());
+        let _ = view(&rig.app);
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Existing));
+        let _ = view(&rig.app);
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
+        send(&mut rig.app, FormMsg::NameChanged("typed".into()));
+        let _ = view(&rig.app);
+
+        assert!(
+            rig.located_with.lock().unwrap().is_empty(),
+            "no gh lookup before the issue source is chosen"
+        );
+        assert!(
+            rig.constructed.lock().unwrap().is_empty(),
+            "no issue source built before it is chosen"
+        );
+        assert!(
+            rig.source.calls().is_empty(),
+            "no issue load before the issue source is chosen: {:?}",
+            rig.source.calls()
+        );
+        assert!(
+            rig.source.search_calls().is_empty(),
+            "no issue search before the issue source is chosen"
+        );
+        assert_eq!(
+            form(&rig.app).issues,
+            IssueList::NotRequested,
+            "the listing was never requested"
+        );
+    }
+
     // --- T036, T076: the search beyond the loaded issues (FR-005a) ------------------------------
 
     /// 1,000 loaded of 1,200 open: #1000 down to #1, and #17 mentions #1100 in its title.
@@ -5596,16 +5692,14 @@ mod issue_source {
         let mut rig = issue_rig(Some(FAKE_GH), source.with_page(capped_page()));
         open_with(&mut rig, github_remote());
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
-        assert!(!rig
-            .app
-            .core
-            .worktree_form
-            .form
-            .as_ref()
-            .is_some_and(|f| matches!(
-                &f.issues,
-                IssueList::Loaded { listing, .. } if listing.complete
-            )));
+        assert!(
+            matches!(
+                &form(&rig.app).issues,
+                IssueList::Loaded { listing, .. } if !listing.complete
+            ),
+            "the capped page loaded as an incomplete listing: {:?}",
+            std::mem::discriminant(&form(&rig.app).issues)
+        );
         rig
     }
 
@@ -5662,6 +5756,33 @@ mod issue_source {
             rig.located_with.lock().unwrap().len(),
             1,
             "gh is located once, for the load"
+        );
+    }
+
+    /// U120 — typing on a listing that holds every open issue never asks GitHub: no debounce is
+    /// scheduled and the source's search is never called (FR-005a; mutant M13 at the shell).
+    #[test]
+    fn issue_typing_on_a_complete_list_never_searches() {
+        let mut rig = loaded_rig();
+        let scheduled = messages(keystroke(&mut rig.app, "crash"));
+        assert!(
+            scheduled.is_empty(),
+            "a complete listing schedules no search debounce, got {} message(s)",
+            scheduled.len()
+        );
+        send(
+            &mut rig.app,
+            FormMsg::IssueQueryChanged("crash when".into()),
+        );
+        assert!(
+            rig.source.search_calls().is_empty(),
+            "every open issue is held, so GitHub is not searched: {:?}",
+            rig.source.search_calls()
+        );
+        assert_eq!(
+            offered(&rig.app),
+            vec![42],
+            "the loaded matches are all there is"
         );
     }
 
@@ -5864,6 +5985,16 @@ mod issue_source {
                 ..Default::default()
             })
             .expect("the fake saves");
+        // Messages through the shell after the save: any that re-read the store and re-typed the
+        // picked issue would show here, before the next pick.
+        send(&mut rig.app, FormMsg::IssueQueryChanged("crash".into()));
+        send(&mut rig.app, FormMsg::IssueFocused);
+        send(&mut rig.app, FormMsg::IssueQueryChanged(String::new()));
+        assert_eq!(
+            form(&rig.app).picked_issue,
+            Some(42),
+            "the pick is still the one made"
+        );
         assert_eq!(
             form(&rig.app).type_,
             Some(ConventionalType::Chore),
@@ -6055,9 +6186,9 @@ mod issue_source {
         );
     }
 
-    /// A21 — the saved mapping comes back when the settings are read again: what the save wrote,
-    /// through its JSON form (US3-4, FR-020). The on-disk file round trip is
-    /// `micold-core/tests/settings_issue_mapping.rs`.
+    /// A21 — a save hands the edited mapping to the settings store (US3-4, FR-020). That the store
+    /// writes it to `settings.json` and a fresh store reads it back is `micold-core`'s
+    /// `settings_issue_mapping.rs::round_trip_and_default`; only the shell's half is pinned here.
     #[test]
     fn issue_the_mapping_survives_a_restart() {
         let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
@@ -6069,54 +6200,76 @@ mod issue_source {
         );
         settings(&mut rig.app, SettingsMsg::Saved);
 
-        // A restart reads the document back: what was written, through its on-disk JSON form.
-        let written = store.saves().pop().expect("the save wrote settings");
-        let json = serde_json::to_string(&written).expect("settings serialise");
-        let restarted: micold_core::settings::Settings =
-            serde_json::from_str(&json).expect("settings read back");
         let mut expected = micold_core::issue_types::default_mapping();
         expected.push(entry("defect", ConventionalType::Feat));
-        assert_eq!(restarted.issue_label_types, expected);
-        assert_eq!(stored(&store), expected);
+        assert_eq!(
+            store.saves().last().map(|s| s.issue_label_types.clone()),
+            Some(expected),
+            "the save hands the store the edited mapping"
+        );
     }
 
-    /// A22 — a blank label, or `Bug` beside `bug`, refuses the save with an error on that entry, and
-    /// the file is unchanged (US3-5, FR-019).
-    #[test]
-    fn issue_an_invalid_mapping_is_not_saved() {
-        use micold_client::features::window::FieldId;
-        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
-
+    /// Open Settings → GitHub issues, add an entry labelled `label`, and save.
+    fn save_with_added_label(rig: &mut IssueRig, label: &str) {
         open_github_section(&mut rig.app);
         settings(&mut rig.app, SettingsMsg::IssueMappingAdded);
+        if !label.is_empty() {
+            settings(
+                &mut rig.app,
+                SettingsMsg::IssueMappingLabelChanged(3, label.into()),
+            );
+        }
         settings(&mut rig.app, SettingsMsg::Saved);
-        let draft = rig
-            .app
+    }
+
+    /// The field and section a refused save marked.
+    fn refusal(app: &App) -> (micold_client::features::window::FieldId, SettingsSection) {
+        let draft = app
             .core
             .settings
             .settings_draft
             .as_ref()
             .expect("a refused save leaves Settings open");
         let error = draft.error.as_ref().expect("the refusal is reported");
+        (error.field, error.section)
+    }
+
+    /// A22 (blank) — a blank label refuses the save with an error on that entry, and nothing is
+    /// written (US3-5, FR-019).
+    #[test]
+    fn issue_an_invalid_mapping_blank_label_is_not_saved() {
+        use micold_client::features::window::FieldId;
+        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
+        save_with_added_label(&mut rig, "");
         assert_eq!(
-            (error.field, error.section),
+            refusal(&rig.app),
             (FieldId::IssueMappingLabel(3), SettingsSection::GithubIssues),
             "the blank entry is the one marked"
         );
-
-        settings(
-            &mut rig.app,
-            SettingsMsg::IssueMappingLabelChanged(3, "Bug".into()),
+        assert!(
+            store.saves().is_empty(),
+            "a blank label writes nothing: {:?}",
+            store.saves()
         );
-        settings(&mut rig.app, SettingsMsg::Saved);
-        let draft = rig.app.core.settings.settings_draft.as_ref().unwrap();
+    }
+
+    /// A22 (duplicate) — `Bug` beside `bug` refuses the save with an error on that entry, and
+    /// nothing is written (US3-5, FR-019).
+    #[test]
+    fn issue_an_invalid_mapping_duplicate_label_is_not_saved() {
+        use micold_client::features::window::FieldId;
+        let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
+        save_with_added_label(&mut rig, "Bug");
         assert_eq!(
-            draft.error.as_ref().map(|e| e.field),
-            Some(FieldId::IssueMappingLabel(3)),
+            refusal(&rig.app),
+            (FieldId::IssueMappingLabel(3), SettingsSection::GithubIssues),
             "`Bug` duplicates `bug` ignoring case"
         );
-        assert!(store.saves().is_empty(), "nothing was written");
-        assert_eq!(stored(&store), micold_core::issue_types::default_mapping());
+        assert!(
+            store.saves().is_empty(),
+            "a duplicate label writes nothing: {:?}",
+            store.saves()
+        );
     }
 
     /// A23 — a never-edited mapping shows the default three entries; after edits, Restore defaults

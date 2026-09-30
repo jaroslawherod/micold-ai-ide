@@ -1,8 +1,8 @@
 //! `GhCli`, the production issue source, against a stub `gh` this test writes (feature 034,
 //! contracts/github-issue-source.md §3, research R6).
 //!
-//! The stub records its arguments, the variables `GhCli` sets and its working directory next to
-//! itself, then prints a fixture. It is a `sh` script on Unix and a `.cmd` on Windows; `cmd`
+//! The stub records its arguments, the variables `GhCli` sets or removes and its working directory
+//! next to itself, then prints a fixture. It is a `sh` script on Unix and a `.cmd` on Windows; `cmd`
 //! cannot record arguments one per line, so on Windows the argument check is by containment.
 
 use std::path::{Path, PathBuf};
@@ -74,8 +74,6 @@ fn copy_fixtures(dir: &Path) {
 /// Write the stub into `dir` and return its path.
 #[cfg(unix)]
 fn stub(dir: &Path, then: Then) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
-
     std::fs::copy(fixture("list_page.json"), dir.join("page.json")).unwrap();
     copy_fixtures(dir);
     let tail = match then {
@@ -105,9 +103,34 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
          {tail}\n"
     );
     let path = dir.join("gh");
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    write_executable(&path, &script);
     path
+}
+
+/// Write `script` to `path` as an executable from a child `sh`, never from this process. Tests run
+/// in parallel threads that fork: a write fd this process held on the stub could be inherited by a
+/// sibling's child between its fork and exec, and running the stub would then fail with
+/// `ETXTBSY` ("Text file busy"), which the source reports as `ToolMissing`.
+#[cfg(unix)]
+fn write_executable(path: &Path, script: &str) {
+    use std::io::Write;
+
+    let mut sh = std::process::Command::new("sh")
+        .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+        .arg(path)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .expect("sh runs");
+    sh.stdin
+        .take()
+        .expect("sh's stdin")
+        .write_all(script.as_bytes())
+        .expect("the stub is written");
+    assert!(
+        sh.wait().expect("sh exits").success(),
+        "the stub is written to {}",
+        path.display()
+    );
 }
 
 /// Write the stub into `dir` and return its path.
@@ -131,12 +154,41 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         "@echo off\r\n\
          echo %*> \"%~dp0args.txt\"\r\n\
          (echo GH_PROMPT_DISABLED=%GH_PROMPT_DISABLED%& echo GH_NO_UPDATE_NOTIFIER=%GH_NO_UPDATE_NOTIFIER%& echo NO_COLOR=%NO_COLOR%& echo CLICOLOR=%CLICOLOR%)> \"%~dp0env.txt\"\r\n\
+         if defined GH_DEBUG (echo GH_DEBUG=%GH_DEBUG%>> \"%~dp0env.txt\") else (echo GH_DEBUG=unset>> \"%~dp0env.txt\")\r\n\
          cd > \"%~dp0cwd.txt\"\r\n\
          {tail}\r\n"
     );
     let path = dir.join("gh.cmd");
     std::fs::write(&path, script).unwrap();
     path
+}
+
+/// Set in the child copy of this test binary that [`in_child`] starts.
+const CHILD_VAR: &str = "MICOLD_TEST_CHILD";
+
+/// Run `test` again in a child copy of this test binary, with `vars` set on that child only, and
+/// return `true` in the child. The variables never touch this process, whose other tests run in
+/// parallel threads and spawn processes of their own.
+fn in_child(test: &str, vars: &[(&str, &std::ffi::OsStr)]) -> bool {
+    if std::env::var_os(CHILD_VAR).is_some() {
+        return true;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().expect("this test binary"));
+    child
+        .args(["--exact", test, "--test-threads=1", "--nocapture"])
+        .env(CHILD_VAR, "1");
+    for (name, value) in vars {
+        child.env(name, value);
+    }
+    let out = child.output().expect("the child test binary runs");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{test} failed in its child process: {}\n{stdout}\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    false
 }
 
 fn recorded(dir: &Path, name: &str) -> String {
@@ -152,22 +204,24 @@ fn home() -> PathBuf {
     std::fs::canonicalize(&home).unwrap_or(home)
 }
 
+/// Run `GhCli::list_open` against a printing stub in `dir`, asking for the page after `CUR`.
+fn list_with_stub(dir: &Path) -> micold_core::github::IssuePage {
+    GhCli::new(stub(dir, Then::PrintPage))
+        .list_open(&repo(), Some("CUR"))
+        .expect("the stub's page parses")
+}
+
+/// U94 — `gh` gets exactly `list_args`, and the page it prints is the page returned.
 #[test]
 fn gh_cli_runs_gh_as_specified() {
     let dir = tempfile::tempdir().unwrap();
-    let gh = stub(dir.path(), Then::PrintPage);
-    // A user who debugs `gh` from their shell profile; the app must not inherit that.
-    std::env::set_var("GH_DEBUG", "api");
-
-    let page = GhCli::new(gh)
-        .list_open(&repo(), Some("CUR"))
-        .expect("the stub's page parses");
+    let page = list_with_stub(dir.path());
     assert_eq!(
         page.issues.len(),
         3,
         "the page gh printed is the page returned"
     );
-    assert_eq!(page.total_open, 142);
+    assert_eq!(page.total_open, 142, "the page's open count is gh's");
 
     let expected = list_args(&repo(), Some("CUR"));
     let args = recorded(dir.path(), "args.txt");
@@ -179,7 +233,13 @@ fn gh_cli_runs_gh_as_specified() {
             assert!(args.contains(arg.as_str()), "{arg} was passed: {args}");
         }
     }
+}
 
+/// U94 — `gh` never prompts, notifies, colours or pages.
+#[test]
+fn gh_cli_sets_the_gh_environment() {
+    let dir = tempfile::tempdir().unwrap();
+    list_with_stub(dir.path());
     let env = recorded(dir.path(), "env.txt");
     for line in [
         "GH_PROMPT_DISABLED=1",
@@ -192,17 +252,46 @@ fn gh_cli_runs_gh_as_specified() {
             "{line} is set so gh never prompts, notifies or colours: {env}"
         );
     }
+    // `cmd` cannot tell an empty variable from an unset one, so the Windows stub cannot record
+    // GH_PAGER's empty value; the `Command` that sets it is the same on every OS.
     if cfg!(unix) {
-        assert!(
-            env.lines().any(|l| l == "GH_DEBUG=unset"),
-            "GH_DEBUG is removed, so debug traces never reach the stderr `classify` reads: {env}"
-        );
         assert!(
             env.lines().any(|l| l == "GH_PAGER="),
             "GH_PAGER is set, and empty, so gh never pages: {env}"
         );
     }
+}
 
+/// U102 — `GH_DEBUG` from the user's environment never reaches `gh`, on every OS.
+#[test]
+fn gh_cli_removes_gh_debug() {
+    // A user who debugs `gh` from their shell profile; the app must not inherit that. The child
+    // copy of this binary runs the test with it set, so no other test here sees it.
+    if !in_child(
+        "gh_cli_removes_gh_debug",
+        &[("GH_DEBUG", std::ffi::OsStr::new("api"))],
+    ) {
+        return;
+    }
+    assert_eq!(
+        std::env::var("GH_DEBUG").as_deref(),
+        Ok("api"),
+        "precondition: the test's own process has GH_DEBUG set"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    list_with_stub(dir.path());
+    let env = recorded(dir.path(), "env.txt");
+    assert!(
+        env.lines().any(|l| l.trim() == "GH_DEBUG=unset"),
+        "GH_DEBUG is removed, so debug traces never reach the stderr `classify` reads: {env}"
+    );
+}
+
+/// U94 — `gh` runs in the user's home.
+#[test]
+fn gh_cli_runs_in_the_home_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    list_with_stub(dir.path());
     let cwd = PathBuf::from(recorded(dir.path(), "cwd.txt").trim());
     assert_eq!(
         std::fs::canonicalize(&cwd).unwrap_or(cwd),
@@ -219,7 +308,11 @@ fn a_hung_gh_is_timed_out() {
     let result = GhCli::new(stub(dir.path(), Then::Hang))
         .with_timeout(bound)
         .list_open(&repo(), None);
-    assert_eq!(result.unwrap_err(), IssueLoadError::TimedOut);
+    assert_eq!(
+        result.unwrap_err(),
+        IssueLoadError::TimedOut,
+        "a gh still running at the bound is timed out"
+    );
     assert!(
         started.elapsed() < bound + Duration::from_secs(2),
         "the bound is enforced, not waited out"
@@ -230,19 +323,26 @@ fn a_hung_gh_is_timed_out() {
 fn exit_4_is_not_signed_in() {
     let dir = tempfile::tempdir().unwrap();
     let result = GhCli::new(stub(dir.path(), Then::NotLoggedIn)).list_open(&repo(), None);
-    assert_eq!(result.unwrap_err(), IssueLoadError::NotSignedIn);
+    assert_eq!(
+        result.unwrap_err(),
+        IssueLoadError::NotSignedIn,
+        "gh's exit 4 with its sign-in text is not signed in"
+    );
 }
 
 /// U95 — a GraphQL answer with `data` is read whatever `gh`'s exit status: the numbered lookup's
-/// NOT_FOUND exits 1, and the search hits beside it are the result. A failure with no JSON is
-/// classified from stderr, as a list failure is.
+/// NOT_FOUND exits 1, and the search hits beside it are the result.
 #[test]
 fn a_partial_response_is_parsed() {
     let dir = tempfile::tempdir().unwrap();
     let found = GhCli::new(stub(dir.path(), Then::PartialSearch))
         .search_open(&repo(), "#4313")
         .expect("the hits beside a NOT_FOUND lookup are the answer");
-    assert_eq!(found.iter().map(Issue::number).collect::<Vec<_>>(), [4312]);
+    assert_eq!(
+        found.iter().map(Issue::number).collect::<Vec<_>>(),
+        [4312],
+        "the search hit is returned although gh exited 1"
+    );
     let args = recorded(dir.path(), "args.txt");
     if cfg!(unix) {
         let got: Vec<&str> = args.lines().collect();
@@ -252,34 +352,57 @@ fn a_partial_response_is_parsed() {
             "exactly `search_args` (FR-025)"
         );
     }
-
-    let dir = tempfile::tempdir().unwrap();
-    let failed = GhCli::new(stub(dir.path(), Then::FailWithoutJson)).search_open(&repo(), "x");
-    assert!(
-        matches!(failed, Err(IssueLoadError::Other(_))),
-        "no JSON on stdout: classified from stderr, got {failed:?}"
-    );
-
-    // An answer the parser refuses is classified from stderr, which names what GraphQL's error
-    // type does not: FORBIDDEN alone would read as `Other`, stderr says SAML (review A #2).
-    let dir = tempfile::tempdir().unwrap();
-    let listed = GhCli::new(stub(dir.path(), Then::SamlRefused)).list_open(&repo(), None);
-    assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
 }
 
-/// U111 — an error the answer types exactly stands at any exit status, for the list and the
-/// search alike; one it only names keeps GitHub's words when stderr adds nothing (review A rounds 2
-/// and 3).
+/// U95 — a failure with no JSON is classified from stderr, as a list failure is.
+#[test]
+fn a_failure_without_json_is_classified_from_stderr() {
+    let dir = tempfile::tempdir().unwrap();
+    let failed = GhCli::new(stub(dir.path(), Then::FailWithoutJson)).search_open(&repo(), "x");
+    assert_eq!(
+        failed.unwrap_err(),
+        IssueLoadError::Other("something unexpected happened".into()),
+        "no JSON on stdout: classified from stderr's first line"
+    );
+}
+
+/// U111 — an answer the parser refuses is classified from stderr, which names what GraphQL's error
+/// type does not: FORBIDDEN alone would read as `Other`, stderr says SAML (review A #2).
+#[test]
+fn a_refused_answer_is_classified_from_stderr() {
+    let dir = tempfile::tempdir().unwrap();
+    let listed = GhCli::new(stub(dir.path(), Then::SamlRefused)).list_open(&repo(), None);
+    assert_eq!(
+        listed.unwrap_err(),
+        IssueLoadError::NoAccess,
+        "stderr's SAML refusal is no access"
+    );
+}
+
+/// U111 — an error the answer types exactly stands at any exit status, for the list and the search
+/// alike (review A rounds 2 and 3).
 #[test]
 fn a_typed_error_stands_at_any_exit_status() {
     let dir = tempfile::tempdir().unwrap();
     let listed = GhCli::new(stub(dir.path(), Then::ListNotFound)).list_open(&repo(), None);
-    assert_eq!(listed.unwrap_err(), IssueLoadError::NoAccess);
+    assert_eq!(
+        listed.unwrap_err(),
+        IssueLoadError::NoAccess,
+        "the list's NOT_FOUND at exit 1 is no access"
+    );
 
     let dir = tempfile::tempdir().unwrap();
     let searched = GhCli::new(stub(dir.path(), Then::RateLimitedAnswer)).search_open(&repo(), "x");
-    assert_eq!(searched.unwrap_err(), IssueLoadError::RateLimited);
+    assert_eq!(
+        searched.unwrap_err(),
+        IssueLoadError::RateLimited,
+        "the search's RATE_LIMITED at exit 1 is a rate limit"
+    );
+}
 
+/// U111 — an error the answer only names keeps GitHub's words when stderr adds nothing.
+#[test]
+fn a_named_error_keeps_githubs_words() {
     let dir = tempfile::tempdir().unwrap();
     let odd = GhCli::new(stub(dir.path(), Then::OddAnswer)).search_open(&repo(), "x");
     assert_eq!(

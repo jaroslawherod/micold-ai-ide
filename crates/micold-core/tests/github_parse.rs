@@ -34,9 +34,21 @@ fn a_list_page_parses() {
     let numbers: Vec<u64> = page.issues.iter().map(Issue::number).collect();
     assert_eq!(numbers, [42, 7, 99], "GitHub's order is kept");
     let first = &page.issues[0];
-    assert_eq!(first.title(), "Crash when opening empty project");
-    assert_eq!(first.updated_at(), "2026-09-28T10:00:00Z");
-    assert_eq!(first.labels(), ["bug", "good first issue"]);
+    assert_eq!(
+        first.title(),
+        "Crash when opening empty project",
+        "the title as GitHub sent it"
+    );
+    assert_eq!(
+        first.updated_at(),
+        "2026-09-28T10:00:00Z",
+        "updatedAt as GitHub sent it"
+    );
+    assert_eq!(
+        first.labels(),
+        ["bug", "good first issue"],
+        "label names in GitHub's order"
+    );
     assert_eq!(
         page.issues[2].labels().len(),
         LABELS_PER_ISSUE,
@@ -55,7 +67,8 @@ fn row_text_shows_labels_only_when_present() {
     let page = parse_list_page(&fixture("list_page.json")).unwrap();
     assert_eq!(
         page.issues[0].row_text(),
-        "#42 Crash when opening empty project  ·  bug, good first issue"
+        "#42 Crash when opening empty project  ·  bug, good first issue",
+        "number, title, then the labels after a separator"
     );
     assert_eq!(
         page.issues[1].row_text(),
@@ -63,7 +76,11 @@ fn row_text_shows_labels_only_when_present() {
         "no separator when the issue has no labels"
     );
     let built = Issue::new(5, "Title".into(), vec!["docs".into()], "t".into());
-    assert_eq!(built.row_text(), "#5 Title  ·  docs");
+    assert_eq!(
+        built.row_text(),
+        "#5 Title  ·  docs",
+        "an issue built in code writes the same row"
+    );
 }
 
 #[test]
@@ -75,7 +92,8 @@ fn graphql_errors_are_classified() {
     );
     assert_eq!(
         parse_list_page(&fixture("list_rate_limited.json")).unwrap_err(),
-        IssueLoadError::RateLimited
+        IssueLoadError::RateLimited,
+        "a RATE_LIMITED error type is a rate limit"
     );
     assert!(
         matches!(
@@ -109,7 +127,8 @@ fn list_args_send_only_the_repository() {
             "owner=o",
             "-f",
             "name=r",
-        ]
+        ],
+        "the first page: the query, owner and name as raw strings, nothing else"
     );
     let paged = list_args(&o_r, Some("CUR"));
     assert_eq!(
@@ -124,7 +143,10 @@ fn list_args_send_only_the_repository() {
 
     let odd = repo("https://github.com/1/true");
     let args = list_args(&odd, None);
-    assert!(args.contains(&"owner=1".to_string()) && args.contains(&"name=true".to_string()));
+    assert!(
+        args.contains(&"owner=1".to_string()) && args.contains(&"name=true".to_string()),
+        "owner and name are sent as written: {args:?}"
+    );
     assert!(
         args.windows(2)
             .filter(|w| w[1].starts_with("owner=") || w[1].starts_with("name="))
@@ -157,9 +179,21 @@ fn search_unions_and_dedupes() {
         [1200, 1300],
         "#1200 came from both the search and the lookup, and is held once"
     );
-    assert_eq!(found[0].title(), "Beyond the cap");
-    assert_eq!(found[0].labels(), ["enhancement"]);
-    assert_eq!(found[0].updated_at(), "2026-01-04T00:00:00Z");
+    assert_eq!(
+        found[0].title(),
+        "Beyond the cap",
+        "a search hit keeps its title"
+    );
+    assert_eq!(
+        found[0].labels(),
+        ["enhancement"],
+        "a search hit keeps its labels"
+    );
+    assert_eq!(
+        found[0].updated_at(),
+        "2026-01-04T00:00:00Z",
+        "a search hit keeps its updatedAt"
+    );
 
     let plain = parse_search(
         br#"{"data":{"search":{"nodes":[
@@ -275,10 +309,14 @@ fn search_args_send_only_the_query() {
         format!("query={SEARCH_QUERY}"),
         "a number past Int's range cannot be an issue number"
     );
-    assert!(!too_big.iter().any(|a| a == "-F"));
+    assert!(
+        !too_big.iter().any(|a| a == "-F"),
+        "no typed number variable is sent for text: {too_big:?}"
+    );
     assert_eq!(
         search_args(&o_r, "2147483647")[5],
-        format!("query={SEARCH_WITH_NUMBER_QUERY}")
+        format!("query={SEARCH_WITH_NUMBER_QUERY}"),
+        "Int's largest value is still looked up"
     );
     assert_eq!(
         search_args(&o_r, "42 crash")[5],

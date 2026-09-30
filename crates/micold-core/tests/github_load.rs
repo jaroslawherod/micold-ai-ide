@@ -35,7 +35,7 @@ fn pages_concatenate_until_the_last() {
         [1, 2, 3],
         "pages are joined in the order GitHub sent them"
     );
-    assert_eq!(listing.total_open, 3);
+    assert_eq!(listing.total_open, 3, "GitHub's open count is kept");
     assert!(listing.complete, "every open issue is held");
     assert_eq!(
         source.calls(),
@@ -49,7 +49,7 @@ fn pages_concatenate_until_the_last() {
 
 #[test]
 fn the_cap_is_1000() {
-    assert_eq!(ISSUE_LOAD_CAP, 1_000);
+    assert_eq!(ISSUE_LOAD_CAP, 1_000, "FR-004's cap");
 
     // 1,001 open: ten full pages reach the cap and paging stops although GitHub has more.
     let mut over = FakeIssueSource::new();
@@ -57,7 +57,15 @@ fn the_cap_is_1000() {
         over = over.with_page(page(1 + i * PAGE, PAGE, 1_001, true));
     }
     let listing = load_listing(&over, &repo()).unwrap();
-    assert_eq!(listing.issues.len(), ISSUE_LOAD_CAP);
+    assert_eq!(
+        listing.issues.len(),
+        ISSUE_LOAD_CAP,
+        "1,001 open: exactly the cap is held"
+    );
+    assert_eq!(
+        listing.total_open, 1_001,
+        "the open count is GitHub's, not what was held, so the form can say 1,000 of 1,001"
+    );
     assert_eq!(over.calls().len(), 10, "no request is made past the cap");
     assert!(
         !listing.complete,
@@ -70,14 +78,22 @@ fn the_cap_is_1000() {
         exact = exact.with_page(page(1 + i * PAGE, PAGE, 1_000, i < 9));
     }
     let listing = load_listing(&exact, &repo()).unwrap();
-    assert_eq!(listing.issues.len(), ISSUE_LOAD_CAP);
+    assert_eq!(
+        listing.issues.len(),
+        ISSUE_LOAD_CAP,
+        "1,000 open: all are held"
+    );
     assert!(listing.complete, "1,000 held of 1,000 open is complete");
 
     // A last page that would cross the cap is truncated to it.
     let mut crossing = FakeIssueSource::new().with_page(page(1, 950, 2_000, true));
     crossing = crossing.with_page(page(951, 100, 2_000, true));
     let listing = load_listing(&crossing, &repo()).unwrap();
-    assert_eq!(listing.issues.len(), ISSUE_LOAD_CAP);
+    assert_eq!(
+        listing.issues.len(),
+        ISSUE_LOAD_CAP,
+        "950 then 100: the second page is cut to the 50 that fit"
+    );
     assert_eq!(
         listing.issues.last().map(Issue::number),
         Some(1_000),
@@ -104,7 +120,7 @@ fn first_error_aborts_and_empty_is_complete() {
 
     let none = FakeIssueSource::new().with_page(page(1, 0, 0, false));
     let listing = load_listing(&none, &repo()).unwrap();
-    assert!(listing.issues.is_empty());
+    assert!(listing.issues.is_empty(), "no open issues, none held");
     assert!(
         listing.complete,
         "no open issues is a complete, empty list (FR-008)"
@@ -140,6 +156,10 @@ fn a_page_that_makes_no_progress_ends_the_load() {
         2,
         "no third request with the same cursor"
     );
-    assert_eq!(listing.issues.len(), 4);
-    assert!(!listing.complete);
+    assert_eq!(
+        listing.issues.len(),
+        4,
+        "both pages are kept, the repeated one included"
+    );
+    assert!(!listing.complete, "4 of 10 held is not complete");
 }

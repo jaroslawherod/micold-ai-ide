@@ -168,16 +168,30 @@ fn other_writers_preserve_the_mapping() {
         vec![vec!["label".to_string(), "type".to_string()]],
         "an entry stores its label and type and nothing of an issue (SC-006)"
     );
-    let issue_keys: Vec<&String> = stored
+    let mut keys: Vec<&str> = stored
         .as_object()
         .unwrap()
         .keys()
-        .filter(|k| k.contains("issue") || k.contains("github"))
+        .map(String::as_str)
         .collect();
+    keys.sort_unstable();
     assert_eq!(
-        issue_keys,
-        vec!["issue_label_types"],
-        "no issue content or GitHub credential is written to settings.json (SC-006)"
+        keys,
+        [
+            "daemon",
+            "default_ai_cli",
+            "env_include_enabled",
+            "env_include_script_path",
+            "env_include_timeout_secs",
+            "issue_label_types",
+            "pi_activity_component",
+            "scrollback_lines",
+            "settings_version",
+            "theme",
+            "tool_server_enabled",
+        ],
+        "settings.json holds these fields and nothing else: no issue content and no GitHub \
+         credential is written to it (SC-006); a new field is added here on purpose"
     );
 }
 

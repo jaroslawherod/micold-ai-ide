@@ -212,8 +212,8 @@ const SOURCE: &str = include_str!("typeahead_budget.rs");
 const RELEASE_ONLY: &str = "#[cfg_attr(debug_assertions, ignore";
 const RELEASE_COMMAND: &str = "cargo test --release -p micold-core --test typeahead_budget";
 
-/// The names of the `#[test]` functions in this file whose body checks against [`BUDGET_MS`], each
-/// with the attribute lines written above it.
+/// The names of the `#[test]` functions in this file whose body checks against a frame budget —
+/// [`BUDGET_MS`] or [`ISSUE_BUDGET_MS`] — each with the attribute lines written above it.
 fn budget_tests() -> Vec<(String, String)> {
     let lines: Vec<&str> = SOURCE.lines().collect();
     let mut out = Vec::new();
@@ -238,7 +238,10 @@ fn budget_tests() -> Vec<(String, String)> {
             .copied()
             .collect();
         let is_test = attributes.contains(&"#[test]");
-        if is_test && body.contains("took < BUDGET_MS") {
+        let measures = ["took < BUDGET_MS", "took < ISSUE_BUDGET_MS"]
+            .iter()
+            .any(|check| body.contains(check));
+        if is_test && measures {
             out.push((name.to_string(), attributes.join("\n")));
         }
     }
@@ -253,9 +256,9 @@ fn budget_tests() -> Vec<(String, String)> {
 fn every_frame_budget_measurement_is_release_only() {
     let tests = budget_tests();
     assert!(
-        tests.len() >= 4,
-        "the scan found {} budget tests, fewer than the four this file has — the check has stopped \
-         seeing them",
+        tests.len() >= 5,
+        "the scan found {} budget tests, fewer than the five this file has (four against \
+         BUDGET_MS, one against ISSUE_BUDGET_MS) — the check has stopped seeing them",
         tests.len()
     );
     for (name, attributes) in tests {
@@ -319,6 +322,16 @@ fn issue_rows() -> Vec<String> {
 #[cfg_attr(debug_assertions, ignore = "a release-build budget (BUG-003)")]
 fn ranking_1000_issue_rows_for_a_short_query_fits_the_budget() {
     let rows = issue_rows();
+    assert_eq!(
+        rows.len(),
+        1_000,
+        "the corpus is the 1,000 issues the picker may hold (SC-003)"
+    );
+    let matched = rank(&rows, |s| s.as_str(), &Query::new("cra")).len();
+    assert!(
+        matched > 0,
+        "\"cra\" matches some rows, so the measurement ranks matches rather than rejecting all"
+    );
     let took = millis(&rows, "cra");
 
     assert!(

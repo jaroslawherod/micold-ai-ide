@@ -461,6 +461,10 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 ],
             },
         },
+        DaemonMsg::OperationOk {
+            req: 9,
+            result: OperationResult::RemoteList { remotes: vec![] },
+        },
         DaemonMsg::OperationError {
             req: 4,
             kind: ErrorKind::GitFailed,

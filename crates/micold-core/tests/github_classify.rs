@@ -32,11 +32,16 @@ fn exited(code: i32, fixture: &str) -> RunOutcome {
 
 #[test]
 fn not_signed_in() {
-    for (code, fixture) in [(4, "not_logged_in"), (1, "bad_credentials")] {
+    // `(1, "not_logged_in")`: the `gh auth login` text is read at any exit status, not only 4.
+    for (code, fixture) in [
+        (4, "not_logged_in"),
+        (1, "not_logged_in"),
+        (1, "bad_credentials"),
+    ] {
         assert_eq!(
             classify(&exited(code, fixture)),
             IssueLoadError::NotSignedIn,
-            "{fixture} means the user has to sign in"
+            "{fixture} at exit {code} means the user has to sign in"
         );
     }
     assert_eq!(
@@ -68,8 +73,9 @@ fn no_access() {
     }
 }
 
+/// U33 — connection failures are `Offline`.
 #[test]
-fn offline_rate_limited_timed_out() {
+fn offline() {
     for fixture in [
         "offline_error_connecting",
         "offline_connection_refused",
@@ -82,6 +88,11 @@ fn offline_rate_limited_timed_out() {
             "{fixture} means GitHub could not be reached"
         );
     }
+}
+
+/// U33 — rate-limit text is `RateLimited`, whatever HTTP status carries it.
+#[test]
+fn rate_limited() {
     for fixture in [
         "rate_limit_403",
         "secondary_rate_limit",
@@ -93,11 +104,17 @@ fn offline_rate_limited_timed_out() {
             "{fixture} is a rate limit, even when it arrives as HTTP 403"
         );
     }
+}
+
+/// U33 — a run past the bound is `TimedOut`; a `gh` that could not be started is missing.
+#[test]
+fn timed_out_and_spawn_failed() {
     assert_eq!(
         classify(&RunOutcome::TimedOut {
             stderr: String::new()
         }),
-        IssueLoadError::TimedOut
+        IssueLoadError::TimedOut,
+        "a run killed at the bound timed out, whatever it printed"
     );
     assert_eq!(
         classify(&RunOutcome::SpawnFailed(
@@ -115,12 +132,14 @@ fn unknown_text_is_other() {
         IssueLoadError::Other("something unexpected happened".into()),
         "the first non-empty stderr line, trimmed"
     );
-    assert!(
-        matches!(
-            classify(&RunOutcome::Exited { code: 1, stdout: Vec::new(), stderr: String::new() }),
-            IssueLoadError::Other(ref s) if !s.is_empty()
-        ),
-        "a silent failure still says something"
+    assert_eq!(
+        classify(&RunOutcome::Exited {
+            code: 1,
+            stdout: Vec::new(),
+            stderr: String::new()
+        }),
+        IssueLoadError::Other("gh exited with status 1".into()),
+        "a silent failure still says something: the exit status"
     );
 }
 

@@ -49,13 +49,18 @@ fn accepted_url_forms() {
 fn userinfo_is_discarded() {
     assert_eq!(
         repo_of("https://user@github.com/o/r").as_deref(),
-        Some("o/r")
+        Some("o/r"),
+        "a user name in the URL is not part of the repository"
     );
     let token = "ghp_SECRET123";
     let repo =
         GithubRepo::from_remote_url(&format!("https://x-access-token:{token}@github.com/o/r"))
             .expect("a token-in-URL remote is still a GitHub remote");
-    assert_eq!(repo.to_string(), "o/r");
+    assert_eq!(
+        repo.to_string(),
+        "o/r",
+        "the token is not part of the repository"
+    );
     assert!(
         !format!("{repo:?}").contains(token),
         "the token never reaches the value, so it can never be shown or sent (FR-022)"
@@ -91,8 +96,11 @@ fn origin_wins_when_on_github() {
     ];
     match choose_remote(&remotes) {
         RemoteChoice::Github { remote, repo } => {
-            assert_eq!(remote, "origin");
-            assert_eq!(repo.to_string(), "me/r");
+            assert_eq!(
+                (remote.as_str(), repo.to_string().as_str()),
+                ("origin", "me/r"),
+                "origin on GitHub is chosen over an earlier GitHub remote"
+            );
         }
         other => panic!("origin on GitHub is chosen over an earlier GitHub remote, got {other:?}"),
     }
@@ -128,13 +136,18 @@ fn first_github_remote_otherwise() {
 
 #[test]
 fn no_github_remote() {
-    assert_eq!(choose_remote(&[]), RemoteChoice::NoGithubRemote);
+    assert_eq!(
+        choose_remote(&[]),
+        RemoteChoice::NoGithubRemote,
+        "a repository without remotes has no GitHub remote"
+    );
     assert_eq!(
         choose_remote(&[
             remote("origin", "https://gitlab.com/me/r.git"),
             remote("mirror", "https://github.example.com/me/r"),
         ]),
-        RemoteChoice::NoGithubRemote
+        RemoteChoice::NoGithubRemote,
+        "remotes on other hosts, a look-alike host included, are no GitHub remote"
     );
 }
 
@@ -143,6 +156,7 @@ fn managed_user_owner_with_underscore() {
     // Enterprise Managed Users on github.com have logins like `jdoe_acme`.
     assert_eq!(
         repo_of("git@github.com:jdoe_acme/tool.git").as_deref(),
-        Some("jdoe_acme/tool")
+        Some("jdoe_acme/tool"),
+        "an underscore in the owner is kept"
     );
 }
