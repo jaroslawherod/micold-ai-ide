@@ -206,6 +206,10 @@ struct MinimalProvider {
     /// How this provider's sessions reach the tool server (feature 034). Its own answer, so the
     /// daemon asks rather than deciding per CLI.
     tool_server: ToolServerSupport,
+    /// How a fresh session of this provider shows it is ready for its first prompt (feature 034).
+    input_readiness: micold_core::provider::InputReadiness,
+    /// Where this provider records the folders it trusts (feature 034).
+    folder_trust: micold_core::provider::FolderTrust,
 }
 
 impl MinimalProvider {
@@ -224,6 +228,8 @@ impl MinimalProvider {
             tool_server: ToolServerSupport::Unsupported {
                 reason: "Minimal has no tool server",
             },
+            input_readiness: micold_core::provider::InputReadiness::OutputSettled,
+            folder_trust: micold_core::provider::FolderTrust::NeverAsks,
         }
     }
 
@@ -296,10 +302,10 @@ impl AiCliProvider for MinimalProvider {
         self.tool_server
     }
     fn input_readiness(&self) -> micold_core::provider::InputReadiness {
-        micold_core::provider::InputReadiness::OutputSettled
+        self.input_readiness
     }
     fn folder_trust(&self) -> micold_core::provider::FolderTrust {
-        micold_core::provider::FolderTrust::NeverAsks
+        self.folder_trust
     }
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
@@ -569,6 +575,42 @@ fn every_cli_answers_its_tool_server_support_through_the_seam() {
     for which in AiCli::ALL {
         let _ = which.provider().tool_server_support();
     }
+}
+
+/// Readiness and folder trust are each provider's own answers, not decided by which CLI a session
+/// runs: a provider that says `claude_code` can still name any readiness signal and trust record.
+#[test]
+fn readiness_and_folder_trust_are_the_providers_own_answers() {
+    use micold_core::mcp::binding::ConfigLocations;
+    use micold_core::mcp::trust::would_ask_trust;
+    use micold_core::provider::{FolderTrust, InputReadiness};
+    let home = tempfile::tempdir().unwrap();
+    let at = ConfigLocations {
+        home: Some(home.path().to_path_buf()),
+        ..ConfigLocations::default()
+    };
+    let minimal = MinimalProvider::new("/minimal");
+    let port: &dyn AiCliProvider = &minimal;
+    assert_eq!(port.id(), AiCli::ClaudeCode);
+    assert_eq!(port.input_readiness(), InputReadiness::OutputSettled);
+    assert!(
+        !would_ask_trust(port.folder_trust(), &at, Path::new("/minimal/project")),
+        "a provider with no trust question never asks, whatever its id"
+    );
+    let asking = MinimalProvider {
+        input_readiness: InputReadiness::ExtensionEvent("ready"),
+        folder_trust: FolderTrust::ClaudeProjects,
+        ..MinimalProvider::new("/minimal")
+    };
+    let port: &dyn AiCliProvider = &asking;
+    assert_eq!(
+        port.input_readiness(),
+        InputReadiness::ExtensionEvent("ready")
+    );
+    assert!(
+        would_ask_trust(port.folder_trust(), &at, Path::new("/minimal/project")),
+        "with no record, a provider that keeps one asks"
+    );
 }
 
 #[test]
