@@ -4131,7 +4131,9 @@ fn opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only() {
 
 mod script_path_report {
     use super::*;
-    use micold_client::features::settings::{script_path_notice, NoticeLine, ScriptCheck};
+    use micold_client::features::settings::{
+        script_path_notice, CheckOrigin, NoticeLine, ScriptCheck,
+    };
     use micold_core::env_include::FakeEnvIncludeResolver;
     use micold_core::script_path_check::{
         CheckedScriptPath, FakeScriptPathProbe, ProbeAnswer, ScriptPathState,
@@ -4852,6 +4854,123 @@ mod script_path_report {
             stored(&app),
             (true, path, 9),
             "the drafted timeout is applied; no default path, no blanking, no switching off"
+        );
+    }
+
+    // --- Close (T043, T045): the real handlers start the check, bounded by the constant ---
+
+    /// Every `ScriptPathChecked` the work a handler returned reports, run to completion.
+    fn checks_reported(work: Task<Message>) -> Vec<(CheckOrigin, Option<CheckedScriptPath>)> {
+        messages(work)
+            .into_iter()
+            .filter_map(|m| match m {
+                Message::Settings(SettingsMsg::ScriptPathChecked { origin, result, .. }) => {
+                    Some((origin, result))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A check that reached the probe and found nothing at `path`.
+    fn not_found_at(path: &str, enabled: bool) -> Option<CheckedScriptPath> {
+        Some(CheckedScriptPath {
+            path: path.to_string(),
+            enabled,
+            state: ScriptPathState::NotFound { tilde: false },
+        })
+    }
+
+    #[test]
+    fn opening_settings_hands_back_work_that_runs_the_check() {
+        let path = stored_path();
+        let (mut app, probe) = app_with(&path, ProbeAnswer::Missing);
+
+        let work = crate::shell::persist::on_settings_opened(&mut app);
+
+        assert_eq!(
+            checks_reported(work),
+            [(CheckOrigin::Opened, not_found_at(&path, false))],
+            "T1: the open's check has to be handed back to run, not prepared and dropped"
+        );
+        assert_eq!(probe.calls(), [PathBuf::from(&path)]);
+    }
+
+    #[test]
+    fn saving_settings_hands_back_work_that_runs_the_saves_check() {
+        let path = stored_path();
+        let (mut app, probe, _store) =
+            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
+        let before = probe.calls().len();
+
+        let work = crate::shell::persist::on_settings_saved(&mut app);
+
+        assert_eq!(
+            checks_reported(work),
+            [(CheckOrigin::Saved, not_found_at(&path, false))],
+            "T2: the save's check has to be handed back to run (FR-004, FR-009)"
+        );
+        assert_eq!(probe.calls()[before..], [PathBuf::from(&path)]);
+    }
+
+    #[test]
+    fn another_windows_save_hands_back_work_that_runs_the_recheck() {
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+        let _ = open_and_check(&mut app);
+        let new_path = std::env::temp_dir()
+            .join("saved-elsewhere.sh")
+            .to_str()
+            .expect("utf-8 temp dir")
+            .to_string();
+        let before = probe.calls().len();
+
+        let work = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::SettingsChanged {
+                settings: settings_saved_elsewhere(&new_path),
+            },
+        );
+
+        assert_eq!(
+            checks_reported(work),
+            [(CheckOrigin::Opened, not_found_at(&new_path, true))],
+            "T3: another window's save has to hand its re-check back to run"
+        );
+        assert_eq!(probe.calls()[before..], [PathBuf::from(&new_path)]);
+    }
+
+    #[test]
+    fn a_check_with_no_answer_gives_up_at_the_bound_and_reports_unchecked() {
+        let path = stored_path();
+        let mut app = base_app();
+        app.caps = app
+            .caps
+            .clone()
+            .with_script_path_probe(Arc::new(FakeScriptPathProbe::blocking()));
+        app.env_include_enabled = false;
+        app.env_include_script_path = path.clone();
+        let job =
+            crate::shell::env_include::prepare_script_path_check(&mut app, CheckOrigin::Opened);
+
+        let started = std::time::Instant::now();
+        let Message::Settings(SettingsMsg::ScriptPathChecked { result, .. }) = job.run() else {
+            panic!("a check reports through the settings reducer");
+        };
+        let waited = started.elapsed();
+
+        assert_eq!(
+            result.map(|c| c.state),
+            Some(ScriptPathState::Unchecked),
+            "a probe that never answers is reported as not checked (FR-006)"
+        );
+        let bound = micold_core::script_path_check::SCRIPT_PATH_CHECK_BOUND;
+        assert!(
+            waited >= bound && waited < bound + std::time::Duration::from_secs(3),
+            "the job waits for SCRIPT_PATH_CHECK_BOUND ({bound:?}) and no longer, waited {waited:?}"
         );
     }
 }
