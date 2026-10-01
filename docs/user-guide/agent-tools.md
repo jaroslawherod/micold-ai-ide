@@ -103,8 +103,10 @@ not even later. The result says `prompt_delivered: false`, and `prompt_reason` s
 happened. The session itself is still there; type into it yourself or ask the assistant to try
 again.
 
-If the AI CLI is not installed where the session would run, `create_session` fails, names the CLI,
-and leaves no session behind.
+If the AI CLI is one a session would not find in the target directory, `create_session` fails and
+leaves no session behind. The reply gives the same reason and action a person is shown, for example
+that "Source a script before each session" is off, or that the startup script was not found. See
+[When a CLI isn't installed](./worktrees-and-sessions.md#when-a-cli-isnt-installed).
 
 ## Reading and typing into other sessions
 
