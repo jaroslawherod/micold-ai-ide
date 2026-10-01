@@ -130,7 +130,28 @@ pub fn explain(
     dir: AttemptDir<'_>,
 ) -> Option<Explanation> {
     let names = name_list(missing)?;
-    let several = missing.len() > 1;
+    Some(explain_named(&names, missing.len() > 1, env, place, dir))
+}
+
+/// [`explain`] for one CLI. Total: one missing CLI always has a reason, so a caller that knows
+/// which CLI it could not find has no empty case to answer for.
+pub fn explain_one(
+    cli: AiCli,
+    env: SpawnEnv,
+    place: Place<'_>,
+    dir: AttemptDir<'_>,
+) -> Explanation {
+    explain_named(&cli.to_string(), false, env, place, dir)
+}
+
+/// The reason and action for the CLIs written out in `names`: one of them, or `several`.
+fn explain_named(
+    names: &str,
+    several: bool,
+    env: SpawnEnv,
+    place: Place<'_>,
+    dir: AttemptDir<'_>,
+) -> Explanation {
     let them = if several { "them" } else { "it" };
     let (lead, path, install) = match place {
         Place::ThisComputer => (
@@ -203,11 +224,11 @@ pub fn explain(
             )
         }
     };
-    Some(Explanation { reason, action })
+    Explanation { reason, action }
 }
 
-/// What a start refused for a missing AI CLI tells the user: [`explain`]'s reason and action for
-/// `dir`, then what this start can do about it (contract W3).
+/// What a start refused for a missing AI CLI tells the user: [`explain_one`]'s reason and action
+/// for `dir`, then what this start can do about it (contract W3).
 ///
 /// A fresh start may go to another CLI. A resume continues a conversation only its own CLI holds,
 /// so it is told to restart and never offered another one (FR-009).
@@ -231,9 +252,7 @@ pub fn start_refusal(
             ),
         };
     }
-    let Some(Explanation { reason, action }) = explain(&[cli], env, place, dir) else {
-        unreachable!("one CLI is missing, so there is an explanation");
-    };
+    let Explanation { reason, action } = explain_one(cli, env, place, dir);
     match launch {
         LaunchMode::Fresh => format!("{reason} {action} Or start this session on another AI CLI."),
         LaunchMode::Resume => format!(

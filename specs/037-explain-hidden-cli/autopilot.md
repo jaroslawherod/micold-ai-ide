@@ -49,6 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D15 | design | M1 (Setup + Foundational + US1) is 19 tasks, over the split guide of about 15. Split it? | No. All six states come from one `classify` and one `explain`, so no acceptance scenario of Story 1 is a deliverable without the whole Foundational phase and the note. | agent-resolved | .claude/skills/speckit-autopilot/references/milestones.md (rule 3); specs/037-explain-hidden-cli/tasks.md#Notes |
 | D16 | milestone | 034 merged PROTOCOL_VERSION 18 while M1 was in flight; which version does 037's wire change take? | 19 (18 -> 19); specs and tests updated in the rebase | agent-resolved | `origin/main` commit 746cfa6c |
 | D17 | milestone | 034's M6 merged PROTOCOL_VERSION 19 after the first rebase; which version does 037's wire change take now? | 20 (19 -> 20). Supersedes D16's number. Code, tests, `docs/daemon.md` and the 037 artifacts updated in the second rebase | agent-resolved | `origin/main` commit 31c8b01b |
+| D18 | milestone | The refusal says "fix the script, then restart", but the service keeps a directory's resolution until environment-include is saved (issue #438 owns cache invalidation). How does the sentence stay true? | A start refused for a missing CLI drops that directory's cached resolution, so the next start and the next availability ask source the script again. Nothing else about the cache changes. A refusal and the answer that follows it are then two attempts and may differ; FR-012 holds per attempt. | agent-resolved | Review A M2 round 1, F1; `crates/micold-daemon/src/state.rs#refuse_and_forget_env`; orchestrator note on #438 |
+| D19 | milestone | Where is a deleted session folder checked, given that resolving in a missing folder reports a timeout? | Inside the gate's CLI-not-found branch, not before the gate: before it, a resume whose folder and conversation are both gone would lose the conversation-gone sentence an existing test requires. | agent-resolved | Review A M2 round 1, F2; `crates/micold-daemon/tests/session_start.rs#resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing` |
 
 ## Review rounds
 
@@ -64,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M1 | 1 | 7127de70ef5c3e65452575ce66c14909a318c21f:b205f81d1c577362dae687bce4268fdc09122bde | CLEAN: 3 MINOR, 1 fixed (U43, U44, U55 marked characterization) |
 | Rebase M1 | 1 | 28f2150c18c1f7bd72942d62c2e26c6336863d3f:ce28161b9c42cff43cd15b7a7671eb1f306d51b8 | CLEAN: no findings (rebase resolution only: nothing of 034 dropped, 037's wire change is version 19 throughout; not counted) |
 | Rebase M1 | 2 | 6a6fdd0d350be640ae526841aed9785ade15630a:65a5fc28465bbc276918bbccee1b30e83733f330 | CLEAN: 2 MINOR, 1 fixed (second rebase, onto 034's M6: nothing of 034 dropped, 037's wire change is version 20 throughout; not counted) |
-| A M2 | 1 | 658bb50d7c40201ec80791e76d82343d60275e9f:e7f3ec7352f5d48be2b4f45ee280a701ff24804a | CHANGES: 2 MAJOR (F1 a refused start left the directory's cached resolution, so "fix the script, then restart" was refused again; F2 a deleted session folder was reported as a script timeout), 3 MINOR — fixes in progress |
+| A M2 | 1 | 658bb50d7c40201ec80791e76d82343d60275e9f:e7f3ec7352f5d48be2b4f45ee280a701ff24804a | CHANGES: 2 MAJOR (F1 a refused start left the directory's cached resolution, so "fix the script, then restart" was refused again; F2 a deleted session folder was reported as a script timeout), 3 MINOR — all five fixed |
 
 ## Declined review findings
 
@@ -104,6 +106,9 @@ None.
 - Rebase review round 2, F1 (MINOR): the doc comment above `FEATURE_026_PROTOCOL_VERSION` in
   `crates/micold-core/tests/schema_hash.rs` lacks the bare `///` line between 034's "18 → 19" paragraph
   and 037's "19 → 20" one. Fixed in M2.
+- Review A M2, F2 remainder (issue #438's ground): with the CLI found and the folder gone, the start fails
+  at the spawn with the folder sentence, but the timed-out entry `env_include::resolve` reports for a
+  missing folder stays cached; `availability_in` on a missing folder caches the same.
 - Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
   full Part B record.

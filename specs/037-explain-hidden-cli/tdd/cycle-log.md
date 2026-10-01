@@ -214,3 +214,22 @@ existed and failed before the implementation.
   installed" sentence. The view never sends that press (W5); it now says `start_refusal_unknown`
   (FR-002). No test pins the branch
 - written by a subagent from the task text; the red and green lines are its runs
+
+## Cycle 9: review A round 1, F1 and F2 (T023)
+
+- test: `crates/micold-daemon/tests/session_start.rs`:
+  `a_restart_after_the_script_is_fixed_sources_it_again_and_starts` (F1),
+  `an_ai_session_whose_folder_is_gone_is_told_that_and_not_that_the_script_timed_out` (F2)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test session_start` ->
+  `test result: FAILED. 25 passed; 2 failed`. F1: the restart returned `"… the startup script exited
+  with an error for /tmp/.tmpV0VM4A … Then restart this session …"`. F2: left `"… the startup script
+  timed out for /tmp/.tmp1MiAMd/gone …"`, right `"This session's folder no longer exists: …"`
+- green: a start refused for a missing CLI drops the directory's cached resolution
+  (`refuse_and_forget_env`); in that branch a folder that is gone gets the folder sentence
+  (`folder_gone`). Same command -> `test result: ok. 27 passed; 0 failed`;
+  `cargo test -p micold-daemon` -> exit 0, 97 `test result: ok`
+- refactor (F4, F5): `cli_reason::explain_one` is total, so neither `start_refusal` nor
+  `mcp/tools.rs` holds an `unreachable!`; `explain_one_says_what_explain_says_for_a_list_of_one` pins
+  it. `ImageReference` borrows the `NoCliOnPath` that holds `ENV_LOCK`.
+  `cargo test -p micold-core --test cli_reason` -> `test result: ok. 35 passed`
+- written by a subagent from the findings; the red and green lines are its runs

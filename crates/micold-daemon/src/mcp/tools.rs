@@ -1032,15 +1032,8 @@ async fn create_session(
     let (available, env) = blocking(move || Ok(st.availability_in(&place))).await?;
     if !available.contains(&cli) {
         let image = crate::state::image_reference();
-        let said = cli_reason::explain(
-            &[cli],
-            env,
-            crate::state::place(&image),
-            AttemptDir::Dir(&cwd),
-        );
-        let Some(Explanation { reason, action }) = said else {
-            unreachable!("one CLI is missing, so there is an explanation");
-        };
+        let Explanation { reason, action } =
+            cli_reason::explain_one(cli, env, crate::state::place(&image), AttemptDir::Dir(&cwd));
         return Err(OpError::service_error(format!("{reason} {action}")));
     }
 

@@ -1319,27 +1319,35 @@ fn starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budge
 
 /// Sets `MICOLD_IMAGE_REFERENCE` the way a sandboxed service is started, and puts it back.
 ///
-/// Holds no lock of its own: it is only ever made while a [`NoCliOnPath`] holds `ENV_LOCK`, and is
-/// declared after it so it is dropped first.
-struct ImageReference {
+/// The variable is process-global, so it is only set under `ENV_LOCK`. This takes no lock of its
+/// own: its constructors borrow the [`NoCliOnPath`] that holds it, so one cannot be made without
+/// the lock or outlive it (037 M2 review F5).
+struct ImageReference<'a> {
     previous: Option<std::ffi::OsString>,
+    _env: &'a NoCliOnPath,
 }
 
-impl ImageReference {
-    fn set(reference: &str) -> Self {
+impl<'a> ImageReference<'a> {
+    fn set(env: &'a NoCliOnPath, reference: &str) -> Self {
         let previous = std::env::var_os("MICOLD_IMAGE_REFERENCE");
         std::env::set_var("MICOLD_IMAGE_REFERENCE", reference);
-        Self { previous }
+        Self {
+            previous,
+            _env: env,
+        }
     }
 
-    fn unset() -> Self {
+    fn unset(env: &'a NoCliOnPath) -> Self {
         let previous = std::env::var_os("MICOLD_IMAGE_REFERENCE");
         std::env::remove_var("MICOLD_IMAGE_REFERENCE");
-        Self { previous }
+        Self {
+            previous,
+            _env: env,
+        }
     }
 }
 
-impl Drop for ImageReference {
+impl Drop for ImageReference<'_> {
     fn drop(&mut self) {
         match self.previous.take() {
             Some(value) => std::env::set_var("MICOLD_IMAGE_REFERENCE", value),
@@ -1392,14 +1400,10 @@ struct RefusedStart {
     answered: SpawnEnv,
 }
 
-/// Start a session on `cli` in a fresh project whose service has `include` for its
-/// environment-include settings, and return what the refusal reported.
-///
-/// Only ever called while a [`NoCliOnPath`] is held, so the CLI is missing whatever `include` is.
-fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) -> RefusedStart {
-    let store = tempfile::tempdir().unwrap();
-    let project_dir = tempfile::tempdir().unwrap();
-    let settings = match include {
+/// The settings `include` stands for, with its script written into `store`. Not saved: a test may
+/// change other fields first.
+fn include_settings(store: &Path, include: &Include) -> Settings {
+    match include {
         Include::Off => Settings {
             env_include_enabled: false,
             ..Settings::default()
@@ -1414,7 +1418,7 @@ fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) 
             } else {
                 ("env-include-script.sh", unix)
             };
-            let script = store.path().join(name);
+            let script = store.join(name);
             std::fs::write(&script, body).unwrap();
             Settings {
                 env_include_enabled: true,
@@ -1423,9 +1427,18 @@ fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) 
                 ..Settings::default()
             }
         }
-    };
+    }
+}
+
+/// Start a session on `cli` in a fresh project whose service has `include` for its
+/// environment-include settings, and return what the refusal reported.
+///
+/// Only ever called while a [`NoCliOnPath`] is held, so the CLI is missing whatever `include` is.
+fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) -> RefusedStart {
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
     JsonFileSettingsStore::at(store.path().join("settings.json"))
-        .save(&settings)
+        .save(&include_settings(store.path(), include))
         .unwrap();
     let id = SessionId::from_uuid(Uuid::from_u128(seed));
     let state = DaemonState::new(catalog_with_ai_cli_session(
@@ -1442,7 +1455,8 @@ fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) 
         );
     };
     assert_eq!(attempts, 0, "a missing binary is not a crash loop");
-    // Asked after the start, so it reads the attempt the start made rather than making its own.
+    // Asked after the start. The refusal dropped the attempt it read, so that a restart sources the
+    // script again (037 M2 review F1); this is a second attempt under the same settings.
     let (available, answered) = state.availability_in(project_dir.path());
     assert!(
         !available.contains(&cli),
@@ -1463,9 +1477,9 @@ fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) 
 /// claims a cause nobody checked: the CLI may be installed where the startup file would put it.
 #[test]
 fn with_environment_include_off_a_refused_start_says_sessions_get_only_the_login_path() {
-    let _path = NoCliOnPath::new();
+    let path = NoCliOnPath::new();
     // On the host. `MICOLD_IMAGE_REFERENCE` is unset for a service started outside a container.
-    let _host = ImageReference::unset();
+    let _host = ImageReference::unset(&path);
 
     for (index, cli) in AiCli::ALL.into_iter().enumerate() {
         for (step, launch) in [LaunchMode::Fresh, LaunchMode::Resume]
@@ -1505,8 +1519,8 @@ fn with_environment_include_off_a_refused_start_says_sessions_get_only_the_login
 /// a refused start says that, for the session's directory, instead of saying the CLI is missing.
 #[test]
 fn a_refused_start_after_the_script_failed_says_the_script_failed_for_the_directory() {
-    let _path = NoCliOnPath::new();
-    let _host = ImageReference::unset();
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
 
     for (step, launch) in [LaunchMode::Resume, LaunchMode::Fresh]
         .into_iter()
@@ -1537,8 +1551,8 @@ fn a_refused_start_after_the_script_failed_says_the_script_failed_for_the_direct
 /// it, or another AI CLI) and adds the one the script makes possible.
 #[test]
 fn a_refused_start_after_the_script_ran_says_the_cli_is_not_on_the_session_path() {
-    let _path = NoCliOnPath::new();
-    let _host = ImageReference::unset();
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
 
     let cli = AiCli::ClaudeCode;
     let refused = refused_start(cli, LaunchMode::Fresh, 0x1D40, &SCRIPT_LACKS_THE_CLI);
@@ -1575,8 +1589,8 @@ fn a_refused_start_after_the_script_ran_says_the_cli_is_not_on_the_session_path(
 /// "another AI CLI": it names what happened and tells the user to restart once it is fixed.
 #[test]
 fn a_resume_after_the_script_timed_out_says_to_fix_it_and_restart_this_session() {
-    let _path = NoCliOnPath::new();
-    let _host = ImageReference::unset();
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
 
     let cli = AiCli::Pi;
     let refused = refused_start(cli, LaunchMode::Resume, 0x1D50, &SCRIPT_TIMES_OUT);
@@ -1622,8 +1636,8 @@ fn a_resume_after_the_script_timed_out_says_to_fix_it_and_restart_this_session()
 /// agree only if both read one resolution of the directory's environment.
 #[test]
 fn a_refused_start_and_an_availability_answer_name_the_same_state() {
-    let _path = NoCliOnPath::new();
-    let _host = ImageReference::unset();
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
 
     for (index, (include, state)) in [
         (Include::Off, SpawnEnv::IncludeOff),
@@ -1662,9 +1676,9 @@ fn a_refused_start_and_an_availability_answer_name_the_same_state() {
 /// nothing a container runs, and a conversation cannot move to another CLI.
 #[test]
 fn in_an_image_whose_script_ran_a_missing_cli_keeps_the_sentences_it_had() {
-    let _path = NoCliOnPath::new();
+    let path = NoCliOnPath::new();
     let image = "registry.example/agents:7";
-    let _image = ImageReference::set(image);
+    let _image = ImageReference::set(&path, image);
 
     for (index, cli) in AiCli::ALL.into_iter().enumerate() {
         let name = cli.provider().display_name();
@@ -1708,9 +1722,9 @@ fn in_an_image_whose_script_ran_a_missing_cli_keeps_the_sentences_it_had() {
 /// the `IncludeOff` one, and it still names the image as where sessions run.
 #[test]
 fn in_an_image_with_environment_include_off_the_refusal_does_not_blame_the_image() {
-    let _path = NoCliOnPath::new();
+    let path = NoCliOnPath::new();
     let image = "registry.example/agents:7";
-    let _image = ImageReference::set(image);
+    let _image = ImageReference::set(&path, image);
 
     let mut seed = 0x1D90;
     for cli in AiCli::ALL {
@@ -1924,5 +1938,170 @@ fn a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing(
         ran,
         "and the CLI that ran is the one on the session's PATH — the spawn resolves the command \
          with the environment-include PATH, as the gate assumed"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// 037 M2 review: what a refused start leaves behind, and what is checked before the CLI
+// ---------------------------------------------------------------------------------------
+
+/// F1 (037 M2 review): the refusal says to fix the script and then restart this session, so the
+/// restart has to source the script again.
+///
+/// The directory's resolution is cached, and editing the script clears nothing. Before this the
+/// restart read the attempt the first start had made and was refused in the same words, whatever
+/// the script had become.
+#[test]
+fn a_restart_after_the_script_is_fixed_sources_it_again_and_starts() {
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
+    let cli = AiCli::Pi;
+    let session_bin = tempfile::tempdir().unwrap();
+    let launches = session_bin.path().join("argv.log");
+    write_stub(
+        session_bin.path(),
+        cli.provider().command(),
+        &launches,
+        "exit 0",
+    );
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let settings = Settings {
+        // No activity component: it would be materialised under the real data directory.
+        pi_activity_component: false,
+        ..include_settings(store.path(), &SCRIPT_FAILS)
+    };
+    JsonFileSettingsStore::at(store.path().join("settings.json"))
+        .save(&settings)
+        .unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x0037_F001));
+    let state = DaemonState::new(catalog_with_ai_cli_session(
+        cli,
+        project.path(),
+        store.path(),
+        id,
+    ));
+
+    assert!(state.start_session(id, LaunchMode::Resume).is_err());
+    let WireLifecycle::Failed { reason, .. } = reported_lifecycle(&state, id) else {
+        panic!(
+            "expected a reported failure, got {:?}",
+            reported_lifecycle(&state, id)
+        );
+    };
+    assert_eq!(
+        reason,
+        cli_reason::start_refusal(
+            cli,
+            SpawnEnv::ScriptFailed,
+            Place::ThisComputer,
+            AttemptDir::Dir(project.path()),
+            LaunchMode::Resume,
+        )
+    );
+    assert!(
+        reason.contains("Then restart this session"),
+        "the advice this test holds the service to; got {reason:?}"
+    );
+
+    // The user does what the sentence said: the script now works and puts the CLI on `PATH`.
+    #[cfg(unix)]
+    let fixed = format!("export PATH=\"{}:$PATH\"\n", session_bin.path().display());
+    #[cfg(windows)]
+    let fixed = format!(
+        "$env:PATH = '{};' + $env:PATH\r\n",
+        session_bin.path().display()
+    );
+    std::fs::write(&settings.env_include_script_path, fixed).unwrap();
+
+    let restarted = state.start_session(id, LaunchMode::Resume);
+    let ran = wait_until(Duration::from_secs(5), || {
+        std::fs::read_to_string(&launches).is_ok_and(|log| !log.is_empty())
+    });
+    if let Some(live) = state.live_session(id) {
+        let _ = live.kill();
+    }
+
+    assert!(
+        restarted.is_ok(),
+        "the script was fixed as the refusal asked, so the restart it asked for must read the \
+         script as it is now and not the attempt that failed: {restarted:?}"
+    );
+    assert!(ran, "and the CLI the fixed script puts on PATH is what ran");
+}
+
+/// F2 (037 M2 review): an AI session whose folder is gone is told that, with environment-include
+/// on as with it off.
+///
+/// The CLI is looked for on the `PATH` the directory's script yields, and the script cannot be
+/// sourced in a directory that does not exist: the attempt comes back as timed out. Before this
+/// the start was refused for a script that "timed out" for the folder, and the one fact the user
+/// could act on, that the folder is gone, was never reached.
+///
+/// The CLI is hidden, as it is wherever only the script would have put it on `PATH`. A start that
+/// does find the CLI is not refused here and reaches the same sentence at the spawn.
+#[test]
+fn an_ai_session_whose_folder_is_gone_is_told_that_and_not_that_the_script_timed_out() {
+    let path = NoCliOnPath::new();
+    let _host = ImageReference::unset(&path);
+    let parent = tempfile::tempdir().unwrap();
+    let project = parent.path().join("gone");
+    std::fs::create_dir(&project).unwrap();
+    let store = tempfile::tempdir().unwrap();
+    JsonFileSettingsStore::at(store.path().join("settings.json"))
+        .save(&include_settings(store.path(), &SCRIPT_LACKS_THE_CLI))
+        .unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x0037_F002));
+    let state = DaemonState::new(catalog_with_ai_cli_session(
+        AiCli::ClaudeCode,
+        &project,
+        store.path(),
+        id,
+    ));
+
+    // `rm -r gone`, outside the application.
+    std::fs::remove_dir(&project).unwrap();
+
+    let result = state.start_session(id, LaunchMode::Fresh);
+
+    let err = result.expect_err("there is no directory to start in");
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    assert!(state.live_session(id).is_none(), "and nothing was spawned");
+    let WireLifecycle::Failed { reason, attempts } = reported_lifecycle(&state, id) else {
+        panic!(
+            "expected a reported failure, got {:?}",
+            reported_lifecycle(&state, id)
+        );
+    };
+    assert_eq!(
+        reason,
+        format!(
+            "This session's folder no longer exists: {}. Restore it, or close this session.",
+            project.display()
+        ),
+        "the sentence a shell session gets for the same folder"
+    );
+    assert_eq!(attempts, 0, "no process ever existed");
+
+    // Put it back. The attempt made while it was gone is not what the next start reads: the script
+    // is sourced there now, and the refusal is the one for a script that ran without the CLI.
+    std::fs::create_dir(&project).unwrap();
+    assert!(state.start_session(id, LaunchMode::Fresh).is_err());
+    let WireLifecycle::Failed { reason, .. } = reported_lifecycle(&state, id) else {
+        panic!(
+            "expected a reported failure, got {:?}",
+            reported_lifecycle(&state, id)
+        );
+    };
+    assert_eq!(
+        reason,
+        cli_reason::start_refusal(
+            AiCli::ClaudeCode,
+            SpawnEnv::Applied,
+            Place::ThisComputer,
+            AttemptDir::Dir(&project),
+            LaunchMode::Fresh,
+        ),
+        "the folder is back, so the timed-out attempt made without it describes nothing"
     );
 }

@@ -323,6 +323,16 @@ fn session_path(vars: Vec<(String, String)>) -> std::ffi::OsString {
         .unwrap_or_else(micold_core::provider::process_path)
 }
 
+/// What a start says when the session's folder was renamed or deleted from outside the application
+/// (`010` BUG-001, FR-012). One sentence for the two places that find it out: the AI-CLI gate,
+/// before it sources a script there (037 M2 review F2), and the refused spawn.
+fn folder_gone(cwd: &Path) -> String {
+    format!(
+        "This session's folder no longer exists: {}. Restore it, or close this session.",
+        cwd.display()
+    )
+}
+
 /// The state an attempt to source the script left (FR-001's last four rows).
 ///
 /// Written as its own total match, not through `SpawnEnv::classify`: an attempt was made, so
@@ -909,6 +919,21 @@ impl DaemonState {
     /// (FR-021, BUG-005).
     pub fn invalidate_env_include(&self, cwd: &Path) {
         self.lock().env_include_cache.remove(cwd);
+    }
+
+    /// Record `reason` as why `id` did not start, and drop the resolution of `cwd` the launch gate
+    /// read to reach it (037 M2 review F1).
+    ///
+    /// The reason tells the user to change something and start again, so the next start has to
+    /// look again. Served from the cache, a restart after the script was fixed, or the folder
+    /// restored, read the attempt that failed and was refused in the same words. Only the gate's
+    /// own refusals drop it; what else should is #438's question.
+    ///
+    /// One short lock for both. Not for a caller that holds the state lock: it is not reentrant.
+    fn refuse_and_forget_env(&self, id: SessionId, cwd: &Path, reason: &str) {
+        let mut inner = self.lock();
+        inner.start_failures.insert(id, reason.to_string());
+        inner.env_include_cache.remove(cwd);
     }
 
     /// Adopt the token this daemon will require, read from `path`.
@@ -2314,6 +2339,23 @@ impl DaemonState {
             let provider = plan.provider.provider();
             let resolved = self.spawn_env_for(&plan.cwd);
             if !provider.is_available(&session_path(resolved.vars)) {
+                // Is there a folder to have looked in (037 M2 review F2)? The script cannot be
+                // sourced in a directory that does not exist, and `env_include::resolve` reports
+                // that attempt as timed out. Without this a session whose folder was deleted was
+                // refused for a script that "timed out" there, and never reached the sentence that
+                // names the folder. Asked only once the CLI was not found: a start that finds it
+                // goes on as before, and learns of the folder from the refused spawn below, as a
+                // Regular session does.
+                if !plan.cwd.is_dir() {
+                    let reason = folder_gone(&plan.cwd);
+                    tracing::warn!(
+                        session = %id.0,
+                        cwd = %plan.cwd.display(),
+                        "session folder is gone; not starting"
+                    );
+                    self.refuse_and_forget_env(id, &plan.cwd, &reason);
+                    return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+                }
                 let image = image_reference();
                 let reason = micold_core::cli_reason::start_refusal(
                     plan.provider,
@@ -2328,7 +2370,7 @@ impl DaemonState {
                     env = ?resolved.env,
                     "AI CLI not on PATH; not starting"
                 );
-                self.lock().start_failures.insert(id, reason.clone());
+                self.refuse_and_forget_env(id, &plan.cwd, &reason);
                 return Err(io::Error::new(io::ErrorKind::NotFound, reason));
             }
 
@@ -2412,11 +2454,7 @@ impl DaemonState {
             Ok(session) => session,
             Err(err) => {
                 let reason = if err.kind() == io::ErrorKind::NotFound && !cwd.is_dir() {
-                    format!(
-                        "This session's folder no longer exists: {}. Restore it, or close this \
-                         session.",
-                        cwd.display()
-                    )
+                    folder_gone(&cwd)
                 } else {
                     format!("Couldn't start this session: {err}")
                 };
