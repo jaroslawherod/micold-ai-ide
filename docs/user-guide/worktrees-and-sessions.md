@@ -779,11 +779,19 @@ guess; if you do run the same conversation in two places at once, both write to 
   that never comes to life. The session's pane and an error banner name the CLI, give the reason for
   the session's directory and say what to change. The reasons are the six described under
   [Default AI CLI](./settings.md#default-ai-cli): for example "Source a script before each session"
-  is off, "Script path" is empty, or the startup script was not found, failed or timed out. When the
-  startup script was not found, failed or timed out, the message does not tell you to install
-  anything: the fix is the script ("Script path", or "Timeout"). Only when the script was applied
-  does it say the CLI was not found on the `PATH` sessions get, and to install it. In a container
-  whose image lacks the CLI, it names the image and says to choose one that provides it.
+  is off, "Script path" is empty, or the startup script was not found, failed or timed out. What it
+  says about installing depends on which:
+  - When the startup script was not found, failed or timed out, it does not mention installing: the
+    fix is the script ("Script path", or "Timeout").
+  - When no script is sourced ("Source a script before each session" is off, or "Script path" is
+    empty), it says to turn that on or set it, and offers installing the CLI on the login `PATH` as
+    the alternative (in a container, using an image that puts the CLI on its `PATH`).
+  - When the script was applied, it says the CLI was not found on the `PATH` sessions get. Only
+    then is installing the first advice, with making the script add the CLI's directory as the
+    alternative.
+
+  In a container whose image lacks the CLI, it names the image and says to choose one that provides
+  it.
   - **A new session** is also offered another AI CLI.
   - **A restarted session** is never pointed at another CLI: its conversation lives in that CLI's
     own store, so it can only continue there. The message says to fix the cause and then restart

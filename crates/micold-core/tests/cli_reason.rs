@@ -7,8 +7,8 @@
 use std::path::Path;
 
 use micold_core::cli_reason::{
-    explain, name_list, AttemptDir, Explanation, Place, SpawnEnv, LABEL_ENABLED, LABEL_SCRIPT_PATH,
-    LABEL_TIMEOUT,
+    explain, explain_one, name_list, AttemptDir, Explanation, Place, SpawnEnv, LABEL_ENABLED,
+    LABEL_SCRIPT_PATH, LABEL_TIMEOUT,
 };
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::AiCli;
@@ -796,5 +796,24 @@ fn w3e_no_refusal_says_not_installed_unless_the_script_was_applied() {
             !(lowered.starts_with("install") || lowered.starts_with("use an image")),
             "SC-003: installing is never the only action: {sentence}"
         );
+    }
+}
+
+/// 037 M2 review F4: `explain_one` is `explain` for a list of one, in every state and place and
+/// for both kinds of directory. It exists so a caller with one CLI has no empty case to handle.
+#[test]
+fn explain_one_says_what_explain_says_for_a_list_of_one() {
+    for cli in AiCli::ALL {
+        for env in EVERY_STATE {
+            for place in BOTH_PLACES {
+                for dir in [AttemptDir::Home, AttemptDir::Dir(Path::new(PROJECT))] {
+                    assert_eq!(
+                        Some(explain_one(cli, env, place, dir)),
+                        explain(&[cli], env, place, dir),
+                        "{cli}, {env:?}, {place:?}, {dir:?}"
+                    );
+                }
+            }
+        }
     }
 }
