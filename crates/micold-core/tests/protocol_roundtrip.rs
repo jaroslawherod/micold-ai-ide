@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use micold_core::git::GitRemote;
+use micold_core::mcp::policy::CrossSessionAccess;
 
 use micold_core::protocol::envelope::{Encoding, EnvelopeError, EnvelopeHeader, Kind, HEADER_LEN};
 use micold_core::protocol::grid::{
@@ -229,6 +230,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             pi_activity_component: Some(false),
             // Feature 034 (FR-004): turning the binding off must cross the wire as `false`.
             tool_server_enabled: Some(false),
+            // Feature 034 (FR-016): the option crosses the wire as the value chosen.
+            cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -241,6 +244,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             default_ai_cli: None,
             pi_activity_component: None,
             tool_server_enabled: None,
+            cross_session_access: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -362,6 +366,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 default_ai_cli: AiCli::ClaudeCode,
                 pi_activity_component: true,
                 tool_server_enabled: true,
+                cross_session_access: CrossSessionAccess::Auto,
             },
         },
         DaemonMsg::Refused {
@@ -420,6 +425,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 default_ai_cli: AiCli::Pi,
                 pi_activity_component: false,
                 tool_server_enabled: false,
+                cross_session_access: CrossSessionAccess::Off,
             },
         },
         DaemonMsg::SessionTitleChanged {
@@ -558,6 +564,56 @@ fn every_daemon_message_json_round_trips() {
     for msg in sample_daemon_msgs() {
         json_roundtrip(&msg);
     }
+}
+
+/// U79 (feature 034, FR-016): every value of the cross-session option survives both directions,
+/// and "leave it unchanged" stays distinct from each of them.
+#[test]
+fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
+    for access in CrossSessionAccess::ALL {
+        let settings = DaemonSettings {
+            scrollback_lines: 10_000,
+            env_include_enabled: true,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: 10,
+            default_ai_cli: AiCli::ClaudeCode,
+            pi_activity_component: true,
+            tool_server_enabled: true,
+            cross_session_access: access,
+        };
+        json_roundtrip(&DaemonMsg::SettingsChanged {
+            settings: settings.clone(),
+        });
+        let set = ClientMsg::SettingsSet {
+            req: 3,
+            scrollback_lines: None,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            tool_server_enabled: None,
+            cross_session_access: Some(access),
+        };
+        json_roundtrip(&set);
+        let bytes = serde_json::to_vec(&set).unwrap();
+        match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
+            ClientMsg::SettingsSet {
+                cross_session_access,
+                ..
+            } => assert_eq!(cross_session_access, Some(access)),
+            other => panic!("expected SettingsSet, got {other:?}"),
+        }
+    }
+    assert_eq!(
+        CrossSessionAccess::ALL,
+        [
+            CrossSessionAccess::Auto,
+            CrossSessionAccess::ConfirmEachSend,
+            CrossSessionAccess::Off
+        ],
+        "the three values FR-016 names, in the order Settings offers them"
+    );
 }
 
 #[test]
