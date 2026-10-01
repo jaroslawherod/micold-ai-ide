@@ -250,7 +250,7 @@ confirmation dialog, and the FR-015/FR-015a refusals.
 
 - [x] T074 [P] [U206] Write `crates/micold-daemon/tests/mcp_read_latency.rs` (SC-004): with 50 worktrees and 50 sessions, each read-only tool answers in under 1 s, `list_branches` (which runs git off the lock) included
 - [x] T075 [P] [U147] Write `crates/micold-daemon/tests/sandbox_real_mcp.rs` (feature `sandbox-real-runtime`, off by default; SC-008 for 027): a sandboxed session's binding file exists in the container's data dir and `whoami` answers from inside the container; nothing on the host's loopback answers on that port
-- [x] T076 Re-run quickstart §B1–§B6 end to end on the finished feature with the real CLIs and the `visual-pass` skill and index the evidence in `specs/034-daemon-mcp-server/evidence/README.md`; if a Copilot probe fails, switch Copilot to `Unsupported` with the observed reason in `crates/micold-core/src/provider.rs` and the user guide (FR-005)
+- [x] T076 Re-run quickstart §B1–§B6 end to end on the finished feature with the real CLIs and the `visual-pass` skill and index the evidence in `specs/034-daemon-mcp-server/evidence/README.md`; if a Copilot probe fails, switch Copilot to `Unsupported` with the observed reason in `crates/micold-core/src/provider.rs` and the user guide (FR-005) (the final pass did not repeat §B2's 55 s Allow from Copilot; it stands on M5's `evidence/m5-real-cli.md`)
 - [x] T077 Final documentation pass: `docs/user-guide/agent-tools.md` covers every FR-019 item (tools, bound CLIs, toggle, cross-session option, confirmation policy, scope), and `docs/daemon.md` names the second loopback listener beside the hook receiver
 
 ---

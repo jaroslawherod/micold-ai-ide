@@ -6,7 +6,7 @@ The **final pass** (M7, T076, 2026-10-01) ran every step but one (§B2's repeat 
 Copilot) on the finished feature, in the real app on Xvfb, with the real `claude`, `copilot` and `pi`
 and real model calls:
 
-- [m7-b1-b3-real-cli/](m7-b1-b3-real-cli/NOTES.md): §B1 steps 1–6, §B2, §B3. 12 of 12 checks passed.
+- [m7-b1-b3-real-cli/](m7-b1-b3-real-cli/NOTES.md): §B1 steps 1–6, §B2, §B3. 13 of 13 results passed.
 - [m7-b4-b6-real-cli/](m7-b4-b6-real-cli/NOTES.md): §B1 step 7, §B4, §B5, §B6. 11 of 11 checks passed.
 
 Each directory's `NOTES.md` says how the pass was run, what deviated from the quickstart and what

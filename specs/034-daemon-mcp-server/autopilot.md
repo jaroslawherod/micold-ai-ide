@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M7
-- **Next step**: M7: all four tasks ticked (T076's index written). Gate, then reviews A and B, then the PR.
+- **Next step**: M7 PR open: the orchestrator waits on CI and merges. Then Phase 5 (close).
 
 ## Pull requests
 
@@ -87,8 +87,10 @@ deliverable (tasks.md Notes).
 | M6 | visual pass §B5, §B6 | 1 | 800ded94aefc484ad7bb8561f2c9012142d58436:5fd07a884c05b1fcdcd22d2a2b81a1120dd76497 | PASS, 5 of 5 checks (evidence/m6-b5-b6-cross-session) |
 | M6 | A (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; the fixes hold, the declines stand |
 | M6 | B (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; Verify green (test-core 1471; mcp_cross_session 19, scrollback_range 11, mcp_audit_log 5, mcp_create_worktree 12, mcp_lifecycle_tools 25; features_settings 63, layout_snapshot 43). 1 MINOR fixed (FR-012a states D23's refusals). Not counted: run because review A's fixes changed code |
-| M7 | visual pass §B1–§B3 (real CLIs) | 1 | binaries of aacbd7cd | PASS, 12 of 12 checks (evidence/m7-b1-b3-real-cli) |
+| M7 | visual pass §B1–§B3 (real CLIs) | 1 | binaries of aacbd7cd | PASS, 13 of 13 results (evidence/m7-b1-b3-real-cli) |
 | M7 | visual pass §B1 step 7, §B4–§B6 (real CLI) | 1 | binaries of aacbd7cd | PASS, 11 of 11 checks (evidence/m7-b4-b6-real-cli) |
+| M7 | A (code-review high) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; 3 MINOR, all declined as follow-ups (below) |
+| M7 | B (conformance) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; Verify green (mcp_audit_log 5, mcp_read_latency 1; sandbox record checked: cycle 41, 29 passed). 3 MINOR: 2 fixed (T076 names the Copilot 55 s step that stands on M5's evidence; the B1–B3 count is 13 of 13), 1 declined |
 
 ## Declined review findings
 
@@ -128,6 +130,10 @@ deliverable (tasks.md Notes).
 | M6 | A round 1 | F1 (part): an inner line break submits early when the target has not enabled bracketed paste | Already a follow-up from M3 review A for the first prompt; the same `encode_submission`. Both real CLIs enable bracketed paste before they take input |
 | M6 | A round 1 | F6: a mistyped `cross_session_access` in a hand-edited settings file fails the whole document | MINOR; the same strict parsing as every other enum in the settings file, and the file is written by the app. Follow-up below |
 | M6 | A round 1 | F7: the PTY write is a blocking `write_all` on the runtime thread; PTY and framer are read under two locks | MINOR; the same write as the first prompt's (M3) and a window's keystrokes. A restart between the two reads answers `conflict`, which is true an instant later. Follow-up below |
+| M7 | A round 1 | F1: an unknown `cross_session_access` reads as `Off` with no log line, and the next save stores `"off"` over it | MINOR; reading it as `Off` is the choice of `aacbd7cd` (U233): the safe value, and the rest of the file is kept. Keeping the unknown stored value across a save and logging it is a follow-up below |
+| M7 | A round 1 | F2: `mcp_read_latency.rs` kills the started session's PTY inline, not in a `Drop` guard, so a panic leaves it to `PtySession::drop` | MINOR, test-only; the gate was already running on this tree. Follow-up below |
+| M7 | A round 1 | F3: `sandbox_real_mcp.rs`'s host-loopback probe has no timeout when a foreign listener accepts and never answers | MINOR, test-only, in a suite that is off by default; not re-verified by the reviewer. Follow-up below |
+| M7 | B round 1 | F3: `aacbd7cd` changes `settings.rs` under M7 with no task row | MINOR; a new task would change M7's range (T074–T077) after the milestones were cut (D18). It is traceable through U233, cycle 40, this ledger (M6 review A F6) and the PR body |
 
 ## Handover
 
@@ -162,3 +168,6 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - A theme change saved in Settings shows only after the client restarts (seen in the M5 and M6 visual passes); not this feature's code.
 - Unconfirmed, from the M7 visual passes: worktrees made with plain `git worktree add` under `.claude/worktrees/` before the app first opened the project (seeded through `projects.json`) were not listed in the sidebar, even after Refresh. Not investigated; not this feature's code.
 - `read_session_output` is timed by `mcp_read_latency.rs` on unix only (the stand-in CLI is `#!/bin/sh`); goes with the Windows stand-in port above.
+- An unknown `cross_session_access` in the settings file is read as `Off` silently and overwritten with `"off"` on the next save; log the unrecognised value and keep the stored one while the in-memory value is the fallback (M7 review A).
+- `mcp_read_latency.rs`: move the PTY kill into a `Drop` guard, as `mcp_cross_session.rs` and `mcp_lifecycle_tools.rs` do (M7 review A).
+- `sandbox_real_mcp.rs`: wrap the host-loopback `post_mcp` probe in a timeout (M7 review A).
