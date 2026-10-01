@@ -25,6 +25,9 @@ existed and failed before the implementation.
   must be green against the untouched launch gate. Its entry records that green, not a red.
 - Twelve behaviours were `DONE` at planning, each held by an existing test: U37, U46, U49, U51, U52,
   U67, U68, U70, U76, U77, U86, U91.
+- After the rebase onto `origin/main`, where feature 034 took protocol 18 (commit 746cfa6c), 037's
+  bump is 18 -> 19 and the version pin in `tests/schema_hash.rs` was re-taken at 19. The dated
+  entries below record the 17 -> 18 they ran against and are left as written.
 
 ## Cycle 1: U1–U8 `SpawnEnv::classify`, U9–U25 `name_list` and `explain` (T001–T003, T007, T008)
 
