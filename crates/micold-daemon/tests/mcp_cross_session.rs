@@ -87,7 +87,7 @@ impl Drop for Env {
 struct Sandbox {
     _env: Env,
     bin: tempfile::TempDir,
-    _home: tempfile::TempDir,
+    home: tempfile::TempDir,
     _project: tempfile::TempDir,
     _other: tempfile::TempDir,
     _store: tempfile::TempDir,
@@ -146,7 +146,7 @@ impl Sandbox {
         Self {
             _env: env,
             bin,
-            _home: home,
+            home,
             _project: project,
             _other: other,
             _store: store,
@@ -245,6 +245,20 @@ impl Sandbox {
             .expect("the session is in the catalog")
     }
 
+    /// Remove Claude Code's trust record, so it would ask about every folder.
+    fn distrust(&self) {
+        std::fs::remove_file(self.home.path().join(".claude.json")).unwrap();
+    }
+
+    /// Wait until the stand-in has put its terminal in raw mode.
+    async fn raw_mode_is_on(&self) {
+        let deadline = Instant::now() + BOUND;
+        while !self.bin.path().join("claude.rawset").exists() {
+            assert!(Instant::now() < deadline, "the stand-in never set raw mode");
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
     fn set_access(&self, access: CrossSessionAccess) {
         self.state.set_cross_session_access(access).unwrap();
     }
@@ -281,7 +295,7 @@ fn install_cli(bin: &Path) {
              while [ \"$i\" -le \"$n\" ]; do printf 'out%s\\n' \"$i\"; i=$((i + 1)); done\n\
              if [ -e '{dir}/claude.raw' ]; then printf '\\033[?2004h'; fi\n\
              printf '\\033[1;32mready>\\033[0m '\n\
-             if [ -e '{dir}/claude.raw' ]; then stty raw -echo; fi\n\
+             if [ -e '{dir}/claude.raw' ]; then stty raw -echo; : > '{dir}/claude.rawset'; fi\n\
              exec cat >> '{dir}/claude.input'\n"
         ),
     )
@@ -510,7 +524,7 @@ async fn a_two_line_text_is_one_bracketed_submission_ending_in_a_carriage_return
     let s2 = s.start_s2().await;
     // The stand-in sets raw mode after drawing its prompt; a write before that would be read in
     // line mode.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    s.raw_mode_is_on().await;
 
     s.ok(
         "send_session_input",
@@ -536,6 +550,57 @@ async fn empty_text_is_invalid_input() {
         assert_eq!(error["category"], "invalid_input", "{args}: {error}");
     }
     s.nothing_typed().await;
+}
+
+/// Text of line breaks only, or with a control character in it, is invalid input and types
+/// nothing: not a bare Enter, and not a Ctrl-C that skips `interrupt_session`'s confirmation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn line_breaks_alone_and_control_characters_are_invalid_input() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    for text in ["\n", "\r\n", "\u{3}", "stop\u{3}", "up\u{1b}[A"] {
+        let error = s
+            .err(
+                "send_session_input",
+                json!({"session": reference(s2), "text": text}),
+            )
+            .await;
+        assert_eq!(error["category"], "invalid_input", "{text:?}: {error}");
+    }
+    s.nothing_typed().await;
+}
+
+/// A CLI with no record that it trusts the folder may be showing its trust question, which the
+/// submission's Enter would answer: nothing is typed and nobody is asked, as for the first prompt
+/// of `create_session` (research R12).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    s.distrust();
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let shown = answering_window(&s.state, true);
+
+    let error = s
+        .err(
+            "send_session_input",
+            json!({"session": reference(s2), "text": TEXT}),
+        )
+        .await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(
+        message.contains("trust") && message.contains("Claude Code"),
+        "names the CLI and the trust question: {message}"
+    );
+    assert!(shown.lock().unwrap().is_empty(), "nobody is asked");
+    s.nothing_typed().await;
+
+    // Reading types nothing, so it still works.
+    s.ok("read_session_output", json!({"session": reference(s2)}))
+        .await;
 }
 
 /// A session that has no running process has no terminal to read and nothing to type into: a

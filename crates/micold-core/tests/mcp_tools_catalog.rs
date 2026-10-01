@@ -528,6 +528,33 @@ fn send_session_input_accepts_any_non_empty_text() {
     assert_eq!(NonEmptyText::new("y").unwrap().as_str(), "y");
 }
 
+/// FR-012a: text made only of line breaks types nothing but the closing Enter, so it is empty.
+/// A space before the line break is text (assumption A-4).
+#[test]
+fn send_session_input_with_only_line_breaks_is_invalid_input() {
+    for text in ["\n", "\r\n", "\n\n\r"] {
+        let message = invalid("send_session_input", json!({"session": S, "text": text}));
+        assert!(message.contains("empty"), "{text:?}: {message}");
+        assert!(NonEmptyText::new(text).is_none(), "{text:?}");
+    }
+    assert!(NonEmptyText::new(" \n").is_some());
+}
+
+/// A control character is a keystroke, not text: Ctrl-C would interrupt the other session without
+/// the confirmation `interrupt_session` needs (FR-014), and Escape would drive its menus. Line
+/// breaks and tabs are text.
+#[test]
+fn send_session_input_with_a_control_character_is_invalid_input() {
+    for text in ["\u{3}", "stop\u{3}", "\u{4}", "up\u{1b}[A", "x\u{7f}", "a\u{0}b", "\u{9b}A"] {
+        let message = invalid("send_session_input", json!({"session": S, "text": text}));
+        assert!(message.contains("control character"), "{text:?}: {message}");
+        assert!(NonEmptyText::new(text).is_none(), "{text:?}");
+    }
+    for text in ["a\tb", "one\r\ntwo", "żółć 日本"] {
+        assert!(NonEmptyText::new(text).is_some(), "{text:?}");
+    }
+}
+
 #[test]
 fn the_cross_session_tools_need_a_session_id() {
     invalid("read_session_output", json!({}));
