@@ -1,5 +1,5 @@
 //! Feature 034 (contracts/mcp-tools.md `read_session_output`, `send_session_input`; US4 scenarios
-//! 1–4; FR-010, FR-012, FR-012a, FR-015, FR-016; A19–A22, U198–U201): an agent reads a sibling
+//! 1–5; FR-010, FR-012, FR-012a, FR-014, FR-015, FR-016; A19–A23, U198–U201): an agent reads a sibling
 //! session's terminal and types into it, under the user's "Let agents read and type into other
 //! sessions" option.
 //!
@@ -10,8 +10,8 @@
 //! a real CLI does, so the file holds the exact bytes the service wrote. A second project holds
 //! session X and worktree `elsewhere`.
 //!
-//! The "Confirm each send" answers a window gives (allow, decline, time out) need the confirmation
-//! flow of milestone M5 and are added with it; what holds without a window is checked here.
+//! At "Confirm each send" a fake window is shown the prompt and answers it, or leaves it until the
+//! 60 s bound passes on a paused clock.
 
 // unix-only: the stand-in CLI is a `#!/bin/sh` script (Windows port is a recorded follow-up).
 #![cfg(unix)]
@@ -22,12 +22,13 @@ mod mcp_support;
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use mcp_support::*;
 use micold_core::mcp::policy::CrossSessionAccess;
-use micold_core::protocol::messages::SessionProcess;
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ConfirmOperation, DaemonMsg, SessionProcess};
 use micold_core::session::{AiCli, SessionId, ShellInstanceId, TerminalMode};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -232,6 +233,18 @@ impl Sandbox {
         assert_eq!(self.typed(), "", "S2 must be untouched");
     }
 
+    /// The label the sidebar shows for `session`.
+    fn label(&self, session: SessionId) -> String {
+        self.state
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .find(|s| s.id == session)
+            .map(|s| s.title.display().to_string())
+            .expect("the session is in the catalog")
+    }
+
     fn set_access(&self, access: CrossSessionAccess) {
         self.state.set_cross_session_access(access).unwrap();
     }
@@ -274,6 +287,48 @@ fn install_cli(bin: &Path) {
     )
     .unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A window that answers every prompt it is shown with `allow`; returns the prompts it was shown.
+fn answering_window(state: &Arc<DaemonState>, allow: bool) -> Arc<Mutex<Vec<DaemonMsg>>> {
+    let mut rx = fake_window(state);
+    let shown = Arc::new(Mutex::new(Vec::new()));
+    let (st, prompts) = (Arc::clone(state), Arc::clone(&shown));
+    tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            if let Frame::Control(msg @ DaemonMsg::ConfirmationRequested { .. }) = frame {
+                let DaemonMsg::ConfirmationRequested { id, .. } = &msg else {
+                    unreachable!()
+                };
+                let id = *id;
+                prompts.lock().unwrap().push(msg);
+                st.answer_confirmation(id, allow);
+            }
+        }
+    });
+    shown
+}
+
+/// The one prompt a window was shown must ask to type into the session labelled `target` from S1,
+/// and carry no part of the text (FR-018: the prompt names the operation and its target only).
+fn assert_one_send_prompt(shown: &Mutex<Vec<DaemonMsg>>, target: &str) {
+    let shown = shown.lock().unwrap();
+    let [DaemonMsg::ConfirmationRequested {
+        caller,
+        operation,
+        target_label,
+        ..
+    }] = shown.as_slice()
+    else {
+        panic!("exactly one prompt, got {shown:#?}");
+    };
+    assert_eq!(*caller, sid(S1));
+    assert_eq!(*operation, ConfirmOperation::SendInput);
+    assert_eq!(target_label, target, "the prompt names the target");
+    assert!(
+        !format!("{shown:?}").contains(TEXT),
+        "the text must not reach the prompt: {shown:#?}"
+    );
 }
 
 fn reference(session: SessionId) -> String {
@@ -537,6 +592,124 @@ async fn at_off_both_tools_are_refused_by_policy_and_s2_is_untouched() {
     s.nothing_typed().await;
 }
 
+/// A19 (US4 s1), with a window attached: a read at Confirm each send asks nobody.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_confirm_each_send_a_read_raises_no_confirmation() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let shown = answering_window(&s.state, false);
+
+    let out = s
+        .ok("read_session_output", json!({"session": reference(s2)}))
+        .await;
+    assert!(
+        lines_of(&out).ends_with(&["ready>".to_string()]),
+        "the read went ahead: {out}"
+    );
+    assert!(
+        shown.lock().unwrap().is_empty(),
+        "a read never asks the user: {:#?}",
+        shown.lock().unwrap()
+    );
+}
+
+/// A23 (US4 s5), allowed: the send waits for the window's answer, and Allow delivers the text as
+/// at Auto. The prompt names the caller, the operation and the target, never the text.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_confirm_each_send_an_allowed_send_is_delivered() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let shown = answering_window(&s.state, true);
+
+    let out = s
+        .ok(
+            "send_session_input",
+            json!({"session": reference(s2), "text": TEXT}),
+        )
+        .await;
+    assert_eq!(out, json!({}), "an acknowledgement and nothing else");
+    s.typed_becomes(&format!("{TEXT}\n")).await;
+    assert_one_send_prompt(&shown, &s.label(s2));
+}
+
+/// A23 (US4 s5), declined: the send is refused by policy and S2 is untouched.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_confirm_each_send_a_declined_send_is_refused_by_policy_and_s2_is_untouched() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let shown = answering_window(&s.state, false);
+
+    let error = s
+        .err(
+            "send_session_input",
+            json!({"session": reference(s2), "text": TEXT}),
+        )
+        .await;
+    assert_eq!(error["category"], "refused_by_policy", "{error}");
+    assert_one_send_prompt(&shown, &s.label(s2));
+    s.nothing_typed().await;
+}
+
+/// A23 (US4 s5), timed out: a window is shown the prompt and nobody answers; after the 60 s bound
+/// the send fails as needing confirmation, the prompt is withdrawn and S2 is untouched. The clock
+/// is paused only to step over the bound, once the prompt is in the window.
+#[tokio::test(flavor = "current_thread")]
+async fn at_confirm_each_send_an_unanswered_send_needs_confirmation_and_s2_is_untouched() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let s2 = s.start_s2().await;
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let mut window = fake_window(&s.state);
+
+    let (addr, bearer) = (s.addr, credential(&s.state, sid(S1)));
+    let args = json!({"session": reference(s2), "text": TEXT});
+    let call =
+        tokio::spawn(async move { call_err(addr, &bearer, "send_session_input", args).await });
+
+    let prompt = tokio::time::timeout(BOUND, async {
+        loop {
+            match window.recv().await.expect("the window stays connected") {
+                Frame::Control(DaemonMsg::ConfirmationRequested { id, operation, .. }) => {
+                    assert_eq!(operation, ConfirmOperation::SendInput);
+                    return id;
+                }
+                _ => continue,
+            }
+        }
+    })
+    .await
+    .expect("the window is shown the prompt");
+
+    tokio::time::pause();
+    tokio::time::advance(micold_daemon::mcp::confirm::CONFIRM_TIMEOUT).await;
+    tokio::time::resume();
+
+    let error = tokio::time::timeout(BOUND, call)
+        .await
+        .expect("the call returns once the bound passed")
+        .unwrap();
+    assert_eq!(error["category"], "needs_confirmation", "{error}");
+    let withdrawn = tokio::time::timeout(BOUND, async {
+        loop {
+            if let Frame::Control(DaemonMsg::ConfirmationWithdrawn { id }) =
+                window.recv().await.expect("the window stays connected")
+            {
+                return id;
+            }
+        }
+    })
+    .await
+    .expect("the prompt is withdrawn");
+    assert_eq!(withdrawn, prompt);
+    s.nothing_typed().await;
+}
+
 /// A23, the part that needs no window: at Confirm each send with no window attached, a send fails
 /// as needing confirmation and S2 is untouched (FR-014's no-window refusal).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -618,7 +791,7 @@ async fn the_callers_own_session_is_invalid_input_under_every_option_value() {
 async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    let session_tools: [TargetedTool; 4] = [
+    let session_tools: [TargetedTool; 7] = [
         ("get_session", |r| json!({"session": r})),
         ("start_session", |r| json!({"session": r})),
         ("read_session_output", |r| json!({"session": r})),
@@ -626,14 +799,22 @@ async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref()
             "send_session_input",
             |r| json!({"session": r, "text": "hello"}),
         ),
+        ("stop_session", |r| json!({"session": r})),
+        ("interrupt_session", |r| json!({"session": r})),
+        ("delete_session", |r| json!({"session": r})),
     ];
-    let worktree_tools: [TargetedTool; 3] = [
+    let worktree_tools: [TargetedTool; 5] = [
         ("list_sessions", |r| json!({"worktree": r})),
         (
             "rename_worktree",
             |r| json!({"worktree": r, "display_name": "Renamed"}),
         ),
         ("create_session", |r| json!({"worktree": r})),
+        ("delete_worktree", |r| json!({"worktree": r})),
+        (
+            "delete_worktree",
+            |r| json!({"worktree": r, "stop_sessions": true}),
+        ),
     ];
 
     for access in CrossSessionAccess::ALL {
@@ -666,5 +847,16 @@ async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref()
     assert!(
         s.state.primary_pty(sid(X)).is_none(),
         "the other project's session was not started"
+    );
+    let theirs = s
+        .state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.sessions.iter().any(|s| s.id == sid(X)))
+        .expect("the other project's session is still in the catalog");
+    assert!(
+        theirs.path.join(".claude/worktrees/elsewhere").is_dir(),
+        "the other project's worktree was not deleted"
     );
 }
