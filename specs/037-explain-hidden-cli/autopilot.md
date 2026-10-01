@@ -9,12 +9,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 1-spec
-- **Next step**: Open PR 1 (`docs(037): specify explaining why an AI CLI is not offered`) after the spec review is clean.
+- **Next step**: Orchestrator merges PR #515 on green, then Phase 2 (clarify): resolve the one open marker (User Story 3 scenario 1 / FR-010).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #515 | Spec | open | |
 
 ## Milestones
 
