@@ -58,10 +58,10 @@ These tools stop or remove something, so each request waits until you allow it:
 
 When the assistant asks, **every open window** shows a dialog naming the session that asks, what it
 wants to do, and to what. **Allow** does it; **Deny** refuses it, and the assistant is told you
-declined. Escape, a click outside the dialog, or opening another dialog over it counts as Deny. The first answer from any window
-counts, and the dialog closes in every other window. If you are in another dialog at that moment
-(say, halfway through a new-worktree form), the request waits until you close it, so nothing you
-typed is lost.
+declined. Escape, a click outside the dialog, or opening another dialog over it counts as Deny. The
+first answer from any window counts, and the dialog closes in every other window. If you are in
+another dialog at that moment (say, halfway through a new-worktree form), the request waits until
+you close it, so nothing you typed is lost.
 
 Nothing changes until you allow it. The request fails with *needs confirmation* if no window is open
 to ask, or if nobody answers within 60 seconds. It fails with *not found* if the session or worktree,
