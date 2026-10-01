@@ -141,18 +141,18 @@ the file has. In every row `available` stays what the file's existing tests asse
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U28 | Environment-include off: the answer carries `env: Some(IncludeOff)` | FR-001 row 1, FR-012 (S1) | example | PENDING | |
-| U29 | On with a blank script path: `Some(NoScriptPath)` | FR-001 row 2 (S2) | example | PENDING | |
-| U30 | On with a script path that names no file: `Some(ScriptNotFound)` | FR-001 row 3 (S3) | example | PENDING | |
-| U31 | On with a script that exits 3: `Some(ScriptFailed)` | FR-001 row 4 (S4) | example | PENDING | |
-| U32 | `cfg(unix)`: on with a script path that names a directory: `Some(ScriptFailed)`, not `ScriptNotFound` | FR-001 (the note on a path that cannot be sourced) (S4) | example | PENDING | |
-| U33 | On with a script that sleeps past a 1 s timeout: `Some(ScriptTimedOut)` | FR-001 row 5 (S5) | example | PENDING | |
-| U34 | On with a script that adds a directory holding a fake CLI: `Some(Applied)`, and the CLI is in `available` | FR-001 row 6, FR-012 (S6) | example | PENDING | |
-| U35 | On with a script that succeeds and leaves the PATH alone: `Some(Applied)`, and the CLI is not in `available`: the other side of U34 | Edge Cases succeeded but changed nothing (S6) | example | PENDING | |
-| U36 | No `cwd` and no home directory: `env` is `Some(IncludeOff)` or `Some(NoScriptPath)` for those settings, and `None` when the settings call for an attempt | FR-011 (S7) | example | PENDING | |
+| U28 | Environment-include off: the answer carries `env: Some(IncludeOff)` | FR-001 row 1, FR-012 (S1) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::with_env_include_off_the_answer_says_it_is_off` |
+| U29 | On with a blank script path: `Some(NoScriptPath)` | FR-001 row 2 (S2) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::with_a_blank_script_path_the_answer_says_no_script_is_sourced` |
+| U30 | On with a script path that names no file: `Some(ScriptNotFound)` | FR-001 row 3 (S3) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_path_that_names_no_file_is_reported_as_not_found` |
+| U31 | On with a script that exits 3: `Some(ScriptFailed)` | FR-001 row 4 (S4) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_that_exits_with_an_error_is_reported_as_failed` |
+| U32 | `cfg(unix)`: on with a script path that names a directory: `Some(ScriptFailed)`, not `ScriptNotFound` | FR-001 (the note on a path that cannot be sourced) (S4) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_path_that_names_a_directory_is_reported_as_failed_not_as_not_found` |
+| U33 | On with a script that sleeps past a 1 s timeout: `Some(ScriptTimedOut)` | FR-001 row 5 (S5) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_that_runs_past_the_timeout_is_reported_as_timed_out` |
+| U34 | On with a script that adds a directory holding a fake CLI: `Some(Applied)`, and the CLI is in `available` | FR-001 row 6, FR-012 (S6) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_that_adds_the_cli_is_reported_as_applied_and_the_cli_is_offered` |
+| U35 | On with a script that succeeds and leaves the PATH alone: `Some(Applied)`, and the CLI is not in `available`: the other side of U34 | Edge Cases succeeded but changed nothing (S6) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_that_succeeds_and_adds_nothing_is_still_reported_as_applied` |
+| U36 | No `cwd` and no home directory: `env` is `Some(IncludeOff)` or `Some(NoScriptPath)` for those settings, and `None` when the settings call for an attempt | FR-011 (S7) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::with_no_directory_the_state_is_known_only_from_the_settings` |
 | U37 | A second answer for a directory does not run the script again: one run in the counting script's log | FR-014, SC-006 (contract A3) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_second_answer_for_a_directory_does_not_run_the_script_again` |
-| U38 | Reading `env` adds no run: two answers through `availability_in` carry the same state and the log still holds one run | FR-014, SC-006 (contract A3) | example | PENDING | (extends U37's test) |
-| U39 | After `set_env_include` turns environment-include on, the next answer for the same directory carries the new state, with no restart of the service | FR-013 (contract A3) | example | PENDING | |
+| U38 | Reading `env` adds no run: two answers through `availability_in` carry the same state and the log still holds one run | FR-014, SC-006 (contract A3) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::a_second_answer_for_a_directory_does_not_run_the_script_again` |
+| U39 | After `set_env_include` turns environment-include on, the next answer for the same directory carries the new state, with no restart of the service | FR-013 (contract A3) | example | DONE | `crates/micold-daemon/tests/ai_cli_availability.rs::turning_env_include_on_changes_the_next_answer_for_the_same_directory` |
 
 ### `crates/micold-client/src/features/session.rs`, `shell/daemon_sync.rs`: the client's copy
 

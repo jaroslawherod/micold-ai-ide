@@ -73,3 +73,27 @@ existed and failed before the implementation.
 - T015 (labels from the constants) and T016 (user guide) carry no behaviour marker: commit `da35f0df`.
 - T008 is not ticked: `name_list` still has its private copy in
   `crates/micold-client/src/features/settings.rs`. U9–U25 are `DONE` against the core functions.
+
+## Cycle 3: U28–U36, U38, U39 what the service answers (T005, T010; T008 remainder)
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs`: ten new tests for contract A2 S1–S7 and A3
+  (`with_env_include_off_the_answer_says_it_is_off`, `with_a_blank_script_path_…`,
+  `a_script_path_that_names_no_file_…`, `a_script_that_exits_with_an_error_…`,
+  `a_script_path_that_names_a_directory_…` (unix), `a_script_that_runs_past_the_timeout_…`,
+  `a_script_that_adds_the_cli_…`, `a_script_that_succeeds_and_adds_nothing_…`,
+  `with_no_directory_the_state_is_known_only_from_the_settings`,
+  `turning_env_include_on_changes_the_next_answer_for_the_same_directory`), and
+  `a_second_answer_for_a_directory_does_not_run_the_script_again` now reads `availability_in` (U38)
+- red: against stubs (`availability_in` returning `NoScriptPath`, `availability_for` returning `None`, the
+  server sending `env: None`): `scripts/build-lock.sh cargo test -p micold-daemon --test ai_cli_availability`
+  -> 9 passed; 11 failed, each on the state alone, for example `left: ([Pi], None)` /
+  `right: ([Pi], Some(ScriptNotFound))` and `left: ([], NoScriptPath)` / `right: ([], IncludeOff)`. `available`
+  was already right in every row, which is contract A2's last line
+- green: `ResolvedEnv { vars, env }` in the cell, `spawn_env_for`, `availability_in`, `availability_for`;
+  the server arm sends `env`. `--test ai_cli_availability --test env_include_cache_coherence`
+  -> 20 passed and 3 passed, 0 failed
+- refactor: `session_path` holds the PATH lookup `spawn_path_for` and `availability_in` share
+- note: an attempt's state comes from a total match (`attempted`), not from `SpawnEnv::classify`, which
+  returns an `Option`. `classify` decides the two settings states and S7
+- T008 remainder: the client's private `name_list` is deleted; `missing_cli_notice` calls the core one
+
