@@ -169,6 +169,20 @@ impl Sandbox {
             .unwrap_or(0)
     }
 
+    /// Wait until `command` was launched `expected` times. `create_session` returns once the
+    /// process is spawned; the stand-in writes its launch line a moment later, as its first act.
+    async fn launched(&self, command: &str, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while self.launches(command) != expected {
+            assert!(
+                Instant::now() < deadline,
+                "{command} was launched {} times, expected {expected}",
+                self.launches(command)
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
     /// Remove the Claude and Copilot trust records, so both would ask about every folder.
     fn distrust(&self) {
         std::fs::remove_file(self.home.path().join(".claude.json")).unwrap();
@@ -302,7 +316,7 @@ async fn without_ai_cli_the_session_runs_the_default_cli_from_settings() {
         .call("get_session", json!({"session": id.0.to_string()}))
         .await;
     assert_eq!(row["structuredContent"]["ai_cli"], "copilot", "{row}");
-    assert_eq!(s.launches("copilot"), 1);
+    s.launched("copilot", 1).await;
     assert_eq!(s.launches("claude"), 0);
 }
 
