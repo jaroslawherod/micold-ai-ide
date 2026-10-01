@@ -120,3 +120,10 @@ existed and failed before the implementation.
   product is unchanged: a person presses the select, not the column's centre
 - result: `cargo test -p micold-client --no-fail-fast` -> every target ok but that one; then
   `--test provider_choice_surfaces` -> 6 passed. The full suite runs in cycle 5 (`mise run gate`)
+
+## Cycle 5: A1–A8 with the full suite (T039)
+
+- A7 mutant: `missing_cli_notice` returning `Some("mutant")` when nothing is missing ->
+  `cargo test -p micold-client --bin micold-ai-ide the_settings_note_explains` -> 6 passed; 2 failed:
+  `with_every_cli_found_there_is_no_note_in_any_state` (A7) and
+  `the_note_appears_with_the_answer_and_goes_when_the_cli_is_found` (A2). Reverted with `git checkout`
