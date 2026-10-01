@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 4-milestone (M1)
-- **Next step**: M1: gate and review A, then review B and the visual pass (T039, T017), then the PR.
+- **Next step**: Merge the M1 PR once CI is green, then dispatch M2.
 
 ## Pull requests
 
@@ -57,6 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 91d8ac1c552b4aebf2935d2dbf27da809322cb24:f490b395f55a537ab5a1f99fea08cb1c9e5afb80 | CLEAN: 1 MINOR, fixed |
 | Tasks | 1 | 6a70370da6ba5cd5650bcbdaf9f8760c347ac6da:fff351d523d61045b0b4faeabc1344331029a419 | CHANGES: 1 MAJOR, 3 MINOR — all fixed |
 | Tasks | 2 | 0d9750169504fffafc0a6b973cfd025dbd58bcc9:1bc17b8d4e28e6454eec2393d3b2519435f6fb96 | CLEAN: no findings (scoped re-review of the round-1 fix diff) |
+| A M1 | 1 | ca880275230916cc10aa96f574819965737f135a:01a574f62363e3826f84a4c842b5c56ba8575728 | CLEAN: 3 MINOR, none fixed (see Follow-ups) |
+| B M1 | 1 | 7127de70ef5c3e65452575ce66c14909a318c21f:b205f81d1c577362dae687bce4268fdc09122bde | CLEAN: 3 MINOR, 1 fixed (U43, U44, U55 marked characterization) |
 
 ## Declined review findings
 
@@ -78,3 +80,22 @@ None.
 - The issue text says nothing names a hidden CLI. Settings already does (027 FR-023b): "*<name>*
   isn't installed on this computer, which is where sessions run." The spec treats that sentence as
   the thing to correct.
+- Review A M1, F1 (MINOR): a failed, timed-out or not-found attempt stays in the directory's cell of the
+  service's environment cache, so after the user fixes the script file the note keeps the old state until
+  an environment-include field is saved with a change or the service restarts. The cache predates 037
+  (`crates/micold-daemon/src/state.rs`, `set_env_include`); not verified by a run. Candidate for the
+  user guide or a bug record.
+- Review A M1, F2 (MINOR): a baseline-probe timeout and a shell that could not be spawned are reported as
+  `ScriptTimedOut` and `ScriptFailed` (`crates/micold-core/src/env_include.rs:313`, `:349`), so the note
+  blames the script. Kept as FR-001's "attempted and fails" (D14).
+- Review A M1, F3 (MINOR): `SpawnEnv` is on the wire but declared in `cli_reason.rs`, which `SCHEMA_HASH`
+  does not cover (`crates/micold-core/build.rs`). A later variant change without a version bump would pass
+  the handshake. Not fixed in M1: moving the type changes the hash after the green gate.
+- Review B M1, F2 (MINOR): `spawn_env_for` maps an attempt's outcome with a total match (`attempted`), not
+  through `SpawnEnv::classify` as T010's text says; the cycle log (cycle 3) records it, tasks.md does not.
+- Review B M1, F3 (MINOR): one line over 100 columns in `docs/user-guide/sandboxed-daemon.md:106` and in
+  the doc comment at `crates/micold-client/src/features/session.rs:262`.
+- Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
+  `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
+  full Part B record.
+

@@ -1,0 +1,25 @@
+# Evidence: 037 visual pass, T017 (B1-B8, B14)
+
+Date 2026-10-01. Ran on Xvfb :87 + lavapipe (software Vulkan), not a real display; private HOME, XDG dirs and PATH (stub claude/copilot, pi only via the include script). Binaries built from HEAD b205f81d and pinned in ~/vp037/bin. Window 1200x900; crops show Settings > Environment from the Default AI CLI field down.
+Geometry (all rows): note's left edge aligns with the select's text inset, wraps inside the column, ends before the select's right edge, no overlap with the next control. Legible in both themes.
+Not run: B9-B13 (later milestones). Mid-flight animation not covered.
+
+| Step | Seed | Sentence seen | Result | Screenshot |
+|---|---|---|---|---|
+| B1 light | false, env.sh (Pi only via script) | A session would not find Pi Coding Agent: sessions get only the login PATH, because "Source a script before each session" is off. Turn it on if your startup file puts it on the PATH, or install it on the login PATH. (selector lists Claude Code, GitHub Copilot only) | PASS | b1-light.png |
+| B1 dark | false, env.sh (Pi only via script) | A session would not find Pi Coding Agent: sessions get only the login PATH, because "Source a script before each session" is off. Turn it on if your startup file puts it on the PATH, or install it on the login PATH. (selector lists Claude Code, GitHub Copilot only) | PASS | b1-dark.png |
+| B2 light | true, env.sh (light: ticked in UI, saved, Settings reopened; dark: seeded) | no note; selector lists Pi Coding Agent | PASS | b2-light.png |
+| B2 dark | true, env.sh (light: ticked in UI, saved, Settings reopened; dark: seeded) | no note; selector lists Pi Coding Agent | PASS | b2-dark.png |
+| B3 light | true, empty path | A session would not find Pi Coding Agent: no script is sourced, because "Script path" is empty. Set "Script path" if a startup file puts it on the PATH, or install it on the login PATH. | PASS | b3-light.png |
+| B3 dark | true, empty path | A session would not find Pi Coding Agent: no script is sourced, because "Script path" is empty. Set "Script path" if a startup file puts it on the PATH, or install it on the login PATH. | PASS | b3-dark.png |
+| B4 light | true, /tmp/does-not-exist.sh | A session would not find Pi Coding Agent: the startup script was not found for your home directory, so its PATH additions are not applied. Correct "Script path". | PASS | b4-light.png |
+| B4 dark | true, /tmp/does-not-exist.sh | A session would not find Pi Coding Agent: the startup script was not found for your home directory, so its PATH additions are not applied. Correct "Script path". | PASS | b4-dark.png |
+| B5 light | true, exit 3 | A session would not find Pi Coding Agent: the startup script exited with an error for your home directory, so its PATH additions are not applied. Fix the script named in "Script path". | PASS | b5-light.png |
+| B5 dark | true, exit 3 | A session would not find Pi Coding Agent: the startup script exited with an error for your home directory, so its PATH additions are not applied. Fix the script named in "Script path". | PASS | b5-dark.png |
+| B6 light | true, sleep 30, timeout 1 | A session would not find Pi Coding Agent: the startup script timed out for your home directory, so its PATH additions are not applied. Fix the script named in "Script path", or raise "Timeout". | PASS | b6-light.png |
+| B6 dark | true, sleep 30, timeout 1 | A session would not find Pi Coding Agent: the startup script timed out for your home directory, so its PATH additions are not applied. Fix the script named in "Script path", or raise "Timeout". | PASS | b6-dark.png |
+| B7 light | true, script adds nothing | Pi Coding Agent was not found on the PATH sessions get for your home directory: the login PATH plus what the startup script adds. Install it, or make the script add its directory. | PASS | b7-light.png |
+| B7 dark | true, script adds nothing | Pi Coding Agent was not found on the PATH sessions get for your home directory: the login PATH plus what the startup script adds. Install it, or make the script add its directory. | PASS | b7-dark.png |
+| B8 light | claude, copilot, pi all on login PATH | no note | PASS | b8-light.png |
+| B8 dark | claude, copilot, pi all on login PATH | no note | PASS | b8-dark.png |
+| B14 | container image | not run | covered by Part A | `missing_cli_is_reported_where_it_is_chosen.rs` asserts both image rows. `mise run image` would replace the shared `micold-daemon:dev` tag other worktrees use, so no image was built (quickstart lines 57-60). |
