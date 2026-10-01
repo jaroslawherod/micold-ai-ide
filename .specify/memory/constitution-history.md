@@ -33,14 +33,15 @@ Modified in 1.7.0:
   - Templates: ✅ no template restates the Default-session prohibition, so none required a
     matching edit.
 
-Follow-up the amendment does not perform (the enforcement still refuses until these land):
-  - ⚠ `specs/034-daemon-mcp-server/spec.md` FR-015a and its `contracts/mcp-tools.md` — still state that a Default
-    caller is refused all three worktree mutations.
-  - ⚠ `crates/micold-core/src/mcp/policy.rs` — `decide` refuses `Operation::CreateWorktree`
-    for a Default caller, and `PRINCIPLE_III`'s message names "create".
-  - ⚠ `crates/micold-core/src/mcp/tools.rs` — the `create_worktree` description ends "A
+Follow-up the amendment does not perform (all four landed with feature 034 milestone M6, in the
+same pull request as the amendment):
+  - ✅ `specs/034-daemon-mcp-server/spec.md` FR-015a and its `contracts/mcp-tools.md` — stated that a Default
+    caller was refused all three worktree mutations.
+  - ✅ `crates/micold-core/src/mcp/policy.rs` — `decide` refused `Operation::CreateWorktree`
+    for a Default caller, and `PRINCIPLE_III`'s message named "create".
+  - ✅ `crates/micold-core/src/mcp/tools.rs` — the `create_worktree` description ended "A
     session running in the project root (Default) is refused."
-  - ⚠ `docs/user-guide/agent-tools.md` — says a `default` session cannot create or rename
+  - ✅ `docs/user-guide/agent-tools.md` — said a `default` session could not create or rename
     worktrees.
 
 Prior report (1.6.0 → 1.6.1):

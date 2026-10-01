@@ -55,7 +55,8 @@ it with the prompt 'print the branch name'." **Expect**: row `feat-x` appears in
 within 2 s (SC-003) without a refresh, a session under it receives the prompt, and the tool result
 reports `prompt_delivered: true`. Repeat with `ai_cli` set to `copilot` and to `pi` (readiness
 signals of R12: output settled; component `session_start`). From a **Default** session, the
-`create_worktree` request is refused by policy.
+`create_worktree` request works the same way (constitution 1.7.0); `rename_worktree` and
+`delete_worktree` from it are refused by policy (FR-015a).
 
 ### B4 — Confirmation dialog (M5; visual pass)
 

@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"needs_confirmation: no answer in an application window within 60 seconds","type":"text"}],"isError":true,"structuredContent":{"error":{"category":"needs_confirmation","message":"no answer in an application window within 60 seconds"}}}}

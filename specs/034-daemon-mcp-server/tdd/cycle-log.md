@@ -869,3 +869,87 @@ tests for the rest and for this record.
   `match message` (`root_vocabulary_is_cross_cutting.rs`), `agent_confirm.held` is pinned in
   `root_state_is_shared.rs::COMPONENT_LOCAL`, `shown` is classified a reader in
   `support/state_scan.rs`.
+
+## Cycle 35 — M6 phase A: cross-session policy, catalog, option, `plain_tail`, handlers, select row (T060–T070, T095–T096, T098–T099)
+
+Written test-first in pairs, during a build hold, so the reds were by construction at first and
+observed only afterwards.
+
+- red: `253ad319`, `a462bb2a`, `2e568dfa`, `a70ef126` (policy rows U115–U117, catalog U97–U103,
+  storage and wire U76–U79, client U216–U217, `Framer::plain_tail` U194–U197, the two tools through
+  `POST /mcp` A19–A22, U198–U201). Each commit says "Not run: builds are on hold (disk)".
+  Observed red, in the body of `afad2025` (tests at HEAD, `src` at `65fbe600`):
+  ```
+  micold-core:   E0432 LineCount/NonEmptyText unresolved, E0599 no Operation::ReadSessionOutput,
+                 no Operation::SendSessionInput (mcp_tools_catalog)
+  micold-daemon: E0027 SettingsSet pattern lacks cross_session_access (server.rs), E0063
+                 DaemonSettings lacks it (catalog.rs), E0004 read_call does not cover the two operations
+  micold-client: E0063 Settings lacks cross_session_access
+  ```
+  The commit adds: "Red is a compile failure in each crate; no test was observed failing at run time."
+- green: `bcea4639` (policy rows, `LineCount`, `NonEmptyText`, `CrossSessionAccess`, select row),
+  `291700bf` (`Framer::plain_tail`, `DaemonState::primary_framer`), `3f11e293` (the two handlers),
+  `f7827d43` (docs). Observed green, from `afad2025`:
+  ```
+  mise run test-core: every target passes
+  micold-daemon: mcp_cross_session 13, mcp_audit_log 5, daemon_lifecycle 7, scrollback_range 11
+  micold-client: bin tests 310, features_settings 63, settings_sections 14
+  cargo fmt --check and cargo clippy --workspace --all-targets -D warnings pass
+  ```
+  Compiling needed one change: `clippy::type_complexity` on two tables in `mcp_cross_session.rs`,
+  now a type alias. One client failure remained, `layout_snapshot` in `settings-view-environment`
+  (the new row); its fixture is re-recorded after the rebase onto M5. At that point
+  `PROTOCOL_VERSION` was still 17; the bump to 19 is `45021009` (T067).
+- At Confirm each send a send was `needs_confirmation` here and nothing was typed. The rest is
+  cycle 37.
+
+## Cycle 36 — A Default session may create a worktree (D21; constitution 1.7.0; U104, U219, A18)
+
+- red: `cf74c10a`. Observed red, from the commit body:
+  ```
+  mcp_policy: 2 failed (Refuse where Proceed is expected; the message says "may not create")
+  mcp_create_worktree: 3 failed (refused_by_policy from the Default caller)
+  ```
+  `mcp_tools_catalog` was not reached in that run, so its changed description assertion has no
+  recorded red.
+- green: `96562d7f`. `policy::decide` no longer refuses `CreateWorktree` for a Default caller;
+  rename and delete stay refused, and the refusal names only those two. Observed green, from the
+  commit body: `mise run test-core` passes; the whole `micold-daemon` suite passes
+  (`mcp_create_worktree` 12, `mcp_lifecycle_tools` 8, `mcp_cross_session` 13, `mcp_audit_log` 5);
+  `cargo fmt --check` and clippy pass.
+- Constitution 1.7.0 is `ba130c19`; the spec text for FR-015a is `c4c8ddcf`.
+
+## Cycle 37 — Confirm each send asks the user in every window before typing (T064 rest, T069 rest, A23, A21)
+
+- red: `9104724a`. Observed red, from the commit body: 14 passed; 3 failed. The allowed and the
+  declined send both fail `needs_confirmation` "this operation needs the user's confirmation in an
+  app window" with no prompt shown; the unanswered one times out waiting for the window to be shown
+  a prompt. The read test and the A21 rows (the destructive tools added to the cross-project
+  table) passed as written, since M5 and phase A already pin that behaviour.
+- green: `94d8fd81`. `send_session_input` checks scope, then policy with the option as it is now,
+  then the conflict for a target with no running process, then, when policy says
+  `Confirm(SendInput)`, asks through M5's `ask_user` / `state.confirm`. Allow types the text; a
+  decline is `refused_by_policy`; no answer in 60 s or no window is `needs_confirmation`. The prompt
+  carries the caller and the target's label, never the text. Observed green, from the commit body:
+  `mcp_cross_session` 17, `mcp_audit_log` 5, `mcp_create_session` 18, `scrollback_range` 11.
+- The flaky M3 test fixed in `15ce3c64` (wait for the stand-in CLI's launch line) is unrelated
+  to this cycle.
+- The Environment page's layout fixture is re-recorded in `5fd07a88`: `layout_snapshot` 43 passed
+  and `features_settings` 63 passed after the record (the red is cycle 35's `layout_snapshot`
+  failure in `settings-view-environment`).
+
+## Cycle 38 — M6 review A round 1: text only, and nothing typed into an untrusted folder (U230–U232)
+
+- red: `a5cc6328`. Observed red: `mcp_tools_catalog` 29 passed, 2 failed (`must be rejected`: the
+  parser accepted `"\n"` and `"\u{3}"`); `mcp_cross_session` 17 passed, 2 failed, both with
+  `send_session_input succeeded: {"content":[{"text":"{}","type":"text"}],"isError":false,…}`.
+- green: the commit after it. `NonEmptyText` refuses text that is only line breaks (FR-012a) and
+  text with a control character other than a line break or a tab; `send_session_input` answers
+  `conflict` before any confirmation when the target CLI's trust record shows it would ask about
+  the folder (D23). Observed green: `mcp_tools_catalog` 31, `mcp_cross_session` 19,
+  `mcp_audit_log` 5, `mcp_create_session` 18.
+- First green run failed `mcp_audit_log` (2 failed, `conflict: GitHub Copilot has no record that it
+  trusts the folder …`): its Copilot sessions had no trust record. The fixture's home now trusts
+  the temporary directory the projects live under.
+- The bracketed-paste test no longer sleeps 300 ms for the stand-in's `stty raw`; it waits for a
+  marker file the stand-in writes after it (review A F5).
