@@ -50,11 +50,11 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::features::session::{AvailabilitySource, CliAvailability};
+use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::cli_reason::{explain, AttemptDir, Explanation, Place};
+use micold_core::cli_reason::{explain, AttemptDir, Explanation};
 use micold_core::issue_types::{
     default_mapping, validate_mapping, LabelTypeEntry, MappingErrorKind,
 };
@@ -1673,14 +1673,10 @@ fn lines_011(
 /// directory's (037 FR-004a).
 pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
     let availability = availability?;
-    let place = match &availability.source {
-        AvailabilitySource::Image(reference) => Place::Image(reference),
-        AvailabilitySource::ThisComputer => Place::ThisComputer,
-    };
     let Explanation { reason, action } = explain(
         &availability.missing(),
         availability.env?,
-        place,
+        availability.place(),
         AttemptDir::Home,
     )?;
     Some(format!("{reason} {action}"))

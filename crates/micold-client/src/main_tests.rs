@@ -6634,3 +6634,114 @@ mod the_settings_note_explains_a_missing_cli {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Feature 037, Story 2: a start that opens the list instead says why, from the row's answer
+// ---------------------------------------------------------------------------------------------
+
+mod a_missing_default_says_why_the_list_opened {
+    use super::*;
+    use micold_client::features::session::{AvailabilityKey, StartMenu};
+    use micold_core::cli_reason::{start_refusal, AttemptDir, Place, SpawnEnv};
+    use micold_core::terminal::LaunchMode;
+
+    const WITHOUT_PI: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+
+    /// A9 (US2-AS1, FR-008, FR-015): the stored default is Pi, environment-include is off, and
+    /// the row's own directory has no Pi. Pressing start says so in `cli_reason`'s words for the
+    /// row's answer, opens the list, sends no start and keeps the default.
+    #[test]
+    fn pressing_start_says_include_is_off_opens_the_list_and_starts_nothing() {
+        let mut app = app_on_demo(&[]);
+        let mut sent =
+            connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+        app.core.session.default_ai_cli = AiCli::Pi;
+        for (req, _) in availability_requests(&mut sent) {
+            let _ = update_inner(
+                &mut app,
+                Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+                    req,
+                    available: WITHOUT_PI.to_vec(),
+                    env: Some(SpawnEnv::IncludeOff),
+                })),
+            );
+        }
+        assert_eq!(
+            app.core
+                .session
+                .availability
+                .for_dir(Path::new(DEMO))
+                .map(|answer| answer.asked_for.clone()),
+            Some(AvailabilityKey::Dir(PathBuf::from(DEMO))),
+            "fixture check: the row is drawn from its own directory's answer"
+        );
+        assert_eq!(app.core.notifications.queue.visible(), None);
+
+        // The press, as `ui/sidebar.rs` publishes it: the intent's own reason travels with it.
+        let StartIntent::OfferChoice {
+            providers,
+            unavailable_default,
+        } = primary_press(&app, &SessionLocation::Default)
+        else {
+            panic!("fixture check: a default the row lacks opens the list");
+        };
+        let _ = update_inner(
+            &mut app,
+            Message::Session(SessionMsg::StartMenuOpened {
+                location: SessionLocation::Default,
+                unavailable_default,
+            }),
+        );
+
+        let queue = &app.core.notifications.queue;
+        assert_eq!(
+            (
+                queue.visible().map(|said| said.message.clone()),
+                queue.pending()
+            ),
+            (
+                Some(start_refusal(
+                    AiCli::Pi,
+                    SpawnEnv::IncludeOff,
+                    Place::ThisComputer,
+                    AttemptDir::Dir(Path::new(DEMO)),
+                    LaunchMode::Fresh,
+                )),
+                0
+            ),
+            "one message, and it gives the reason of the answer the row offers from (FR-008)"
+        );
+        assert!(
+            matches!(
+                &app.core.session.start_menu,
+                Some(StartMenu {
+                    location: SessionLocation::Default,
+                    ..
+                })
+            ),
+            "the list is open on the row that was pressed"
+        );
+        assert_eq!(
+            providers, WITHOUT_PI,
+            "and it offers what a session there finds"
+        );
+
+        let mut after = Vec::new();
+        while let Ok(msg) = sent.try_recv() {
+            after.push(msg);
+        }
+        assert!(
+            matches!(
+                &after[..],
+                [ClientMsg::AiCliAvailabilityRequest { cwd: Some(dir), .. }]
+                    if dir == Path::new(DEMO)
+            ),
+            "the press asks about the row's directory again and sends no start: {after:?}"
+        );
+        assert_eq!(
+            app.core.session.default_ai_cli,
+            AiCli::Pi,
+            "the stored default is the user's; a missing CLI does not rewrite it (FR-015)"
+        );
+    }
+}

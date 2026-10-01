@@ -75,6 +75,9 @@ pub const MUTATORS: &[&str] = &[
 pub const READERS: &[&str] = &[
     "all",
     "and_then",
+    // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store
+    // already holds (feature 037, FR-012).
+    "answer_in_use",
     "any",
     "as_deref",
     "as_ref",
