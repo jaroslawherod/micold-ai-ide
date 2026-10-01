@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M6
-- **Next step**: see *Handover* below (M6, no PR open yet; nothing is pushed).
+- **Next step**: M6 PR open; the orchestrator waits on CI and merges. Then M7.
 
 ## Pull requests
 
@@ -64,6 +64,7 @@ deliverable (tasks.md Notes).
 | D20 | 4-milestone M3 | With a first prompt, a CLI's folder-trust question gets answered by the prompt's Enter; what should `create_session` do? | Read the CLI's own trust record read-only (Claude `.claude.json` `hasTrustDialogAccepted`, Copilot `config.json` `trustedFolders`, ancestors count); when it would ask, type nothing and return `prompt_delivered: false` with a reason; document "trust the project in that CLI first" | _(decided by user)_ | evidence/m3-real-cli.md finding 4; cycle 24 |
 | D21 | 4-milestone M6 | May a Default session create a worktree through `create_worktree`? (supersedes D1 for create) | Yes: constitution 1.7.0 amends Principle III with that exception; rename and delete stay refused from Default (FR-015a) | _(decided by user)_ | .specify/memory/constitution.md 1.7.0, constitution-history.md; spec.md#FR-015a; `mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does` |
 | D22 | 4-milestone M6 | What do `read_session_output` and `send_session_input` answer for a target with no running primary process? | `conflict`, naming `start_session`, for both; checked after policy and before any confirmation, so nobody is asked about a send that cannot be typed | agent-resolved | contracts/mcp-tools.md *Order of checks*; FR-012a's `interrupt_session` precedent; `mcp_cross_session.rs::a_session_that_is_not_running_is_a_conflict_naming_start_session` |
+| D23 | 4-milestone M6 | Should `send_session_input` type into a session whose CLI may be showing its folder-trust question, and may the text hold control characters? | No to both. The D20 trust check runs before any confirmation and answers `conflict`; a control character other than a line break or a tab is `invalid_input` (Ctrl-C would be an unconfirmed interrupt, against FR-014) | agent-resolved | M6 review A F1, F2; D20; contracts/mcp-tools.md; `mcp_cross_session.rs::a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed`, `::line_breaks_alone_and_control_characters_are_invalid_input` |
 
 ## Review rounds
 
@@ -80,6 +81,11 @@ deliverable (tasks.md Notes).
 | M5 | B (conformance) | 1 | 3161139f516b488e6189b6a5b65b139385d8284a:5c4bf06c5e3cbbe45974430cfcffe78a72d8eb74 | CHANGES; Verify green (mcp_audit_log 4, mcp_confirmations 18, mcp_lifecycle_tools 24, features_agent_confirm 12, layout_snapshot 43, protocol_roundtrip 9, schema_hash 9, mcp_tools_catalog 19, mcp_policy 12). F1 MAJOR untested review A fixes (fixed: 2 tests with red evidence, cycle 34; the untestable `delete_session` re-resolve removed), F3 MINOR (follow-up), F4 MINOR (guide fixed), F2 MINOR declined |
 | M5 | visual pass §B4 | 1 | 3161139f516b488e6189b6a5b65b139385d8284a:5c4bf06c5e3cbbe45974430cfcffe78a72d8eb74 | PASS, 6 of 6 checks (evidence/m5-b4-confirm-dialog) |
 | M5 | B (sonnet re-review) | 2 | a0030724f7b0e34ff5dbab78a3e584ca02dee3b6:26e750151e1c667231867949df627b2dd0646364 | CLEAN; fixes hold, declines stand; Verify green (mcp_confirmations 19, mcp_lifecycle_tools 25, mcp_audit_log 4); 1 MINOR fixed (guide rewrapped) |
+| M6 | A (code-review high) | 1 | 800ded94aefc484ad7bb8561f2c9012142d58436:95195525b563af7cddf21fe81c0001b415c3d254 | CHANGES, 7 findings. Fixed: F1 control characters in the text are `invalid_input` (Ctrl-C was an unconfirmed interrupt); F2 nothing is typed into a CLI that would ask to trust its folder (`conflict`, D23); F3 text of line breaks only is `invalid_input`; F5 the bracketed-paste test waits for a raw-mode marker. Declined: F4, F6, F7 and F1's unbracketed inner line break (below) |
+| M6 | B (conformance) | 1 | 800ded94aefc484ad7bb8561f2c9012142d58436:5fd07a884c05b1fcdcd22d2a2b81a1120dd76497 | CLEAN; Verify green (test-core 1469: mcp_policy 18, mcp_tools_catalog 29, settings_roundtrip 28, protocol_roundtrip 10; mcp_cross_session 17, scrollback_range 11, mcp_audit_log 5, mcp_create_worktree 12, mcp_lifecycle_tools 25; features_settings 63, layout_snapshot 43). 3 MINOR, all fixed (contract rows name D22's conflict; T030/T036 note D21; constitution-history's follow-ups marked landed) |
+| M6 | visual pass §B5, §B6 | 1 | 800ded94aefc484ad7bb8561f2c9012142d58436:5fd07a884c05b1fcdcd22d2a2b81a1120dd76497 | PASS, 5 of 5 checks (evidence/m6-b5-b6-cross-session) |
+| M6 | A (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; the fixes hold, the declines stand |
+| M6 | B (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; Verify green (test-core 1471; mcp_cross_session 19, scrollback_range 11, mcp_audit_log 5, mcp_create_worktree 12, mcp_lifecycle_tools 25; features_settings 63, layout_snapshot 43). 1 MINOR fixed (FR-012a states D23's refusals). Not counted: run because review A's fixes changed code |
 
 ## Declined review findings
 
@@ -115,58 +121,14 @@ deliverable (tasks.md Notes).
 | M5 | A round 1 | `SessionStop` racing a start/respawn in flight: the spawn registers after the stop reported `Idle` | Pre-existing for the sidebar's stop (the old kill-only arm raced the same spawns); the start gate serialization is feature 026's. Follow-up below |
 | M5 | A round 1 | `headline` repeats `operation_phrase`'s delete-worktree suffixes | Cosmetic; two short phrases in one file |
 | M5 | A round 1 | `wire_operation` mirrors `policy::ConfirmedOp` onto the protocol's `ConfirmOperation` | Layering: the policy type is daemon-internal and the wire type is the versioned protocol; a `From` in core would tie the policy to protocol 18. `SendInput` arrives with M6 |
+| M6 | A round 1 | F4: `plain_tail`'s `truncated` is false for an unviewed session whose scrollback overflowed, when the request covers everything retained | Reachable only with the scrollback limit set below the 2,000-line maximum of a read (default 10,000): otherwise an overflowed terminal retains more than any request and `start > 0` already says `true`. The flag is a hint and no returned line is wrong. Follow-up below |
+| M6 | A round 1 | F1 (part): an inner line break submits early when the target has not enabled bracketed paste | Already a follow-up from M3 review A for the first prompt; the same `encode_submission`. Both real CLIs enable bracketed paste before they take input |
+| M6 | A round 1 | F6: a mistyped `cross_session_access` in a hand-edited settings file fails the whole document | MINOR; the same strict parsing as every other enum in the settings file, and the file is written by the app. Follow-up below |
+| M6 | A round 1 | F7: the PTY write is a blocking `write_all` on the runtime thread; PTY and framer are read under two locks | MINOR; the same write as the first prompt's (M3) and a window's keystrokes. A restart between the two reads answers `conflict`, which is true an instant later. Follow-up below |
 
 ## Handover
 
-M6 unit 1 stopped at the context cap. Branch `feat/daemon-should-expose-mcp-server-for-agent` is
-`origin/main` `fc1c3ad2` plus local, unpushed commits. No PR is open. Skip nothing in
-`branch-start.sh 516`: it rebases this unmerged work onto `origin/main`.
-
-**Done**
-- Phase A's 13 commits are cherry-picked (the Default `create_worktree` change, D21, among them).
-  Conflicts resolved in `mcp_tools_catalog.rs` (15 shipped tools, phase A's catalog order),
-  `mcp_audit_log.rs` (M5's siblings plus phase A's AI sibling; `prepare` starts the target of
-  `send_session_input` and `interrupt_session`), daemon `mcp/tools.rs` (`policy_for`,
-  `cross_session_policy`, `decided`, `unconfirmed`; `wire_operation` has the `SendInput` arm) and
-  `docs/user-guide/agent-tools.md`.
-- `PROTOCOL_VERSION` 19 with its changelog line and the `schema_hash.rs` pin.
-- Flaky M3 test: `mcp_create_session.rs` waits (10 s bound) for the stand-in's launch line.
-- Confirm each send goes through `ask_user`/`state.confirm` (red then green, in the commit
-  messages): `mcp_cross_session` 17 passed, `mcp_audit_log` 5, `mcp_create_session` 18,
-  `scrollback_range` 11. A21 has the four destructive tools. A read with a window attached raises
-  no prompt.
-- `delete_worktree` from a Default caller through `POST /mcp` is already on `main`:
-  `mcp_lifecycle_tools.rs::a_default_session_is_refused_delete_worktree` (M5). No new test needed;
-  confirm it still passes (the refusal text changed in phase A but still names Principle III).
-
-**Next, in order**
-1. `fixup!` commit `3142fdd3` (a match arm lost in conflict resolution) is still separate; squash
-   it with `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash origin/main`, or leave it.
-2. Only four daemon test binaries ran after the cherry-pick. The workspace compiled before the
-   last `mcp/tools.rs` change. Not yet run: `mise run test-core`, the client tests.
-3. Re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` for the Environment page
-   (phase A saw `settings-view-environment` fail, the new select row) and check
-   `tests/support/covered_states.rs` merged correctly with M5's states.
-4. Docs: check that `docs/user-guide/agent-tools.md` and `settings.md` describe Confirm each send
-   as a working dialog (phase A wrote them before the confirm path existed), and that
-   `contracts/protocol-delta.md` §3 says 18 → 19.
-5. Bookkeeping: tick T060–T071, T095–T099 (T104 after the visual pass) in tasks.md; test-list:
-   reword U104, U219 and A18 (create from Default now proceeds; tests are
-   `mcp_policy.rs::a_default_caller_may_create_a_worktree`,
-   `mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does`), mark A19–A23
-   and M6's U rows DONE with their test names; cycle-log cycles 35 (phase A; evidence in the commit
-   message of `test(034): M6 phase A compiled`), 36 (Default create; evidence in the two commits
-   after the constitution one) and 37 (Confirm each send; evidence in the last two commits).
-6. Gate detached (`df` first; stop under 8 GB), review A in its shadow, then review B and the
-   visual pass (§B5, §B6, T104), evidence under `evidence/`, push, PR
-   `feat(034): cross-session read and send under the user's option; Default may create a worktree`.
-
-**For the reviews**: D22 (a target with no running primary process is `conflict` naming
-`start_session`, for both tools, before any prompt). Some phase A commits do not compile alone
-(red is a compile failure there); the phase file does not require compiling commits. The timeout
-test pauses the clock only to step over `CONFIRM_TIMEOUT`, on a `current_thread` runtime.
-
-No review round has run for M6.
+None.
 
 ## Open escalation
 
@@ -193,3 +155,7 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - Windows: seven M5 tests in `mcp_lifecycle_tools.rs` are `#[cfg(unix)]` (the fixture's sessions are `#!/bin/sh` stand-ins), so Windows CI does not run an allowed stop, interrupt or delete through `/mcp`; port the stand-ins (M5 review B).
 - M5 merge note: M4 added `policy::ConfirmedOp` and `PolicyDecision::Confirm`; M5's prebuilt protocol `ConfirmOperation` should be mapped from it.
 - Client: a Settings save made while disconnected is overwritten by the daemon's `Welcome` on reconnect, for every service-owned field (M2 review A).
+- `read_session_output`'s `truncated` can be false for a session nobody views whose scrollback (set below 2,000 lines) overflowed: `Framer::scrolled_off` advances only in `frame()`. Derive it from the grid or count evictions in the PTY reader (M6 review A).
+- `cross_session_access` in the settings file is a strict enum: a mistyped hand edit sends the whole file to `.bak` and the option comes back `Auto`. Read an unknown token as `Off` (M6 review A).
+- `send_session_input` and the first prompt write to the PTY with a blocking `write_all` on a runtime thread, with text bounded only by the 1 MiB request body; move it to `blocking` and cap the text (M6 review A).
+- A theme change saved in Settings shows only after the client restarts (seen in the M5 and M6 visual passes); not this feature's code.

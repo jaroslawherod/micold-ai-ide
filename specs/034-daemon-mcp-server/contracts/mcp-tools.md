@@ -32,7 +32,7 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `list_branches` | — | `{branches:[{name, kind: local|remote, checked_out_in: <ref>|null, unavailable_reason: string|null}]}` — the reason is the dialog pre-flight's `BranchSituation` wording (`null` when a new worktree can use it) | — |
 | `list_sessions` | `{worktree?: ref}` | `{sessions:[SessionRow]}` | unknown `worktree` → not_found |
 | `get_session` | `{session}` | `SessionRow + {failure_reason?}` | — |
-| `read_session_output` | `{session, lines?: int=200}` | `{lines:[string], truncated: bool}` | self → invalid_input (FR-015); `lines<1` → invalid_input; `>2000` clamped (FR-012); FR-016 Off → refused_by_policy |
+| `read_session_output` | `{session, lines?: int=200}` | `{lines:[string], truncated: bool}` | self → invalid_input (FR-015); `lines<1` → invalid_input; `>2000` clamped (FR-012); FR-016 Off → refused_by_policy; not running → conflict naming `start_session` |
 | `create_worktree` | `{branch, name?, mode?: new_branch|existing_local|track_remote = new_branch, remote?}` | `WorktreeRow` | Default caller → proceeds as any caller (FR-015a, constitution 1.7.0); invalid name → invalid_input with the dialog's message; pre-flight mismatch → conflict naming the situation |
 | `rename_worktree` | `{worktree, display_name}` | `WorktreeRow` | Default caller → refused_by_policy (FR-015a); `default` → invalid_input |
 | `delete_worktree` | `{worktree, stop_sessions?: bool=false, delete_branch?: bool=true}` | `{removed: ref, branch_deleted: bool, leftovers:[path]}` | Default caller → refused_by_policy; caller's own worktree → refused_by_policy (FR-015); `default` → invalid_input; live sessions and `!stop_sessions` → conflict naming them; then **confirm** (FR-014) |
@@ -40,7 +40,7 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `start_session` | `{session}` | `{lifecycle}` | already Starting/Running/Restarting → success, unchanged (FR-012a) |
 | `stop_session` | `{session}` | `{lifecycle}` | self → refused_by_policy (FR-015); Idle → success, unchanged; other session → **confirm**; effect: processes end, record `idle`, catalog broadcast |
 | `interrupt_session` | `{session}` | `{}` | self → invalid_input (FR-015); not running → conflict (FR-012a); other session → **confirm** |
-| `send_session_input` | `{session, text}` | `{}` | self → invalid_input; empty → invalid_input (FR-012a); FR-016: Auto → proceed, Confirm each send → **confirm**, Off → refused_by_policy |
+| `send_session_input` | `{session, text}` | `{}` | self → invalid_input; empty, or line breaks only → invalid_input (FR-012a); a control character other than a line break or a tab → invalid_input; FR-016: Auto → proceed, Confirm each send → **confirm**, Off → refused_by_policy; not running → conflict naming `start_session`; the CLI would ask to trust the folder → conflict (below) |
 | `delete_session` | `{session}` | `{}` | self → refused_by_policy (FR-015); then **confirm** |
 
 Order of checks: scope (not_found) → input validation (invalid_input) → policy (refused_by_policy)
@@ -58,6 +58,13 @@ failed start (FR-017). When the CLI's own trust record shows it would first ask 
 the session's folder, nothing is typed and the call returns as soon as the session has started, with `prompt_delivered: false`
 (R12). `prompt_reason` is present exactly when `prompt_delivered` is `false`, and says which of the
 three happened.
+
+`send_session_input` types one submission as that first prompt is typed (R12). Its text is text
+only: a control character other than a line break or a tab is a keystroke (Ctrl-C would interrupt
+the target without the confirmation `interrupt_session` needs, FR-014), so it is `invalid_input`.
+The same trust check applies before any confirmation: when the target CLI's own trust record shows
+it would ask whether to trust the session's folder, nothing is typed and the call is a `conflict`
+that says to trust the project in that CLI first.
 
 If the agent's HTTP connection closes while a request waits for confirmation, the request is
 abandoned: the prompt is withdrawn and nothing changes.

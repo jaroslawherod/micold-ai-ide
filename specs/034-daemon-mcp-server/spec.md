@@ -351,7 +351,12 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   bounded number of the most recent lines (default 200, maximum 2,000), drawn from the session's
   retained scrollback. A requested count above the maximum is clamped to it; a count below 1 is
   invalid input.
-- **FR-012a**: `send_session_input` with empty text MUST be refused as invalid input.
+- **FR-012a**: `send_session_input` with empty text MUST be refused as invalid input. Text made only of
+  line breaks counts as empty, and text holding a control character other than a line break or a
+  tab MUST be refused as invalid input too: such a character is a keystroke, not text (Ctrl-C
+  would interrupt the target without FR-014's confirmation). When the target CLI's own trust
+  record shows it would ask whether to trust the session's folder, `send_session_input` MUST type
+  nothing and fail as a conflict, before any confirmation (as FR-017 rules for a first prompt).
   `start_session` on a session that is already `Starting`, `Running` or `Restarting` MUST succeed
   without changing it and report its current lifecycle; `stop_session` on an `Idle` session
   likewise. `interrupt_session` on a session that is not running MUST fail as a conflict.

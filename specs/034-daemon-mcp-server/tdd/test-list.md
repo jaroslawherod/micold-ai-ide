@@ -78,12 +78,12 @@ real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104
 | A15 | `delete_worktree` on a worktree with live sessions and no `stop_sessions` fails `conflict` naming those sessions, and the worktree, its sessions and its branch are unchanged | US3-AS3, FR-009 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::delete_worktree_with_live_sessions_and_no_stop_sessions_is_a_conflict_naming_them` |
 | A16 | Each of `delete_worktree`, `delete_session`, `stop_session` and `interrupt_session` on another target raises a confirmation in the fake windows and changes nothing until it is answered | US3-AS4, FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::each_destructive_tool_waits_for_the_user_and_a_decline_changes_nothing` |
 | A17 | `stop_session` and `delete_session` on the caller, and `delete_worktree` of the caller's hosting worktree, fail `refused_by_policy` with no confirmation raised and nothing changed | US3-AS5, FR-015 | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::self_targets_are_refused_without_a_prompt` |
-| A18 | From a Default session, `create_worktree`, `rename_worktree` and `delete_worktree` each fail `refused_by_policy` naming Principle III and nothing changes | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::a_default_session_is_refused_delete_worktree` |
-| A19 | At Auto and at Confirm each send, S1's `read_session_output` on sibling S2 returns S2's last N primary-terminal lines as plain text with no confirmation raised | US4-AS1, FR-012, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| A20 | At Auto, S1's `send_session_input` to an awaiting-input S2 writes the text to S2's primary PTY as typed and submitted (ends `\r`) | US4-AS2, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| A21 | Every session-targeting and worktree-targeting tool aimed at another project's session or worktree fails `not_found` with the same message as an unknown ref | US4-AS3, FR-010, EC-2 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| A22 | At Off, `read_session_output` and `send_session_input` on S2 fail `refused_by_policy` and S2's PTY receives nothing | US4-AS4, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| A23 | At Confirm each send, `send_session_input` raises a confirmation: allowed delivers as A20, declined fails `refused_by_policy`, timed out or no window fails `needs_confirmation`, S2 untouched in the last three | US4-AS5, FR-014, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
+| A18 | From a Default session, `rename_worktree` and `delete_worktree` each fail `refused_by_policy` naming Principle III and nothing changes; `create_worktree` proceeds as from any session (constitution 1.7.0, D21) | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_lifecycle_tools.rs::a_default_session_is_refused_rename_worktree`, `::a_default_session_is_refused_delete_worktree`; create: `crates/micold-daemon/tests/mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does` |
+| A19 | At Auto and at Confirm each send, S1's `read_session_output` on sibling S2 returns S2's last N primary-terminal lines as plain text with no confirmation raised | US4-AS1, FR-012, FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::at_auto_and_at_confirm_each_send_s1_reads_s2s_last_lines_as_plain_text`, `crates/micold-daemon/tests/mcp_cross_session.rs::at_confirm_each_send_a_read_raises_no_confirmation` |
+| A20 | At Auto, S1's `send_session_input` to an awaiting-input S2 writes the text to S2's primary PTY as typed and submitted (ends `\r`) | US4-AS2, FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::at_auto_the_text_is_typed_into_s2_and_submitted` |
+| A21 | Every session-targeting and worktree-targeting tool aimed at another project's session or worktree fails `not_found` with the same message as an unknown ref | US4-AS3, FR-010, EC-2 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::another_projects_session_or_worktree_is_not_found_like_an_unknown_ref` |
+| A22 | At Off, `read_session_output` and `send_session_input` on S2 fail `refused_by_policy` and S2's PTY receives nothing | US4-AS4, FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::at_off_both_tools_are_refused_by_policy_and_s2_is_untouched` |
+| A23 | At Confirm each send, `send_session_input` raises a confirmation: allowed delivers as A20, declined fails `refused_by_policy`, timed out or no window fails `needs_confirmation`, S2 untouched in the last three | US4-AS5, FR-014, FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::at_confirm_each_send_an_allowed_send_is_delivered`, `crates/micold-daemon/tests/mcp_cross_session.rs::at_confirm_each_send_a_declined_send_is_refused_by_policy_and_s2_is_untouched`, `crates/micold-daemon/tests/mcp_cross_session.rs::at_confirm_each_send_an_unanswered_send_needs_confirmation_and_s2_is_untouched`, `crates/micold-daemon/tests/mcp_cross_session.rs::at_confirm_each_send_with_no_window_a_send_needs_confirmation_and_s2_is_untouched` |
 
 ## Inner loop: unit behaviors
 
@@ -207,13 +207,13 @@ each group that changes existing code.
 | U73 | A settings file written before the field loads `tool_server_enabled = true` | FR-004 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::a_settings_file_written_before_the_toggle_loads_with_the_binding_on` |
 | U74 | `tool_server_enabled = false` survives a save/load round trip | FR-004 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::turning_the_tool_server_binding_off_survives_a_save_and_load` |
 | U75 | `DaemonSettings` and `SettingsSet` round-trip `tool_server_enabled` | FR-004 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs` (`SettingsSet`, `Welcome`, `SettingsChanged` samples) |
-| U76 | `cross_session_access` defaults to `Auto` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U77 | A settings file written before the field loads `Auto` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U78 | `ConfirmEachSend` and `Off` each survive a save/load round trip | FR-016 | example | PENDING | planned: `crates/micold-core/tests/settings_roundtrip.rs` |
-| U79 | `DaemonSettings` and `SettingsSet` round-trip `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-core/tests/protocol_roundtrip.rs` |
+| U76 | `cross_session_access` defaults to `Auto` | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::the_cross_session_option_is_auto_by_default` |
+| U77 | A settings file written before the field loads `Auto` | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::a_settings_file_written_before_the_cross_session_option_loads_auto` |
+| U78 | `ConfirmEachSend` and `Off` each survive a save/load round trip | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::confirm_each_send_and_off_each_survive_a_save_and_load` |
+| U79 | `DaemonSettings` and `SettingsSet` round-trip `cross_session_access` | FR-016 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::the_cross_session_option_round_trips_in_daemon_settings_and_settings_set` |
 | U80 | `ConfirmationRequested`, `ConfirmationWithdrawn` and `ConfirmationAnswer` round-trip | FR-014 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::every_client_message_json_round_trips`; `crates/micold-core/tests/protocol_roundtrip.rs::every_daemon_message_json_round_trips` |
 | U81 | `ConfirmOperation::SendInput` has no field that can carry input text | FR-018 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::a_send_input_confirmation_has_no_field_that_can_carry_the_input_text` |
-| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` (pin 18) |
+| U82 | Each wire change moves `PROTOCOL_VERSION` and the pinned schema hash together | INV-2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` (pin 19) |
 
 ### `crates/micold-core/src/mcp/tools.rs` catalog and validation (T014, T019, T031, T037, T044, T046, T061, T066)
 
@@ -233,19 +233,19 @@ each group that changes existing code.
 | U94 | `create_session` accepts `ai_cli` of `claude_code`, `copilot`, `pi` and rejects any other value as `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::create_session_accepts_exactly_the_three_ai_clis` |
 | U95 | `rename_worktree` or `delete_worktree` targeting `default` fails `invalid_input` | FR-008 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::default_is_not_a_worktree_to_rename_or_delete` |
 | U96 | `delete_worktree` defaults to `stop_sessions: false`, `delete_branch: true` | FR-008, FR-009 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default` |
-| U97 | `read_session_output` without `lines` means 200 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U98 | `lines: 0` fails `invalid_input` | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U99 | `lines: 1` is accepted as 1 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U100 | `lines: 2000` is accepted as 2000 | FR-012 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U101 | `lines: 2001` is clamped to 2000 | FR-012, EC-16 | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U102 | `send_session_input` with `text: ""` fails `invalid_input` | FR-012a | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
-| U103 | `send_session_input` with a one-character `text` is accepted (assumption A-4 for whitespace) | FR-012a | example | PENDING | planned: `crates/micold-core/tests/mcp_tools_catalog.rs` |
+| U97 | `read_session_output` without `lines` means 200 | FR-012 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::read_session_output_without_lines_means_200` |
+| U98 | `lines: 0` fails `invalid_input` | FR-012 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_line_count_below_one_is_invalid_input` |
+| U99 | `lines: 1` is accepted as 1 | FR-012 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_line_count_of_1_and_of_2000_are_accepted_unchanged` |
+| U100 | `lines: 2000` is accepted as 2000 | FR-012 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_line_count_of_1_and_of_2000_are_accepted_unchanged` |
+| U101 | `lines: 2001` is clamped to 2000 | FR-012, EC-16 | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::a_line_count_above_2000_is_clamped_to_2000` |
+| U102 | `send_session_input` with `text: ""` fails `invalid_input` | FR-012a | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::send_session_input_with_empty_text_is_invalid_input` |
+| U103 | `send_session_input` with a one-character `text` is accepted (assumption A-4 for whitespace) | FR-012a | example | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::send_session_input_accepts_any_non_empty_text` |
 
 ### `crates/micold-core/src/mcp/policy.rs` `decide` (T030, T036, T043, T046, T060, T066)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U104 | `create_worktree` from a Default caller is `refused_by_policy` naming Principle III | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_create_worktree_naming_principle_iii` |
+| U104 | `create_worktree` from a Default caller proceeds as from any caller (constitution 1.7.0, D21); rename and delete from Default stay `refused_by_policy` naming Principle III | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_may_create_a_worktree`, `::a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename`, `::a_default_caller_is_refused_delete_worktree_before_any_confirmation` |
 | U105 | `create_worktree` from a worktree caller proceeds | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_worktree_caller_may_create_a_worktree` |
 | U106 | `rename_worktree` from a Default caller is refused; from a worktree caller it proceeds | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_rename_worktree_and_a_worktree_caller_may_rename` |
 | U107 | `delete_worktree` from a Default caller is refused before any confirmation | FR-015a | example | DONE | `crates/micold-core/tests/mcp_policy.rs::a_default_caller_is_refused_delete_worktree_before_any_confirmation` |
@@ -256,9 +256,9 @@ each group that changes existing code.
 | U112 | `delete_session` on self is `refused_by_policy`; on another session it is `Confirm` | FR-014, FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::delete_session_on_self_is_refused_and_on_another_session_confirmed` |
 | U113 | `interrupt_session` on self is `invalid_input`; on another session it is `Confirm` | FR-014, FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::interrupt_session_on_self_is_invalid_input_and_on_another_session_confirmed` |
 | U114 | `start_session` proceeds | FR-009 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::start_session_proceeds_on_any_session` |
-| U115 | `read_session_output` on another session proceeds at Auto and at ConfirmEachSend, and is refused at Off | FR-016 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U116 | `send_session_input` on another session proceeds at Auto, is `Confirm(SendInput)` at ConfirmEachSend, and is refused at Off | FR-016 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
-| U117 | `read_session_output` and `send_session_input` on self are `invalid_input` under every option value, Off included | FR-015 | example | PENDING | planned: `crates/micold-core/tests/mcp_policy.rs` |
+| U115 | `read_session_output` on another session proceeds at Auto and at ConfirmEachSend, and is refused at Off | FR-016 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::read_session_output_proceeds_at_auto_and_confirm_each_send_and_is_refused_at_off` |
+| U116 | `send_session_input` on another session proceeds at Auto, is `Confirm(SendInput)` at ConfirmEachSend, and is refused at Off | FR-016 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::send_session_input_proceeds_at_auto_is_confirmed_at_confirm_each_send_and_refused_at_off` |
+| U117 | `read_session_output` and `send_session_input` on self are `invalid_input` under every option value, Off included | FR-015 | example | DONE | `crates/micold-core/tests/mcp_policy.rs::the_cross_session_tools_on_the_callers_own_session_are_invalid_input_at_every_option_value` |
 
 ### `crates/micold-core/src/mcp/submission.rs` (T033, T039)
 
@@ -384,19 +384,19 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U194 | `plain_tail(n)` returns the last n lines of scrollback plus screen | FR-012 | example | PENDING | planned: `crates/micold-daemon/tests/scrollback_range.rs` |
-| U195 | Lines carry no escape sequences and are right-trimmed | FR-012 | example | PENDING | planned: `crates/micold-daemon/tests/scrollback_range.rs` |
-| U196 | `truncated` is true when older lines existed beyond n | FR-012, EC-16 | example | PENDING | planned: `crates/micold-daemon/tests/scrollback_range.rs` |
-| U197 | `truncated` is false when the whole content fits in n | FR-012 | example | PENDING | planned: `crates/micold-daemon/tests/scrollback_range.rs` |
+| U194 | `plain_tail(n)` returns the last n lines of scrollback plus screen | FR-012 | example | DONE | `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_returns_the_last_n_lines_of_scrollback_plus_screen`, `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_never_returns_more_than_n_lines` |
+| U195 | Lines carry no escape sequences and are right-trimmed | FR-012 | example | DONE | `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_lines_carry_no_escape_sequences_and_are_right_trimmed` |
+| U196 | `truncated` is true when older lines existed beyond n | FR-012, EC-16 | example | DONE | `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_is_truncated_when_older_lines_exist_beyond_n`, `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_is_truncated_when_the_scrollback_limit_discarded_older_lines` |
+| U197 | `truncated` is false when the whole content fits in n | FR-012 | example | DONE | `crates/micold-daemon/tests/scrollback_range.rs::plain_tail_is_not_truncated_when_the_whole_content_fits_in_n` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` cross-session handlers (T064, T069)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U198 | `read_session_output` reads the primary terminal even when another shell instance is attached | FR-012 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| U199 | `read_session_output {lines: 5000}` on a long scrollback returns at most 2,000 lines | FR-012, EC-16 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| U200 | A two-line `send_session_input` reaches the PTY as one bracketed submission ending `\r` | US4-AS2, FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
-| U201 | A `SettingsSet` changing the option applies to the very next request of an already-running session | FR-016 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_cross_session.rs` |
+| U198 | `read_session_output` reads the primary terminal even when another shell instance is attached | FR-012 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::the_primary_terminal_is_read_even_with_a_shell_instance_attached` |
+| U199 | `read_session_output {lines: 5000}` on a long scrollback returns at most 2,000 lines | FR-012, EC-16 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::a_line_count_above_the_maximum_returns_at_most_2000_lines` |
+| U200 | A two-line `send_session_input` reaches the PTY as one bracketed submission ending `\r` | US4-AS2, FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::a_two_line_text_is_one_bracketed_submission_ending_in_a_carriage_return` |
+| U201 | A `SettingsSet` changing the option applies to the very next request of an already-running session | FR-016 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::a_change_of_the_option_applies_to_the_very_next_request` |
 
 ### `crates/micold-daemon/src/mcp/tools.rs` audit line (T072, T073)
 
@@ -432,10 +432,10 @@ each group that changes existing code.
 | --- | --- | --- | --- | --- | --- |
 | U214 | The Environment draft carries `tool_server_enabled` from `DaemonSettings` | FR-004 | example | DONE | `crates/micold-client/tests/features_settings.rs::the_binding_toggle_is_seeded_from_the_stored_setting`, `crates/micold-client/src/main_tests.rs::the_binding_toggle_opens_with_the_value_the_service_reported` |
 | U215 | Toggling the row sends `SettingsSet { tool_server_enabled: Some(_) }` | FR-004 | example | DONE | `crates/micold-client/src/main_tests.rs::turning_the_binding_toggle_off_and_saving_tells_the_service`, `crates/micold-client/tests/features_settings.rs::turning_the_binding_toggle_off_reaches_what_save_writes` |
-| U216 | The Environment draft carries `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
-| U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
+| U216 | The Environment draft carries `cross_session_access` | FR-016 | example | DONE | `crates/micold-client/tests/features_settings.rs::the_cross_session_option_is_seeded_from_the_stored_setting`, `crates/micold-client/tests/features_settings.rs::every_value_of_the_cross_session_option_reaches_what_save_writes` |
+| U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | DONE | `crates/micold-client/src/main_tests.rs::choosing_a_cross_session_value_and_saving_tells_the_service` |
 | U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | DONE | `crates/micold-client/tests/support/covered_states.rs` (`settings-view-environment`) + `layout_snapshot.rs`; M6 adds the FR-016 row to the same state and re-records it |
-| U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_default_session_is_refused_by_principle_iii_and_nothing_changes` |
+| U219 | `create_worktree` through `POST /mcp` from a Default session's credential creates the worktree as from any session (constitution 1.7.0, D21); rename and delete from it stay refused by policy | US3-AS6, FR-015a | example | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does`, `::a_default_session_is_still_refused_rename_after_creating` |
 | U220 | Each CLI names its trust record: Claude `ClaudeProjects`, Copilot `CopilotTrustedFolders`, Pi `NeverAsks` | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::each_cli_names_its_trust_record` |
 | U221 | Claude does not ask in a project `.claude.json` records as accepted, nor in a worktree below it | FR-017 | example | DONE | `crates/micold-core/tests/folder_trust.rs::claude_does_not_ask_below_an_accepted_project` |
 | U222 | Claude asks with no file, `hasTrustDialogAccepted: false`, or a sibling that only shares the name prefix | FR-017 | boundary | DONE | `crates/micold-core/tests/folder_trust.rs::claude_asks_without_an_accepted_record` |
@@ -446,6 +446,9 @@ each group that changes existing code.
 | U227 | Pi gets its first prompt without any trust record | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::pi_gets_its_first_prompt_without_a_trust_record` |
 | U228 | A bracketed submission drops paste markers inside the text, so it cannot end the paste early, including a marker rebuilt by dropping another | FR-017 | boundary | DONE | `crates/micold-core/tests/input_readiness.rs::{paste_markers_inside_the_text_cannot_end_the_paste_early, a_marker_rebuilt_by_dropping_another_is_dropped_too}` |
 | U229 | `create_worktree` with a reflog shorthand (`@{-1}`) that git would expand is `invalid_input`, nothing changes | EC-3 | boundary | DONE | `crates/micold-daemon/tests/mcp_create_worktree.rs::a_previous_branch_shorthand_is_invalid_input` |
+| U230 | `send_session_input` with text of line breaks only is `invalid_input` (only the closing Enter would be typed); a space before the line break is text | FR-012a | boundary | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::send_session_input_with_only_line_breaks_is_invalid_input` |
+| U231 | `send_session_input` with a control character other than a line break or a tab (Ctrl-C, Ctrl-D, Escape, DEL, NUL, a C1 control) is `invalid_input`; through `POST /mcp` nothing is typed | FR-014, FR-012a | boundary | DONE | `crates/micold-core/tests/mcp_tools_catalog.rs::send_session_input_with_a_control_character_is_invalid_input`, `crates/micold-daemon/tests/mcp_cross_session.rs::line_breaks_alone_and_control_characters_are_invalid_input` |
+| U232 | Through `POST /mcp`, `send_session_input` into a session whose CLI would ask to trust its folder is a `conflict` naming the CLI and the trust question; nothing is typed, nobody is asked, and a read still works | FR-017 (R12), FR-014 | example | DONE | `crates/micold-daemon/tests/mcp_cross_session.rs::a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed` |
 | U230 | The first prompt goes to the primary process, judged on its output, even with a shell attached meanwhile | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached` |
 | U231 | Every connection hears that an agent-created session went live (a window viewing it builds its stream) | FR-009, SC-003 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::every_connection_hears_that_an_agent_created_session_went_live` |
 | U232 | Pi without its `session_start` event is ready once its output settles | FR-017 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::pi_without_its_event_is_ready_once_its_output_settles` |

@@ -116,10 +116,14 @@ even while you have one of the session's shell terminals open instead. The resul
 older lines exist beyond the ones returned.
 
 `send_session_input` types the text into the other session's AI CLI and submits it once. Text of
-several lines arrives as one message. The text cannot be empty.
+several lines arrives as one message. The text cannot be empty or only line breaks, and it cannot
+hold control characters such as Ctrl-C or Escape: an assistant that wants to interrupt another
+session uses `interrupt_session`, which asks you first.
 
 Both need the other session to be running; otherwise they fail and name `start_session`. Neither
-works on the assistant's own session.
+works on the assistant's own session. Nothing is typed into a session whose AI CLI has not yet been
+told to trust the project folder, because the text's Enter would answer that question for you:
+the request fails and says to trust the project in that CLI first.
 
 **You decide whether assistants may do this.** Settings → Environment has **Let agents read and
 type into other sessions**

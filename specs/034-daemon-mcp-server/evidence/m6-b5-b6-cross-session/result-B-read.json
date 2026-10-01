@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"lines\": [\n    \"STUB-READY-S2\"\n  ],\n  \"truncated\": false\n}","type":"text"}],"isError":false,"structuredContent":{"lines":["STUB-READY-S2"],"truncated":false}}}
