@@ -22,8 +22,9 @@ log="$SCRATCHPAD/gate-$(date +%s).log"
 setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 ```
 
-- **Detach it.** A plain background task can be killed while it waits on the build lock. Use
-  `Monitor` with an until-loop on `grep -q GATE_EXIT= "$log"`, then read the exit code.
+- **Detach it.** A plain background task can be killed while it waits on the build lock. Wait with
+  `scripts/autopilot/hold.sh "$log"` (unit.md, *Wait with `hold.sh`*); its `DONE` line carries the
+  exit code.
 - **Order is CI's:** fmt → clippy (core, then workspace) → `cargo test --workspace` →
   `mise run test-scripts`. `mise run test` alone is not the gate.
 - **Push only what the gate saw.** A green gate records the tree it ran on, and a hook blocks

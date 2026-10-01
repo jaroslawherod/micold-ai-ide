@@ -11,8 +11,9 @@ scripts/autopilot-tokens.py --json …                # machine-readable
 
 Read `cost_eq` first. It weights every token by its API price ratio (input 1, cache write 1.25 or 2,
 cache read 0.1, output 5), so one number compares runs. `peak_ctx` shows how large one unit's
-context grew. The `output` column is a lower bound: transcripts store usage from the start of the
-stream.
+context grew. `rebuild_eq` is the part of `cost_eq` that cache rebuilds cost: requests that wrote
+most of a large context to the cache again, after an idle wait or a compaction. The `output` column
+is a lower bound: transcripts store usage from the start of the stream.
 
 ## Baseline, 2026-09-29
 
@@ -204,6 +205,52 @@ Because of the handover finding, `scripts/autopilot/context-hook.py` now runs as
 hook. On a branch an autopilot ledger names, it reads the caller's own transcript after each tool
 call and, once the context passes the cap, tells a unit to hand over and the orchestrator to
 suggest `/clear` and `resume`. It repeats only after another 20k of growth.
+
+## Where the cost of the 034 runs went, 2026-10-01
+
+`github-issue-worktree` ended at 42.8M `cost_eq` over 2,316 calls. `daemon-mcp-server` stood at
+51.9M over 2,590 calls in its last milestone. Opus carried 88–92% of both.
+
+**Cache rebuilds were a quarter of each run: 10.6M and 12.4M.** A subagent's prompt cache lasts 5
+idle minutes and the main session's 60. Every request in the two runs that came after a longer gap
+re-wrote its context; none that came sooner did:
+
+| Idle gap before the request | Subagents: cache kept / rebuilt | Orchestrator: kept / rebuilt |
+|---|---:|---:|
+| 2 to 5 min | 76 / 0 | 27 / 0 |
+| 5 to 5.5 min | 5 / 1 | 2 / 0 |
+| 5.5 to 30 min | 3 / 90 | 58 / 0 |
+| 30 to 60 min | 1 / 7 | 6 / 0 |
+| over 65 min | 0 / 13 | 0 / 19 |
+
+Units idled while the gate built (11 and 20 rebuilds), while a subagent or a forked skill ran or
+after a turn ended (25 and 34), and while CI ran (16 and 3). Their context at a rebuild averaged 141k, so each cost about
+175k. The orchestrator idled over an hour behind a unit or the human 8 and 11 times, at the main session's
+doubled write rate: 1.5M and 2.4M.
+
+`scripts/autopilot/hold.sh` now does the waiting. A unit calls it in the foreground; it returns when
+the gate log has its result line, or after 4 minutes with `HOLD`, and the unit calls it again. Each
+return is one call that reads the cache and so keeps it: about 12k at a 120k context, against 150k
+for the rebuild. After 10 holds (40 minutes) it prints `STOP`, because 12 holds cost what one
+rebuild does. The orchestrator runs `hold.sh --long` in the background while a unit works: it comes
+back every 50 minutes, up to 12 times.
+
+**Units passed 150k early.** Before the context hook, a milestone unit passed 150k at its 14th to
+28th call and spent 80–95% of its cost above the cap (daemon-mcp M3: 7.8M of 8.2M). With the hook,
+units handed over at 139–168k after about 50 calls, and three milestones ran as two parts. Cost per
+call barely moved, 21–23k against 21–26k, because a part starts at 29k, reads `unit.md`, its phase
+file, the ledger and two reference files to reach 55–60k before its first step, then adds about 2k
+per call.
+
+**What a unit starts with.** The first request of every subagent is 27–29k (system prompt, tool
+schemas, `CLAUDE.md`, memory index, skill list), carried on about 2,300 calls: roughly 6M per run.
+The daemon-mcp ledger had grown to 28 kB, about 8k tokens, of which the units' working state (PRs,
+milestones, handover, escalation) is a tenth; the rest is decisions, review rounds and declined
+findings that later units do not need.
+
+**Whole-file reads.** `Read` results were 50–58% of what the big units carried in tool output. The
+largest single results were whole files of 10–16k tokens: `tasks.md`, `test-list.md`, `tools.rs`,
+`worktree_form.rs`.
 
 ## Skill size
 

@@ -95,6 +95,14 @@ as its starting point.
   new part finishes the work on that PR; wait on and merge it as usual, and send any `RED` log to
   the latest part.
 
+### While a unit runs
+
+Your prompt cache expires after 60 idle minutes; the next call then re-writes your whole context,
+which costs as much as 20 calls. After you dispatch a unit, run
+`scripts/autopilot/hold.sh --long "$SCRATCHPAD/unit-<description>"` with `run_in_background` and
+`timeout: 3300000`. When it reports `HOLD` and the unit has not returned, run it again. Stop on
+`STOP`, when the unit returns, and while you wait on the human.
+
 ### Waiting and merging
 
 After a unit returns `DONE` with a PR, run `scripts/autopilot/wait-merge.sh <n>` detached, and wait

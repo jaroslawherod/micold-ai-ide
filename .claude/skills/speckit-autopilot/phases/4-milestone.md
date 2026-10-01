@@ -19,7 +19,7 @@ For milestone K:
    changed, also `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`).
    While it builds, run review **A**: the `code-review` skill at `high` on `origin/main...HEAD` (a
    scoped round on the fix diff when A has run before). A builds nothing, so it does not wait on
-   the build lock. Then wait for the gate.
+   the build lock. Then wait for the gate with `hold.sh`.
    - **A found a real BLOCKER or MAJOR, or the gate is red:** fix, and repeat step 2. The gate
      must pass on the tree as it now is.
    - Otherwise go to step 3.

@@ -29,6 +29,8 @@ Columns:
   peak_ctx    largest context sent in one request (input + cache_w + cache_r)
   cost_eq     input-token equivalent at API price ratios: input 1, cache write 1.25 (5m) or 2 (1h),
               cache read 0.1, output 5. Comparable across runs on the same model only.
+  rebuild_eq  the part of cost_eq that the rebuilds' cache writes cost: what idle waits and
+              compactions lost
 """
 
 import json
@@ -39,7 +41,7 @@ from pathlib import Path
 
 PROJECTS = Path.home() / ".claude" / "projects"
 FIELDS = ("calls", "input", "cache_w", "cache_r", "rebuilds", "unbatched", "output", "peak_ctx",
-          "cost_eq")
+          "cost_eq", "rebuild_eq")
 # A request that writes more than half of a context this large re-caches the conversation.
 REBUILD_MIN_CTX = 30_000
 
@@ -119,6 +121,7 @@ def usage_of(path):
         ctx = inp + cw + cr
         if not first and ctx >= REBUILD_MIN_CTX and cw > ctx / 2:
             m["rebuilds"] += 1
+            m["rebuild_eq"] += 1.25 * w5m + 2 * w1h
         first = False
         m["output"] += out
         m["peak_ctx"] = max(m["peak_ctx"], inp + cw + cr)

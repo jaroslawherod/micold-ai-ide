@@ -31,10 +31,15 @@ sends you there.
   - `grep -n -C5 <pattern> <file>` shows the lines in one call; `Read` after `grep` only when you
     need more than that.
   - At a checkpoint, `scripts/autopilot/checkpoint.sh` (below) is the one probe you need.
-- **Wait once.** Your prompt cache expires after 5 idle minutes; the next call then re-writes your
-  whole context. Run work that needs no build (a review, a subagent) while the gate builds, and
-  wait for what runs together in one wait, not one after another. A job waiting on the build lock
-  idles too: do not start it until the build is done.
+- **Wait with `hold.sh`, never idle.** Your prompt cache expires after 5 idle minutes; the next call
+  then re-writes your whole context, which costs as much as 12 calls. While a detached gate or a
+  background subagent runs, do not end your turn: call `scripts/autopilot/hold.sh <log> [<regex>]`
+  with Bash `timeout: 300000`, and again on each `HOLD`. It prints `DONE <line>` when the log
+  matches (default `_EXIT=`). To hold for a subagent, name a file nothing writes; its result reaches
+  you when a hold returns. On `STOP`, wait once in the background instead. Run work that needs no
+  build (a review, a subagent) while the gate builds, and wait for what runs together in one wait,
+  not one after another. A job waiting on the build lock idles too: do not start it until the build
+  is done.
 - **Read only what you need.** Everything you read is re-read on each later call of the unit.
   - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
     not the whole file.
