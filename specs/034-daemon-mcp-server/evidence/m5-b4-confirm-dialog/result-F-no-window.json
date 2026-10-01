@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"needs_confirmation: no application window is open to confirm it","type":"text"}],"isError":true,"structuredContent":{"error":{"category":"needs_confirmation","message":"no application window is open to confirm it"}}}}

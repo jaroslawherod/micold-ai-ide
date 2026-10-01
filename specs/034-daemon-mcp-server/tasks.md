@@ -205,7 +205,7 @@ confirmation dialog, and the FR-015/FR-015a refusals.
 - [x] T092 [US3] [A16] Acceptance: US3-AS4 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_confirmations.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M5)
 - [x] T093 [US3] [A17] Acceptance: US3-AS5 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M5)
 - [x] T094 [US3] [A18] Acceptance: US3-AS6 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_lifecycle_tools.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M5); its `create_worktree` part can pass in M3 and `rename_worktree` in M4, but `delete_worktree` is only listed from M5 (T056)
-- [ ] T103 [US3] Run quickstart §B4 with the `visual-pass` skill, and §B1 step 7 / §B2 repeat (a ~55 s confirmation wait from `claude` and `copilot`); save evidence
+- [x] T103 [US3] Run quickstart §B4 with the `visual-pass` skill, and §B1 step 7 / §B2 repeat (a ~55 s confirmation wait from `claude` and `copilot`); save evidence
 
 **Checkpoint**: an agent's `delete_worktree` shows a dialog in every window; Allow removes it, Deny refuses (quickstart §B4).
 

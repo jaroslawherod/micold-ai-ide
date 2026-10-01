@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"branch_deleted\": true,\n  \"leftovers\": [],\n  \"removed\": \"feat-x\"\n}","type":"text"}],"isError":false,"structuredContent":{"branch_deleted":true,"leftovers":[],"removed":"feat-x"}}}
