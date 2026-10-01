@@ -15,7 +15,7 @@ in that directory gets, and the action that would change it.
 Technical approach (research.md R1–R9): the session service already resolves each directory's
 environment once and caches the variables. It now keeps the attempt's outcome in the same cache
 cell and classifies it into a six-variant `SpawnEnv`. The availability answer carries that state
-in one new field (`PROTOCOL_VERSION` 17 → 18). A new pure module `micold_core::cli_reason` writes
+in one new field (`PROTOCOL_VERSION` 18 → 19). A new pure module `micold_core::cli_reason` writes
 every sentence, and both the service (start failure, reply to an AI session) and the client
 (Settings notes, missing-default message, a note in a row's CLI list) call it, so the surfaces
 cannot disagree. The client stamps each answer with the key it was asked for, which gives the
@@ -65,7 +65,7 @@ touched, 1 new core module, 1 new builder method on a shared component, 4 user g
 | **IV. Local-First** | PASS | The state comes from the local session service's own cache. No network, no remote service, nothing persisted or transmitted beyond the existing local socket. |
 | **V. Rust + iced** | PASS | Rust and iced only. `SpawnEnv` is a closed enum, so a state without an action cannot be built. `Option<SpawnEnv>` separates "the service could not say" from every state. `ResolvedEnv` holds variables and state together, so one cannot be cached without the other. |
 | **VI. Cross-Platform** | PASS | The classification and the sentences do not branch on the OS. No sentence names a platform's startup file (contract W2e). The service tests that source a script run on all three CI platforms with the fixtures `ai_cli_availability.rs` already has for bash and PowerShell. `mcp_create_session.rs` is `#![cfg(unix)]`, so U5's wiring is tested on unix only, and its wording on every platform by `cli_reason.rs`. No `cfg(target_os)` arm is added. |
-| **VII. Documentation** | PASS | The user guide changes in the milestone that ships each behaviour (FR-017): `settings.md` (Default AI CLI note) and `sandboxed-daemon.md` with the Settings note; `worktrees-and-sessions.md` ("When a CLI isn't installed") and `agent-tools.md` with the failure and the reply; the row list in `worktrees-and-sessions.md` with the list note. `docs/daemon.md`'s protocol paragraph, which stops at version 10, is brought up to version 18. |
+| **VII. Documentation** | PASS | The user guide changes in the milestone that ships each behaviour (FR-017): `settings.md` (Default AI CLI note) and `sandboxed-daemon.md` with the Settings note; `worktrees-and-sessions.md` ("When a CLI isn't installed") and `agent-tools.md` with the failure and the reply; the row list in `worktrees-and-sessions.md` with the list note. `docs/daemon.md`'s protocol paragraph, which stops at version 10, is brought up to version 19. |
 | **VIII. Reusable UI** | PASS | The Settings notes keep the shared `field_note` primitive. The row list's note is a builder method on the shared `material::MenuOverlay`, shown in the component showcase and covered by `menu_anatomy`. No feature-level widget styling. `menu_panel_size_with_note(items, note)` is not a component constructor: it is the measuring function beside the existing free `menu_panel_size(items)` (`ui/material/menu.rs`), which the anchor clamp calls before any overlay is built, so it keeps that function's form. |
 
 No violations. Complexity Tracking is empty.
@@ -101,7 +101,7 @@ crates/micold-core/
 │                                       #      explain, start_refusal, start_refusal_unknown, name_list,
 │                                       #      the 3 label consts
 ├── src/protocol/messages.rs            # DaemonMsg::AiCliAvailability + env: Option<SpawnEnv>
-├── src/protocol/version.rs             # PROTOCOL_VERSION 17 → 18, with its paragraph
+├── src/protocol/version.rs             # PROTOCOL_VERSION 18 → 19, with its paragraph
 ├── tests/cli_reason.rs                 # NEW: classification table, W1–W3 over state × place
 ├── tests/schema_hash.rs                # the pinned version
 └── tests/protocol_roundtrip.rs         # the answer with and without env
@@ -135,7 +135,7 @@ crates/micold-client/
 └── tests/layout_snapshot.rs            # regenerated if the showcase entry changes a snapshot
 
 docs/user-guide/settings.md, sandboxed-daemon.md, worktrees-and-sessions.md, agent-tools.md   # FR-017
-docs/daemon.md                          # the stale "version 10 today" sentence names version 18
+docs/daemon.md                          # the stale "version 10 today" sentence names version 19
                                         #   (the record of the version is version.rs's paragraph
                                         #   and the pin in tests/schema_hash.rs)
 ```
@@ -171,7 +171,7 @@ shared menu component.
 | FR-015 (changes nothing) | client reducer | the notice functions take `&State` and return a string; `unavailable_default_says_so.rs` keeps asserting the stored default is unchanged |
 | FR-016 (three OSes) | CI | core tests and `ai_cli_availability.rs` run on the Linux, macOS and Windows jobs; `mcp_create_session.rs` on unix only; W2e |
 | FR-017 | docs | the four user guide pages; CI's user-guide gate |
-| A1 (wire) | core unit | `tests/schema_hash.rs` (version 18), `tests/protocol_roundtrip.rs` |
+| A1 (wire) | core unit | `tests/schema_hash.rs` (version 19), `tests/protocol_roundtrip.rs` |
 | SC-001 (six of six, both placements), SC-002, SC-007, rendering | quickstart §B | `visual-pass` skill, steps B1–B14 |
 
 ## Complexity Tracking
