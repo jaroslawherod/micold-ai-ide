@@ -2,10 +2,12 @@
 
 Every Claude Code and GitHub Copilot session the application starts can see your project the way the
 sidebar shows it: which worktrees exist, which branches are free, and which sessions are running
-where. It can also create, rename and delete a worktree and create, start, stop, interrupt and
-delete a session; the ones that stop or remove something wait for you
-to allow them first. The session service provides this through a small tool server named `micold`, and each
-session is connected to it automatically. You do not install or configure anything.
+where. It can also create, rename and delete a worktree, create, start, stop, interrupt and delete
+a session, and read and type into another session of the project. The requests that stop or remove
+something wait for you to allow them first, and you decide in Settings whether sessions may read
+and type into each other. The session service provides this through a small tool server named
+`micold`, and each session is connected to it automatically. You do not install or configure
+anything.
 
 Ask the assistant in a session something like *"which worktrees does this project have?"* or *"is
 anyone else working on the `parser` branch?"* and it answers from the same list you see. Ask it to
@@ -149,6 +151,10 @@ Each session connects with its own key. The key is created when the session star
 when the session is deleted (directly or with its worktree), and is never reused after the service
 restarts. The tool server listens only on your own computer (`127.0.0.1`) and refuses a request
 without a valid key; the key file is readable only by you.
+
+When the session service runs [in a container](sandboxed-daemon.md), the sessions run there too, and
+so does the tool server: it listens inside the container, its port is not published, and nothing
+on your computer outside the container can reach it. The assistant sees the same tools either way.
 
 ## Which sessions are connected
 

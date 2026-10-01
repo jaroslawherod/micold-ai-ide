@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M6
-- **Next step**: M6 PR open; the orchestrator waits on CI and merges. Then M7.
+- **Phase**: 4-milestone M7
+- **Next step**: M7 in progress: T074 done; T075 real-runtime run, T076 real-CLI pass, T077 docs, then gate and reviews.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #498 | M3: create_worktree / create_session | merged | 2486d096bfb6ddbba8f6b6cad1f2489f3a2e481c |
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
-| #519 | M6: cross-session read and send; Default may create a worktree | open | — |
+| #519 | M6: cross-session read and send; Default may create a worktree | merged | e108619b041f290b415b62f1a76c95bfbe1b4801 |
 
 ## Milestones
 
@@ -32,8 +32,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | merged |
-| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | #519 | PR open |
-| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
+| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | #519 | merged |
+| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | in progress |
 
 Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
 acceptance-gate and quickstart tasks and no split along an acceptance scenario leaves an observable
@@ -154,9 +154,7 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - Flaky: `crates/micold-core/tests/github_gh_cli.rs::a_typed_error_stands_at_any_exit_status` failed once with `ToolMissing` (stub executable race) during the M4 gate; passed on rerun. Not this feature's code.
 - `SessionStop` (sidebar or `stop_session`) racing a start/respawn in flight: the spawn can register a live process after the stop reported `Idle` (M5 review A).
 - Windows: seven M5 tests in `mcp_lifecycle_tools.rs` are `#[cfg(unix)]` (the fixture's sessions are `#!/bin/sh` stand-ins), so Windows CI does not run an allowed stop, interrupt or delete through `/mcp`; port the stand-ins (M5 review B).
-- M5 merge note: M4 added `policy::ConfirmedOp` and `PolicyDecision::Confirm`; M5's prebuilt protocol `ConfirmOperation` should be mapped from it.
 - Client: a Settings save made while disconnected is overwritten by the daemon's `Welcome` on reconnect, for every service-owned field (M2 review A).
 - `read_session_output`'s `truncated` can be false for a session nobody views whose scrollback (set below 2,000 lines) overflowed: `Framer::scrolled_off` advances only in `frame()`. Derive it from the grid or count evictions in the PTY reader (M6 review A).
-- `cross_session_access` in the settings file is a strict enum: a mistyped hand edit sends the whole file to `.bak` and the option comes back `Auto`. Read an unknown token as `Off` (M6 review A).
 - `send_session_input` and the first prompt write to the PTY with a blocking `write_all` on a runtime thread, with text bounded only by the 1 MiB request body; move it to `blocking` and cap the text (M6 review A).
 - A theme change saved in Settings shows only after the client restarts (seen in the M5 and M6 visual passes); not this feature's code.
