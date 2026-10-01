@@ -9,6 +9,11 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
 - **Next step**: M5 PR #516 is open; merge on green (`scripts/autopilot/wait-merge.sh 516`), then M6.
+  Rebased onto main `976b0220` after main made it CONFLICTING. One conflict,
+  `crates/micold-core/tests/protocol_auth.rs`: main (034-github-issue-worktree's close) removed the
+  duplicate literal pin there, so main's side was taken and the one pin is `schema_hash.rs`'s, at 18.
+  Main's `PROTOCOL_VERSION` is still 17, so no renumbering: M5 stays 18 and M6 takes 19. Main did not
+  touch the layout fixture.
 
 ## Pull requests
 

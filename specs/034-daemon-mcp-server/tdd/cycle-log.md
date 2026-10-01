@@ -782,7 +782,8 @@ cherry-picked onto `main` after M4 merged; `PROTOCOL_VERSION` on `main` was stil
   `ConfirmationWithdrawn`, `ConfirmationAnswer`, `ConfirmOperation::SendInput` without a text field;
   `schema_hash` pinned at 18.
 - green: `6935a6ab` (of `646ece7b`): the three messages and `ConfirmOperation`; protocol 17 → 18
-  with its changelog line; `protocol_auth` moved to match.
+  with its changelog line; `protocol_auth` moved to match. (Rebased onto `976b0220`: main had
+  removed `protocol_auth`'s duplicate literal pin, so the one pin is `schema_hash.rs`'s.)
 
 ## Cycle 30 — M5 phase A registry: U172–U185 (T050 part → T055)
 
