@@ -558,11 +558,11 @@ fn w2c_the_directory_is_named_exactly_where_an_attempt_is_reported() {
         (AttemptDir::Dir(Path::new(PROJECT)), PROJECT),
     ] {
         for (env, place, said) in every_explanation(dir) {
-            let reports_an_attempt = match (env, place) {
-                (SpawnEnv::IncludeOff | SpawnEnv::NoScriptPath, _) => false,
-                (SpawnEnv::Applied, Place::Image(_)) => false,
-                _ => true,
-            };
+            let reports_an_attempt = !matches!(
+                (env, place),
+                (SpawnEnv::IncludeOff | SpawnEnv::NoScriptPath, _)
+                    | (SpawnEnv::Applied, Place::Image(_))
+            );
             let both = format!("{} {}", said.reason, said.action);
             assert_eq!(
                 both.contains(shown),
