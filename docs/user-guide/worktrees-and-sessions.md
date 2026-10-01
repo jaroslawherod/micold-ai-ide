@@ -687,10 +687,13 @@ decided when the session is created.
   computer, that is your `PATH`. With it [in a container](./sandboxed-daemon.md), it is the
   container's image, and what is on your own `PATH` makes no difference. The image this app
   publishes, and one built from a checkout, ships all three.
-- **If your default CLI is not installed, pressing start offers the ones that are** instead of
-  trying to run something that isn't there. Nothing is created until you pick — your default stays
-  as you set it, and the list is checked at that moment, so a CLI you installed since opening the
-  app is in it.
+- **If your default CLI is one a session would not find there, pressing start says so and offers
+  the ones it would find** instead of trying to run something that isn't there. The message names
+  the CLI, gives the reason for that row's directory and what to change (the same reasons as the
+  note under [Default AI CLI](./settings.md#default-ai-cli)), and the list opens. If the reason is
+  not known yet, the message says only that a session would not find it there. Nothing is created
+  until you pick — your default stays as you set it, and the list is checked at that moment, so a
+  CLI you installed since opening the app is in it.
 
 **The choice is fixed for the session's lifetime.** There is no way to switch a running session to
 another CLI, and nothing switches it for you — not changing your default, not restarting the app,
@@ -772,21 +775,23 @@ guess; if you do run the same conversation in two places at once, both write to 
 - **Settings tells you before you start anything.** Under
   [Default AI CLI](./settings.md#default-ai-cli), and under *Image reference* when sessions run in a
   container, a note names each CLI missing from where sessions run.
-- Starting one tells you which CLI is missing, by name, and starts nothing. You get a clear failure
-  rather than a terminal that never comes to life. The session's pane and an error banner say what
-  to change, and that depends on where sessions run and on what you were starting:
-
-  | | On this computer | In a container |
-  |---|---|---|
-  | **A new session** | Install it, or start this session on another AI CLI. | Choose an image that provides it, or start this session on another AI CLI. |
-  | **Resuming a session** | Install it, then restart this session. | Choose an image that provides it, then restart this session. |
-
-  A resumed session is never pointed at another CLI: its conversation lives in that CLI's own
-  store, so it can only continue there.
+- **Starting one tells you why, and starts nothing.** You get a clear failure rather than a terminal
+  that never comes to life. The session's pane and an error banner name the CLI, give the reason for
+  the session's directory and say what to change. The reasons are the six described under
+  [Default AI CLI](./settings.md#default-ai-cli): for example "Source a script before each session"
+  is off, "Script path" is empty, or the startup script was not found, failed or timed out. When the
+  startup script was not found, failed or timed out, the message does not tell you to install
+  anything: the fix is the script ("Script path", or "Timeout"). Only when the script was applied
+  does it say the CLI was not found on the `PATH` sessions get, and to install it. In a container
+  whose image lacks the CLI, it names the image and says to choose one that provides it.
+  - **A new session** is also offered another AI CLI.
+  - **A restarted session** is never pointed at another CLI: its conversation lives in that CLI's
+    own store, so it can only continue there. The message says to fix the cause and then restart
+    the session.
 - **Restart fails the same way until that is fixed.** So the pane does not suggest *restart* for
-  this failure, as it does after a crash loop. Once the CLI is installed, or the service runs from an
-  image that has it, press **restart** in the bar. The service has to restart before a newly chosen
-  image is used, as described under [Session service](./settings.md#session-service).
+  this failure, as it does after a crash loop. Once you have fixed the cause, or the service runs
+  from an image that has the CLI, press **restart** in the bar. The service has to restart before a
+  newly chosen image is used, as described under [Session service](./settings.md#session-service).
 - The banner appears once per failure. Pressing **restart** again with nothing changed fails again
   without a second banner, and the bar's `failed` is what remains.
 
