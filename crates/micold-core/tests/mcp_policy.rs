@@ -2,8 +2,9 @@
 //! U106–U114 for milestone M4).
 //!
 //! `policy::decide` is evaluated before anything changes. A Default session (one running in the
-//! project root) may not create, rename or delete a worktree, because Principle III forbids a
-//! Default session to create, modify or remove any git worktree (FR-015a). An agent may not stop,
+//! project root) may not rename or delete a worktree, because Principle III forbids a Default
+//! session to modify or remove any git worktree (FR-015a). It may create one: since constitution
+//! 1.7.0 that call is the application creating the worktree on the session's behalf. An agent may not stop,
 //! delete or interrupt its own session, nor delete the worktree it runs in (FR-015). The other
 //! destructive operations wait for the user's confirmation (FR-014), and a refusal is always
 //! decided before any confirmation.
@@ -50,27 +51,54 @@ fn decide_for(location: SessionLocation, operation: &Operation) -> PolicyDecisio
     )
 }
 
+/// U104 (constitution 1.7.0, Principle III's exception): a Default session may create a worktree
+/// through the tool server, in every create mode.
 #[test]
-fn a_default_caller_is_refused_create_worktree_naming_principle_iii() {
-    let decision = decide_for(SessionLocation::Default, &create_worktree());
-    let PolicyDecision::Refuse(error) = decision else {
-        panic!("a Default session must not create a worktree (FR-015a): {decision:?}");
-    };
-    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
-    assert!(
-        error.message.contains("Principle III"),
-        "the refusal names the rule the user can look up: {}",
-        error.message
-    );
+fn a_default_caller_may_create_a_worktree() {
+    for mode in [
+        CreateMode::NewBranch,
+        CreateMode::ReuseLocal,
+        CreateMode::TrackRemote {
+            remote: "origin".into(),
+        },
+    ] {
+        let operation = Operation::CreateWorktree {
+            branch: "feat-x".into(),
+            name: None,
+            mode: mode.clone(),
+        };
+        assert_eq!(
+            decide_for(SessionLocation::Default, &operation),
+            PolicyDecision::Proceed,
+            "{mode:?}"
+        );
+    }
 }
 
 #[test]
 fn a_worktree_caller_may_create_a_worktree() {
     assert_eq!(
         decide_for(SessionLocation::Worktree("b".into()), &create_worktree()),
-        PolicyDecision::Proceed,
-        "only the Default session is bound by Principle III"
+        PolicyDecision::Proceed
     );
+}
+
+/// The exception is one verb wide: the refusal a Default caller still gets names what it may not
+/// do, rename and delete, and no longer says it may not create.
+#[test]
+fn the_default_refusal_names_rename_and_delete_and_not_create() {
+    for operation in [rename_worktree("b"), delete_worktree("b")] {
+        let error = refusal(decide_for(SessionLocation::Default, &operation));
+        assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+        assert!(error.message.contains("Principle III"), "{}", error.message);
+        assert!(error.message.contains("rename"), "{}", error.message);
+        assert!(error.message.contains("delete"), "{}", error.message);
+        assert!(
+            !error.message.contains("create"),
+            "a Default session may create a worktree: {}",
+            error.message
+        );
+    }
 }
 
 #[test]
