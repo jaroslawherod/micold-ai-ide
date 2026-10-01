@@ -22,8 +22,9 @@ mod support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::session::{AvailabilitySource, CliAvailability};
-use micold_client::features::settings::{SettingsDraft, SettingsSection};
+use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
+use micold_client::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::AiCli;
 use support::layout as lay;
@@ -38,6 +39,15 @@ const CLI_SUPPORTING: &str = "Used for new sessions unless you choose otherwise"
 const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be reported in a bug";
 
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
+    // The script applied: with no known state there is no note to look at (037, W5).
+    settings_showing_in(section, source, SpawnEnv::Applied)
+}
+
+fn settings_showing_in(
+    section: SettingsSection,
+    source: AvailabilitySource,
+    env: SpawnEnv,
+) -> State {
     let mut state = State::default();
     support::hold_home(
         &mut state,
@@ -46,6 +56,8 @@ fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> Sta
             // select still has an option, which is the ordinary case rather than an empty form.
             available: vec![AiCli::ClaudeCode],
             source,
+            env: Some(env),
+            asked_for: AvailabilityKey::Home,
         },
     );
     state.settings.settings_draft = Some(SettingsDraft {
@@ -98,8 +110,8 @@ fn the_missing_cli_notice_lines_up_with_the_select_it_is_about() {
     ));
 
     let supporting = x_of(&painted, CLI_SUPPORTING);
-    // "isn't" or "aren't", depending on how many CLIs are missing; the column is the same.
-    let notice = x_of(&painted, "installed on this computer");
+    // "was" or "were", depending on how many CLIs are missing; the column is the same.
+    let notice = x_of(&painted, "not found on the PATH");
 
     assert!(
         (notice - supporting).abs() <= TOLERANCE,
@@ -122,6 +134,35 @@ fn and_so_does_the_one_under_the_image_reference() {
         (notice - supporting).abs() <= TOLERANCE,
         "the notice starts at {notice} and the field's own supporting line at {supporting}; the \
          two call sites of `field_note` must not drift apart"
+    );
+}
+
+/// 037 U50 (FR-005, surface U2): the note under *Image reference* is the note under **Default AI
+/// CLI**. One answer, one sentence, in both places it is chosen.
+#[test]
+fn the_two_notes_are_one_sentence() {
+    let image = AvailabilitySource::Image("ghcr.io/example/my-own-image:3".to_string());
+    let note_in = |section| {
+        let state = settings_showing_in(section, image.clone(), SpawnEnv::IncludeOff);
+        let expected = missing_cli_notice(state.session.availability.home())
+            .expect("fixture check: two CLIs are missing, so there is a note");
+        let shown: Vec<String> = painted(&state)
+            .into_iter()
+            .map(|(content, _)| content)
+            .filter(|content| content.contains("would not find"))
+            .collect();
+        assert_eq!(
+            shown,
+            vec![expected.clone()],
+            "the section paints the note once, whole"
+        );
+        expected
+    };
+
+    assert_eq!(
+        note_in(SettingsSection::Environment),
+        note_in(SettingsSection::Daemon),
+        "the two points of choice read one answer and must say one thing about it"
     );
 }
 

@@ -6377,3 +6377,260 @@ mod issue_source {
         assert_eq!(shown(&rig.app), defaults, "Restore defaults returns them");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Feature 037, Story 1: the Settings note gives the reason and the action
+// ---------------------------------------------------------------------------------------------
+
+mod the_settings_note_explains_a_missing_cli {
+    use super::*;
+    use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
+    use micold_client::features::settings::missing_cli_notice;
+    use micold_core::cli_reason::SpawnEnv;
+
+    type Sent = iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>;
+
+    const WITHOUT_PI: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+
+    /// Open Settings, which asks about the home directory, and answer that request.
+    fn settings_opened_and_answered(
+        app: &mut App,
+        sent: &mut Sent,
+        available: &[AiCli],
+        env: Option<SpawnEnv>,
+    ) {
+        let _ = update_inner(app, Message::Settings(SettingsMsg::Opened));
+        let mut asked = Vec::new();
+        while let Ok(msg) = sent.try_recv() {
+            if let ClientMsg::AiCliAvailabilityRequest { req, cwd: None } = msg {
+                asked.push(req);
+            }
+        }
+        let [req] = asked[..] else {
+            panic!(
+                "fixture check: opening Settings asks about the home directory once, got {asked:?}"
+            );
+        };
+        let _ = update_inner(
+            app,
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+                req,
+                available: available.to_vec(),
+                env,
+            })),
+        );
+    }
+
+    /// The note under **Default AI CLI**, read as the view reads it.
+    fn note(app: &App) -> Option<String> {
+        missing_cli_notice(app.core.session.availability.home())
+    }
+
+    fn note_for(available: &[AiCli], env: Option<SpawnEnv>) -> Option<String> {
+        let mut app = base_app();
+        let mut sent = connected_with_outbox(&mut app);
+        settings_opened_and_answered(&mut app, &mut sent, available, env);
+        note(&app)
+    }
+
+    /// U45 (contract A4, C1): the state on the wire is the state the client holds.
+    #[test]
+    fn the_shell_files_the_answers_environment_state_with_the_set() {
+        let mut app = base_app();
+        let mut sent = connected_with_outbox(&mut app);
+        settings_opened_and_answered(
+            &mut app,
+            &mut sent,
+            &[AiCli::ClaudeCode],
+            Some(SpawnEnv::IncludeOff),
+        );
+
+        assert_eq!(
+            app.core.session.availability.home(),
+            Some(&CliAvailability {
+                available: vec![AiCli::ClaudeCode],
+                source: AvailabilitySource::ThisComputer,
+                env: Some(SpawnEnv::IncludeOff),
+                asked_for: AvailabilityKey::Home,
+            }),
+            "the answer is held as it was sent: the set, the state it was walked in, where the \
+             boot plan says sessions run, and the directory it is for"
+        );
+    }
+
+    /// A1 (Story 1 scenario 1): the reporter's situation.
+    #[test]
+    fn with_env_include_off_the_note_says_so_and_names_the_switch() {
+        assert_eq!(
+            note_for(&WITHOUT_PI, Some(SpawnEnv::IncludeOff)).as_deref(),
+            Some(
+                "A session would not find Pi Coding Agent: sessions get only the login PATH, \
+                 because \"Source a script before each session\" is off. Turn it on if your \
+                 startup file puts it on the PATH, or install it on the login PATH."
+            ),
+        );
+    }
+
+    /// A3 (Story 1 scenario 3): complete without the environment-include group's outcome line,
+    /// which reports the directory most recently resolved and may be another one (FR-007).
+    #[test]
+    fn a_timed_out_script_is_named_for_the_home_directory_with_the_fields_to_change() {
+        let mut app = base_app();
+        let mut sent = connected_with_outbox(&mut app);
+        settings_opened_and_answered(
+            &mut app,
+            &mut sent,
+            &WITHOUT_PI,
+            Some(SpawnEnv::ScriptTimedOut),
+        );
+        let said = note(&app).expect("Pi is missing, so there is a note");
+
+        for part in [
+            "Pi Coding Agent",
+            "the startup script timed out for your home directory, so its PATH additions are not \
+             applied.",
+            "\"Script path\"",
+            "\"Timeout\"",
+        ] {
+            assert!(said.contains(part), "the note lacks {part:?}: {said}");
+        }
+
+        for last_outcome in [
+            micold_core::env_include::EnvIncludeOutcome::Success,
+            micold_core::env_include::EnvIncludeOutcome::MissingScript,
+        ] {
+            app.env_include_last_outcome = last_outcome;
+            assert_eq!(
+                note(&app).as_deref(),
+                Some(said.as_str()),
+                "the note is about the home directory's attempt, whatever the outcome line of \
+                 the environment-include group last reported for some other directory"
+            );
+        }
+    }
+
+    /// A4 (Story 1 scenario 4).
+    #[test]
+    fn a_failed_script_and_a_script_that_is_not_there_are_each_named() {
+        let mut app = base_app();
+        let mut sent = connected_with_outbox(&mut app);
+
+        settings_opened_and_answered(
+            &mut app,
+            &mut sent,
+            &WITHOUT_PI,
+            Some(SpawnEnv::ScriptFailed),
+        );
+        let failed = note(&app).expect("Pi is missing, so there is a note");
+        assert!(
+            failed.contains("the startup script exited with an error for your home directory"),
+            "{failed}"
+        );
+
+        settings_opened_and_answered(
+            &mut app,
+            &mut sent,
+            &WITHOUT_PI,
+            Some(SpawnEnv::ScriptNotFound),
+        );
+        let not_found = note(&app).expect("Pi is still missing");
+        assert!(
+            not_found.contains("the startup script was not found for your home directory"),
+            "the note follows the newer answer: {not_found}"
+        );
+    }
+
+    /// A5 (Story 1 scenario 4a).
+    #[test]
+    fn a_blank_script_path_is_the_reason_and_setting_it_is_the_action() {
+        let said = note_for(&WITHOUT_PI, Some(SpawnEnv::NoScriptPath))
+            .expect("Pi is missing, so there is a note");
+
+        assert!(
+            said.contains("no script is sourced, because \"Script path\" is empty."),
+            "{said}"
+        );
+        assert!(said.contains("Set \"Script path\""), "{said}");
+        assert!(
+            !said.contains("Turn it on"),
+            "environment-include is already on; telling the user to turn it on is wrong: {said}"
+        );
+    }
+
+    /// A6 (Story 1 scenario 5): the one state in which "not found" is the true reason.
+    #[test]
+    fn with_the_script_applied_the_note_says_the_cli_is_not_on_the_path_sessions_get() {
+        assert_eq!(
+            note_for(&WITHOUT_PI, Some(SpawnEnv::Applied)).as_deref(),
+            Some(
+                "Pi Coding Agent was not found on the PATH sessions get for your home \
+                 directory: the login PATH plus what the startup script adds. Install it, or \
+                 make the script add its directory."
+            ),
+        );
+    }
+
+    /// A7 (Story 1 scenario 6).
+    #[test]
+    fn with_every_cli_found_there_is_no_note_in_any_state() {
+        for env in [
+            None,
+            Some(SpawnEnv::IncludeOff),
+            Some(SpawnEnv::NoScriptPath),
+            Some(SpawnEnv::ScriptNotFound),
+            Some(SpawnEnv::ScriptFailed),
+            Some(SpawnEnv::ScriptTimedOut),
+            Some(SpawnEnv::Applied),
+        ] {
+            assert_eq!(
+                note_for(&AiCli::ALL, env),
+                None,
+                "nothing is missing, so there is nothing to explain ({env:?})"
+            );
+        }
+    }
+
+    /// A8 then A2 (Story 1 scenarios 7 and 2): no note before an answer, the reason when one
+    /// arrives, and no note once the CLI is found, with nothing but the answers in between.
+    #[test]
+    fn the_note_appears_with_the_answer_and_goes_when_the_cli_is_found() {
+        let mut app = base_app();
+        let mut sent = connected_with_outbox(&mut app);
+        assert_eq!(
+            note(&app),
+            None,
+            "the service has not answered: naming a CLI as missing now would be a guess"
+        );
+
+        settings_opened_and_answered(
+            &mut app,
+            &mut sent,
+            &[AiCli::ClaudeCode],
+            Some(SpawnEnv::IncludeOff),
+        );
+        let said = note(&app).expect("two CLIs are missing");
+        assert!(
+            said.starts_with("A session would not find GitHub Copilot and Pi Coding Agent:")
+                && said.contains("\"Source a script before each session\" is off"),
+            "the note names what is missing with the reason of the answer that arrived: {said}"
+        );
+
+        // The user turned environment-include on and saved, which closed Settings. Opening it
+        // again is the next answer (FR-013): no restart, and no message but the question.
+        settings_opened_and_answered(&mut app, &mut sent, &AiCli::ALL, Some(SpawnEnv::Applied));
+        assert_eq!(note(&app), None, "every CLI is found, so the note is gone");
+        assert_eq!(
+            app.core
+                .session
+                .availability
+                .home()
+                .map(|answer| answer.available.contains(&AiCli::Pi)),
+            Some(true),
+            "and the selector, drawn from the same answer, now offers Pi (SC-002)"
+        );
+        assert!(
+            sent.try_recv().is_err(),
+            "the answer itself causes no further message to the service"
+        );
+    }
+}

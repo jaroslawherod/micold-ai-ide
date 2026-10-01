@@ -42,6 +42,8 @@ fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
     state
@@ -213,6 +215,8 @@ fn a_default_the_lists_directory_provides_is_not_reported_missing() {
         CliAvailability {
             available: vec![AiCli::ClaudeCode, AiCli::Pi],
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
 

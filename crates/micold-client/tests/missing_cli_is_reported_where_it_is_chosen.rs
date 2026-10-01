@@ -20,24 +20,54 @@
 //! exactly what FR-023b enumerates, so an assertion that loses one of them is a requirement that
 //! stopped being met.
 
-use micold_client::features::session::{AvailabilitySource, CliAvailability};
+use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
 use micold_client::features::settings::missing_cli_notice;
+use micold_core::cli_reason::{explain, AttemptDir, Place, SpawnEnv};
 use micold_core::session::AiCli;
 
 const IMAGE: &str = "ghcr.io/example/my-own-image:3";
 
+/// Every state of FR-001, in its order.
+const STATES: [SpawnEnv; 6] = [
+    SpawnEnv::IncludeOff,
+    SpawnEnv::NoScriptPath,
+    SpawnEnv::ScriptNotFound,
+    SpawnEnv::ScriptFailed,
+    SpawnEnv::ScriptTimedOut,
+    SpawnEnv::Applied,
+];
+
+/// An image's answer with the script applied: the one state in which "the image lacks it" is
+/// true, and so the state 027's sentence is kept for (037 FR-005).
 fn in_image(available: &[AiCli]) -> CliAvailability {
     CliAvailability {
         available: available.to_vec(),
         source: AvailabilitySource::Image(IMAGE.to_string()),
+        env: Some(SpawnEnv::Applied),
+        asked_for: AvailabilityKey::Home,
     }
 }
 
+/// This computer's answer with the script applied.
 fn on_host(available: &[AiCli]) -> CliAvailability {
     CliAvailability {
         available: available.to_vec(),
         source: AvailabilitySource::ThisComputer,
+        env: Some(SpawnEnv::Applied),
+        asked_for: AvailabilityKey::Home,
     }
+}
+
+/// `answer`, in another environment state.
+fn in_state(mut answer: CliAvailability, env: Option<SpawnEnv>) -> CliAvailability {
+    answer.env = env;
+    answer
+}
+
+/// What `explain` says for these CLIs, as the note joins it.
+fn explained(missing: &[AiCli], env: SpawnEnv, place: Place<'_>) -> String {
+    let said = explain(missing, env, place, AttemptDir::Home).expect("something is missing");
+    format!("{} {}", said.reason, said.action)
 }
 
 #[test]
@@ -119,8 +149,8 @@ fn an_image_with_no_cli_at_all_names_every_one() {
 #[test]
 fn the_host_placement_gets_a_different_sentence_and_no_image() {
     // FR-023c's other half. With the service on this computer there is no image, and telling the
-    // user to fix one would send them to a machine that does not exist. The remedy is installing
-    // the CLI, so the sentence is about this computer.
+    // user to fix one would send them to a machine that does not exist. Since feature 037 the
+    // sentence is about the PATH sessions get, which is what the user can change.
     let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode, AiCli::Pi])))
         .expect("a host without Copilot has something to report");
 
@@ -134,8 +164,8 @@ fn the_host_placement_gets_a_different_sentence_and_no_image() {
          {notice}"
     );
     assert!(
-        notice.contains("this computer"),
-        "the notice must say where sessions run: {notice}"
+        notice.contains("the PATH sessions get for your home directory"),
+        "the notice must say where the CLI was looked for: {notice}"
     );
 }
 
@@ -163,7 +193,8 @@ fn a_missing_pi_is_named_as_pi_coding_agent_and_never_as_its_command() {
         let notice = missing_cli_notice(Some(&availability))
             .expect("a place without pi has something to report");
         assert!(
-            notice.starts_with("Pi Coding Agent isn't"),
+            notice.starts_with("Pi Coding Agent isn't")
+                || notice.starts_with("Pi Coding Agent was not found"),
             "the notice names Pi by its display name, singular: {notice}"
         );
         assert!(
@@ -184,4 +215,86 @@ fn a_missing_pi_is_a_presence_fact_with_no_version_in_it() {
         !notice.chars().any(|c| c.is_ascii_digit()),
         "a missing CLI has no version to name: {notice}"
     );
+}
+
+// --- Feature 037: the note gives the reason for the environment's state, and the action ---
+
+/// 037 U47 (FR-006, SC-001): on this computer the note is `explain`'s reason and action for the
+/// home directory, in each of the six states.
+#[test]
+fn on_this_computer_the_note_is_the_reason_and_action_of_each_state() {
+    let missing = [AiCli::Copilot, AiCli::Pi];
+    for env in STATES {
+        assert_eq!(
+            missing_cli_notice(Some(&in_state(on_host(&[AiCli::ClaudeCode]), Some(env)))),
+            Some(explained(&missing, env, Place::ThisComputer)),
+            "{env:?}"
+        );
+    }
+}
+
+/// 037 U48 (FR-005, FR-002): with an image, the five states in which no script was applied give
+/// the environment reason. "Isn't in the image" would be a claim nobody checked.
+#[test]
+fn in_an_image_the_note_blames_the_image_only_when_the_script_was_applied() {
+    let missing = [AiCli::Copilot];
+    for env in STATES.into_iter().filter(|env| !env.script_applied()) {
+        let note = missing_cli_notice(Some(&in_state(
+            in_image(&[AiCli::ClaudeCode, AiCli::Pi]),
+            Some(env),
+        )))
+        .expect("Copilot is missing");
+
+        assert_eq!(
+            note,
+            explained(&missing, env, Place::Image(IMAGE)),
+            "{env:?}"
+        );
+        assert!(
+            !note.contains("isn't in"),
+            "no script was applied ({env:?}), so the image has not been shown to lack it: {note}"
+        );
+    }
+}
+
+/// 037 U53 (W5, FR-011): the other side of U47. A CLI is missing and the service could not say
+/// which state the environment is in, so any reason would be a guess.
+#[test]
+fn a_missing_cli_with_no_known_state_says_nothing() {
+    for answer in [
+        on_host(&[AiCli::ClaudeCode]),
+        in_image(&[AiCli::ClaudeCode]),
+    ] {
+        assert_eq!(missing_cli_notice(Some(&in_state(answer, None))), None);
+    }
+}
+
+/// 037 U54 (FR-004): every CLI missing is one sentence naming all three, with the reason once.
+#[test]
+fn with_nothing_available_every_cli_is_named_and_the_reason_is_given_once() {
+    let note = missing_cli_notice(Some(&in_state(on_host(&[]), Some(SpawnEnv::IncludeOff))))
+        .expect("an empty answer is a real one");
+
+    assert!(
+        note.starts_with(
+            "A session would not find Claude Code, GitHub Copilot and Pi Coding Agent:"
+        ),
+        "{note}"
+    );
+    assert_eq!(
+        note.matches("is off").count(),
+        1,
+        "one reason for the three, not one each: {note}"
+    );
+}
+
+/// 037 U55 (FR-015): giving a reason changes nothing. The function borrows the answer.
+#[test]
+fn asking_for_the_note_leaves_the_answer_as_it_was() {
+    let answer = in_state(on_host(&[AiCli::ClaudeCode]), Some(SpawnEnv::ScriptFailed));
+    let before = answer.clone();
+
+    let _ = missing_cli_notice(Some(&answer));
+
+    assert_eq!(answer, before);
 }

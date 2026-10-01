@@ -50,6 +50,8 @@ fn with_project(default_ai_cli: AiCli, available: &[AiCli]) -> State {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
     state
@@ -320,6 +322,8 @@ fn with_project_local_pi() -> State {
         CliAvailability {
             available: vec![AiCli::ClaudeCode, AiCli::Pi],
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
     state

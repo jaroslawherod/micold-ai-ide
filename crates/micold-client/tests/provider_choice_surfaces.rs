@@ -96,6 +96,8 @@ fn settings_state(available: &[AiCli]) -> State {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
     state.settings.settings_draft = Some(SettingsDraft {
@@ -119,6 +121,8 @@ fn start_menu_state(available: &[AiCli]) -> State {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
     state.session.start_menu = Some(StartMenu {
@@ -271,6 +275,8 @@ fn hold_project_root(state: &mut State, available: &[AiCli]) {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
 }
