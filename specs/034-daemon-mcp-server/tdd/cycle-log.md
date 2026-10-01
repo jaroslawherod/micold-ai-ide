@@ -838,3 +838,33 @@ separate red run; the red evidence is the changed assertions in `overlay_registr
   `agent_confirm.declined`, and `shell::daemon_sync::send_agent_confirm_declines` sends
   `ConfirmationAnswer { allow: false }` after every message
   (`daemon_sync::tests::dismissing_the_prompt_sends_one_decline`).
+
+## Cycle 34 — M5 review fixes (review A round 1, review B round 1)
+
+Review A's fixes landed in `8e2052f9` with four tests in the same commit; review B (F1) asked for
+tests for the rest and for this record.
+
+- **In `8e2052f9`, observed red before the fix was complete**:
+  `agent_confirm_waits_behind_dialogs.rs::a_dialog_opening_over_the_prompt_declines_only_the_shown_one`
+  failed with `left: [1, 2, 3]  right: [1]` while `release` still ran inside the nested
+  `State::update` calls of the closing loop; green once `release` runs only at the outermost
+  update (`agent_confirm.update_depth`). Same commit, no separate red run:
+  `escape_declines_the_shown_prompt_and_the_next_opens`,
+  `losing_the_connection_drops_every_prompt_without_declining` (`Msg::Disconnected`) and
+  `mcp_lifecycle_tools.rs::stop_keeps_a_failed_session_failed_and_does_not_touch_a_deleted_one`.
+- **Red, against `682e7ad1`'s `mcp/server.rs` and `mcp/tools.rs`** (tests of `test(034): a
+  half-closed connection still gets a reply; …`):
+  - `mcp_confirmations.rs::through_the_tool_server::a_half_closed_connection_still_gets_a_reply`:
+    `a reply: ""` (the connection was closed with no reply). 18 passed; 1 failed.
+  - `mcp_lifecycle_tools.rs::an_interrupt_allowed_after_the_process_was_replaced_is_a_conflict`:
+    `interrupt_session succeeded: {"content":[{"text":"{}","type":"text"}],"isError":false,…}`
+    (Ctrl-C typed into the restarted process). 24 passed; 1 failed.
+- **Green** with the fixes: `mcp_confirmations` 19 passed, `mcp_lifecycle_tools` 25 passed.
+- **Removed**: `delete_session`'s re-resolve of its target after the answer (added in `8e2052f9`).
+  No test can reach it: every path that archives a session withdraws the prompts naming it
+  (`revoke_tool_credentials` → `confirmations_session_gone`), so the waiting request already ends
+  `not_found` (`the_user_deleting_the_target_while_pending_fails_the_request_not_found`).
+- Gate findings fixed in `fix(034): keep the root reducer one match; …`: the root reducer stays one
+  `match message` (`root_vocabulary_is_cross_cutting.rs`), `agent_confirm.held` is pinned in
+  `root_state_is_shared.rs::COMPONENT_LOCAL`, `shown` is classified a reader in
+  `support/state_scan.rs`.

@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"refused_by_policy: declined by the user","type":"text"}],"isError":true,"structuredContent":{"error":{"category":"refused_by_policy","message":"declined by the user"}}}}
