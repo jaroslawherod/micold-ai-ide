@@ -23,6 +23,7 @@ These tools only read. None of them changes anything.
 | `list_branches` | Every local and remote-tracking branch, the worktree it is checked out in, and, when a new worktree could not use it, the same explanation the new-worktree dialog gives |
 | `list_sessions` | The project's sessions with their label, AI CLI, state, activity and worktree. The calling session is marked. It can be narrowed to one worktree |
 | `get_session` | One session. A session that failed to start includes the reason |
+| `read_session_output` | The most recent lines of another session's terminal, as plain text: 200 lines unless the assistant asks for a different number, and never more than 2,000. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 
 Worktrees an assistant created for itself are left out, as they are in the sidebar, unless the
 assistant asks for them with `include_hidden`.
@@ -35,6 +36,7 @@ These tools make changes, exactly as the sidebar does:
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
+| `send_session_input` | Types text into another session and submits it once, as if you had typed it there and pressed Enter. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch
@@ -99,6 +101,37 @@ again.
 
 If the AI CLI is not installed where the session would run, `create_session` fails, names the CLI,
 and leaves no session behind.
+
+## Reading and typing into other sessions
+
+An assistant can read what another session of the same project shows, and type into it. This is
+how one session hands work to another: it starts a session with a prompt, reads its terminal to see
+how far it got, and sends it the next instruction.
+
+`read_session_output` returns the last lines of the other session's AI CLI terminal, oldest first,
+as the text you would read there: no colours and no control codes. It reads the AI CLI's terminal
+even while you have one of the session's shell terminals open instead. The result says whether
+older lines exist beyond the ones returned.
+
+`send_session_input` types the text into the other session's AI CLI and submits it once. Text of
+several lines arrives as one message. The text cannot be empty.
+
+Both need the other session to be running; otherwise they fail and name `start_session`. Neither
+works on the assistant's own session.
+
+**You decide whether assistants may do this.** Settings → Environment has **Let agents read and
+type into other sessions**
+([Settings](settings.md#let-agents-read-and-type-into-other-sessions)):
+
+| Value | Reading | Typing |
+|---|---|---|
+| **Auto** (the default) | Allowed | Allowed |
+| **Confirm each send** | Allowed | Each message waits for you to allow it in an app window. If you decline, or no window is open, or you do not answer within 60 seconds, nothing is typed |
+| **Off** | Refused | Refused |
+
+A change applies to the very next request, also from sessions that are already running. A refused
+request leaves the other session untouched and tells the assistant that the option in Settings
+refused it.
 
 ## What it can see
 
