@@ -953,3 +953,39 @@ observed only afterwards.
   the temporary directory the projects live under.
 - The bracketed-paste test no longer sleeps 300 ms for the stand-in's `stty raw`; it waits for a
   marker file the stand-in writes after it (review A F5).
+
+## Cycle 39 — M7: read latency at 50 worktrees and 50 sessions (T074, U206)
+
+- The test asserts a bound the implementation already met, so there is no red for the bound
+  itself. Written on main before M6 (`955876cc`), it passed with a worst case of 9 ms
+  (`list_branches`). On main with M6 it failed by design: the tools timed are the ones `tools/list`
+  marks read-only, and it had no arguments for `read_session_output` (`no arguments for the
+  read-only tool`).
+- green: `d1ba663e`. One session is started on a stand-in `claude` that prints 3,000 lines, and the
+  read asks for the maximum (2,000). Observed, worst of five calls each: `whoami` 1 ms,
+  `list_worktrees` 2 ms, `list_branches` 8 ms, `list_sessions` 3 ms, `get_session` 0 ms,
+  `read_session_output` 12 ms, against SC-004's 1 s.
+- The stand-in is a `#!/bin/sh` script, so `read_session_output` is timed on unix only; the other
+  five are timed on every platform.
+
+## Cycle 40 — An unknown `cross_session_access` in the settings file reads as `Off` (U233; M6 review A F6)
+
+- red: `an_unknown_cross_session_value_reads_as_off_and_keeps_the_rest_of_the_file` against the
+  strict enum. Observed red: `left: Recovered, right: Loaded` for `"confirm"`: the whole file went
+  to `.bak` and the option came back `Auto`.
+- green: `aacbd7cd` (test and change in one commit; the red run was made on the test alone before
+  the change was written). The settings file's field reads through `cross_session_access_or_off`.
+  Observed green: `settings_roundtrip` 29 passed. The wire type stays strict.
+
+## Cycle 41 — M7: the binding inside the sandbox container (T075, U147)
+
+- The probe checks research R8's claim that the sandbox needs no change, so there is no red: it
+  was written before it could run (`e346105c`) and passed on its first run against a real runtime.
+- Observed green, 2026-10-01, `mise run image` then `mise run test-sandbox` (docker, release,
+  `--test-threads=1`): `sandbox_real_mcp_binding_answers_whoami_from_inside_the_container ... ok`
+  in 0.98 s; the whole real-runtime suite 29 passed, 0 failed. The `micold-daemon:dev` image id was
+  the same before and after the suite, so no other worktree swapped it mid-run.
+- The two assumptions the test was written on both hold: starting a Claude Code session in the
+  container with no sign-in writes the binding file under the container's data directory, and
+  `node`'s `fetch` from a shell session in the container reaches the listener and gets `whoami`'s
+  answer for the bound session.

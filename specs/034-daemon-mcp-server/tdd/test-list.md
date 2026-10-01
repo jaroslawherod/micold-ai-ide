@@ -210,6 +210,7 @@ each group that changes existing code.
 | U76 | `cross_session_access` defaults to `Auto` | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::the_cross_session_option_is_auto_by_default` |
 | U77 | A settings file written before the field loads `Auto` | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::a_settings_file_written_before_the_cross_session_option_loads_auto` |
 | U78 | `ConfirmEachSend` and `Off` each survive a save/load round trip | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::confirm_each_send_and_off_each_survive_a_save_and_load` |
+| U233 | A `cross_session_access` value this build does not know reads as `Off` and the rest of the file is kept | FR-016 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::an_unknown_cross_session_value_reads_as_off_and_keeps_the_rest_of_the_file` |
 | U79 | `DaemonSettings` and `SettingsSet` round-trip `cross_session_access` | FR-016 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::the_cross_session_option_round_trips_in_daemon_settings_and_settings_set` |
 | U80 | `ConfirmationRequested`, `ConfirmationWithdrawn` and `ConfirmationAnswer` round-trip | FR-014 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::every_client_message_json_round_trips`; `crates/micold-core/tests/protocol_roundtrip.rs::every_daemon_message_json_round_trips` |
 | U81 | `ConfirmOperation::SendInput` has no field that can carry input text | FR-018 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::a_send_input_confirmation_has_no_field_that_can_carry_the_input_text` |
@@ -411,8 +412,8 @@ each group that changes existing code.
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U206 | With 50 worktrees and 50 sessions, each read-only tool answers in under 1 s | SC-004 | example | PENDING | planned: `crates/micold-daemon/tests/mcp_read_latency.rs` |
-| U147 | A sandboxed session's `whoami` answers from inside the container, its returned paths are the container's, and the host loopback does not answer on that port (`sandbox-real-runtime`) | FR-001, FR-007, SC-008, EC-12 | example | PENDING | planned: `crates/micold-daemon/tests/sandbox_real_mcp.rs` |
+| U206 | With 50 worktrees and 50 sessions, each read-only tool answers in under 1 s | SC-004 | example | DONE | `crates/micold-daemon/tests/mcp_read_latency.rs::each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sessions` |
+| U147 | A sandboxed session's `whoami` answers from inside the container, its returned paths are the container's, and the host loopback does not answer on that port (`sandbox-real-runtime`) | FR-001, FR-007, SC-008, EC-12 | example | DONE | `crates/micold-daemon/tests/sandbox_real_mcp.rs::sandbox_real_mcp_binding_answers_whoami_from_inside_the_container` |
 
 ### `crates/micold-client/src/features/agent_confirm.rs` (T052, T057)
 

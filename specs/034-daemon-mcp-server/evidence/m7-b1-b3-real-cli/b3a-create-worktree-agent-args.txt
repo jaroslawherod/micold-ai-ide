@@ -1,0 +1,1 @@
+{"branch":"feat/x","name":"feat-x"} -- the agent itself sent branch feat/x (from Claude transcript); from-default call: {"branch":"from-default","mode":"new_branch"}

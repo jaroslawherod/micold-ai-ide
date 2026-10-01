@@ -1,0 +1,7 @@
+2026-10-01T19:05:08.670580Z  INFO micold::mcp: tool call caller=b705761c-87e6-45f6-b2c7-2a9a3cec34c1 op=create_worktree target=feat-x outcome=ok
+2026-10-01T19:05:14.171251Z  INFO micold::mcp: tool call caller=b705761c-87e6-45f6-b2c7-2a9a3cec34c1 op=create_session target=feat-x outcome=ok
+2026-10-01T19:06:32.453127Z  INFO micold::mcp: tool call caller=bf3032d8-531b-4d06-b7d3-bb717dee5e39 op=create_session target=feat-x outcome=ok
+2026-10-01T19:06:33.249842Z  INFO micold::mcp: tool call caller=bf3032d8-531b-4d06-b7d3-bb717dee5e39 op=create_session target=feat-x outcome=ok
+2026-10-01T19:08:25.457698Z  INFO micold::mcp: tool call caller=7fe10801-36a1-434f-8583-595378ab86cc op=create_worktree target=from-default outcome=ok
+2026-10-01T19:09:12.143924Z  INFO micold::mcp: tool call caller=7fe10801-36a1-434f-8583-595378ab86cc op=rename_worktree target=feat-a outcome=refused_by_policy
+2026-10-01T19:09:12.351567Z  INFO micold::mcp: tool call caller=7fe10801-36a1-434f-8583-595378ab86cc op=delete_worktree target=feat-a outcome=refused_by_policy

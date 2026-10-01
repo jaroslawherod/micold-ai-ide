@@ -144,7 +144,9 @@ sessions** above. With that one off, new sessions have no tools at all, so this 
 govern for them.
 
 It is one setting for the whole app, kept by the session service, so every open window shows the
-same value.
+same value. In the settings file it is `cross_session_access`, with the value `auto`,
+`confirm_each_send` or `off`. If the file holds anything else there, for example after a mistyped
+edit, the option reads as **Off** and the rest of your settings are kept.
 
 ### The environment a session starts in
 
