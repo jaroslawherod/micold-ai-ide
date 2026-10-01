@@ -917,7 +917,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::AiCliAvailability {
             req,
             available,
-            env: _,
+            env,
         } => {
             let source = availability_source(app);
             app.core.session.availability.answered(
@@ -925,7 +925,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 CliAvailability {
                     available,
                     source,
-                    env: None,
+                    env,
+                    // A placeholder: `answered` stamps the key the request named.
                     asked_for: AvailabilityKey::Home,
                 },
             );

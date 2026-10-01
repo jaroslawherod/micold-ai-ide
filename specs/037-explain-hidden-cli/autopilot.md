@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 4-milestone (M1)
-- **Next step**: Continue M1 from the Handover section (the client red run, then T011).
+- **Next step**: M1: gate and review A, then review B and the visual pass (T039, T017), then the PR.
 
 ## Pull requests
 
@@ -65,46 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1, second unit, stopped at the context cap. No PR is open. Nothing is pushed. Do not run
-`branch-start.sh`: the branch carries M1's unmerged commits on `origin/main` (`976b0220`).
-
-**Done and committed**:
-
-- `bd702dcb` T005, T010 and the rest of T008: `ResolvedEnv`, `spawn_env_for`, `availability_in`,
-  `availability_for` in `crates/micold-daemon/src/state.rs`; the server arm sends `env`. Red and green are in
-  `tdd/cycle-log.md` cycle 3 (`--test ai_cli_availability` 20 passed, `env_include_cache_coherence` 3 passed).
-- The commit after it (`test(037): … (red)`) holds the **tests** of T006, T038, T012 and T013, written and
-  **not yet run**: it may not compile. `CliAvailability` already has `env` and `asked_for` (all 13 fixtures
-  updated), but `answered` does not stamp `asked_for`, the shell arm still files `env: None`, and
-  `missing_cli_notice` still returns the old sentence. Those three are the expected reds.
-  - `crates/micold-client/tests/directory_availability.rs`: U40–U44 (`answer_in`, five tests).
-  - `crates/micold-client/src/main_tests.rs`, module `the_settings_note_explains_a_missing_cli`: U45, A1,
-    A3–A7, and A8 with A2 in one test. Each answer is driven by `SettingsMsg::Opened` then the reply.
-  - `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs`: U47, U48, U53, U54, U55;
-    fixtures now `env: Some(Applied)`; two 027 host assertions reworded.
-  - `crates/micold-client/tests/a_field_note_shares_its_fields_column.rs`: `settings_showing_in`, needle
-    "not found on the PATH", and U50 `the_two_notes_are_one_sentence` (placed here, where the page is painted).
-  - `crates/micold-client/tests/features_settings.rs`: `a_failure_message_names_the_cli_…` uses `explain`.
-
-**Next steps, in order**:
-
-1. Red: `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast` to a log, grep the failures, fix
-   any compile error in the tests, and record the red in `tdd/cycle-log.md` (cycle 4).
-2. T011: `AvailabilityAnswers::answered` sets `answer.asked_for = key.clone()` before filing; the
-   `DaemonMsg::AiCliAvailability` arm in `shell/daemon_sync.rs` passes `env`. Add
-   `use micold_core::cli_reason::SpawnEnv;` to `features/session.rs` (the field uses it).
-3. T014: `missing_cli_notice` returns `explain(&missing, availability.env?, place, AttemptDir::Home)` joined
-   as `{reason} {action}`, with `place` from `source`. Update its doc comment and the stale sentence at
-   `features/session.rs:261` ("installed on this computer").
-4. Green, tick T006, T011, T012, T013, T014, T038, set U40–U45, U47, U48, U50, U53–U55 and A1–A8 `DONE`
-   in `tdd/test-list.md`, commit.
-5. T039: `mise run gate` detached; record A1–A8 green and the A7 mutant (return a note when nothing is
-   missing, see it fail, revert) in the cycle log. Review A (`code-review` high on `origin/main...HEAD`)
-   runs while the gate builds. No `cfg(target_os)` arm was touched in code (one `#[cfg(unix)]` test).
-6. T017: `visual-pass`, quickstart §B B1–B8 and B14, light and dark, evidence under `evidence/`.
-7. Review B, then the PR `feat(037): …` with `Refs #434`.
-
-**Open findings**: none. No review has run. The full suite and the gate have not run on this branch.
+None.
 
 ## Open escalation
 
