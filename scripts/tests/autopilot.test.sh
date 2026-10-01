@@ -478,6 +478,25 @@ echo 'fn x() {}' >> main.rs; git commit -qam "code after gate"
 check "hook blocks code committed after the gate" 2 'has not passed' hook "cd . && git push"
 cd "$ROOT"
 
+# context-hook.py: tells the caller its context passed the cap, on a ledger branch, without nagging.
+d="$(new_repo)"; cd "$d/wt"; C="$S/context-hook.py"; export TMPDIR="$d/tmp"; mkdir -p "$TMPDIR" "$d/s1/subagents"
+usage() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usage":{"input_tokens":%s,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' "$1" "$2"; }
+usage a 170000 > "$d/s1/subagents/agent-u1.jsonl"; usage a 90000 > "$d/s1/subagents/agent-u2.jsonl"; usage a 160000 > "$d/s1.jsonl"
+chook() { jq -n --arg t "$d/s1.jsonl" --arg c "$PWD" --arg a "${1:-}" '{transcript_path:$t,cwd:$c,session_id:"s1"} + (if $a == "" then {} else {agent_id:$a} end)' | "$C"; }
+check "context hook is silent without a ledger" 0 '^$' chook u1
+ledger specs/042-x/autopilot.md wt 4-milestones
+check "context hook tells a unit over the cap to hand over" 0 'additionalContext.*170000 tokens.*STATUS: HANDOVER' chook u1
+check "context hook does not repeat at the same size" 0 '^$' chook u1
+usage b 185000 >> "$d/s1/subagents/agent-u1.jsonl"
+check "context hook waits for a full step of growth" 0 '^$' chook u1
+usage c 195000 >> "$d/s1/subagents/agent-u1.jsonl"
+check "context hook repeats after the context grew a step" 0 '195000 tokens' chook u1
+check "context hook is silent under the cap" 0 '^$' chook u2
+check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*/speckit-autopilot resume' chook
+check "context hook honours the cap override" 0 '90000 tokens, over the 50000 cap' env AUTOPILOT_CONTEXT_CAP=50000 bash -c "$(declare -f chook); d='$d' C='$C' chook u2"
+check "context hook ignores a missing transcript" 0 '^$' chook nope
+unset TMPDIR; cd "$ROOT"
+
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
 d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
 echo '{"labels":[{"name":"bug"}],"assignees":[{"login":"me"}]}' > "$d/fx/issue-7.json"
