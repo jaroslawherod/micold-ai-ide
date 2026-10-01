@@ -7,7 +7,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 5-close (handover open)
+- **Phase**: 5-close
 - **Next step**: open the close PR (`docs(034): close the spec`) once the gate is green and the review is clean; the orchestrator waits on CI and merges. No new milestone: convergence found no unbuilt behaviour (D26).
 
 ## Pull requests
@@ -98,6 +98,7 @@ deliverable (tasks.md Notes).
 | M7 | A (code-review high) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; 3 MINOR, all declined as follow-ups (below) |
 | M7 | B (conformance) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; Verify green (mcp_audit_log 5, mcp_read_latency 1; sandbox record checked: cycle 41, 29 passed). 3 MINOR: 2 fixed (T076 names the Copilot 55 s step that stands on M5's evidence; the B1–B3 count is 13 of 13), 1 declined |
 | close | fresh-subagent review of the close diff | 1 | 4aa8bad305fba52200cad21315c35bf9a693c566:1d99648a87ba66c3b9ebc89b653b7f3ab994cd2e | CHANGES: 2 MAJOR, 3 MINOR, all fixed. F1 the U127 follow-up still said T015/T021 were unticked; F2 T105's tail and the comments in `mcp_create_session.rs` and `folder_trust.rs` kept the ids the close renumbered; F3 the cycle log and D27 said every strengthened assertion was shown to bite when four were; F4 the new policy test cited FR-005, not FR-015; F5 the contract's first check also covers the text and name content rules `parse_call` applies |
+| close | fresh-subagent re-review (sonnet) of the fix diff | 2 | e6f8ecd4d49066c3b45425daa7fa577c168a41cf:581de30e802f154d1bbc4e1960278afe9660125b | CLEAN; the five fixes hold. 1 MINOR declined (below) |
 
 ## Declined review findings
 
@@ -148,34 +149,11 @@ deliverable (tasks.md Notes).
 | close | tdd-verify | 12, 13, 16: the `Env` guard copied in three files; a dead `cfg!(windows)` branch on unix; assertions without rule messages | Cosmetic; no test is weaker for them |
 | close | tdd-verify | 14 (second half): the allow and deny confirm tests in `features_agent_confirm.rs` assert the same client state | The pure state is the same after either answer (the prompt closes); what differs is the `ConfirmationAnswer { allow }` put on the wire, which the shell's own test in `crates/micold-client/src/shell/daemon_sync.rs` (near line 3271) asserts for both values |
 | close | tdd-verify | 15: another feature's commits are also tagged `(034)` | History on `main` cannot be rewritten; see D28's `SPK012` follow-up |
+| close | review round 2 | `mcp_policy.rs:125` cites FR-015 for "the read-only operations proceed", and FR-015 is the self-protection rule; FR-015a's "every other operation stays available" is the nearer text | MINOR, a comment. No requirement states that reads proceed: it is what FR-014, FR-015 and FR-015a leave untouched, and T110 names FR-015 for the same rows. Changing the test file would also need a new gate for one word |
 
 ## Handover
 
-Close unit 1 handed over at the context cap (2026-10-01). Done: `branch-start.sh 521`; converge
-(D26), tdd-verify (D27, `tdd/verification.md`), docguard (D28); D24, D25; the follow-ups settled
-(no new milestone); remediation T106–T112 in the working tree and committed (not pushed); spec
-Status set to Closed; review round 1 (below) and its fixes. The two orphaned
-`target-shared/release/micold-daemon` PIDs 3056946 and 3057433 no longer exist; the only
-`micold-daemon` running is the user's `/usr/bin/micold-daemon`, left alone.
-
-Next step, in order:
-
-1. Gate: a detached `mise run gate` was started on the committed tree, log
-   `<scratchpad>/gate-close-2.log` (grep it for `GATE_EXIT=`; do not `tail` `gate-*.log`, older
-   logs share the directory). If it is missing or red, check `df -h /` (escalate under 8 GB) and
-   run it again. The first gate of this unit (`gate-1790886377.log`) ran on the tree before the
-   review fixes and does not count.
-2. Re-review, round 2 (`model: "sonnet"`, description `Review close 034`), with round 1's five
-   findings, all marked fixed, and `scripts/autopilot/review-snapshot.sh diff
-   4aa8bad305fba52200cad21315c35bf9a693c566:1d99648a87ba66c3b9ebc89b653b7f3ab994cd2e`. Round 1's
-   rubric: no product code in the diff; no test weakened; the docs edits match the code; the
-   ledger is true (D24–D28, the declined rows); tasks.md and the renumbered U-ids are consistent;
-   the cycle log's *Close* entry matches the test diff.
-3. Set this section to `None.`, the phase to `5-close`, push, open the close PR
-   (`docs(034): close the spec`; body: converge, tdd-verify and docguard results, the review, the
-   gate), record its number here.
-
-Open findings: none known. Round 1's F1–F5 are fixed (see *Review rounds*).
+None.
 
 ## Open escalation
 
