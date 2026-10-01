@@ -567,6 +567,7 @@ fn connecting_asks_which_clis_the_service_can_run() {
         Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
             req: home,
             available: vec![AiCli::ClaudeCode, AiCli::Copilot],
+            env: None,
         })),
     );
     assert_eq!(
@@ -3267,6 +3268,7 @@ fn an_answer_to_an_earlier_question_does_not_replace_a_later_one() {
             Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
                 req,
                 available,
+                env: None,
             })),
         );
     }
@@ -3394,6 +3396,7 @@ fn availability_answer(app: &mut App, req: u64, available: &[AiCli]) {
         Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
             req,
             available: available.to_vec(),
+            env: None,
         })),
     );
 }

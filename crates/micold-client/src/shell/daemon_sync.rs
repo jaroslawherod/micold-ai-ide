@@ -914,7 +914,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // is not the newest for its directory, or that belongs to a request from before a
         // reconnect, is dropped: replies are resolved off the service's loop, so a slow first
         // resolution can land after a cached one asked later (029 BUG-001).
-        DaemonMsg::AiCliAvailability { req, available } => {
+        DaemonMsg::AiCliAvailability {
+            req,
+            available,
+            env: _,
+        } => {
             let source = availability_source(app);
             app.core
                 .session

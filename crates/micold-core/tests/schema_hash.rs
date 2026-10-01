@@ -185,7 +185,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 18 → 19 for feature 034's `cross_session_access` on `DaemonSettings` and `SettingsSet`
 /// (FR-016). Thirteenth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 19;
+/// And 19 → 20 for feature 037's `env` on `DaemonMsg::AiCliAvailability`: the state of the
+/// environment the answer was walked in, which had developed against the 17 that feature 034
+/// took to 18 and then 19. Fourteenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 20;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -228,5 +231,17 @@ fn every_field_this_feature_added_is_present_in_one_protocol_source() {
         2,
         "exactly two `provider: AiCli` fields ride the wire: one inbound on `SessionCreate`, one \
          outbound on `SessionSummary`"
+    );
+}
+
+#[test]
+fn the_availability_answer_carries_the_environment_state_in_the_hashed_source() {
+    // Feature 037, contract A1. Read from the text `build.rs` hashes, as above: the field has to
+    // sit in `messages.rs` for the schema hash to be the one of the message set that has it.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    assert!(
+        canonicalize(&messages).contains("env: Option<SpawnEnv>,"),
+        "`DaemonMsg::AiCliAvailability` does not carry `env: Option<SpawnEnv>` in messages.rs, \
+         so version 20's hash is not the hash of the answer that says why a CLI is missing"
     );
 }

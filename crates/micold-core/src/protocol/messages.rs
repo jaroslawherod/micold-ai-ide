@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
@@ -762,6 +763,10 @@ pub enum DaemonMsg {
         req: u64,
         /// Present, in `AiCli::ALL`'s order. Empty is a real answer, not an error.
         available: Vec<AiCli>,
+        /// The state of the environment `available` was walked in (feature 037, FR-012): why a
+        /// CLI that is not in the set would not be found. `None` when the service could not
+        /// resolve a directory at all, so it has no attempt to report.
+        env: Option<SpawnEnv>,
     },
 
     // --- Agent confirmations (feature 034, FR-014) ---
