@@ -101,10 +101,11 @@ pub enum ConfirmedOp {
     SendInput,
 }
 
-/// The refusal a Default session gets for a worktree mutation (FR-015a).
-const PRINCIPLE_III: &str = "a session running in the project root (Default) may not create, \
-    rename or delete worktrees (Constitution Principle III); ask from a session that runs in a \
-    worktree";
+/// The refusal a Default session gets for renaming or deleting a worktree (FR-015a). Creating one
+/// is allowed: constitution 1.7.0 names that as Principle III's exception, because the tool
+/// server's create is the application creating the worktree on the session's behalf.
+const PRINCIPLE_III: &str = "a session running in the project root (Default) may not rename or \
+    delete worktrees (Constitution Principle III); ask from a session that runs in a worktree";
 
 /// The refusal both cross-session tools get while the FR-016 option is Off.
 const CROSS_SESSION_OFF: &str = "reading and typing into other sessions is turned off in Settings \
@@ -125,9 +126,7 @@ pub fn decide(
     };
     let is_me = |session: &SessionRef| session.0 == caller.session.0;
     match operation {
-        Operation::CreateWorktree { .. }
-        | Operation::RenameWorktree { .. }
-        | Operation::DeleteWorktree { .. }
+        Operation::RenameWorktree { .. } | Operation::DeleteWorktree { .. }
             if caller.is_default() =>
         {
             refused(PRINCIPLE_III)
