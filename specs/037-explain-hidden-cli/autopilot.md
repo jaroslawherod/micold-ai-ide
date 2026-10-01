@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 2-clarify
-- **Next step**: Clarify round 4. Round 3 asked three questions (all agent-resolved, D9 to D11), so it was not a clean scan; it found D6 to D8 consistent with the spec and the closed specs. Rounds 1 to 3 are four local commits and ship in PR 2. The branch is rebased onto `origin/main` at 01afbbee (done by the orchestrator before round 3); nothing is owed.
+- **Next step**: Clarify round 5. Round 4 asked one question (agent-resolved, D12), so it was not a clean scan: FR-004a (added in round 3) contradicted FR-005 and Story 2 scenario 4 for the last state under container placement. It found D9 and D10 consistent with the spec, the closed specs and the code. Rounds 1 to 4 are five local commits and ship in PR 2. The branch is on `origin/main` at 01afbbee; nothing is owed.
 
 ## Pull requests
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | clarify 3 | Does a row's CLI list give the action as well as the reason? | Yes. FR-001 pairs each reason with its action and SC-003 already counts the list. FR-010, Story 3 scenario 1 and SC-007 now say "reason and action". | agent-resolved | specs/037-explain-hidden-cli/spec.md#FR-001; specs/037-explain-hidden-cli/spec.md#FR-003 |
 | D10 | clarify 3 | Does a message already shown at an event (missing-default message, start failure, AI-session reply) change when a newer answer arrives? | No. It states the reason that held at its event. Only the Settings note and an open row list follow a newer answer. A start failure's reason comes from the environment that start resolved, the resolution the answer shares. Corrects the round-2 edge case that said the message "follows". | agent-resolved | crates/micold-client/src/features/session.rs#start_menu_toggled; specs/029-pi-cli-provider/spec.md#FR-003b; crates/micold-daemon/src/state.rs#ai_clis_available_in |
 | D11 | clarify 3 | How does a reason stay true when it reports the home directory's attempt on a project row (D7)? | New FR-004a: a reason that reports an attempt (last four states) names the directory the attempt was for. The two settings states name none. | agent-resolved | specs/037-explain-hidden-cli/spec.md#User Story 1 (scenario 3); specs/037-explain-hidden-cli/spec.md#Edge Cases |
+| D12 | clarify 4 | FR-004a makes the "last attempt succeeded" reason name a directory; FR-005 and Story 2 scenario 4 keep 027's container sentence unchanged. Which holds under container placement? | FR-005. The container sentence names the CLI and the image and no directory, in Settings and at a failed start. FR-004a covers the three failed-attempt states under both placements and the last state on the host only. Story 1 scenario 5 now names the home directory. | agent-resolved | specs/037-explain-hidden-cli/spec.md#FR-005; specs/027-sandboxed-daemon-runtime/spec.md#FR-023b; crates/micold-daemon/src/state.rs#missing_cli_reason; crates/micold-client/src/features/settings.rs#missing_cli_notice |
 
 ## Review rounds
 
