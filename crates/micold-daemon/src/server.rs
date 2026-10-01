@@ -690,6 +690,8 @@ where
             // Recomputed per request rather than cached at boot: the client only asks when a choice
             // is offered, and research R11's rule is that this answer is never stored. What *is*
             // cached is the resolved environment, in the per-directory cache spawns already use.
+            // The answer carries that environment's state too (037, contract A2), read from the
+            // same cache entry, so the reason for a missing CLI costs no run of the script.
             //
             // Resolving it can run the script for up to its timeout, so it runs on the blocking
             // pool and the whole answer is *spawned*, never awaited here: this loop is where the
@@ -698,23 +700,25 @@ where
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
                     let resolver = Arc::clone(&task_state);
-                    let available = tokio::task::spawn_blocking(move || {
+                    let (available, env) = tokio::task::spawn_blocking(move || {
                         let home =
                             || directories::UserDirs::new().map(|d| d.home_dir().to_path_buf());
-                        match cwd.or_else(home) {
-                            Some(dir) => resolver.ai_clis_available_in(&dir),
-                            None => micold_core::provider::available_here(),
-                        }
+                        resolver.availability_for(cwd.or_else(home).as_deref())
                     })
                     .await
-                    .unwrap_or_else(|_| micold_core::provider::available_here());
-                    tracing::debug!(client = id, ?available, "AI CLI availability reported");
+                    .unwrap_or_else(|_| task_state.availability_for(None));
+                    tracing::debug!(
+                        client = id,
+                        ?available,
+                        ?env,
+                        "AI CLI availability reported"
+                    );
                     task_state.send(
                         id,
                         DaemonMsg::AiCliAvailability {
                             req,
                             available,
-                            env: None,
+                            env,
                         },
                     );
                 });

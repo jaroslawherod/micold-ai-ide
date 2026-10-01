@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 4-milestone (M1)
-- **Next step**: Continue M1 from the Handover section (T005 next).
+- **Next step**: M1 second unit: T006, T011, T038, T012–T014, then T039, T017, the gate, reviews A and B, and the PR.
 
 ## Pull requests
 
@@ -65,26 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1, first unit, stopped at the context cap. No PR is open. Nothing is pushed. Branch `fix/github-issues`
-was reset to `origin/main` (`976b0220`) by `branch-start.sh 517`: do not run it again.
-
-**Done and committed** (core subset 1475 passed, `cargo check --workspace --all-targets` clean, `cargo fmt` run):
-
-- `58590956` T001, T002, T003, T007 and the core half of T008: `crates/micold-core/src/cli_reason.rs`, `tests/cli_reason.rs` (26 tests).
-- `2e477df7` T004, T009: `env: Option<SpawnEnv>` on `DaemonMsg::AiCliAvailability`, `PROTOCOL_VERSION` 18, `docs/daemon.md`. The service sends `env: None` (`server.rs`), the client ignores it (`shell/daemon_sync.rs`).
-- `da35f0df` T015, T016: labels from the constants, `docs/user-guide/settings.md`, `sandboxed-daemon.md`.
-- `tdd/cycle-log.md` cycles 1 and 2, `tdd/test-list.md` U1–U27 `DONE`, tasks ticked: T001–T004, T007, T009, T015, T016.
-
-**Next steps, in order** (tests first, record each red in `tdd/cycle-log.md`):
-
-1. T008 remainder: delete the private `name_list` in `crates/micold-client/src/features/settings.rs:1674` and call `micold_core::cli_reason::name_list`. Then tick T008.
-2. T005 then T010 (service). Tests in `crates/micold-daemon/tests/ai_cli_availability.rs` (fixtures `service_with_script`, `include_script`, `bin_with`, `ServicePath::without_clis`; `Settings::env_include_timeout_secs` for S5). Design chosen: `ResolvedEnv { vars, env }` in the `OnceLock` cell; `spawn_env_for(cwd)`; `availability_in(cwd) -> (Vec<AiCli>, SpawnEnv)`; and for S7 a `DaemonState` method the server arm calls with `Option<&Path>` after `cwd.or_else(home)` (for `None`: `available_here()` and `SpawnEnv::classify(enabled, path, None)`), so U36 is testable without removing the home directory. A cell's attempt always classifies to `Some` (the two settings states return before a cell is taken).
-3. T006 then T011 (client): `env` and `asked_for` on `CliAvailability`; `answered` stamps `asked_for`. 13 fixtures build a `CliAvailability` literal (`grep -rn 'CliAvailability {' crates/micold-client`).
-4. T038, T012, T013 (red), then T014: `missing_cli_notice` returns `explain(..)`'s `{reason} {action}`, `None` when `env` is `None`.
-5. T039 (full gate, A7 mutant), T017 (`visual-pass`, quickstart §B B1–B8 and B14, light and dark).
-6. Phase 4 steps 2–4: gate with review A, review B, PR `feat(037): …` with `Refs #434`.
-
-**Open findings**: none. No review has run. The full suite has not run on this branch.
+None.
 
 ## Open escalation
 

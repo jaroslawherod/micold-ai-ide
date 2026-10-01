@@ -1670,7 +1670,7 @@ fn lines_011(
 pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
     let availability = availability?;
     let missing = availability.missing();
-    let names = name_list(&missing)?;
+    let names = micold_core::cli_reason::name_list(&missing)?;
     let verb = if missing.len() == 1 {
         "isn't"
     } else {
@@ -1685,17 +1685,4 @@ pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<Stri
             format!("{names} {verb} installed on this computer, which is where sessions run.")
         }
     })
-}
-
-/// "Claude Code", "Claude Code and GitHub Copilot", "a, b and c" — `None` for an empty list.
-///
-/// Written out rather than `join(", ")` because this goes in a sentence, and a comma-separated
-/// list reads as a field value rather than as prose.
-fn name_list(clis: &[AiCli]) -> Option<String> {
-    let (last, rest) = clis.split_last()?;
-    if rest.is_empty() {
-        return Some(last.to_string());
-    }
-    let leading: Vec<String> = rest.iter().map(ToString::to_string).collect();
-    Some(format!("{} and {last}", leading.join(", ")))
 }

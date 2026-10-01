@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use futures_util::{SinkExt, StreamExt};
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::protocol::version::{
@@ -67,6 +68,15 @@ async fn connect(state: &Arc<DaemonState>) -> Client {
 
 /// Ask which CLIs a session in `cwd` would find (`None`: no directory is in play, as in Settings).
 async fn ask(client: &mut Client, req: u64, cwd: Option<&Path>) -> Vec<AiCli> {
+    ask_env(client, req, cwd).await.0
+}
+
+/// [`ask`], with the state of the environment the answer was read from (feature 037, contract A2).
+async fn ask_env(
+    client: &mut Client,
+    req: u64,
+    cwd: Option<&Path>,
+) -> (Vec<AiCli>, Option<SpawnEnv>) {
     client
         .send(Frame::Control(ClientMsg::AiCliAvailabilityRequest {
             req,
@@ -79,13 +89,13 @@ async fn ask(client: &mut Client, req: u64, cwd: Option<&Path>) -> Vec<AiCli> {
             Frame::Control(DaemonMsg::AiCliAvailability {
                 req: got,
                 available,
-                ..
+                env,
             }) => {
                 assert_eq!(
                     got, req,
                     "the reply must carry the request's correlation id"
                 );
-                return available;
+                return (available, env);
             }
             Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
             Frame::Grid(_) => continue,
@@ -272,14 +282,22 @@ fn service_with(store: &Path, env_include: Option<&Path>) -> Arc<DaemonState> {
 /// A service with `script` configured and environment-include `enabled` or not — off with a script
 /// in place is the reporter's own configuration (BUG-001).
 fn service_with_script(store: &Path, script: Option<&Path>, enabled: bool) -> Arc<DaemonState> {
-    JsonFileSettingsStore::at(store.join("settings.json"))
-        .save(&Settings {
+    service_with_settings(
+        store,
+        &Settings {
             env_include_enabled: enabled,
             env_include_script_path: script
                 .map(|script| script.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             ..Settings::default()
-        })
+        },
+    )
+}
+
+/// A service started with exactly these settings.
+fn service_with_settings(store: &Path, settings: &Settings) -> Arc<DaemonState> {
+    JsonFileSettingsStore::at(store.join("settings.json"))
+        .save(settings)
         .unwrap();
     Arc::new(DaemonState::new(Catalog::load(
         Box::new(JsonFileStore::at(store.join("projects.json"))),
@@ -397,18 +415,25 @@ fn a_second_answer_for_a_directory_does_not_run_the_script_again() {
     );
 
     let state = service_with(store.path(), Some(&script));
-    let first = state.ai_clis_available_in(project.path());
-    let second = state.ai_clis_available_in(project.path());
+    let first = state.availability_in(project.path());
+    let second = state.availability_in(project.path());
 
     assert_eq!(
+        first,
+        (vec![AiCli::Pi], SpawnEnv::Applied),
+        "fixture check: the script ran and put the CLI on the PATH"
+    );
+    assert_eq!(
         first, second,
-        "fixture check: the same directory, the same answer"
+        "the same directory gives the same answer and the same state: the state is kept from the \
+         one attempt, not found out by another (037 FR-014)"
     );
     assert_eq!(
         std::fs::read_to_string(&runs).unwrap().lines().count(),
         1,
         "the environment for a directory is resolved once and then served from the cache that \
-         spawns there use too; asking again must not run the script again (SC-006a)"
+         spawns there use too; asking again, or reading the state, must not run the script again \
+         (SC-006a, 037 SC-006)"
     );
 }
 
@@ -510,5 +535,245 @@ async fn with_env_include_off_a_cli_only_the_script_would_add_is_not_offered() {
         "environment-include is off, so a session here gets the service's own PATH, which holds \
          no CLI; offering one would start a session that cannot find it (FR-003, FR-003b), got \
          {offered:?}"
+    );
+}
+
+// --- Feature 037, contract A2: the answer carries the state of the environment it was read from ---
+
+/// S1 (U28): environment-include off. The script is in place and would add the CLI, which is the
+/// reporter's own setup.
+#[tokio::test]
+async fn with_env_include_off_the_answer_says_it_is_off() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with_script(store.path(), Some(&script), false);
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 21, Some(project.path())).await,
+        (Vec::new(), Some(SpawnEnv::IncludeOff)),
+        "with environment-include off a session gets only the service's own PATH, and the answer \
+         must say that is why (FR-001 row 1)"
+    );
+}
+
+/// S2 (U29): on, and the script path is blank.
+#[tokio::test]
+async fn with_a_blank_script_path_the_answer_says_no_script_is_sourced() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    let state = service_with_settings(
+        store.path(),
+        &Settings {
+            env_include_enabled: true,
+            env_include_script_path: "   ".into(),
+            ..Settings::default()
+        },
+    );
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 22, Some(project.path())).await,
+        (vec![AiCli::Pi], Some(SpawnEnv::NoScriptPath)),
+        "on with no script path sources nothing: the answer walks the service's own PATH and \
+         says so (FR-001 row 2)"
+    );
+}
+
+/// S3 (U30): on, and nothing exists at the script path.
+#[tokio::test]
+async fn a_script_path_that_names_no_file_is_reported_as_not_found() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    let state = service_with(store.path(), Some(&store.path().join("no-such-script")));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 23, Some(project.path())).await,
+        (vec![AiCli::Pi], Some(SpawnEnv::ScriptNotFound)),
+        "nothing at the script path: the service's own PATH is walked and the answer says the \
+         script was not found (FR-001 row 3)"
+    );
+}
+
+/// S4 (U31): on, and the script exits with an error.
+#[tokio::test]
+async fn a_script_that_exits_with_an_error_is_reported_as_failed() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let script = include_script(store.path(), "exit 3\n", "exit 3\r\n");
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 24, Some(project.path())).await,
+        (vec![AiCli::Pi], Some(SpawnEnv::ScriptFailed)),
+        "a script that exits 3 adds nothing: the service's own PATH is walked and the answer says \
+         the script failed (FR-001 row 4)"
+    );
+}
+
+/// S4 (U32): a script path that exists and cannot be sourced is attempted and fails. It is not
+/// "not found" (FR-001's note, decision D14).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_script_path_that_names_a_directory_is_reported_as_failed_not_as_not_found() {
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let not_a_script = tempfile::tempdir().unwrap();
+
+    let state = service_with(store.path(), Some(not_a_script.path()));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 25, Some(project.path())).await,
+        (Vec::new(), Some(SpawnEnv::ScriptFailed)),
+        "a directory at the script path exists, so the attempt is made and fails: the state is \
+         the one the environment-include group shows for it (FR-001)"
+    );
+}
+
+/// S5 (U33): on, and the script runs past the timeout.
+#[tokio::test]
+async fn a_script_that_runs_past_the_timeout_is_reported_as_timed_out() {
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let script = include_script(store.path(), "sleep 5\n", "Start-Sleep -Seconds 5\r\n");
+
+    let state = service_with_settings(
+        store.path(),
+        &Settings {
+            env_include_enabled: true,
+            env_include_script_path: script.to_string_lossy().into_owned(),
+            env_include_timeout_secs: 1,
+            ..Settings::default()
+        },
+    );
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 26, Some(project.path())).await,
+        (Vec::new(), Some(SpawnEnv::ScriptTimedOut)),
+        "a script that sleeps past the 1 s timeout applies nothing, and the answer says it timed \
+         out (FR-001 row 5)"
+    );
+}
+
+/// S6 (U34): on, the script succeeded and added the CLI's directory.
+#[tokio::test]
+async fn a_script_that_adds_the_cli_is_reported_as_applied_and_the_cli_is_offered() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 27, Some(project.path())).await,
+        (vec![AiCli::Pi], Some(SpawnEnv::Applied)),
+        "the script ran and its PATH additions reached the session (FR-001 row 6)"
+    );
+}
+
+/// S6 (U35): the other side of U34. The script succeeded and changed nothing, so "applied" is the
+/// true state and the CLI is still not there: the one state in which "not found" is the reason.
+#[tokio::test]
+async fn a_script_that_succeeds_and_adds_nothing_is_still_reported_as_applied() {
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let script = include_script(
+        store.path(),
+        "export F037_UNRELATED=1\n",
+        "$env:F037_UNRELATED = '1'\r\n",
+    );
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask_env(&mut client, 28, Some(project.path())).await,
+        (Vec::new(), Some(SpawnEnv::Applied)),
+        "a script that succeeds and leaves the PATH alone was applied; the CLI is missing from \
+         the PATH sessions get, script included (Edge Cases)"
+    );
+}
+
+/// S7 (U36): no directory can be resolved. No attempt is made, so the state is known only where
+/// the settings alone decide it.
+#[test]
+fn with_no_directory_the_state_is_known_only_from_the_settings() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let script_dir = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(script_dir.path());
+    let script = include_script(script_dir.path(), &unix, &windows);
+
+    let off = tempfile::tempdir().unwrap();
+    assert_eq!(
+        service_with_script(off.path(), Some(&script), false).availability_for(None),
+        (vec![AiCli::Pi], Some(SpawnEnv::IncludeOff)),
+        "off holds for every directory, so it is known with none"
+    );
+    let blank = tempfile::tempdir().unwrap();
+    assert_eq!(
+        service_with_script(blank.path(), None, true).availability_for(None),
+        (vec![AiCli::Pi], Some(SpawnEnv::NoScriptPath)),
+        "a blank script path holds for every directory, so it is known with none"
+    );
+    let on = tempfile::tempdir().unwrap();
+    assert_eq!(
+        service_with(on.path(), Some(&script)).availability_for(None),
+        (vec![AiCli::Pi], None),
+        "the settings call for an attempt and there is no directory to make it in: the state is \
+         not known, and no reason may be given (FR-011)"
+    );
+}
+
+/// Contract A3 (U39): saving the environment-include settings changes the next answer for the same
+/// directory, with no restart of the service (FR-013).
+#[test]
+fn turning_env_include_on_changes_the_next_answer_for_the_same_directory() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with_script(store.path(), Some(&script), false);
+    assert_eq!(
+        state.availability_in(project.path()),
+        (Vec::new(), SpawnEnv::IncludeOff),
+        "fixture check: off, and the CLI is not offered"
+    );
+
+    state.set_env_include(Some(true), None, None).unwrap();
+
+    assert_eq!(
+        state.availability_in(project.path()),
+        (vec![AiCli::Pi], SpawnEnv::Applied),
+        "the same service, the same directory: the answer after the save carries the new state \
+         and the CLI the script adds (FR-013, SC-002)"
     );
 }

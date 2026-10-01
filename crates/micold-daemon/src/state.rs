@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::mcp::binding::{self as mcp_binding, ConfigLocations, SkipReason};
@@ -210,8 +211,22 @@ struct Inner {
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
-/// the resolved variables merged with `TERM` (FR-021, BUG-005).
-type EnvIncludeCell = Arc<std::sync::OnceLock<Vec<(String, String)>>>;
+/// what that resolve gave (FR-021, BUG-005).
+type EnvIncludeCell = Arc<std::sync::OnceLock<ResolvedEnv>>;
+
+/// The environment a session in one directory gets, and the state it is in (feature 037,
+/// research R1).
+///
+/// `vars` and `env` come from one call of `env_include::resolve`. Nothing writes one without the
+/// other, so what is offered and the reason given for what is not cannot describe two attempts
+/// (FR-012).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedEnv {
+    /// The resolved variables merged with the hardcoded `TERM` pair, ready for a spawn site.
+    vars: Vec<(String, String)>,
+    /// Which of FR-001's six states the attempt, or the settings that ruled one out, left.
+    env: SpawnEnv,
+}
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
 /// a caller can clone it and write to the PTY *after* dropping the state lock — PTY writes must never
@@ -296,6 +311,33 @@ fn materialise_pi_activity_component() -> io::Result<PathBuf> {
         std::fs::write(&path, PI_ACTIVITY_COMPONENT)?;
     }
     Ok(path)
+}
+
+/// The `PATH` in a session's resolved variables, or this process's own when they carry none
+/// (environment-include off, or a script that left `PATH` alone). Matched without regard to case,
+/// because Windows spells it `Path`.
+fn session_path(vars: Vec<(String, String)>) -> std::ffi::OsString {
+    vars.into_iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+        .map(|(_, value)| std::ffi::OsString::from(value))
+        .unwrap_or_else(micold_core::provider::process_path)
+}
+
+/// The state an attempt to source the script left (FR-001's last four rows).
+///
+/// Written as its own total match, not through `SpawnEnv::classify`: an attempt was made, so
+/// there is always a state. `env_include::resolve` does not return `Disabled` (its callers decide
+/// whether to run it at all); the arm maps to the state that sources nothing, so that a change
+/// there could not make a reason claim the script ran.
+fn attempted(outcome: &micold_core::env_include::EnvIncludeOutcome) -> SpawnEnv {
+    use micold_core::env_include::EnvIncludeOutcome;
+    match outcome {
+        EnvIncludeOutcome::Disabled => SpawnEnv::IncludeOff,
+        EnvIncludeOutcome::MissingScript => SpawnEnv::ScriptNotFound,
+        EnvIncludeOutcome::NonZeroExit { .. } => SpawnEnv::ScriptFailed,
+        EnvIncludeOutcome::TimedOut { .. } => SpawnEnv::ScriptTimedOut,
+        EnvIncludeOutcome::Success => SpawnEnv::Applied,
+    }
 }
 
 /// What a start refused for a missing AI CLI tells the user (FR-010), as advice that works where
@@ -706,11 +748,28 @@ impl DaemonState {
     /// - **A resolve that unwinds** leaves the cell empty (`OnceLock`), and the next waiter runs the
     ///   script itself rather than waiting forever.
     fn env_include_vars_for(&self, cwd: &Path) -> Vec<(String, String)> {
+        self.spawn_env_for(cwd).vars
+    }
+
+    /// [`Self::env_include_vars_for`] with the state the environment is in (feature 037, research
+    /// R1): which of FR-001's six cases a session spawned in `cwd` is in. Everything said there
+    /// about locking, sharing one run and invalidation holds here, because this is that function.
+    ///
+    /// The state costs no run of the script (FR-014): it is the outcome of the one attempt the
+    /// cell already holds, or it follows from the settings alone, in which case no cell is taken.
+    fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
         let (script_path, timeout_secs, cell) = {
             let mut inner = self.lock();
             let settings = inner.catalog.settings_wire();
-            if !settings.env_include_enabled || settings.env_include_script_path.trim().is_empty() {
-                return micold_core::env_include::merge_with_term(&[]);
+            if let Some(env) = SpawnEnv::classify(
+                settings.env_include_enabled,
+                &settings.env_include_script_path,
+                None,
+            ) {
+                return ResolvedEnv {
+                    vars: micold_core::env_include::merge_with_term(&[]),
+                    env,
+                };
             }
             let cell = Arc::clone(
                 inner
@@ -733,7 +792,10 @@ impl DaemonState {
             if outcome != micold_core::env_include::EnvIncludeOutcome::Success {
                 tracing::warn!(?outcome, cwd = %cwd.display(), "env-include resolution did not succeed");
             }
-            micold_core::env_include::merge_with_term(&vars)
+            ResolvedEnv {
+                vars: micold_core::env_include::merge_with_term(&vars),
+                env: attempted(&outcome),
+            }
         })
         .clone()
     }
@@ -779,11 +841,7 @@ impl DaemonState {
     /// never call it under the state lock. Matched without regard
     /// to case, because Windows spells it `Path`.
     fn spawn_path_for(&self, cwd: &Path) -> std::ffi::OsString {
-        self.env_include_vars_for(cwd)
-            .into_iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
-            .map(|(_, value)| std::ffi::OsString::from(value))
-            .unwrap_or_else(micold_core::provider::process_path)
+        session_path(self.env_include_vars_for(cwd))
     }
 
     /// Whether `cli`, started in `cwd`, would first ask the user to trust that folder (feature
@@ -813,6 +871,43 @@ impl DaemonState {
     /// resolution for `cwd`; the caller runs it off the connection loop.
     pub fn ai_clis_available_in(&self, cwd: &Path) -> Vec<AiCli> {
         micold_core::provider::available_in(&self.spawn_path_for(cwd))
+    }
+
+    /// [`Self::ai_clis_available_in`] with the state of the environment that was walked (feature
+    /// 037, contract A3). Both come from one [`ResolvedEnv`], so the set and the reason for what
+    /// it lacks describe one attempt (FR-012). Blocks as `ai_clis_available_in` does.
+    pub fn availability_in(&self, cwd: &Path) -> (Vec<AiCli>, SpawnEnv) {
+        let resolved = self.spawn_env_for(cwd);
+        (
+            micold_core::provider::available_in(&session_path(resolved.vars)),
+            resolved.env,
+        )
+    }
+
+    /// The answer to `ClientMsg::AiCliAvailabilityRequest` for `dir` (contract A2).
+    ///
+    /// `None` is the request that named no directory on a machine with no home directory, and the
+    /// answer when the resolving task itself failed (S7): this process's own `PATH` is walked, as
+    /// before, and the state is known only where the settings alone decide it. With the settings
+    /// calling for an attempt and none made it is `None`, and the client gives no reason (FR-011).
+    pub fn availability_for(&self, dir: Option<&Path>) -> (Vec<AiCli>, Option<SpawnEnv>) {
+        match dir {
+            Some(dir) => {
+                let (available, env) = self.availability_in(dir);
+                (available, Some(env))
+            }
+            None => {
+                let settings = self.lock().catalog.settings_wire();
+                (
+                    micold_core::provider::available_here(),
+                    SpawnEnv::classify(
+                        settings.env_include_enabled,
+                        &settings.env_include_script_path,
+                        None,
+                    ),
+                )
+            }
+        }
     }
 
     /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
