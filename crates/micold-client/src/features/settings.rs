@@ -51,10 +51,10 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::features::session::{AvailabilitySource, CliAvailability};
-use micold_core::cli_reason::{explain, AttemptDir, Explanation, Place};
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::cli_reason::{explain, AttemptDir, Explanation, Place};
 use micold_core::issue_types::{
     default_mapping, validate_mapping, LabelTypeEntry, MappingErrorKind,
 };
