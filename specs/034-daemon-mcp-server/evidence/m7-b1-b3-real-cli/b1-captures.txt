@@ -1,0 +1,28 @@
+# B1.1/B1.4 hashes
+before:
+a746df32605eafd7318da780df7692d61774cf32c68022890651ea7cb08ffc0e  /home/jaro/.cache/vp89/cc/.claude.json
+9a546cf575ffd0f3363fdf809b0a96eefefafb30593f1e9c3d8bfb729ff91913  /home/jaro/.cache/vp89/cc/settings.json
+.mcp.json: absent
+after:
+3ff927c4747da6924a0603e192e7b1f0a9ee9e294d58437d527b7218e5492bcd  /home/jaro/.cache/vp89/cc/.claude.json
+9a546cf575ffd0f3363fdf809b0a96eefefafb30593f1e9c3d8bfb729ff91913  /home/jaro/.cache/vp89/cc/settings.json
+ls: cannot access '/home/jaro/.cache/vp89/proj2/.mcp.json': No such file or directory
+
+# B1.5
+claude --session-id b705761c-87e6-45f6-b2c7-2a9a3cec34c1 --settings /home/jaro/.cache/vp89/data/micold-ai-ide/hooks/b705761c87e645f6b2c72a9a3cec34c1.json --mcp-config /home/jaro/.cache/vp89/data/micold-ai-ide/mcp/b705761c-87e6-45f6-b2c7-2a9a3cec34c1.json --allowedTools mcp__micold
+total 4
+-rw------- 1 jaro jaro 231 Oct  1 21:01 b705761c-87e6-45f6-b2c7-2a9a3cec34c1.json
+binding file (token redacted):
+{
+  "mcpServers": {
+    "micold": {
+      "headers": {
+        "Authorization": "REDACTED"
+      },
+      "timeout": 120000,
+      "type": "http",
+      "url": "http://127.0.0.1:42359/mcp"
+    }
+  }
+}# B1.6 POST /mcp -d {} without auth:
+401

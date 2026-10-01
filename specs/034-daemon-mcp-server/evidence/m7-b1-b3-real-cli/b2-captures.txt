@@ -1,0 +1,18 @@
+copilot argv:
+copilot --session-id 2c01f9cc-ec13-44ef-b433-f1d0aa85943b --no-remote --additional-mcp-config @/home/jaro/.cache/vp89/data/micold-ai-ide/mcp/2c01f9cc-ec13-44ef-b433-f1d0aa85943b.json --allow-tool micold
+binding (redacted):
+{
+  "mcpServers": {
+    "micold": {
+      "headers": {
+        "Authorization": "REDACTED"
+      },
+      "timeout": 120000,
+      "tools": [
+        "*"
+      ],
+      "type": "http",
+      "url": "http://127.0.0.1:42359/mcp"
+    }
+  }
+}-rw------- 1 jaro jaro 269 Oct  1 21:03 /home/jaro/.cache/vp89/data/micold-ai-ide/mcp/2c01f9cc-ec13-44ef-b433-f1d0aa85943b.json
