@@ -20,7 +20,7 @@ PROTOCOL_VERSION                                            17 → 18
 | S1 | Environment-include off | walk of the service's own `PATH` | `Some(IncludeOff)` |
 | S2 | On, script path blank | walk of the service's own `PATH` | `Some(NoScriptPath)` |
 | S3 | On, the attempt found no script | walk of the service's own `PATH` | `Some(ScriptNotFound)` |
-| S4 | On, the attempt exited with an error | walk of the service's own `PATH`, unless the attempt returned one | `Some(ScriptFailed)` |
+| S4 | On, the attempt exited with an error (this includes a script path that exists but cannot be sourced: a directory, a file the user may not read; FR-001) | walk of the service's own `PATH`, unless the attempt returned one | `Some(ScriptFailed)` |
 | S5 | On, the attempt timed out | walk of the service's own `PATH`, unless the attempt returned one | `Some(ScriptTimedOut)` |
 | S6 | On, the attempt succeeded | walk of the resolved `PATH` | `Some(Applied)` |
 | S7 | No directory can be resolved (no `cwd`, no home), or the resolving task failed | `available_here()`, as today | `SpawnEnv::classify(enabled, path, None)`: `Some` for S1 and S2's settings, else `None` |
