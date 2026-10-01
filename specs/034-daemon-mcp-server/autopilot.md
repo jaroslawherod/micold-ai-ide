@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
-- **Next step**: M5: gate, review B, T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), tick T103, push and open the PR.
+- **Next step**: M5: push and open the PR; the orchestrator merges on green.
 
 ## Pull requests
 
@@ -76,6 +76,7 @@ deliverable (tasks.md Notes).
 | M5 | A (sonnet re-review) | 2 | ac6aaebe56cdac342e724f809336270975084e90:8e2052f9 | CLEAN; the 8 fixes hold |
 | M5 | B (conformance) | 1 | 3161139f516b488e6189b6a5b65b139385d8284a:5c4bf06c5e3cbbe45974430cfcffe78a72d8eb74 | CHANGES; Verify green (mcp_audit_log 4, mcp_confirmations 18, mcp_lifecycle_tools 24, features_agent_confirm 12, layout_snapshot 43, protocol_roundtrip 9, schema_hash 9, mcp_tools_catalog 19, mcp_policy 12). F1 MAJOR untested review A fixes (fixed: 2 tests with red evidence, cycle 34; the untestable `delete_session` re-resolve removed), F3 MINOR (follow-up), F4 MINOR (guide fixed), F2 MINOR declined |
 | M5 | visual pass §B4 | 1 | 3161139f516b488e6189b6a5b65b139385d8284a:5c4bf06c5e3cbbe45974430cfcffe78a72d8eb74 | PASS, 6 of 6 checks (evidence/m5-b4-confirm-dialog) |
+| M5 | B (sonnet re-review) | 2 | a0030724f7b0e34ff5dbab78a3e584ca02dee3b6:26e750151e1c667231867949df627b2dd0646364 | CLEAN; fixes hold, declines stand; Verify green (mcp_confirmations 19, mcp_lifecycle_tools 25, mcp_audit_log 4); 1 MINOR fixed (guide rewrapped) |
 
 ## Declined review findings
 
