@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;
 
@@ -710,6 +711,30 @@ fn envelope_header_round_trips_and_rejects_garbage() {
 // before the field existed must decode as `false` rather than fail, which is what makes an
 // older daemon's snapshot readable at all.
 // ---------------------------------------------------------------------------------------
+
+#[test]
+fn an_availability_answer_round_trips_with_and_without_the_environment_state() {
+    // Feature 037, contract A1: `env` says why a CLI is missing, and `None` says the service could
+    // not tell. The two must still differ after the wire, or "unknown" would read as a reason.
+    let answer = |env| DaemonMsg::AiCliAvailability {
+        req: 7,
+        available: vec![AiCli::ClaudeCode],
+        env,
+    };
+    let known = answer(Some(SpawnEnv::ScriptTimedOut));
+    let unknown = answer(None);
+    json_roundtrip(&known);
+    json_roundtrip(&unknown);
+
+    let decode = |msg: &DaemonMsg| -> DaemonMsg {
+        serde_json::from_slice(&serde_json::to_vec(msg).unwrap()).unwrap()
+    };
+    assert_ne!(
+        decode(&known),
+        decode(&unknown),
+        "a known state and no state are different answers on the wire"
+    );
+}
 
 #[test]
 fn a_session_summary_carrying_a_derived_label_round_trips_on_both_wires() {

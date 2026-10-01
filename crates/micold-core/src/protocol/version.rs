@@ -71,7 +71,11 @@
 /// Bumped 18 → 19 for feature 034's `cross_session_access` on `DaemonSettings` and
 /// `ClientMsg::SettingsSet` (FR-016): the Settings option for reading and typing into sibling
 /// sessions. An older peer would fail to decode either field.
-pub const PROTOCOL_VERSION: u32 = 19;
+/// Bumped 19 → 20 for feature 037's `env` on `DaemonMsg::AiCliAvailability`: the state of the
+/// environment the answer was walked in, from which the client says why a CLI is missing. No
+/// `#[serde(default)]` and no compatibility shim: peers that differ are refused at the handshake.
+/// It developed against 17 while feature 034 took 18 and 19 here, so it is 20.
+pub const PROTOCOL_VERSION: u32 = 20;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

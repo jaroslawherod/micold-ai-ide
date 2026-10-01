@@ -709,7 +709,14 @@ where
                     .await
                     .unwrap_or_else(|_| micold_core::provider::available_here());
                     tracing::debug!(client = id, ?available, "AI CLI availability reported");
-                    task_state.send(id, DaemonMsg::AiCliAvailability { req, available });
+                    task_state.send(
+                        id,
+                        DaemonMsg::AiCliAvailability {
+                            req,
+                            available,
+                            env: None,
+                        },
+                    );
                 });
             }
 
