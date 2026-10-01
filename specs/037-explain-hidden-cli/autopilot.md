@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 4-milestone (M2)
-- **Next step**: M2: T018–T026, T040, T041 are committed. Fix review A round 1 (F1–F5), gate, scoped A round 2, review B, visual pass B9/B10 (T027), T042 record, PR.
+- **Next step**: Continue M2 from the Handover section (gate result, review B, visual pass, T042 and T027, PR).
 
 ## Pull requests
 
@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Rebase M1 | 1 | 28f2150c18c1f7bd72942d62c2e26c6336863d3f:ce28161b9c42cff43cd15b7a7671eb1f306d51b8 | CLEAN: no findings (rebase resolution only: nothing of 034 dropped, 037's wire change is version 19 throughout; not counted) |
 | Rebase M1 | 2 | 6a6fdd0d350be640ae526841aed9785ade15630a:65a5fc28465bbc276918bbccee1b30e83733f330 | CLEAN: 2 MINOR, 1 fixed (second rebase, onto 034's M6: nothing of 034 dropped, 037's wire change is version 20 throughout; not counted) |
 | A M2 | 1 | 658bb50d7c40201ec80791e76d82343d60275e9f:e7f3ec7352f5d48be2b4f45ee280a701ff24804a | CHANGES: 2 MAJOR (F1 a refused start left the directory's cached resolution, so "fix the script, then restart" was refused again; F2 a deleted session folder was reported as a script timeout), 3 MINOR — all five fixed |
+| A M2 | 2 | 9754422054820536aa17744be7f7e4f0a960f307:e1253adc9da7adf6974b9eb5ac0b7ee27d8db917 | CLEAN: no findings (scoped re-review of the round-1 fix diff, Sonnet; it took 6 tool calls, so review B should look at `refuse_and_forget_env` and `folder_gone` with care) |
 
 ## Declined review findings
 
@@ -75,7 +76,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2, written at the 150k cap. No PR is open; the branch is local only (HEAD is this commit, on top of
+`origin/main` at 7918f7bb). Skip nothing: run `branch-start.sh 520` only if it reports the branch as is
+(the work is unmerged commits on it, so it rebases, it does not reset).
+
+Done and committed: T018–T026, T040, T041 (ticked in tasks.md; cycle log cycles 6–9), review A round 1
+(2 MAJOR, 3 MINOR, all fixed in `e1253adc`) and round 2 (CLEAN).
+
+Next steps, in order:
+
+1. Gate on `e1253adc`: a detached `mise run gate` was started on that tree; its log is
+   `<session scratchpad>/m2f/gate.log` and ends with a `GATE_EXIT=` line. It had 203 `test result: ok`
+   and no failure when this unit stopped. If the log is gone or the tree changed (a rebase), rerun the
+   gate. An earlier gate on `e7f3ec73` (before the review fixes) ended `GATE_EXIT=0`, 378 ok.
+2. `git fetch origin`; if main moved, rebase and rerun the gate.
+3. Review B round 1 (full, session model) on `origin/main...HEAD` with the brief
+   `scripts/autopilot/brief.py milestone specs/037-explain-hidden-cli M2`; in parallel the
+   `visual-pass` skill for quickstart §B B9 and B10 (T027), screenshots to
+   `specs/037-explain-hidden-cli/evidence/` and a line each in `evidence/README.md`.
+4. T042: record in `tdd/cycle-log.md` that A9–A14 are green with the full suite (the gate's result
+   line), and that A12 was green before T023 changed the gate (cycle 7 already says so). Tick T042 and
+   T027. Update the test list rows U56–U66, U69, U71–U75, A9–A14 to DONE (A12: BASELINE) with the test
+   names from cycles 6–8: this was not done yet.
+5. Set M2's row and the PR table, push, open the PR `feat(037): a failed or refused start gives the
+   same reason` with `Refs #434`.
+
+Open findings: none. Not verified by this unit: the two `Agent`-written test sets were run by the
+agents, and by the gate; no `cargo check --target aarch64-apple-darwin` was run (no `cfg(target_os)`
+arm was added, as far as the agents reported; confirm with `git diff origin/main...HEAD | grep cfg`).
 
 ## Open escalation
 
