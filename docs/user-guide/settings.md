@@ -65,8 +65,26 @@ Which AI coding CLI a new session runs when you don't choose one for it.
   manager up. This field answers for your home directory, because the default applies everywhere.
   Each sidebar row answers for its own project or worktree, so a CLI one project's script adds is
   offered on that project's rows even when it is not listed here.
-- **A note under the field names any CLI that is missing** from there, so you know before you start a
-  session rather than when it fails.
+- **A note under the field names any CLI a session would not find, says why, and says what to
+  change.** It answers for your home directory, like the field itself. The reason is one of six,
+  following the state of [the environment a session starts in](#the-environment-a-session-starts-in):
+
+  | State | What the note says | What it tells you to do |
+  |---|---|---|
+  | **Source a script before each session** is off | Sessions get only the login `PATH` | Turn it on if your startup file puts the CLI on the `PATH`, or install the CLI on the login `PATH` |
+  | It is on and **Script path** is empty | No script is sourced | Set **Script path**, or install the CLI on the login `PATH` |
+  | No file exists at the script path | The startup script was not found for your home directory | Correct **Script path** |
+  | The script exited with an error (this includes a path that exists but cannot be sourced) | The startup script exited with an error for your home directory | Fix the script |
+  | The script ran past the timeout | The startup script timed out for your home directory | Fix the script, or raise **Timeout** |
+  | The script was applied and the CLI is still not found | The CLI was not found on the `PATH` sessions get for your home directory: the login `PATH` plus what the script adds | Install the CLI, or make the script add its directory |
+
+  Only the last row means the CLI is not there. In the first five the note does not say the CLI is
+  not installed, because no script was applied and the app cannot know. The note is complete by
+  itself: it does not depend on the outcome line in the environment-include group, which reports
+  the directory resolved most recently and may be about another project. Saving a change to these
+  settings asks again, so the note and the list are up to date the next time you open Settings,
+  with no restart. Nothing is said when every CLI is found, or before the session service has
+  answered.
 - **Default**: Claude Code.
 - **Changing it affects new sessions only.** A session's CLI is fixed when the session is created
   and never changes afterwards, so sessions you already have keep running the CLI they started on.
@@ -79,7 +97,7 @@ installed it with, or install the CLI somewhere on the `PATH` your login session
 example with a symlink in `~/.local/bin`). The app does not look anywhere else, because a session
 would not either.
 
-**If your default names a CLI that isn't installed, the app keeps it rather than quietly changing
+**If your default names a CLI a session would not find, the app keeps it rather than quietly changing
 it.** That is deliberate. A CLI can be missing for a moment — a startup file that failed or timed
 out, environment-include switched off, an upgrade in progress — and silently rewriting your
 preference would lose a choice you made without saying so. The setting stays as you left it, and

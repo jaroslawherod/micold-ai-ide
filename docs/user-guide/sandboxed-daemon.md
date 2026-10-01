@@ -98,7 +98,12 @@ A session runs its AI CLI inside the container. That means the CLI comes from th
 installed on your computer is not used. The published image, and one built from this checkout, ship
 Claude Code, GitHub Copilot and Pi Coding Agent at pinned versions. If you choose an image that
 lacks one, that CLI is not offered, and **Settings → Session service** names it under *Image
-reference*. A session that already runs it fails to start and says to choose an image that provides
+reference*, with the same note that appears under **Default AI CLI**. The note says the image lacks
+the CLI only when the environment a session starts in was applied: environment-include is on and
+the startup script succeeded. Otherwise it gives the environment-include reason (the switch is off,
+the script path is empty, or the script was not found, failed or timed out) and the setting to
+change, because a script that was not applied may be what puts the CLI on the `PATH`. See
+[Settings → Default AI CLI](settings.md#default-ai-cli). A session that already runs it fails to start and says to choose an image that provides
 it — see [When a CLI isn't installed](worktrees-and-sessions.md#when-a-cli-isnt-installed).
 
 ### The AI's tools work the same way
