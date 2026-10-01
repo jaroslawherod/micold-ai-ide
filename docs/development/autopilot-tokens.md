@@ -167,6 +167,44 @@ What they show:
   changes (034 daemon-mcp M2: 0.46M per task over 8 tasks). Batching had not merged: milestone units
   still made 117 and 166 lone reads right after another read.
 
+## The 034 runs at their end, 2026-10-01
+
+`github-issue-worktree` finished (ledger `done`, record unit run): 42.7M `cost_eq` over 2,309
+calls. `daemon-mcp-server` was at M5 of its milestones: 37.4M over 1,866 calls so far. Both still
+mix skill versions, so these stay indicative.
+
+| | Baseline | 034 github-issue | 034 daemon-mcp (so far) |
+|---|---:|---:|---:|
+| Orchestrator, whole run | ~5.3M | 4.06M | 4.04M |
+| Orchestrator peak context | n/a | 174k | 195k |
+| Milestone unit with its subagents, average | ~3.3M | 3.93M (7 units) | 5.67M (5 milestones) |
+| Milestone unit peak context | 266k | 82–266k | 211–266k |
+| First-round reviewer (session model) | ~0.27M | 0.08–0.27M | 0.11–0.24M |
+| Re-review on Sonnet | n/a | 0.05M | 0.06–0.07M |
+| `code-review` skill | ~0.25M | 0.15M | 0.28M |
+| Record unit (Haiku) | n/a | 0.22M | n/a |
+
+- **The orchestrator ended about 25% under the baseline.** The mid-run figures above (2.9M and
+  1.9M) were low only because the runs were unfinished.
+- **Re-reviews on Sonnet cost 0.05–0.07M**, against about 0.27M for a baseline review.
+- **Milestone units did not get cheaper.** Feature difficulty dominates: daemon-mcp M3 cost 8.9M
+  and M1 6.5M.
+- **The 150k handover was mostly not followed.** github-issue's last two milestones stayed at 164k
+  and 82k. But daemon-mcp M5, started after the rule merged, never checked its context in 144 calls
+  and reached 266k; M4 checked once, at 202k, and did not hand over; only M3 handed over, after
+  265k. The rule relied on the unit remembering to check.
+- **Batching was uneven.** Lone reads fell to 5 and 1 in github-issue's last two milestones, while
+  daemon-mcp M4 and M5 still made 22 and 38.
+- **The close unit cost 6.6M with its subagents**, 3.2M of it two test-remediation subagents on the
+  session model.
+- `cost_eq` weights tokens the same on every model, so the record unit's 0.22M overstates its
+  price on Haiku.
+
+Because of the handover finding, `scripts/autopilot/context-hook.py` now runs as a PostToolUse
+hook. On a branch an autopilot ledger names, it reads the caller's own transcript after each tool
+call and, once the context passes the cap, tells a unit to hand over and the orchestrator to
+suggest `/clear` and `resume`. It repeats only after another 20k of growth.
+
 ## Skill size
 
 What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every
