@@ -85,7 +85,8 @@ as its starting point.
   repro and correct behaviour the bug unit returned; for a milestone, its ID and task IDs (and
   `BUG-<k>` for a bug).
 - **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED | HANDOVER`, a PR number if it
-  opened one, and at most five lines. Read the ledger, not the transcript.
+  opened one, and at most five lines. Read the ledger (`scripts/autopilot/brief.py ledger <ledger>`),
+  not the transcript.
 - **`ESCALATE`:** subagents have no `AskUserQuestion`. Ask the returned questions yourself (see
   *Asking the human*), then continue **the same** subagent with `SendMessage` and the answers.
 - **`FAILED`:** read the ledger and the five lines. Retry once with a fresh unit, or escalate.

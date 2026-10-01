@@ -11,9 +11,10 @@ sends you there.
   to `origin/main`, or rebases unmerged work from an earlier unit (clarify rounds, a BUG record,
   close-phase milestones) onto it. On `CONFLICT`, resolve, run the gate, `git rebase --continue`.
 - **Stay in scope.** Do only your unit's work, then return. The orchestrator waits on CI and merges.
-- **Ledger first.** Record the previous PR's merge SHA the orchestrator passed you. Update the
-  ledger before every commit and before you return. The orchestrator
-  reads the ledger, not your transcript.
+- **Ledger first.** Read it with `scripts/autopilot/brief.py ledger <ledger> [M<K>]`, never whole: it
+  prints the state, and of the history only your milestone's rows. Record the previous PR's merge
+  SHA the orchestrator passed you. Update the ledger before every commit and before you return. The
+  orchestrator reads the ledger, not your transcript.
 - **Scratch files** (debug notes, probe scripts, logs) go in the session scratchpad, never the
   worktree.
 - **Reviews.** Every artifact and diff gets a review by a **fresh-context subagent**, never you. Give
@@ -43,7 +44,8 @@ sends you there.
 - **Read only what you need.** Everything you read is re-read on each later call of the unit.
   - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
     not the whole file.
-  - Code: `grep -n` for the lines, then `Read` with `offset`/`limit`.
+  - Code: `grep -n` for the lines, then `Read` with `offset`/`limit` A hook blocks a `Read` without
+    `limit` of a file over 400 lines.
   - Finding code across many files: dispatch an `Explore` subagent (it runs on Haiku) and keep
     its answer, not the file dumps.
   - A saved tool result (`…/tool-results/…`), a gate log or an agent `.output` file: `grep` it;
