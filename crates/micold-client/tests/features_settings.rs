@@ -387,6 +387,65 @@ fn turning_the_binding_toggle_off_reaches_what_save_writes() {
     );
 }
 
+// ---------------------------------------------------------------------------------------
+// "Let agents read and type into other sessions" (feature 034, T065 — FR-016)
+// ---------------------------------------------------------------------------------------
+
+use micold_core::mcp::policy::CrossSessionAccess;
+
+/// U216. The Environment draft carries the option, seeded from the stored value: Auto unless the
+/// user chose otherwise.
+#[test]
+fn the_cross_session_option_is_seeded_from_the_stored_setting() {
+    assert_eq!(
+        SettingsDraft::from_settings(&Settings::default())
+            .environment
+            .cross_session_access,
+        CrossSessionAccess::Auto,
+        "Auto until the user chooses otherwise (FR-016)"
+    );
+    for chosen in [CrossSessionAccess::ConfirmEachSend, CrossSessionAccess::Off] {
+        let stored = Settings {
+            cross_session_access: chosen,
+            ..Settings::default()
+        };
+        assert_eq!(
+            SettingsDraft::from_settings(&stored)
+                .environment
+                .cross_session_access,
+            chosen,
+            "a user who tightened the option must see their choice when the page opens"
+        );
+    }
+}
+
+/// U216 (the save half). A closed choice: every value is valid, and it is what Save writes.
+#[test]
+fn every_value_of_the_cross_session_option_reaches_what_save_writes() {
+    for chosen in CrossSessionAccess::ALL {
+        let mut draft = valid();
+        draft.show(SettingsSection::Environment);
+        draft.environment.cross_session_access = chosen;
+
+        assert!(draft.error.is_none());
+        let saved = draft
+            .validate()
+            .expect("choosing from a list cannot produce a validation error")
+            .into_settings();
+        assert_eq!(saved.cross_session_access, chosen);
+    }
+}
+
+/// The select draws each value by its `Display`, so these are the words the user reads (FR-016).
+#[test]
+fn the_cross_session_select_names_its_three_values_as_the_requirement_does() {
+    let names: Vec<String> = CrossSessionAccess::ALL
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(names, ["Auto", "Confirm each send", "Off"]);
+}
+
 // --- Feature 034: the label-to-type mapping rides along with every save (U86) ------------------
 
 #[test]

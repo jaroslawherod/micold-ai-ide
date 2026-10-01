@@ -282,6 +282,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         default_ai_cli: AiCli::ClaudeCode,
         pi_activity_component: true,
         tool_server_enabled: true,
+        cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
     }
 }
 
@@ -1746,6 +1747,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: true,
             tool_server_enabled: true,
+            cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
     });
@@ -1831,6 +1833,78 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
     );
 }
 
+/// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
+/// sessions" and saving tells the connected service, which reads it on every tool request.
+#[test]
+fn choosing_a_cross_session_value_and_saving_tells_the_service() {
+    use micold_core::mcp::policy::CrossSessionAccess;
+
+    for chosen in [
+        CrossSessionAccess::ConfirmEachSend,
+        CrossSessionAccess::Off,
+        CrossSessionAccess::Auto,
+    ] {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::CrossSessionAccessChanged(chosen)),
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        let told = sent.iter().find_map(|msg| match msg {
+            ClientMsg::SettingsSet {
+                cross_session_access,
+                ..
+            } => Some(*cross_session_access),
+            _ => None,
+        });
+        assert_eq!(
+            told,
+            Some(Some(chosen)),
+            "the service must be told the chosen value: {sent:?}"
+        );
+        assert_eq!(
+            app.core.session.cross_session_access, chosen,
+            "and this window's own copy follows the save"
+        );
+    }
+}
+
+/// U216 (feature 034, FR-016): the page shows what the service says is in force, so a value
+/// another window chose opens here.
+#[test]
+fn the_cross_session_select_opens_with_the_value_the_service_reported() {
+    use micold_core::mcp::policy::CrossSessionAccess;
+
+    let mut app = base_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                cross_session_access: CrossSessionAccess::Off,
+                ..quiet_settings()
+            },
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+    assert_eq!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .environment
+            .cross_session_access,
+        CrossSessionAccess::Off,
+        "the service said Off; the page must not show Auto"
+    );
+}
+
 /// The disconnected case is not an error: settings-saving already has a fully working local-only
 /// path (the direct `settings.json` write above the daemon-send in
 /// `Message::Settings(SettingsMsg::Saved)`), so
@@ -1851,6 +1925,7 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
             tool_server_enabled: true,
+            cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
     });
@@ -1889,6 +1964,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
             tool_server_enabled: true,
+            cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         daemon: micold_client::features::settings::DaemonDraft {
             placement: chosen,
@@ -2076,6 +2152,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 env_include_timeout_secs: 30,
                 pi_activity_component: true,
                 tool_server_enabled: true,
+                cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
             },
         }),
     );
@@ -2107,6 +2184,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 env_include_timeout_secs: 45,
                 pi_activity_component: true,
                 tool_server_enabled: true,
+                cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
             },
         })),
     );
@@ -2578,6 +2656,7 @@ fn the_service_answers_with(
                 env_include_timeout_secs: 30,
                 pi_activity_component: false,
                 tool_server_enabled: true,
+                cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
             },
         }),
     );
@@ -3816,6 +3895,7 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
+            cross_session_access: settings.cross_session_access,
         },
         ..SettingsDraft::default()
     });
@@ -4538,6 +4618,7 @@ mod script_path_report {
             env_include_timeout_secs: 10,
             pi_activity_component: false,
             tool_server_enabled: true,
+            cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         }
     }
 

@@ -165,6 +165,7 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
         default_ai_cli: None,
         pi_activity_component: None,
         tool_server_enabled: None,
+        cross_session_access: None,
     }))
     .await
     .unwrap();
@@ -196,6 +197,7 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
         default_ai_cli: None,
         pi_activity_component: None,
         tool_server_enabled: Some(false),
+        cross_session_access: None,
     }))
     .await
     .unwrap();
@@ -209,6 +211,57 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
             "the toggle the user turned off must be what the other window is told"
         ),
         other => panic!("expected SettingsChanged on the second client, got {other:?}"),
+    }
+}
+
+/// Feature 034, FR-016: the cross-session option reaches the service over the wire, every window
+/// learns the new value, and the service itself answers with it from then on (the tool server
+/// reads it per request). A `SettingsSet` that does not name it leaves it as it is.
+#[tokio::test]
+async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and_the_service() {
+    use micold_core::mcp::policy::CrossSessionAccess;
+
+    let state = new_state();
+    let mut a = connect(&state, "client-a").await;
+    let mut b = connect(&state, "client-b").await;
+    wait_until(|| state.client_count() == 2).await;
+    assert_eq!(
+        state.cross_session_access(),
+        CrossSessionAccess::Auto,
+        "Auto until the user chooses otherwise"
+    );
+
+    for (req, chosen, scrollback) in [
+        (1, Some(CrossSessionAccess::ConfirmEachSend), None),
+        (2, Some(CrossSessionAccess::Off), None),
+        // A save about something else: the option stays Off.
+        (3, None, Some(7_000)),
+    ] {
+        a.send(Frame::Control(ClientMsg::SettingsSet {
+            req,
+            scrollback_lines: scrollback,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            tool_server_enabled: None,
+            cross_session_access: chosen,
+        }))
+        .await
+        .unwrap();
+
+        let expected = chosen.unwrap_or(CrossSessionAccess::Off);
+        let told = tokio::time::timeout(std::time::Duration::from_secs(5), b.next())
+            .await
+            .expect("the second window was never told the option changed");
+        match told.unwrap().unwrap() {
+            Frame::Control(DaemonMsg::SettingsChanged { settings }) => {
+                assert_eq!(settings.cross_session_access, expected, "request {req}")
+            }
+            other => panic!("expected SettingsChanged on the second client, got {other:?}"),
+        }
+        assert_eq!(state.cross_session_access(), expected, "request {req}");
     }
 }
 
