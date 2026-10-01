@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 4-milestone (M1)
-- **Next step**: Merge the M1 PR once CI is green, then dispatch M2.
+- **Next step**: Continue M1 from the Handover section (gate on the rebased tree, then the PR).
 
 ## Pull requests
 
@@ -68,7 +68,33 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1, third unit, stopped before the PR. No PR is open. Nothing is pushed. Do not run `branch-start.sh`.
+
+**Done**: T001–T017 and T038–T039 are ticked. Reviews A and B ran once each and were CLEAN (see *Review
+rounds*); the visual pass B1–B8 passed in both themes (`evidence/README.md`). `mise run gate` was green on
+`b205f81d`, **before** the rebase below.
+
+**What changed after that gate**: the first push was refused because `origin/main` had gained feature 034
+(27 commits), which took `PROTOCOL_VERSION` 18. A helper rebased the M1 commits onto `origin/main`
+(`fc1c3ad2`), keeping them separate, and moved 037's bump to 18 -> 19 (D16; commit `3cddb792` updates the
+spec texts). The branch is 12 commits ahead of `origin/main`, tree clean. The helper was still running its
+checks (`cargo fmt --check`, `mise run test-core`, daemon `ai_cli_availability`, `cargo test -p
+micold-client --no-fail-fast`) when this unit ended, so **the rebased tree is unverified**.
+
+**Next steps, in order**:
+
+1. `git status -sb` and `git log --oneline origin/main..HEAD`; fetch and rebase again if `origin/main` moved.
+2. `mise run gate` detached on the rebased tree; fix what the rebase broke (the schema-hash and version
+   pins in `crates/micold-core/tests/schema_hash.rs` and `protocol/version.rs` are the likely places).
+3. In the gate's shadow, a full review round (the snapshots in *Review rounds* are stale after the rebase)
+   limited in effect to the rebase resolution: `protocol/{messages,version}.rs`, `tests/schema_hash.rs`,
+   `tests/protocol_roundtrip.rs`, daemon `server.rs` and `state.rs`, client `shell/daemon_sync.rs`. It does
+   not count toward the limit unless it finds a BLOCKER or MAJOR. Nothing visible changed, so no new
+   visual pass.
+4. `git push --force-with-lease -u origin HEAD` (the remote branch holds only merged PR #517's old head),
+   open the PR `feat(037): …` with `Refs #434`, record its number here.
+
+**Open findings**: none above MINOR; the MINORs are under *Follow-ups not done*.
 
 ## Open escalation
 
