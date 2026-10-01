@@ -65,6 +65,14 @@ as "Default". No session may run in any other unmanaged or arbitrary directory.
 - The project root MAY host session(s) under the "Default" label, alongside its
   worktrees. A Default session MUST NOT create, modify, or remove any git worktree, and
   MUST NOT be presented or styled as one.
+- **Exception — creating a worktree through the application's tool server.** A Default
+  session MAY create a worktree, and only create one, by calling the application's own
+  agent tool server (the MCP `create_worktree` tool), because that call is the application
+  creating the worktree on the session's behalf: it runs the same operation as the
+  create-worktree dialog, records the worktree as created by the application, and shows it
+  in every window. The exception covers nothing else. A Default session MUST NOT create a
+  worktree by any other means (a `git worktree` command, a script, a file operation), and
+  MUST NOT rename, modify, or remove a worktree by any means, the tool server included.
 - This exception is scoped narrowly to the project's own root: it exists solely to let
   a session run directly against the project's current checkout when branch isolation
   is unnecessary or undesired. It does not extend to any other non-worktree directory.
@@ -76,7 +84,12 @@ isolation (Principle II) enforceable at the VCS layer for worktree-bound session
 single, explicitly-named exception for the project root — rather than allowing sessions
 against arbitrary non-worktree directories — accommodates work that is deliberately not
 branch-isolated (quick commands, inspecting the current checkout) without opening the
-door to unmanaged, ad hoc session locations.
+door to unmanaged, ad hoc session locations. A Default session may ask the application to
+create a worktree because that keeps the lifecycle where this principle puts it — inside
+the application — while letting a session in the project root hand work off to an isolated
+worktree instead of doing it in the shared checkout. Renaming and removing stay forbidden:
+they change or destroy a location other sessions run in, and the project root is the one
+place that hosts sessions with no worktree of their own to answer for.
 
 ### IV. Local-First Storage (NON-NEGOTIABLE)
 
@@ -248,4 +261,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.6.1 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-09-13
+**Version**: 1.7.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-10-01

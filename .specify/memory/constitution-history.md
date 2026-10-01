@@ -6,6 +6,44 @@ every run read only the principles. Newest report first; prepend the next one he
 ```text
 SYNC IMPACT REPORT
 ==================
+Version change: 1.6.1 → 1.7.0
+Bump rationale: MINOR — Principle III's prohibition on a Default session touching worktrees
+  gains one narrowly-scoped, explicitly-named exception: a Default session MAY create a
+  worktree by calling the application's agent tool server (the MCP `create_worktree` tool).
+  Consistent with 1.3.0, 1.5.0 and 1.6.0, which each treated a narrow, named expansion of
+  what is permitted as MINOR rather than PATCH.
+
+  The amendment exists because the prohibition, as written, stopped a session in the project
+  root from doing the one thing the principle wants done through the application: handing
+  work to an isolated worktree. A user asking a Default session to "create a worktree and a
+  session for this issue" got `refused_by_policy`, and the remaining routes were to do the
+  work in the shared checkout or to run `git worktree add` by hand — the two outcomes
+  Principle III exists to prevent. The tool server's `create_worktree` is the create-worktree
+  dialog's own operation, so permitting it keeps the lifecycle inside the application.
+
+  The exception is deliberately one verb wide and one route wide. Rename and delete stay
+  forbidden for a Default session, through the tool server as much as through git, because
+  they change or destroy a location other sessions run in. Creating by any other means than
+  the tool server stays forbidden, because only that route records the worktree as created by
+  the application.
+
+Modified in 1.7.0:
+  - Principle III — gains the "Exception — creating a worktree through the application's tool
+    server" bullet; the Rationale gains the reason the exception is create-only.
+  - Templates: ✅ no template restates the Default-session prohibition, so none required a
+    matching edit.
+
+Follow-up the amendment does not perform (the enforcement still refuses until these land):
+  - ⚠ `specs/034-daemon-mcp-server/spec.md` FR-015a and its `contracts/mcp-tools.md` — still state that a Default
+    caller is refused all three worktree mutations.
+  - ⚠ `crates/micold-core/src/mcp/policy.rs` — `decide` refuses `Operation::CreateWorktree`
+    for a Default caller, and `PRINCIPLE_III`'s message names "create".
+  - ⚠ `crates/micold-core/src/mcp/tools.rs` — the `create_worktree` description ends "A
+    session running in the project root (Default) is refused."
+  - ⚠ `docs/user-guide/agent-tools.md` — says a `default` session cannot create or rename
+    worktrees.
+
+Prior report (1.6.0 → 1.6.1):
 Version change: 1.6.0 → 1.6.1
 Bump rationale: PATCH — the Documentation gate obliges exactly what it obliged before. What
   changes is that the gate now names the check that enforces it, the declaration that check
