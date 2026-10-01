@@ -85,10 +85,12 @@ Done and committed: T018–T026, T040, T041 (ticked in tasks.md; cycle log cycle
 
 Next steps, in order:
 
-1. Gate on `e1253adc`: a detached `mise run gate` was started on that tree; its log is
-   `<session scratchpad>/m2f/gate.log` and ends with a `GATE_EXIT=` line. It had 203 `test result: ok`
-   and no failure when this unit stopped. If the log is gone or the tree changed (a rebase), rerun the
-   gate. An earlier gate on `e7f3ec73` (before the review fixes) ended `GATE_EXIT=0`, 378 ok.
+1. Gate on `e1253adc`: the detached `mise run gate` ended `GATE_EXIT=101` with one failure,
+   `-p micold-daemon --test frame_coalescing`:
+   `a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval` (1 passed; 1 failed). The diff does not
+   touch frame coalescing, the test is timing-based, and the machine was under two builds; the gate on
+   `e7f3ec73` (before the review fixes) ended `GATE_EXIT=0`, 378 ok. Not investigated. Rerun that test
+   file alone, then the gate; if it fails again, run `systematic-debugging` before anything else.
 2. `git fetch origin`; if main moved, rebase and rerun the gate.
 3. Review B round 1 (full, session model) on `origin/main...HEAD` with the brief
    `scripts/autopilot/brief.py milestone specs/037-explain-hidden-cli M2`; in parallel the
