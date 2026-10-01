@@ -27,6 +27,15 @@ use serde_json::{json, Value};
 /// What a first prompt says; it must never reach the log.
 const PROMPT_MARKER: &str = "prompt-marker-4c1d77";
 
+/// What `send_session_input` types into a sibling; it must never reach the log either.
+const TEXT_MARKER: &str = "text-marker-9e02b5";
+
+/// The second session of a fixture: a sibling of `caller` in the same worktree, for the tools
+/// that target another session.
+fn sibling_of(caller: SessionId) -> SessionId {
+    sid(caller.0.as_u128() + 1_000)
+}
+
 /// The six categories a failure may carry (contracts/mcp-tools.md).
 const CATEGORIES: [ErrorCategory; 6] = [
     ErrorCategory::NotFound,
@@ -73,7 +82,7 @@ const SHELL: u128 = 100;
 const DOOMED: u128 = 200;
 
 /// A repository with worktrees `b` and `c` and a free branch `taken`; `caller` is a session in
-/// `b` beside its [`sibling`]s. A window answers every prompt with Allow.
+/// `b` beside its [`sibling`]s and the AI sibling [`sibling_of`] names. A window answers every prompt with Allow.
 async fn fixture(caller: SessionId) -> Fixture {
     log();
     sandbox_env();
@@ -99,6 +108,12 @@ async fn fixture(caller: SessionId) -> Fixture {
                     sibling(caller, DOOMED),
                     Some("b"),
                     TerminalMode::Regular,
+                    AiCli::Copilot,
+                ),
+                session(
+                    sibling_of(caller),
+                    Some("b"),
+                    TerminalMode::AiCli,
                     AiCli::Copilot,
                 ),
             ],
@@ -135,6 +150,25 @@ impl Fixture {
         call_tool(self.addr, &credential(&self.state, caller), tool, args).await
     }
 
+    /// What `good_call` for `tool` needs to be true first. `send_session_input` types into a
+    /// running sibling and only a running session can be interrupted, so the target is started
+    /// here, before the caller's lines are counted.
+    async fn prepare(&self, tool: &str, caller: SessionId) {
+        let target = match tool {
+            "send_session_input" => sibling_of(caller),
+            "interrupt_session" => sibling(caller, SHELL),
+            _ => return,
+        };
+        let started = self
+            .call(
+                caller,
+                "start_session",
+                json!({"session": target.0.to_string()}),
+            )
+            .await;
+        assert_eq!(started["isError"], json!(false), "{started}");
+    }
+
     /// The names `tools/list` marks as not read-only.
     async fn mutating_tools(&self, caller: SessionId) -> Vec<String> {
         let request = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"});
@@ -169,6 +203,9 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
         "interrupt_session" => json!({"session": sibling(caller, SHELL).0.to_string()}),
         "delete_session" => json!({"session": sibling(caller, DOOMED).0.to_string()}),
         "delete_worktree" => json!({"worktree": "c"}),
+        "send_session_input" => {
+            json!({"session": sibling_of(caller).0.to_string(), "text": TEXT_MARKER})
+        }
         other => panic!("no successful call for the mutating tool {other}: add one here"),
     }
 }
@@ -211,6 +248,16 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
             json!({"session": caller.0.to_string()}),
             ErrorCategory::InvalidInput,
         )],
+        "send_session_input" => vec![
+            (
+                json!({"session": sid(99).0.to_string()}),
+                ErrorCategory::InvalidInput,
+            ),
+            (
+                json!({"session": sid(99).0.to_string(), "text": TEXT_MARKER}),
+                ErrorCategory::NotFound,
+            ),
+        ],
         other => panic!("no failing call for the mutating tool {other}: add one here"),
     }
 }
@@ -236,13 +283,7 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     let tools = f.mutating_tools(caller).await;
     assert!(!tools.is_empty(), "M3 ships mutating tools");
     for tool in &tools {
-        if tool == "interrupt_session" {
-            // Only a running session can be interrupted; starting it is not what is counted.
-            let started = f
-                .call(caller, "start_session", good_call(tool, caller))
-                .await;
-            assert_eq!(started["isError"], json!(false), "{started}");
-        }
+        f.prepare(tool, caller).await;
         let before = audit_lines(caller).len();
         let result = f.call(caller, tool, good_call(tool, caller)).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
@@ -300,6 +341,49 @@ async fn a_prompt_never_reaches_the_log() {
     assert!(
         !logged.contains(PROMPT_MARKER),
         "a prompt reached the log (FR-018)"
+    );
+}
+
+/// FR-018 for `send_session_input`: one line naming the sibling as the target, and the text in no
+/// line of the log, whether the send is delivered or refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sent_text_never_reaches_the_log() {
+    use micold_core::mcp::policy::CrossSessionAccess;
+
+    let caller = sid(75);
+    let f = fixture(caller).await;
+    f.prepare("send_session_input", caller).await;
+    let sibling = sibling_of(caller).0.to_string();
+    let send = json!({"session": sibling, "text": TEXT_MARKER});
+
+    let before = audit_lines(caller).len();
+    let result = f.call(caller, "send_session_input", send.clone()).await;
+    assert_eq!(result["isError"], json!(false), "{result}");
+    f.state
+        .set_cross_session_access(CrossSessionAccess::Off)
+        .unwrap();
+    let result = f.call(caller, "send_session_input", send).await;
+    assert_eq!(result["isError"], json!(true), "{result}");
+
+    let lines = audit_lines(caller);
+    assert_eq!(lines.len(), before + 2, "one line per send: {lines:#?}");
+    let [delivered, refused] = &lines[before..] else {
+        unreachable!("two lines were just counted")
+    };
+    assert_eq!(field(delivered, "outcome"), Some("ok"), "{delivered}");
+    assert_eq!(
+        field(refused, "outcome"),
+        Some("refused_by_policy"),
+        "{refused}"
+    );
+    for line in [delivered, refused] {
+        assert_eq!(field(line, "op"), Some("send_session_input"), "{line}");
+        assert_eq!(field(line, "target"), Some(sibling.as_str()), "{line}");
+    }
+    let logged = String::from_utf8_lossy(&log().lock().unwrap()).into_owned();
+    assert!(
+        !logged.contains(TEXT_MARKER),
+        "a sent text reached the log (FR-018)"
     );
 }
 
