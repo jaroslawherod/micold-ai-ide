@@ -59,8 +59,9 @@ Every PR merges on green before the next unit starts.
 
 ### Dispatching a unit
 
-Run each unit in its own `general-purpose` subagent. Pick the model by the work, not the phase
-name. A unit keeps its model when continued with `SendMessage`.
+Run each unit in its own `autopilot-unit` subagent (`general-purpose` when your agent types lack
+it: the type drops tool schemas a unit never uses, about 10k tokens on each of its calls). Pick the
+model by the work, not the phase name. A unit keeps its model when continued with `SendMessage`.
 
 | Unit | `model` |
 |---|---|

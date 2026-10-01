@@ -7,7 +7,8 @@ write. Give it paths, not a summary. It never edits.
 
 Before each round, run `scripts/autopilot/review-snapshot.sh` and record the `<tree>:<head>` it prints in the
 ledger's *Review rounds*. Nothing needs committing: the snapshot holds the working tree as is.
-Use `Agent` (`subagent_type: general-purpose`). A full round (round 1, including review B's first
+Use `Agent` (`subagent_type: autopilot-reviewer`, which cannot edit; `general-purpose` when your agent
+types lack it). A full round (round 1, including review B's first
 pass): omit `model`. A scoped re-review (below): `model: "sonnet"`.
 
 Prompt parts, in order. Parts 1 to 4 are the same text for every review of a kind, so the prompt
