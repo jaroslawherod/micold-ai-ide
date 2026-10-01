@@ -73,6 +73,7 @@ deliverable (tasks.md Notes).
 | M4 | A (sonnet re-review) | 2 | 1882e06044be9f66f4b5bc1ad8b239d5237956bd:29e38622b60e5a1c9ff48c67d972cca5661cf3d1 | CLEAN |
 | M4 | B (conformance) | 1 | 0e3d56ded2112ab8955dac9cdbb45e6215c2396e:a18955332115b3bc228c76e32100a90b6f61e72c | CLEAN; Verify green (mcp_policy 12, mcp_tools_catalog 19, mcp_lifecycle_tools 8); 1 MINOR declined |
 | M5 | A (code-review high) | 1 | 9e8856e41323ac71ea4b9f4d660319f6e88e6832:ac6aaebe56cdac342e724f809336270975084e90 | CHANGES, 10 findings. Fixed: stale prompts dropped on disconnect (ids reused after a restart); another dialog opening declined every queued prompt (release now only at the outermost `update`); peer half-close no longer loses the reply; `stop_session` off the runtime thread; stopping an archived session is unknown and `Failed` keeps its reason; `delete_session` re-resolves its target after the answer; interrupt types Ctrl-C only into the process the user was asked about; 14-space typo in the conflict text. Declined: 3 (below) |
+| M5 | A (sonnet re-review) | 2 | ac6aaebe56cdac342e724f809336270975084e90:8e2052f9 | CLEAN; the 8 fixes hold |
 
 ## Declined review findings
 
