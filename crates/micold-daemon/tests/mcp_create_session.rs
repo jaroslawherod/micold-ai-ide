@@ -581,7 +581,7 @@ async fn pi_gets_its_first_prompt_without_a_trust_record() {
 }
 
 /// The prompt goes to the session's primary process, and readiness is judged on its output, even
-/// when the user opens a shell in the new session and attaches it while the call waits (U230).
+/// when the user opens a shell in the new session and attaches it while the call waits (U237).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached() {
     let _guard = ENV.lock().await;
@@ -622,7 +622,7 @@ async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached
 }
 
 /// Every window's connection learns that a session an agent created has gone live, so a window
-/// already viewing it builds its stream then (U231).
+/// already viewing it builds its stream then (U238).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_connection_hears_that_an_agent_created_session_went_live() {
     let _guard = ENV.lock().await;
@@ -638,7 +638,7 @@ async fn every_connection_hears_that_an_agent_created_session_went_live() {
 }
 
 /// A Pi session whose `session_start` never reaches the service is still ready once its output
-/// settles, rather than waiting out the bound (U232).
+/// settles, rather than waiting out the bound (U239).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn pi_without_its_event_is_ready_once_its_output_settles() {
     let _guard = ENV.lock().await;

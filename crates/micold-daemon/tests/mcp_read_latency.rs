@@ -137,6 +137,19 @@ async fn start_the_read_session(
     }
 }
 
+/// Kills the PTYs of session `READ` when dropped, so a panic still cleans up.
+#[cfg(unix)]
+struct Reaper(std::sync::Arc<micold_daemon::state::DaemonState>);
+
+#[cfg(unix)]
+impl Drop for Reaper {
+    fn drop(&mut self) {
+        for pty in self.0.session_ptys(session_id(READ)) {
+            let _ = pty.kill();
+        }
+    }
+}
+
 /// Every tool `tools/list` marks read-only, in the order it lists them.
 async fn read_only_tools(addr: std::net::SocketAddr, bearer: &str) -> Vec<String> {
     let request = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"});
@@ -178,6 +191,9 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
     );
     let addr = serve_tool_server(&state, store.path().join("mcp")).await;
     let cred = credential(&state, session_id(0));
+    // Kills the started session even if an assertion below panics.
+    #[cfg(unix)]
+    let _reaper = Reaper(std::sync::Arc::clone(&state));
 
     let tools = read_only_tools(addr, &cred).await;
     for expected in [
@@ -239,10 +255,6 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
             }
             _ => {}
         }
-    }
-    #[cfg(unix)]
-    for pty in state.session_ptys(session_id(READ)) {
-        let _ = pty.kill();
     }
     assert!(
         slow.is_empty(),

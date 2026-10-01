@@ -664,16 +664,61 @@ async fn an_allowed_delete_session_archives_it_and_revokes_its_credential() {
     let f = Fixture::new().await;
     let key = credential(&f.state, sid(FAILED));
     let asked = answering_window(&f.state, true);
+    let mut window = fake_window(&f.state);
 
     let out = f.ok(CALLER, "delete_session", target(FAILED)).await;
 
     assert_eq!(out, json!({}));
     assert_eq!(asked.load(Ordering::SeqCst), 1);
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |c| {
+            lifecycle_in(c, sid(FAILED)).is_none()
+        })
+        .await,
+        "every window sees it gone within 2 s (SC-003)"
+    );
     let error = f.err(CALLER, "get_session", target(FAILED)).await;
     assert_eq!(error["category"], "not_found", "archived: {error}");
     let request = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).to_string();
     let (status, _) = post_mcp(f.addr, Some(&key), &request).await;
     assert_eq!(status, 401, "the deleted session's credential is refused");
+}
+
+/// FR-006: an allowed delete of a RUNNING session ends its process, drops it from the catalog and
+/// tells every window.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_allowed_delete_session_on_a_running_session_ends_its_process() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let pty = f.state.primary_pty(sid(IDLE)).expect("running");
+    assert!(pty.is_alive(), "the stand-in shell runs before the delete");
+    let asked = answering_window(&f.state, true);
+    let mut window = fake_window(&f.state);
+
+    let out = f.ok(CALLER, "delete_session", target(IDLE)).await;
+
+    assert_eq!(out, json!({}));
+    assert_eq!(asked.load(Ordering::SeqCst), 1, "the user was asked once");
+    assert!(f.state.live_session(sid(IDLE)).is_none(), "no process left");
+    let mut ended = false;
+    for _ in 0..100 {
+        if !pty.is_alive() {
+            ended = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(ended, "the process was killed");
+    let error = f.err(CALLER, "get_session", target(IDLE)).await;
+    assert_eq!(error["category"], "not_found", "gone: {error}");
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |c| {
+            lifecycle_in(c, sid(IDLE)).is_none()
+        })
+        .await,
+        "every window sees it gone within 2 s (SC-003)"
+    );
 }
 
 /// U193 (EC-4): of two agents deleting one worktree, the one asked second is told it is gone.
@@ -713,16 +758,32 @@ async fn each_destructive_tool_waits_for_the_user_and_a_decline_changes_nothing(
     let f = Fixture::new().await;
     f.start(IDLE).await;
     let running = f.state.primary_pty(sid(IDLE)).expect("running");
+    // The label each prompt must name: the session's own label, or the worktree's display name.
+    let label_of = |n: u128| {
+        let f = &f;
+        async move {
+            let got = f
+                .ok(
+                    CALLER,
+                    "get_session",
+                    json!({"session": sid(n).0.to_string()}),
+                )
+                .await;
+            got["label"].as_str().unwrap().to_string()
+        }
+    };
+    let (idle_label, failed_label) = (label_of(IDLE).await, label_of(FAILED).await);
     let cases = [
-        ("stop_session", target(IDLE)),
-        ("interrupt_session", target(IDLE)),
-        ("delete_session", target(FAILED)),
+        ("stop_session", target(IDLE), idle_label.clone()),
+        ("interrupt_session", target(IDLE), idle_label),
+        ("delete_session", target(FAILED), failed_label),
         (
             "delete_worktree",
             json!({"worktree": "d", "stop_sessions": true}),
+            f.display_name_of("d").await,
         ),
     ];
-    for (tool, args) in cases {
+    for (tool, args, label) in cases {
         let mut window = fake_window(&f.state);
         let call = {
             let (addr, key, args) = (f.addr, credential(&f.state, sid(CALLER)), args.clone());
@@ -738,7 +799,7 @@ async fn each_destructive_tool_waits_for_the_user_and_a_decline_changes_nothing(
             unreachable!()
         };
         assert_eq!(*caller, sid(CALLER), "{tool}: names the caller");
-        assert!(!target_label.is_empty(), "{tool}: names the target");
+        assert_eq!(*target_label, label, "{tool}: names the target");
         // Waiting: nothing has changed yet.
         assert!(!call.is_finished(), "{tool} waits for the answer");
         assert!(f.state.live_session(sid(IDLE)).is_some(), "{tool}");

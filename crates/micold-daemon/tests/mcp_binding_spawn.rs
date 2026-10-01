@@ -239,7 +239,32 @@ async fn a_claude_session_is_bound_and_answers_whoami_with_its_own_credential() 
     let (status, body) = post_mcp(addr, Some(&bearer), &list).await;
     assert_eq!(status, 200);
     let tools: Value = serde_json::from_str(&body).unwrap();
-    assert!(!tools["result"]["tools"].as_array().unwrap().is_empty());
+    let mut names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    names.sort_unstable();
+    let mut expected = [
+        "whoami",
+        "list_worktrees",
+        "list_branches",
+        "list_sessions",
+        "get_session",
+        "read_session_output",
+        "create_worktree",
+        "rename_worktree",
+        "delete_worktree",
+        "create_session",
+        "start_session",
+        "stop_session",
+        "interrupt_session",
+        "send_session_input",
+        "delete_session",
+    ];
+    expected.sort_unstable();
+    assert_eq!(names, expected, "tools/list names the full catalog");
     let who = call_ok(addr, &bearer, "whoami", json!({})).await;
     assert_eq!(who["session"], sid(3).0.to_string());
     assert_eq!(who["worktree"], "b");

@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M7
-- **Next step**: M7 PR #521 open: the orchestrator waits on CI and merges. Then Phase 5 (close).
+- **Phase**: 5-close (handover open)
+- **Next step**: open the close PR (`docs(034): close the spec`) once the gate is green and the review is clean; the orchestrator waits on CI and merges. No new milestone: convergence found no unbuilt behaviour (D26).
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
 | #519 | M6: cross-session read and send; Default may create a worktree | merged | e108619b041f290b415b62f1a76c95bfbe1b4801 |
-| #521 | M7: read latency, sandbox placement, the full real-CLI pass, final docs | open | |
+| #521 | M7: read latency, sandbox placement, the full real-CLI pass, final docs | merged | 68e483204935171cda1757b57c74be6547e1e560 |
 
 ## Milestones
 
@@ -34,7 +34,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | merged |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | #519 | merged |
-| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | #521 | PR open |
+| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | #521 | merged |
 
 Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
 acceptance-gate and quickstart tasks and no split along an acceptance scenario leaves an observable
@@ -67,6 +67,11 @@ deliverable (tasks.md Notes).
 | D21 | 4-milestone M6 | May a Default session create a worktree through `create_worktree`? (supersedes D1 for create) | Yes: constitution 1.7.0 amends Principle III with that exception; rename and delete stay refused from Default (FR-015a) | _(decided by user)_ | .specify/memory/constitution.md 1.7.0, constitution-history.md; spec.md#FR-015a; `mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does` |
 | D22 | 4-milestone M6 | What do `read_session_output` and `send_session_input` answer for a target with no running primary process? | `conflict`, naming `start_session`, for both; checked after policy and before any confirmation, so nobody is asked about a send that cannot be typed | agent-resolved | contracts/mcp-tools.md *Order of checks*; FR-012a's `interrupt_session` precedent; `mcp_cross_session.rs::a_session_that_is_not_running_is_a_conflict_naming_start_session` |
 | D23 | 4-milestone M6 | Should `send_session_input` type into a session whose CLI may be showing its folder-trust question, and may the text hold control characters? | No to both. The D20 trust check runs before any confirmation and answers `conflict`; a control character other than a line break or a tab is `invalid_input` (Ctrl-C would be an unconfirmed interrupt, against FR-014) | agent-resolved | M6 review A F1, F2; D20; contracts/mcp-tools.md; `mcp_cross_session.rs::a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed`, `::line_breaks_alone_and_control_characters_are_invalid_input` |
+| D24 | 5-close | U127: `list_worktrees` never reports `status: locked`, and T015/T021 were unticked for it. A new milestone? | No. FR-008's operation lists worktrees "as the sidebar shows them", and the sidebar cannot show a locked worktree either: `micold_core::worktree::WorktreeStatus` is `Valid / Missing / Invalid`, the porcelain parser reads only `prunable`, and `wire_worktree_status` has no arm that yields the protocol's `Locked`. The tool maps `Locked` to `"locked"` and will report it the day discovery produces it. Building it means a new core state and a sidebar rendering for it, in the worktree features' files (FR-018a of the worktree spec, feature 029's status words), not 034's. T015 and T021 ticked with that note; carried to *Follow-ups not done* | agent-resolved | crates/micold-core/src/worktree.rs `WorktreeStatus`, `parse_worktree_porcelain`; crates/micold-daemon/src/state.rs `wire_worktree_status`; crates/micold-daemon/src/mcp/tools.rs:1412; unit.md *Ownership* |
+| D25 | 5-close | M7's final real-CLI pass did not repeat §B2's 55 s Allow from Copilot. Close on M5's evidence? | Yes. The step tests one thing M7 could not have changed: that Copilot's own MCP client waits 55 s for a held tool result. The service's side of that wait (the held response, the Allow, the result) was repeated in M7 from Claude Code (Allow at ask+57 s), and Copilot's binding was repeated in M7's §B2 (`whoami`). No commit after M5 touches `confirm.rs`'s wait or the Copilot binding arguments. Residual risk, stated: M5 ran Copilot CLI 1.0.89 and the machine now has 1.0.91; a shorter client timeout in a later Copilot would show as `needs_confirmation` never arriving, which the user guide's "answer within 60 s" already covers | agent-resolved | evidence/m5-real-cli.md case `copilot-55s`; evidence/m7-b4-b6-real-cli/NOTES.md *B4 D*; evidence/README.md |
+| D26 | 5-close | `speckit-converge` | No unbuilt behaviour: 85 requirements, scenarios, edge cases and success criteria and 30 contract rows checked against the code by two fresh assessors. 5 LOW findings. Fixed as T106–T108: the contract's order of checks said scope before validation, the code validates argument shape first (no leak: the answer is the same for every caller); the spec's edge case said a malformed target is "not found", the contract and the code say `invalid_input`; `delete_session` had no window-broadcast assertion and no running-session case. Declined: 2 (below) | agent-resolved | converge run on `origin/main` 68e48320; tasks.md Phase 8 |
+| D27 | 5-close | `speckit-tdd-verify` verdict and remediation | `FAIL` as written: 262 behaviours, 97 PROVEN, 139 LIKELY, 20 TEST_AFTER (cycle 8, U206, U147), 1 NO_TEST (U127), 5 n/a; 8 HIGH smells (vacuous or conditional assertions); 22 of 22 acceptance scenarios covered; 4 of 4 deliberate mutants caught (no cargo-mutants). Nothing needs product behaviour. Fixed in the close PR as T109–T112: 7 of the 8 HIGH smells (four shown to bite with a wrong expected value: the audit `target`, the audit `outcome`, the prompt's `target_label`, the running session's liveness; the others are equality pins not run against a wrong value); absolute `Proceed` rows; the duplicate U-ids renumbered (U234–U239); a recorded waiver for U206 and U147. Declined: finding 1 and five MEDIUM/LOW (below). The verdict in `verification.md` stands as the auditor wrote it; the cycle log's *Close* entry records what was done about it | agent-resolved | tdd/verification.md; tdd/cycle-log.md *Close* |
+| D28 | 5-close | `speckit-docguard-guard`: FAIL 1151/2847, 6 blocking, 1,755 warnings repo-wide. Fix any here? | No. 30 are 034's: `TRC004` ×29 (`@req` test annotations, a convention this repo never adopted, as features 031 D65 and 033 D14 decided) and `SPK012` (spec number 034 is shared with `specs/034-github-issue-worktree`, another flow's directory; follow-up). The 6 blocking `STR001`s ask for `docs-canonical/*` scaffolding this repo does not use | agent-resolved | `docguard-cli@latest guard` (0.43.0), filtered to 034 |
 
 ## Review rounds
 
@@ -92,6 +97,7 @@ deliverable (tasks.md Notes).
 | M7 | visual pass §B1 step 7, §B4–§B6 (real CLI) | 1 | binaries of aacbd7cd | PASS, 11 of 11 checks (evidence/m7-b4-b6-real-cli) |
 | M7 | A (code-review high) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; 3 MINOR, all declined as follow-ups (below) |
 | M7 | B (conformance) | 1 | 2c2187a68ac5cb2404919efd4024ecf8da78a577:9f352fa5ab6df230f0aaf8ade688562ada991e83 | CLEAN; Verify green (mcp_audit_log 5, mcp_read_latency 1; sandbox record checked: cycle 41, 29 passed). 3 MINOR: 2 fixed (T076 names the Copilot 55 s step that stands on M5's evidence; the B1–B3 count is 13 of 13), 1 declined |
+| close | fresh-subagent review of the close diff | 1 | 4aa8bad305fba52200cad21315c35bf9a693c566:1d99648a87ba66c3b9ebc89b653b7f3ab994cd2e | CHANGES: 2 MAJOR, 3 MINOR, all fixed. F1 the U127 follow-up still said T015/T021 were unticked; F2 T105's tail and the comments in `mcp_create_session.rs` and `folder_trust.rs` kept the ids the close renumbered; F3 the cycle log and D27 said every strengthened assertion was shown to bite when four were; F4 the new policy test cited FR-005, not FR-015; F5 the contract's first check also covers the text and name content rules `parse_call` applies |
 
 ## Declined review findings
 
@@ -135,10 +141,41 @@ deliverable (tasks.md Notes).
 | M7 | A round 1 | F2: `mcp_read_latency.rs` kills the started session's PTY inline, not in a `Drop` guard, so a panic leaves it to `PtySession::drop` | MINOR, test-only; the gate was already running on this tree. Follow-up below |
 | M7 | A round 1 | F3: `sandbox_real_mcp.rs`'s host-loopback probe has no timeout when a foreign listener accepts and never answers | MINOR, test-only, in a suite that is off by default; not re-verified by the reviewer. Follow-up below |
 | M7 | B round 1 | F3: `aacbd7cd` changes `settings.rs` under M7 with no task row | MINOR; a new task would change M7's range (T074–T077) after the milestones were cut (D18). It is traceable through U233, cycle 40, this ledger (M6 review A F6) and the PR body |
+| close | converge | A crash respawn re-runs the name-collision check, so a session bound at start respawns unbound if the user added a `micold` server meanwhile (edge case *Session respawn*) | Not a gap: FR-003 and SC-001 let the user's server of that name win, and binding over it would shadow it. The session keeps its credential, so its next clean start decides again |
+| close | converge | Windows: the binding directory's DACL is set but only the file's is asserted | Cannot be run on this host; a Windows-only test written blind would first run in CI. Follow-up below |
+| close | tdd-verify | 1 (HIGH): `sandbox_real_mcp.rs`'s host-loopback assertion is inside `if connect().is_ok()` | The branch is the assertion: a refused connection is the isolation the test wants, and only when a foreign listener happens to hold that port on the host is there an answer to check. Asserting that connect fails would fail on such a host. The probe's missing timeout stays a follow-up |
+| close | tdd-verify | 11: fixed sleeps and wall-clock bounds | The stand-in CLIs are real processes on a PTY; the bounds are the spec's own (SC-003 2 s, SC-004 1 s, FR-017 60 s scaled). No flake was seen in seven milestone gates. Follow-up below |
+| close | tdd-verify | 12, 13, 16: the `Env` guard copied in three files; a dead `cfg!(windows)` branch on unix; assertions without rule messages | Cosmetic; no test is weaker for them |
+| close | tdd-verify | 14 (second half): the allow and deny confirm tests in `features_agent_confirm.rs` assert the same client state | The pure state is the same after either answer (the prompt closes); what differs is the `ConfirmationAnswer { allow }` put on the wire, which the shell's own test in `crates/micold-client/src/shell/daemon_sync.rs` (near line 3271) asserts for both values |
+| close | tdd-verify | 15: another feature's commits are also tagged `(034)` | History on `main` cannot be rewritten; see D28's `SPK012` follow-up |
 
 ## Handover
 
-None.
+Close unit 1 handed over at the context cap (2026-10-01). Done: `branch-start.sh 521`; converge
+(D26), tdd-verify (D27, `tdd/verification.md`), docguard (D28); D24, D25; the follow-ups settled
+(no new milestone); remediation T106–T112 in the working tree and committed (not pushed); spec
+Status set to Closed; review round 1 (below) and its fixes. The two orphaned
+`target-shared/release/micold-daemon` PIDs 3056946 and 3057433 no longer exist; the only
+`micold-daemon` running is the user's `/usr/bin/micold-daemon`, left alone.
+
+Next step, in order:
+
+1. Gate: a detached `mise run gate` was started on the committed tree, log
+   `<scratchpad>/gate-close-2.log` (grep it for `GATE_EXIT=`; do not `tail` `gate-*.log`, older
+   logs share the directory). If it is missing or red, check `df -h /` (escalate under 8 GB) and
+   run it again. The first gate of this unit (`gate-1790886377.log`) ran on the tree before the
+   review fixes and does not count.
+2. Re-review, round 2 (`model: "sonnet"`, description `Review close 034`), with round 1's five
+   findings, all marked fixed, and `scripts/autopilot/review-snapshot.sh diff
+   4aa8bad305fba52200cad21315c35bf9a693c566:1d99648a87ba66c3b9ebc89b653b7f3ab994cd2e`. Round 1's
+   rubric: no product code in the diff; no test weakened; the docs edits match the code; the
+   ledger is true (D24–D28, the declined rows); tasks.md and the renumbered U-ids are consistent;
+   the cycle log's *Close* entry matches the test diff.
+3. Set this section to `None.`, the phase to `5-close`, push, open the close PR
+   (`docs(034): close the spec`; body: converge, tdd-verify and docguard results, the review, the
+   gate), record its number here.
+
+Open findings: none known. Round 1's F1–F5 are fixed (see *Review rounds*).
 
 ## Open escalation
 
@@ -154,7 +191,7 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - An unbracketed first prompt with inner newlines submits line by line; only reachable when the CLI has not enabled bracketed paste by the time it is ready (M3 review A).
 - Hook receiver's `--settings` token file is written with the default umask, not owner-only (`crates/micold-daemon/src/hooks.rs` `prepare_settings`); outside this feature (research R7).
 - Pi tool-server binding via a `-e` bridge extension (research R4).
-- U127 (`list_worktrees` reports `status: locked`): the daemon cannot produce it. `micold_core::worktree::WorktreeStatus` has no locked state and `wire_worktree_status` never yields `WorktreeStatus::Locked`, so T015/T021 stay unticked on that one behavior. Needs worktree discovery to parse porcelain `locked` (core + sidebar), outside feature 034's files.
+- U127 (`list_worktrees` reports `status: locked`): the daemon cannot produce it. `micold_core::worktree::WorktreeStatus` has no locked state and `wire_worktree_status` never yields `WorktreeStatus::Locked`, so that one behavior is not built; T015/T021 were ticked at close with a note saying so (D24). Needs worktree discovery to parse porcelain `locked` (core + sidebar), outside feature 034's files.
 - T002 deviation: the MCP test fixture is included by `#[path = "support/mcp.rs"]` instead of re-exported from `tests/support/mod.rs`, so the framer helpers do not become dead code (a clippy `-D warnings` failure) in the MCP test binaries.
 - Tool-server listener read timeouts (slowloris), shared with the hook receiver through `http.rs` (M1 review A).
 - Windows: verify the `.claude.json` project-key form the collision check uses (M1 review A).
@@ -170,5 +207,9 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - Unconfirmed, from the M7 visual passes: worktrees made with plain `git worktree add` under `.claude/worktrees/` before the app first opened the project (seeded through `projects.json`) were not listed in the sidebar, even after Refresh. Not investigated; not this feature's code.
 - `read_session_output` is timed by `mcp_read_latency.rs` on unix only (the stand-in CLI is `#!/bin/sh`); goes with the Windows stand-in port above.
 - An unknown `cross_session_access` in the settings file is read as `Off` silently and overwritten with `"off"` on the next save; log the unrecognised value and keep the stored one while the in-memory value is the fallback (M7 review A).
-- `mcp_read_latency.rs`: move the PTY kill into a `Drop` guard, as `mcp_cross_session.rs` and `mcp_lifecycle_tools.rs` do (M7 review A).
 - `sandbox_real_mcp.rs`: wrap the host-loopback `post_mcp` probe in a timeout (M7 review A).
+- Windows: assert the binding directory's protected, current-user-only DACL (`platform/windows.rs` sets it; only the file's is tested) (close, converge).
+- Spec number 034 is shared by `specs/034-daemon-mcp-server` and `specs/034-github-issue-worktree`, so "spec 034" and the `(034)` commit tag are ambiguous (docguard `SPK012`); not this flow's to renumber.
+- MCP tests: replace the fixed sleeps before an interrupt and the negative 3 s wait with a readiness signal; share one `Env` guard in `tests/support/` (close, tdd-verify 11, 12).
+
+Settled at close (2026-10-01): none of the items above is behaviour the spec requires and lacks, so none became a milestone (D24, D26). All are carried to the handoff as they stand.

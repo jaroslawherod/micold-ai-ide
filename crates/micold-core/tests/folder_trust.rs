@@ -1,5 +1,5 @@
 //! Whether a CLI would first ask the user to trust a session's folder (feature 034, FR-017,
-//! research R12; U220–U225).
+//! research R12; U234–U236, U223–U225).
 //!
 //! Claude Code and Copilot show a trust question in a folder they have not trusted yet, and their
 //! output settles on it (quickstart §B3, `evidence/m3-real-cli.md` finding 4). A first prompt typed
@@ -33,7 +33,7 @@ fn copilot_record(home: &Path, body: &str) {
     std::fs::write(home.join(".copilot/config.json"), body).unwrap();
 }
 
-/// U220: each CLI names the record it keeps; Pi never asks.
+/// U234: each CLI names the record it keeps; Pi never asks.
 #[test]
 fn each_cli_names_its_trust_record() {
     assert_eq!(
@@ -47,7 +47,7 @@ fn each_cli_names_its_trust_record() {
     assert_eq!(AiCli::Pi.provider().folder_trust(), FolderTrust::NeverAsks);
 }
 
-/// U221: Claude trusts a project it accepted, and every worktree below it.
+/// U235: Claude trusts a project it accepted, and every worktree below it.
 #[test]
 fn claude_does_not_ask_below_an_accepted_project() {
     let home = tempfile::tempdir().unwrap();
@@ -63,7 +63,7 @@ fn claude_does_not_ask_below_an_accepted_project() {
     }
 }
 
-/// U222: Claude asks with no record, no file, or `hasTrustDialogAccepted: false`, and a sibling
+/// U236: Claude asks with no record, no file, or `hasTrustDialogAccepted: false`, and a sibling
 /// whose name merely starts with the project's is not below it.
 #[test]
 fn claude_asks_without_an_accepted_record() {
