@@ -58,6 +58,55 @@ impl std::fmt::Display for WorktreeRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SessionRef(pub Uuid);
 
+/// How many of a session's most recent lines `read_session_output` returns (FR-012): 1 to
+/// [`LineCount::MAX`], after clamping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LineCount(u16);
+
+impl LineCount {
+    /// What a call that names no count gets.
+    pub const DEFAULT: LineCount = LineCount(200);
+    /// The most one call returns; a larger request is clamped to it.
+    pub const MAX: LineCount = LineCount(2000);
+
+    /// `requested` clamped to the maximum, or `None` below 1.
+    pub fn new(requested: u64) -> Option<Self> {
+        if requested == 0 {
+            return None;
+        }
+        Some(LineCount(requested.min(u64::from(Self::MAX.0)) as u16))
+    }
+
+    /// The count.
+    pub fn get(self) -> u16 {
+        self.0
+    }
+}
+
+/// Text an agent types into a session: never empty (FR-012a), and never printed. Its `Debug` shows
+/// the length only, so no log line or panic message can carry input text (FR-018).
+#[derive(Clone, PartialEq, Eq)]
+pub struct NonEmptyText(String);
+
+impl NonEmptyText {
+    /// `text` as it is, or `None` when it is empty. Whitespace is text (assumption A-4).
+    pub fn new(text: impl Into<String>) -> Option<Self> {
+        let text = text.into();
+        (!text.is_empty()).then_some(NonEmptyText(text))
+    }
+
+    /// The text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for NonEmptyText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NonEmptyText(<{} bytes>)", self.0.len())
+    }
+}
+
 /// A validated tool call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
@@ -71,6 +120,17 @@ pub enum Operation {
     },
     GetSession {
         session: SessionRef,
+    },
+    /// The most recent `lines` of another session's primary terminal, as plain text (FR-012).
+    ReadSessionOutput {
+        session: SessionRef,
+        lines: LineCount,
+    },
+    /// Type `text` into another session's primary process and submit it once. The text is input:
+    /// it is never logged (FR-018).
+    SendSessionInput {
+        session: SessionRef,
+        text: NonEmptyText,
     },
     /// A new worktree on `branch`, in directory `name` (derived from the branch when absent).
     CreateWorktree {
@@ -121,6 +181,8 @@ impl Operation {
             Operation::ListBranches => "list_branches",
             Operation::ListSessions { .. } => "list_sessions",
             Operation::GetSession { .. } => "get_session",
+            Operation::ReadSessionOutput { .. } => "read_session_output",
+            Operation::SendSessionInput { .. } => "send_session_input",
             Operation::CreateWorktree { .. } => "create_worktree",
             Operation::CreateSession { .. } => "create_session",
             Operation::StartSession { .. } => "start_session",
@@ -143,6 +205,8 @@ impl Operation {
                 .map(|w| w.as_str().to_string())
                 .unwrap_or_default(),
             Operation::GetSession { session }
+            | Operation::ReadSessionOutput { session, .. }
+            | Operation::SendSessionInput { session, .. }
             | Operation::StartSession { session }
             | Operation::StopSession { session }
             | Operation::InterruptSession { session }
@@ -250,6 +314,26 @@ const TOOLS: &[Tool] = &[
         description: "Describe one session of the project; a failed session includes its \
             failure_reason.",
         properties: session_property,
+        required: &["session"],
+        read_only: true,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "read_session_output",
+        description: "Read the most recent lines another session of the project showed in its \
+            terminal, as plain text: lines (default 200, at most 2000) counts from the end, and \
+            truncated says whether older lines exist. Reads the session's AI CLI, not a shell \
+            opened beside it. A session cannot read itself. Refused when the user has turned \
+            \"Let agents read and type into other sessions\" off in Settings.",
+        properties: || {
+            json!({
+                "session": {"type": "string", "format": "uuid",
+                    "description": "A session id from list_sessions."},
+                "lines": {"type": "integer", "minimum": 1, "default": 200,
+                    "description": "How many of the most recent lines; above 2000 is read as 2000."},
+            })
+        },
         required: &["session"],
         read_only: true,
         destructive: false,
@@ -371,6 +455,27 @@ const TOOLS: &[Tool] = &[
         shipped: true,
     },
     Tool {
+        name: "send_session_input",
+        description: "Type text into another running session of the project and submit it once, \
+            exactly as if the user had typed it and pressed Enter; a multi-line text is one \
+            submission. Check get_session first: the session should be awaiting input. A session \
+            cannot type into itself. Depending on the user's \"Let agents read and type into \
+            other sessions\" setting, the send goes through, waits for the user's confirmation \
+            in an app window, or is refused.",
+        properties: || {
+            json!({
+                "session": {"type": "string", "format": "uuid",
+                    "description": "A session id from list_sessions."},
+                "text": {"type": "string", "minLength": 1,
+                    "description": "The text to type; it is submitted with one Enter."},
+            })
+        },
+        required: &["session", "text"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
         name: "delete_session",
         description: "Delete another session of the project after the user confirms in an app \
             window. A session cannot delete itself.",
@@ -453,6 +558,14 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         "get_session" => Operation::GetSession {
             session: required_session(args, "session")?,
         },
+        "read_session_output" => Operation::ReadSessionOutput {
+            session: required_session(args, "session")?,
+            lines: line_count(args, "lines")?,
+        },
+        "send_session_input" => Operation::SendSessionInput {
+            session: required_session(args, "session")?,
+            text: non_empty_text(args, "text")?,
+        },
         "create_worktree" => Operation::CreateWorktree {
             branch: required_string(args, "branch")?,
             name: optional_string(args, "name")?,
@@ -498,6 +611,30 @@ fn optional_bool(args: &Map<String, Value>, key: &str) -> Result<Option<bool>, O
         Some(Value::Bool(b)) => Ok(Some(*b)),
         Some(_) => Err(OpError::invalid_input(format!("{key} must be a boolean"))),
     }
+}
+
+/// How many lines to read (FR-012): absent means the default, a whole number above the maximum is
+/// clamped to it, and anything below 1 or not a whole number is invalid.
+fn line_count(args: &Map<String, Value>, key: &str) -> Result<LineCount, OpError> {
+    let invalid = || {
+        OpError::invalid_input(format!(
+            "{key} must be a whole number of at least 1 (at most {} are returned)",
+            LineCount::MAX.get()
+        ))
+    };
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(LineCount::DEFAULT),
+        // `as_u64` is `None` for a negative number and for one with a fraction.
+        Some(Value::Number(n)) => n.as_u64().and_then(LineCount::new).ok_or_else(invalid),
+        Some(_) => Err(invalid()),
+    }
+}
+
+/// Input text that must be given and not empty (FR-012a).
+fn non_empty_text(args: &Map<String, Value>, key: &str) -> Result<NonEmptyText, OpError> {
+    let text = optional_text(args, key)?
+        .ok_or_else(|| OpError::invalid_input(format!("{key} must be a string")))?;
+    NonEmptyText::new(text).ok_or_else(|| OpError::invalid_input(format!("{key} cannot be empty")))
 }
 
 fn optional_worktree(args: &Map<String, Value>, key: &str) -> Result<Option<WorktreeRef>, OpError> {

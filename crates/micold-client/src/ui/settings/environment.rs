@@ -19,6 +19,7 @@ use crate::ui::material::{Checkbox, Select, TextField};
 use crate::ui::settings::{caution, field_note, note, page};
 use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::session::AiCli;
 use micold_core::tokens::Roles;
 
@@ -33,6 +34,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("default_ai_cli", "DefaultAiCliChanged"),
     ("pi_activity_component", "PiActivityComponentToggled"),
     ("tool_server_enabled", "ToolServerToggled"),
+    ("cross_session_access", "CrossSessionAccessChanged"),
 ];
 
 /// The Environment page.
@@ -139,7 +141,25 @@ pub fn view<'a>(
         roles,
     );
 
-    let mut controls: Vec<Element<'a, Message>> = vec![cli, pi_activity, tool_server];
+    // Feature 034, FR-016: whether an agent may read another session's terminal and type into it.
+    // A separate option from the binding above it, with three values, so it is the shared `Select`
+    // (Principle VIII) rather than a second checkbox. The values are drawn by their `Display`.
+    let cross_session = Select::new(
+        &CrossSessionAccess::ALL,
+        Some(draft.environment.cross_session_access),
+        |v| Message::Settings(SettingsMsg::CrossSessionAccessChanged(v)),
+        roles,
+    )
+    .label("Let agents read and type into other sessions")
+    .supporting("Applies to the next request, also from sessions already running");
+    let cross_session = field_note(
+        cross_session,
+        Some("Auto: no confirmation. Confirm each send: you approve each message an agent types; reading needs no approval. Off: both are refused."),
+        roles,
+    );
+
+    let mut controls: Vec<Element<'a, Message>> =
+        vec![cli, pi_activity, tool_server, cross_session];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,

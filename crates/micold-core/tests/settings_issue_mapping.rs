@@ -178,6 +178,7 @@ fn other_writers_preserve_the_mapping() {
     assert_eq!(
         keys,
         [
+            "cross_session_access",
             "daemon",
             "default_ai_cli",
             "env_include_enabled",

@@ -57,6 +57,7 @@ use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::issue_types::{
     default_mapping, validate_mapping, LabelTypeEntry, MappingErrorKind,
 };
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::naming::ConventionalType;
 use micold_core::overlay::Layer;
 use micold_core::sandbox::placement::PlacementKind;
@@ -343,6 +344,9 @@ pub struct EnvironmentDraft {
     /// Application-wide and service-owned like the Pi switch above it; the default-on comes from
     /// `Settings`.
     pub tool_server_enabled: bool,
+    /// Whether agents may read and type into other sessions (feature 034, FR-016). A closed choice
+    /// of three values, like the default CLI above: nothing to validate on save.
+    pub cross_session_access: CrossSessionAccess,
 }
 
 /// The label-to-type mapping the draft carries (feature 034, FR-016).
@@ -446,6 +450,8 @@ pub struct ValidSettings {
     pub pi_activity_component: bool,
     /// Environment.
     pub tool_server_enabled: bool,
+    /// Environment.
+    pub cross_session_access: CrossSessionAccess,
     /// Session service.
     pub daemon: DaemonConfig,
     /// GitHub issues: the label-to-type mapping (feature 034).
@@ -464,6 +470,7 @@ impl ValidSettings {
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
+            cross_session_access: self.cross_session_access,
             daemon: self.daemon,
             issue_label_types: self.issue_label_types,
         }
@@ -571,6 +578,7 @@ impl SettingsDraft {
             default_ai_cli: self.environment.default_ai_cli,
             pi_activity_component: self.environment.pi_activity_component,
             tool_server_enabled: self.environment.tool_server_enabled,
+            cross_session_access: self.environment.cross_session_access,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
                 sandbox: profile,
@@ -770,6 +778,7 @@ impl SettingsDraft {
                 default_ai_cli: settings.default_ai_cli,
                 pi_activity_component: settings.pi_activity_component,
                 tool_server_enabled: settings.tool_server_enabled,
+                cross_session_access: settings.cross_session_access,
             },
             daemon: DaemonDraft {
                 placement: settings.daemon.placement,
@@ -893,6 +902,9 @@ pub enum Msg {
     /// The Settings **Let AI sessions manage worktrees and sessions** switch was toggled
     /// (feature 034, FR-004).
     ToolServerToggled(bool),
+    /// The Settings **Let agents read and type into other sessions** select changed
+    /// (feature 034, FR-016).
+    CrossSessionAccessChanged(CrossSessionAccess),
     /// Where the session service runs (feature 027, FR-001).
     PlacementChanged(PlacementKind),
     /// Which container runtime drives the sandbox (feature 027, FR-021).
@@ -1007,6 +1019,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
+        Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
         Msg::ImageKindChanged(kind) => image_kind_changed(state, kind),
@@ -1176,6 +1189,13 @@ pub fn pi_activity_component_toggled(state: &mut crate::app::State, on: bool) {
 /// Environment: bind new sessions to the service's tool server (feature 034, FR-004).
 pub fn tool_server_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.tool_server_enabled = on);
+}
+
+/// Environment: whether agents may read and type into other sessions (feature 034, FR-016).
+pub fn cross_session_access_changed(state: &mut crate::app::State, access: CrossSessionAccess) {
+    edit(state, |draft| {
+        draft.environment.cross_session_access = access
+    });
 }
 
 /// Session service: where sessions run (feature 027, FR-001).

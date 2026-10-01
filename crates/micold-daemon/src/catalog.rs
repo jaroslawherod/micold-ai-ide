@@ -16,6 +16,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use micold_core::fs_scan::FolderScanner;
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::project::Availability;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
@@ -156,6 +157,7 @@ impl Catalog {
             default_ai_cli: self.settings.default_ai_cli,
             pi_activity_component: self.settings.pi_activity_component,
             tool_server_enabled: self.settings.tool_server_enabled,
+            cross_session_access: self.settings.cross_session_access,
         }
     }
 
@@ -295,6 +297,7 @@ impl Catalog {
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
                 on_disk.pi_activity_component = self.settings.pi_activity_component;
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
+                on_disk.cross_session_access = self.settings.cross_session_access;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -369,6 +372,18 @@ impl Catalog {
     /// Turn the tool-server binding on or off, persisting atomically (feature 034, FR-004).
     pub fn set_tool_server_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.tool_server_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Whether agents may read and type into other sessions (feature 034, FR-016). Read by the
+    /// tool server on every request, so a change applies to sessions already running.
+    pub fn cross_session_access(&self) -> CrossSessionAccess {
+        self.settings.cross_session_access
+    }
+
+    /// Set the cross-session option, persisting atomically (feature 034, FR-016).
+    pub fn set_cross_session_access(&mut self, access: CrossSessionAccess) -> io::Result<()> {
+        self.settings.cross_session_access = access;
         self.persist_service_settings()
     }
 
