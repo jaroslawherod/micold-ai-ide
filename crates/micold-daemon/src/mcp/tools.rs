@@ -9,9 +9,10 @@
 //! sidebar's protocol messages do ([`crate::ops`]), so an agent's change is the user's (FR-009).
 //!
 //! The destructive tools (`stop_session`, `interrupt_session`, `delete_session`,
-//! `delete_worktree`) check in the contract's order: scope, policy, state conflicts and no-ops,
-//! then the user's confirmation in every window (FR-014), and only then the effect. So a refused,
-//! conflicting or no-op request never shows a prompt.
+//! `delete_worktree`), and `send_session_input` while the FR-016 option is "Confirm each send",
+//! check in the contract's order: scope, policy, state conflicts and no-ops, then the user's
+//! confirmation in every window (FR-014), and only then the effect. So a refused, conflicting or
+//! no-op request never shows a prompt.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -136,7 +137,7 @@ async fn dispatch(
             .await
         }
         Operation::SendSessionInput { session, text } => {
-            send_session_input(&state, caller, session, text).await
+            send_session_input(&state, caller, session, text, hangup).await
         }
         Operation::ReadSessionOutput { session, lines } => {
             blocking(move || read_session_output(&state, caller, session, lines)).await
@@ -268,7 +269,7 @@ fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
     unconfirmed(policy_for(who, operation)?)
 }
 
-/// [`cross_session_policy`] without the confirmation flow.
+/// [`cross_session_policy`] for `read_session_output`, which never waits for a confirmation.
 fn check_cross_session(
     state: &DaemonState,
     who: &Caller,
@@ -887,26 +888,24 @@ fn read_session_output(
 }
 
 /// `send_session_input` (contracts/mcp-tools.md): scope, then policy with the option as it is now
-/// (FR-015, FR-016), then the text typed into the target's primary process as one submission
-/// (research R12), as the first prompt of `create_session` is.
+/// (FR-015, FR-016), then the conflict for a target with no running process, then — at "Confirm
+/// each send" — the user's confirmation in every window (FR-014), then the text typed into the
+/// target's primary process as one submission (research R12), as the first prompt of
+/// `create_session` is.
 ///
-/// At "Confirm each send" the call is refused as needing confirmation and nothing is typed: the
-/// confirmation in a window arrives with the confirmation flow (FR-014).
+/// The prompt names the caller and the target, never the text (FR-018).
 async fn send_session_input(
     state: &Arc<DaemonState>,
     caller: SessionId,
     target: SessionRef,
     text: NonEmptyText,
+    hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
     let session = SessionId::from_uuid(target.0);
     let st = Arc::clone(state);
-    let who = blocking(move || {
-        let (who, project) = resolve_caller(&st, caller)?;
-        session_in(&project, session)?;
-        Ok(who)
-    })
-    .await?;
-    check_cross_session(
+    let (who, project, summary) =
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let confirm = cross_session_policy(
         state,
         &who,
         &Operation::SendSessionInput {
@@ -915,10 +914,32 @@ async fn send_session_input(
         },
     )?;
 
-    let pty = state
-        .primary_pty(session)
-        .filter(|pty| pty.is_alive())
-        .ok_or_else(|| not_running(session))?;
+    let running = || {
+        state
+            .primary_pty(session)
+            .filter(|pty| pty.is_alive())
+            .ok_or_else(|| not_running(session))
+    };
+    // The process the user is asked about: a restart while the prompt waits is another process,
+    // and the approval does not carry over to it.
+    let asked_about = running()?;
+    if let Some(op) = confirm {
+        let label = summary.title.display().to_string();
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Session(session),
+            label,
+            hangup,
+        )
+        .await?;
+    }
+    let pty = running()?;
+    if !Arc::ptr_eq(&pty, &asked_about) {
+        return Err(not_running(session));
+    }
     let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
     pty.write_input(&encode_submission(text.as_str(), bracketed))
         .map_err(|err| {
