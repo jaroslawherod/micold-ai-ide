@@ -139,3 +139,16 @@ existed and failed before the implementation.
   the function's signature, passed on arrival, and have no red and no mutant (Review B, F1)
 - T017: quickstart §B B1–B8 in the light and dark themes pass; B14 is recorded as covered by Part A
   (`evidence/README.md`)
+
+## Cycle 6: U56–U63 `start_refusal` and `start_refusal_unknown` (T018, T022)
+
+- test: `crates/micold-core/tests/cli_reason.rs`, the eight tests under "W3: the sentence said when a
+  start is refused"
+- stub: both functions declared returning `String::new()` so the test file compiles
+- red: `scripts/build-lock.sh cargo test -p micold-core --test cli_reason` ->
+  `test result: FAILED. 26 passed; 8 failed`; the eight are the new ones
+  (`a_fresh_refusal_is_the_explanation_and_the_offer_of_another_cli`, …, `w3e_…`)
+- green: `start_refusal` returns 027's two sentences for `Applied` in an image and otherwise
+  `explain(&[cli], ..)`'s `{reason} {action}` plus the launch's ending; `start_refusal_unknown` is W5's
+  sentence. `mise run test-core` -> exit 0, 134 `test result: ok`, 0 failed
+- refactor: none needed
