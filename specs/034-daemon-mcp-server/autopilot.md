@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
-- **Next step**: ESCALATED (category 4, disk). Once at least 10 GB is free: gate, then a sonnet re-review of review A's fixes, then review B, then T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), then tick tasks.md, push and open the PR.
+- **Next step**: M5: gate, then a sonnet re-review of review A's fixes, then review B, then T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), then tick tasks.md, push and open the PR.
 
 ## Pull requests
 
@@ -109,13 +109,9 @@ deliverable (tasks.md Notes).
 
 ## Open escalation
 
-**Category 4 (environment): disk too full to run the M5 gate.** 2026-10-01.
+None.
 
-- Decision needed: free disk space so that at least 10 GB is free on `/` before `mise run gate` runs.
-- Why the unit cannot decide this: the only reclaim the unit is allowed is this worktree's own stray `target-shared/`, and there is none. The shared `target-shared/` (64 GB) is used by other worktrees' builds, and the unit must not delete it.
-- What was checked: `df -h /` shows 3.2 GB free (100%), down from 5.7 GB after M5's targeted test builds. The worktree has no private target dir. M4's gate once ran out of space and emptied source files.
-- Recommended: run `mise run sweep` with `SWEEP_ARGS='--maxsize 50GB'` from the main checkout (this freed 47 GB before), or delete `target-shared/debug/incremental`. Do this when no other worktree is building.
-- While waiting: the M5 code, tests, user guide and review A round 1 fixes are committed on the branch (not pushed). Targeted suites pass (daemon mcp_lifecycle_tools 24, mcp_confirmations 18, mcp_audit_log 4; all client tests except one, which is fixed and re-run green). Still to do: the gate, a sonnet re-review of the review A fixes, review B, the T103 real-CLI pass and §B4 visual pass, the tasks.md ticks, then push and open the PR.
+Resolved 2026-10-01, category 4 (environment): the disk was too full for the M5 gate (3.2 GB free). The user approved `SWEEP_ARGS='--maxsize 50GB' mise run sweep`; `/` then had 21 GB free.
 
 ## Follow-ups not done
 
