@@ -67,7 +67,9 @@ sends you there.
   open handover or escalation, and last `context.py`'s `CONTEXT` line, with its exit code. On `OVER`: write *Handover* in the ledger (what is
   done, the next step, open findings, your PR if you opened one), commit, push only if your PR is
   already open, and return `STATUS: HANDOVER`. A fresh unit of the same phase continues from it.
-  Exit 2 means the check cannot run: say so in your return's lines and carry on.
+  Exit 2 means the check cannot run: say so in your return's lines and carry on. A hook also watches
+  your context: a message starting `autopilot context:` means you are over the cap. Finish the step in
+  hand and hand over then; do not wait for the next checkpoint.
 - **Continuing a handover.** Your prompt says so: read the ledger's *Handover*, carry on from its
   next step, and set the section back to `None.` in your first commit. If it names your unit's own
   open PR, skip `branch-start.sh`: stay on the branch as it is. Review rounds already counted in

@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/autopilot/context-hook.py\"; [ -x \"$f\" ] || exit 0; exec \"$f\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
