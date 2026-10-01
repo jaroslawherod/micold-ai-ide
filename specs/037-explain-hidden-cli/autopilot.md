@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 2-clarify
-- **Next step**: Clarify round 5. Round 4 asked one question (agent-resolved, D12), so it was not a clean scan: FR-004a (added in round 3) contradicted FR-005 and Story 2 scenario 4 for the last state under container placement. It found D9 and D10 consistent with the spec, the closed specs and the code. Rounds 1 to 4 are five local commits and ship in PR 2. The branch is on `origin/main` at 01afbbee; nothing is owed.
+- **Next step**: Phase 3 (design). Clarify round 5 was a clean scan: no question asked, spec.md unchanged, checklist 16/16. It re-read the round-4 edit (D12) against every FR, scenario, success criterion and assumption and found FR-004a, FR-005, Story 1 scenario 5, Story 2 scenarios 3 and 4, SC-001, SC-004 and the container edge case and assumption in agreement. It also checked that the six states of FR-001 are all the states an availability answer can have: the answer blocks on the directory's resolution (`crates/micold-daemon/src/state.rs#env_include_vars_for`), so there is no "not attempted yet" state. Rounds 1 to 5 are six local commits and ship in PR 2. The branch is on `origin/main` at 01afbbee; nothing is owed.
 
 ## Pull requests
 
