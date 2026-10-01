@@ -91,6 +91,18 @@ that would change it, said wherever the application names a missing CLI.
   every directory, and name none. _(agent-resolved: specs/037-explain-hidden-cli/spec.md#User
   Story 1 (scenario 3); specs/037-explain-hidden-cli/spec.md#Edge Cases (per-directory outcomes
   differ); crates/micold-client/src/features/session.rs#AvailabilityAnswers::for_dir)_
+- Q: FR-004a has the "last attempt succeeded" reason name a directory, but FR-005 and Story 2
+  scenario 4 keep the container sentence of 027 FR-023b unchanged, and that sentence names no
+  directory. Which holds under container placement? → A: FR-005. In the last state under container
+  placement the sentence stays as it is today in Settings and at a failed start: it names the CLI
+  and the image and no directory. It is a statement about the image, not a report of one
+  directory's attempt. FR-004a covers the three failed-attempt states under both placements and
+  the last state under host placement only. Story 1 scenario 5 now names the home directory.
+  _(agent-resolved: specs/037-explain-hidden-cli/spec.md#FR-005;
+  specs/037-explain-hidden-cli/spec.md#User Story 2 (scenario 4);
+  specs/027-sandboxed-daemon-runtime/spec.md#FR-023b;
+  crates/micold-daemon/src/state.rs#missing_cli_reason;
+  crates/micold-client/src/features/settings.rs#missing_cli_notice)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -133,10 +145,11 @@ restart of the application.
 4a. **Given** environment-include is on and the script path is blank, **When** I open Settings,
    **Then** the note says no script is sourced because no script path is set, and names setting
    one as the action. It does not say to turn environment-include on.
-5. **Given** environment-include is on and the last attempt succeeded, and a CLI is still not
-   found, **When** I open Settings, **Then** the note says the CLI was not found on the `PATH`
-   sessions get (the login `PATH` plus what the script adds) and names both ways out: install it,
-   or make the script add its directory.
+5. **Given** sessions run on this computer, environment-include is on and the last attempt for my
+   home directory succeeded, and a CLI is still not found, **When** I open Settings, **Then** the
+   note says the CLI was not found on the `PATH` sessions get for my home directory (the login
+   `PATH` plus what the script adds) and names both ways out: install it, or make the script add
+   its directory.
 6. **Given** every CLI the application supports is found, **When** I open Settings, **Then** no
    note is shown.
 7. **Given** the session service has not yet answered which CLIs exist, **When** I open Settings,
@@ -309,9 +322,12 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   MUST say which directory the attempt was for: the home directory in the Settings note and on a
   row drawn from the home directory's answer (033 FR-005), the row's or session's own directory
   otherwise. The first two states are settings that hold for every directory and name none.
+  Under container placement the last state is the exception: the sentence FR-005 keeps names the
+  image and no directory.
 - **FR-005**: Under container placement FR-001 to FR-004 MUST apply as they do on the host, with
   the image named as the place sessions run. In the last state of FR-001 the wording of 027 FR-023b
-  MUST stay as it is: the note names the CLI and the image and says the image must provide it. In
+  MUST stay as it is: the note names the CLI and the image and says the image must provide it, and
+  names no directory (the exception in FR-004a). In
   the first five states the note under *Image reference* and the note under **Default AI CLI** MUST
   give the environment reason instead. This refines 027 FR-023b, which named the image as the cause
   in every state.
