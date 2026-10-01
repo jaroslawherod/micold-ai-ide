@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
-- **Next step**: ESCALATED (category 4, disk, second time). Once about 40 GB is free: gate, review B, T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), tick T103, push and open the PR.
+- **Next step**: M5: gate, review B, T103 (real-CLI §B1 step 7/§B2, §B4 visual pass), tick T103, push and open the PR.
 
 ## Pull requests
 
@@ -110,15 +110,11 @@ deliverable (tasks.md Notes).
 
 ## Open escalation
 
-**Category 4 (environment): the M5 gate ran out of disk again.** 2026-10-01.
-
-- Decision needed: free much more disk space on `/` (about 40 GB or more) before the gate runs again.
-- Why the unit cannot decide this: the unit may only delete this worktree's own stray `target-shared/`, and there is none. The shared `target-shared/` (66 GB) is the only large thing in reach, and the unit must not delete it.
-- What was checked: the gate started with 21 GB free. It failed in `cargo test --workspace` while compiling `micold-core` tests with `No space left on device (os error 28)`; `df -h /` then showed 29 MB free. fmt and both clippy steps had passed. No source file was damaged (`git status` clean apart from the ledger). No other cargo build was running afterwards. The sweep had trimmed the shared target dir, so the gate rebuilt everything and used all 21 GB before the test binaries were linked.
-- Recommended: when no worktree is building, delete `/home/jaro/workspaces/micold-ai-ide/target-shared` entirely (frees 66 GB; one full rebuild follows), or free 40 GB elsewhere on `/`.
-- While waiting: everything is committed, not pushed. Review A round 1 fixes are in and round 2 (sonnet) is CLEAN. Tasks T049–T059 and T090–T094 are ticked. Still to do: the gate, review B, T103 (real-CLI §B1 step 7/§B2 and the §B4 visual pass), then push and open the PR.
+None.
 
 Resolved 2026-10-01, category 4 (environment): the disk was too full for the M5 gate (3.2 GB free). The user approved `SWEEP_ARGS='--maxsize 50GB' mise run sweep`; `/` then had 21 GB free.
+
+Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk during `cargo test --workspace` (21 GB was not enough for a full rebuild). The sweep was re-run and the Go build cache cleaned (`go clean -cache`), with the user's approval; `/` then had 75 GB free. No file was truncated.
 
 ## Follow-ups not done
 
