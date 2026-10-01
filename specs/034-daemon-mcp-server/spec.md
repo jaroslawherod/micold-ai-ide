@@ -212,8 +212,9 @@ sidebar; the stop and the delete follow FR-014.
    `delete_worktree` on its own session or hosting worktree, **Then** the operation is refused
    (FR-015).
 6. **Given** a Default session (running in the project root), **When** its agent invokes
-   `create_worktree`, `rename_worktree` or `delete_worktree`, **Then** the operation is refused by
-   policy (FR-015a, Principle III).
+   `rename_worktree` or `delete_worktree`, **Then** the operation is refused by policy (FR-015a,
+   Principle III). **When** it invokes `create_worktree`, **Then** the worktree is created as it
+   is for a session in a worktree (FR-015a; Principle III's exception, constitution 1.7.0).
 
 ---
 
@@ -370,9 +371,12 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
   as invalid input.
 - **FR-015a**: When the calling session is a Default session (it runs in the project root),
-  `create_worktree`, `rename_worktree` and `delete_worktree` MUST be refused by policy, because
-  Principle III forbids a Default session to create, modify or remove any git worktree. Every
-  other operation stays available to it.
+  `rename_worktree` and `delete_worktree` MUST be refused by policy, because Principle III forbids
+  a Default session to modify or remove any git worktree. `create_worktree` MUST be available to
+  it exactly as to a session in a worktree: Principle III (constitution 1.7.0) lets a Default
+  session create a worktree through the application's tool server, and by no other means. Every
+  other operation stays available to it. _(decided by user: a Default session may create a
+  worktree through the tool server; rename and delete stay refused)_
 - **FR-016**: `read_session_output` and `send_session_input` on a session other than the caller
   MUST be governed by a Settings option separate from FR-004, "Let agents read and type into other
   sessions", with three values, applied within the scope of FR-010:
@@ -415,7 +419,7 @@ for the project root.
 | `list_sessions` | List the project's sessions, Regular-terminal sessions included | optional worktree ref filter | per session: ref, label, AI CLI (or "regular terminal"), lifecycle, activity, hosting worktree ref, is-caller flag | read-only |
 | `get_session` | One session's current state | session ref | as one `list_sessions` row, plus failure reason if `Failed` | read-only |
 | `read_session_output` | Recent terminal text of another session (FR-012, FR-016) | session ref, line count | plain-text lines, whether output was truncated | read-only; gated by FR-016 |
-| `create_worktree` | Create a worktree as the create-worktree dialog does | branch name, optional worktree name, mode (new branch / existing local branch / track remote branch), remote (for track remote branch) | worktree ref, branch, path | mutating; refused from a Default session (FR-015a) |
+| `create_worktree` | Create a worktree as the create-worktree dialog does | branch name, optional worktree name, mode (new branch / existing local branch / track remote branch), remote (for track remote branch) | worktree ref, branch, path | mutating; available to a Default session too (FR-015a) |
 | `rename_worktree` | Change a worktree's display name | worktree ref, new display name | updated worktree row | mutating; refused from a Default session (FR-015a) |
 | `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); refused for the caller's own worktree (FR-015) and from a Default session (FR-015a) |
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
@@ -494,9 +498,11 @@ including or excluding worktrees the app did not create. These stay user-only in
 - A local process running as the same user that reads a live session's credential can act as that
   session. The tool server does not try to tell processes apart, exactly as the hook receiver does
   not today; the guard is FR-007's per-user protection, not per-process identity.
-- Principle III's rule that a Default session must not create, modify or remove a worktree is read
-  as covering agent-requested operations too (FR-015a). Letting a Default session's agent manage
-  worktrees would need a constitution amendment, which is outside this feature.
+- Principle III's rule that a Default session must not modify or remove a worktree is read as
+  covering agent-requested operations too (FR-015a). Constitution 1.7.0 amended the principle
+  with one exception: a Default session may create a worktree through the tool server's
+  `create_worktree`. Letting a Default session's agent rename or delete worktrees would need a
+  further amendment, which is outside this feature.
 - A Regular-terminal session (feature 010-regular-terminal-mode) runs a shell, not an AI CLI, and
   gets no binding.
 - The initial prompt of `create_session` is delivered as typed input, the same way the user would

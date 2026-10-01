@@ -43,9 +43,11 @@ branch that already exists or is checked out elsewhere, a name the naming rules 
 name git does not accept. Nothing is created when a request fails. When several requests race for
 the same branch, one succeeds and the others are told the branch is taken.
 
-A session running in the project folder itself (`default`) cannot create, rename or delete
-worktrees. Work in the project folder is kept separate from worktrees, and an assistant there is
-refused with that reason. It can still list everything and create, start, stop and delete sessions.
+A session running in the project folder itself (`default`) can create a worktree, so an assistant
+there can hand work to a worktree of its own instead of doing it in your project folder. It cannot
+rename or delete a worktree: work in the project folder is kept separate from the worktrees that
+exist, and an assistant there is refused with that reason. It can still list everything and create,
+start, stop and delete sessions.
 
 ### Requests that wait for you
 
