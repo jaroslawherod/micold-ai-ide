@@ -613,3 +613,33 @@ fn the_cross_session_option_is_stored_in_snake_case() {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(document["cross_session_access"], "confirm_each_send");
 }
+
+/// A value this build does not know (a mistyped hand edit, or a value a later build wrote) reads
+/// as `Off`, the value that allows nothing, and the rest of the file is kept. It must not read as
+/// `Auto`, and it must not send the whole file to `.bak` (M6 review A, F6).
+#[test]
+fn an_unknown_cross_session_value_reads_as_off_and_keeps_the_rest_of_the_file() {
+    for unknown in [r#""confirm""#, r#""AUTO""#, "7", "null"] {
+        let (_dir, store, _path) = store_with(&format!(
+            r#"{{
+                "settings_version": 4,
+                "theme": "dark",
+                "tool_server_enabled": false,
+                "cross_session_access": {unknown}
+            }}"#
+        ));
+
+        let outcome = store.load();
+
+        assert_eq!(outcome.status, LoadStatus::Loaded, "{unknown}");
+        assert_eq!(
+            outcome.settings.cross_session_access,
+            CrossSessionAccess::Off,
+            "{unknown}"
+        );
+        assert!(
+            !outcome.settings.tool_server_enabled,
+            "{unknown}: the rest of the file is kept"
+        );
+    }
+}

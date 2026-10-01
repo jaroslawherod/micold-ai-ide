@@ -160,6 +160,17 @@ pub struct Settings {
     pub issue_label_types: Vec<LabelTypeEntry>,
 }
 
+/// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
+/// or one a later build wrote) reads as `Off`, the value that allows nothing: it must not fail the
+/// whole document, which would bring the option back as `Auto` (M6 review A, F6).
+fn cross_session_access_or_off<'de, D>(deserializer: D) -> Result<CrossSessionAccess, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or(CrossSessionAccess::Off))
+}
+
 /// The binding's default when a file predates it: on (FR-004).
 fn default_tool_server_enabled() -> bool {
     true
@@ -394,8 +405,9 @@ struct StoredSettings {
     #[serde(default = "default_tool_server_enabled")]
     tool_server_enabled: bool,
     /// Missing in files written before the option → `Auto`, the requirement's default (FR-016).
-    /// Additive and defaulted, so `settings_version` does not move for it either.
-    #[serde(default)]
+    /// Additive and defaulted, so `settings_version` does not move for it either. A value this
+    /// build does not know reads as `Off`: see [`cross_session_access_or_off`].
+    #[serde(default, deserialize_with = "cross_session_access_or_off")]
     cross_session_access: CrossSessionAccess,
     /// Missing in pre-034 files → the default table (FR-021); `[]` stays `[]`. An entry naming a
     /// type this build does not know (or that does not parse at all) is dropped on read and the
