@@ -629,4 +629,38 @@ mod through_the_tool_server {
         assert!(text.starts_with("HTTP/1.1 200"), "{text}");
         assert!(!exists(&f.state, sid(OTHER)), "deleted");
     }
+    /// Review A (M5): a client that only shuts its sending side still reads a reply. The half-close
+    /// reads as a hang-up, so the waiting request is abandoned and nothing is done.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_half_closed_connection_still_gets_a_reply() {
+        let f = fixture().await;
+        let mut a = window(&f.state);
+        let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+        let key = credential(&f.state, sid(AGENT));
+        stream
+            .write_all(&request(
+                f.addr,
+                &key,
+                "delete_session",
+                json!({"session": sid(OTHER).0.to_string()}),
+            ))
+            .await
+            .unwrap();
+        let id = within("the prompt", async { prompt_id(&next(&mut a).await) }).await;
+
+        stream.shutdown().await.unwrap();
+
+        let mut response = Vec::new();
+        within("the reply", stream.read_to_end(&mut response))
+            .await
+            .unwrap();
+        let text = String::from_utf8_lossy(&response);
+        assert!(text.starts_with("HTTP/1.1 200"), "a reply: {text:?}");
+        assert!(text.contains("\"isError\":true"), "{text}");
+        assert_eq!(
+            within("the withdrawal", next(&mut a)).await,
+            DaemonMsg::ConfirmationWithdrawn { id }
+        );
+        assert!(exists(&f.state, sid(OTHER)), "nothing was deleted");
+    }
 }
