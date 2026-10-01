@@ -280,6 +280,9 @@ fn reference(session: SessionId) -> String {
     session.0.to_string()
 }
 
+/// A tool and the arguments that aim it at a ref.
+type TargetedTool = (&'static str, fn(&str) -> Value);
+
 fn lines_of(out: &Value) -> Vec<String> {
     out["lines"]
         .as_array()
@@ -615,7 +618,7 @@ async fn the_callers_own_session_is_invalid_input_under_every_option_value() {
 async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    let session_tools: [(&str, fn(&str) -> Value); 4] = [
+    let session_tools: [TargetedTool; 4] = [
         ("get_session", |r| json!({"session": r})),
         ("start_session", |r| json!({"session": r})),
         ("read_session_output", |r| json!({"session": r})),
@@ -624,7 +627,7 @@ async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref()
             |r| json!({"session": r, "text": "hello"}),
         ),
     ];
-    let worktree_tools: [(&str, fn(&str) -> Value); 3] = [
+    let worktree_tools: [TargetedTool; 3] = [
         ("list_sessions", |r| json!({"worktree": r})),
         (
             "rename_worktree",
