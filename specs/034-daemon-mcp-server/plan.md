@@ -89,8 +89,10 @@ each; M5 adds the 3 confirmation messages), 1 new dialog, 1 new `DaemonState::st
 - [x] **III. Worktree Integration**: PASS. Agent-made worktrees go through the app's own create path
   (location `.claude/worktrees/<name>`, provenance record, gate), so the app still owns their
   lifecycle; `create_session` places a session only in a worktree of the project or in Default. A
-  Default session's agent cannot create, rename or delete a worktree (FR-015a), which is the
-  principle's own rule applied to agent requests.
+  Default session's agent cannot rename or delete a worktree (FR-015a), which is the principle's
+  own rule applied to agent requests. It can create one through `create_worktree`: constitution
+  1.7.0 names exactly that as the principle's exception, because the call is the application
+  creating the worktree on the session's behalf.
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: PASS. Loopback only, in both placements; no
   remote service; everything works offline; nothing leaves the device.
 - [x] **V. Rust + iced Stack**: PASS. Rust only; the dialog is iced. Invalid states are types:

@@ -33,8 +33,8 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `list_sessions` | `{worktree?: ref}` | `{sessions:[SessionRow]}` | unknown `worktree` → not_found |
 | `get_session` | `{session}` | `SessionRow + {failure_reason?}` | — |
 | `read_session_output` | `{session, lines?: int=200}` | `{lines:[string], truncated: bool}` | self → invalid_input (FR-015); `lines<1` → invalid_input; `>2000` clamped (FR-012); FR-016 Off → refused_by_policy |
-| `create_worktree` | `{branch, name?, mode?: new_branch|existing_local|track_remote = new_branch, remote?}` | `WorktreeRow` | Default caller → refused_by_policy (FR-015a); invalid name → invalid_input with the dialog's message; pre-flight mismatch → conflict naming the situation |
-| `rename_worktree` | `{worktree, display_name}` | `WorktreeRow` | Default caller → refused_by_policy; `default` → invalid_input |
+| `create_worktree` | `{branch, name?, mode?: new_branch|existing_local|track_remote = new_branch, remote?}` | `WorktreeRow` | Default caller → proceeds as any caller (FR-015a, constitution 1.7.0); invalid name → invalid_input with the dialog's message; pre-flight mismatch → conflict naming the situation |
+| `rename_worktree` | `{worktree, display_name}` | `WorktreeRow` | Default caller → refused_by_policy (FR-015a); `default` → invalid_input |
 | `delete_worktree` | `{worktree, stop_sessions?: bool=false, delete_branch?: bool=true}` | `{removed: ref, branch_deleted: bool, leftovers:[path]}` | Default caller → refused_by_policy; caller's own worktree → refused_by_policy (FR-015); `default` → invalid_input; live sessions and `!stop_sessions` → conflict naming them; then **confirm** (FR-014) |
 | `create_session` | `{worktree, ai_cli?: claude_code|copilot|pi, prompt?: string}` | `{session, lifecycle, prompt_delivered: bool|null, prompt_reason?: string}` | CLI availability checked **before** the record is created: not installed → service_error naming it, no record (US2 s5); `null` when no prompt was given |
 | `start_session` | `{session}` | `{lifecycle}` | already Starting/Running/Restarting → success, unchanged (FR-012a) |
