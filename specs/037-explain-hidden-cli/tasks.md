@@ -173,6 +173,7 @@ CI's order).
 - T038 first in US1. T012, T013, T038 → T014. T015 after T001. T039 after T014. T017 after T014–T016 and T039.
 - T040 first in US2. T018 → T022. T019, T041 → T023 (after T022; T041 after T019, one test file). T020 → T024. T021, T040 → T025 (after T022). T042 after T023–T025. T027 after T023–T026 and T042.
 - T043 first in US3. T028, T043 → T030. T029 → T031. T032 after T030 and T031. T033 after T031. T044 after T030. T035 after T032–T034 and T044.
+- T037 after T036 (both record in `evidence/README.md`).
 
 ### Parallel Opportunities
 
