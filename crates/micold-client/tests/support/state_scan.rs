@@ -111,6 +111,8 @@ pub const READERS: &[&str] = &[
     // stores it is what this scan flags, at its own site.
     "next",
     "position",
+    // `agent_confirm.shown` hands back the prompt the dialog shows, if any (feature 034).
+    "shown",
     "to_string",
     "to_vec",
     "unasked",
