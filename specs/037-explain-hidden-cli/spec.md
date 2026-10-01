@@ -66,6 +66,31 @@ that would change it, said wherever the application names a missing CLI.
   messages? → A: Yes. FR-001 covers every surface of FR-006 to FR-010. SC-003 and SC-004 now name
   the row's CLI list among the surfaces they count. _(agent-resolved:
   specs/037-explain-hidden-cli/spec.md#FR-001)_
+- Q: Does a row's CLI list give the action as well as the reason for a CLI it does not offer? →
+  A: Yes. FR-001 pairs every reason with its action, FR-003 has every reason name the setting to
+  change, and SC-003 already counts the list among the surfaces that must not give "install it" as
+  the only action. FR-010, Story 3 and SC-007 now say "reason and action". _(agent-resolved:
+  specs/037-explain-hidden-cli/spec.md#FR-001; specs/037-explain-hidden-cli/spec.md#FR-003)_
+- Q: The missing-default message, the start failure and the reply to an AI session are each said
+  once, at an event. Does one that was already shown change when a newer availability answer
+  arrives? → A: No. Each states the reason that held at its event and is not rewritten. The
+  missing-default message uses the answer in use for the row at the press. The start failure and
+  the reply to an AI session use the environment that start resolved, which is the resolution the
+  availability answer shares (029 FR-003b). The next such message uses the answer then in use. Only
+  the standing surfaces, the Settings note and an open row list, follow a newer answer.
+  _(agent-resolved:
+  crates/micold-client/src/features/session.rs#start_menu_toggled (the notice is said only as the
+  list opens); specs/029-pi-cli-provider/spec.md#FR-003b;
+  crates/micold-daemon/src/state.rs#ai_clis_available_in)_
+- Q: A reason can report an attempt made for another directory than the row's: the home
+  directory's, while the row is drawn from the home answer. How does the reason stay true? → A: A
+  reason that reports the outcome of an attempt (the last four states of FR-001) says which
+  directory the attempt was for, as Story 1 scenario 3 ("for my home directory") and Story 2
+  scenario 2 ("for its directory") already do. A row drawn from the home answer therefore says the
+  home directory's attempt failed, never its own. The first two states are settings, the same for
+  every directory, and name none. _(agent-resolved: specs/037-explain-hidden-cli/spec.md#User
+  Story 1 (scenario 3); specs/037-explain-hidden-cli/spec.md#Edge Cases (per-directory outcomes
+  differ); crates/micold-client/src/features/session.rs#AvailabilityAnswers::for_dir)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -179,7 +204,7 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 
 1. **Given** a row whose directory provides two or more supported CLIs and does not provide
    another, **When** I open that row's CLI choice, **Then** the list names the CLI that is not
-   offered there and gives the reason for that directory.
+   offered there and gives the reason and its action for that directory.
 1a. **Given** a row whose directory provides fewer than two supported CLIs, **When** I look at the
    row, **Then** it has no chevron and shows nothing about missing CLIs, exactly as before this
    feature (026 FR-006).
@@ -206,8 +231,10 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   the failure of FR-009 gives the reason.
 - **A row is still drawn from the home directory's answer.** Until a row's own answer arrives it
   uses the home directory's (033 FR-005). Its list and its missing-default message then give the
-  home answer's reason, and both follow the row's own answer as soon as it arrives. This is one
-  answer used in two places, not one project's outcome given to another.
+  home answer's reason, and a reason that reports an attempt says it was the home directory's
+  (FR-004a). The list follows the row's own answer as soon as it arrives. A message already shown
+  is not rewritten, and the next one uses the row's own answer. This is one answer used in two
+  places, not one project's outcome given to another.
 - **Not answered yet.** Until an availability answer is in use for a directory, no reason is
   shown. A reason is a finding, and silence before the answer is not one (027 FR-023c).
 - **The answer cannot be obtained.** The session service is unreachable or the request fails. The
@@ -233,6 +260,9 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 - **The state changes while Settings is open.** A session restart re-sources the script, or a save
   changes environment-include. The note follows the new state the next time availability is
   answered. It never shows a reason for a state that no longer holds after that answer.
+- **A message was shown and the state then changed.** The missing-default message, a start failure
+  and a reply to an AI session each state the reason that held when they were said. They are not
+  rewritten when a newer answer arrives. The next press, start or request gives the new reason.
 - **Several sessions and rows at once (Principle II).** Showing a reason starts nothing, stops
   nothing and changes no running session. Two rows opened in quick succession each keep their own
   answer. Sessions already running a CLI that has gone missing stay listed and labelled.
@@ -275,6 +305,10 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   and MUST name the setting to change by the label Settings shows for it.
 - **FR-004**: When several CLIs are missing for the same directory, the application MUST name them
   together and give the reason once.
+- **FR-004a**: A reason that reports the outcome of an attempt (the last four states of FR-001)
+  MUST say which directory the attempt was for: the home directory in the Settings note and on a
+  row drawn from the home directory's answer (033 FR-005), the row's or session's own directory
+  otherwise. The first two states are settings that hold for every directory and name none.
 - **FR-005**: Under container placement FR-001 to FR-004 MUST apply as they do on the host, with
   the image named as the place sessions run. In the last state of FR-001 the wording of 027 FR-023b
   MUST stay as it is: the note names the CLI and the image and says the image must provide it. In
@@ -295,17 +329,18 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   (026 FR-002) MUST carry the reason and action for the directory of the row being started. It MUST
   still offer the available CLIs and start nothing until the user chooses.
 - **FR-009**: The failure shown when a session cannot start or restart because its CLI is not found
-  (the pane text and the banner) MUST carry the reason and action for that session's directory. In
+  (the pane text and the banner) MUST carry the reason and action for that session's directory,
+  taken from the environment that start resolved. In
   the first five states of FR-001 it MUST NOT tell the user to install the CLI. A resumed session
   MUST still never be pointed at another CLI.
 - **FR-009a**: The reply an AI session receives when it asks the application to start a session on
   a CLI that would not be found (feature 034) MUST carry the reason and action for the target
   directory, under FR-002's limits.
 - **FR-010**: When a sidebar row's per-session CLI list opens and a supported CLI is not offered
-  for that row's directory, the list MUST name that CLI and give its reason for that directory. An
-  unavailable CLI MUST NOT be selectable. The rule for when the row has a chevron is unchanged (026
-  FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay without one, and this
-  feature MUST add nothing to that row. That includes the list such a row opens when the stored
+  for that row's directory, the list MUST name that CLI and give the reason and action of FR-001
+  for that directory. An unavailable CLI MUST NOT be selectable. The rule for when the row has a
+  chevron is unchanged (026 FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay
+  without one, and this feature MUST add nothing to that row. That includes the list such a row opens when the stored
   default is missing (033 FR-010): it MUST NOT name the CLIs that are not offered, and the message
   of FR-008 is what carries the reason there.
 
@@ -318,6 +353,11 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   one directory and one answer, every surface (FR-006, FR-008, FR-009, FR-009a, FR-010) MUST give the
   same reason. While a row is drawn from the home directory's answer (033 FR-005), the reason it
   gives MUST be that answer's, and MUST change to the row's own together with what is offered.
+  The Settings note and an open row list are standing surfaces and MUST follow a newer answer. A
+  message said at an event (FR-008, FR-009, FR-009a) MUST state the reason that held at that event
+  and MUST NOT be rewritten afterwards. The environment a start resolves is the resolution the
+  availability answer shares (029 FR-003b), so a failure and the answer cannot disagree about one
+  attempt.
 - **FR-013**: When environment-include settings are saved, or a directory's environment is
   resolved again, the reason shown for that directory MUST follow the new state with no restart of
   the application, on the same occasions on which the offered CLIs are refreshed today.
@@ -372,9 +412,9 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 - **SC-006**: Showing a reason causes no additional run of the startup script and no additional
   search of the computer: the number of script runs with the note shown equals the number without.
 - **SC-007**: On a row whose directory provides two or more supported CLIs and lacks another, the
-  reason for that directory is reachable in one interaction from that row (opening its CLI list),
-  without opening Settings. On a row with fewer than two available CLIs the start control is the
-  same as before this feature: zero added controls.
+  reason and its action for that directory are reachable in one interaction from that row (opening
+  its CLI list), without opening Settings. On a row with fewer than two available CLIs the start
+  control is the same as before this feature: zero added controls.
 
 ## Assumptions
 
