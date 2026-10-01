@@ -276,6 +276,16 @@ pub struct CliAvailability {
     pub available: Vec<AiCli>,
     /// What the set is an answer *about*.
     pub source: AvailabilitySource,
+    /// The state of the environment `available` was walked in (feature 037), from the wire. `None`
+    /// when the service could not resolve a directory at all: no reason is given then (FR-011).
+    ///
+    /// A field of the same value as `available`, so no surface can pair one answer's offer with
+    /// another's reason (FR-012).
+    pub env: Option<SpawnEnv>,
+    /// The key this answer was filed under: the directory the attempt in `env` was made for
+    /// (FR-004a). Stamped by [`AvailabilityAnswers::answered`]; whatever the caller put here is
+    /// replaced, because only the store knows which request an answer belongs to.
+    pub asked_for: AvailabilityKey,
 }
 
 /// Where the answer in [`CliAvailability`] was settled.

@@ -920,10 +920,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             env: _,
         } => {
             let source = availability_source(app);
-            app.core
-                .session
-                .availability
-                .answered(req, CliAvailability { available, source });
+            app.core.session.availability.answered(
+                req,
+                CliAvailability {
+                    available,
+                    source,
+                    env: None,
+                    asked_for: AvailabilityKey::Home,
+                },
+            );
         }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.
         DaemonMsg::LogLocation { path, sink, .. } => {

@@ -11,6 +11,7 @@ use micold_client::features::session::{
     wanted_availability_dirs, AvailabilityAnswers, AvailabilityKey, AvailabilitySource,
     CliAvailability, EnvIncludeSettings,
 };
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -24,6 +25,8 @@ fn answer(available: &[AiCli]) -> CliAvailability {
     CliAvailability {
         available: available.to_vec(),
         source: AvailabilitySource::ThisComputer,
+        env: None,
+        asked_for: AvailabilityKey::Home,
     }
 }
 
@@ -169,6 +172,131 @@ fn a_directory_reads_its_own_answer_and_falls_back_to_home() {
         held(&answers, P),
         Some(vec![AiCli::ClaudeCode, AiCli::Pi]),
         "and its own answer once it has one"
+    );
+}
+
+// --- Feature 037, contract A4: an answer carries its environment state and the key it is for ---
+
+/// An answer in `env`, as the shell builds it: it does not know which request it answers, so
+/// `asked_for` holds a key no request here names.
+fn answer_in(available: &[AiCli], env: Option<SpawnEnv>) -> CliAvailability {
+    CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+        env,
+        asked_for: dir("/not/the/key/of/any/request"),
+    }
+}
+
+/// 037 U40 (C2, FR-004a).
+#[test]
+fn an_answer_to_a_request_without_a_directory_is_stamped_as_the_home_directorys() {
+    let mut answers = AvailabilityAnswers::default();
+    answers.asked(1, AvailabilityKey::Home);
+    answers.answered(
+        1,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::ScriptTimedOut)),
+    );
+
+    assert_eq!(
+        answers.home().map(|a| (a.asked_for.clone(), a.env)),
+        Some((AvailabilityKey::Home, Some(SpawnEnv::ScriptTimedOut))),
+        "the request named no directory, so the attempt the answer reports was for the home \
+         directory, and a reason must say so (FR-004a)"
+    );
+}
+
+/// 037 U41 (C2, FR-004a).
+#[test]
+fn an_answer_to_a_request_for_a_directory_is_stamped_with_that_directory() {
+    let mut answers = AvailabilityAnswers::default();
+    answers.asked(2, dir(P));
+    answers.answered(
+        2,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::ScriptFailed)),
+    );
+
+    assert_eq!(
+        answers.for_dir(Path::new(P)).map(|a| a.asked_for.clone()),
+        Some(dir(P)),
+        "the attempt the answer reports was made in the directory the request named"
+    );
+}
+
+/// 037 U42 (C3, FR-004a, FR-012): a row drawn from the home answer gives the home answer's reason
+/// for the home directory, and its own reason for its own directory once it has one.
+#[test]
+fn a_row_reads_the_home_answers_state_until_its_own_arrives() {
+    let mut answers = AvailabilityAnswers::default();
+    answers.asked(1, AvailabilityKey::Home);
+    answers.answered(
+        1,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::IncludeOff)),
+    );
+
+    assert_eq!(
+        answers
+            .for_dir(Path::new(P))
+            .map(|a| (a.asked_for.clone(), a.env)),
+        Some((AvailabilityKey::Home, Some(SpawnEnv::IncludeOff))),
+        "while the row has no answer of its own, what it offers and the reason both come from \
+         the home answer, which is about the home directory"
+    );
+
+    answers.asked(2, dir(P));
+    answers.answered(
+        2,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::ScriptTimedOut)),
+    );
+
+    assert_eq!(
+        answers
+            .for_dir(Path::new(P))
+            .map(|a| (a.asked_for.clone(), a.env)),
+        Some((dir(P), Some(SpawnEnv::ScriptTimedOut))),
+        "the row's own answer brings its own state and its own directory together"
+    );
+}
+
+/// 037 U43 (C2, FR-012, FR-013): the offer and the state are replaced as one value.
+#[test]
+fn a_newer_answer_replaces_the_state_together_with_the_set() {
+    let mut answers = AvailabilityAnswers::default();
+    answers.asked(1, AvailabilityKey::Home);
+    answers.answered(
+        1,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::IncludeOff)),
+    );
+    answers.asked(2, AvailabilityKey::Home);
+    answers.answered(
+        2,
+        answer_in(&[AiCli::ClaudeCode, AiCli::Pi], Some(SpawnEnv::Applied)),
+    );
+
+    assert_eq!(
+        answers.home().map(|a| (a.available.clone(), a.env)),
+        Some((vec![AiCli::ClaudeCode, AiCli::Pi], Some(SpawnEnv::Applied))),
+        "after environment-include is turned on and saved, the next answer changes what is \
+         offered and the state in one step"
+    );
+}
+
+/// 037 U44 (C2, FR-012): the other side of U43.
+#[test]
+fn an_older_answer_changes_neither_the_set_nor_the_state() {
+    let mut answers = AvailabilityAnswers::default();
+    answers.asked(1, AvailabilityKey::Home);
+    answers.asked(2, AvailabilityKey::Home);
+    answers.answered(2, answer_in(&[AiCli::Pi], Some(SpawnEnv::Applied)));
+
+    assert!(
+        !answers.answered(1, answer_in(&[], Some(SpawnEnv::IncludeOff))),
+        "fixture check: the older answer is dropped"
+    );
+    assert_eq!(
+        answers.home().map(|a| (a.available.clone(), a.env)),
+        Some((vec![AiCli::Pi], Some(SpawnEnv::Applied))),
+        "a dropped answer leaves no part of itself behind: not its set and not its state"
     );
 }
 

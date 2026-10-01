@@ -492,6 +492,8 @@ fn hold(state: &mut State, key: AvailabilityKey, available: &[AiCli]) {
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
+            env: None,
+            asked_for: AvailabilityKey::Home,
         },
     );
 }

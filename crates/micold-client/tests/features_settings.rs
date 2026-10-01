@@ -285,12 +285,23 @@ fn the_settings_select_names_clis_the_human_readable_way() {
 
 #[test]
 fn a_failure_message_names_the_cli_the_human_readable_way() {
-    // FR-010: "GitHub Copilot isn't installed" is a sentence; "copilot isn't installed" reads as a
-    // shell error. Same register as the menus, and the same reason.
-    let missing = AiCli::Copilot.provider();
-    let message = format!("{} isn't installed.", missing.display_name());
-    assert_eq!(message, "GitHub Copilot isn't installed.");
-    assert!(!message.contains("copilot "), "not the command name");
+    // FR-010: "GitHub Copilot" in a sentence; "copilot" reads as a shell error. Same register as
+    // the menus, and the same reason. Since feature 037 the sentence is `explain`'s.
+    use micold_core::cli_reason::{explain, AttemptDir, Place, SpawnEnv};
+    let said = explain(
+        &[AiCli::Copilot],
+        SpawnEnv::Applied,
+        Place::ThisComputer,
+        AttemptDir::Home,
+    )
+    .expect("one CLI is missing");
+    assert!(
+        said.reason
+            .starts_with(AiCli::Copilot.provider().display_name()),
+        "{}",
+        said.reason
+    );
+    assert!(!said.reason.contains("copilot "), "not the command name");
 }
 
 // ---------------------------------------------------------------------------------------
