@@ -185,6 +185,7 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 18 → 19 for feature 034's `cross_session_access` on `DaemonSettings` and `SettingsSet`
 /// (FR-016). Thirteenth time, same case, same answer.
+///
 /// And 19 → 20 for feature 037's `env` on `DaemonMsg::AiCliAvailability`: the state of the
 /// environment the answer was walked in, which had developed against the 17 that feature 034
 /// took to 18 and then 19. Fourteenth time, same case, same answer.

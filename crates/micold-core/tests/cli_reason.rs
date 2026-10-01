@@ -667,14 +667,26 @@ fn a_resume_refusal_is_the_explanation_and_says_to_restart_this_session() {
 fn w3b_applied_in_an_image_keeps_the_refusal_of_027() {
     for cli in AiCli::ALL {
         assert_eq!(
-            start_refusal(cli, SpawnEnv::Applied, Place::Image(IMAGE), project(), LaunchMode::Fresh),
+            start_refusal(
+                cli,
+                SpawnEnv::Applied,
+                Place::Image(IMAGE),
+                project(),
+                LaunchMode::Fresh
+            ),
             format!(
                 "{cli} isn't in {IMAGE}, where sessions run. Choose an image that provides it, or \
                  start this session on another AI CLI."
             )
         );
         assert_eq!(
-            start_refusal(cli, SpawnEnv::Applied, Place::Image(IMAGE), project(), LaunchMode::Resume),
+            start_refusal(
+                cli,
+                SpawnEnv::Applied,
+                Place::Image(IMAGE),
+                project(),
+                LaunchMode::Resume
+            ),
             format!(
                 "{cli} isn't in {IMAGE}, where sessions run, and this conversation can only \
                  continue in it. Choose an image that provides it, then restart this session."

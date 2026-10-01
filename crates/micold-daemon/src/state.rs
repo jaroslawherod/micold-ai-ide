@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use micold_core::cli_reason::SpawnEnv;
+use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::mcp::binding::{self as mcp_binding, ConfigLocations, SkipReason};
@@ -340,31 +340,19 @@ fn attempted(outcome: &micold_core::env_include::EnvIncludeOutcome) -> SpawnEnv 
     }
 }
 
-/// What a start refused for a missing AI CLI tells the user (FR-010), as advice that works where
-/// sessions run and for what is being started (`029` quickstart §D, finding 1).
-///
-/// `cli` is the provider's `display_name()`, not its `command()`: this is a sentence, and "copilot
-/// isn't installed" reads as a shell error rather than as something to go and fix. `image` is the
-/// service's `MICOLD_IMAGE_REFERENCE`, empty on the host. In a container, installing on this
-/// computer changes nothing, so the image is named instead, as the settings notices name it. A
-/// resume continues a conversation only the same CLI holds, so it is not offered another one.
-fn missing_cli_reason(cli: &str, image: &str, launch: LaunchMode) -> String {
-    match (image.is_empty(), launch) {
-        (true, LaunchMode::Fresh) => {
-            format!("{cli} isn't installed. Install it, or start this session on another AI CLI.")
-        }
-        (true, LaunchMode::Resume) => format!(
-            "{cli} isn't installed, and this conversation can only continue in it. Install it, \
-             then restart this session."
-        ),
-        (false, LaunchMode::Fresh) => format!(
-            "{cli} isn't in {image}, where sessions run. Choose an image that provides it, or \
-             start this session on another AI CLI."
-        ),
-        (false, LaunchMode::Resume) => format!(
-            "{cli} isn't in {image}, where sessions run, and this conversation can only continue \
-             in it. Choose an image that provides it, then restart this session."
-        ),
+/// The image this service's sessions run in: `MICOLD_IMAGE_REFERENCE`, empty on the host.
+pub(crate) fn image_reference() -> String {
+    std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default()
+}
+
+/// Where sessions run, as a sentence about a missing AI CLI names it (feature 037, contract W4):
+/// this computer when `image` is empty, otherwise that image. In a container, installing on this
+/// computer changes nothing, so the image is named instead, as the settings notices name it.
+pub(crate) fn place(image: &str) -> Place<'_> {
+    if image.is_empty() {
+        Place::ThisComputer
+    } else {
+        Place::Image(image)
     }
 }
 
@@ -939,7 +927,7 @@ impl DaemonState {
         micold_core::protocol::handshake::Expectation {
             token: self.auth_token.get().cloned(),
             build: format!("micold-daemon {}", env!("CARGO_PKG_VERSION")),
-            image: std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
+            image: image_reference(),
         }
     }
 
@@ -2317,15 +2305,29 @@ impl DaemonState {
         // The `PATH` checked is the one this session is about to be spawned with (029 BUG-001,
         // FR-003b), the same one the offer was made from. Checking the service's own would refuse
         // a CLI that only the environment-include script puts on `PATH` — offered, then refused.
+        //
+        // The reason is written for the state that same resolution is in (037, FR-009, contract
+        // W4 U4): one read gives the `PATH` walked and why it is what it is, so the refusal cannot
+        // describe a different attempt than the one that failed to find the CLI (FR-012). The
+        // sentence is `cli_reason`'s, as the availability answer's notes are in the client.
         if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
-            if !provider.is_available(&self.spawn_path_for(&plan.cwd)) {
-                let reason = missing_cli_reason(
-                    provider.display_name(),
-                    &std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
+            let resolved = self.spawn_env_for(&plan.cwd);
+            if !provider.is_available(&session_path(resolved.vars)) {
+                let image = image_reference();
+                let reason = micold_core::cli_reason::start_refusal(
+                    plan.provider,
+                    resolved.env,
+                    place(&image),
+                    AttemptDir::Dir(&plan.cwd),
                     launch,
                 );
-                tracing::warn!(session = %id.0, cli = provider.command(), "AI CLI not on PATH; not starting");
+                tracing::warn!(
+                    session = %id.0,
+                    cli = provider.command(),
+                    env = ?resolved.env,
+                    "AI CLI not on PATH; not starting"
+                );
                 self.lock().start_failures.insert(id, reason.clone());
                 return Err(io::Error::new(io::ErrorKind::NotFound, reason));
             }

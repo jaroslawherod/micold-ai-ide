@@ -152,3 +152,33 @@ existed and failed before the implementation.
   `explain(&[cli], ..)`'s `{reason} {action}` plus the launch's ending; `start_refusal_unknown` is W5's
   sentence. `mise run test-core` -> exit 0, 134 `test result: ok`, 0 failed
 - refactor: none needed
+
+## Cycle 7: U64–U66, A10–A14 the service's refusals (T019, T041, T020, T023, T024)
+
+- test: `crates/micold-daemon/tests/session_start.rs`:
+  `with_environment_include_off_a_refused_start_says_sessions_get_only_the_login_path` (U64),
+  `a_refused_start_after_the_script_failed_says_the_script_failed_for_the_directory` (U65),
+  `a_refused_start_after_the_script_ran_says_the_cli_is_not_on_the_session_path` (A11),
+  `a_resume_after_the_script_timed_out_says_to_fix_it_and_restart_this_session` (A10),
+  `a_refused_start_and_an_availability_answer_name_the_same_state` (U66),
+  `in_an_image_whose_script_ran_a_missing_cli_keeps_the_sentences_it_had` (A12),
+  `in_an_image_with_environment_include_off_the_refusal_does_not_blame_the_image` (A13);
+  `crates/micold-daemon/tests/mcp_create_session.rs`:
+  `a_cli_the_directorys_environment_lacks_is_refused_with_the_reason_and_no_record` (A14)
+- red, before any change under `src/`: `scripts/build-lock.sh cargo test -p micold-daemon --test
+  session_start` -> `test result: FAILED. 19 passed; 6 failed`: U64, U65, A11, A10, U66 and A13, each on
+  the old sentence (left `"Claude Code isn't installed. Install it, …"`).
+  `… --test mcp_create_session` -> `test result: FAILED. 17 passed; 1 failed`: A14 (left
+  `"Pi Coding Agent is not installed where this session would run: …"`)
+- A12 is a characterization test written against literal strings: it was green in that red run, before
+  T023 changed the gate, and is green after it
+- green: the launch gate resolves the directory once (`spawn_env_for`) and fails with
+  `start_refusal(cli, env, place, Dir(cwd), launch)`; `missing_cli_reason` is removed; `create_session`
+  replies with `explain`'s `{reason} {action}` from `State::availability_in(cwd)`.
+  `session_start` -> `test result: ok. 25 passed; 0 failed`; `mcp_create_session` ->
+  `test result: ok. 18 passed; 0 failed`; `cargo test -p micold-daemon` -> exit 0, 97 `test result: ok`
+- replaced: `a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started` and the file's
+  `missing_cli_reason` helper; its properties (a resume never offers another CLI, an image never says
+  "install") are asserted in U64, A12 and A13. The T020 test is renamed: "not installed" is no longer
+  what it checks
+- written by a subagent from the task text; the red and green lines are its runs

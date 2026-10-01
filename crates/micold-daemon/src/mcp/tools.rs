@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use alacritty_terminal::term::TermMode;
+use micold_core::cli_reason::{self, AttemptDir, Explanation};
 use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
@@ -1021,16 +1022,26 @@ async fn create_session(
     )?;
 
     // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5).
+    //
+    // What is available and the state of the environment it was looked for in come from one
+    // resolution of the directory, so the reason given describes the attempt that did not find
+    // the CLI (037, FR-012). The words are `cli_reason`'s: "is not installed" was said here in
+    // every state, and is true in none that the service can tell apart (FR-009a, FR-002).
     let st = Arc::clone(state);
     let place = cwd.clone();
-    let available = blocking(move || Ok(st.ai_clis_available_in(&place))).await?;
+    let (available, env) = blocking(move || Ok(st.availability_in(&place))).await?;
     if !available.contains(&cli) {
-        let provider = cli.provider();
-        return Err(OpError::service_error(format!(
-            "{} is not installed where this session would run: `{}` is not on its PATH",
-            provider.display_name(),
-            provider.command()
-        )));
+        let image = crate::state::image_reference();
+        let said = cli_reason::explain(
+            &[cli],
+            env,
+            crate::state::place(&image),
+            AttemptDir::Dir(&cwd),
+        );
+        let Some(Explanation { reason, action }) = said else {
+            unreachable!("one CLI is missing, so there is an explanation");
+        };
+        return Err(OpError::service_error(format!("{reason} {action}")));
     }
 
     let dir = match &worktree {
