@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -24,18 +24,15 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
-- [ ] Feature meets measurable outcomes defined in Success Criteria
+- [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- One open question, marked twice because one answer settles both: User Story 3 scenario 1 and
-  FR-010 (the form the per-session surface takes when fewer than two CLIs are available, which
-  touches 026 FR-006). It goes to `/speckit-clarify`; SC-007 depends on its answer.
-- Three more items stay unticked for the same reason and no other: FR-010 has no defined form
-  until that question is answered, so it is not yet unambiguous, has no settled acceptance
-  criterion, and SC-007 is conditional on it. Every other requirement and criterion passes.
+- The one open question (the form of FR-010 when fewer than two CLIs are available) was answered
+  in clarify round 1 on 2026-10-01: the chevron rule of 026 FR-006 stays, and the reason appears
+  only in a row list that already opens. The four items that waited on it now pass.
 - `PATH` and "environment-include" are named because they are the user-facing terms the Settings
   page and the user guide already use, not implementation details.

@@ -33,6 +33,17 @@ distinguishable from one that does not exist on this machine at all."
 This spec adds the behaviour none of them intended: the reason a CLI is not offered, and the action
 that would change it, said wherever the application names a missing CLI.
 
+## Clarifications
+
+### Session 2026-10-01
+
+- Q: On a sidebar row where fewer than two CLIs are available, so the row has no chevron (026
+  FR-006), where is a CLI that is not offered there explained? → A: Not at the row. The chevron
+  rule stays as it is. The reason appears only in a row list that already opens: two or more CLIs
+  are available there and another supported one is missing. A row with fewer than two available
+  CLIs is unchanged, and that user gets the reason from the Settings note (Story 1) and the start
+  and restart messages (Story 2). No closed spec is amended. _(decided by user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Settings says why a CLI is missing and what would make it appear (Priority: P1)
@@ -123,40 +134,40 @@ of that CLI: the failure in the pane and the banner give the same reason.
 
 ---
 
-### User Story 3 - The place I start a session tells me a CLI is hidden (Priority: P3)
+### User Story 3 - A row's CLI list tells me a CLI is hidden (Priority: P3)
 
 I start sessions from the sidebar and rarely open Settings. A row offers what its own directory
-provides, so a CLI can be offered on one project's rows and not on another's. I want to learn at
-the row that a CLI is not offered there and why, without first guessing that Settings holds the
-answer.
+provides, so a CLI can be offered on one project's rows and not on another's. When I open a row's
+list of CLIs, I want it to tell me that a CLI is not offered there and why, without first guessing
+that Settings holds the answer.
 
-**Why this priority**: It closes the gap for users who never open Settings and for per-directory
-differences that the Settings note, which answers for the home directory, cannot show. It ranks
-below Stories 1 and 2 because it changes the start control, which features 026 and 033 made
-deliberately quiet.
+**Why this priority**: It shows per-directory differences that the Settings note, which answers
+for the home directory, cannot show. It ranks below Stories 1 and 2 because it reaches only rows
+that already have a list to open: a row with fewer than two available CLIs has no chevron (026
+FR-006) and stays as it is. That user, the BUG-001 reporter among them, is served by Stories 1
+and 2.
 
-**Independent Test**: With two projects whose environments differ, so that one row finds a CLI
-the other does not, open the per-session CLI choice on each row. The row that lacks the CLI says so
-and gives the reason for that row's directory. The other row says nothing.
+**Independent Test**: With three supported CLIs and two projects whose environments differ, so
+that one row finds all three and the other finds two, open the per-session CLI choice on each row.
+The row that lacks a CLI says so and gives the reason for that row's directory. The other row says
+nothing. A third row whose directory provides one CLI has no chevron, as today.
 
 **Acceptance Scenarios**:
 
-1. **Given** a row whose directory does not provide a CLI the application supports, **When** I
-   open that row's CLI choice, **Then** I can see which CLI is not offered there and the reason for
-   that directory. [NEEDS CLARIFICATION: where does this appear when fewer than two CLIs are
-   available? 026 FR-006 removes the per-session chevron in that case, which is exactly the
-   BUG-001 reporter's situation. Options: (A) show the chevron whenever a supported CLI is not
-   offered, with unavailable CLIs listed as non-selectable entries that carry the reason — this
-   amends 026 FR-006; (B) keep the chevron rule and show the reason only in a list that already
-   appears (two or more CLIs available), leaving the single-CLI case to Settings; (C) no change at
-   the row, Settings and start messages only — drops this story.]
+1. **Given** a row whose directory provides two or more supported CLIs and does not provide
+   another, **When** I open that row's CLI choice, **Then** the list names the CLI that is not
+   offered there and gives the reason for that directory.
+1a. **Given** a row whose directory provides fewer than two supported CLIs, **When** I look at the
+   row, **Then** it has no chevron and shows nothing about missing CLIs, exactly as before this
+   feature (026 FR-006).
 2. **Given** a row whose directory provides every supported CLI, **When** I open its CLI choice,
    **Then** nothing about missing CLIs is shown.
 3. **Given** two rows whose directories differ in what they provide, **When** I open each row's
    CLI choice, **Then** each gives the answer for its own directory, and opening one never changes
    what the other shows.
-4. **Given** a CLI is shown as not offered on a row, **When** I try to start a session on it from
-   that row, **Then** nothing starts: an unavailable CLI can never be chosen by accident.
+4. **Given** a CLI is named as not offered in a row's list, **When** I press it, **Then** nothing
+   starts and the list offers no way to choose it: an unavailable CLI can never be chosen by
+   accident.
 
 ---
 
@@ -257,10 +268,11 @@ and gives the reason for that row's directory. The other row says nothing.
 - **FR-009a**: The reply an AI session receives when it asks the application to start a session on
   a CLI that would not be found (feature 034) MUST carry the reason and action for the target
   directory, under FR-002's limits.
-- **FR-010**: The per-session CLI choice on a sidebar row MUST make a supported CLI that is not
-  offered there discoverable, with its reason for that row's directory. [NEEDS CLARIFICATION: the
-  form is the open question of User Story 3, scenario 1 — options A, B or C.] An unavailable CLI
-  MUST NOT be selectable.
+- **FR-010**: When a sidebar row's per-session CLI list opens and a supported CLI is not offered
+  for that row's directory, the list MUST name that CLI and give its reason for that directory. An
+  unavailable CLI MUST NOT be selectable. The rule for when the row has a chevron is unchanged (026
+  FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay without one, and this
+  feature MUST add nothing to that row.
 
 **When it is said**
 
@@ -322,10 +334,10 @@ and gives the reason for that row's directory. The other row says nothing.
   shows a reason: zero notes in both cases.
 - **SC-006**: Showing a reason causes no additional run of the startup script and no additional
   search of the computer: the number of script runs with the note shown equals the number without.
-- **SC-007**: On a row whose directory lacks a supported CLI, the reason for that directory is
-  reachable in at most two interactions from that row, without opening Settings. This criterion
-  applies to the cases the answer to FR-010 puts in scope, and is dropped if that answer is
-  option C.
+- **SC-007**: On a row whose directory provides two or more supported CLIs and lacks another, the
+  reason for that directory is reachable in one interaction from that row (opening its CLI list),
+  without opening Settings. On a row with fewer than two available CLIs the start control is the
+  same as before this feature: zero added controls.
 
 ## Assumptions
 
@@ -337,20 +349,22 @@ and gives the reason for that row's directory. The other row says nothing.
   environment-include, because Default AI CLI and environment-include are on the same Settings
   page and 035 FR-008 rejected automatic recovery.
 - **The availability rule is unchanged.** What is offered, the launch gate, and the absence of an
-  unavailable CLI from the Settings selector stay as 026, 027 and 029 define them. Whether the
-  per-session control's "fewer than two" rule (026 FR-006) changes is the open question of FR-010.
+  unavailable CLI from the Settings selector stay as 026, 027 and 029 define them. The
+  per-session control's "fewer than two" rule (026 FR-006) also stays: this feature never adds a
+  chevron to a row.
 - **Container placement follows the same rule.** Environment-include applies where sessions run
   under both placements (029 FR-003b), so the same states can hide a CLI the image has. The
   image-naming sentence of 027 FR-023b is kept for the one state in which it is true.
 - **The existing reports stay where they are.** Features 011 and 035 keep ownership of the
   environment-include lines. This feature refers to them and does not move or reword them.
 - **Home directory for Settings.** The Settings note reasons from the home directory's outcome, as
-  the selector does. A difference in one project is shown at that project's rows and start
-  messages.
+  the selector does. A difference in one project is shown in that project's start messages, and in
+  its rows' CLI lists where a row has one.
 
 ## Out of Scope
 
 - Changing which CLIs are offered, or offering a CLI a session would not find.
+- Showing a chevron, or any other new control, on a row with fewer than two available CLIs.
 - Detecting where a CLI is installed, or which version manager installed it.
 - Installing a CLI, or changing environment-include settings for the user.
 - Reporting a CLI that is found but too old, not signed in, or otherwise unusable.
