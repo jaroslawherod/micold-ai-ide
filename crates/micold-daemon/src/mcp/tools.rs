@@ -23,7 +23,9 @@ use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
 use micold_core::mcp::submission::encode_submission;
-use micold_core::mcp::tools::{is_mutating_tool, parse_call, Operation, SessionRef, WorktreeRef};
+use micold_core::mcp::tools::{
+    is_mutating_tool, parse_call, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
+};
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
     ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
@@ -133,6 +135,12 @@ async fn dispatch(
             )
             .await
         }
+        Operation::SendSessionInput { session, text } => {
+            send_session_input(&state, caller, session, text).await
+        }
+        Operation::ReadSessionOutput { session, lines } => {
+            blocking(move || read_session_output(&state, caller, session, lines)).await
+        }
         read => blocking(move || read_call(&state, caller, read)).await,
     }
 }
@@ -171,11 +179,15 @@ fn read_call(
         | Operation::CreateSession { .. }
         | Operation::StartSession { .. }
         | Operation::RenameWorktree { .. }
+        | Operation::SendSessionInput { .. }
         | Operation::StopSession { .. }
         | Operation::InterruptSession { .. }
         | Operation::DeleteSession { .. }
         | Operation::DeleteWorktree { .. } => {
             unreachable!("mutating tools are dispatched by call")
+        }
+        Operation::ReadSessionOutput { .. } => {
+            unreachable!("read_session_output has its own handler, with a policy check")
         }
     }
 }
@@ -206,28 +218,63 @@ fn resolve_caller(
 /// What policy says about `operation` from `who`: `None` to go ahead, `Some` to ask the user
 /// first (FR-014), or the refusal that is the call's failure.
 fn policy_for(who: &Caller, operation: &Operation) -> Result<Option<ConfirmedOp>, OpError> {
-    match policy::decide(
+    decided(policy::decide(
         who,
         operation,
         &TargetFacts::default(),
         CrossSessionAccess::default(),
-    ) {
+    ))
+}
+
+/// [`policy_for`] for the two cross-session tools: the user's option is read here, on every
+/// request, so a change in Settings applies to the next call of a session that is already running
+/// (FR-016).
+fn cross_session_policy(
+    state: &DaemonState,
+    who: &Caller,
+    operation: &Operation,
+) -> Result<Option<ConfirmedOp>, OpError> {
+    decided(policy::decide(
+        who,
+        operation,
+        &TargetFacts::default(),
+        state.cross_session_access(),
+    ))
+}
+
+/// A policy decision as a call's result.
+fn decided(decision: PolicyDecision) -> Result<Option<ConfirmedOp>, OpError> {
+    match decision {
         PolicyDecision::Proceed => Ok(None),
         PolicyDecision::Confirm(op) => Ok(Some(op)),
         PolicyDecision::Refuse(error) => Err(error),
     }
 }
 
-/// [`policy_for`] for a tool that never waits for a confirmation; one that would is refused as
-/// needing it, rather than performed unasked.
-fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
-    match policy_for(who, operation)? {
+/// For a tool that never waits for a confirmation: an operation that would is refused as needing
+/// it, rather than performed unasked.
+fn unconfirmed(confirm: Option<ConfirmedOp>) -> Result<(), OpError> {
+    match confirm {
         None => Ok(()),
         Some(_) => Err(OpError::new(
             ErrorCategory::NeedsConfirmation,
             "this operation needs the user's confirmation in an app window",
         )),
     }
+}
+
+/// [`policy_for`] for a tool that never waits for a confirmation.
+fn check_policy(who: &Caller, operation: &Operation) -> Result<(), OpError> {
+    unconfirmed(policy_for(who, operation)?)
+}
+
+/// [`cross_session_policy`] without the confirmation flow.
+fn check_cross_session(
+    state: &DaemonState,
+    who: &Caller,
+    operation: &Operation,
+) -> Result<(), OpError> {
+    unconfirmed(cross_session_policy(state, who, operation)?)
 }
 
 /// The wire form of a confirmed operation, as the prompt names it.
@@ -243,6 +290,7 @@ fn wire_operation(op: ConfirmedOp) -> ConfirmOperation {
         ConfirmedOp::DeleteSession => ConfirmOperation::DeleteSession,
         ConfirmedOp::StopSession => ConfirmOperation::StopSession,
         ConfirmedOp::InterruptSession => ConfirmOperation::InterruptSession,
+        ConfirmedOp::SendInput => ConfirmOperation::SendInput,
     }
 }
 
@@ -776,6 +824,110 @@ async fn start_session(
     .await?["lifecycle"]
         .clone();
     Ok(json!({ "lifecycle": lifecycle }))
+}
+
+/// `session` must be one of `project`'s. A session of another project fails exactly as one that
+/// does not exist (FR-010).
+fn session_in(project: &ProjectSnapshot, session: SessionId) -> Result<(), OpError> {
+    if project.sessions.iter().any(|s| s.id == session) {
+        Ok(())
+    } else {
+        Err(OpError::not_found(format!(
+            "no session {} in this project",
+            session.0
+        )))
+    }
+}
+
+/// A cross-session tool aimed at a session with no running primary process: there is no terminal
+/// to read and nothing to type into.
+fn not_running(session: SessionId) -> OpError {
+    OpError::new(
+        ErrorCategory::Conflict,
+        format!(
+            "session {} has no running process; start it with start_session first",
+            session.0
+        ),
+    )
+}
+
+/// `read_session_output` (contracts/mcp-tools.md): scope, then policy with the option as it is
+/// now (FR-015, FR-016), then the last lines of the target's **primary** terminal as plain text,
+/// whichever of its processes the user has attached (FR-012). **Blocking.**
+fn read_session_output(
+    state: &DaemonState,
+    caller: SessionId,
+    target: SessionRef,
+    lines: LineCount,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let (who, project) = resolve_caller(state, caller)?;
+    session_in(&project, session)?;
+    check_cross_session(
+        state,
+        &who,
+        &Operation::ReadSessionOutput {
+            session: target,
+            lines,
+        },
+    )?;
+
+    let (Some(pty), Some(framer)) = (state.primary_pty(session), state.primary_framer(session))
+    else {
+        return Err(not_running(session));
+    };
+    if !pty.is_alive() {
+        return Err(not_running(session));
+    }
+    let (text, truncated) = framer
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .plain_tail(pty.term(), usize::from(lines.get()));
+    Ok(json!({ "lines": text, "truncated": truncated }))
+}
+
+/// `send_session_input` (contracts/mcp-tools.md): scope, then policy with the option as it is now
+/// (FR-015, FR-016), then the text typed into the target's primary process as one submission
+/// (research R12), as the first prompt of `create_session` is.
+///
+/// At "Confirm each send" the call is refused as needing confirmation and nothing is typed: the
+/// confirmation in a window arrives with the confirmation flow (FR-014).
+async fn send_session_input(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+    text: NonEmptyText,
+) -> Result<Value, OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let who = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        session_in(&project, session)?;
+        Ok(who)
+    })
+    .await?;
+    check_cross_session(
+        state,
+        &who,
+        &Operation::SendSessionInput {
+            session: target,
+            text: text.clone(),
+        },
+    )?;
+
+    let pty = state
+        .primary_pty(session)
+        .filter(|pty| pty.is_alive())
+        .ok_or_else(|| not_running(session))?;
+    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
+    pty.write_input(&encode_submission(text.as_str(), bracketed))
+        .map_err(|err| {
+            OpError::service_error(format!(
+                "the text could not be typed into session {}: {err}",
+                session.0
+            ))
+        })?;
+    Ok(json!({}))
 }
 
 /// `create_session` (contracts/mcp-tools.md): scope and the worktree, then the CLI's availability
