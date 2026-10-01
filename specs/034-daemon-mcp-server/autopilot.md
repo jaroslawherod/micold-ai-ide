@@ -7,13 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 4-milestone M5
-- **Next step**: M5 PR #516 is open; merge on green (`scripts/autopilot/wait-merge.sh 516`), then M6.
-  Rebased onto main `976b0220` after main made it CONFLICTING. One conflict,
-  `crates/micold-core/tests/protocol_auth.rs`: main (034-github-issue-worktree's close) removed the
-  duplicate literal pin there, so main's side was taken and the one pin is `schema_hash.rs`'s, at 18.
-  Main's `PROTOCOL_VERSION` is still 17, so no renumbering: M5 stays 18 and M6 takes 19. Main did not
-  touch the layout fixture.
+- **Phase**: 4-milestone M6
+- **Next step**: see *Handover* below (M6, no PR open yet; nothing is pushed).
 
 ## Pull requests
 
@@ -25,7 +20,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #474 | M2: Settings toggle for the tool server | merged | 7964273e |
 | #498 | M3: create_worktree / create_session | merged | 2486d096bfb6ddbba8f6b6cad1f2489f3a2e481c |
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
-| #516 | M5: confirmations and the destructive tools | open | — |
+| #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
 
 ## Milestones
 
@@ -35,8 +30,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
 | M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
-| M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | PR open |
-| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |
+| M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | merged |
+| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | — | in progress |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
 
 Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
@@ -67,6 +62,8 @@ deliverable (tasks.md Notes).
 | D18 | design | Milestones M1–M7 as cut? | Ship as cut, M1 through M7 in order, no changes | decided by user | Coordinator relay of the user's decision |
 | D19 | 4-milestone M3 | Claude Code never posts `SessionStart` over the HTTP hook; how does a Claude session show it is ready for its first prompt? | The output-settled rule, as FR-017 prescribes for a CLI that reports no signal; `HookSessionStart` removed | agent-resolved | evidence/m3-real-cli.md finding 1; cycle 23 |
 | D20 | 4-milestone M3 | With a first prompt, a CLI's folder-trust question gets answered by the prompt's Enter; what should `create_session` do? | Read the CLI's own trust record read-only (Claude `.claude.json` `hasTrustDialogAccepted`, Copilot `config.json` `trustedFolders`, ancestors count); when it would ask, type nothing and return `prompt_delivered: false` with a reason; document "trust the project in that CLI first" | _(decided by user)_ | evidence/m3-real-cli.md finding 4; cycle 24 |
+| D21 | 4-milestone M6 | May a Default session create a worktree through `create_worktree`? (supersedes D1 for create) | Yes: constitution 1.7.0 amends Principle III with that exception; rename and delete stay refused from Default (FR-015a) | _(decided by user)_ | .specify/memory/constitution.md 1.7.0, constitution-history.md; spec.md#FR-015a; `mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does` |
+| D22 | 4-milestone M6 | What do `read_session_output` and `send_session_input` answer for a target with no running primary process? | `conflict`, naming `start_session`, for both; checked after policy and before any confirmation, so nobody is asked about a send that cannot be typed | agent-resolved | contracts/mcp-tools.md *Order of checks*; FR-012a's `interrupt_session` precedent; `mcp_cross_session.rs::a_session_that_is_not_running_is_a_conflict_naming_start_session` |
 
 ## Review rounds
 
@@ -118,6 +115,58 @@ deliverable (tasks.md Notes).
 | M5 | A round 1 | `SessionStop` racing a start/respawn in flight: the spawn registers after the stop reported `Idle` | Pre-existing for the sidebar's stop (the old kill-only arm raced the same spawns); the start gate serialization is feature 026's. Follow-up below |
 | M5 | A round 1 | `headline` repeats `operation_phrase`'s delete-worktree suffixes | Cosmetic; two short phrases in one file |
 | M5 | A round 1 | `wire_operation` mirrors `policy::ConfirmedOp` onto the protocol's `ConfirmOperation` | Layering: the policy type is daemon-internal and the wire type is the versioned protocol; a `From` in core would tie the policy to protocol 18. `SendInput` arrives with M6 |
+
+## Handover
+
+M6 unit 1 stopped at the context cap. Branch `feat/daemon-should-expose-mcp-server-for-agent` is
+`origin/main` `fc1c3ad2` plus local, unpushed commits. No PR is open. Skip nothing in
+`branch-start.sh 516`: it rebases this unmerged work onto `origin/main`.
+
+**Done**
+- Phase A's 13 commits are cherry-picked (the Default `create_worktree` change, D21, among them).
+  Conflicts resolved in `mcp_tools_catalog.rs` (15 shipped tools, phase A's catalog order),
+  `mcp_audit_log.rs` (M5's siblings plus phase A's AI sibling; `prepare` starts the target of
+  `send_session_input` and `interrupt_session`), daemon `mcp/tools.rs` (`policy_for`,
+  `cross_session_policy`, `decided`, `unconfirmed`; `wire_operation` has the `SendInput` arm) and
+  `docs/user-guide/agent-tools.md`.
+- `PROTOCOL_VERSION` 19 with its changelog line and the `schema_hash.rs` pin.
+- Flaky M3 test: `mcp_create_session.rs` waits (10 s bound) for the stand-in's launch line.
+- Confirm each send goes through `ask_user`/`state.confirm` (red then green, in the commit
+  messages): `mcp_cross_session` 17 passed, `mcp_audit_log` 5, `mcp_create_session` 18,
+  `scrollback_range` 11. A21 has the four destructive tools. A read with a window attached raises
+  no prompt.
+- `delete_worktree` from a Default caller through `POST /mcp` is already on `main`:
+  `mcp_lifecycle_tools.rs::a_default_session_is_refused_delete_worktree` (M5). No new test needed;
+  confirm it still passes (the refusal text changed in phase A but still names Principle III).
+
+**Next, in order**
+1. `fixup!` commit `3142fdd3` (a match arm lost in conflict resolution) is still separate; squash
+   it with `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash origin/main`, or leave it.
+2. Only four daemon test binaries ran after the cherry-pick. The workspace compiled before the
+   last `mcp/tools.rs` change. Not yet run: `mise run test-core`, the client tests.
+3. Re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` for the Environment page
+   (phase A saw `settings-view-environment` fail, the new select row) and check
+   `tests/support/covered_states.rs` merged correctly with M5's states.
+4. Docs: check that `docs/user-guide/agent-tools.md` and `settings.md` describe Confirm each send
+   as a working dialog (phase A wrote them before the confirm path existed), and that
+   `contracts/protocol-delta.md` §3 says 18 → 19.
+5. Bookkeeping: tick T060–T071, T095–T099 (T104 after the visual pass) in tasks.md; test-list:
+   reword U104, U219 and A18 (create from Default now proceeds; tests are
+   `mcp_policy.rs::a_default_caller_may_create_a_worktree`,
+   `mcp_create_worktree.rs::a_default_session_creates_a_worktree_as_any_session_does`), mark A19–A23
+   and M6's U rows DONE with their test names; cycle-log cycles 35 (phase A; evidence in the commit
+   message of `test(034): M6 phase A compiled`), 36 (Default create; evidence in the two commits
+   after the constitution one) and 37 (Confirm each send; evidence in the last two commits).
+6. Gate detached (`df` first; stop under 8 GB), review A in its shadow, then review B and the
+   visual pass (§B5, §B6, T104), evidence under `evidence/`, push, PR
+   `feat(034): cross-session read and send under the user's option; Default may create a worktree`.
+
+**For the reviews**: D22 (a target with no running primary process is `conflict` naming
+`start_session`, for both tools, before any prompt). Some phase A commits do not compile alone
+(red is a compile failure there); the phase file does not require compiling commits. The timeout
+test pauses the clock only to step over `CONFIRM_TIMEOUT`, on a `current_thread` runtime.
+
+No review round has run for M6.
 
 ## Open escalation
 
