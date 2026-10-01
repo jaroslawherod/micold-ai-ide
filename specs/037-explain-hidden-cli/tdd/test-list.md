@@ -279,6 +279,11 @@ under the behaviour named, and is not credited as `DONE`:
   pins the host `Fresh` sentence. T019, U64 and A12.
 - `mcp_create_session.rs::a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record`
   asserts the binary name `pi`. T020, A14.
+- `a_field_note_shares_its_fields_column.rs::the_missing_cli_notice_lines_up_with_the_select_it_is_about`
+  finds the note by "installed on this computer", which no new host sentence contains. Its
+  fixture `settings_showing` needs `env: Some(SpawnEnv::Applied)` and the needle becomes "was not
+  found on the PATH". `::and_so_does_the_one_under_the_image_reference` keeps its needle with the
+  same fixture change. T012, U47.
 - The fixtures in `features_settings.rs` and `start_failure_notice.rs` quote the old text as an
   opaque string (T012, T021). U68's test does not depend on the wording.
 

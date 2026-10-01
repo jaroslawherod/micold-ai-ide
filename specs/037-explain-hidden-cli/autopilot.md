@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 3-design
-- **Next step**: Phase 3 (design unit 2): `speckit-analyze`, the tasks and milestone review, then PR 2.
+- **Next step**: Phase 3, continue from *Handover*: tasks review round 2, then PR 2.
 
 ## Pull requests
 
@@ -54,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | b460803fa1576b80357bd110538b491691e8f6c3:65fbe60069a3f9b434d1550233c450000099604e | CLEAN: 1 MINOR, fixed |
 | Plan | 1 | 36e2eb237df3c0946d4477309215238afed6789b:c1fb57e37f3409153c7d001c0e6d5b95c88124d8 | CHANGES: 2 MAJOR, 3 MINOR — all fixed |
 | Plan | 2 | 91d8ac1c552b4aebf2935d2dbf27da809322cb24:f490b395f55a537ab5a1f99fea08cb1c9e5afb80 | CLEAN: 1 MINOR, fixed |
-| Tasks | 1 | 6a70370da6ba5cd5650bcbdaf9f8760c347ac6da:fff351d523d61045b0b4faeabc1344331029a419 | pending |
+| Tasks | 1 | 6a70370da6ba5cd5650bcbdaf9f8760c347ac6da:fff351d523d61045b0b4faeabc1344331029a419 | CHANGES: 1 MAJOR, 3 MINOR — all fixed |
 
 ## Declined review findings
 
@@ -63,7 +63,35 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design unit 2 stopped at the context cap (150k) after fixing tasks review round 1. Nothing is
+pushed and no PR is open. Do not run `branch-start.sh`: the branch carries the unmerged design
+commits on top of `origin/main` (#515 merged).
+
+**Done**: plan review (rounds 1 and 2, clean); `speckit-tasks` (T001–T044); `speckit-tdd-plan`
+(`tdd/test-list.md`: 20 A and 91 U behaviours; `tdd/cycle-log.md` baseline green, 4098 passed);
+milestones M1–M4 cut and in the ledger; `speckit-analyze` (0 CRITICAL, 0 HIGH; both MEDIUM fixed);
+tasks review round 1 (1 MAJOR, 3 MINOR, all fixed); `checklists/requirements.md` has no unchecked
+item; `mise run test-scripts` passed (15 cases, 0 failures) on the tree before the round-1 fixes,
+which changed only `tasks.md`, `tdd/test-list.md` and this ledger.
+
+**Next steps**, in order:
+
+1. Tasks review round 2: a scoped re-review (`model: "sonnet"`), with
+   `scripts/autopilot/review-snapshot.sh diff 6a70370da6ba5cd5650bcbdaf9f8760c347ac6da:fff351d523d61045b0b4faeabc1344331029a419`
+   as the fix diff. Take a new snapshot first and record it in *Review rounds* as Tasks round 2.
+   Round 1's findings and fixes: F1 MAJOR, M1 breaks
+   `crates/micold-client/tests/a_field_note_shares_its_fields_column.rs` and no task named it:
+   T012 now rewrites both tests there, and the test list's rewrite section lists it. F2 MINOR,
+   T037 `[P]` wrote T036's file: `[P]` dropped and "T037 after T036" added. F3 MINOR, T012 quoted
+   a fixture that does not exist in `features_settings.rs`: it now names the real test at line
+   291. F4 MINOR, scenario 4a was not claimed: M1's Satisfies line and checkpoint say "1–7 and 4a".
+2. `mise run test-scripts`, then `git push --force-with-lease -u origin HEAD` and open PR 2:
+   `docs(037): clarify, plan and cut milestones for explaining a hidden AI CLI`, body ending
+   `Refs #434`. Record its number under *Pull requests*. Do not merge it.
+3. Set this section back to `None.` and return `STATUS: DONE` with the milestone list
+   (M1–M3 `full`; M4 `docs`, the only docs-only milestone).
+
+**Open findings**: none.
 
 ## Open escalation
 
