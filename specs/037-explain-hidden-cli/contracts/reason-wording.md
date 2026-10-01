@@ -13,6 +13,7 @@ pub fn explain(missing: &[AiCli], env: SpawnEnv, place: Place<'_>, dir: AttemptD
     -> Option<Explanation>;                                // None when `missing` is empty
 pub fn start_refusal(cli: AiCli, env: SpawnEnv, place: Place<'_>, dir: AttemptDir<'_>,
     launch: LaunchMode) -> String;
+pub fn start_refusal_unknown(cli: AiCli) -> String;        // the answer in use has no state (W5)
 ```
 
 ## W1 — Placeholders
@@ -66,6 +67,11 @@ Rules the table obeys, each asserted by a test over all rows × both places:
 - **W3b (Story 2 scenario 4)**: the `Applied`/image row is the text `missing_cli_reason` returns
   today, byte for byte.
 - **W3c (Story 2 scenario 2)**: in the three failed-attempt states no form contains "install".
+- **W3d (FR-012)**: in every state and place except `Applied`/image, both forms begin with
+  `explain(&[cli], ..)`'s `{reason} {action}`. The `Applied`/image row is the one exception, held
+  by W3b: it says the same thing (the image lacks the CLI, so the image must provide it) in 027's
+  words.
+- **W3e (FR-002)**: rule W2a holds for both forms and for `start_refusal_unknown`.
 
 ## W4 — Surfaces
 
@@ -73,7 +79,7 @@ Rules the table obeys, each asserted by a test over all rows × both places:
 |---|---|---|---|---|
 | U1 | Note under **Default AI CLI** (FR-006, FR-007) | client `features::settings::missing_cli_notice(availability)` | `{reason} {action}` | `Home`, place from `source` |
 | U2 | Note under *Image reference* (FR-005) | the same function (`ui/settings/daemon.rs` calls it today) | the same string as U1 | the same |
-| U3 | Missing-default message as the list opens (FR-008) | client `features::session::start_menu_toggled` | `start_refusal(cli, .., Fresh)` | the answer in use for the row: `asked_for` |
+| U3 | Missing-default message as the list opens (FR-008) | client `features::session::start_menu_toggled` | `start_refusal(cli, .., Fresh)`, or `start_refusal_unknown(cli)` when `env` is `None` | the answer in use for the row: `asked_for` |
 | U4 | Start or restart failure: pane text and banner (FR-009) | service, the launch gate in `state.rs` (replaces `missing_cli_reason`) | `start_refusal(cli, .., launch)` | `Dir(plan.cwd)`, place from `MICOLD_IMAGE_REFERENCE` |
 | U5 | Reply to an AI session's `create_session` (FR-009a) | service `mcp/tools.rs` | `{reason} {action}` | `Dir(cwd)` |
 | U6 | Note in a row's CLI list (FR-010) | client `features::session::State::start_menu_note(dir)`, drawn by `MenuOverlay::note` | `{reason} {action}` | the answer in use for the row: `asked_for` |
@@ -84,7 +90,7 @@ Rules the table obeys, each asserted by a test over all rows × both places:
 |---|---|---|---|
 | No answer in use | nothing | not reached: with no answer the press goes to the session service, and U4 answers | nothing |
 | Answer in use, nothing missing | nothing | nothing (the default is available) | nothing |
-| Answer in use, `env` is `None` | nothing | `{name} would not be found by a session here. Start this session on another AI CLI.` (R8) | nothing |
+| Answer in use, `env` is `None` | nothing | `start_refusal_unknown(cli)`: `{name} would not be found by a session here. Start this session on another AI CLI.` (R8) | nothing |
 | Row's answer offers fewer than two CLIs | — | said, as above | nothing (FR-010, D5, D6) |
 
 U4 and U5 are said only when the service has resolved the directory, so they always have a state.

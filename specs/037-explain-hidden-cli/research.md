@@ -49,7 +49,9 @@ The order is the daemon's own: `enabled` is tested first, then the blank path, a
 path that exists but cannot be read (a directory, a mode-000 file) is sourced and fails, so it is
 `ScriptFailed`, the same category the environment-include group shows for it ("Exited with an
 error"). That is Story 1 scenario 4's "in the same terms the environment-include group uses", and
-it needs no probe of the path (FR-014). The diagnostic text of an outcome is dropped: FR-007
+it needs no probe of the path (FR-014). spec.md FR-001's third row and Story 1 scenario 4 said
+"no readable file", which put that path in the third state against the group's own report. They
+now say "no file", and FR-001 states where an unreadable path falls (ledger D14). The diagnostic text of an outcome is dropped: FR-007
 forbids repeating the script's output.
 
 **Alternatives rejected**:
@@ -87,8 +89,8 @@ recovery (027).
 
 **Decision**: One pure module, `micold_core::cli_reason`, owns every sentence:
 `explain(missing, env, place, dir) -> Option<Explanation>` for the standing surfaces and the reply
-to an AI session, and `start_refusal(cli, env, place, dir, launch) -> String` for the failed start
-and the missing-default message. The service and the client both call it. `name_list` moves there
+to an AI session, `start_refusal(cli, env, place, dir, launch) -> String` for the failed start
+and the missing-default message, and `start_refusal_unknown(cli) -> String` for R8's case. The service and the client both call it. `name_list` moves there
 from `features/settings.rs`. The three setting labels become `pub const`s there, and
 `ui/settings/environment.rs` reads them for its checkbox and field labels.
 
@@ -177,7 +179,9 @@ the limit as "the only action".
 
 **Decision**: When the answer in use has `env: None`, the missing-default message says
 "*<name>* would not be found by a session here. Start this session on another AI CLI." The
-Settings note and the row note show nothing in that case.
+Settings note and the row note show nothing in that case. The sentence is written by
+`cli_reason::start_refusal_unknown(cli)`, so the module of R4 still writes every sentence and rule
+W2a covers it.
 
 **Rationale**: FR-008's message must still explain why a list opened in place of a session (026
 BUG-001), so it cannot be silent. It must not claim "isn't installed" without knowing (FR-002).

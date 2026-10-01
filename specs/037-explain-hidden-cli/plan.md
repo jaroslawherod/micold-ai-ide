@@ -64,8 +64,8 @@ touched, 1 new core module, 1 new builder method on a shared component, 4 user g
 | **III. Worktree Integration** | PASS | A row reasons from its own worktree directory's attempt. A worktree's cell is removed when the worktree is deleted, as today. No VCS operation is added. |
 | **IV. Local-First** | PASS | The state comes from the local session service's own cache. No network, no remote service, nothing persisted or transmitted beyond the existing local socket. |
 | **V. Rust + iced** | PASS | Rust and iced only. `SpawnEnv` is a closed enum, so a state without an action cannot be built. `Option<SpawnEnv>` separates "the service could not say" from every state. `ResolvedEnv` holds variables and state together, so one cannot be cached without the other. |
-| **VI. Cross-Platform** | PASS | The classification and the sentences do not branch on the OS. No sentence names a platform's startup file (contract W2e). The service tests that source a script run on all three CI platforms with the fixtures `ai_cli_availability.rs` already has for bash and PowerShell. No `cfg(target_os)` arm is added. |
-| **VII. Documentation** | PASS | The user guide changes in the milestone that ships each behaviour (FR-017): `settings.md` (Default AI CLI note) and `sandboxed-daemon.md` with the Settings note; `worktrees-and-sessions.md` ("When a CLI isn't installed") and `agent-tools.md` with the failure and the reply; the row list in `worktrees-and-sessions.md` with the list note. `docs/daemon.md` records protocol version 18. |
+| **VI. Cross-Platform** | PASS | The classification and the sentences do not branch on the OS. No sentence names a platform's startup file (contract W2e). The service tests that source a script run on all three CI platforms with the fixtures `ai_cli_availability.rs` already has for bash and PowerShell. `mcp_create_session.rs` is `#![cfg(unix)]`, so U5's wiring is tested on unix only, and its wording on every platform by `cli_reason.rs`. No `cfg(target_os)` arm is added. |
+| **VII. Documentation** | PASS | The user guide changes in the milestone that ships each behaviour (FR-017): `settings.md` (Default AI CLI note) and `sandboxed-daemon.md` with the Settings note; `worktrees-and-sessions.md` ("When a CLI isn't installed") and `agent-tools.md` with the failure and the reply; the row list in `worktrees-and-sessions.md` with the list note. `docs/daemon.md`'s protocol paragraph, which stops at version 10, is brought up to version 18. |
 | **VIII. Reusable UI** | PASS | The Settings notes keep the shared `field_note` primitive. The row list's note is a builder method on the shared `material::MenuOverlay`, shown in the component showcase and covered by `menu_anatomy`. No feature-level widget styling. |
 
 No violations. Complexity Tracking is empty.
@@ -98,7 +98,8 @@ specs/037-explain-hidden-cli/
 crates/micold-core/
 ├── src/lib.rs                          # + pub mod cli_reason
 ├── src/cli_reason.rs                   # NEW: SpawnEnv, classify, Place, AttemptDir, Explanation,
-│                                       #      explain, start_refusal, name_list, the 3 label consts
+│                                       #      explain, start_refusal, start_refusal_unknown, name_list,
+│                                       #      the 3 label consts
 ├── src/protocol/messages.rs            # DaemonMsg::AiCliAvailability + env: Option<SpawnEnv>
 ├── src/protocol/version.rs             # PROTOCOL_VERSION 17 → 18, with its paragraph
 ├── tests/cli_reason.rs                 # NEW: classification table, W1–W3 over state × place
@@ -134,7 +135,9 @@ crates/micold-client/
 └── tests/layout_snapshot.rs            # regenerated if the showcase entry changes a snapshot
 
 docs/user-guide/settings.md, sandboxed-daemon.md, worktrees-and-sessions.md, agent-tools.md   # FR-017
-docs/daemon.md                          # protocol version 18
+docs/daemon.md                          # the stale "version 10 today" sentence names version 18
+                                        #   (the record of the version is version.rs's paragraph
+                                        #   and the pin in tests/schema_hash.rs)
 ```
 
 Paths marked NEW do not exist yet. `spawn_env_for`, `availability_in`, `ResolvedEnv`,
@@ -157,16 +160,16 @@ shared menu component.
 | FR-004a (the directory named) | core unit + client unit | `cli_reason.rs`: W2c. `tests/directory_availability.rs`: a row reading the home answer has `asked_for == Home` |
 | FR-005 (container placement) | core unit + client unit | `cli_reason.rs`: image rows, W2d. `tests/missing_cli_is_reported_where_it_is_chosen.rs`: both notes in each state |
 | FR-006, FR-007 (Settings note, complete by itself) | client unit (pure) | `tests/missing_cli_is_reported_where_it_is_chosen.rs`: U1 per state; W2f |
-| FR-008 (missing-default message) | client reducer | `tests/unavailable_default_says_so.rs`: U3 per state, the list still opens, nothing starts, and R8's sentence when `env` is `None` |
+| FR-008 (missing-default message) | client reducer + core unit | `tests/unavailable_default_says_so.rs`: U3 per state, the list still opens, nothing starts, and `start_refusal_unknown`'s sentence (R8) when `env` is `None`. `cli_reason.rs`: W3e |
 | FR-009 (start and restart failure) | service integration | `micold-daemon/tests/session_start.rs`: U4 for Fresh and Resume in an off, a failed and an applied state; W3a–W3c |
-| FR-009a (reply to an AI session) | service integration | `micold-daemon/tests/mcp_create_session.rs`: U5 |
+| FR-009a (reply to an AI session) | service integration (unix) + core unit | `micold-daemon/tests/mcp_create_session.rs`: U5, by rewriting `a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record`, which asserts the binary name today. The sentence itself is `explain`'s, tested on every platform in `cli_reason.rs` |
 | FR-010 (row list note; nothing on a row with fewer than two) | client unit + geometry gate | `tests/directory_availability.rs`: `start_menu_note` for 3/2/1/0 available. `ui/material/menu_anatomy.rs`: the note is laid out, is not pressable, and the size estimate matches |
 | FR-011, SC-005 (silence) | client unit | `missing_cli_is_reported_where_it_is_chosen.rs` and `directory_availability.rs`: no answer, nothing missing, `env` `None` (W5) |
-| FR-012, SC-004 (one answer, all surfaces agree; event messages not rewritten) | core unit + client reducer | one function writes all sentences (R4), and `cli_reason.rs` asserts `start_refusal` begins with `explain`'s reason. `directory_availability.rs`: a newer answer changes U1 and U6's value and posts no second notification |
+| FR-012, SC-004 (one answer, all surfaces agree; event messages not rewritten) | core unit + client reducer | one function writes all sentences (R4), and `cli_reason.rs` asserts W3d: in every state and place except `Applied`/image, `start_refusal` begins with `explain`'s reason and action, and the `Applied`/image row equals today's `missing_cli_reason` text (W3b). `directory_availability.rs`: a newer answer changes U1 and U6's value and posts no second notification |
 | FR-013 (follows a save or a new resolution, no restart) | service integration + shell | `ai_cli_availability.rs`: after `set_env_include` the next answer carries the new state. `main_tests.rs`: the `AiCliAvailability` arm files `env` on the occasions 033 contract C1 lists |
 | FR-014, SC-006 (no extra script run) | service integration | `ai_cli_availability.rs`: the run-counting script is run once across an answer, a start check and a second answer |
 | FR-015 (changes nothing) | client reducer | the notice functions take `&State` and return a string; `unavailable_default_says_so.rs` keeps asserting the stored default is unchanged |
-| FR-016 (three OSes) | CI | core and service tests run on the Linux, macOS and Windows jobs; W2e |
+| FR-016 (three OSes) | CI | core tests and `ai_cli_availability.rs` run on the Linux, macOS and Windows jobs; `mcp_create_session.rs` on unix only; W2e |
 | FR-017 | docs | the four user guide pages; CI's user-guide gate |
 | A1 (wire) | core unit | `tests/schema_hash.rs` (version 18), `tests/protocol_roundtrip.rs` |
 | SC-001 (six of six, both placements), SC-002, SC-007, rendering | quickstart §B | `visual-pass` skill, steps B1–B14 |
