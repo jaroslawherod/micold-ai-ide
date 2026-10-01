@@ -5,7 +5,8 @@
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::jsonrpc::{parse, route, Route};
 use micold_core::mcp::tools::{
-    catalog, parse_call, parse_operation, Operation, SessionRef, WorktreeRef,
+    catalog, is_mutating_tool, parse_call, parse_operation, LineCount, NonEmptyText, Operation,
+    SessionRef, WorktreeRef,
 };
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
@@ -13,21 +14,23 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 /// The read-only tools, shipped in milestone M1.
-const READ_TOOLS: [&str; 5] = [
+const READ_TOOLS: [&str; 6] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
+    "read_session_output",
 ];
 
-/// The tools whose handlers ship by milestone M5, in catalog order.
-const SHIPPED: [&str; 13] = [
+/// The tools whose handlers ship by milestone M6, in catalog order.
+const SHIPPED: [&str; 15] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
+    "read_session_output",
     "create_worktree",
     "rename_worktree",
     "delete_worktree",
@@ -35,6 +38,7 @@ const SHIPPED: [&str; 13] = [
     "start_session",
     "stop_session",
     "interrupt_session",
+    "send_session_input",
     "delete_session",
 ];
 
@@ -421,5 +425,109 @@ fn delete_worktree_keeps_live_sessions_and_deletes_the_branch_by_default() {
     invalid_any(
         "delete_worktree",
         json!({"worktree": "b", "stop_sessions": "yes"}),
+    );
+}
+
+// --- Milestone M6: the cross-session tools (FR-012, FR-012a; U97–U103) ---
+
+fn read_lines(arguments: Value) -> u16 {
+    match parse_call("read_session_output", &arguments).unwrap() {
+        Operation::ReadSessionOutput { session, lines } => {
+            assert_eq!(session, s7());
+            lines.get()
+        }
+        other => panic!("expected ReadSessionOutput, got {other:?}"),
+    }
+}
+
+/// U97
+#[test]
+fn read_session_output_without_lines_means_200() {
+    assert_eq!(read_lines(json!({"session": S})), 200);
+    assert_eq!(read_lines(json!({"session": S, "lines": null})), 200);
+    assert_eq!(LineCount::DEFAULT.get(), 200);
+}
+
+/// U98
+#[test]
+fn a_line_count_below_one_is_invalid_input() {
+    for lines in [json!(0), json!(-1), json!(-5000)] {
+        let message = invalid("read_session_output", json!({"session": S, "lines": lines}));
+        assert!(message.contains("lines"), "{message}");
+    }
+}
+
+/// U99, U100: the bounds themselves are accepted as they are.
+#[test]
+fn a_line_count_of_1_and_of_2000_are_accepted_unchanged() {
+    assert_eq!(read_lines(json!({"session": S, "lines": 1})), 1);
+    assert_eq!(read_lines(json!({"session": S, "lines": 2000})), 2000);
+}
+
+/// U101 (EC-16): more than the maximum is clamped, never refused.
+#[test]
+fn a_line_count_above_2000_is_clamped_to_2000() {
+    assert_eq!(read_lines(json!({"session": S, "lines": 2001})), 2000);
+    assert_eq!(
+        read_lines(json!({"session": S, "lines": u64::MAX})),
+        2000,
+        "a count too large for the handler's own integer is still only too large"
+    );
+    assert_eq!(LineCount::MAX.get(), 2000);
+}
+
+#[test]
+fn a_line_count_that_is_not_a_whole_number_is_invalid_input() {
+    for lines in [json!("200"), json!(1.5), json!(true)] {
+        invalid("read_session_output", json!({"session": S, "lines": lines}));
+    }
+}
+
+/// U102 (FR-012a)
+#[test]
+fn send_session_input_with_empty_text_is_invalid_input() {
+    let message = invalid("send_session_input", json!({"session": S, "text": ""}));
+    assert!(message.contains("text"), "{message}");
+    invalid("send_session_input", json!({"session": S}));
+    invalid("send_session_input", json!({"session": S, "text": 7}));
+}
+
+/// U103: one character is text, and so is whitespace (assumption A-4).
+#[test]
+fn send_session_input_accepts_any_non_empty_text() {
+    for text in ["y", " ", "line one\nline two"] {
+        assert_eq!(
+            parse_call("send_session_input", &json!({"session": S, "text": text})).unwrap(),
+            Operation::SendSessionInput {
+                session: s7(),
+                text: NonEmptyText::new(text).unwrap(),
+            }
+        );
+    }
+    assert!(NonEmptyText::new("").is_none());
+    assert_eq!(NonEmptyText::new("y").unwrap().as_str(), "y");
+}
+
+#[test]
+fn the_cross_session_tools_need_a_session_id() {
+    invalid("read_session_output", json!({}));
+    invalid("send_session_input", json!({"text": "hello"}));
+    invalid("read_session_output", json!({"session": "not-a-uuid"}));
+}
+
+/// FR-018: reading changes nothing; typing does, and is audited by its target, never its text.
+#[test]
+fn only_send_session_input_is_a_mutating_cross_session_tool() {
+    assert!(!is_mutating_tool("read_session_output"));
+    assert!(is_mutating_tool("send_session_input"));
+    let operation = parse_call(
+        "send_session_input",
+        &json!({"session": S, "text": "secret-text"}),
+    )
+    .unwrap();
+    assert_eq!(operation.audit_target(), S);
+    assert!(
+        !format!("{operation:?}").contains("secret-text"),
+        "input text must not be printable through Debug (FR-018)"
     );
 }

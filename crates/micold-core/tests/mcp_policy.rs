@@ -14,7 +14,7 @@ use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::policy::{
     decide, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
-use micold_core::mcp::tools::{Operation, SessionRef, WorktreeRef};
+use micold_core::mcp::tools::{LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef};
 use micold_core::session::{AiCli, SessionId, SessionLocation};
 use micold_core::worktree::CreateMode;
 use uuid::Uuid;
@@ -286,5 +286,134 @@ fn start_session_proceeds_on_any_session() {
             ),
             PolicyDecision::Proceed
         );
+    }
+}
+
+// --- Milestone M6: the cross-session tools under the user's option (FR-015, FR-016) ---
+
+const EVERY_ACCESS: [CrossSessionAccess; 3] = [
+    CrossSessionAccess::Auto,
+    CrossSessionAccess::ConfirmEachSend,
+    CrossSessionAccess::Off,
+];
+
+fn read_output(target: u128) -> Operation {
+    Operation::ReadSessionOutput {
+        session: session(target),
+        lines: LineCount::DEFAULT,
+    }
+}
+
+fn send_input(target: u128) -> Operation {
+    Operation::SendSessionInput {
+        session: session(target),
+        text: NonEmptyText::new("carry on").expect("non-empty"),
+    }
+}
+
+fn decide_at(access: CrossSessionAccess, operation: &Operation) -> PolicyDecision {
+    decide(
+        &caller(in_worktree("b")),
+        operation,
+        &TargetFacts::default(),
+        access,
+    )
+}
+
+/// U115: reading is never confirmed; only Off closes it.
+#[test]
+fn read_session_output_proceeds_at_auto_and_confirm_each_send_and_is_refused_at_off() {
+    assert_eq!(
+        decide_at(CrossSessionAccess::Auto, &read_output(OTHER)),
+        PolicyDecision::Proceed
+    );
+    assert_eq!(
+        decide_at(CrossSessionAccess::ConfirmEachSend, &read_output(OTHER)),
+        PolicyDecision::Proceed,
+        "Confirm each send asks about sends only (FR-016)"
+    );
+    let error = refusal(decide_at(CrossSessionAccess::Off, &read_output(OTHER)));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(
+        error.message.contains("Settings"),
+        "the refusal says where the user turned it off: {}",
+        error.message
+    );
+}
+
+/// U116
+#[test]
+fn send_session_input_proceeds_at_auto_is_confirmed_at_confirm_each_send_and_refused_at_off() {
+    assert_eq!(
+        decide_at(CrossSessionAccess::Auto, &send_input(OTHER)),
+        PolicyDecision::Proceed
+    );
+    assert_eq!(
+        decide_at(CrossSessionAccess::ConfirmEachSend, &send_input(OTHER)),
+        PolicyDecision::Confirm(ConfirmedOp::SendInput)
+    );
+    let error = refusal(decide_at(CrossSessionAccess::Off, &send_input(OTHER)));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(error.message.contains("Settings"), "{}", error.message);
+}
+
+/// U117: validation comes before policy, so the caller's own session is invalid input even when
+/// the option is Off (contracts/mcp-tools.md *Order of checks*).
+#[test]
+fn the_cross_session_tools_on_the_callers_own_session_are_invalid_input_at_every_option_value() {
+    for access in EVERY_ACCESS {
+        for operation in [read_output(ME), send_input(ME)] {
+            let error = refusal(decide_at(access, &operation));
+            assert_eq!(
+                error.category,
+                ErrorCategory::InvalidInput,
+                "{access:?} {operation:?}"
+            );
+        }
+    }
+}
+
+/// FR-016 is a separate option from every other row: it changes no other decision.
+#[test]
+fn the_option_changes_no_decision_but_the_cross_session_tools() {
+    for operation in [
+        Operation::Whoami,
+        Operation::GetSession {
+            session: session(OTHER),
+        },
+        Operation::StartSession {
+            session: session(OTHER),
+        },
+        Operation::StopSession {
+            session: session(OTHER),
+        },
+        create_worktree(),
+    ] {
+        for access in EVERY_ACCESS {
+            assert_eq!(
+                decide_at(access, &operation),
+                decide_at(CrossSessionAccess::Auto, &operation),
+                "{access:?} {operation:?}"
+            );
+        }
+    }
+}
+
+/// FR-015a restricts worktree mutations only: a Default caller reads and types like any other.
+#[test]
+fn a_default_caller_gets_the_same_cross_session_decisions_as_a_worktree_caller() {
+    for access in EVERY_ACCESS {
+        for operation in [read_output(OTHER), send_input(OTHER)] {
+            assert_eq!(
+                decide(
+                    &caller(SessionLocation::Default),
+                    &operation,
+                    &TargetFacts::default(),
+                    access
+                ),
+                decide_at(access, &operation),
+                "{access:?} {operation:?}"
+            );
+        }
     }
 }

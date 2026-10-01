@@ -2,6 +2,7 @@
 //! (FollowSystem) with the right status (contracts/settings-schema.md; FR-009, FR-019).
 //! Runs under `cargo test --no-default-features` against a temp directory.
 
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::settings::{
     JsonFileSettingsStore, Settings, SettingsStore, DEFAULT_ENV_INCLUDE_ENABLED,
     DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
@@ -540,4 +541,75 @@ fn turning_the_tool_server_binding_off_survives_a_save_and_load() {
         !store.load().settings.tool_server_enabled,
         "the user turned the binding off; loading the file must not turn it back on"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 034 — "Let agents read and type into other sessions" (FR-016)
+// ---------------------------------------------------------------------------------------
+
+/// U76. The user chose Auto as the default (decision D6).
+#[test]
+fn the_cross_session_option_is_auto_by_default() {
+    assert_eq!(
+        Settings::default().cross_session_access,
+        CrossSessionAccess::Auto
+    );
+}
+
+/// U77. A file written before the option existed is a user who never tightened it.
+#[test]
+fn a_settings_file_written_before_the_cross_session_option_loads_auto() {
+    let (_dir, store, _path) = store_with(
+        r#"{
+            "settings_version": 4,
+            "theme": "dark",
+            "tool_server_enabled": false
+        }"#,
+    );
+
+    let outcome = store.load();
+
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert_eq!(
+        outcome.settings.cross_session_access,
+        CrossSessionAccess::Auto
+    );
+}
+
+/// U78. Tightening the option is a choice that outlives a restart: neither value may load as Auto.
+#[test]
+fn confirm_each_send_and_off_each_survive_a_save_and_load() {
+    for chosen in [CrossSessionAccess::ConfirmEachSend, CrossSessionAccess::Off] {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+
+        store
+            .save(&Settings {
+                cross_session_access: chosen,
+                ..Settings::default()
+            })
+            .unwrap();
+
+        let outcome = store.load();
+        assert_eq!(outcome.status, LoadStatus::Loaded);
+        assert_eq!(outcome.settings.cross_session_access, chosen);
+    }
+}
+
+/// The stored spelling is part of the settings file's contract: a hand edit uses these words.
+#[test]
+fn the_cross_session_option_is_stored_in_snake_case() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+    store
+        .save(&Settings {
+            cross_session_access: CrossSessionAccess::ConfirmEachSend,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(document["cross_session_access"], "confirm_each_send");
 }
