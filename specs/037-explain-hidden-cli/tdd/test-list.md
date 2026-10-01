@@ -131,7 +131,7 @@ Tests in `crates/micold-core/tests/schema_hash.rs` and `tests/protocol_roundtrip
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U26 | `PROTOCOL_VERSION` is 19 and the pinned schema hash is the one of the message set with `env` | FR-012 (contract A1, A5) | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump`, `::the_availability_answer_carries_the_environment_state_in_the_hashed_source` |
+| U26 | `PROTOCOL_VERSION` is 20 and the pinned schema hash is the one of the message set with `env` | FR-012 (contract A1, A5) | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump`, `::the_availability_answer_carries_the_environment_state_in_the_hashed_source` |
 | U27 | `DaemonMsg::AiCliAvailability` round-trips with `env: Some(SpawnEnv::ScriptTimedOut)` and with `env: None`, and the two are distinct after the round trip | FR-012, FR-011 (contract A1) | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::an_availability_answer_round_trips_with_and_without_the_environment_state` |
 
 ### `crates/micold-daemon/src/state.rs`, `server.rs`: what the service answers

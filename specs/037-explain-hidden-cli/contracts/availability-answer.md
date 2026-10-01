@@ -7,7 +7,7 @@ Research: [R1–R3, R5](../research.md). Types: [data-model.md](../data-model.md
 ```text
 ClientMsg::AiCliAvailabilityRequest { req, cwd }            unchanged
 DaemonMsg::AiCliAvailability { req, available, env }        env: Option<SpawnEnv>  (new)
-PROTOCOL_VERSION                                            18 → 19
+PROTOCOL_VERSION                                            19 → 20
 ```
 
 `crates/micold-core/src/protocol/messages.rs`, `crates/micold-core/src/protocol/version.rs`.
