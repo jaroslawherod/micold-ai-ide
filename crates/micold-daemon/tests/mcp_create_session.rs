@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mcp_support::*;
+use micold_core::cli_reason::{self, AttemptDir, Place, SpawnEnv};
 use micold_core::mcp::submission::SETTLE_AFTER;
 use micold_core::protocol::messages::{ActivitySignal, CatalogSnapshot};
 use micold_core::session::{AiCli, SessionId, TerminalMode};
@@ -75,7 +76,7 @@ struct Sandbox {
     _env: Env,
     bin: tempfile::TempDir,
     home: tempfile::TempDir,
-    _project: tempfile::TempDir,
+    project: tempfile::TempDir,
     store: tempfile::TempDir,
     state: Arc<DaemonState>,
     addr: std::net::SocketAddr,
@@ -107,6 +108,8 @@ impl Sandbox {
             ("CLAUDE_CONFIG_DIR", None),
             ("COPILOT_HOME", None),
             ("PI_CODING_AGENT_DIR", Some(home.path().join(".pi").into())),
+            // The service runs on this computer, whatever started the test run (037, A14).
+            ("MICOLD_IMAGE_REFERENCE", None),
         ]);
         let state = state_over(
             vec![(
@@ -125,7 +128,7 @@ impl Sandbox {
             _env: env,
             bin,
             home,
-            _project: project,
+            project,
             store,
             state,
             addr,
@@ -320,17 +323,64 @@ async fn without_ai_cli_the_session_runs_the_default_cli_from_settings() {
     assert_eq!(s.launches("claude"), 0);
 }
 
+/// The `{reason} {action}` an agent is told when `cli` would not be found in `cwd` (037, W4 U5).
+fn refusal(cli: AiCli, env: SpawnEnv, cwd: &Path) -> String {
+    let said = cli_reason::explain(&[cli], env, Place::ThisComputer, AttemptDir::Dir(cwd))
+        .expect("one CLI is missing, so there is an explanation");
+    format!("{} {}", said.reason, said.action)
+}
+
+/// A14 (037, FR-009a): `create_session` for a CLI the target directory's environment lacks is
+/// refused with the reason for the state that environment is in, and leaves no session record.
+///
+/// It said `Pi is not installed where this session would run`, whatever had kept the CLI off the
+/// session's `PATH`. With environment-include off, or with a script that failed, nothing has
+/// established that, and an agent told so cannot tell the user what to change (FR-002).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record() {
+async fn a_cli_the_directorys_environment_lacks_is_refused_with_the_reason_and_no_record() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     std::fs::remove_file(s.bin.path().join("pi")).unwrap();
     let before = s.session_ids();
+
+    // Environment-include off: sessions get only the service's own PATH.
+    s.state.set_env_include(Some(false), None, None).unwrap();
+    let worktree = s.project.path().join(".claude/worktrees/b");
     let error = s.err(json!({"worktree": "b", "ai_cli": "pi"})).await;
     assert_eq!(error["category"], "service_error", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert_eq!(
+        message,
+        refusal(AiCli::Pi, SpawnEnv::IncludeOff, &worktree),
+        "{error}"
+    );
     assert!(
-        error["message"].as_str().unwrap().contains("pi"),
-        "names the missing CLI: {error}"
+        !message.contains("is not installed"),
+        "nothing established that it is not installed (FR-009a): {error}"
+    );
+    assert_eq!(s.session_ids(), before, "no session record is left behind");
+
+    // On, with a script that exits with an error: the reason is the directory's own attempt.
+    let script = s.store.path().join("env-include.sh");
+    std::fs::write(&script, "exit 3\n").unwrap();
+    s.state
+        .set_env_include(
+            Some(true),
+            Some(script.to_string_lossy().into_owned()),
+            None,
+        )
+        .unwrap();
+    let error = s.err(json!({"worktree": "default", "ai_cli": "pi"})).await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert_eq!(
+        message,
+        refusal(AiCli::Pi, SpawnEnv::ScriptFailed, s.project.path()),
+        "{error}"
+    );
+    assert!(
+        message.contains(&s.project.path().display().to_string()),
+        "names the directory the script failed for (FR-004a): {error}"
     );
     assert_eq!(s.session_ids(), before, "no session record is left behind");
 }

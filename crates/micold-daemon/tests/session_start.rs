@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
+use micold_core::cli_reason::{self, AttemptDir, Place, SpawnEnv};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
@@ -19,6 +20,7 @@ use micold_core::session::{
 };
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::terminal::LaunchMode;
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
@@ -1346,10 +1348,85 @@ impl Drop for ImageReference {
     }
 }
 
-/// The reason a missing CLI reports, for one start of a session on `cli`.
-fn missing_cli_reason(cli: AiCli, launch: micold_core::terminal::LaunchMode, seed: u128) -> String {
+/// How a test sets environment-include for the service it starts.
+enum Include {
+    /// Off: a session gets only the service's own `PATH`.
+    Off,
+    /// On, with a script of this body: `unix` is sourced by `bash`, `windows` by PowerShell.
+    Script {
+        unix: &'static str,
+        windows: &'static str,
+        timeout_secs: u64,
+    },
+}
+
+/// A script that exits with an error, so nothing it would add is applied.
+const SCRIPT_FAILS: Include = Include::Script {
+    unix: "exit 3\n",
+    windows: "exit 3\r\n",
+    timeout_secs: 30,
+};
+
+/// A script that succeeds and leaves `PATH` alone: applied, and the CLI is still not there.
+const SCRIPT_LACKS_THE_CLI: Include = Include::Script {
+    unix: "export F037_UNRELATED=1\n",
+    windows: "$env:F037_UNRELATED = '1'\r\n",
+    timeout_secs: 30,
+};
+
+/// A script that sleeps past a 1 s timeout.
+const SCRIPT_TIMES_OUT: Include = Include::Script {
+    unix: "sleep 5\n",
+    windows: "Start-Sleep -Seconds 5\r\n",
+    timeout_secs: 1,
+};
+
+/// What one refused start of a session reported, and what a test needs to say what it should
+/// have been.
+struct RefusedStart {
+    /// The reason a client is sent.
+    reason: String,
+    /// The session's directory: the one the start was attempted in.
+    cwd: std::path::PathBuf,
+    /// The state an availability answer for that directory carries (037 contract A3).
+    answered: SpawnEnv,
+}
+
+/// Start a session on `cli` in a fresh project whose service has `include` for its
+/// environment-include settings, and return what the refusal reported.
+///
+/// Only ever called while a [`NoCliOnPath`] is held, so the CLI is missing whatever `include` is.
+fn refused_start(cli: AiCli, launch: LaunchMode, seed: u128, include: &Include) -> RefusedStart {
     let store = tempfile::tempdir().unwrap();
     let project_dir = tempfile::tempdir().unwrap();
+    let settings = match include {
+        Include::Off => Settings {
+            env_include_enabled: false,
+            ..Settings::default()
+        },
+        Include::Script {
+            unix,
+            windows,
+            timeout_secs,
+        } => {
+            let (name, body) = if cfg!(windows) {
+                ("env-include-script.ps1", windows)
+            } else {
+                ("env-include-script.sh", unix)
+            };
+            let script = store.path().join(name);
+            std::fs::write(&script, body).unwrap();
+            Settings {
+                env_include_enabled: true,
+                env_include_script_path: script.to_string_lossy().into_owned(),
+                env_include_timeout_secs: *timeout_secs,
+                ..Settings::default()
+            }
+        }
+    };
+    JsonFileSettingsStore::at(store.path().join("settings.json"))
+        .save(&settings)
+        .unwrap();
     let id = SessionId::from_uuid(Uuid::from_u128(seed));
     let state = DaemonState::new(catalog_with_ai_cli_session(
         cli,
@@ -1365,70 +1442,317 @@ fn missing_cli_reason(cli: AiCli, launch: micold_core::terminal::LaunchMode, see
         );
     };
     assert_eq!(attempts, 0, "a missing binary is not a crash loop");
-    reason
+    // Asked after the start, so it reads the attempt the start made rather than making its own.
+    let (available, answered) = state.availability_in(project_dir.path());
+    assert!(
+        !available.contains(&cli),
+        "the availability answer for the directory agrees that {cli} is missing"
+    );
+    RefusedStart {
+        reason,
+        cwd: project_dir.path().to_path_buf(),
+        answered,
+    }
 }
 
-/// The advice a missing CLI gives has to be advice that works where sessions run, and for what is
-/// being started (`029` quickstart §D, finding 1).
+/// U64 (037, FR-009, FR-002): on the host with environment-include off, a refused start says what
+/// is true, that sessions get only the login `PATH`, in exactly `cli_reason`'s words.
 ///
-/// Before this every refusal said `<CLI> isn't installed. Install it, or start this session on
-/// another AI CLI.` — on a sandboxed service resuming a conversation, that was wrong three ways.
-/// Installing on this computer changes nothing, because the image is what lacks it. A conversation
-/// cannot move to another CLI. And the pane's pointer at `restart` fails the same way until the
-/// image does change.
+/// Before 037 every host refusal said `<CLI> isn't installed. Install it, or start this session on
+/// another AI CLI.`, whatever had kept the CLI off the session's `PATH`. With the setting off that
+/// claims a cause nobody checked: the CLI may be installed where the startup file would put it.
 #[test]
-fn a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started() {
-    use micold_core::terminal::LaunchMode;
-
+fn with_environment_include_off_a_refused_start_says_sessions_get_only_the_login_path() {
     let _path = NoCliOnPath::new();
-
     // On the host. `MICOLD_IMAGE_REFERENCE` is unset for a service started outside a container.
-    let host = ImageReference::unset();
-    assert_eq!(
-        missing_cli_reason(AiCli::ClaudeCode, LaunchMode::Fresh, 0x1D01),
-        format!(
-            "{} isn't installed. Install it, or start this session on another AI CLI.",
-            AiCli::ClaudeCode.provider().display_name()
-        ),
-        "a fresh start on the host keeps the advice that was already right for it"
-    );
+    let _host = ImageReference::unset();
+
     for (index, cli) in AiCli::ALL.into_iter().enumerate() {
-        let reason = missing_cli_reason(cli, LaunchMode::Resume, 0x1D10 + index as u128);
-        assert!(
-            reason.contains(cli.provider().display_name()),
-            "got {reason:?}"
+        for (step, launch) in [LaunchMode::Fresh, LaunchMode::Resume]
+            .into_iter()
+            .enumerate()
+        {
+            let seed = 0x1D00 + (index * 2 + step) as u128;
+            let refused = refused_start(cli, launch, seed, &Include::Off);
+            assert_eq!(
+                refused.reason,
+                cli_reason::start_refusal(
+                    cli,
+                    SpawnEnv::IncludeOff,
+                    Place::ThisComputer,
+                    AttemptDir::Dir(&refused.cwd),
+                    launch,
+                ),
+                "{cli}, {launch:?}"
+            );
+            assert!(
+                !refused.reason.contains("isn't installed"),
+                "nothing established that it is not installed (FR-002); got {:?}",
+                refused.reason
+            );
+            if launch == LaunchMode::Resume {
+                assert!(
+                    !refused.reason.contains("another AI CLI"),
+                    "a conversation continues only in the CLI that holds it; got {:?}",
+                    refused.reason
+                );
+            }
+        }
+    }
+}
+
+/// U65 (037, FR-009): a script that exits with an error leaves its `PATH` additions unapplied, and
+/// a refused start says that, for the session's directory, instead of saying the CLI is missing.
+#[test]
+fn a_refused_start_after_the_script_failed_says_the_script_failed_for_the_directory() {
+    let _path = NoCliOnPath::new();
+    let _host = ImageReference::unset();
+
+    for (step, launch) in [LaunchMode::Resume, LaunchMode::Fresh]
+        .into_iter()
+        .enumerate()
+    {
+        let refused = refused_start(AiCli::Copilot, launch, 0x1D30 + step as u128, &SCRIPT_FAILS);
+        assert_eq!(
+            refused.reason,
+            cli_reason::start_refusal(
+                AiCli::Copilot,
+                SpawnEnv::ScriptFailed,
+                Place::ThisComputer,
+                AttemptDir::Dir(&refused.cwd),
+                launch,
+            ),
+            "{launch:?}"
         );
         assert!(
-            !reason.contains("another AI CLI"),
-            "a conversation continues only in the CLI that holds it; got {reason:?}"
+            refused.reason.contains(&refused.cwd.display().to_string()),
+            "the attempt is the directory's own, so the reason names it (FR-004a); got {:?}",
+            refused.reason
         );
     }
-    drop(host);
+}
 
-    // In a container.
+/// A11 (037, Story 2 scenario 3): on the host, a script that succeeded without the CLI is the one
+/// state in which "not found" is the reason. The refusal keeps the remedy it always had (install
+/// it, or another AI CLI) and adds the one the script makes possible.
+#[test]
+fn a_refused_start_after_the_script_ran_says_the_cli_is_not_on_the_session_path() {
+    let _path = NoCliOnPath::new();
+    let _host = ImageReference::unset();
+
+    let cli = AiCli::ClaudeCode;
+    let refused = refused_start(cli, LaunchMode::Fresh, 0x1D40, &SCRIPT_LACKS_THE_CLI);
+
+    assert_eq!(
+        refused.reason,
+        cli_reason::start_refusal(
+            cli,
+            SpawnEnv::Applied,
+            Place::ThisComputer,
+            AttemptDir::Dir(&refused.cwd),
+            LaunchMode::Fresh,
+        )
+    );
+    for expected in [
+        format!(
+            "{cli} was not found on the PATH sessions get for {}",
+            refused.cwd.display()
+        ),
+        "Install it".to_string(),
+        "make the script add its directory".to_string(),
+        "another AI CLI".to_string(),
+    ] {
+        assert!(
+            refused.reason.contains(&expected),
+            "expected {expected:?} in {:?}",
+            refused.reason
+        );
+    }
+}
+
+/// A10 (037, Story 2 scenario 2): resuming in a directory whose script timed out. The CLI may well
+/// be installed, and the conversation cannot move, so the reason says neither "install" nor
+/// "another AI CLI": it names what happened and tells the user to restart once it is fixed.
+#[test]
+fn a_resume_after_the_script_timed_out_says_to_fix_it_and_restart_this_session() {
+    let _path = NoCliOnPath::new();
+    let _host = ImageReference::unset();
+
+    let cli = AiCli::Pi;
+    let refused = refused_start(cli, LaunchMode::Resume, 0x1D50, &SCRIPT_TIMES_OUT);
+
+    assert_eq!(
+        refused.reason,
+        cli_reason::start_refusal(
+            cli,
+            SpawnEnv::ScriptTimedOut,
+            Place::ThisComputer,
+            AttemptDir::Dir(&refused.cwd),
+            LaunchMode::Resume,
+        )
+    );
+    for expected in [
+        cli.provider().display_name().to_string(),
+        format!("timed out for {}", refused.cwd.display()),
+        "raise \"Timeout\"".to_string(),
+        "restart this session".to_string(),
+    ] {
+        assert!(
+            refused.reason.contains(&expected),
+            "expected {expected:?} in {:?}",
+            refused.reason
+        );
+    }
+    for wrong in ["install", "another AI CLI"] {
+        assert!(
+            !refused
+                .reason
+                .to_lowercase()
+                .contains(&wrong.to_lowercase()),
+            "{wrong:?} is not advice for a script that timed out; got {:?}",
+            refused.reason
+        );
+    }
+}
+
+/// U66 (037, FR-012, contract A3): a refused start and an availability answer for the same
+/// directory name the same state, in each state a test here can produce quickly.
+///
+/// The client writes its notes from the answer and the service writes the refusal, so the two
+/// agree only if both read one resolution of the directory's environment.
+#[test]
+fn a_refused_start_and_an_availability_answer_name_the_same_state() {
+    let _path = NoCliOnPath::new();
+    let _host = ImageReference::unset();
+
+    for (index, (include, state)) in [
+        (Include::Off, SpawnEnv::IncludeOff),
+        (SCRIPT_FAILS, SpawnEnv::ScriptFailed),
+        (SCRIPT_LACKS_THE_CLI, SpawnEnv::Applied),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let cli = AiCli::Pi;
+        let refused = refused_start(cli, LaunchMode::Fresh, 0x1D60 + index as u128, &include);
+        assert_eq!(
+            refused.answered, state,
+            "the availability answer names the state the settings produce"
+        );
+        assert_eq!(
+            refused.reason,
+            cli_reason::start_refusal(
+                cli,
+                refused.answered,
+                Place::ThisComputer,
+                AttemptDir::Dir(&refused.cwd),
+                LaunchMode::Fresh,
+            ),
+            "and the refusal is the sentence for that same state ({state:?})"
+        );
+    }
+}
+
+/// A12 (037, Story 2 scenario 4): in a container whose script ran, the image is what lacks the
+/// CLI, and the refusal is the sentence it was before 037, byte for byte.
+///
+/// A characterization: the strings are written out here, not taken from `cli_reason`, so a change
+/// to that module cannot move this test with it. The advice has to work where sessions run and
+/// for what is being started (`029` quickstart §D, finding 1): installing on this computer changes
+/// nothing a container runs, and a conversation cannot move to another CLI.
+#[test]
+fn in_an_image_whose_script_ran_a_missing_cli_keeps_the_sentences_it_had() {
+    let _path = NoCliOnPath::new();
     let image = "registry.example/agents:7";
     let _image = ImageReference::set(image);
-    let mut seed = 0x1D20;
-    for cli in AiCli::ALL {
-        for launch in [LaunchMode::Fresh, LaunchMode::Resume] {
-            seed += 1;
-            let reason = missing_cli_reason(cli, launch, seed);
-            assert!(
-                reason.contains(cli.provider().display_name()),
-                "got {reason:?}"
-            );
-            assert!(
-                reason.contains(image),
-                "a sandboxed service names the image, which is what lacks the CLI; got {reason:?}"
-            );
+
+    for (index, cli) in AiCli::ALL.into_iter().enumerate() {
+        let name = cli.provider().display_name();
+        let fresh = refused_start(
+            cli,
+            LaunchMode::Fresh,
+            0x1D70 + index as u128,
+            &SCRIPT_LACKS_THE_CLI,
+        );
+        assert_eq!(
+            fresh.reason,
+            format!(
+                "{name} isn't in {image}, where sessions run. Choose an image that provides it, \
+                 or start this session on another AI CLI."
+            )
+        );
+        let resume = refused_start(
+            cli,
+            LaunchMode::Resume,
+            0x1D80 + index as u128,
+            &SCRIPT_LACKS_THE_CLI,
+        );
+        assert_eq!(
+            resume.reason,
+            format!(
+                "{name} isn't in {image}, where sessions run, and this conversation can only \
+                 continue in it. Choose an image that provides it, then restart this session."
+            )
+        );
+        for reason in [&fresh.reason, &resume.reason] {
             assert!(
                 !reason.contains("install"),
                 "installing on this computer changes nothing a container runs; got {reason:?}"
             );
+        }
+    }
+}
+
+/// A13 (037, Story 2 scenario 5): in a container with environment-include off, nobody looked at
+/// what the startup file would add, so the image is not blamed for lacking the CLI. The reason is
+/// the `IncludeOff` one, and it still names the image as where sessions run.
+#[test]
+fn in_an_image_with_environment_include_off_the_refusal_does_not_blame_the_image() {
+    let _path = NoCliOnPath::new();
+    let image = "registry.example/agents:7";
+    let _image = ImageReference::set(image);
+
+    let mut seed = 0x1D90;
+    for cli in AiCli::ALL {
+        for launch in [LaunchMode::Fresh, LaunchMode::Resume] {
+            seed += 1;
+            let refused = refused_start(cli, launch, seed, &Include::Off);
+            assert_eq!(
+                refused.reason,
+                cli_reason::start_refusal(
+                    cli,
+                    SpawnEnv::IncludeOff,
+                    Place::Image(image),
+                    AttemptDir::Dir(&refused.cwd),
+                    launch,
+                ),
+                "{cli}, {launch:?}"
+            );
+            assert!(
+                refused
+                    .reason
+                    .starts_with(&format!("A session in {image} would not find {cli}:")),
+                "a sandboxed service names the image sessions run in; got {:?}",
+                refused.reason
+            );
+            for wrong in ["isn't in", "isn't installed"] {
+                assert!(
+                    !refused.reason.contains(wrong),
+                    "{wrong:?} claims a cause the setting ruled out checking (FR-002, SC-003); \
+                     got {:?}",
+                    refused.reason
+                );
+            }
+            assert!(
+                !refused.reason.contains("install"),
+                "installing on this computer changes nothing a container runs; got {:?}",
+                refused.reason
+            );
             if launch == LaunchMode::Resume {
                 assert!(
-                    !reason.contains("another AI CLI"),
-                    "a conversation continues only in the CLI that holds it; got {reason:?}"
+                    !refused.reason.contains("another AI CLI"),
+                    "a conversation continues only in the CLI that holds it; got {:?}",
+                    refused.reason
                 );
             }
         }
