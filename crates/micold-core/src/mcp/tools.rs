@@ -345,8 +345,9 @@ const TOOLS: &[Tool] = &[
             the project's .claude/worktrees/, recorded as created by the app, shown in every \
             window. mode new_branch (default) starts a new branch at HEAD; existing_local checks \
             out a local branch no worktree holds; track_remote starts a local branch from \
-            <remote>/<branch>. name is the directory name (default: derived from the branch). A \
-            session running in the project root (Default) is refused.",
+            <remote>/<branch>. name is the directory name (default: derived from the branch). \
+            Any session may create a worktree, one running in the project root (Default) too; \
+            renaming and deleting a worktree are refused from there.",
         properties: || {
             json!({
                 "branch": {"type": "string", "minLength": 1,
