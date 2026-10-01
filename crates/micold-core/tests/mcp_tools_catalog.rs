@@ -545,7 +545,15 @@ fn send_session_input_with_only_line_breaks_is_invalid_input() {
 /// breaks and tabs are text.
 #[test]
 fn send_session_input_with_a_control_character_is_invalid_input() {
-    for text in ["\u{3}", "stop\u{3}", "\u{4}", "up\u{1b}[A", "x\u{7f}", "a\u{0}b", "\u{9b}A"] {
+    for text in [
+        "\u{3}",
+        "stop\u{3}",
+        "\u{4}",
+        "up\u{1b}[A",
+        "x\u{7f}",
+        "a\u{0}b",
+        "\u{9b}A",
+    ] {
         let message = invalid("send_session_input", json!({"session": S, "text": text}));
         assert!(message.contains("control character"), "{text:?}: {message}");
         assert!(NonEmptyText::new(text).is_none(), "{text:?}");

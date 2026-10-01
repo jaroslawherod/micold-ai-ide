@@ -62,6 +62,15 @@ fn sandbox_env() {
         std::env::set_var("HOME", home.path());
         std::env::set_var("XDG_DATA_HOME", home.path().join(".local/share"));
         std::env::remove_var("COPILOT_HOME");
+        // Copilot's own record that it trusts every fixture's project (an ancestor counts):
+        // `send_session_input` types nothing into a CLI that would ask about its folder.
+        std::fs::create_dir_all(home.path().join(".copilot")).unwrap();
+        let trusted = json!({"trustedFolders": [std::env::temp_dir()]});
+        std::fs::write(
+            home.path().join(".copilot/config.json"),
+            trusted.to_string(),
+        )
+        .unwrap();
         (bin, home)
     });
 }

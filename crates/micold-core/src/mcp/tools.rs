@@ -83,16 +83,42 @@ impl LineCount {
     }
 }
 
-/// Text an agent types into a session: never empty (FR-012a), and never printed. Its `Debug` shows
-/// the length only, so no log line or panic message can carry input text (FR-018).
+/// Text an agent types into a session: never empty (FR-012a), only text, and never printed. Its
+/// `Debug` shows the length only, so no log line or panic message can carry input text (FR-018).
 #[derive(Clone, PartialEq, Eq)]
 pub struct NonEmptyText(String);
 
+/// Why a string is not text to type into a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotText {
+    /// Nothing would be typed before the closing Enter.
+    Empty,
+    /// It holds a control character, which a terminal reads as a keystroke.
+    Keystroke,
+}
+
 impl NonEmptyText {
-    /// `text` as it is, or `None` when it is empty. Whitespace is text (assumption A-4).
+    /// `text` as it is, or `None` when it is not text to type.
+    ///
+    /// Whitespace is text (assumption A-4), but line breaks alone are not: a submission drops its
+    /// trailing line breaks, so only the closing Enter would be typed. A control character other
+    /// than a line break or a tab is a keystroke (Ctrl-C interrupts, Escape drives a menu), and
+    /// `interrupt_session` is the confirmed way to send one (FR-014).
     pub fn new(text: impl Into<String>) -> Option<Self> {
-        let text = text.into();
-        (!text.is_empty()).then_some(NonEmptyText(text))
+        Self::checked(text.into()).ok()
+    }
+
+    fn checked(text: String) -> Result<Self, NotText> {
+        if text.trim_end_matches(['\r', '\n']).is_empty() {
+            return Err(NotText::Empty);
+        }
+        if text
+            .chars()
+            .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+        {
+            return Err(NotText::Keystroke);
+        }
+        Ok(NonEmptyText(text))
     }
 
     /// The text.
@@ -631,11 +657,18 @@ fn line_count(args: &Map<String, Value>, key: &str) -> Result<LineCount, OpError
     }
 }
 
-/// Input text that must be given and not empty (FR-012a).
+/// Input text that must be given, not empty (FR-012a), and text only.
 fn non_empty_text(args: &Map<String, Value>, key: &str) -> Result<NonEmptyText, OpError> {
     let text = optional_text(args, key)?
         .ok_or_else(|| OpError::invalid_input(format!("{key} must be a string")))?;
-    NonEmptyText::new(text).ok_or_else(|| OpError::invalid_input(format!("{key} cannot be empty")))
+    NonEmptyText::checked(text).map_err(|why| {
+        OpError::invalid_input(match why {
+            NotText::Empty => format!("{key} cannot be empty"),
+            NotText::Keystroke => {
+                format!("{key} cannot hold a control character other than a line break or a tab")
+            }
+        })
+    })
 }
 
 fn optional_worktree(args: &Map<String, Value>, key: &str) -> Result<Option<WorktreeRef>, OpError> {
