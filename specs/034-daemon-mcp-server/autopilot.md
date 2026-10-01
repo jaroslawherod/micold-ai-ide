@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M5
-- **Next step**: M5: push and open the PR; the orchestrator merges on green.
+- **Next step**: M5 PR #516 is open; merge on green (`scripts/autopilot/wait-merge.sh 516`), then M6.
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #474 | M2: Settings toggle for the tool server | merged | 7964273e |
 | #498 | M3: create_worktree / create_session | merged | 2486d096bfb6ddbba8f6b6cad1f2489f3a2e481c |
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
+| #516 | M5: confirmations and the destructive tools | open | — |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 17) | #474 | merged |
 | M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
-| M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | — | in progress |
+| M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | PR open |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19) | — | planned |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
 
