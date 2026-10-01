@@ -18,6 +18,7 @@ use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
 use crate::ui::settings::{caution, field_note, note, page};
 use iced::Element;
+use micold_core::cli_reason;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::session::AiCli;
@@ -46,16 +47,12 @@ pub fn view<'a>(
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
-    let enabled = Checkbox::new(
-        "Source a script before each session",
-        draft.environment.enabled,
-        roles,
-    )
-    .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
-    .on_toggle(|v| Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(v)));
+    let enabled = Checkbox::new(cli_reason::LABEL_ENABLED, draft.environment.enabled, roles)
+        .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
+        .on_toggle(|v| Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(v)));
 
     let path = TextField::new("", &draft.environment.script_path, roles)
-        .label("Script path")
+        .label(cli_reason::LABEL_SCRIPT_PATH)
         .supporting("Run in a shell; its exported variables reach every session")
         .error(super::error_for(
             draft,
@@ -67,7 +64,7 @@ pub fn view<'a>(
         .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let timeout = TextField::new("", &draft.environment.timeout_secs, roles)
-        .label("Timeout")
+        .label(cli_reason::LABEL_TIMEOUT)
         .supporting("Seconds")
         .error(super::error_for(
             draft,
