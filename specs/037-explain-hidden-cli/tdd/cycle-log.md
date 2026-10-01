@@ -127,3 +127,11 @@ existed and failed before the implementation.
   `cargo test -p micold-client --bin micold-ai-ide the_settings_note_explains` -> 6 passed; 2 failed:
   `with_every_cli_found_there_is_no_note_in_any_state` (A7) and
   `the_note_appears_with_the_answer_and_goes_when_the_cli_is_found` (A2). Reverted with `git checkout`
+- gate: the first run stopped at `cargo fmt --check` (import order in `features/settings.rs`), the second
+  at clippy `match_like_matches_macro` in `crates/micold-core/tests/cli_reason.rs`; neither reached a
+  test. Third run, on `b205f81d`: `mise run gate` -> `GATE_EXIT=0`, 374 `test result: ok`, 0 failed.
+  A1–A8 (`the_settings_note_explains_a_missing_cli`) -> 8 passed
+- U43, U44 and U55 are characterization entries: they hold by how `answered` already files an answer and by
+  the function's signature, passed on arrival, and have no red and no mutant (Review B, F1)
+- T017: quickstart §B B1–B8 in the light and dark themes pass; B14 is recorded as covered by Part A
+  (`evidence/README.md`)
