@@ -2961,6 +2961,16 @@ impl DaemonState {
             .map(|p| Arc::clone(&p.pty))
     }
 
+    /// The session's primary process framer, whichever process is attached (feature 034, FR-012:
+    /// `read_session_output` reads the AI CLI's terminal even while the user has a shell attached).
+    pub fn primary_framer(&self, session: SessionId) -> Option<Arc<Mutex<Framer>>> {
+        let inner = self.lock();
+        let live = inner.sessions.get(&session)?;
+        live.procs
+            .get(&SessionProcess::Primary)
+            .map(|p| Arc::clone(&p.framer))
+    }
+
     /// The *attached* process's PTY handle, if the daemon is hosting the session.
     pub fn live_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
         let inner = self.lock();
