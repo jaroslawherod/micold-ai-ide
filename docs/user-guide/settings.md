@@ -125,6 +125,27 @@ with until they stop; restart one to drop it. Turning it back on connects the ne
 It is one setting for the whole app, kept by the session service beside the default AI CLI, so
 every open window shows the same value.
 
+### Let agents read and type into other sessions
+
+Whether the assistant in one session may read another session's terminal and type into it, with the
+`read_session_output` and `send_session_input` tools
+([Tools for the AI in your sessions](agent-tools.md#reading-and-typing-into-other-sessions)). It
+only ever reaches sessions of the same project.
+
+| Value | What it means |
+|---|---|
+| **Auto** (the default) | An assistant reads and types into other sessions without asking you |
+| **Confirm each send** | Reading needs no approval. Each message an assistant wants to type waits for you to allow it in an app window; declined, unanswered for 60 seconds, or with no window open, it is not typed |
+| **Off** | Both are refused |
+
+A change applies to the next request, also from sessions that are already running: you do not need
+to restart anything. It is a separate setting from **Let AI sessions manage worktrees and
+sessions** above. With that one off, new sessions have no tools at all, so this one has nothing to
+govern for them.
+
+It is one setting for the whole app, kept by the session service, so every open window shows the
+same value.
+
 ### The environment a session starts in
 
 By default, every session's AI CLI process and regular-terminal process automatically pick up
