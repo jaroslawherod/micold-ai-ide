@@ -169,6 +169,35 @@ text itself is treated as untrusted and length-bounded. For a session found on d
 started here, there is no live terminal to read, so the title comes from the CLI's own record of the
 conversation — `claude`'s transcript or `copilot`'s session state — if it has written one yet.
 
+### The second loopback listener: tools for the AI in a session
+
+Beside the activity listener the daemon binds a **second loopback-only listener**, the tool server
+named `micold` (feature 034). It is also on `127.0.0.1`, on its own random port, chosen when the
+daemon starts. Where the activity listener only receives notices, this one answers requests: the AI
+CLI in a session asks it which worktrees and sessions the project has, and asks it to create,
+start, stop or delete them. [Tools for the AI in your sessions](user-guide/agent-tools.md) lists
+every tool and what you are asked to confirm.
+
+The two listeners share nothing but the address family:
+
+| | Activity listener | Tool server |
+|---|---|---|
+| Who calls it | Claude Code's hooks | The MCP client in Claude Code and GitHub Copilot |
+| What it does | Records a session's activity | Reads and changes the session's own project, through the same operations a window uses |
+| Credential | One token per session, in a per-session settings file | One key per session, in a per-session file under `mcp/` in the daemon's data directory, readable only by you |
+| When it is refused | No valid token | No valid key (`401`); the key stops working when its session is deleted, and no key outlives a daemon restart |
+
+A key names one session, so the daemon knows which session is asking and limits every answer to
+that session's project. Each session's file is passed to its CLI as an argument, so **your own
+Claude Code and Copilot configuration is never modified**. Turning off **Let AI sessions manage
+worktrees and sessions** in Settings stops new sessions from being given a key; the listener stays
+bound for the sessions that already have one. Every change a session asks for is written to the
+log as one line (the caller, the tool, its target and the outcome), never with a prompt or typed
+text in it.
+
+When the daemon runs in a container, both listeners are the container's own loopback: neither port
+is published, and nothing on your machine outside the container can reach them.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a
