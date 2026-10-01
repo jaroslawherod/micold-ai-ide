@@ -21,6 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #498 | M3: create_worktree / create_session | merged | 2486d096bfb6ddbba8f6b6cad1f2489f3a2e481c |
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
+| #519 | M6: cross-session read and send; Default may create a worktree | open | — |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M3 | T029–T042, T072–T073, T084–T088, T102, T105 | create_worktree / create_session with first prompt, audit line | #498 | merged |
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | merged |
-| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | — | in progress |
+| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | #519 | PR open |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
 
 Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
