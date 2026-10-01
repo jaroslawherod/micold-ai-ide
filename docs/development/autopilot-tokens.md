@@ -263,6 +263,11 @@ branch an autopilot ledger names, it blocks a `Read` without `limit` of a file o
 of a ledger over 80 lines, and says what to do instead. A `Read` with `limit` always passes, so a
 caller that needs a whole file asks for it by its length.
 
+**Close-phase test remediation ran on the session model.** In `github-issue-worktree` the close
+unit handed its test-strength findings to two subagents on Opus: 161 calls, 3.2M. The close phase
+file now sends them to `autopilot-worker` subagents on Sonnet, one per crate, and the unit runs the
+tests itself afterwards.
+
 ## Skill size
 
 What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every
