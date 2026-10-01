@@ -140,7 +140,7 @@ restart of the application.
    and timeout fields as what to change. The note is complete without the environment-include
    group's own outcome line, which may be showing another directory.
 4. **Given** environment-include is on and the last attempt for my home directory exited with an
-   error, or found no readable file at the script path, **When** I open Settings, **Then** the note
+   error, or found no file at the script path, **When** I open Settings, **Then** the note
    gives that outcome as the reason, in the same terms the environment-include group uses for it.
 4a. **Given** environment-include is on and the script path is blank, **When** I open Settings,
    **Then** the note says no script is sourced because no script path is set, and names setting
@@ -305,10 +305,14 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   |---|---|---|
   | Environment-include is off | Sessions get only the login `PATH` | Turn environment-include on, if the startup file puts the CLI on the `PATH`; or install the CLI on the login `PATH` |
   | On, script path is blank | No script is sourced, because no script path is set | Set a script path, if a startup file puts the CLI on the `PATH`; or install the CLI on the login `PATH` |
-  | On, script path names no readable file | The startup script could not be read, so its `PATH` additions are not applied | Correct the script path |
+  | On, script path names no file | The startup script was not found, so its `PATH` additions are not applied | Correct the script path |
   | On, last attempt exited with an error | The startup script failed, so its `PATH` additions are not applied | Fix the script |
   | On, last attempt timed out | The startup script timed out, so its `PATH` additions are not applied | Fix the script or raise the timeout |
   | On, last attempt succeeded | The CLI was not found on the login `PATH` or among what the script adds | Install the CLI, or make the script add its directory |
+
+  The state is the outcome of the attempt as the environment-include group reports it (011). A
+  script path that names something that exists but cannot be sourced (a directory, a file the
+  user may not read) is attempted and fails, so it is the fourth state, not the third.
 
 - **FR-002**: The application MUST NOT state that a CLI "is not installed", or that the image lacks
   it, in the first five states of FR-001 (the states in which no script was applied). In those

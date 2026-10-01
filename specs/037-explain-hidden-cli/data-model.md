@@ -11,7 +11,7 @@ The state of the environment a session in one directory gets. One variant per ro
 |---|---|---|---|
 | `IncludeOff` | Environment-include is off | no | no |
 | `NoScriptPath` | On, script path is blank | no | no |
-| `ScriptNotFound` | On, script path names no readable file | yes | no |
+| `ScriptNotFound` | On, script path names no file | yes | no |
 | `ScriptFailed` | On, last attempt exited with an error | yes | no |
 | `ScriptTimedOut` | On, last attempt timed out | yes | no |
 | `Applied` | On, last attempt succeeded | yes | yes |
