@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 20 # US1 AS1–AS7 with AS4a, US2 AS1–AS6, US3 AS1, AS1a, AS1b, AS2–AS4
 planned_at: f490b395
-updated_at: f490b395
+updated_at: 2e477df7
 suite_baseline: green # 4098 passed, 0 failed, 9 ignored, 374 binaries at f490b395
 ---
 
@@ -91,14 +91,14 @@ Tests in `crates/micold-core/tests/cli_reason.rs` (new file).
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U1  | `enabled == false` gives `Some(IncludeOff)` whatever the path (blank, set, a path that names no file) and whatever the attempt (`None`, `Success`, `MissingScript`, `TimedOut`) | FR-001 row 1, Edge Cases off with a missing path (R2) | example | PENDING | |
-| U2  | Enabled with `""` or `"   "` gives `Some(NoScriptPath)` whatever the attempt, `MissingScript` included: never `ScriptNotFound` and never `IncludeOff` | FR-001 row 2, Edge Cases blank path (R2) | example | PENDING | |
-| U3  | Enabled, path set, attempt `MissingScript` gives `Some(ScriptNotFound)` | FR-001 row 3 (R2) | example | PENDING | |
-| U4  | Attempt `NonZeroExit { .. }` gives `Some(ScriptFailed)` | FR-001 row 4 (R2) | example | PENDING | |
-| U5  | Attempt `TimedOut { .. }` gives `Some(ScriptTimedOut)` | FR-001 row 5 (R2) | example | PENDING | |
-| U6  | Attempt `Success` gives `Some(Applied)` | FR-001 row 6, Edge Cases succeeded but changed nothing (R2) | example | PENDING | |
-| U7  | Enabled, path set, attempt `None` or `Disabled` gives `None`: the other side of U3–U6 | FR-011 (R2, R3) | example | PENDING | |
-| U8  | `script_applied()` is true for `Applied` and false for each of the other five states | FR-002 | example | PENDING | |
+| U1  | `enabled == false` gives `Some(IncludeOff)` whatever the path (blank, set, a path that names no file) and whatever the attempt (`None`, `Success`, `MissingScript`, `TimedOut`) | FR-001 row 1, Edge Cases off with a missing path (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U2  | Enabled with `""` or `"   "` gives `Some(NoScriptPath)` whatever the attempt, `MissingScript` included: never `ScriptNotFound` and never `IncludeOff` | FR-001 row 2, Edge Cases blank path (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U3  | Enabled, path set, attempt `MissingScript` gives `Some(ScriptNotFound)` | FR-001 row 3 (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U4  | Attempt `NonZeroExit { .. }` gives `Some(ScriptFailed)` | FR-001 row 4 (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U5  | Attempt `TimedOut { .. }` gives `Some(ScriptTimedOut)` | FR-001 row 5 (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U6  | Attempt `Success` gives `Some(Applied)` | FR-001 row 6, Edge Cases succeeded but changed nothing (R2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U7  | Enabled, path set, attempt `None` or `Disabled` gives `None`: the other side of U3–U6 | FR-011 (R2, R3) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
+| U8  | `script_applied()` is true for `Applied` and false for each of the other five states | FR-002 | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `classify` and `script_applied` tests) |
 
 ### `crates/micold-core/src/cli_reason.rs`: `name_list`, `explain`
 
@@ -107,23 +107,23 @@ Tests in `crates/micold-core/tests/cli_reason.rs`. Every sentence is asserted as
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U9  | `name_list` gives "A", "A and B", "A, B and C" in display names, and `None` for an empty slice | FR-003, FR-004 (W1) | example | PENDING | |
-| U10 | `explain(&[], ..)` is `None` in every state and place | FR-011 (W2) | example | PENDING | |
-| U11 | `IncludeOff` on this computer: the exact reason and action of W2's first row, with no directory | FR-001 row 1, US1-AS1 (W2) | example | PENDING | |
-| U12 | `NoScriptPath` on this computer: the exact row, and the action does not contain "Turn it on" | FR-001 row 2, US1-AS4a (W2) | example | PENDING | |
-| U13 | `ScriptNotFound` on this computer: the exact row, action `Correct "Script path".` | FR-001 row 3, US1-AS4 (W2) | example | PENDING | |
-| U14 | `ScriptFailed` on this computer: the exact row, action `Fix the script named in "Script path".` | FR-001 row 4, US1-AS4 (W2) | example | PENDING | |
-| U15 | `ScriptTimedOut` on this computer: the exact row, action naming "Script path" and "Timeout" | FR-001 row 5, US1-AS3 (W2) | example | PENDING | |
-| U16 | `Applied` on this computer, one CLI: the exact row ("was not found on the PATH sessions get for {dir}", "Install it, or make the script add its directory.") | FR-001 row 6, US1-AS5 (W2) | example | PENDING | |
-| U17 | In an image, the five states in which no script was applied use the lead `A session in {image} would not find {names}:`, `the image's PATH`, and `use an image that puts {them} on its PATH` where the host rows say install | FR-005, US2-AS5 (W1, W2) | example | PENDING | |
-| U18 | `Applied` in an image: `{names} isn't in {image}.` and the obligation sentence. Joined by a space they are today's note byte for byte, and they name no directory | FR-005, FR-004a (W2d) | example | PENDING | |
-| U19 | Two and three missing CLIs are named together in one reason, with "them", "were", "aren't" and "their directories" where one CLI gives "it", "was", "isn't" and "its directory" | FR-004, Edge Cases several missing (W1, W2) | example | PENDING | |
-| U20 | Over all states and both places: where `!env.script_applied()` neither string contains `isn't installed`, `not installed`, `isn't in` or `aren't in`, and the action is never only an instruction to install. In `Applied` the reason may say not found: the other side | FR-002, SC-003 (W2a) | example | PENDING | |
-| U21 | Over all states and both places: every double-quoted label in a sentence is `LABEL_ENABLED`, `LABEL_SCRIPT_PATH` or `LABEL_TIMEOUT` | FR-003 (W2b) | example | PENDING | |
-| U22 | The directory appears in `ScriptNotFound`, `ScriptFailed` and `ScriptTimedOut` in both places and in `Applied` on this computer, and in no sentence of `IncludeOff`, `NoScriptPath` or `Applied` in an image | FR-004a (W2c) | example | PENDING | |
-| U23 | `AttemptDir::Home` is written "your home directory" and `AttemptDir::Dir(p)` is written as `p` displayed | FR-004a (W1) | example | PENDING | |
-| U24 | Over all states and both places: no sentence contains `.bashrc`, `.zshrc`, `.profile` or `$PROFILE` | FR-016 (W2e) | example | PENDING | |
-| U25 | Over all states and both places: no sentence contains "see below" | FR-007 (W2f) | example | PENDING | |
+| U9  | `name_list` gives "A", "A and B", "A, B and C" in display names, and `None` for an empty slice | FR-003, FR-004 (W1) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U10 | `explain(&[], ..)` is `None` in every state and place | FR-011 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U11 | `IncludeOff` on this computer: the exact reason and action of W2's first row, with no directory | FR-001 row 1, US1-AS1 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U12 | `NoScriptPath` on this computer: the exact row, and the action does not contain "Turn it on" | FR-001 row 2, US1-AS4a (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U13 | `ScriptNotFound` on this computer: the exact row, action `Correct "Script path".` | FR-001 row 3, US1-AS4 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U14 | `ScriptFailed` on this computer: the exact row, action `Fix the script named in "Script path".` | FR-001 row 4, US1-AS4 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U15 | `ScriptTimedOut` on this computer: the exact row, action naming "Script path" and "Timeout" | FR-001 row 5, US1-AS3 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U16 | `Applied` on this computer, one CLI: the exact row ("was not found on the PATH sessions get for {dir}", "Install it, or make the script add its directory.") | FR-001 row 6, US1-AS5 (W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U17 | In an image, the five states in which no script was applied use the lead `A session in {image} would not find {names}:`, `the image's PATH`, and `use an image that puts {them} on its PATH` where the host rows say install | FR-005, US2-AS5 (W1, W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U18 | `Applied` in an image: `{names} isn't in {image}.` and the obligation sentence. Joined by a space they are today's note byte for byte, and they name no directory | FR-005, FR-004a (W2d) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U19 | Two and three missing CLIs are named together in one reason, with "them", "were", "aren't" and "their directories" where one CLI gives "it", "was", "isn't" and "its directory" | FR-004, Edge Cases several missing (W1, W2) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U20 | Over all states and both places: where `!env.script_applied()` neither string contains `isn't installed`, `not installed`, `isn't in` or `aren't in`, and the action is never only an instruction to install. In `Applied` the reason may say not found: the other side | FR-002, SC-003 (W2a) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U21 | Over all states and both places: every double-quoted label in a sentence is `LABEL_ENABLED`, `LABEL_SCRIPT_PATH` or `LABEL_TIMEOUT` | FR-003 (W2b) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U22 | The directory appears in `ScriptNotFound`, `ScriptFailed` and `ScriptTimedOut` in both places and in `Applied` on this computer, and in no sentence of `IncludeOff`, `NoScriptPath` or `Applied` in an image | FR-004a (W2c) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U23 | `AttemptDir::Home` is written "your home directory" and `AttemptDir::Dir(p)` is written as `p` displayed | FR-004a (W1) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U24 | Over all states and both places: no sentence contains `.bashrc`, `.zshrc`, `.profile` or `$PROFILE` | FR-016 (W2e) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
+| U25 | Over all states and both places: no sentence contains "see below" | FR-007 (W2f) | example | DONE | `crates/micold-core/tests/cli_reason.rs` (the `name_list`, `explain` and `w2*` tests) |
 
 ### `crates/micold-core/src/protocol/`: the wire field
 
@@ -131,8 +131,8 @@ Tests in `crates/micold-core/tests/schema_hash.rs` and `tests/protocol_roundtrip
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U26 | `PROTOCOL_VERSION` is 18 and the pinned schema hash is the one of the message set with `env` | FR-012 (contract A1, A5) | example | PENDING | |
-| U27 | `DaemonMsg::AiCliAvailability` round-trips with `env: Some(SpawnEnv::ScriptTimedOut)` and with `env: None`, and the two are distinct after the round trip | FR-012, FR-011 (contract A1) | example | PENDING | |
+| U26 | `PROTOCOL_VERSION` is 18 and the pinned schema hash is the one of the message set with `env` | FR-012 (contract A1, A5) | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump`, `::the_availability_answer_carries_the_environment_state_in_the_hashed_source` |
+| U27 | `DaemonMsg::AiCliAvailability` round-trips with `env: Some(SpawnEnv::ScriptTimedOut)` and with `env: None`, and the two are distinct after the round trip | FR-012, FR-011 (contract A1) | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::an_availability_answer_round_trips_with_and_without_the_environment_state` |
 
 ### `crates/micold-daemon/src/state.rs`, `server.rs`: what the service answers
 
