@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M7
-- **Next step**: M7 handed over: see *Handover*. T074, T075, T077 done; T076 passes run, its index and tick are open; then gate, reviews A and B, PR.
+- **Next step**: M7: all four tasks ticked (T076's index written). Gate, then reviews A and B, then the PR.
 
 ## Pull requests
 
@@ -87,6 +87,8 @@ deliverable (tasks.md Notes).
 | M6 | visual pass §B5, §B6 | 1 | 800ded94aefc484ad7bb8561f2c9012142d58436:5fd07a884c05b1fcdcd22d2a2b81a1120dd76497 | PASS, 5 of 5 checks (evidence/m6-b5-b6-cross-session) |
 | M6 | A (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; the fixes hold, the declines stand |
 | M6 | B (sonnet re-review) | 2 | 505b4f9293f1e227962c8633669f484f24450d8e:0cd5dd5429c6b1049e8fa805a2f703ac96347bb7 | CLEAN; Verify green (test-core 1471; mcp_cross_session 19, scrollback_range 11, mcp_audit_log 5, mcp_create_worktree 12, mcp_lifecycle_tools 25; features_settings 63, layout_snapshot 43). 1 MINOR fixed (FR-012a states D23's refusals). Not counted: run because review A's fixes changed code |
+| M7 | visual pass §B1–§B3 (real CLIs) | 1 | binaries of aacbd7cd | PASS, 12 of 12 checks (evidence/m7-b1-b3-real-cli) |
+| M7 | visual pass §B1 step 7, §B4–§B6 (real CLI) | 1 | binaries of aacbd7cd | PASS, 11 of 11 checks (evidence/m7-b4-b6-real-cli) |
 
 ## Declined review findings
 
@@ -129,46 +131,7 @@ deliverable (tasks.md Notes).
 
 ## Handover
 
-M7, first unit, handed over at the context cap (2026-10-01). No PR is open; nothing is pushed. The
-branch is `origin/main` (e108619b) plus local commits, the last one this ledger's.
-
-Done:
-- T074: `mcp_read_latency.rs` cherry-picked and extended with `read_session_output` (a stand-in
-  `claude` printing 3,000 lines, read at the 2,000 maximum; unix only). Green, worst 12 ms.
-- T075: `sandbox_real_mcp.rs` cherry-picked unchanged. `mise run image && mise run test-sandbox`:
-  29 passed, 0 failed, the new test `ok`; image id unchanged across the run. Both unverified
-  assumptions hold (cycle 41).
-- T077: `docs/daemon.md` (*The second loopback listener*), `docs/user-guide/agent-tools.md` (intro
-  names cross-session access; the container paragraph), `docs/user-guide/settings.md` (stored
-  values). The coordinator's late M6 note about spec.md FR-012a / D23 needs nothing: main already
-  states both refusals (spec.md lines 354–358).
-- Follow-up settled: an unknown `cross_session_access` in the settings file reads as `Off`
-  (`aacbd7cd`, U233, cycle 40). The stale "M5 merge note" follow-up is removed.
-- T076 passes, both with the real CLIs in the real app on Xvfb, from binaries of commit `aacbd7cd`'s
-  code: `evidence/m7-b1-b3-real-cli/` (B1.2–6, B2, B3 with Copilot and Pi, D21 create allowed and
-  rename/delete refused from Default, audit lines: 12 of 12 PASS) and
-  `evidence/m7-b4-b6-real-cli/` (B6, B4.A–E with B1 step 7's 55 s Allow, B5.A–E: 11 of 11 PASS).
-  No product defect. Each has a NOTES.md with deviations and what was not run.
-
-Next steps, in order:
-1. T076's index: write `specs/034-daemon-mcp-server/evidence/README.md` (one row per quickstart
-   step §B1–§B6, the evidence file that shows it, the milestone it came from; the two `m7-*`
-   directories are the final pass, `m1`/`m3`/`m5`/`m6` the earlier ones). Read the two NOTES.md,
-   not the PNGs. Tick T076 in tasks.md. Copilot stays bound (B2 passed); `provider.rs` is unchanged.
-2. Add the review rows for the two visual passes to *Review rounds*; set the M7 row's status.
-3. `df -h /` (stop with ESCALATE under 8 GB; 38 GB were free), then the gate, detached; review A
-   (`code-review` high on `origin/main...HEAD`) in its shadow. No gate has run on this tree yet.
-   The diff is small: two test files, `settings.rs` (one reader), `settings_roundtrip.rs`, docs,
-   spec bookkeeping, evidence.
-4. Review B (conformance against M7's deliverable; Verify: `scripts/build-lock.sh cargo test -p
-   micold-daemon --test mcp_audit_log --test mcp_read_latency`; the sandbox run above need not be
-   repeated unless `sandbox_real_mcp.rs` or the daemon changes). No further visual pass unless code
-   that is visible changes.
-5. Commit, push, open the PR `feat(034): read latency, sandbox placement, the full real-CLI pass and the final docs`.
-
-Open findings: none. Observation from both passes, unconfirmed and not this feature's code:
-worktrees made with plain `git worktree add` under `.claude/worktrees/` before launch were not
-listed in the sidebar of a project seeded through `projects.json` (added to *Follow-ups not done*).
+None.
 
 ## Open escalation
 
