@@ -600,3 +600,189 @@ fn w2f_no_sentence_sends_the_user_to_another_line() {
         }
     }
 }
+
+// --- W3: the sentence said when a start is refused ---
+
+use micold_core::cli_reason::{start_refusal, start_refusal_unknown};
+use micold_core::terminal::LaunchMode;
+
+const BOTH_LAUNCHES: [LaunchMode; 2] = [LaunchMode::Fresh, LaunchMode::Resume];
+const FAILED_ATTEMPTS: [SpawnEnv; 3] = [
+    SpawnEnv::ScriptNotFound,
+    SpawnEnv::ScriptFailed,
+    SpawnEnv::ScriptTimedOut,
+];
+
+fn applied_in_an_image(env: SpawnEnv, place: Place<'_>) -> bool {
+    env == SpawnEnv::Applied && place != Place::ThisComputer
+}
+
+/// Every `(cli, state, place)` W3's first row covers: all but `Applied` in an image.
+fn every_refusal_that_follows_explain() -> Vec<(AiCli, SpawnEnv, Place<'static>)> {
+    let mut all = Vec::new();
+    for cli in AiCli::ALL {
+        for env in EVERY_STATE {
+            for place in BOTH_PLACES {
+                if !applied_in_an_image(env, place) {
+                    all.push((cli, env, place));
+                }
+            }
+        }
+    }
+    all
+}
+
+fn project() -> AttemptDir<'static> {
+    AttemptDir::Dir(Path::new(PROJECT))
+}
+
+#[test]
+fn a_fresh_refusal_is_the_explanation_and_the_offer_of_another_cli() {
+    for (cli, env, place) in every_refusal_that_follows_explain() {
+        let Explanation { reason, action } = told(&[cli], env, place, project());
+        assert_eq!(
+            start_refusal(cli, env, place, project(), LaunchMode::Fresh),
+            format!("{reason} {action} Or start this session on another AI CLI."),
+            "W3 ({cli:?}, {env:?}, {place:?})"
+        );
+    }
+}
+
+#[test]
+fn a_resume_refusal_is_the_explanation_and_says_to_restart_this_session() {
+    for (cli, env, place) in every_refusal_that_follows_explain() {
+        let Explanation { reason, action } = told(&[cli], env, place, project());
+        assert_eq!(
+            start_refusal(cli, env, place, project(), LaunchMode::Resume),
+            format!(
+                "{reason} {action} Then restart this session: its conversation can only continue \
+                 in {cli}."
+            ),
+            "W3 ({cli:?}, {env:?}, {place:?})"
+        );
+    }
+}
+
+#[test]
+fn w3b_applied_in_an_image_keeps_the_refusal_of_027() {
+    for cli in AiCli::ALL {
+        assert_eq!(
+            start_refusal(cli, SpawnEnv::Applied, Place::Image(IMAGE), project(), LaunchMode::Fresh),
+            format!(
+                "{cli} isn't in {IMAGE}, where sessions run. Choose an image that provides it, or \
+                 start this session on another AI CLI."
+            )
+        );
+        assert_eq!(
+            start_refusal(cli, SpawnEnv::Applied, Place::Image(IMAGE), project(), LaunchMode::Resume),
+            format!(
+                "{cli} isn't in {IMAGE}, where sessions run, and this conversation can only \
+                 continue in it. Choose an image that provides it, then restart this session."
+            )
+        );
+    }
+}
+
+#[test]
+fn w3a_a_resume_refusal_never_offers_another_cli() {
+    for cli in AiCli::ALL {
+        for env in EVERY_STATE {
+            for place in BOTH_PLACES {
+                let said = start_refusal(cli, env, place, project(), LaunchMode::Resume);
+                assert!(
+                    said.contains("restart this session"),
+                    "a resume says to restart this session ({env:?}, {place:?}): {said}"
+                );
+                assert!(
+                    !said.contains("another AI CLI"),
+                    "FR-009: a conversation continues only in its own CLI ({env:?}, {place:?}): \
+                     {said}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn w3c_a_failed_attempt_never_says_to_install() {
+    for cli in AiCli::ALL {
+        for place in BOTH_PLACES {
+            for launch in BOTH_LAUNCHES {
+                for env in FAILED_ATTEMPTS {
+                    let said = start_refusal(cli, env, place, project(), launch);
+                    assert!(!said.is_empty(), "something is said ({env:?}, {place:?})");
+                    assert!(
+                        !said.to_lowercase().contains("install"),
+                        "FR-009: the script is the cause ({env:?}, {place:?}, {launch:?}): {said}"
+                    );
+                }
+                for env in [SpawnEnv::IncludeOff, SpawnEnv::NoScriptPath] {
+                    let said = start_refusal(cli, env, place, project(), launch);
+                    assert!(
+                        said.contains("Turn it on") || said.contains(LABEL_SCRIPT_PATH),
+                        "SC-003: installing is never the only action ({env:?}, {place:?}, \
+                         {launch:?}): {said}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn w3d_both_forms_begin_with_the_explanation() {
+    for (cli, env, place) in every_refusal_that_follows_explain() {
+        let Explanation { reason, action } = told(&[cli], env, place, AttemptDir::Home);
+        for launch in BOTH_LAUNCHES {
+            let said = start_refusal(cli, env, place, AttemptDir::Home, launch);
+            assert!(
+                said.starts_with(&format!("{reason} {action} ")),
+                "FR-012: one reason on every surface ({env:?}, {place:?}, {launch:?}): {said}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_refusal_with_no_known_state_claims_nothing_about_the_cause() {
+    for cli in AiCli::ALL {
+        assert_eq!(
+            start_refusal_unknown(cli),
+            format!(
+                "{cli} would not be found by a session here. Start this session on another AI CLI."
+            )
+        );
+    }
+}
+
+#[test]
+fn w3e_no_refusal_says_not_installed_unless_the_script_was_applied() {
+    let mut said = Vec::new();
+    for cli in AiCli::ALL {
+        said.push(start_refusal_unknown(cli));
+        for env in EVERY_STATE {
+            if env.script_applied() {
+                continue;
+            }
+            for place in BOTH_PLACES {
+                for launch in BOTH_LAUNCHES {
+                    said.push(start_refusal(cli, env, place, project(), launch));
+                }
+            }
+        }
+    }
+    for sentence in said {
+        assert!(!sentence.is_empty(), "something is said");
+        for claim in ["isn't installed", "not installed", "isn't in", "aren't in"] {
+            assert!(
+                !sentence.contains(claim),
+                "FR-002: without the script applied \"{claim}\" is a guess: {sentence}"
+            );
+        }
+        let lowered = sentence.to_lowercase();
+        assert!(
+            !(lowered.starts_with("install") || lowered.starts_with("use an image")),
+            "SC-003: installing is never the only action: {sentence}"
+        );
+    }
+}

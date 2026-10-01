@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::env_include::EnvIncludeOutcome;
 use crate::session::AiCli;
+use crate::terminal::LaunchMode;
 
 /// The label of the environment-include checkbox, as the Settings page shows it.
 ///
@@ -203,4 +204,49 @@ pub fn explain(
         }
     };
     Some(Explanation { reason, action })
+}
+
+/// What a start refused for a missing AI CLI tells the user: [`explain`]'s reason and action for
+/// `dir`, then what this start can do about it (contract W3).
+///
+/// A fresh start may go to another CLI. A resume continues a conversation only its own CLI holds,
+/// so it is told to restart and never offered another one (FR-009).
+pub fn start_refusal(
+    cli: AiCli,
+    env: SpawnEnv,
+    place: Place<'_>,
+    dir: AttemptDir<'_>,
+    launch: LaunchMode,
+) -> String {
+    // 027's sentences for an image that lacks the CLI, kept byte for byte (Story 2 scenario 4).
+    if let (SpawnEnv::Applied, Place::Image(image)) = (env, place) {
+        return match launch {
+            LaunchMode::Fresh => format!(
+                "{cli} isn't in {image}, where sessions run. Choose an image that provides it, or \
+                 start this session on another AI CLI."
+            ),
+            LaunchMode::Resume => format!(
+                "{cli} isn't in {image}, where sessions run, and this conversation can only \
+                 continue in it. Choose an image that provides it, then restart this session."
+            ),
+        };
+    }
+    let Some(Explanation { reason, action }) = explain(&[cli], env, place, dir) else {
+        unreachable!("one CLI is missing, so there is an explanation");
+    };
+    match launch {
+        LaunchMode::Fresh => format!("{reason} {action} Or start this session on another AI CLI."),
+        LaunchMode::Resume => format!(
+            "{reason} {action} Then restart this session: its conversation can only continue in \
+             {cli}."
+        ),
+    }
+}
+
+/// What a refused start says when the answer in use carries no state (contract W5, research R8).
+///
+/// The cause is not known, so none is claimed (FR-002): the sentence says only what the answer
+/// does, that a session would not find the CLI.
+pub fn start_refusal_unknown(cli: AiCli) -> String {
+    format!("{cli} would not be found by a session here. Start this session on another AI CLI.")
 }
