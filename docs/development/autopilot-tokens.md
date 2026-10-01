@@ -244,6 +244,12 @@ per call.
 
 **What a unit starts with.** The first request of every subagent is 27–29k (system prompt, tool
 schemas, `CLAUDE.md`, memory index, skill list), carried on about 2,300 calls: roughly 6M per run.
+About 10k of it is the schema of the Artifact tool, which a `general-purpose` subagent of an
+interactive session gets and a headless one does not (27.8k against 17.4k for the same one-call
+task). Units, reviewers and delegated workers now run as the `autopilot-unit`, `autopilot-reviewer`
+and `autopilot-worker` agent types in `.claude/agents/`, which disallow it and the other tools they
+never call; the reviewer type also has no `Edit`, `Write` or `Agent`. A session that started before
+the types existed does not list them and keeps using `general-purpose`.
 The daemon-mcp ledger had grown to 28 kB, about 8k tokens, of which the units' working state (PRs,
 milestones, handover, escalation) is a tenth; the rest is decisions, review rounds and declined
 findings that later units do not need. `scripts/autopilot/brief.py ledger <ledger> [M<K>]` now
