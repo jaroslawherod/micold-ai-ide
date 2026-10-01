@@ -65,7 +65,7 @@ forbids repeating the script's output.
 ## R3. The wire change
 
 **Decision**: `DaemonMsg::AiCliAvailability` gains `env: Option<SpawnEnv>`. `PROTOCOL_VERSION`
-goes 18 → 19 in one edit, with its paragraph in `protocol/version.rs`. `None` means the service
+goes 19 → 20 in one edit, with its paragraph in `protocol/version.rs`. `None` means the service
 could not say which state holds: the user has no home directory to resolve for, or the blocking
 task that resolves it failed. The request is unchanged.
 

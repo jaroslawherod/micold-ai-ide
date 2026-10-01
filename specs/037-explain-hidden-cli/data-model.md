@@ -46,7 +46,7 @@ The state of the environment a session in one directory gets. One variant per ro
 | `available` | `Vec<AiCli>` | unchanged |
 | `env` | `Option<SpawnEnv>` | **new**. The state of the environment `available` was walked in. `None` when the service could not resolve a directory at all |
 
-`PROTOCOL_VERSION` 18 → 19.
+`PROTOCOL_VERSION` 19 → 20.
 
 ## `CliAvailability` (changed, `micold-client` `features/session.rs`)
 
