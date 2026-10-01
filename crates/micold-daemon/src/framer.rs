@@ -240,6 +240,36 @@ impl Framer {
         (lines, styles, hyperlinks, more)
     }
 
+    /// The last `n` lines of the terminal — scrollback plus screen — as plain text, oldest first,
+    /// and whether older lines existed (feature 034, FR-012; research R11).
+    ///
+    /// What `read_session_output` returns. The text comes from the grid's cells, so no escape
+    /// sequence can be in it and a redraw reads as it is shown. Each line is right-trimmed. The
+    /// content ends at the last row that shows anything: the rows of the screen below it are
+    /// space the process has not written to, not output.
+    ///
+    /// `truncated` is true when lines older than the returned ones exist above them, or when the
+    /// scrollback limit already discarded some (as far as this framer saw them leave).
+    pub fn plain_tail(&self, term: &SharedTerm, n: usize) -> (Vec<String>, bool) {
+        let term = term.lock();
+        let grid = term.grid();
+        let cols = grid.columns();
+        let history = grid.history_size();
+        let discarded = self.scrolled_off > 0;
+
+        // Buffer offset `o` (0 = oldest retained) is grid `Line(o - history)`, as in
+        // `scrollback_range`.
+        let mut end = history + grid.screen_lines();
+        while end > 0 && plain_row(&grid[Line(end as i32 - 1 - history as i32)], cols).is_empty() {
+            end -= 1;
+        }
+        let start = end.saturating_sub(n);
+        let lines = (start..end)
+            .map(|o| plain_row(&grid[Line(o as i32 - history as i32)], cols))
+            .collect();
+        (lines, start > 0 || discarded)
+    }
+
     /// The oldest retained line's id (the eviction watermark). Equals `scrolled_off`.
     pub fn oldest_available(&self) -> LineId {
         LineId(self.scrolled_off)
@@ -336,6 +366,31 @@ fn intern_style(
     styles.push(style);
     index.insert(style, i);
     i
+}
+
+/// One grid row as the text a person reads on it, right-trimmed (feature 034, FR-012).
+///
+/// Not [`WireLine::text`]: that is one `char` per *cell*, which a renderer needs and a reader does
+/// not. Here the spacer cell behind a wide character is skipped, combining marks follow their
+/// base character, and the `\t` the emulator keeps in a tab's first cell reads as the space it is
+/// drawn as — so the line holds no control character at all.
+fn plain_row(row: &alacritty_terminal::grid::Row<Cell>, cols: usize) -> String {
+    let mut text = String::with_capacity(cols);
+    for col in 0..cols {
+        let cell = &row[Column(col)];
+        if cell
+            .flags
+            .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+        {
+            continue;
+        }
+        text.push(if cell.c.is_control() { ' ' } else { cell.c });
+        if let Some(marks) = cell.zerowidth() {
+            text.extend(marks.iter().copied());
+        }
+    }
+    text.truncate(text.trim_end().len());
+    text
 }
 
 /// Convert one grid row to a [`WireLine`]: one `char` per cell, RLE style runs, and sparse extras
