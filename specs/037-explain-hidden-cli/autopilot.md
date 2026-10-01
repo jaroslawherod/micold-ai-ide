@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 | 1 | ca880275230916cc10aa96f574819965737f135a:01a574f62363e3826f84a4c842b5c56ba8575728 | CLEAN: 3 MINOR, none fixed (see Follow-ups) |
 | B M1 | 1 | 7127de70ef5c3e65452575ce66c14909a318c21f:b205f81d1c577362dae687bce4268fdc09122bde | CLEAN: 3 MINOR, 1 fixed (U43, U44, U55 marked characterization) |
 | Rebase M1 | 1 | 28f2150c18c1f7bd72942d62c2e26c6336863d3f:ce28161b9c42cff43cd15b7a7671eb1f306d51b8 | CLEAN: no findings (rebase resolution only: nothing of 034 dropped, 037's wire change is version 19 throughout; not counted) |
+| Rebase M1 | 2 | 6a6fdd0d350be640ae526841aed9785ade15630a:65a5fc28465bbc276918bbccee1b30e83733f330 | CLEAN: 2 MINOR, 1 fixed (second rebase, onto 034's M6: nothing of 034 dropped, 037's wire change is version 20 throughout; not counted) |
 
 ## Declined review findings
 
@@ -70,33 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1, third unit, stopped before the PR. No PR is open. Nothing is pushed. Do not run `branch-start.sh`.
-
-**Done**: T001–T017 and T038–T039 are ticked. Reviews A and B ran once each and were CLEAN (see *Review
-rounds*); the visual pass B1–B8 passed in both themes (`evidence/README.md`). `mise run gate` was green on
-`b205f81d`, **before** the rebase below.
-
-**What changed after that gate**: the first push was refused because `origin/main` had gained feature 034
-(27 commits), which took `PROTOCOL_VERSION` 18. A helper rebased the M1 commits onto `origin/main`
-(`fc1c3ad2`), keeping them separate, and moved 037's bump to 18 -> 19 (D16; commit `3cddb792` updates the
-spec texts). The branch is 12 commits ahead of `origin/main`, tree clean. The helper was still running its
-checks (`cargo fmt --check`, `mise run test-core`, daemon `ai_cli_availability`, `cargo test -p
-micold-client --no-fail-fast`) when this unit ended, so **the rebased tree is unverified**.
-
-**Next steps, in order**:
-
-1. `git status -sb` and `git log --oneline origin/main..HEAD`; fetch and rebase again if `origin/main` moved.
-2. `mise run gate` detached on the rebased tree; fix what the rebase broke (the schema-hash and version
-   pins in `crates/micold-core/tests/schema_hash.rs` and `protocol/version.rs` are the likely places).
-3. In the gate's shadow, a full review round (the snapshots in *Review rounds* are stale after the rebase)
-   limited in effect to the rebase resolution: `protocol/{messages,version}.rs`, `tests/schema_hash.rs`,
-   `tests/protocol_roundtrip.rs`, daemon `server.rs` and `state.rs`, client `shell/daemon_sync.rs`. It does
-   not count toward the limit unless it finds a BLOCKER or MAJOR. Nothing visible changed, so no new
-   visual pass.
-4. `git push --force-with-lease -u origin HEAD` (the remote branch holds only merged PR #517's old head),
-   open the PR `feat(037): …` with `Refs #434`, record its number here.
-
-**Open findings**: none above MINOR; the MINORs are under *Follow-ups not done*.
+None.
 
 ## Open escalation
 
@@ -124,6 +99,10 @@ None.
   through `SpawnEnv::classify` as T010's text says; the cycle log (cycle 3) records it, tasks.md does not.
 - Review B M1, F3 (MINOR): one line over 100 columns in `docs/user-guide/sandboxed-daemon.md:106` and in
   the doc comment at `crates/micold-client/src/features/session.rs:262`.
+- Rebase review round 2, F1 (MINOR): the doc comment above `FEATURE_026_PROTOCOL_VERSION` in
+  `crates/micold-core/tests/schema_hash.rs` lacks the bare `///` line between 034's "18 → 19" paragraph
+  and 037's "19 → 20" one. Not fixed in M1: it changes a code file after the green gate. Take it with
+  the next code change (M2).
 - Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
   full Part B record.
