@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #434
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
-- **Phase**: 2-clarify
-- **Next step**: Phase 3 (design). Clarify round 5 was a clean scan: no question asked, spec.md unchanged, checklist 16/16. It re-read the round-4 edit (D12) against every FR, scenario, success criterion and assumption and found FR-004a, FR-005, Story 1 scenario 5, Story 2 scenarios 3 and 4, SC-001, SC-004 and the container edge case and assumption in agreement. It also checked that the six states of FR-001 are all the states an availability answer can have: the answer blocks on the directory's resolution (`crates/micold-daemon/src/state.rs#env_include_vars_for`), so there is no "not attempted yet" state. Rounds 1 to 5 are six local commits and ship in PR 2. The branch is on `origin/main` at 01afbbee; nothing is owed.
+- **Phase**: 3-design
+- **Next step**: Phase 3, continue from *Handover*: plan review, then `speckit-tasks`.
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | clarify 3 | Does a message already shown at an event (missing-default message, start failure, AI-session reply) change when a newer answer arrives? | No. It states the reason that held at its event. Only the Settings note and an open row list follow a newer answer. A start failure's reason comes from the environment that start resolved, the resolution the answer shares. Corrects the round-2 edge case that said the message "follows". | agent-resolved | crates/micold-client/src/features/session.rs#start_menu_toggled; specs/029-pi-cli-provider/spec.md#FR-003b; crates/micold-daemon/src/state.rs#ai_clis_available_in |
 | D11 | clarify 3 | How does a reason stay true when it reports the home directory's attempt on a project row (D7)? | New FR-004a: a reason that reports an attempt (last four states) names the directory the attempt was for. The two settings states name none. | agent-resolved | specs/037-explain-hidden-cli/spec.md#User Story 1 (scenario 3); specs/037-explain-hidden-cli/spec.md#Edge Cases |
 | D12 | clarify 4 | FR-004a makes the "last attempt succeeded" reason name a directory; FR-005 and Story 2 scenario 4 keep 027's container sentence unchanged. Which holds under container placement? | FR-005. The container sentence names the CLI and the image and no directory, in Settings and at a failed start. FR-004a covers the three failed-attempt states under both placements and the last state on the host only. Story 1 scenario 5 now names the home directory. | agent-resolved | specs/037-explain-hidden-cli/spec.md#FR-005; specs/027-sandboxed-daemon-runtime/spec.md#FR-023b; crates/micold-daemon/src/state.rs#missing_cli_reason; crates/micold-client/src/features/settings.rs#missing_cli_notice |
+| D13 | design | FR-009 said a start failure must not tell the user to install the CLI in the first five states, but FR-001's table gives "or install the CLI on the login PATH" as part of the action in the first two, and FR-012 requires every surface to give the same action. Which holds? | FR-001 and SC-003. FR-009 now says installing is never the only action in those states and is not named at all in the three failed-attempt states. Story 2 scenario 2 (a failed-attempt state) stays true. | agent-resolved | specs/037-explain-hidden-cli/spec.md#FR-001; specs/037-explain-hidden-cli/spec.md#SC-003; specs/037-explain-hidden-cli/research.md#R7 |
 
 ## Review rounds
 
@@ -53,7 +54,40 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design unit 1 stopped at the context cap (151k) after writing the plan. Nothing is pushed and no
+PR is open. `branch-start.sh 515` reported `REBASED 6`; do not run it again.
+
+**Done** (one local commit on top of the six clarify commits):
+
+- `speckit-plan` artifacts written: `plan.md`, `research.md` (R1–R9), `data-model.md`,
+  `contracts/availability-answer.md`, `contracts/reason-wording.md`, `quickstart.md`.
+  `.specify/extensions.yml` has no `before_plan` or `after_plan` hook.
+- spec.md FR-009 corrected (D13).
+- `checklists/requirements.md` has no unchecked item.
+
+**Next steps**, in order:
+
+1. Plan review round 1 by a fresh reviewer (plan rubric; `review-snapshot.sh` first, record the
+   snapshot in *Review rounds*). It has not run yet. Things the author did not verify and the
+   reviewer should: every path in plan.md's source tree exists or is marked new;
+   `crates/micold-daemon/tests/mcp_create_session.rs` is the right home for U5; `docs/daemon.md`
+   is where the protocol version is recorded; the paragraph API named for
+   `menu_panel_size_with_note` (research R6) can measure wrapped text.
+2. `speckit-tasks` (its `before_tasks` docguard hook and `after_tasks` hooks are optional; run
+   `speckit-tdd-plan`, since `before_implement` makes `speckit-tdd-run` mandatory), then cut
+   milestones and add them to the ledger. Intended cut:
+   - **M1** (full, MVP): core `cli_reason`, the wire field and version 18, the service's
+     `ResolvedEnv` and answer, the client's `env` and `asked_for`, the Settings notes (U1, U2),
+     `settings.md` and `sandboxed-daemon.md`, `docs/daemon.md`, visual pass B1–B8 (B14). US1.
+   - **M2** (full): the start failure (U4), the reply to an AI session (U5), the missing-default
+     message (U3), `worktrees-and-sessions.md` and `agent-tools.md`, visual pass B9–B10. US2.
+   - **M3** (full): `MenuOverlay::note`, `start_menu_note`, the showcase entry, the row-list
+     paragraph of `worktrees-and-sessions.md`, visual pass B11–B13. US3.
+   - **M4** (docs): Polish. Quickstart Part A record and cross-checks of the spec artifacts.
+3. `speckit-analyze`, fix its findings, then the tasks and milestone review.
+4. `mise run test-scripts`, push, open PR 2 with `Refs #434`, record its number here.
+
+**Open findings**: none yet (no review has run).
 
 ## Open escalation
 

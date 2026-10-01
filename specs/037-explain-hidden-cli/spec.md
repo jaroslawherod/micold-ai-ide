@@ -347,8 +347,9 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 - **FR-009**: The failure shown when a session cannot start or restart because its CLI is not found
   (the pane text and the banner) MUST carry the reason and action for that session's directory,
   taken from the environment that start resolved. In
-  the first five states of FR-001 it MUST NOT tell the user to install the CLI. A resumed session
-  MUST still never be pointed at another CLI.
+  the first five states of FR-001 it MUST NOT give installing the CLI as the only action (SC-003),
+  and in the three failed-attempt states it MUST NOT name installing at all, as FR-001's table has
+  it. A resumed session MUST still never be pointed at another CLI.
 - **FR-009a**: The reply an AI session receives when it asks the application to start a session on
   a CLI that would not be found (feature 034) MUST carry the reason and action for the target
   directory, under FR-002's limits.
