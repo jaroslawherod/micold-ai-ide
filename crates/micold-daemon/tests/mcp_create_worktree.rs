@@ -1,6 +1,7 @@
 //! Feature 034 (contracts/mcp-tools.md `create_worktree`; US2 scenarios 1–2, US3 scenario 6; A7,
 //! A8, U145–U151, U219): an agent creates a worktree through `POST /mcp` exactly as the
-//! create-worktree dialog would.
+//! create-worktree dialog would, from a session in a worktree or in the project root (Default;
+//! constitution 1.7.0).
 //!
 //! The fixture is a real git repository with worktree `b` and a free local branch `taken`, and
 //! sessions S1 (project root) and S3 (`b`, the usual caller), plus S10–S19 in `b` for the race.
@@ -324,18 +325,93 @@ async fn back_to_back_creates_from_one_caller_all_succeed() {
     );
 }
 
+/// U219 (constitution 1.7.0, FR-015a; the isolation & lifecycle gate): a session in the project
+/// root (Default) creates a worktree through the tool server and gets exactly what a session in
+/// a worktree gets: the dialog's worktree, recorded as created by the app, in every window.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_default_session_is_refused_by_principle_iii_and_nothing_changes() {
+async fn a_default_session_creates_a_worktree_as_any_session_does() {
+    let f = Fixture::new().await;
+    let mut window = fake_window(&f.state);
+    let row = f.ok(sid(1), json!({"branch": "feat-x"})).await;
+    assert_eq!(
+        row,
+        json!({
+            "ref": "feat-x",
+            "display_name": row["display_name"],
+            "branch": "feat-x",
+            "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
+            "status": "clean",
+            "app_created": true,
+            "assistant_owned": false,
+            "session_count": 0,
+        })
+    );
+    assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());
+    assert_eq!(f.on_disk(), ["b", "feat-x"]);
+    assert!(f.listed().await.contains(&"feat-x".to_string()));
+    let (records, _) = f.state.provenance(f.repo());
+    assert!(
+        records.contains("feat-x"),
+        "recorded as created by the app, as the dialog's create is (FR-009)"
+    );
+    let repo = f.repo().to_path_buf();
+    assert!(
+        window_sees(&mut window, WINDOW_BOUND, |catalog| {
+            catalog
+                .projects
+                .iter()
+                .any(|p| p.path == repo && p.worktrees.iter().any(|w| w.dir_name == "feat-x"))
+        })
+        .await,
+        "every window sees the new worktree (SC-003)"
+    );
+
+    // The calling session is still where it was: creating a worktree moves nobody into it.
+    let who = call_ok(f.addr, &credential(&f.state, sid(1)), "whoami", json!({})).await;
+    assert_eq!(who["worktree"], "default", "{who}");
+}
+
+/// The exception is create-only: a Default session that just created a worktree is still refused
+/// renaming it, or any other, and the refusal no longer says it may not create.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_default_session_is_still_refused_rename_after_creating() {
+    let f = Fixture::new().await;
+    f.ok(sid(1), json!({"branch": "feat-x"})).await;
+    let before = f.snapshot().await;
+    for worktree in ["feat-x", "b"] {
+        let error = call_err(
+            f.addr,
+            &credential(&f.state, sid(1)),
+            "rename_worktree",
+            json!({"worktree": worktree, "display_name": "Renamed"}),
+        )
+        .await;
+        assert_eq!(
+            error["category"], "refused_by_policy",
+            "{worktree}: {error}"
+        );
+        let message = error["message"].as_str().unwrap();
+        assert!(message.contains("Principle III"), "{worktree}: {error}");
+        assert!(
+            !message.contains("create"),
+            "{worktree}: creating is allowed, so the refusal must not name it: {error}"
+        );
+    }
+    f.assert_unchanged(&before).await;
+}
+
+/// A create the dialog would refuse is refused for a Default session the same way, by the same
+/// check: the exception opens the policy gate and nothing behind it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_default_session_gets_the_dialogs_refusals_too() {
     let f = Fixture::new().await;
     let before = f.snapshot().await;
-    let (records_before, _) = f.state.provenance(f.repo());
-    let error = f.err(sid(1), json!({"branch": "feat-x"})).await;
-    assert_eq!(error["category"], "refused_by_policy", "{error}");
-    assert!(
-        error["message"].as_str().unwrap().contains("Principle III"),
-        "{error}"
+    let from_default = f.err(sid(1), json!({"branch": "b"})).await;
+    let from_worktree = f.err(sid(3), json!({"branch": "b"})).await;
+    assert_eq!(from_default, from_worktree);
+    assert_ne!(
+        from_default["category"], "refused_by_policy",
+        "{from_default}"
     );
     f.assert_unchanged(&before).await;
-    let (records, _) = f.state.provenance(f.repo());
-    assert_eq!(records, records_before, "no provenance record either");
 }

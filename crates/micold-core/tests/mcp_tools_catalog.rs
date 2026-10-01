@@ -77,6 +77,26 @@ fn tools_list_names_exactly_the_shipped_tools() {
     assert_eq!(names, SHIPPED);
 }
 
+/// Constitution 1.7.0: the catalog tells an agent in the project root (Default) what it is
+/// refused, which is renaming and deleting a worktree, and no longer creating one.
+#[test]
+fn only_rename_and_delete_worktree_say_a_default_session_is_refused() {
+    let says_refused = |name: &str| {
+        let tools = tools_list();
+        let tool = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is not listed"));
+        let description = tool["description"].as_str().unwrap();
+        description.contains("(Default) is refused")
+    };
+    assert!(
+        !says_refused("create_worktree"),
+        "a Default session may create a worktree"
+    );
+    assert!(says_refused("rename_worktree"));
+}
+
 #[test]
 fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
     for tool in tools_list() {
