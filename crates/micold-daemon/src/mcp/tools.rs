@@ -888,8 +888,9 @@ fn read_session_output(
 }
 
 /// `send_session_input` (contracts/mcp-tools.md): scope, then policy with the option as it is now
-/// (FR-015, FR-016), then the conflict for a target with no running process, then — at "Confirm
-/// each send" — the user's confirmation in every window (FR-014), then the text typed into the
+/// (FR-015, FR-016), then the conflict for a target with no running process or whose CLI would
+/// ask to trust its folder, then — at "Confirm each send" — the user's confirmation in every
+/// window (FR-014), then the text typed into the
 /// target's primary process as one submission (research R12), as the first prompt of
 /// `create_session` is.
 ///
@@ -923,6 +924,32 @@ async fn send_session_input(
     // The process the user is asked about: a restart while the prompt waits is another process,
     // and the approval does not carry over to it.
     let asked_about = running()?;
+    // A CLI with no record that it trusts the folder may be showing its trust question, which the
+    // submission's Enter would answer; as for a first prompt, nothing is typed (research R12).
+    let cli = summary.provider;
+    let cwd = match &summary.worktree_dir {
+        None => project.path.clone(),
+        Some(dir) => project
+            .worktrees
+            .iter()
+            .find(|wt| &wt.dir_name == dir)
+            .map_or_else(
+                || project.path.join(".claude/worktrees").join(dir),
+                |wt| wt.path.clone(),
+            ),
+    };
+    let st = Arc::clone(state);
+    if blocking(move || Ok(st.cli_would_ask_trust(&cwd, cli))).await? {
+        let display = cli.provider().display_name();
+        return Err(OpError::new(
+            ErrorCategory::Conflict,
+            format!(
+                "{display} has no record that it trusts the folder of session {}, and may be \
+                 asking about it, so nothing was typed; trust the project in {display} first",
+                session.0
+            ),
+        ));
+    }
     if let Some(op) = confirm {
         let label = summary.title.display().to_string();
         ask_user(
