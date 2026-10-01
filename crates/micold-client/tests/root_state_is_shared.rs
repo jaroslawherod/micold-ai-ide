@@ -39,7 +39,7 @@
 //! (feature 017), which exists to assert that these facts outlive the widget that shows them, and
 //! by the overlay suite, which asks the whole window which surface is open. FR-021 forbids
 //! relaxing those tests to let a path move, so the allowlist is the honest record — the rule is
-//! live, it has fifteen hits, and all fifteen are answered.
+//! live, it has sixteen hits, and all sixteen are answered.
 //!
 //! # Neither list may outlive its reason
 //!
@@ -92,7 +92,7 @@ const SHARED: &[(&str, &str)] = &[(
 /// assertion to make room for a move. The list is measured, not chosen: it is exactly what
 /// [`component_local_candidates`] returns, and every candidate had a pinning assertion already.
 ///
-/// Nine of the fifteen are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
+/// Nine of the sixteen are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
 /// not a coincidence: modality is the one thing a component cannot own, because deciding what
 /// Escape does and what a scroll dismisses is a question about the whole window. The overlay suite
 /// (`overlay_dismissal_delta.rs`, `overlay_dispatch_ordering.rs`) asks it of `app::State` for every
@@ -107,6 +107,12 @@ const SHARED: &[(&str, &str)] = &[(
 /// the switcher on an accepted pick and rescans availability when it opens (`008` BUG-002/BUG-003),
 /// so it has a reader outside its feature and its view.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
+    (
+        "agent_confirm.held",
+        "tests/agent_confirm_waits_behind_dialogs.rs::a_held_prompt_that_is_withdrawn_is_gone — \
+         whether an agent's prompt waits behind another dialog is decided while its own dialog \
+         is not on screen, so no component exists to hold it (feature 034, FR-014)",
+    ),
     (
         "help.about_open",
         "tests/logical_state_ownership.rs::open_overlay_identity_is_application_owned — which \
