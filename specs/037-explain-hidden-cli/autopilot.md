@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #434
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
-- **Phase**: 4-milestone (M1)
-- **Next step**: Continue M1 from the Handover section (gate on the rebased tree, then the PR).
+- **Phase**: 4-milestone (M2)
+- **Next step**: M2: finish T025/T021/T040 (client), then gate, reviews A and B, visual pass B9/B10 (T027), PR.
 
 ## Pull requests
 
@@ -17,14 +17,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #515 | Spec | merged | 063fa77affbcbcc20a842bffb71dce22212582d6 |
 | #517 | Design | merged | 976b0220d342f1e35608286f0bdec4a77b8ce247 |
-| #520 | M1 | open | |
+| #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | PR open |
-| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | | pending |
+| M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
+| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | | in progress |
 | M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | | pending |
 | M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | | pending |
 
@@ -102,8 +102,7 @@ None.
   the doc comment at `crates/micold-client/src/features/session.rs:262`.
 - Rebase review round 2, F1 (MINOR): the doc comment above `FEATURE_026_PROTOCOL_VERSION` in
   `crates/micold-core/tests/schema_hash.rs` lacks the bare `///` line between 034's "18 → 19" paragraph
-  and 037's "19 → 20" one. Not fixed in M1: it changes a code file after the green gate. Take it with
-  the next code change (M2).
+  and 037's "19 → 20" one. Fixed in M2.
 - Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
   full Part B record.
