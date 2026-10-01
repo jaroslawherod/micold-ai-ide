@@ -248,8 +248,9 @@ About 10k of it is the schema of the Artifact tool, which a `general-purpose` su
 interactive session gets and a headless one does not (27.8k against 17.4k for the same one-call
 task). Units, reviewers and delegated workers now run as the `autopilot-unit`, `autopilot-reviewer`
 and `autopilot-worker` agent types in `.claude/agents/`, which disallow it and the other tools they
-never call; the reviewer type also has no `Edit`, `Write` or `Agent`. A session that started before
-the types existed does not list them and keeps using `general-purpose`.
+never call; the reviewer type also has no `Edit`, `Write` or `Agent`. Measured in an interactive
+session with a prompt that runs no tool: `general-purpose` 27.8k, `autopilot-unit` 15.9k,
+`autopilot-reviewer` 14.2k. A running session lists the types as soon as the files exist.
 The daemon-mcp ledger had grown to 28 kB, about 8k tokens, of which the units' working state (PRs,
 milestones, handover, escalation) is a tenth; the rest is decisions, review rounds and declined
 findings that later units do not need. `scripts/autopilot/brief.py ledger <ledger> [M<K>]` now
