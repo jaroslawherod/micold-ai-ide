@@ -17,6 +17,7 @@ use std::time::Instant;
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::mcp::binding::{self as mcp_binding, ConfigLocations, SkipReason};
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
@@ -1235,6 +1236,24 @@ impl DaemonState {
         let settings = {
             let mut inner = self.lock();
             inner.catalog.set_tool_server_enabled(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// The cross-session option as it is now (feature 034, FR-016). The tool server reads it on
+    /// every request, never from a copy taken when a session started.
+    pub fn cross_session_access(&self) -> CrossSessionAccess {
+        self.lock().catalog.cross_session_access()
+    }
+
+    /// Set the cross-session option (feature 034, FR-016). It applies to the next tool request,
+    /// including from sessions already running. Pushes `SettingsChanged` to every client.
+    pub fn set_cross_session_access(&self, access: CrossSessionAccess) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_cross_session_access(access)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });

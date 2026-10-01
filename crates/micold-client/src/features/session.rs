@@ -190,6 +190,10 @@ pub struct State {
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     /// Service-owned and mirrored like [`Self::pi_activity_component`].
     pub tool_server_enabled: bool,
+    /// Whether agents may read and type into other sessions (feature 034, FR-016). Service-owned
+    /// and mirrored like [`Self::tool_server_enabled`]; the service reads its own copy on every
+    /// tool request.
+    pub cross_session_access: micold_core::mcp::policy::CrossSessionAccess,
     /// The start failure already reported to the user for each session, by the sentence reported
     /// (feature 026, FR-010, T088).
     ///

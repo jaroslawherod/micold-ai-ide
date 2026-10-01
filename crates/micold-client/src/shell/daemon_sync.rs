@@ -564,6 +564,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.default_ai_cli = settings.default_ai_cli;
     app.core.session.pi_activity_component = settings.pi_activity_component;
     app.core.session.tool_server_enabled = settings.tool_server_enabled;
+    app.core.session.cross_session_access = settings.cross_session_access;
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);

@@ -8,6 +8,8 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use super::errors::{ErrorCategory, OpError};
 use super::tools::{Operation, SessionRef, WorktreeRef};
 use crate::session::{AiCli, SessionId, SessionLocation};
@@ -31,18 +33,47 @@ impl Caller {
 }
 
 /// What the service knows about a call's target when policy is decided. Empty until a row needs a
-/// fact (the destructive and cross-session rows of later milestones).
+/// fact.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TargetFacts {}
 
-/// The user's option for reading and typing into sibling sessions (FR-016). `Auto` is the default
-/// (decision D6).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// The user's option for reading and typing into sibling sessions (FR-016), "Let agents read and
+/// type into other sessions". `Auto` is the default (decision D6). Stored in the settings file and
+/// carried on the wire; the tool server reads it on every request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CrossSessionAccess {
+    /// Both operations work without confirmation.
     #[default]
     Auto,
+    /// Reading works without confirmation; each send waits for the user's.
     ConfirmEachSend,
+    /// Both operations are refused by policy.
     Off,
+}
+
+impl CrossSessionAccess {
+    /// Every value, in the order Settings offers them.
+    pub const ALL: [CrossSessionAccess; 3] = [
+        CrossSessionAccess::Auto,
+        CrossSessionAccess::ConfirmEachSend,
+        CrossSessionAccess::Off,
+    ];
+
+    /// The value's name in the Settings select.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            CrossSessionAccess::Auto => "Auto",
+            CrossSessionAccess::ConfirmEachSend => "Confirm each send",
+            CrossSessionAccess::Off => "Off",
+        }
+    }
+}
+
+impl std::fmt::Display for CrossSessionAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.display_name())
+    }
 }
 
 /// What policy says about one call. A refusal is always decided before a confirmation, so the user
@@ -65,6 +96,9 @@ pub enum ConfirmedOp {
     DeleteSession,
     StopSession,
     InterruptSession,
+    /// Type into another session while the FR-016 option is "Confirm each send". The prompt names
+    /// the target only, never the text.
+    SendInput,
 }
 
 /// The refusal a Default session gets for a worktree mutation (FR-015a).
@@ -72,14 +106,19 @@ const PRINCIPLE_III: &str = "a session running in the project root (Default) may
     rename or delete worktrees (Constitution Principle III); ask from a session that runs in a \
     worktree";
 
+/// The refusal both cross-session tools get while the FR-016 option is Off.
+const CROSS_SESSION_OFF: &str = "reading and typing into other sessions is turned off in Settings \
+    (\"Let agents read and type into other sessions\")";
+
 /// Decide `operation` for `caller`. The refusals come first: Principle III for a Default caller
-/// (FR-015a), then the caller's own session or hosting worktree (FR-015); only then does a
-/// destructive operation wait for the user (FR-014).
+/// (FR-015a), then the caller's own session or hosting worktree (FR-015), then the cross-session
+/// option at Off (FR-016); only then does an operation wait for the user (FR-014). `access` is the
+/// FR-016 option as it is for this request.
 pub fn decide(
     caller: &Caller,
     operation: &Operation,
     _facts: &TargetFacts,
-    _access: CrossSessionAccess,
+    access: CrossSessionAccess,
 ) -> PolicyDecision {
     let refused = |message: &str| {
         PolicyDecision::Refuse(OpError::new(ErrorCategory::RefusedByPolicy, message))
@@ -110,6 +149,26 @@ pub fn decide(
                 "a session may not interrupt itself: the interrupt would abort the turn waiting \
                  for this result",
             ))
+        }
+        // The caller's own session is invalid input under every value of the option, Off
+        // included: validation comes before policy (contracts/mcp-tools.md *Order of checks*).
+        Operation::ReadSessionOutput { session, .. } if is_me(session) => {
+            PolicyDecision::Refuse(OpError::invalid_input(
+                "a session may not read its own output through this tool; it already has it",
+            ))
+        }
+        Operation::SendSessionInput { session, .. } if is_me(session) => {
+            PolicyDecision::Refuse(OpError::invalid_input(
+                "a session may not type into itself: the text would arrive as its own next input",
+            ))
+        }
+        Operation::ReadSessionOutput { .. } | Operation::SendSessionInput { .. }
+            if access == CrossSessionAccess::Off =>
+        {
+            refused(CROSS_SESSION_OFF)
+        }
+        Operation::SendSessionInput { .. } if access == CrossSessionAccess::ConfirmEachSend => {
+            PolicyDecision::Confirm(ConfirmedOp::SendInput)
         }
         Operation::DeleteWorktree {
             stop_sessions,

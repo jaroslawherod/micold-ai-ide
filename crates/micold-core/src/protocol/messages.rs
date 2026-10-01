@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::theme::ColorScheme;
@@ -528,6 +529,9 @@ pub enum ClientMsg {
         /// Bind new sessions to the service's tool server, or `None` to leave unchanged
         /// (feature 034, FR-004).
         tool_server_enabled: Option<bool>,
+        /// Whether agents may read and type into other sessions, or `None` to leave unchanged
+        /// (feature 034, FR-016).
+        cross_session_access: Option<CrossSessionAccess>,
     },
 
     // --- AI CLIs ---
@@ -1090,6 +1094,9 @@ pub struct DaemonSettings {
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     /// Service-owned for the same reason: the spawn reads it, and running sessions keep theirs.
     pub tool_server_enabled: bool,
+    /// Whether agents may read and type into other sessions of their project (feature 034,
+    /// FR-016). Service-owned because the tool server reads it on every request.
+    pub cross_session_access: CrossSessionAccess,
 }
 
 /// The result payload of a successful mutating request.

@@ -964,6 +964,7 @@ where
                 default_ai_cli,
                 pi_activity_component,
                 tool_server_enabled,
+                cross_session_access,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -993,6 +994,10 @@ where
                 })
                 .and_then(|()| match tool_server_enabled {
                     Some(on) => state.set_tool_server_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match cross_session_access {
+                    Some(access) => state.set_cross_session_access(access),
                     None => Ok(()),
                 });
                 match result {

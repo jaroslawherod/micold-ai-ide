@@ -8,6 +8,7 @@
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
 use crate::issue_types::{default_mapping, LabelTypeEntry};
+use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
 use crate::session::AiCli;
@@ -146,6 +147,11 @@ pub struct Settings {
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     #[serde(default = "default_tool_server_enabled")]
     pub tool_server_enabled: bool,
+    /// Whether agents may read and type into other sessions of their project (feature 034,
+    /// FR-016). `Auto` by default. Service-owned like the binding toggle, but read on every tool
+    /// request rather than at spawn, so a change applies to sessions already running.
+    #[serde(default)]
+    pub cross_session_access: CrossSessionAccess,
     /// The ordered label-to-type mapping an issue pick reads (feature 034, FR-016, FR-017).
     ///
     /// Read leniently, as the stored document is: an entry that does not parse is dropped and the
@@ -176,6 +182,7 @@ impl Default for Settings {
             default_ai_cli: AiCli::default(),
             pi_activity_component: default_pi_activity_component(),
             tool_server_enabled: default_tool_server_enabled(),
+            cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
         }
     }
@@ -386,6 +393,10 @@ struct StoredSettings {
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_tool_server_enabled")]
     tool_server_enabled: bool,
+    /// Missing in files written before the option → `Auto`, the requirement's default (FR-016).
+    /// Additive and defaulted, so `settings_version` does not move for it either.
+    #[serde(default)]
+    cross_session_access: CrossSessionAccess,
     /// Missing in pre-034 files → the default table (FR-021); `[]` stays `[]`. An entry naming a
     /// type this build does not know (or that does not parse at all) is dropped on read and the
     /// rest kept (R10), and a value that is not a list reads as the default table: one hand edit
@@ -424,6 +435,7 @@ impl StoredSettings {
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
+            cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
         }
     }
@@ -454,6 +466,7 @@ impl StoredSettings {
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
+            cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
         }
     }
