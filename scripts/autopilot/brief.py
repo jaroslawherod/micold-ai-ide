@@ -8,6 +8,10 @@ Usage:
                                             through its subsections
   brief.py items <file> <ID>...             bullet items by ID (FR-001, SC-002, T014), with their
                                             continuation lines
+  brief.py ledger <ledger> [<M-id>]         the ledger's state: header, pull requests, milestones,
+                                            handover and open escalation. Of the history sections
+                                            (decisions, review rounds, declined findings) only the
+                                            rows that name <M-id>; of the rest, the line count
 
 Exit 1 with a message on stderr when something asked for is not found.
 """
@@ -156,7 +160,44 @@ def milestone(feature, mid):
             print("\n".join(story))
 
 
+LEDGER_FULL = ("Pull requests", "Milestones", "Handover", "Open escalation")
+
+
+def ledger(path, mid=None):
+    """What a unit needs of the ledger. The history sections grow with every milestone and are
+    re-read on each of the unit's calls, so only the rows of its own milestone are printed."""
+    lines = lines_of(path)
+    starts = [i for i, ln in enumerate(lines) if ln.startswith("## ")] + [len(lines)]
+    print("\n".join(lines[:starts[0]]).rstrip())
+    word = re.compile(r"(?<![\w])" + re.escape(mid) + r"(?![\w])") if mid else None
+    for a, b in zip(starts, starts[1:]):
+        name, body = lines[a][3:].strip(), [ln for ln in lines[a + 1:b] if ln.strip()]
+        print(f"\n{lines[a]}\n")
+        if name == "Open escalation":
+            # A resolved escalation stays below the open one as a record.
+            resolved = [ln for ln in body if ln.startswith("Resolved")]
+            body = [ln for ln in body if not ln.startswith("Resolved")]
+            print("\n".join(body) or "None.")
+            if resolved:
+                print(f"({len(resolved)} resolved, not shown)")
+        elif name in LEDGER_FULL:
+            print("\n".join(body) or "None.")
+        else:
+            rows = [ln for ln in body if not re.match(r"^\|\s*-", ln)]
+            head = [ln for ln in body[:2] if ln.startswith("|")] if len(body) > 1 and re.match(r"^\|\s*-", body[1]) else []
+            rows = rows[1:] if head else rows
+            mine = [ln for ln in rows if word and word.search(ln)]
+            if mine:
+                print("\n".join(head + mine))
+            rest = len(rows) - len(mine)
+            if rest:
+                print(f"({rest} {'other ' if mine else ''}line(s) not shown: brief.py section {path} \"{name}\")")
+
+
 def main(argv):
+    if argv[:1] == ["ledger"] and len(argv) in (2, 3):
+        ledger(*argv[1:])
+        return 0
     if len(argv) < 3 or argv[0] not in ("milestone", "section", "items"):
         print(__doc__)
         return 2

@@ -246,11 +246,16 @@ per call.
 schemas, `CLAUDE.md`, memory index, skill list), carried on about 2,300 calls: roughly 6M per run.
 The daemon-mcp ledger had grown to 28 kB, about 8k tokens, of which the units' working state (PRs,
 milestones, handover, escalation) is a tenth; the rest is decisions, review rounds and declined
-findings that later units do not need.
+findings that later units do not need. `scripts/autopilot/brief.py ledger <ledger> [M<K>]` now
+prints the state in full and, of the history, only the rows that name the unit's milestone: 6.8 kB
+of that ledger for M7, 3.5 kB without a milestone.
 
 **Whole-file reads.** `Read` results were 50–58% of what the big units carried in tool output. The
 largest single results were whole files of 10–16k tokens: `tasks.md`, `test-list.md`, `tools.rs`,
-`worktree_form.rs`.
+`worktree_form.rs`. `scripts/autopilot/read-hook.sh` now runs as a PreToolUse hook on `Read`: on a
+branch an autopilot ledger names, it blocks a `Read` without `limit` of a file over 400 lines, and
+of a ledger over 80 lines, and says what to do instead. A `Read` with `limit` always passes, so a
+caller that needs a whole file asks for it by its length.
 
 ## Skill size
 

@@ -523,6 +523,73 @@ echo building > "$d/run.log"; hold "$d/run.log" >/dev/null
 sleep 4
 check "hold forgets a count older than three hold times" 0 '^HOLD 1/10$' hold "$d/run.log"
 
+# brief.py ledger: the state in full, of the history only the rows that name the milestone.
+d="$(mktemp -d "$tmp/ledger.XXXX")"
+cat > "$d/autopilot.md" <<'MD'
+# Autopilot ledger — 042-links
+
+- **Worktree branch**: wt
+- **Phase**: 4-milestone M2
+
+## Pull requests
+
+| PR | Purpose | Status | Merge SHA |
+|---|---|---|---|
+| #11 | Spec | merged | abc |
+
+## Decisions
+
+| # | Phase | Question | Answer |
+|---|---|---|---|
+| D1 | clarify | old question | old answer |
+| D2 | 4-milestone M2 | mine | yes |
+| D3 | 4-milestone M21 | not mine | no |
+
+## Handover
+
+T031 done; next T032.
+
+## Open escalation
+
+None.
+
+Resolved 2026-01-02: disk was full.
+
+## Follow-ups not done
+
+- a defect elsewhere (M1 review A)
+- another one
+MD
+B="$S/brief.py"
+check "brief ledger: header and state sections in full" 0 '^ok$' bash -c "out=\$('$B' ledger '$d/autopilot.md' M2); grep -q 'Phase\*\*: 4-milestone M2' <<<\"\$out\" && grep -q '^| #11 | Spec' <<<\"\$out\" && grep -q '^T031 done; next T032' <<<\"\$out\" && echo ok"
+check "brief ledger: the milestone's history rows, under the table head" 0 '^ok$' bash -c "out=\$('$B' ledger '$d/autopilot.md' M2); grep -q '^| D2 ' <<<\"\$out\" && grep -q '^| # | Phase' <<<\"\$out\" && echo ok"
+check "brief ledger: leaves out other milestones' rows" 0 '^ok$' bash -c "out=\$('$B' ledger '$d/autopilot.md' M2); ! grep -qE '^\| D1 |^\| D3 |another one|a defect' <<<\"\$out\" && echo ok"
+check "brief ledger: counts what it left out and says how to get it" 0 '^\(2 other line\(s\) not shown: brief.py section .*autopilot.md "Decisions"\)$' "$B" ledger "$d/autopilot.md" M2
+check "brief ledger: no milestone, no history rows" 0 '^\(3 line\(s\) not shown: .*"Decisions"\)$' "$B" ledger "$d/autopilot.md"
+check "brief ledger: a resolved escalation is not open" 0 '^ok$' bash -c "out=\$('$B' ledger '$d/autopilot.md'); grep -q '^(1 resolved, not shown)' <<<\"\$out\" && ! grep -q 'disk was full' <<<\"\$out\" && echo ok"
+
+# read-hook.sh: on a ledger branch, blocks a Read without limit of a long file or a grown ledger.
+d="$(new_repo)"; cd "$d/wt"; RH="$S/read-hook.sh"
+seq 1 500 > long.rs; seq 1 50 > short.rs; seq 1 500 > shot.png
+rhook() {  # rhook <file> [<limit>]
+  jq -cn --arg f "$1" --arg l "${2:-}" --arg cwd "$PWD" \
+    '{cwd: $cwd, tool_name: "Read", tool_input: ({file_path: $f} + (if $l == "" then {} else {limit: ($l | tonumber)} end))}' | "$RH"
+}
+check "read hook is silent off a ledger branch" 0 '^$' rhook "$PWD/long.rs"
+ledger specs/042-x/autopilot.md wt 4-milestone 11
+check "read hook blocks a whole Read of a long file" 2 'long.rs has 500 lines.*limit: 500' rhook "$PWD/long.rs"
+check "read hook passes a Read with a limit" 0 '^$' rhook "$PWD/long.rs" 500
+check "read hook passes a short file" 0 '^$' rhook "$PWD/short.rs"
+check "read hook passes an image" 0 '^$' rhook "$PWD/shot.png"
+check "read hook passes a missing file" 0 '^$' rhook "$PWD/nope.rs"
+check "read hook honours the line limit setting" 2 'short.rs has 50 lines' env AUTOPILOT_READ_LINES=40 bash -c "$(declare -f rhook); RH='$RH' rhook '$PWD/short.rs'"
+check "read hook passes a young ledger" 0 '^$' rhook "$PWD/specs/042-x/autopilot.md"
+seq 1 100 >> specs/042-x/autopilot.md
+check "read hook sends a grown ledger to brief.py" 2 'ledger has 1[0-9][0-9] lines.*brief.py ledger' rhook "$PWD/specs/042-x/autopilot.md"
+mkdir -p .claude/skills/x; seq 1 500 > .claude/skills/x/unit.md
+check "read hook passes the skill's own files" 0 '^$' rhook "$PWD/.claude/skills/x/unit.md"
+cd "$ROOT"
+
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
 d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
 echo '{"labels":[{"name":"bug"}],"assignees":[{"login":"me"}]}' > "$d/fx/issue-7.json"
