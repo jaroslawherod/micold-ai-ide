@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 4-milestone M7
-- **Next step**: M7 PR open: the orchestrator waits on CI and merges. Then Phase 5 (close).
+- **Next step**: M7 PR #521 open: the orchestrator waits on CI and merges. Then Phase 5 (close).
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #509 | M4: start_session / rename_worktree | merged | f19454dcccf06d54c8da403a7a05e3931a0152b8 |
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
 | #519 | M6: cross-session read and send; Default may create a worktree | merged | e108619b041f290b415b62f1a76c95bfbe1b4801 |
+| #521 | M7: read latency, sandbox placement, the full real-CLI pass, final docs | open | |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | #509 | merged |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 18) | #516 | merged |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 19); a Default session may create a worktree (constitution 1.7.0) | #519 | merged |
-| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | in progress |
+| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | #521 | PR open |
 
 Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
 acceptance-gate and quickstart tasks and no split along an acceptance scenario leaves an observable
