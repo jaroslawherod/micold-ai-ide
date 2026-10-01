@@ -182,3 +182,35 @@ existed and failed before the implementation.
   "install") are asserted in U64, A12 and A13. The T020 test is renamed: "not installed" is no longer
   what it checks
 - written by a subagent from the task text; the red and green lines are its runs
+
+## Cycle 8: U69, U71–U75, A9 the missing-default message (T040, T021, T025)
+
+- test: `crates/micold-client/tests/unavailable_default_says_so.rs`:
+  `in_each_state_the_press_says_that_states_refusal_once` (U69),
+  `in_each_state_the_press_opens_the_list_starts_nothing_and_keeps_the_stored_default` (U71),
+  `an_answer_without_a_state_says_only_that_the_cli_would_not_be_found` (U72),
+  `a_row_on_the_home_answer_names_the_home_directory_and_its_own_answer_names_its_own` (U73),
+  `an_answer_settled_in_an_image_says_the_image_form` (U74);
+  `tests/directory_availability.rs`:
+  `a_newer_answer_after_the_missing_default_message_says_nothing_and_leaves_it_as_said` (U75);
+  `src/main_tests.rs`: `a_missing_default_says_why_the_list_opened::
+  pressing_start_says_include_is_off_opens_the_list_and_starts_nothing` (A9)
+- red, before any change under `src/`: `scripts/build-lock.sh cargo test -p micold-client --test
+  unavailable_default_says_so --test directory_availability --test start_failure_notice
+  --no-fail-fast` -> `unavailable_default_says_so`: `test result: FAILED. 6 passed; 7 failed` (the five
+  above and the two 026/029 tests that quoted the old sentence); `directory_availability`:
+  `test result: FAILED. 21 passed; 1 failed` (U75); left `"Pi Coding Agent isn't installed. Install
+  it, or start this session on another AI CLI."`. `… --bin micold-ai-ide
+  a_missing_default_says_why_the_list_opened` -> `test result: FAILED. 0 passed; 1 failed` (A9)
+- green: `start_menu_toggled` posts `start_refusal(cli, env, place, dir, Fresh)` from the answer in use
+  for the row (`State::answer_in_use`, which `known_clis` now reads too), and `start_refusal_unknown`
+  when the answer has no state. The same commands -> 13 passed, 22 passed, 4 passed, 1 passed;
+  `cargo test -p micold-client --no-fail-fast` -> exit 0, 146 `test result: ok`, 0 failed
+- U71 and U75 went red only through the message equality they assert together with the list, the start
+  and the stored default; those parts have no red and no mutant of their own
+- `start_failure_notice.rs`: fixture only (`REASON` is now `start_refusal(..)`), assertions unchanged,
+  green before and after
+- after green, not test-first: the branch for a press with no answer in use kept 026's "isn't
+  installed" sentence. The view never sends that press (W5); it now says `start_refusal_unknown`
+  (FR-002). No test pins the branch
+- written by a subagent from the task text; the red and green lines are its runs

@@ -6,14 +6,15 @@
 //! staleness, fallback, pruning — and the rule that turns a sidebar row into the directory it is
 //! answered for.
 
-use micold_client::app::State;
+use micold_client::app::{drain, interpret, State};
 use micold_client::features::session::{
-    wanted_availability_dirs, AvailabilityAnswers, AvailabilityKey, AvailabilitySource,
-    CliAvailability, EnvIncludeSettings,
+    start_menu_toggled, wanted_availability_dirs, AvailabilityAnswers, AvailabilityKey,
+    AvailabilitySource, CliAvailability, EnvIncludeSettings,
 };
-use micold_core::cli_reason::SpawnEnv;
+use micold_core::cli_reason::{start_refusal, AttemptDir, Place, SpawnEnv};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, SessionLocation};
+use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -297,6 +298,61 @@ fn an_older_answer_changes_neither_the_set_nor_the_state() {
         answers.home().map(|a| (a.available.clone(), a.env)),
         Some((vec![AiCli::Pi], Some(SpawnEnv::Applied))),
         "a dropped answer leaves no part of itself behind: not its set and not its state"
+    );
+}
+
+/// 037 U75 (FR-012, contract W6): the missing-default message is an event, said once from the
+/// answer in use at the press. A newer answer changes what the row offers and what a later press
+/// would say. It does not say anything itself, and it does not rewrite what was said.
+#[test]
+fn a_newer_answer_after_the_missing_default_message_says_nothing_and_leaves_it_as_said() {
+    let mut state = state_with(Vec::new(), Vec::new());
+    state.session.default_ai_cli = AiCli::Pi;
+    state.session.availability.asked(1, dir(P));
+    state.session.availability.answered(
+        1,
+        answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::ScriptTimedOut)),
+    );
+
+    let outcomes = start_menu_toggled(&mut state, SessionLocation::Default, Some(AiCli::Pi));
+    drain(outcomes, |outcome| interpret(&mut state, outcome));
+
+    let first = start_refusal(
+        AiCli::Pi,
+        SpawnEnv::ScriptTimedOut,
+        Place::ThisComputer,
+        AttemptDir::Dir(Path::new(P)),
+        LaunchMode::Fresh,
+    );
+    let said = |state: &State| {
+        let queue = &state.notifications.queue;
+        (queue.visible().map(|n| n.message.clone()), queue.pending())
+    };
+    assert_eq!(said(&state), (Some(first.clone()), 0));
+
+    // The press itself asked again (033 contract C1), and the script now runs and still does not
+    // provide Pi: another state, and another sentence if anything were to say it.
+    state.session.availability.asked(2, dir(P));
+    assert!(state
+        .session
+        .availability
+        .answered(2, answer_in(&[AiCli::ClaudeCode], Some(SpawnEnv::Applied)),));
+    assert_eq!(
+        said(&state),
+        (Some(first.clone()), 0),
+        "the message on screen is the one said at the press, and nothing waits behind it"
+    );
+
+    // Then the CLI is found. The row offers it, and the message is still what was said.
+    state.session.availability.asked(3, dir(P));
+    assert!(state.session.availability.answered(
+        3,
+        answer_in(&[AiCli::ClaudeCode, AiCli::Pi], Some(SpawnEnv::Applied)),
+    ));
+    assert_eq!(said(&state), (Some(first), 0));
+    assert_eq!(
+        held(&state.session.availability, P),
+        Some(vec![AiCli::ClaudeCode, AiCli::Pi])
     );
 }
 

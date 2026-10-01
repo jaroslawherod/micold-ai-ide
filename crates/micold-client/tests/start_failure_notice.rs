@@ -12,18 +12,29 @@
 //! a record that is never cleared silences the *next* failure, which is a real one the user has not
 //! been told about.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use micold_client::app::State;
 use micold_client::catalog_sync::reconcile_catalog;
+use micold_core::cli_reason::{start_refusal, AttemptDir, Place, SpawnEnv};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel};
+use micold_core::terminal::LaunchMode;
 use uuid::Uuid;
 
-const REASON: &str =
-    "GitHub Copilot isn't installed. Install it, or start this session on another AI CLI.";
+/// What the service says when a start is refused for a missing CLI (037 FR-009, contract W4 row
+/// U4): `cli_reason`'s sentence for the session's own directory. The client shows it as it is.
+fn reason() -> String {
+    start_refusal(
+        AiCli::Copilot,
+        SpawnEnv::IncludeOff,
+        Place::ThisComputer,
+        AttemptDir::Dir(Path::new("/a")),
+        LaunchMode::Fresh,
+    )
+}
 
 fn id() -> SessionId {
     SessionId::from_uuid(Uuid::from_u128(0x0FF0))
@@ -56,7 +67,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
 
 fn failed() -> WireLifecycle {
     WireLifecycle::Failed {
-        reason: REASON.to_string(),
+        reason: reason(),
         attempts: 0,
     }
 }
@@ -71,7 +82,7 @@ fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
             .queue
             .visible()
             .map(|n| n.message.clone()),
-        Some(REASON.to_string()),
+        Some(reason()),
         "the first report of a failure is news"
     );
 
@@ -109,7 +120,7 @@ fn a_failure_after_the_session_has_been_something_else_is_said_again() {
     reconcile_catalog(&mut core, &snapshot(failed()), false);
     assert_eq!(
         core.notifications.queue.visible().map(|n| n.message.clone()),
-        Some(REASON.to_string()),
+        Some(reason()),
         "this is a second failure and the user has not been told about it — suppressing it because \
          the sentence matches the last one would silence a real report"
     );

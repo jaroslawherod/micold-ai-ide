@@ -54,10 +54,11 @@
 use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::cli_reason::SpawnEnv;
+use micold_core::cli_reason::{start_refusal, start_refusal_unknown, AttemptDir, Place, SpawnEnv};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::terminal::LaunchMode;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -310,6 +311,28 @@ impl CliAvailability {
             .into_iter()
             .filter(|which| !self.available.contains(which))
             .collect()
+    }
+
+    /// Where the answer was settled, as a sentence names it (037 FR-005).
+    ///
+    /// The one mapping from `source`: the Settings note and the missing-default message both read
+    /// it, so they cannot name different places for one answer (FR-012).
+    pub fn place(&self) -> Place<'_> {
+        match &self.source {
+            AvailabilitySource::Image(reference) => Place::Image(reference),
+            AvailabilitySource::ThisComputer => Place::ThisComputer,
+        }
+    }
+
+    /// The directory the attempt in `env` was made for, as a sentence names it (037 FR-004a).
+    ///
+    /// A row with no answer of its own reads the home answer, and this is then the home
+    /// directory: that is where the attempt it reports was made.
+    pub fn attempt_dir(&self) -> AttemptDir<'_> {
+        match &self.asked_for {
+            AvailabilityKey::Home => AttemptDir::Home,
+            AvailabilityKey::Dir(dir) => AttemptDir::Dir(dir),
+        }
     }
 }
 
@@ -1979,12 +2002,21 @@ impl State {
     /// service that answered "none" mean the same thing. The distinction matters once, in the
     /// Settings sentence (FR-023b), which reads [`AvailabilityAnswers::home`] directly.
     pub fn known_clis(&self, dir: Option<&Path>) -> &[AiCli] {
+        self.answer_in_use(dir)
+            .map(|a| a.available.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// The answer a list for `dir` is drawn from: the directory's own, else the home answer, and
+    /// the home answer with `None` (033 FR-005). `None` while the service has said nothing.
+    ///
+    /// What is offered and the reason given for what is not both read this one value, so a
+    /// sentence never explains another answer's offer (037 FR-012).
+    pub fn answer_in_use(&self, dir: Option<&Path>) -> Option<&CliAvailability> {
         match dir {
             None => self.availability.home(),
             Some(dir) => self.availability.for_dir(dir),
         }
-        .map(|a| a.available.as_slice())
-        .unwrap_or(&[])
     }
 
     /// Whether the stored default is installed where a session in `dir` would run (FR-002).
@@ -2099,15 +2131,31 @@ pub fn start_menu_toggled(
         // why it appeared.
         return Vec::new();
     }
-    unavailable_default
-        .filter(|cli| !state.session.known_clis(dir.as_deref()).contains(cli))
-        .map(|cli| {
-            vec![crate::features::notifications::error(format!(
-                "{} isn't installed. Install it, or start this session on another AI CLI.",
-                cli.provider().display_name()
-            ))]
-        })
-        .unwrap_or_default()
+    let Some(cli) = unavailable_default else {
+        return Vec::new();
+    };
+    // The reason comes from the answer the list is drawn from, never from another one (037
+    // FR-012): the state it was walked in, where it was settled and the directory it was asked
+    // for (FR-004a). It is said once, here; a newer answer does not say it again (contract W6).
+    let message = match state.session.answer_in_use(dir.as_deref()) {
+        Some(answer) if answer.available.contains(&cli) => return Vec::new(),
+        Some(answer) => match answer.env {
+            Some(env) => start_refusal(
+                cli,
+                env,
+                answer.place(),
+                answer.attempt_dir(),
+                LaunchMode::Fresh,
+            ),
+            // The answer does not say why, so no cause is claimed (FR-002, research R8).
+            None => start_refusal_unknown(cli),
+        },
+        // No answer at all. `start_intent` sends that press to the service and never opens a
+        // list for it (contract W5), so this is reached only when the answers went away between
+        // the draw and the press. Nothing is known then, so nothing is claimed (FR-002).
+        None => start_refusal_unknown(cli),
+    };
+    vec![crate::features::notifications::error(message)]
 }
 
 /// Where a press on the start affordance landed (018 BUG-008, FR-029d).
