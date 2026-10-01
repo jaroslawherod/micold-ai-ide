@@ -412,9 +412,6 @@ async fn delete_session(
             hangup,
         )
         .await?;
-        // Archiving is idempotent, so a record deleted while the prompt waited is caught here.
-        let st = Arc::clone(state);
-        blocking(move || resolve_session_target(&st, caller, session)).await?;
     }
     let st = Arc::clone(state);
     let (owner, ptys) = blocking(move || {

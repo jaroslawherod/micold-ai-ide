@@ -529,6 +529,35 @@ async fn an_allowed_interrupt_session_types_ctrl_c_and_leaves_it_running() {
     assert_eq!(f.lifecycle_of(IDLE).await, "running");
 }
 
+/// Review A (M5): the approval is for the process the user was asked about. A session stopped and
+/// started again while the prompt waits is another process, and the interrupt does not reach it.
+// unix-only: the fixture's sessions are `#!/bin/sh` stand-ins.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_interrupt_allowed_after_the_process_was_replaced_is_a_conflict() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let asked_about = f.state.primary_pty(sid(IDLE)).expect("running");
+    let mut window = fake_window(&f.state);
+    let (addr, key) = (f.addr, credential(&f.state, sid(CALLER)));
+    let call =
+        tokio::spawn(async move { call_err(addr, &key, "interrupt_session", target(IDLE)).await });
+    let (id, _) = next_prompt(&mut window).await;
+
+    assert!(f.state.stop_session(sid(IDLE)));
+    f.start(IDLE).await;
+    let replaced = f.state.primary_pty(sid(IDLE)).expect("running again");
+    assert!(!Arc::ptr_eq(&asked_about, &replaced), "another process");
+    f.state.answer_confirmation(id, true);
+
+    let error = tokio::time::timeout(Duration::from_secs(5), call)
+        .await
+        .expect("a reply within 5 s")
+        .unwrap();
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert_eq!(f.lifecycle_of(IDLE).await, "running");
+}
+
 /// U187 (FR-012a): interrupting a session that is not running is a conflict, asked of nobody.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn interrupt_session_on_a_session_that_is_not_running_is_a_conflict() {
