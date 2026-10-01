@@ -43,9 +43,13 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `send_session_input` | `{session, text}` | `{}` | self → invalid_input; empty, or line breaks only → invalid_input (FR-012a); a control character other than a line break or a tab → invalid_input; FR-016: Auto → proceed, Confirm each send → **confirm**, Off → refused_by_policy; not running → conflict naming `start_session`; the CLI would ask to trust the folder → conflict (below) |
 | `delete_session` | `{session}` | `{}` | self → refused_by_policy (FR-015); then **confirm** |
 
-Order of checks: scope (not_found) → input validation (invalid_input) → policy (refused_by_policy)
-→ state conflicts (conflict) and no-ops → confirmation → effect. So a refused, conflicting or no-op
-request never shows a prompt (FR-014).
+Order of checks: the arguments alone (invalid_input) → scope (not_found) → input validation that needs
+the target (invalid_input) → policy (refused_by_policy) → state conflicts (conflict) and no-ops →
+confirmation → effect. So a refused, conflicting or no-op request never shows a prompt (FR-014).
+The arguments alone decide: a missing or mistyped argument, a `session` that is not an id, `text`
+that is empty, only line breaks or holds a control character, a `display_name` that is empty or
+only whitespace. This is checked before any target is looked up, so its answer is the same whether or
+not the target exists in this or another project (FR-010).
 
 **confirm** = the FR-014 flow ([protocol-delta.md](./protocol-delta.md) §2): allowed → proceed;
 declined → `refused_by_policy` "declined by the user"; 60 s or no window → `needs_confirmation`;

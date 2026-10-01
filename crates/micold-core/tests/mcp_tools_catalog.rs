@@ -108,9 +108,16 @@ fn every_tool_has_an_object_input_schema_and_the_read_tools_are_read_only() {
             json!(false),
             "{name} rejects unknown arguments"
         );
+        let description = tool["description"].as_str().unwrap_or_default();
         assert!(
-            tool["description"].as_str().is_some_and(|d| !d.is_empty()),
-            "{name} has a description"
+            description.len() >= 40 && description.trim_end().ends_with('.'),
+            "{name} has a description of at least a sentence: {description:?}"
+        );
+        // FR-014: a tool that asks the user first says so, so an agent is not surprised by it.
+        assert_eq!(
+            description.contains("confirms in an app window"),
+            DESTRUCTIVE.contains(&name),
+            "{name}: exactly the destructive tools say the user confirms: {description:?}"
         );
         assert_eq!(
             tool["annotations"]["readOnlyHint"],
@@ -332,11 +339,25 @@ fn destructive_hint_is_set_on_exactly_the_destructive_tools() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(destructive, DESTRUCTIVE);
-    for tool in &tools {
-        let name = tool["name"].as_str().unwrap();
-        if DESTRUCTIVE.contains(&name) {
-            assert_eq!(tool["annotations"]["readOnlyHint"], json!(false), "{name}");
-        }
+    let (destructive_tools, other_tools): (Vec<&Value>, Vec<&Value>) = tools
+        .iter()
+        .partition(|t| t["annotations"]["destructiveHint"] == json!(true));
+    assert_eq!(destructive_tools.len(), DESTRUCTIVE.len());
+    for tool in destructive_tools {
+        assert_eq!(
+            tool["annotations"]["readOnlyHint"],
+            json!(false),
+            "{}: a destructive tool is not read-only",
+            tool["name"]
+        );
+    }
+    for tool in other_tools {
+        assert_eq!(
+            tool["annotations"]["destructiveHint"],
+            json!(false),
+            "{}: only the destructive tools carry the hint",
+            tool["name"]
+        );
     }
 }
 

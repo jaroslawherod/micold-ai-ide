@@ -105,12 +105,19 @@ fn initialize_declares_tools_without_list_changes_and_names_the_server() {
     assert_eq!(result["capabilities"]["tools"]["listChanged"], json!(false));
     assert_eq!(result["serverInfo"]["name"], "micold");
     assert_eq!(result["serverInfo"]["version"], VERSION);
-    assert!(
-        result["instructions"]
-            .as_str()
-            .is_some_and(|s| !s.is_empty()),
-        "initialize must carry the instructions paragraph"
-    );
+    // contracts/binding.md: the paragraph names the scope (own project) and the confirmation policy.
+    let instructions = result["instructions"].as_str().unwrap_or_default();
+    for phrase in [
+        "this session belongs to, and only that project",
+        "another project's sessions and worktrees are reported as not found",
+        "ask the user in the app first",
+        "needs_confirmation",
+    ] {
+        assert!(
+            instructions.contains(phrase),
+            "the instructions must say {phrase:?}: {instructions}"
+        );
+    }
 }
 
 #[test]

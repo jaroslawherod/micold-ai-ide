@@ -674,7 +674,7 @@ was taken by stubbing that implementation out and restoring it afterwards.
 - refactor: `mcp_create_session.rs` lost its now-unused `new_session` helper; `mcp_audit_log.rs`'s
   `// unix-only:` reason fits on the line above the gate (`daemon_tests_gate_with_reason.rs`).
 
-## Cycle 24 — U220–U227 — T102 follow-up (folder trust, ledger D20)
+## Cycle 24 — U234–U236, U223–U227 (the first three were U220–U222 until the close renumbered them) — T102 follow-up (folder trust, ledger D20)
 
 - trigger: quickstart §B3 finding 4 (a trust question settles output and the prompt's Enter
   answers it); the user chose to check the CLI's own trust record read-only and type nothing when it
@@ -702,7 +702,7 @@ was taken by stubbing that implementation out and restoring it afterwards.
   `prompt_reason` whenever `prompt_delivered` is false. 15 passed.
 - refactor: `session_dir_var` takes the environment slice, shared by the binding and the trust read.
 
-## Cycle 25 — U228–U232 — review A (M3) findings
+## Cycle 25 — U228, U229, U237–U239 (the last three were U230–U232 until the close renumbered them) — review A (M3) findings
 
 - red: `scripts/build-lock.sh cargo test -p micold-core --test input_readiness`, then
   `-p micold-daemon --test mcp_create_session` and `--test mcp_create_worktree a_previous_branch`
@@ -715,7 +715,7 @@ was taken by stubbing that implementation out and restoring it afterwards.
    right: "print the branch name\n"
   assertion `left == right` failed: {"category":"service_error","message":"git failed to create the worktree: git worktree add -b @{-1} …"}
   ```
-  (U231 ran against a `subscribe_session_started` channel that nothing announced on yet, so it
+  (U238 ran against a `subscribe_session_started` channel that nothing announced on yet, so it
   failed on its timeout, not on compilation.) A test for "a CLI that exits before it is ready" was
   written and dropped: the exited session stays live under supervision and the wait runs to the
   bound, so review A's finding 6 did not reproduce.
@@ -989,3 +989,34 @@ observed only afterwards.
   container with no sign-in writes the binding file under the container's data directory, and
   `node`'s `fetch` from a shell session in the container reaches the listener and gets `whoami`'s
   answer for the bound session.
+
+## Close — remediation of `verification.md` and `speckit-converge` (T106–T112)
+
+No product code changed, so there is no red-green cycle. Four of the strengthened assertions were
+shown to bite by giving the test a wrong expected value, running it, and restoring it: the audit
+line's `target` and `outcome`, the prompt's `target_label`, and the running session's liveness.
+Their observed failures are quoted below. The others (the `tools/list` names, the `initialize`
+phrases, the description rule, the `destructiveHint` partition, the `Proceed` rows, the
+`delete_session` window broadcast) are equality or membership pins that were run green only.
+
+- `mcp_audit_log.rs`: `target` equals the session, worktree or branch the call names (wrong
+  expectation observed: `left: Some("audit-ok"), right: Some("audit-okx")`); a failed call's
+  `outcome` equals its expected category and is never `ok` (observed: `left: "invalid_input",
+  right: "conflict"`); both loops refuse an empty tool list.
+- `mcp_lifecycle_tools.rs`: the confirmation's `target_label` equals the target's label (observed:
+  `left: "New session", right: "New sessionx"`); an allowed `delete_session` is seen by a window
+  within the bound; new `an_allowed_delete_session_on_a_running_session_ends_its_process`
+  (inverted liveness check observed: `the process was killed`).
+- `mcp_binding_spawn.rs` pins the 15 tool names of `tools/list`; `mcp_jsonrpc.rs` pins the four
+  statements of the `initialize` instructions; `mcp_tools_catalog.rs` gives the description rule
+  content and partitions the tools by `destructiveHint` with no `if` in the loop; `mcp_policy.rs`
+  pins `Proceed` for the read-only operations for a worktree caller and a Default caller.
+- `mcp_read_latency.rs`: the PTY kill moved into a `Drop` guard.
+- Waiver, U206 (cycle 39) and U147 (cycle 41), which `verification.md` lists as test-after with no
+  mutant. U206 times tools that already existed, so its only possible red was the missing
+  arguments case cycle 39 records; a mutant would be a sleep in a read tool, which shows the clock
+  works and nothing about the tools. U147 probes research R8's claim on a real container runtime
+  and passed on its first run by design (cycle 41); a mutant needs the image rebuilt per run.
+  Both stand as characterization tests.
+- Observed green: `mcp_audit_log` 5, `mcp_binding_spawn` 18, `mcp_lifecycle_tools` 26,
+  `mcp_read_latency` 1, `mcp_jsonrpc` 13, `mcp_tools_catalog` 31, `mcp_policy` 19.

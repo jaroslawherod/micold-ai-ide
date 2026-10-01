@@ -122,6 +122,33 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
     }
 }
 
+/// FR-015: the read-only operations proceed, absolutely, for a worktree caller and a Default one.
+#[test]
+fn the_read_only_operations_proceed_for_a_worktree_caller_and_a_default_caller() {
+    for operation in [
+        Operation::Whoami,
+        Operation::ListWorktrees {
+            include_hidden: true,
+        },
+        Operation::ListBranches,
+        Operation::ListSessions { worktree: None },
+        Operation::GetSession {
+            session: session(ME),
+        },
+        Operation::GetSession {
+            session: session(OTHER),
+        },
+    ] {
+        for location in [in_worktree("b"), SessionLocation::Default] {
+            assert_eq!(
+                decide_for(location.clone(), &operation),
+                PolicyDecision::Proceed,
+                "a read-only operation needs no confirmation: {operation:?} from {location:?}"
+            );
+        }
+    }
+}
+
 fn session(n: u128) -> SessionRef {
     SessionRef(Uuid::from_u128(n))
 }

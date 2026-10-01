@@ -219,6 +219,16 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
     }
 }
 
+/// The target an audit line names for a call with `args`: the session, else the worktree, else
+/// the branch a new worktree is made from.
+fn expected_target(args: &Value) -> String {
+    ["session", "worktree", "branch"]
+        .iter()
+        .find_map(|k| args[*k].as_str())
+        .expect("every call names a session, a worktree or a branch")
+        .to_string()
+}
+
 /// Arguments with which `tool` fails for `caller`, and the category it fails with.
 fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
     match tool {
@@ -294,7 +304,8 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     for tool in &tools {
         f.prepare(tool, caller).await;
         let before = audit_lines(caller).len();
-        let result = f.call(caller, tool, good_call(tool, caller)).await;
+        let args = good_call(tool, caller);
+        let result = f.call(caller, tool, args.clone()).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
         let lines = audit_lines(caller);
         assert_eq!(
@@ -306,7 +317,11 @@ async fn every_successful_mutating_call_writes_one_info_line() {
         assert!(line.contains(" INFO "), "logged at info: {line}");
         assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");
         assert_eq!(field(line, "outcome"), Some("ok"), "{line}");
-        assert!(field(line, "target").is_some(), "{line}");
+        assert_eq!(
+            field(line, "target"),
+            Some(expected_target(&args).as_str()),
+            "the line names what {tool} acted on: {line}"
+        );
     }
 }
 
@@ -314,7 +329,9 @@ async fn every_successful_mutating_call_writes_one_info_line() {
 async fn every_failed_mutating_call_writes_one_line_with_its_category() {
     let caller = sid(72);
     let f = fixture(caller).await;
-    for tool in f.mutating_tools(caller).await {
+    let tools = f.mutating_tools(caller).await;
+    assert!(!tools.is_empty(), "M3 ships mutating tools");
+    for tool in tools {
         for (args, category) in failing_call(&tool, caller) {
             let before = audit_lines(caller).len();
             let result = f.call(caller, &tool, args.clone()).await;
@@ -400,21 +417,32 @@ async fn a_sent_text_never_reaches_the_log() {
 async fn every_logged_failure_carries_one_of_the_six_categories() {
     let caller = sid(74);
     let f = fixture(caller).await;
-    for tool in f.mutating_tools(caller).await {
-        for (args, _) in failing_call(&tool, caller) {
-            f.call(caller, &tool, args).await;
+    let tools = f.mutating_tools(caller).await;
+    assert!(!tools.is_empty(), "M3 ships mutating tools");
+    // Each call, in order, with the category its failure must be logged under.
+    let mut expected = Vec::new();
+    for tool in tools {
+        for (args, category) in failing_call(&tool, caller) {
+            let result = f.call(caller, &tool, args.clone()).await;
+            assert_eq!(result["isError"], json!(true), "{tool} {args}: {result}");
+            expected.push((tool.clone(), category));
         }
         // Arguments of the wrong type.
-        f.call(caller, &tool, json!({"worktree": 7, "branch": 7}))
+        let result = f
+            .call(caller, &tool, json!({"worktree": 7, "branch": 7}))
             .await;
+        assert_eq!(result["isError"], json!(true), "{tool}: {result}");
+        expected.push((tool.clone(), ErrorCategory::InvalidInput));
     }
     let lines = audit_lines(caller);
-    assert!(!lines.is_empty());
-    for line in lines {
-        let outcome = field(&line, "outcome").unwrap_or_default();
+    assert_eq!(lines.len(), expected.len(), "one line per call: {lines:#?}");
+    for (line, (tool, category)) in lines.iter().zip(&expected) {
+        let outcome = field(line, "outcome").unwrap_or_default();
         assert!(
-            outcome == "ok" || CATEGORIES.iter().any(|c| c.as_str() == outcome),
+            CATEGORIES.iter().any(|c| c.as_str() == outcome),
             "an outcome outside the six categories: {line}"
         );
+        assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");
+        assert_eq!(outcome, category.as_str(), "{tool}: {line}");
     }
 }

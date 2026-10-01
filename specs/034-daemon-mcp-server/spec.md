@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Closed 2026-10-01 — shipped in PRs #455, #465, #469, #474, #498, #509, #516, #519, #521
 
 **Input**: User description: "the daemon server should expose mcp server that will be automaticly
 binded into AI sessions. Should allow to manage the sessions and worktries."
@@ -257,7 +257,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 - **Empty project**: a project with no worktrees and no sessions except the caller lists just the
   Default location and the calling session; an empty list is a successful answer, not an error.
 - **Unknown or malformed target**: a session id or worktree name that does not exist, or belongs to
-  another project, fails with "not found" and never reveals whether it exists elsewhere.
+  another project, fails with "not found" and never reveals whether it exists elsewhere. A session
+  reference that is not an id at all fails as invalid input, the same for every caller, so it
+  reveals nothing either.
 - **Invalid names**: a branch or worktree name git or the app's naming rules reject fails with the
   same validation message the create-worktree dialog shows, before anything is created.
 - **Concurrency (Principle II)**: two sessions (or a session and a user in the sidebar) create the
