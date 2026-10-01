@@ -51,6 +51,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::features::session::{AvailabilitySource, CliAvailability};
+use micold_core::cli_reason::{explain, AttemptDir, Explanation, Place};
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -1648,12 +1649,14 @@ fn lines_011(
     lines
 }
 
-// --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
+// --- Where a CLI is missing, and what to say about it (027 FR-023b, 037 FR-006) ---
 
-/// The sentence shown where an image is chosen and where a CLI is chosen, when the place sessions
-/// run is missing one (FR-023b). `None` when there is nothing to say.
+/// The sentence shown where an image is chosen and where a CLI is chosen, when a session would not
+/// find one of the CLIs (027 FR-023b, 037 FR-006): the reason and the action
+/// [`micold_core::cli_reason::explain`] gives for the home directory's environment state, joined
+/// as `{reason} {action}`. `None` when there is nothing to say.
 ///
-/// Two of the three `None` cases are the interesting ones:
+/// The `None` cases:
 ///
 /// - **the service has not answered yet.** Not "nothing is available" — the app has not asked, or
 ///   the reply is in flight. Saying anything here would be a guess, and a guess that names a
@@ -1661,28 +1664,24 @@ fn lines_011(
 /// - **everything is present.** The absence of a notice is the whole of "this is fine"; a green
 ///   "all CLIs present" line is a second thing to read on every visit to a form that is not about
 ///   AI CLIs.
+/// - **the answer carries no environment state** (037 FR-011, contract W5). A CLI is missing but
+///   why is not known, and a reason made up here could send the user to change the wrong setting.
 ///
-/// The sentence never presents this as the application failing. It is a fact about the machine
-/// sessions run on, phrased as what that machine would have to provide, because that is where the
-/// user can act. FR-023b is explicit that it belongs *here*, at the two points of choice, and not
-/// at session start — by then the user has committed to something the app already knew would not
-/// work.
+/// The sentence never presents this as the application failing. It says what a session would not
+/// find and which setting or install changes that, because that is where the user can act. The
+/// answer is always the home directory's here, so the attempt it reports is named as the home
+/// directory's (037 FR-004a).
 pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
     let availability = availability?;
-    let missing = availability.missing();
-    let names = micold_core::cli_reason::name_list(&missing)?;
-    let verb = if missing.len() == 1 {
-        "isn't"
-    } else {
-        "aren't"
+    let place = match &availability.source {
+        AvailabilitySource::Image(reference) => Place::Image(reference),
+        AvailabilitySource::ThisComputer => Place::ThisComputer,
     };
-    Some(match &availability.source {
-        AvailabilitySource::Image(reference) => format!(
-            "{names} {verb} in {reference}. Sessions run in that image, so it has to provide any \
-             AI CLI you want to use."
-        ),
-        AvailabilitySource::ThisComputer => {
-            format!("{names} {verb} installed on this computer, which is where sessions run.")
-        }
-    })
+    let Explanation { reason, action } = explain(
+        &availability.missing(),
+        availability.env?,
+        place,
+        AttemptDir::Home,
+    )?;
+    Some(format!("{reason} {action}"))
 }

@@ -54,6 +54,7 @@
 use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::cli_reason::SpawnEnv;
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
@@ -262,7 +263,7 @@ pub struct State {
 ///
 /// The two travel together on purpose. FR-023c settles availability **where sessions run**, and
 /// FR-023b then has to name the thing that is missing the CLI — "not in this image" and "not
-/// installed on this computer" are different sentences with different remedies, and picking the
+/// on the PATH sessions get on this computer" are different sentences with different remedies, and picking the
 /// wrong one sends the user to fix the wrong machine.
 ///
 /// The service does not report which image it is running; the client started it and holds that
@@ -365,16 +366,18 @@ impl AvailabilityAnswers {
         self.in_flight.insert(req, key);
     }
 
-    /// File the answer to `req` under the key it asked about. `false` — and nothing filed — when
+    /// File the answer to `req` under the key it asked about, stamping that key on it as
+    /// `asked_for` (037 FR-004a). `false` — and nothing filed — when
     /// `req` was never asked (a reply from before a reconnect or for a pruned directory), or a
     /// newer request for the same key has been sent since (FR-009).
-    pub fn answered(&mut self, req: u64, answer: CliAvailability) -> bool {
+    pub fn answered(&mut self, req: u64, mut answer: CliAvailability) -> bool {
         let Some(key) = self.in_flight.remove(&req) else {
             return false;
         };
         if self.latest.get(&key) != Some(&req) {
             return false;
         }
+        answer.asked_for = key.clone();
         match key {
             AvailabilityKey::Home => self.home = Some(answer),
             AvailabilityKey::Dir(dir) => {

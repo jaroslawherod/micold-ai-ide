@@ -97,3 +97,26 @@ existed and failed before the implementation.
   returns an `Option`. `classify` decides the two settings states and S7
 - T008 remainder: the client's private `name_list` is deleted; `missing_cli_notice` calls the core one
 
+## Cycle 4: U40–U45, U47, U48, U50, U53–U55, A1–A8 the client files the state and Settings says it (T006, T011–T014, T038)
+
+- test: `tests/directory_availability.rs` (U40–U44), `src/main_tests.rs` module
+  `the_settings_note_explains_a_missing_cli` (U45, A1–A8),
+  `tests/missing_cli_is_reported_where_it_is_chosen.rs` (U47, U48, U53–U55),
+  `tests/a_field_note_shares_its_fields_column.rs` (U50), commit `1c419173`
+- compile: the first run stopped at `error[E0425]: cannot find type SpawnEnv` in
+  `features/session.rs`; the field was committed without its import. Import added, nothing else
+- red: `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast` -> 4 targets failed, 17 tests:
+  bin 309 passed; 7 failed (U45, A1, A3–A6, A8 with A2); `a_field_note_shares_its_fields_column`
+  2 passed; 2 failed; `directory_availability` 18 passed; 3 failed (U40–U42);
+  `missing_cli_is_reported_where_it_is_chosen` 8 passed; 5 failed (U47, U48, U53, U54 and the reworded
+  027 host test). Every other target ok
+- passed on arrival: U43 and U44 (`answered` already replaces the whole answer and drops an older one, so
+  `env` travels with `available`), U55 (a property of the signature) and A7 (an absence; mutant in cycle 5)
+- green: `answered` stamps `asked_for` with the request's key; the shell arm files the answer's `env`;
+  `missing_cli_notice` returns `explain(missing, env?, place, AttemptDir::Home)` as `{reason} {action}`
+- one test outside the list went red at green: `provider_choice_surfaces` pressed the centre of the
+  `field_note` column, which is inside the note once the note wraps, so the select never opened. Its
+  fixture now carries `env: Some(Applied)` and `SETTINGS_SELECT` addresses the select itself. The
+  product is unchanged: a person presses the select, not the column's centre
+- result: `cargo test -p micold-client --no-fail-fast` -> every target ok but that one; then
+  `--test provider_choice_surfaces` -> 6 passed. The full suite runs in cycle 5 (`mise run gate`)
