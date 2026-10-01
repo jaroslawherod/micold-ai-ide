@@ -43,6 +43,29 @@ that would change it, said wherever the application names a missing CLI.
   are available there and another supported one is missing. A row with fewer than two available
   CLIs is unchanged, and that user gets the reason from the Settings note (Story 1) and the start
   and restart messages (Story 2). No closed spec is amended. _(decided by user)_
+- Q: On a row with fewer than two available CLIs whose stored default is missing, pressing start
+  already opens the row's list although the row has no chevron (033 FR-010). Does that list name
+  the CLIs that are not offered? → A: No. FR-010 applies only where two or more CLIs are available.
+  On this row the message of FR-008, shown as the list opens, carries the reason for the default,
+  and the list itself is as before this feature. When nothing is available there is no list at
+  all: the press goes to the session service and the failure of FR-009 carries the reason.
+  _(agent-resolved: specs/037-explain-hidden-cli/spec.md#Clarifications (first answer: a row with
+  fewer than two available CLIs is unchanged and is served by Story 2);
+  specs/033-directory-aware-start-affordance/spec.md#FR-010;
+  crates/micold-client/src/ui/sidebar.rs#start_press)_
+- Q: Until a row's own availability answer arrives, the row is drawn from the home directory's
+  answer (033 FR-005). Which reason does a row surface give in that interval? → A: The reason that
+  belongs to the answer in use, which is the home directory's. The offer and the reason always come
+  from one answer (FR-012), so a surface never names a CLI as missing without a reason (FR-001) and
+  never pairs one answer's offer with another's reason. Both switch to the row's own when its
+  answer arrives, with no user action. Opening the row's list asks for that answer (033 FR-004).
+  Silence (FR-011) is for a row with no answer in use at all. _(agent-resolved:
+  specs/033-directory-aware-start-affordance/spec.md#FR-005;
+  crates/micold-client/src/features/session.rs#AvailabilityAnswers::for_dir)_
+- Q: Do the limits of FR-002 and the agreement of FR-012 cover the row's CLI list as well as the
+  messages? → A: Yes. FR-001 covers every surface of FR-006 to FR-010. SC-003 and SC-004 now name
+  the row's CLI list among the surfaces they count. _(agent-resolved:
+  specs/037-explain-hidden-cli/spec.md#FR-001)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -160,6 +183,10 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 1a. **Given** a row whose directory provides fewer than two supported CLIs, **When** I look at the
    row, **Then** it has no chevron and shows nothing about missing CLIs, exactly as before this
    feature (026 FR-006).
+1b. **Given** a row whose directory provides one supported CLI and my stored default is not that
+   one, **When** I press start on the row, **Then** its list opens as before this feature (033
+   FR-010) with the message of Story 2 scenario 1, and the list itself says nothing about CLIs
+   that are not offered.
 2. **Given** a row whose directory provides every supported CLI, **When** I open its CLI choice,
    **Then** nothing about missing CLIs is shown.
 3. **Given** two rows whose directories differ in what they provide, **When** I open each row's
@@ -174,8 +201,14 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 ### Edge Cases
 
 - **Nothing is available at all.** Every supported CLI is missing. The note names all of them
-  with the one reason that applies. No surface is left empty without a sentence.
-- **Not answered yet.** Until the session service has answered for a directory, no reason is
+  with the one reason that applies. No surface is left empty without a sentence. A row in this
+  state has no list to open: pressing start asks the session service for the stored default, and
+  the failure of FR-009 gives the reason.
+- **A row is still drawn from the home directory's answer.** Until a row's own answer arrives it
+  uses the home directory's (033 FR-005). Its list and its missing-default message then give the
+  home answer's reason, and both follow the row's own answer as soon as it arrives. This is one
+  answer used in two places, not one project's outcome given to another.
+- **Not answered yet.** Until an availability answer is in use for a directory, no reason is
   shown. A reason is a finding, and silence before the answer is not one (027 FR-023c).
 - **The answer cannot be obtained.** The session service is unreachable or the request fails. The
   application shows no reason about a CLI. It never presents a failure to ask as a missing CLI.
@@ -272,15 +305,19 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   for that row's directory, the list MUST name that CLI and give its reason for that directory. An
   unavailable CLI MUST NOT be selectable. The rule for when the row has a chevron is unchanged (026
   FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay without one, and this
-  feature MUST add nothing to that row.
+  feature MUST add nothing to that row. That includes the list such a row opens when the stored
+  default is missing (033 FR-010): it MUST NOT name the CLIs that are not offered, and the message
+  of FR-008 is what carries the reason there.
 
 **When it is said**
 
-- **FR-011**: No reason MUST be shown when every supported CLI is found, when the session service
-  has not yet answered for that directory, or when the answer could not be obtained.
+- **FR-011**: No reason MUST be shown when every supported CLI is found, when no availability
+  answer is in use for that directory yet, or when the answer could not be obtained. A row drawn
+  from the home directory's answer while its own is awaited (033 FR-005) has an answer in use.
 - **FR-012**: A reason MUST reflect the same availability answer that decides what is offered. For
   one directory and one answer, every surface (FR-006, FR-008, FR-009, FR-009a, FR-010) MUST give the
-  same reason.
+  same reason. While a row is drawn from the home directory's answer (033 FR-005), the reason it
+  gives MUST be that answer's, and MUST change to the row's own together with what is offered.
 - **FR-013**: When environment-include settings are saved, or a directory's environment is
   resolved again, the reason shown for that directory MUST follow the new state with no restart of
   the application, on the same occasions on which the offered CLIs are refreshed today.
@@ -326,10 +363,10 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
   Settings again, choose the CLI, save), with no restart of the application and no documentation.
 - **SC-003**: In no state where the startup script was not applied does any surface say the CLI is
   not installed, say the image lacks it, or tell the user to install it as the only action: zero
-  occurrences across the Settings notes, the missing-default message, the start failure and the
-  reply to an AI session.
+  occurrences across the Settings notes, the missing-default message, the start failure, the
+  reply to an AI session and the row's CLI list.
 - **SC-004**: For one directory at one moment, all surfaces that name a missing CLI agree on the
-  reason: zero disagreements across the surfaces in scope.
+  reason: zero disagreements across the surfaces of FR-012, the row's CLI list included.
 - **SC-005**: With every supported CLI found, and before the first availability answer, no surface
   shows a reason: zero notes in both cases.
 - **SC-006**: Showing a reason causes no additional run of the startup script and no additional
