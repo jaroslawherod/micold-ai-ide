@@ -8,6 +8,11 @@
 //!
 //! The tools timed are the ones `tools/list` marks read-only, not a list kept here. A read-only
 //! tool this file has no arguments for fails the test, so a tool added later cannot go untimed.
+//!
+//! `read_session_output` needs a running session with output to read. On unix one session is
+//! started on a stand-in `claude` that prints more lines than a read may return, and the read asks
+//! for the maximum. The stand-in is a `#!/bin/sh` script, so on other platforms that one tool is
+//! skipped, like the other MCP tests that start a session.
 
 #[path = "support/mcp.rs"]
 mod mcp_support;
@@ -34,15 +39,101 @@ fn session_id(i: usize) -> SessionId {
     sid(i as u128 + 1)
 }
 
+/// The session `read_session_output` reads: not the caller, and the one that is started.
+const READ: usize = 1;
+/// The most lines one read returns (contracts/mcp-tools.md).
+const MAX_LINES: usize = 2_000;
+/// Lines the stand-in prints before its prompt: more than one read returns.
+#[cfg(unix)]
+const PRINTED: usize = 3_000;
+
 /// The arguments each read-only tool is timed with, or `None` for a tool this file does not know.
 fn arguments(tool: &str) -> Option<Value> {
     match tool {
         "whoami" | "list_worktrees" | "list_branches" | "list_sessions" => Some(json!({})),
         "get_session" => Some(json!({"session": session_id(SESSIONS - 1).0.to_string()})),
-        // PHASE B (M6): `read_session_output` is read-only and ships in milestone M6, which was
-        // not on main when this was written. Add its arguments here, over a session that has
-        // output to read. Until then this test fails on a tree that lists the tool.
+        "read_session_output" => Some(json!({
+            "session": session_id(READ).0.to_string(),
+            "lines": MAX_LINES,
+        })),
         _ => None,
+    }
+}
+
+/// Whether `tool` can be timed on this platform.
+fn timed_here(tool: &str) -> bool {
+    cfg!(unix) || tool != "read_session_output"
+}
+
+/// A stand-in `claude` on `PATH` that prints `PRINTED` lines and a prompt, then waits. Holds the
+/// directories it lives in; this file has one test, so the variables are not restored.
+#[cfg(unix)]
+struct StandInCli {
+    _bin: tempfile::TempDir,
+    _home: tempfile::TempDir,
+}
+
+#[cfg(unix)]
+impl StandInCli {
+    fn install() -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let path = bin.path().join("claude");
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\n\
+                 i=1\n\
+                 while [ \"$i\" -le {PRINTED} ]; do printf 'out%s\\n' \"$i\"; i=$((i + 1)); done\n\
+                 printf 'ready> '\n\
+                 exec cat > /dev/null\n"
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut dirs = vec![bin.path().to_path_buf()];
+        dirs.extend(["/usr/bin", "/bin"].map(std::path::PathBuf::from));
+        std::env::set_var("PATH", std::env::join_paths(dirs).unwrap());
+        std::env::set_var("HOME", home.path());
+        std::env::set_var("XDG_DATA_HOME", home.path().join(".local/share"));
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+        Self {
+            _bin: bin,
+            _home: home,
+        }
+    }
+}
+
+/// Start session `READ` and wait until everything it prints is on its terminal.
+#[cfg(unix)]
+async fn start_the_read_session(
+    state: &std::sync::Arc<micold_daemon::state::DaemonState>,
+    addr: std::net::SocketAddr,
+    bearer: &str,
+) {
+    let target = session_id(READ);
+    call_ok(
+        addr,
+        bearer,
+        "start_session",
+        json!({"session": target.0.to_string()}),
+    )
+    .await;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let (Some(pty), Some(framer)) = (state.primary_pty(target), state.primary_framer(target))
+        {
+            let last = framer.lock().unwrap().plain_tail(pty.term(), 1).0;
+            if last.last().map(String::as_str) == Some("ready>") {
+                return;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the stand-in never drew its prompt"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
     }
 }
 
@@ -61,8 +152,10 @@ async fn read_only_tools(addr: std::net::SocketAddr, bearer: &str) -> Vec<String
         .collect()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sessions() {
+    #[cfg(unix)]
+    let _cli = StandInCli::install();
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     init_repo(project.path());
@@ -93,15 +186,18 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
         "list_branches",
         "list_sessions",
         "get_session",
+        "read_session_output",
     ] {
         assert!(
             tools.iter().any(|t| t == expected),
             "{expected} is not listed as read-only: {tools:?}"
         );
     }
+    #[cfg(unix)]
+    start_the_read_session(&state, addr, &cred).await;
 
     let mut slow = Vec::new();
-    for tool in &tools {
+    for tool in tools.iter().filter(|tool| timed_here(tool)) {
         let args = arguments(tool).unwrap_or_else(|| {
             panic!("no arguments for the read-only tool {tool}: time it here (SC-004)")
         });
@@ -136,8 +232,17 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
                 last["branches"].as_array().unwrap().len() > WORKTREES,
                 "main and a branch per worktree: {last}"
             ),
+            "read_session_output" => {
+                let lines = last["lines"].as_array().unwrap();
+                assert_eq!(lines.len(), MAX_LINES, "the most a read returns");
+                assert_eq!(lines.last(), Some(&json!("ready>")), "{last}");
+            }
             _ => {}
         }
+    }
+    #[cfg(unix)]
+    for pty in state.session_ptys(session_id(READ)) {
+        let _ = pty.kill();
     }
     assert!(
         slow.is_empty(),
