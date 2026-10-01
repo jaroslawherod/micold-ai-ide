@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 5-close
-- **Next step**: open the close PR (`docs(034): close the spec`) once the gate is green and the review is clean; the orchestrator waits on CI and merges. No new milestone: convergence found no unbuilt behaviour (D26).
+- **Next step**: the orchestrator waits on CI for the close PR #524 and merges it; then the record PR. Local gate green at 581de30e (tree e6f8ecd4), review round 2 clean. No new milestone (D26).
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
 | #519 | M6: cross-session read and send; Default may create a worktree | merged | e108619b041f290b415b62f1a76c95bfbe1b4801 |
 | #521 | M7: read latency, sandbox placement, the full real-CLI pass, final docs | merged | 68e483204935171cda1757b57c74be6547e1e560 |
+| #524 | Close: converge, tdd-verify, docguard; test-strength remediation T106–T112 | open | |
 
 ## Milestones
 
