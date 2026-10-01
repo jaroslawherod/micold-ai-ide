@@ -363,6 +363,8 @@ msg() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usa
 { msg m1 40000 0; msg m2 500 40000; msg m3 41000 0; msg m3 41000 0; msg m4 9000 1000; } > "$d/s.jsonl"
 check "autopilot-tokens counts one cache rebuild" 0 '^\| orchestrator \(main session\) \| x \| 4 \| [^|]+\| [^|]+\| [^|]+\| 1 \|' \
   "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
+check "autopilot-tokens prices the rebuild's cache write" 0 '^\| orchestrator \(main session\) .*\| 51k \| 100% \|$' \
+  "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
 
 # context.py: finds a unit's transcript by its description (the newest one) under a fake HOME,
 # and reports the last request's context against the cap.
@@ -496,6 +498,30 @@ check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*
 check "context hook honours the cap override" 0 '90000 tokens, over the 50000 cap' env AUTOPILOT_CONTEXT_CAP=50000 bash -c "$(declare -f chook); d='$d' C='$C' chook u2"
 check "context hook ignores a missing transcript" 0 '^$' chook nope
 unset TMPDIR; cd "$ROOT"
+
+# hold.sh: comes back when the log has its result line or the hold time passed, counts the holds
+# per file, and says STOP once more holds would cost more than a rebuild.
+d="$(new_repo)"; H="$S/hold.sh"
+hold() { env TMPDIR="$d" AUTOPILOT_HOLD_SECS=1 "$H" "$@"; }
+printf 'building\nGATE_EXIT=0\n' > "$d/done.log"; echo building > "$d/run.log"
+check "hold reports a finished log at once" 0 '^DONE GATE_EXIT=0$' hold "$d/done.log"
+check "hold comes back while the log has no result" 0 '^HOLD 1/10$' hold "$d/run.log"
+check "hold counts the holds on one file" 0 '^HOLD 2/10$' hold "$d/run.log"
+check "hold says stop at the limit" 3 '^STOP 2/2$' env AUTOPILOT_HOLD_MAX=2 TMPDIR="$d" AUTOPILOT_HOLD_SECS=1 "$H" "$d/run.log"
+check "hold holds on a file nothing writes" 0 '^HOLD 1/10$' hold "$d/no-such-file"
+check "hold --long has its own limit" 0 '^HOLD 1/12$' hold --long "$d/long.log"
+check "hold takes a pattern" 0 '^DONE building$' hold "$d/run.log" '^build'
+(sleep 1; echo "WAIT_EXIT=7" >> "$d/late.log") &
+check "hold sees a result that arrives during the hold" 0 '^DONE WAIT_EXIT=7$' env TMPDIR="$d" AUTOPILOT_HOLD_SECS=20 "$H" "$d/late.log"
+wait
+echo "GATE_EXIT=1" >> "$d/run.log"
+check "hold reports a red gate's exit code" 0 '^DONE GATE_EXIT=1$' hold "$d/run.log"
+echo building > "$d/again.log"; hold "$d/again.log" >/dev/null; echo "GATE_EXIT=0" >> "$d/again.log"
+hold "$d/again.log" >/dev/null; echo building > "$d/again.log"
+check "hold starts counting again after DONE" 0 '^HOLD 1/10$' hold "$d/again.log"
+echo building > "$d/run.log"; hold "$d/run.log" >/dev/null
+sleep 4
+check "hold forgets a count older than three hold times" 0 '^HOLD 1/10$' hold "$d/run.log"
 
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
 d="$(new_repo)"; export GH_FIXTURES="$d/fx"; I="$S/issue.sh"
