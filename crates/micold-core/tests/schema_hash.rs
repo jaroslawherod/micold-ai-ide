@@ -182,7 +182,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 17 → 18 for feature 034's confirmations (`DaemonMsg::ConfirmationRequested` /
 /// `ConfirmationWithdrawn`, `ClientMsg::ConfirmationAnswer`, FR-014). Twelfth time, same case, same
 /// answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 18;
+///
+/// And 18 → 19 for feature 034's `cross_session_access` on `DaemonSettings` and `SettingsSet`
+/// (FR-016). Thirteenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 19;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
