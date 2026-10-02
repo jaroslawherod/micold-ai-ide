@@ -14,7 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{
-    BranchContainment, ClientMsg, DaemonMsg, MergedBranchQuery, OperationResult,
+    BranchContainment, ClientMsg, DaemonMsg, ErrorKind, MergedBranchQuery, OperationResult,
 };
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
@@ -302,4 +302,29 @@ async fn the_answers_are_one_per_query_in_query_order() {
             BranchContainment::Contained,
         ]
     );
+}
+
+/// U64. One reading asks about at most 50 branches at once (contracts/reading-and-wire.md §3):
+/// 50 queries are answered, and a longer list is refused as a malformed request, not cut short.
+#[tokio::test]
+async fn fifty_queries_are_answered_and_fifty_one_are_refused() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+    let queries = |count: usize| vec![query("at", &f.merged); count];
+
+    let fifty = check(&mut client, f.project.path(), queries(50)).await;
+    assert_eq!(
+        answers(fifty),
+        vec![BranchContainment::Contained; 50],
+        "the largest list a reading sends is answered in full"
+    );
+
+    match check(&mut client, f.project.path(), queries(51)).await {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(
+            kind,
+            ErrorKind::InvalidInput,
+            "a list over the limit is a malformed request"
+        ),
+        other => panic!("51 queries must be refused, got {other:?}"),
+    }
 }

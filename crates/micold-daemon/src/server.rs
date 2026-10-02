@@ -1301,6 +1301,20 @@ where
             } => {
                 // Read-only and local: refs and the object store, never a fetch, and nothing is
                 // written (040 FR-016, FR-018a).
+                if checks.len() > MERGED_BRANCH_CHECK_LIMIT {
+                    state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::InvalidInput,
+                            message: format!(
+                                "at most {MERGED_BRANCH_CHECK_LIMIT} branches can be checked at once"
+                            ),
+                            detail: Some(format!("{} were asked for", checks.len())),
+                        },
+                    );
+                    continue;
+                }
                 let Some((repo, true)) = state.project_repo(&project) else {
                     reject_non_repo(state, id, req, &project);
                     continue;
@@ -1765,6 +1779,11 @@ async fn prune_empty_off_runtime(state: &Arc<DaemonState>, project: &std::path::
         _ => {}
     }
 }
+
+/// The most branches one `MergedBranchCheck` may ask about. A reading sends one query per merged
+/// pull request it shows, which stays far below this; a longer list is refused, so that one
+/// request cannot hold a blocking thread for an unbounded run of git calls.
+const MERGED_BRANCH_CHECK_LIMIT: usize = 50;
 
 /// One answer of `MergedBranchCheck`: whether `check.branch`, as the repository holds it now, has
 /// commits beyond `check.head` (feature 040, contracts/reading-and-wire.md §3). Asks git for the
