@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Tasks review round 2 (scoped, fix diff from the round 1 snapshot), `mise run test-scripts`, open PR 2.
+- **Next step**: Open PR 2 after a green `mise run test-scripts`; the orchestrator then waits on CI and merges.
 
 ## Pull requests
 
@@ -64,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 7dfdd00bfdb595aa473a2abd3e119814606b521d:21c79c9d9bf6fb59b7945d2b4bd0596a9a9aefe7 | CHANGES: 5 MAJOR (`SessionChanged` is never sent, the carrier is `CatalogChanged`; the Wayland token did not reach the window that is raised; no rule for a click after the raising window closed; the raise decision was untested glue; no test layer for FR-015, FR-015a, FR-017, FR-025, FR-028), 3 MINOR (an event while the switch is off claimable after reconnecting; counts need the session in view; `SettingsSet` field is an `Option`); all eight fixed |
 | Plan | 2 | 6f5590e2f6b7bd8ef3510df31aee2a75532299d2:80af04fa661ea74bd8f32172b5dd8b92c2813ecb | CLEAN (1 MINOR: wrong line cited for the second `note_activity` caller; fixed) |
 | Tasks | 1 | c85dac2f537bb711fcce428ed56ceeef88af19dc:897f84cedd8e9e405d34fa1ff8b79c1fbf646097 | CHANGES: 5 MAJOR, 3 MINOR. Fixed: F1 the macOS and Windows backend tests ran on no CI leg (new T122 edits `ci.yml`; client test files join the enumerated list in T006, T051, T063, T077); F3 T118 would be ticked in M2 (markers removed); F4 a failed probe left T092–T100 open and version 25 untaken (T091 closes them as `DROPPED`; versions are "next free"); F5 the rules of the view report sat untested in `main.rs` (new T123 `State::view_facts` in the lib, tested in T006 with `[A9]`, `[A10]`, U176–U178; this replaces the reason given for analysis finding G6); F6 dependencies (M4 on M2, M6 on M3 and M4, M8 on M7); F7 the "next free number" rule in R10, wire.md and the plan; F8 the Windows notification-centre sentence moved to T090, milestone ids in D15 and D16, the header's glue list. F2 (the D15 Edge Case narrowed FR-011 by agent decision): escalated, decided by the user (D19), FR-015 and FR-015a amended, `checklists/requirements.md` line 17 ticked again |
+| Tasks | 2 | 87798c9ef7f66cc737705e1027bdd8ac800df22f:3e048fa2f8aedc3fdf5b0c9a8a0acfe60351f003 | CLEAN (1 MINOR: T016 named no dependency on T123; fixed) |
 
 ## Declined review findings
 
