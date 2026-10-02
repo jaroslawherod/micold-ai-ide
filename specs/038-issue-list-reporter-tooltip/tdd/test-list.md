@@ -182,9 +182,10 @@ gives the test task first, then the implementation task(s).
 | U74 | `menu_element` wraps a row with tooltip text in `Tooltip` with `ROW_TOOLTIP_REST` (3 s), `ROW_TOOLTIP_LINES` (3) and the key as subject; a row without is not wrapped | FR-015, FR-021 | example | PENDING | T046 / T051 |
 | U75 | With a hover held past the rest delay on the first, last and lower-edge row exactly one panel opens, inside the window, not over its row, at most three `Caption` lines plus padding | US3-8, FR-021, FR-023 | example | PENDING | T047 / T050, T051 |
 | U76 | A click on the row under an open panel picks the issue | US3-10, FR-023 | example | PENDING | T047 / T050, T051 |
-| U77 | No code under `src/ui/` calls the issue source, so a resting cursor causes no request | FR-024, SC-006 | example | PENDING | T048 / (none) |
+| U77 | No code under `src/ui/` calls the issue source, so a resting cursor causes no request | FR-024, SC-006 | characterization | BASELINE | T048 / (none) |
 | U82 | The view of a form on another source, or whose list is `IssueList::Loading` after a newer load, builds no row and no row tooltip | FR-017, Edge: source switched | example | PENDING | T046 / T051 |
 | U83 | A highlighted row the cursor is not over shows no panel: the highlight passes nothing to the row's tooltip | FR-015, FR-007 | example | PENDING | T046 / T051 |
+| U85 | With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it | FR-023 | example | PENDING | T047 / T050, T051 |
 | U84 | With a panel open on one row, moving onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay | FR-016 | example | PENDING | T047 / T050, T051 |
 
 ## Notes

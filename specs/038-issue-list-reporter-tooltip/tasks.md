@@ -65,13 +65,13 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
   - `list_args_send_only_the_repository` and `search_args_send_only_the_query` also assert that no argument contains `author:` and that the arguments are the ones sent today (FR-013, FR-026).
 - [ ] T002 [P] [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] Write `crates/micold-core/tests/github_issue_lines.rs` (NEW; contracts/issue-fields.md §3–4, data-model §3–4):
   - `title_line()` is `#<number> <title>`; `details_line()` is `<reporter>`, then `"  ·  "` + `labels.join(", ")` "only when `labels` is not empty" (the three rows of the contract's table, including `ghost`).
-  - `row_text()` is unchanged from today: `#N title` + (`"  ·  "` + labels); it does not contain the reporter in this slice.
+  - `row_text()` is unchanged from today: `#N title` + (`"  ·  "` + labels); it does not contain the reporter in this slice (slice A only; T024 replaces this case when the reporter joins the match text).
   - `emphasis(spans)`: a span in the title part maps to the same range of the title line; a span in the labels part maps to the details line after the reporter and its 6-byte separator; a span crossing the separator is split and "the separator's bytes carry no emphasis"; a span outside every part is dropped; an issue without labels yields no details emphasis.
   - Ranges returned are "sorted, non-overlapping, and lie on character boundaries" for a title and labels with multi-byte characters.
 - [ ] T003 [P] [US1] [U28] [U29] Write `crates/micold-core/tests/github_privacy.rs` (NEW; contracts/issue-fields.md §5, FR-025):
   - `format!("{:?}", issue)` contains the number and the title and does not contain the reporter's login.
-  - A source check over `crates/micold-core/src/github.rs`, `crates/micold-client/src/shell/issues.rs` and `crates/micold-client/src/features/worktree_form.rs`: no `tracing`/`log` macro call names an issue, a reporter or a description.
-- [ ] T004 [P] [US1] [A7] [U31] [U32] [U33] [U34] [U35] [A7] Add unit tests to `crates/micold-client/src/ui/material/picker.rs` (contracts/picker-row.md §1–2):
+  - A source check over `crates/micold-core/src/github.rs`, `crates/micold-client/src/shell/issues.rs` and `crates/micold-client/src/features/worktree_form.rs`, and also `crates/micold-client/src/main.rs` and `crates/micold-client/src/ui/`: no `tracing`/`log` macro call names an issue, a reporter or a description.
+- [ ] T004 [P] [US1] [A7] [U31] [U32] [U33] [U34] [U35] Add unit tests to `crates/micold-client/src/ui/material/picker.rs` (contracts/picker-row.md §1–2):
   - The wrapping label, at a width narrower than its text, lays out more than one line high and at most the bound wide; a 256-character title without spaces stays inside the bound; emphasised and plain runs concatenated equal the input.
   - A row with details is at least `density::MENU_ITEM_BASE` high, and higher when either line wraps.
   - A row without details has today's fixed `MENU_ITEM_BASE` height and today's single-line label (FR-029).
@@ -211,7 +211,7 @@ screen of the app uses it yet; slice B puts it on issue rows.
 description as plain text, at most three lines; it closes on another row, on leaving, on a pick and
 when the list changes under the cursor. No request is made for it.
 
-**Independent Test**: quickstart §B6–B9, B11; automated: `github_description.rs`,
+**Independent Test**: quickstart §B6–B11; automated: `github_description.rs`,
 `gates/picker_row_tooltip_clears_its_row.rs`, `issue_picker_rows.rs`.
 
 ### Tests for User Story 3, slice B (MANDATORY — Constitution Principle I) ⚠️
@@ -229,8 +229,8 @@ when the list changes under the cursor. No request is made for it.
   - `menu_element` wraps a row with a tooltip in `Tooltip` with `ROW_TOOLTIP_REST` (3 s), `ROW_TOOLTIP_LINES` (3) and the key as subject; a row without one is not wrapped.
   - The view of a form on another source, and of a form whose list is `IssueList::Loading` after a newer load started, builds no row and so no row tooltip: a wait in progress is dropped with its row.
   - A highlighted row that the cursor is not over shows no panel: the highlight passes nothing to the row's tooltip.
-- [ ] T047 [P] [US3] [A16] [A23] [A25] [U75] [U76] [U84] Write `crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` (NEW, beside `tooltip_clears_its_row.rs` and registered like it in `crates/micold-client/tests/layout_snapshot.rs`; contracts/picker-row.md §5): with a hover held past the rest delay on the first row, the last row and a row at the list's lower edge, exactly one panel opens; it lies inside the window, does not intersect its row, and is at most three `Caption` lines plus the panel's padding tall; a click on the row under an open panel picks the issue (FR-021, FR-023, US3 scenario 10). With a panel open on one row, moving the cursor onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay (FR-016).
-- [ ] T048 [P] [US3] [U77] Extend `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs`: no code under `crates/micold-client/src/ui/` calls the issue source, so a resting cursor cannot cause a request (FR-024, SC-006).
+- [ ] T047 [P] [US3] [A16] [A23] [A25] [U75] [U76] [U84] [U85] Write `crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` (NEW, beside `tooltip_clears_its_row.rs` and registered like it in `crates/micold-client/tests/layout_snapshot.rs`; contracts/picker-row.md §5): with a hover held past the rest delay on the first row, the last row and a row at the list's lower edge, exactly one panel opens; it lies inside the window, does not intersect its row, and is at most three `Caption` lines plus the panel's padding tall; a click on the row under an open panel picks the issue (FR-021, FR-023, US3 scenario 10). With a panel open on one row, moving the cursor onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay (FR-016). With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it (FR-023).
+- [ ] T048 [P] [US3] [U77] Extend `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs`: no code under `crates/micold-client/src/ui/` calls the issue source, so a resting cursor cannot cause a request (FR-024, SC-006). It passes today and must keep passing: a characterization test, no red phase.
 
 ### Implementation for User Story 3, slice B
 
@@ -240,7 +240,7 @@ when the list changes under the cursor. No request is made for it.
 - [ ] T052 [US3] [U71] [U72] In `crates/micold-client/src/ui/worktree_form.rs`: `issue_rows` passes `.key(issue.number)` and, when the description is not empty, `.tooltip(issue.description())` (T046).
 - [ ] T053 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` if the wrapped rows changed its records, and confirm the branch picker, `Select` and 034's states did not change.
 - [ ] T054 [P] [US3] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue": resting the cursor on an issue for 3 seconds shows the start of its description, at most three lines, as plain text; it needs a pointer; an issue without a description shows nothing; the description is not searched (FR-031). Update `docs/development/component-library.md` § "Pickers": `Row::tooltip`, `Row::key`.
-- [ ] T055 [US3] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A23] [A24] [A25] [A26] [A27] [A28] Run `mise run gate`; run quickstart §B6–B9 and §B11 with the `visual-pass` skill and save the results and screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [ ] T055 [US3] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A23] [A24] [A25] [A26] [A27] [A28] Run `mise run gate`; run quickstart §B6–B9 and §B11 with the `visual-pass` skill and save the results and screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`. Also run §B10 (load time: five runs before on `main` and five after, alternating) and stop and escalate above 1.5× (research R14): M5 merges `bodyText`, the only change that can slow loading.
 
 **Checkpoint**: All three stories work; `mise run gate` passes.
 
@@ -248,7 +248,7 @@ when the list changes under the cursor. No request is made for it.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T056 Measure SC-008 by quickstart §B10 (five runs before, on `main`, and five after, alternating) and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
+- [ ] T056 Repeat quickstart §B10 on `main` after M5 (five runs before, five after, alternating) and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
 - [ ] T057 Run quickstart §A (`mise run test-core`, `mise run gate`, the release rank budget) and the whole of §B (B1–B11, light and dark themes) with the `visual-pass` skill on the merged result, and record each step's outcome in `specs/038-issue-list-reporter-tooltip/evidence/README.md`.
 
 ---
@@ -313,7 +313,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T018–T023
 - **Deliverable**: On `main`, moving the highlight with Up and Down through the issue list scrolls
   the list so the highlighted row is always wholly visible, whatever its height.
-- **Satisfies**: US1 acceptance scenario 6; FR-007; SC-007
+- **Satisfies**: US1 acceptance scenario 6; FR-007; FR-031 (the list follows the highlight); SC-007
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test picker_highlight_into_view`; quickstart §B3
 - **Depends on**: M1
 - **Tier**: full
@@ -350,8 +350,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   row, on leaving the list and on a pick; an issue without a description shows none; the user
   guide describes it.
 - **Satisfies**: US3 acceptance scenarios 1–13; FR-015–FR-024, FR-025 (description), FR-026,
-  FR-031 (tooltip); SC-003, SC-004, SC-005, SC-006
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test github_description`; `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot picker_row_tooltip_clears_its_row`; quickstart §B6–B9, B11
+  FR-031 (tooltip); SC-003, SC-004, SC-005, SC-006, SC-008
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test github_description`; `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot picker_row_tooltip_clears_its_row`; quickstart §B6–B11
 - **Depends on**: M1, M4
 - **Tier**: full
 
