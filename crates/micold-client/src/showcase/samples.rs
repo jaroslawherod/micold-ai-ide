@@ -73,19 +73,30 @@ pub const PROJECTS: &[(&str, usize, bool)] = &[
 /// The options a dropdown offers.
 pub const CHOICES: &[&str] = &["Follow the system", "Always light", "Always dark"];
 
-/// What the type-ahead searches over: `(label, available)`.
+/// What the type-ahead searches over: `(label, details, available)`.
 ///
-/// Deliberately mixed, so one query exercises three different rows: one the query hits literally,
-/// one long enough that the row has to truncate around its match, and one present but unavailable —
-/// whose reason is part of its label, because the component has no second text slot for it.
-pub const SEARCH_RESULTS: &[(&str, bool)] = &[
-    ("feat/login-page", true),
+/// Deliberately mixed, so one query exercises different rows: a short one with a short second line,
+/// one whose title is long enough to wrap, one whose second line carries many labels and wraps, one
+/// present but unavailable (whose reason is part of its label, and which has no second line, so it
+/// stays a one-line row beside the two-line ones) and a bare one. The second line is generic sample
+/// text, shaped like an issue's reporter and labels.
+pub const SEARCH_RESULTS: &[(&str, Option<&str>, bool)] = &[
+    ("feat/login-page", Some("sample-user  ·  enhancement"), true),
     (
         "feat/experimental-rendering-pipeline-for-the-changelog-viewer",
+        Some("sample-user  ·  enhancement, rendering"),
         true,
     ),
-    ("fix/logout-redirect — in use in ../review", false),
-    ("main", true),
+    (
+        "docs/refresh-the-contributor-guide",
+        Some(
+            "ghost  ·  documentation, good first issue, help wanted, needs triage, \
+             low priority, website, accessibility",
+        ),
+        true,
+    ),
+    ("fix/logout-redirect — in use in ../review", None, false),
+    ("main", None, true),
 ];
 
 /// A tag's text, for the chip-shaped components.

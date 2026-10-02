@@ -121,6 +121,14 @@ mod context_menu_anchor;
 #[path = "gates/tooltip_clears_its_row.rs"]
 mod tooltip_clears_its_row;
 
+// --- The issue-rows-show-all-their-text gate (038, SC-001) ---------------------------------------
+
+// Here because it reads covered states — the issue list's rows — and compares what they painted
+// with the issues the state was built from. It draws them itself rather than reading the cache: the
+// cache holds layout nodes, and whether a paragraph was painted is not a fact about a node.
+#[path = "gates/issue_rows_show_all_text.rs"]
+mod issue_rows_show_all_text;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

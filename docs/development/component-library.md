@@ -143,9 +143,16 @@ What it does **not** do is as important as what it does:
 - **It holds no state.** Whether the list is open, where the keyboard is, and what is selected are
   all the caller's, passed in and echoed back as messages. That is what lets an open list with no
   rows exist at all — the state that shows the no-match message.
-- **It knows nothing about your domain.** Its row is `{ label, spans, enabled }`. Whatever explains
-  an unavailable row must already be inside `label`; there is no second text slot, because a
-  component that had one would need to know what to put in it.
+- **It knows nothing about your domain.** Its row is `{ label, spans, enabled }` and, optionally,
+  a second line. Whatever explains an unavailable row must already be inside `label`, and the second
+  line is plain text the caller composed; the component never learns what it is made of.
+
+A row may carry that second line through `Row::details(text, spans)`. A row **with** details is two
+wrapping lines: the label at the body role, the details under it at the caption role in the
+secondary colour. Both wrap, a word wider than the row breaks inside the word, and nothing is
+truncated; the row is as tall as its text needs, never shorter than a menu item, and the picked-row
+marker sits beside the label's first line. A row **without** details is unchanged: fixed height, one
+truncated line.
 
 So a new picker's work is a mapping — your candidate type to a `Row`, and a row index back to your
 candidate — plus the four messages. The branch picker's version of that mapping is about twenty

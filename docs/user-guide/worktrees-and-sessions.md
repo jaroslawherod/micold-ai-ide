@@ -348,7 +348,9 @@ open, typing in **Issue** also searches GitHub (see below); that request carries
 as well. The same notice stays at the top of
 the issue list while the source is chosen.
 
-**The list.** Issues are listed most recently updated first, each as its number, title and labels.
+**The list.** Issues are listed most recently updated first. Each takes two lines: its number and
+title, then who reported it and its labels. Long text wraps onto further lines instead of being cut
+off, and `ghost` stands for a reporter whose account has been deleted.
 Type in **Issue** to narrow the list by number, by a word of the title, or by a label, and use the
 arrow keys and Enter to pick without leaving the field. The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both

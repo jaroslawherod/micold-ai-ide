@@ -380,6 +380,7 @@ pub const COMPONENTS: &[Entry] = &[
             "clear the search with the ✕",
             "↑ / ↓ move the highlight, Enter takes the row it is on",
             "press a row to choose it; the dimmed one cannot be chosen",
+            "a row with a second line wraps it, and a long title, instead of cutting either",
         ],
         interactive: true,
         section: Section::Components,

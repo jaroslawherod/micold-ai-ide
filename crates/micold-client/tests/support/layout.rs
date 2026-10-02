@@ -867,6 +867,13 @@ pub struct Overflow {
     /// however far the list has been scrolled. A test asking whether a row was *scrolled into view*
     /// reads this one (002 BUG-005).
     pub on_screen: iced::Point,
+    /// Which draw pass painted it: the base tree or the overlay floated over it.
+    ///
+    /// Not derived from [`Self::node_path`], which is a geometric attribution and carries no layer:
+    /// a floated list lies over the dialog that opened it, so a point inside one of its rows is
+    /// inside a base node as well. This is the order of the draw calls, which cannot be mistaken
+    /// (feature 038, T006).
+    pub layer: Layer,
 }
 
 impl Overflow {
@@ -898,7 +905,9 @@ pub fn text_overflows<'a, M: 'a>(
         renderer,
         std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok(),
         Before::Mounted,
+        WINDOW,
     )
+    .0
 }
 
 /// Every piece of text the renderer painted, with the width it wanted and the width it was allowed
@@ -912,7 +921,7 @@ pub fn painted_text<'a, M: 'a>(
     element: Element<'a, M>,
     renderer: &mut iced::Renderer,
 ) -> Vec<Overflow> {
-    painted(element, renderer, true, Before::Mounted)
+    painted(element, renderer, true, Before::Mounted, WINDOW).0
 }
 
 /// As [`painted_text`], but pressing the node at `press_at` first — and reporting what the
@@ -928,7 +937,7 @@ pub fn painted_text_pressing<'a, M: 'a>(
     renderer: &mut iced::Renderer,
     press_at: &[usize],
 ) -> Vec<Overflow> {
-    painted(element, renderer, true, Before::Pressed(press_at))
+    painted(element, renderer, true, Before::Pressed(press_at), WINDOW).0
 }
 
 /// As [`painted_text`], but letting entrance transitions finish first — and reporting the overlay
@@ -942,7 +951,27 @@ pub fn painted_text_settled<'a, M: 'a>(
     element: Element<'a, M>,
     renderer: &mut iced::Renderer,
 ) -> Vec<Overflow> {
-    painted(element, renderer, true, Before::Settled)
+    painted_text_settled_at(element, renderer, WINDOW).0
+}
+
+/// As [`painted_text_settled`], in a window of `window` rather than the canonical [`WINDOW`] — and
+/// handing back the layout boxes of both layers beside the text.
+///
+/// A covered state carries no window size, and every other pass here lays out at `WINDOW`. A
+/// wrapping row is the first thing whose *text* depends on the width it is given: narrower, it
+/// takes more lines and its row grows, so "is all of it shown" has to be asked at more than one
+/// width. The size is the caller's to declare, as `gates/tooltip_clears_its_row.rs` declares its
+/// own (feature 038, T006).
+///
+/// The boxes are what the text is read against: which row a paragraph was drawn in and whether
+/// that row is inside the list's viewport are questions about nodes, and they have to be the nodes
+/// of *this* pass — a second layout at the same size would be a second sequence of events.
+pub fn painted_text_settled_at<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    window: Size,
+) -> (Vec<Overflow>, Vec<LayoutRecord>) {
+    painted(element, renderer, true, Before::Settled, window)
 }
 
 /// As [`painted_text_settled`], but first turning the mouse wheel a long way down with the cursor
@@ -956,7 +985,7 @@ pub fn painted_text_scrolled<'a, M: 'a>(
     renderer: &mut iced::Renderer,
     at: iced::Point,
 ) -> Vec<Overflow> {
-    painted(element, renderer, true, Before::Scrolled(at))
+    painted(element, renderer, true, Before::Scrolled(at), WINDOW).0
 }
 
 /// One thing a person does with the mouse, for [`messages_after`].
@@ -1114,14 +1143,15 @@ fn painted<'a, M: 'a>(
     renderer: &mut iced::Renderer,
     report_everything: bool,
     before: Before<'_>,
-) -> Vec<Overflow> {
+    window: Size,
+) -> (Vec<Overflow>, Vec<LayoutRecord>) {
     use iced::advanced::Renderer as _;
 
     let mut element = element;
     let mut tree = Tree::new(element.as_widget());
-    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let limits = layout::Limits::new(Size::ZERO, window);
     let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
-    let viewport = Rectangle::with_size(WINDOW);
+    let viewport = Rectangle::with_size(window);
 
     match before {
         Before::Mounted => {}
@@ -1133,7 +1163,7 @@ fn painted<'a, M: 'a>(
                 &*renderer,
                 std::time::Instant::now(),
                 0..SETTLE_FRAMES,
-                WINDOW,
+                window,
             );
             node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
         }
@@ -1175,6 +1205,16 @@ fn painted<'a, M: 'a>(
     // still at zero, drawing its panel's geometry and none of its rows' text. That reads exactly
     // like a list of options that was never offered, which is the one thing this measurement exists
     // to tell apart from the real thing.
+    //
+    // How much text each renderer layer holds once the base tree is drawn: whatever is past these
+    // counts afterwards was painted by the overlay. Layers are only ever appended to within a frame
+    // and reading them changes nothing (the CPU rasteriser's flush is empty), so the counts are a
+    // faithful boundary between the two passes.
+    let base_text: Vec<usize> = rasteriser(renderer)
+        .layers()
+        .iter()
+        .map(|layer| layer.text.len())
+        .collect();
     let mut overlay_boxes = Vec::new();
     if !matches!(before, Before::Mounted) {
         if let Some(mut overlay) = element.as_widget_mut().overlay(
@@ -1186,7 +1226,7 @@ fn painted<'a, M: 'a>(
         ) {
             use iced::advanced::{clipboard, mouse, Shell};
 
-            let mut overlay_node = overlay.as_overlay_mut().layout(&*renderer, WINDOW);
+            let mut overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
             let origin = std::time::Instant::now();
             let mut messages: Vec<M> = Vec::new();
             for frame in 0..SETTLE_FRAMES {
@@ -1202,7 +1242,7 @@ fn painted<'a, M: 'a>(
                     &mut shell,
                 );
             }
-            overlay_node = overlay.as_overlay_mut().layout(&*renderer, WINDOW);
+            overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
 
             overlay.as_overlay_mut().draw(
                 renderer,
@@ -1215,12 +1255,7 @@ fn painted<'a, M: 'a>(
         }
     }
 
-    let inner = match renderer {
-        iced_renderer::fallback::Renderer::Secondary(tiny_skia) => tiny_skia,
-        iced_renderer::fallback::Renderer::Primary(_) => {
-            panic!("the overflow check needs the CPU rasteriser; see support::layout::renderer")
-        }
-    };
+    let inner = rasteriser(renderer);
 
     // Which layout node does a piece of drawn text belong to? Geometry alone cannot say, and both
     // of the obvious answers are wrong in a way this gate has now been bitten by once each.
@@ -1279,8 +1314,14 @@ fn painted<'a, M: 'a>(
     };
 
     let mut found = Vec::new();
-    for layer in inner.layers() {
-        for item in &layer.text {
+    for (layer_index, layer) in inner.layers().iter().enumerate() {
+        let base_items = base_text.get(layer_index).copied().unwrap_or(0);
+        for (item_index, item) in layer.text.iter().enumerate() {
+            let painted_by = if item_index < base_items {
+                Layer::Base
+            } else {
+                Layer::Overlay
+            };
             // `Item` itself is not nameable from outside the crate; `as_slice` reaches its
             // contents without naming it.
             for text in item.as_slice() {
@@ -1325,6 +1366,7 @@ fn painted<'a, M: 'a>(
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
                             node_path,
+                            layer: painted_by,
                         });
                     }
                 }
@@ -1332,7 +1374,17 @@ fn painted<'a, M: 'a>(
         }
     }
 
-    found
+    (found, boxes)
+}
+
+/// The CPU rasteriser inside the fallback renderer, whose layers the paint passes read.
+fn rasteriser(renderer: &mut iced::Renderer) -> &mut iced_tiny_skia::Renderer {
+    match renderer {
+        iced_renderer::fallback::Renderer::Secondary(tiny_skia) => tiny_skia,
+        iced_renderer::fallback::Renderer::Primary(_) => {
+            panic!("the overflow check needs the CPU rasteriser; see support::layout::renderer")
+        }
+    }
 }
 
 // --- Containment (BUG-001) ---------------------------------------------------------------------
