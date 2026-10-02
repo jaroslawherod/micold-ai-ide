@@ -468,7 +468,7 @@ fn a_node_parses_alike_from_every_source() {
             .expect("a search answer");
     assert_eq!(
         searched,
-        [listed.clone()],
+        std::slice::from_ref(&listed),
         "a search hit parses to the issue the listing gives"
     );
 
