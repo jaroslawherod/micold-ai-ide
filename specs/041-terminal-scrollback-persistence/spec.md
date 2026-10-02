@@ -54,6 +54,14 @@
   and is being retried (FR-033). _(agent-resolved: spec.md#FR-027, FR-033; docs/daemon.md retry
   conventions not required)_
 
+### Session 2026-10-02 (design)
+
+- Q: Claude Code and Copilot CLI draw full-screen by default, where the terminal has no scrollback
+  and restored lines are covered by the CLI's own view. What should this feature do? → A: Ship as
+  specified for output on the normal screen, and say so. For a full-screen CLI only the last screen
+  is saved, and the CLI's own resume shows the conversation. No new setting and no change to how a
+  CLI is started. _(decided by user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Scroll back to what happened before the service restarted (Priority: P1)
@@ -245,8 +253,12 @@ Repeat with Close.
   in force are restored.
 - **Terminal size changed between save and restore**: restored lines are laid out as live history is
   when the terminal is resized.
-- **Full-screen programs**: output of a program that takes over the whole screen and leaves nothing
-  to scroll back to is restored only as the last screen it showed.
+- **Full-screen programs**: a program that takes over the whole screen leaves nothing to scroll back
+  to, so only the last screen it showed is saved. Claude Code and Copilot CLI draw full-screen by
+  default; Pi Coding Agent, and Claude Code in its scrolling mode, print on the normal screen. At
+  the next start the saved screen and the separator are put in the terminal's history, where a
+  full-screen CLI covers them with its own view until it leaves full-screen. Such a CLI shows the
+  earlier conversation itself when it resumes.
 - **A session that resumes a conversation**: the AI CLI redraws its own view below the separator; the
   saved history above it is unchanged.
 - **Session removed while the setting is off**: a saved history still on disk because its deletion
@@ -291,7 +303,9 @@ Repeat with Close.
   service restart (opening an interrupted session resumes it; a session the user had stopped is
   started by the user), its terminal MUST show the saved history, then one separator line, then the
   new output, and the saved history MUST be reachable by scrolling exactly as live history is.
-  FR-015 gives the same for a start within one service run.
+  FR-015 gives the same for a start within one service run. While the terminal's program draws
+  full-screen, the saved history and the separator are in the terminal's history but are not
+  visible until the program leaves full-screen (edge case *Full-screen programs*).
 - **FR-009**: The separator MUST read "session restarted at" followed by the local date and time of
   the start, MUST be visually distinct from program output, MUST occupy one line, and MUST NOT be
   sent to the session's process as input.
@@ -373,7 +387,8 @@ Repeat with Close.
 - **FR-032**: The user guide MUST describe, in the same change that ships each behaviour: that
   terminal history survives a service restart and a stop and start of the session, what the
   separator means, the setting and that turning it off deletes the saved history, that Regular
-  Terminal instances are not covered, where saved histories are stored and who can read them, and
+  Terminal instances are not covered, that for an AI CLI that draws full-screen only its last screen
+  is saved and the CLI's own resume shows the conversation, where saved histories are stored and who can read them, and
   what the user sees when a saved history could not be restored.
 
 ### Key Entities
@@ -392,6 +407,7 @@ Repeat with Close.
 
 - **SC-001**: After an orderly service restart, 100% of the lines a terminal held before the restart,
   up to the scrollback limit, can be scrolled back to, with the same text, colours and styles.
+  Measured on a terminal whose program prints on the normal screen, not full-screen.
 - **SC-002**: After the service is killed without warning, a terminal's restored history is missing
   at most the last 60 seconds of output before the kill.
 - **SC-003**: A terminal that prints continuously for 10 minutes causes at most 21 writes of its
@@ -411,6 +427,7 @@ Repeat with Close.
   Linux, macOS and Windows, and when the service runs in a container.
 - **SC-010**: A user returning after a restart can tell, from the terminal alone and without
   consulting the guide, which output is from before the restart and when the restart happened.
+  Measured on a terminal whose program prints on the normal screen, not full-screen.
 - **SC-011**: After a session is stopped, or its process exits, and it is started again within one
   service run, 100% of the lines its terminal held, up to the scrollback limit, can be scrolled
   back to above the separator, with the same text, colours and styles.
@@ -436,6 +453,10 @@ Repeat with Close.
   restarted or only the session's process did.
 - **What is saved is what the user could scroll back to**, plus the last screen. Output a full-screen
   program drew and then cleared is not recoverable, as it is not today.
+- **Restored history is seen where the AI CLI prints on the normal screen**: Pi Coding Agent, and
+  Claude Code in its scrolling mode. A CLI that draws full-screen (Claude Code and Copilot CLI by
+  default) keeps its own conversation view and shows it again when it resumes; this feature saves
+  only its last screen and does not change how any CLI is started.
 - **Clickable links, images and cursor position are not part of the saved history.** Text, colours
   and text styles are.
 - **The separator uses the computer's local time and the app's usual date format.**
@@ -471,3 +492,5 @@ Repeat with Close.
 - Saving or restoring the history of Regular Terminal (shell) instances, and bringing those
   instances back after a service restart.
 - Keeping saved histories on disk, hidden, while the setting is off.
+- Starting an AI CLI in a scrolling mode, a setting for that, and showing restored history over a
+  full-screen CLI's view.
