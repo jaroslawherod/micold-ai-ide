@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 2-clarify
-- **Next step**: Ask the user the three questions under *Open escalation*, then continue clarify round 1 with the answers: record them in spec.md `## Clarifications` as `_(decided by user)_`, replace the three markers (FR-008, FR-023, FR-028), re-validate `checklists/requirements.md`, commit (no push; it ships in PR 2).
+- **Next step**: Clarify round 2 (round 1 raised three questions, so it is not `CLEAN`): run `speckit-clarify` on the spec as it now stands; the round's commits stay local and ship in PR 2.
 
 ## Pull requests
 
@@ -32,6 +32,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | spec | Do unread marks depend on the notification setting? | No. The switch stops desktop notifications only (FR-017, FR-027). | agent-resolved | spec.md#User Story 4 |
 | D5 | spec | Is a session covered by Settings, or showing a regular terminal tab, in view? | Settings: not in view (the user cannot see it). Regular terminal tab: in view (its indicator is beside it). | agent-resolved | spec.md#Terms; Review Spec round 1 F1 |
 | D6 | spec | Does a change missed during a lost connection count? | Yes, with a window open: it is treated as a change at reconnection (FR-006). At application start nothing is notified (FR-005); unread then waits on FR-008. | agent-resolved | spec.md FR-005, FR-006; Review Spec round 1 F2 |
+| D7 | clarify | FR-008: a session changes to awaiting input while no window is open. What must happen? | (b) No desktop notification; the session is unread when the application is next opened. Unread state outlives the window and is stored on the user's computer (FR-008, FR-008a, FR-024). | user | Orchestrator relayed the user's answer, 2026-10-02; spec.md#Clarifications |
+| D8 | clarify | FR-023: does the switcher's button show unread with its panel closed? | (a) Yes: the total of unread sessions in projects other than the active one, nothing when zero. | user | Orchestrator relayed the user's answer, 2026-10-02; spec.md#Clarifications |
+| D9 | clarify | FR-028: a notification switch per AI CLI? | (a) No: one switch for every AI CLI; per-CLI is out of scope. | user | Orchestrator relayed the user's answer, 2026-10-02; spec.md#Clarifications |
+| D10 | clarify | What is unread on the first start with the feature, or when the stored unread state cannot be read? | Nothing, and no error is shown: there is no record of what the user viewed (FR-008a). Same fallback as an unreadable settings file. | agent-resolved | spec.md#Edge Cases ("Settings file unreadable"); follows from D7 |
 
 ## Review rounds
 
@@ -51,42 +55,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, 2026-10-02. `speckit-clarify` raised three questions, the spec's three markers; the
-scan found no other critical ambiguity. All three are category 1 (product or scope decision the repo
-does not settle). Nothing is written to spec.md until they are answered.
-
-1. **FR-008 — a session changes to awaiting input while no window is open. What must happen?**
-   - (b) *(Recommended)* No desktop notification; the session is shown as unread when the
-     application is next opened. Evidence: the issue's "a turn the user has not viewed"; user story
-     2 ("comes back from a meeting"); `specs/010-daemon-session-persistence/spec.md` user story 1
-     (close the UI, reopen, find the session where it got to). Cost: the unread state must outlive
-     the window, stored locally (Principle IV), and FR-005's "nothing is notified at start" stays.
-   - (c) Neither: notifications and unread marks exist only for changes seen while a window is
-     open. Smallest; a session that finished while the application was closed shows only its
-     activity indicator.
-   - (a) Notify even with no window. Not workable inside this spec: the client is one
-     `iced::application` process that ends with its window
-     (`crates/micold-client/src/shell/startup.rs:83`), so only the session service could raise it,
-     and FR-007 and the Assumptions say the container takes no part; a tray or background process
-     is under Out of Scope.
-2. **FR-023 — must the switcher's button in the top bar show, with its panel closed, that other
-   projects hold unread sessions?**
-   - (a) *(Recommended)* Yes: the button carries the total number of unread sessions in projects
-     other than the active one, and nothing when that is zero. Evidence: the issue's own reason for
-     the count, "so attention needed in a background project is visible"; today the button shows
-     only the active project's name (`crates/micold-client/src/ui/toolbar.rs:63-77`), so a count on
-     the panel's rows alone is seen only after opening it. With notifications off (story 4) it
-     would be the only standing sign of a background project.
-   - (b) Yes, but a mark without a number.
-   - (c) No: the count on the rows of the open panel is all.
-3. **FR-028 — is a separate notification switch per AI CLI (Claude Code, GitHub Copilot, Pi) part
-   of this feature?**
-   - (a) *(Recommended)* No: one switch; per-CLI is left for a later request. Evidence: the issue
-     says "optionally per provider" and no acceptance criterion needs it; `Settings` has no per-CLI
-     table today (`crates/micold-core/src/settings.rs:110`), only `default_ai_cli` and
-     `pi_activity_component`; Pi can already be silenced by **Show activity for Pi sessions** (029
-     FR-012e).
-   - (b) Yes: one master switch plus one switch per AI CLI, all on by default.
+None.
 
 ## Token usage
 
