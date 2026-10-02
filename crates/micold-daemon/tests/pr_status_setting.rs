@@ -197,3 +197,31 @@ async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() 
         "the window that turned it on is told too"
     );
 }
+
+/// U69 (contracts/reading-and-wire.md §4). A save about something else does not name the switch,
+/// and leaves it as it is: on stays on, in what the windows are pushed and in the settings file.
+#[tokio::test]
+async fn a_settings_change_that_does_not_name_the_switch_leaves_it_as_it_is() {
+    let store = tempfile::tempdir().unwrap();
+    let state = service(store.path());
+    let (mut a, _) = connect(&state).await;
+    let (mut b, _) = connect(&state).await;
+    both_registered(&state).await;
+    set(&mut a, 1, Some(true), None).await;
+    assert!(next_settings_changed(&mut b).await.pr_status_enabled);
+
+    set(&mut a, 2, None, Some(7_000)).await;
+
+    let pushed = next_settings_changed(&mut b).await;
+    assert_eq!(pushed.scrollback_lines, 7_000, "the other change was made");
+    assert!(
+        pushed.pr_status_enabled,
+        "a change that does not name the switch must not turn it off"
+    );
+    let restarted = service(store.path());
+    let (_after_restart, welcomed) = connect(&restarted).await;
+    assert!(
+        welcomed.pr_status_enabled,
+        "nor in the settings file: a restarted service still has it on"
+    );
+}
