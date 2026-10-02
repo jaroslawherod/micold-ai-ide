@@ -61,15 +61,15 @@ not depend on the pull request module.
 - A row with `removable` also carries a label-only chip **can be removed** in the row's existing
   chip slot, in the style of "outside this app". The chip has no press action (FR-016).
 - A row with `None` builds exactly the element tree it builds today (FR-001): a layout test
-  compares the two.
+  compares the two. Every row of a read-only (refused or displaced) window is such a row.
 - Session rows and the "Default" row are never given either mark (FR-007).
 
 ---
 
 ## 3. Tooltip lines
 
-`features::sidebar::worktree_tooltip` gains one argument, `Option<RowPullRequest>` plus `now`
-through it; with `None` its output is **byte-identical** to today's (FR-011, test against today's
+`features::sidebar::worktree_tooltip` gains one argument, `Option<RowPullRequest>` (data-model §4:
+status, `age_secs`, `removable`); with `None` its output is **byte-identical** to today's (FR-011, test against today's
 expected strings). With `Some`, these lines follow today's lines, in this order:
 
 | # | Line | When |
@@ -78,16 +78,16 @@ expected strings). With `Some`, these lines follow today's lines, in this order:
 | 2 | `PR state: open` \| `draft` \| `merged` \| `closed` | always |
 | 3 | `Checks: passing` \| `pending` \| `failing` | open or draft with a check status |
 | 4 | `Review: approved` \| `changes requested` \| `review required` | GitHub reports a decision |
-| 5 | `Read: <n> min ago` | stale (`is_stale`) |
+| 5 | `Read: <n> min ago` | stale (`age_secs > 600`) |
 | 6 | `Cleanup: merged — this worktree can be removed (right-click, Delete)` | `removable` |
 
 - **Title**: control characters and line breaks become spaces; cut to 72 characters, the 72nd
   being `…`, so the number, which comes first, always shows (story 2 scenario 6). The tooltip's
   existing bounded width wraps the rest (029 FR-009).
-- **`<n>`** is `(now − read_at) / 60`, rounded down; from 120 minutes on the line reads
+- **`<n>`** is `age_secs / 60`, rounded down; from 120 minutes on the line reads
   `Read: <h> h ago`.
 - **No link, no control** (FR-013): the tooltip stays one string; no address appears in it.
-- **No clock inside**: `now` is an argument; the function reads no disk and sends nothing
+- **No clock inside**: the age is an argument, worked out by the view glue from `now`; the function reads no disk and sends nothing
   (FR-012, SC-008).
 
 ---

@@ -54,6 +54,9 @@ built by the pure `status_args(repo, branches) -> Vec<String>`.
 - **Only `-f`** (raw string), never `-F`: a branch named `true`, `123` or `@file` stays a string.
 - **Nothing else about the project is sent** (FR-031): the arguments are the query text, the
   repository's owner and name, and branch names. No path, no worktree name, no commit id.
+- **No credential is passed or read** (FR-028): no token argument, no `Authorization` header, no
+  `GH_TOKEN` set by the application; `gh` uses the user's own sign-in, and when there is none it
+  fails (`Unavailable`) rather than ask anonymously.
 - **The only repository ever named is the project's own** (`choose_remote`), so a pull request in
   the repository a fork was made from is never asked for (FR-006).
 - `--hostname github.com` always: a `GH_HOST` in the user's environment cannot redirect the request
@@ -166,9 +169,16 @@ pub fn reading_failure(outcome: &RunOutcome, now: u64) -> ReadingFailure
   A GraphQL `errors` entry, a missing alias, a `null` repository or JSON that does not parse is a
   failure, never a partial map. The key of the result is `branches[i]`, never a name taken from the
   answer.
-- **`rate_limit_pause`**: `Retry-After: <seconds>` ⇒ `now + seconds`; else `X-RateLimit-Reset:
-  <epoch>` ⇒ that value; else `now + 60`. A value that does not parse is skipped as if absent. The
-  result is never before `now + 1`.
+- **`rate_limit_pause`**, called only for a rate-limit answer (row 3 below):
+  1. `Retry-After: <seconds>` ⇒ `now + seconds`;
+  2. else `X-RateLimit-Remaining: 0` ⇒ the value of `X-RateLimit-Reset: <epoch>`;
+  3. else `now + 60`.
+
+  `X-RateLimit-Reset` is on every answer GitHub sends and is the primary window's reset, so it is
+  used only when the primary limit is the one that was hit. A value that does not parse is skipped
+  as if absent. The result is never before `now + 1`.
+  Tests: `Retry-After: 30`; remaining 0 with a reset; a 403 secondary limit with remaining above 0
+  and no `Retry-After` ⇒ `now + 60`; a reset in the past ⇒ `now + 1`.
 - **`reading_failure`** maps evidence to data-model §2, checked in this order:
 
 | # | Evidence | Result |
@@ -194,8 +204,9 @@ and only then trimmed of tokens and request ids; the recording command is the fi
 | `pr_draft.txt`, `pr_closed.txt`, `pr_review_states.txt` | HTTP 200 |
 | `pr_cross_repository.txt` | HTTP 200: a fork's pull request with the same head-branch name |
 | `pr_repo_not_found.txt` | HTTP 200 with a `NOT_FOUND` error, exit 1 |
-| `pr_rate_limited_graphql.txt` | `RATE_LIMITED` with `X-RateLimit-Reset` |
+| `pr_rate_limited_graphql.txt` | `RATE_LIMITED` with `X-RateLimit-Remaining: 0` and `X-RateLimit-Reset` |
 | `pr_rate_limited_secondary.txt` | HTTP 403 with `Retry-After` |
+| `pr_rate_limited_secondary_no_retry_after.txt` | HTTP 403 secondary limit, `X-RateLimit-Remaining` above 0, no `Retry-After` |
 | `pr_truncated.txt` | a 200 answer cut mid-body |
 
 A state that cannot be produced on demand (a secondary limit) is recorded from GitHub's documented

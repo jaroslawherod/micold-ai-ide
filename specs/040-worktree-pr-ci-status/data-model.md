@@ -61,17 +61,19 @@ the variant and the branch count only.
 
 ## 3. Client state: `features::pr_status::State` (`micold-client`)
 
-One per window. It describes the project the window shows, and no other.
+One per window. It describes the window's active project, and no other.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `enabled` | `bool` | the live value of §5's setting, from `Welcome` and `SettingsChanged` |
+| `held` | `bool` | the window holds its active project: `Attached` was received for it and no `Displaced` / `Refused { ProjectBusy }`, project switch or disconnect since (R6) |
+| `awaiting_listing` | `bool` | set by `Attached`; cleared by the next `CatalogChanged`, which starts the first reading (R7) |
 | `phase` | `Phase` | below |
 | `next_seq` | `u64` | sequence number given to the next reading |
 | `statuses` | `BTreeMap<String, PullRequestStatus>` | branch → status of the last successful reading |
 | `removable` | `BTreeSet<String>` | branches whose merged pull request holds all of the branch's work (§6 answered `Contained`) |
 | `read_at` | `Option<u64>` | Unix seconds at which the last successful reading **started**; `None` before the first |
-| `pause_until` | `Option<u64>` | no reading starts while `now < pause_until` (R9) |
+| `pause_until` | `Option<u64>` | no reading starts while `now < pause_until` (R9); belongs to the sign-in, so it outlives a project switch |
 
 ```text
 Phase = Idle | Reading { seq: u64, again: bool }
@@ -84,15 +86,17 @@ Phase = Idle | Reading { seq: u64, again: bool }
    turned off and on, spec Edge Cases "project closed while a reading is under way").
 3. `enabled == false` ⇒ `statuses`, `removable` are empty, `read_at` and `pause_until` are `None`,
    `phase` is `Idle` (FR-029: turning off removes every indicator at once).
-4. Switching the shown project resets everything but `enabled` and `next_seq`, including
-   `pause_until`: the pause belongs to an answer for the project that was shown. The first reading
-   of the new project is sent; if the limit still holds, GitHub rejects it without counting it and
-   the window pauses again (the same rule FR-024 gives for another window).
+4. Switching the active project, losing the hold (`Displaced`, `Refused { ProjectBusy }`) and a
+   disconnect each reset `statuses`, `removable`, `read_at`, `phase`, `held` and `awaiting_listing`,
+   and keep `enabled`, `next_seq` and **`pause_until`**: a rate-limit pause is kept until its time
+   whatever project the window shows next (FR-024, SC-006).
 5. `removable ⊆ keys(statuses)`, and every branch in `removable` has `state == Merged` (FR-017).
 6. The reducer writes no other part of the application's state (FR-020).
+7. `held == false` ⇒ `statuses` and `removable` are empty and `phase` is `Idle`: a read-only window
+   shows no indicator and reads nothing (SC-007).
 
-`is_stale(read_at, now) = now.saturating_sub(read_at) >= 600` lives in `micold_core::pull_request`
-(R13); `State` holds no stale flag.
+`is_stale(read_at, now) = now.saturating_sub(read_at) > 600` lives in `micold_core::pull_request`
+(R13, "older than two intervals"); `State` holds no stale flag.
 
 ---
 
@@ -101,7 +105,7 @@ Phase = Idle | Reading { seq: u64, again: bool }
 The sidebar's row model gains one optional field, filled at projection time:
 
 ```text
-RowPullRequest { status: &PullRequestStatus, stale: bool, removable: bool }
+RowPullRequest { status: &PullRequestStatus, age_secs: u64, removable: bool }
 ```
 
 | Row | Looked up by | Result |
@@ -111,8 +115,10 @@ RowPullRequest { status: &PullRequestStatus, stale: bool, removable: bool }
 | the "Default" entry | — | `None`, whatever branch the project root has checked out (FR-007) |
 | session rows | — | untouched |
 
-`stale` is `is_stale(read_at, now)` with `now` passed in by the view glue. `removable` is
-`removable.contains(b)`. A row with `None` is projected, drawn and described by its tooltip exactly
+`age_secs` is `now − read_at`, with `now` passed in by the view glue; the row and the tooltip derive
+the stale form from it (`age_secs > 600`), and the tooltip its `Read:` line. `removable` is
+`removable.contains(b)`. When the window does not hold the project the map is empty (§3 invariant
+7), so every row gets `None`. A row with `None` is projected, drawn and described by its tooltip exactly
 as today (FR-001, FR-011): the join by branch name is the only coupling, so a worktree removed,
 renamed or re-branched between readings just stops matching.
 
@@ -158,7 +164,7 @@ is treated as no answer (no suggestion, statuses still applied).
 ## State transitions of one reading
 
 ```text
-start(now) ── enabled ∧ project shown ∧ connected ∧ now ≥ pause_until ∧ phase = Idle
+start(now) ── enabled ∧ held ∧ ¬awaiting_listing ∧ now ≥ pause_until ∧ phase = Idle
    └▶ phase = Reading { seq, again: false }; task(seq, project, branches)
 
 finished(seq, Ok { statuses, removable, started_at })

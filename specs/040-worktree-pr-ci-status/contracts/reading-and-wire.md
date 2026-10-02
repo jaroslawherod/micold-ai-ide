@@ -7,22 +7,36 @@
 
 ## 1. Start events and the source gate
 
-A reading may start only when **all** hold: the switch is on, the window shows a project, the
-daemon connection is up, and `now ≥ pause_until`. It is started by exactly these events:
+A reading may start only when **all** hold: the switch is on, the window **holds** its active
+project, that project's listing has arrived from the daemon, and `now ≥ pause_until`.
+
+**Holding** (R6). The window holds its active project from `DaemonMsg::Attached { project }` for it
+until `DaemonMsg::Displaced` or `Refused { ProjectBusy }` for it, a switch to another project, or a
+disconnect — the facts `app.displaced` and `app.disconnected` already record. A refused or
+displaced window stays on the project read-only; it does not hold it, reads nothing and shows no
+indicator.
+
+A reading is started by exactly these events:
 
 | # | Event | Message that carries it | Requirement |
 |---|---|---|---|
-| S1 | the shown project's first listing arrives after it is opened or switched to | `WorktreeMsg::Loaded` for a project that was not the shown one | FR-018 "opened in a window" |
-| S2 | the switch turns on | `Welcome` / `SettingsChanged` with `pr_status_enabled: true` after `false` | FR-030 |
+| S1 | the listing arrives after the window came to hold the project | the first `DaemonMsg::CatalogChanged` after `DaemonMsg::Attached` for the active project (`awaiting_listing`, data-model §3) | FR-018 "opened in a window" |
+| S2 | the switch turns on while the project is held and listed | `SettingsChanged` with `pr_status_enabled: true` after `false` | FR-030 |
 | S3 | the interval elapses | `Message::PrStatusTick` from `iced::time::every(300 s)` | FR-018 "every 5 minutes" |
 | S4 | a list refresh ends | `WorktreeMsg::RefreshFinished` or `RefreshTimedOut` | FR-018, FR-018a |
 | S5 | a reading ends with `again` set | `PrStatusMsg::Finished` | FR-022 |
 
-- **S1 also covers reconnection and takeover**: a window that reconnects or takes a project over
-  receives a fresh listing for it and reads once.
-- **S2 with a project already shown** reads at once; a `Welcome` that carries `true` at start-up
-  starts nothing by itself — S1 follows when the listing arrives. One of S1 and S2 fires per
-  opening, never both.
+- **S1 covers opening, switching, reconnecting and taking over**: each makes the client send
+  `ClientMsg::Attach`, and the daemon answers `Attached` and then one `CatalogChanged` with the
+  freshly discovered worktrees (`refresh_worktrees_and_send`). `Attached` sets `awaiting_listing`;
+  the `CatalogChanged` arm of `shell/daemon_sync.rs`, after `reconcile_catalog`, clears it and
+  sends `Msg::ListingArrived`, which starts the reading. Every later `CatalogChanged` finds the flag clear and starts nothing.
+  `WorktreeMsg::Loaded` is not used: production code never sends it.
+- **S2 and start-up do not overlap**: `Welcome` carries the settings before any `Attached`, so
+  `EnabledChanged { true }` then finds `held == false` and starts nothing; S1 follows. While
+  `awaiting_listing` is set, `EnabledChanged { true }` also starts nothing, for the same reason: the
+  listing is about to arrive and S1 reads it. So one of S1 and S2 fires per opening, never both, and
+  no reading runs over the listing of a project the daemon has not yet answered for.
 - **S4 is the end of the list refresh**, successful or not. The daemon broadcasts the new listing
   before it acknowledges the refresh, so the branches read are those the updated listing shows
   (FR-018a). The refresh control's busy state and its notice are settled by the existing
@@ -30,16 +44,18 @@ daemon connection is up, and `now ≥ pause_until`. It is started by exactly the
 - **What a reading covers**: every entry of `state.worktree.worktrees` with `branch: Some`,
   deduplicated, in listing order. A reading never sends `ClientMsg::WorktreeRefresh` and never
   asks for a listing.
-- **Not start events**: `CatalogChanged`, worktree create / delete / rename / include, hover,
-  selection, focus, a session event.
+- **Not start events**: any `CatalogChanged` but S1's, worktree create / delete / rename / include,
+  hover, selection, focus, a session event.
 
-**The interval subscription** exists only while the switch is on and a project is shown
-(`shell/subscriptions.rs`). `tests/idle_subscriptions.rs` holds: switch off ⇒ the timer is absent.
+**The interval subscription** exists only while the switch is on and the window holds its active
+project (`shell/subscriptions.rs`). `tests/idle_subscriptions.rs` holds: switch off ⇒ the timer is
+absent; a read-only (displaced) window ⇒ the timer is absent.
 
 **Source gate** `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs`: the
 function that turns a start into a task (`shell::pr_status::start`) is called from exactly the
 lines that handle S1 to S5, counted as `issues_are_requested_only_on_named_events.rs` counts its
-own; and `PullRequestSource::read` is called from one place.
+own; `Msg::ListingArrived` is sent from exactly one line, inside the `CatalogChanged` arm, and only
+the reducer's `awaiting_listing` row turns it into a reading; and `PullRequestSource::read` is called from one place.
 
 ---
 
@@ -52,26 +68,33 @@ pub enum Msg {
     Trigger { cause: Cause, now: u64 },          // S1–S4
     Finished { seq: u64, outcome: Outcome, now: u64 },
     EnabledChanged { enabled: bool, now: u64 },
-    ProjectChanged,                               // shown project switched or closed
+    Held,                                         // `Attached` for the active project
+    ListingArrived { now: u64 },                  // `CatalogChanged`; S1 when `awaiting_listing`
+    Released,                                     // project switched or closed, displaced, refused, disconnected
 }
-pub enum Cause { Opened, SwitchedOn, Interval, Refresh }
+pub enum Cause { Interval, Refresh }
 pub enum Effect { None, Read { seq: u64 } }
-pub fn update(state: &mut State, msg: Msg, shown: bool) -> Effect
+pub fn update(state: &mut State, msg: Msg) -> Effect
 ```
 
 `Outcome` is `Ok { statuses, removable, started_at }` or `Err(ReadingFailure)`.
 
 | State | Message | New state | Effect |
 |---|---|---|---|
-| any | `Trigger` while `!enabled`, `!shown` or paused | unchanged | `None` |
+| any | `Trigger` while `!enabled`, `!held`, `awaiting_listing` or paused | unchanged | `None` |
 | `Idle` | `Trigger` | `Reading { seq: next_seq, again: false }` | `Read { seq }` |
 | `Reading` | `Trigger { Refresh }` | `again = true` | `None` |
-| `Reading` | `Trigger { Interval \| Opened \| SwitchedOn }` | unchanged | `None` |
+| `Reading` | `Trigger { Interval }` | unchanged | `None` |
+| any | `Held` | `held = true`, `awaiting_listing = true` | `None` |
+| `awaiting_listing` | `ListingArrived` | `awaiting_listing = false`; then as `Trigger` in `Idle` (refused while off or paused) | `Read { seq }` or `None` |
+| not `awaiting_listing` | `ListingArrived` | unchanged | `None` |
 | `Reading { seq }` | `Finished { seq }` | data-model "State transitions"; then `Idle` | `Read` when `again` and not paused, else `None` |
 | any | `Finished` with another `seq` | unchanged | `None` |
 | any | `EnabledChanged { false }` | data-model §3 invariant 3 | `None` |
-| `Idle`, was off | `EnabledChanged { true }` and `shown` | `Reading` | `Read { seq }` |
-| any | `ProjectChanged` | data-model §3 invariant 4 | `None` (S1 follows) |
+| `Idle`, was off | `EnabledChanged { true }`, `held` and not `awaiting_listing` | `Reading` | `Read { seq }` |
+| was off | `EnabledChanged { true }`, `!held` or `awaiting_listing` | `enabled = true` | `None` (S1 follows) |
+| any | `EnabledChanged` with the value it already has | unchanged | `None` |
+| any | `Released` | data-model §3 invariant 4: statuses cleared, `Idle`, `held = false`; `pause_until` kept | `None` (S1 follows a new `Attached`) |
 
 Invariants, each a test:
 
@@ -79,9 +102,14 @@ Invariants, each a test:
   `Finished` (or a reset) between them.
 - **Any number of refreshes ⇒ one further reading**: three `Trigger { Refresh }` during a reading
   and its `Finished` yield exactly one `Read`.
-- **Paused**: after `RateLimited { until }`, every `Trigger` with `now < until` yields `None`, a
-  pending `again` is dropped, and the first `Trigger` with `now ≥ until` reads (FR-024, story 4
-  scenario 7). A refresh pressed during the pause is not remembered.
+- **Paused**: after `RateLimited { until }`, every `Trigger` and `ListingArrived` with `now < until`
+  yields `None`, a pending `again` is dropped, and the first `Trigger` with `now ≥ until` reads
+  (FR-024, story 4 scenario 7). A refresh pressed during the pause is not remembered. The pause
+  survives `Released`: a project opened during it is first read by the interval tick that follows
+  the pause's end, at most 5 minutes after it.
+- **Only the holder reads and shows** (SC-007): after `Released` no message but `Held` followed by
+  `ListingArrived` yields a `Read`, and `statuses` is empty; `Held` + `ListingArrived` (a take-over)
+  yields exactly one `Read`.
 - **A lost task cannot stop the schedule for ever**: `Reading` records its start time; a `Trigger`
   that arrives 60 s or more after it treats the reading as abandoned (`Passing`) and starts a new
   one with a new `seq`, so a late answer of the old one is dropped. 60 s is above the worst case of
@@ -92,6 +120,7 @@ Invariants, each a test:
 
 **What one reading does** (`shell/pr_status.rs`, the pattern of `shell/issues.rs`):
 
+0. The shell handles `Effect::Read { seq }` by collecting the branches (§1) and starting the task.
 1. `ClientMsg::RemoteList` to the daemon → `choose_remote`. No github.com remote ⇒ `Unavailable`,
    nothing further (FR-026).
 2. `locate_gh`. Not found ⇒ `Unavailable`.
