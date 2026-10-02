@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: D11 answered and applied to spec.md. Design unit 2 handed over at the context cap. Next: a fresh design unit continues from *Handover* (write plan.md from research.md R1 to R16).
+- **Next step**: Design unit 3: plan, data-model, contracts, quickstart and tasks written; plan review round 1 fixed. Next: plan re-review, `speckit-tdd-plan`, `speckit-analyze`, tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -21,6 +21,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | | pending |
+| M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | pending |
+| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | pending |
+| M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
+| M5 | T037–T048 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
+| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
+| M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
+| M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
+| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | pending |
+| M10 | T074–T077 | full | SC-005 test, architecture page, recorded visual pass | | pending |
 
 ## Decisions
 
@@ -37,6 +47,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | clarify 1 | Does a stop/start, or a process exit and restart, within one service run show the earlier output above a separator? | Yes, every start behaves the same. | decided by user, 2026-10-02 | spec.md#Clarifications; User Story 1 scenarios 9-10, FR-015, SC-011 |
 | D10 | clarify 1 | With saving off, does a start within one service run still show the earlier output? | Yes: it needs nothing on disk, and D9 says every start behaves the same. The setting decides only what is on disk. Not asked of the user; derived from D9. | agent-resolved | spec.md User Story 2 scenario 8, FR-015, Assumptions |
 | D11 | design | Claude Code and Copilot CLI draw full-screen by default, where there is no scrollback to save and restored lines are hidden. What should 041 do? | Option 1: ship as specified for output on the normal screen, and say so. Restored history shows in Pi sessions and in Claude Code's scrolling mode; for a full-screen CLI only the last screen is saved and its own resume shows the conversation. FR-008, SC-001 and SC-010 are scoped to a terminal that is not full-screen; the guide says it. No new setting, no change to how a CLI starts. | decided by user, 2026-10-02 | research.md R13, R16; spec.md#Clarifications (design), FR-008, FR-032, SC-001, SC-010 |
+| D12 | design | How is story 1 cut, given it holds the whole mechanism? | Four milestones along its acceptance scenarios: in-run restore (M1), saved at a process end (M2), periodic saves (M3), orderly stop (M4). Then one per story (M5 to M7), Windows stop request (M8), sandbox (M9), Polish (M10). | agent-resolved | references/milestones.md rule 3; tasks.md Milestones |
+| D13 | design | Saving is on from M2, before the setting (M5) and removal (M7) are on `main`. Acceptable? | Yes, with a hold: no release is cut between M2 and M7. Files are owner-only from M2 and M7's sweep removes leftovers. Each of those PR bodies says so. | agent-resolved | plan.md Risks; spec.md User Story 2 "before the feature is acceptable to ship by default" |
+| D14 | design | Plan review: a power loss could leave a renamed but unwritten file; the capture waited on a signal Windows does not give; ConPTY paints from a blank buffer. | Sync before the rename (R5); capture after the reader is joined (R4); the seed ends by moving its rows into history (R17, not run on Windows, pinned by a `cfg(windows)` test in M1); no write for unchanged content (FR-004). | agent-resolved | research.md R4, R5, R17 |
 
 ## Review rounds
 
@@ -44,6 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | e6ca334adfe00961d2b378af7e552c08264ae279:71ea3df9093d57217ceee3caed91301dd78382cf | CHANGES: 6 MAJOR, 2 MINOR; all 8 fixed |
 | Spec | 2 | 433b819aa8c08256fbf4c7397f02ad45b9a539c0:71ea3df9093d57217ceee3caed91301dd78382cf | CLEAN: 2 MINOR, both fixed |
+| Plan | 1 | 41708445f0bab32dc0145f3f9da07751aea93ab3:028bfc3789510c128d2ef2564482a086dcc55199 | CHANGES: 2 MAJOR (no sync before the rename; capture order on Windows), 3 MINOR; all 5 fixed (R4, R5, new R17, data-model §5 and §6, contracts, tasks) |
 
 ## Declined review findings
 
@@ -52,36 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit 2, 2026-10-02. At the 150k cap after the escalation was answered; no PR opened, nothing
-pushed. Five unmerged commits plus this one are on the branch.
-
-- **Done**: research.md is complete, R1 to R16 (R13 measured; R14 the stop request; R15 the sandbox
-  on a Windows host; R16 full-screen CLIs, decided by the user as D11). D11 is applied to spec.md
-  (Clarifications, edge case *Full-screen programs*, FR-008, FR-032, SC-001, SC-010, Assumptions,
-  Out of scope). `.specify/extensions.yml` has no `before_plan` or `after_plan` hook; `after_tasks`
-  has `speckit.tdd.plan` and `speckit.docguard.score` (both optional). No review has run:
-  *Review rounds* has no Plan row.
-- **Not done**: `plan.md` does not exist (the copied template was removed). No `data-model.md`,
-  `contracts/`, `quickstart.md`, `tasks.md`.
-- **Next step**: `branch-start.sh 531` (the branch is 2 behind `origin/main`), read `research.md`
-  and `spec.md` (no code reading is needed; every path is in research.md), run `speckit-plan` from
-  step 1 and write `plan.md` (style: `specs/040-worktree-pr-ci-status/plan.md`, with a
-  *Requirement → design map* and *Test strategy by layer*, which the plan rubric checks),
-  `data-model.md`, `contracts/` (the saved-history file format, R5; the setting on the wire, R10;
-  the stop request, R14) and `quickstart.md` (Part A automated, Part B visual pass as
-  `specs/037-explain-hidden-cli/quickstart.md`, with the Part B checks of R16). Then the plan
-  review (round 1), and steps 2 to 5 of the phase file.
-- **Milestone cut suggested**: M1 = US1 with FR-015 and the Unix stop request (R14); the setting
-  (US2, wire bump); damaged files (US3); removal and sweep (US4); the Windows stop request (R14);
-  the sandbox work (R7, R8, R11, R15); Polish. All but a docs-only Polish are `full`. Each story's
-  user-guide task goes in its own milestone; D11's guide sentence ships with M1.
-- **Not in the spec, decided in research** (the plan should record them under Risks): spec.md's
-  Terms call restart, update, logout and reboot orderly, but only the idle stop saves today; R14
-  adds the stop request, and a real Windows logout cannot be tested in CI. A sandbox container made
-  before this feature on a Windows host saves nothing until it is recreated (R15).
-- **Open findings**: none from a review.
-- **Checklists**: `checklists/requirements.md` has no unticked item; re-check it against the spec
-  edits of D11 in step 4.
+None.
 
 ## Open escalation
 
@@ -91,3 +76,5 @@ None.
 
 ## Follow-ups not done
 
+- **Release hold**: cut no release between the merge of M2 and the merge of M7 (D13).
+- Manual checks on a Windows machine, not automatable here: a real logout or reboot saves the histories; the file's DACL as seen by a second account (quickstart Part B).

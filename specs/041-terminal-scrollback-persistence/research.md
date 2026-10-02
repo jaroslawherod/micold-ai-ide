@@ -4,7 +4,7 @@ Phase 0 of the plan for [spec.md](spec.md). Each section records one decision, w
 rejected. Paths are relative to the repository root; line numbers are as of `origin/main` at
 `bc569992`.
 
-**Status**: R1 to R16 are decided. R16 was decided by the user (ledger D11).
+**Status**: R1 to R17 are decided. R16 was decided by the user (ledger D11).
 
 ## R1. Where the history is today
 
@@ -93,9 +93,17 @@ decides only whether the snapshot is also written to disk.
 (`state.rs:2415-2447`). A `Shell(_)` instance, and the primary of a `Regular` session, are never
 captured, carried or saved (FR-014).
 
-**Order at a stop.** Kill the process tree, wait for the reader thread to end (`output_ended`,
-bounded at 500 ms), then capture. The last lines the process printed are then in the snapshot
-(User Story 1 scenario 10).
+**Order at a process end.** Keep a clone of the session's `SharedTerm` (`supervisor.rs:60`, an
+`Arc`), take the `PtySession` out of the state and drop it off the state lock, then capture from
+the clone, then put the snapshot in `carried`, and only then reply to the stop or spawn the next
+process. Dropping the `PtySession` kills the process tree, closes the master and joins the reader
+thread, in that order (`supervisor.rs:548-564`), so every byte the process wrote has reached the
+`Term` before the capture (User Story 1 scenario 10). The same order serves `stop_session` and the
+supervision tick (clean exit, give-up and before `respawn_primary`).
+
+Waiting for `output_ended` instead does not work on Windows: with ConPTY the reader sees
+end-of-file only when the pseudoconsole is closed, which is the drop of the master, not the kill
+(`supervisor.rs:553-558`). The capture would then rest on a timeout.
 
 **Rejected.** *Always reading back from disk at a start.* It cannot serve FR-015 while saving is
 off, and it makes a stop and start depend on a write that may have failed.
@@ -120,8 +128,17 @@ gives `Damaged(reason)`; a missing file gives `None`. A read never panics and ne
 a file.
 
 The whole file is rewritten at each save, through a temporary file renamed over the old one
-(`write_owner_only`, R8). An interrupted save leaves the previous file (FR-006). A file torn by a
-power loss fails the checksum and is treated as damaged.
+(`write_owner_only`, R8). The helper syncs the temporary file to disk before the rename
+(`File::sync_all`; on Unix it then syncs the directory), so after a power loss the name holds
+either the previous complete file or the new complete one (FR-006, User Story 1 scenario 7). The
+helper does not sync today (`platform/unix.rs:149-151`); the sync is added when it moves to
+`micold-core`. It runs on the blocking pool, off every lock a terminal needs. A file that is torn
+all the same (a disk that lies about the sync) fails the checksum and is treated as damaged.
+
+**No write for unchanged content.** The store remembers the checksum of the last file it wrote for
+each session in this service run and skips a save whose bytes have the same checksum. A save at a
+process end or at a service stop therefore writes nothing for a terminal that printed nothing since
+its last save (FR-004).
 
 **Rationale.** 10,000 lines of about 100 characters are about 1 MB; rewriting that at most once per
 30 seconds per busy session needs no compression and no append log. The format is the same bytes on
@@ -439,3 +456,24 @@ default Claude Code and Copilot session shows.
 
 **Rejected.** *Starting the CLIs in a scrolling mode behind a setting* (new scope; Copilot has no
 known one). *Stopping the feature.*
+
+## R17. Seeding and the Windows pseudoconsole
+
+**Finding.** On Unix the new process writes at the terminal's cursor, so after a seed its first
+output lands below the separator. On Windows the process draws through ConPTY, which keeps its own
+screen buffer: it starts blank with the cursor at home and addresses rows absolutely. Its first
+paint could overwrite seeded rows that are still on the screen. This was not run on a Windows
+machine; R13's measurements are from a Unix pseudo-terminal.
+
+**Decision.** `seed` ends by moving the seeded rows out of the screen into the history and homing
+the cursor, on every platform: the `Term`'s `clear_screen(ClearMode::All)`, which on the primary
+screen moves the screen into history and loses nothing (R13). The new process then starts on a blank
+screen, as it does today, with the earlier output and the separator directly above it in the
+history. The tests assert the order (earlier output, separator, new output) in the captured
+history, not a screen row, and one integration test with a real pseudoconsole runs under
+`cfg(windows)` in CI.
+
+**Rejected.** *Leaving the seeded rows on the screen on Unix only*: two behaviours to test, and a
+CLI that homes the cursor and repaints (as Claude Code's scrolling mode does on resume) would
+overwrite them there too. *Telling ConPTY the cursor position*: there is no such call; ConPTY
+learns it only by asking the terminal, which the daemon answers from the `Term` after the fact.
