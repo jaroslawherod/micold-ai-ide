@@ -222,8 +222,8 @@ Tests: `crates/micold-core/tests/pull_request_is_never_stored.rs` (new, T008).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U46 | Source gate: `PullRequestStatus` derives neither `Serialize`, `Deserialize` nor `Debug` | FR-032, SC-011 | example | PENDING | |
-| U47 | Its hand-written `Debug` output holds the number and the enums and neither the title nor the address | FR-032, SC-011 | example | PENDING | |
+| U46 | Source gate: `PullRequestStatus` derives neither `Serialize`, `Deserialize` nor `Debug` | FR-032, SC-011 | example | DONE | `crates/micold-core/tests/pull_request_is_never_stored.rs::the_status_derives_no_serialisation_and_no_debug` |
+| U47 | Its hand-written `Debug` output holds the number and the enums and neither the title nor the address | FR-032, SC-011 | example | DONE | `crates/micold-core/tests/pull_request_is_never_stored.rs::debug_output_holds_the_number_and_the_enums_and_neither_title_nor_address` |
 
 ### `crates/micold-core/src/settings.rs`: `pr_status_enabled`
 

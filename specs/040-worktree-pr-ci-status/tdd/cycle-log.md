@@ -43,3 +43,23 @@ existed and failed before the implementation.
   be available in rlib format`): another worktree was writing the shared target directory. The
   suite run right after it built and passed; nothing in this tree changed between the two.
 - commit: the commit that adds this entry
+
+## Cycle 2: U46, U47 — a pull request's status is never stored and never printed whole
+
+- test: `crates/micold-core/tests/pull_request_is_never_stored.rs` (new), 2 tests
+- stub: new `src/pull_request.rs` (`pub mod pull_request;`) declaring `PullRequestStatus`,
+  `PrState`, `CheckStatus` and `ReviewState`, each with `#[derive(Debug, Clone, PartialEq, Eq)]`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_is_never_stored`
+  -> `test result: FAILED. 0 passed; 2 failed`. Decisive lines:
+  `the_status_derives_no_serialisation_and_no_debug`: `PullRequestStatus must not derive Debug: a
+  derived one would write the title and the address to a stored file or a log (FR-032); found: …
+  #[derive(Debug, Clone, PartialEq, Eq)]`;
+  `debug_output_holds_the_number_and_the_enums_and_neither_title_nor_address`: `the title is never
+  printed (FR-032): PullRequestStatus { number: 4711, title: "Rework the billing export", url:
+  "https://github.com/acme/widgets/pull/4711", state: Open { checks: Failing }, review:
+  ChangesRequested, head: "0123…4567" }`
+- green: T009 — `PullRequestStatus` derives `Clone, PartialEq, Eq` only and has a hand-written
+  `Debug` (`number`, `state`, `review`, `finish_non_exhaustive`); `ReadingFailure` declared beside
+  the enums. -> `2 passed; 0 failed`; `mise run test-core` 1513 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: the commit that adds this entry
