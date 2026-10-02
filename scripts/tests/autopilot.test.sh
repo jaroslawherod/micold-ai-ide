@@ -365,6 +365,17 @@ check "autopilot-tokens counts one cache rebuild" 0 '^\| orchestrator \(main ses
   "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
 check "autopilot-tokens prices the rebuild's cache write" 0 '^\| orchestrator \(main session\) .*\| 51k \| 100% \|$' \
   "$(dirname "$S")/autopilot-tokens.py" "$d/s.jsonl"
+# --rebuilds lists each one with the idle time before it and what the request before it called.
+tmsg() { printf '{"type":"assistant","timestamp":"2026-01-01T00:%s:00Z","message":{"id":"%s","model":"claude-x","content":[%s],"usage":{"input_tokens":1,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s,"output_tokens":1}}}\n' "$@"; }
+gate='{"type":"tool_use","name":"Bash","input":{"command":"cd /w && X=1 scripts/build-lock.sh mise run gate"}}'
+{ tmsg 00 m1 '' 40000 0; tmsg 01 m2 "$gate" 500 40000; tmsg 01 m2 '{"type":"tool_use","name":"Edit","input":{}}' 500 40000
+  tmsg 08 m3 '' 41000 0; tmsg 09 m4 '' 500 41000; tmsg 30 m5 '' 42000 0; } > "$d/r.jsonl"
+check "autopilot-tokens --rebuilds names what a rebuild waited on" 0 '^\| orchestrator \(main session\) \| 41k \| 51k \| 7 \| Bash:build-lock.sh, Edit \|$' \
+  "$(dirname "$S")/autopilot-tokens.py" --rebuilds "$d/r.jsonl"
+check "autopilot-tokens --rebuilds marks a rebuild after a turn ended" 0 '^\| orchestrator \(main session\) \| 42k \| 52k \| 21 \| \(turn ended\) \|$' \
+  "$(dirname "$S")/autopilot-tokens.py" --rebuilds "$d/r.jsonl"
+check "autopilot-tokens --rebuilds totals them" 0 '2 rebuild\(s\), 104k cost_eq' \
+  "$(dirname "$S")/autopilot-tokens.py" --rebuilds "$d/r.jsonl"
 
 # context.py: finds a unit's transcript by its description (the newest one) under a fake HOME,
 # and reports the last request's context against the cap.
@@ -497,6 +508,38 @@ check "context hook is silent under the cap" 0 '^$' chook u2
 check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*/speckit-autopilot resume' chook
 check "context hook honours the cap override" 0 '90000 tokens, over the 50000 cap' env AUTOPILOT_CONTEXT_CAP=50000 bash -c "$(declare -f chook); d='$d' C='$C' chook u2"
 check "context hook ignores a missing transcript" 0 '^$' chook nope
+
+# The same hook: after three requests in a row that each made one read-only call, it says to batch.
+tuse() {  # tuse <id> <context> <tool json>...
+  local id="$1" ctx="$2"; shift 2; local blocks; blocks="$(IFS=,; echo "$*")"
+  printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","content":[%s],"usage":{"input_tokens":%s,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' "$id" "$blocks" "$ctx"
+}
+gr='{"type":"tool_use","name":"Bash","input":{"command":"grep -n x y"}}'
+rd='{"type":"tool_use","name":"Read","input":{"file_path":"a"}}'
+wr='{"type":"tool_use","name":"Bash","input":{"command":"cargo test"}}'
+sub="$d/s1/subagents"
+{ tuse a 90000 "$gr"; tuse b 90000 "$rd"; } > "$sub/agent-b1.jsonl"
+check "batching: two lone reads are not yet a run" 0 '^$' chook b1
+tuse c 91000 "$gr" >> "$sub/agent-b1.jsonl"
+check "batching: three lone reads in a row" 0 'autopilot batching: your last 3 calls.*91000 tokens.*Explore' chook b1
+tuse e 92000 "$gr" >> "$sub/agent-b1.jsonl"
+check "batching: quiet right after it spoke" 0 '^$' chook b1
+for i in 1 2 3 4 5 6 7; do tuse "q$i" 93000 "$gr"; done >> "$sub/agent-b1.jsonl"
+check "batching: speaks again after eight more requests" 0 'autopilot batching: your last 11 calls' chook b1
+{ tuse a 90000 "$gr"; tuse b 90000 "$gr"; tuse c 90000 "$rd" "$gr"; tuse e 90000 "$gr"; tuse f 90000 "$rd"; } > "$sub/agent-b2.jsonl"
+check "batching: a batched message ends the run" 0 '^$' chook b2
+{ tuse a 90000 "$gr"; tuse b 90000 "$wr"; tuse c 90000 "$gr"; tuse e 90000 "$rd"; } > "$sub/agent-b3.jsonl"
+check "batching: a build is not a read" 0 '^$' chook b3
+{ tuse a 30000 "$gr"; tuse b 30000 "$gr"; tuse c 30000 "$gr"; } > "$sub/agent-b4.jsonl"
+check "batching: silent while the context is small" 0 '^$' chook b4
+check "batching: honours the context setting" 0 'autopilot batching' env AUTOPILOT_BATCH_CTX=20000 bash -c "$(declare -f chook); d='$d' C='$C' chook b4"
+{ tuse a 90000 "$gr"; tuse b 90000 "$gr"; } > "$sub/agent-b5.jsonl"
+check "batching: honours the run setting" 0 'your last 2 calls' env AUTOPILOT_BATCH_RUN=2 bash -c "$(declare -f chook); d='$d' C='$C' chook b5"
+{ tuse a 170000 "$gr"; tuse b 170000 "$gr"; tuse c 170000 "$gr"; } > "$sub/agent-b6.jsonl"
+check "batching and the cap in one message" 0 'autopilot batching.*autopilot context: 170000' chook b6
+git mv -q specs/042-x/autopilot.md specs/042-x/elsewhere.md 2>/dev/null || mv specs/042-x/autopilot.md specs/042-x/elsewhere.md
+{ tuse a 90000 "$gr"; tuse b 90000 "$gr"; tuse c 90000 "$gr"; } > "$sub/agent-b7.jsonl"
+check "batching: silent without a ledger" 0 '^$' chook b7
 unset TMPDIR; cd "$ROOT"
 
 # hold.sh: comes back when the log has its result line or the hold time passed, counts the holds
