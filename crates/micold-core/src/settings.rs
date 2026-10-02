@@ -422,6 +422,10 @@ struct StoredSettings {
     /// `settings_version` does not move for it.
     #[serde(default = "default_mapping", deserialize_with = "known_entries")]
     issue_label_types: Vec<LabelTypeEntry>,
+    /// Missing in pre-040 files → off, the requirement's default (FR-030). Additive and
+    /// defaulted, so `settings_version` does not move for it either.
+    #[serde(default)]
+    pr_status_enabled: bool,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -455,6 +459,7 @@ impl StoredSettings {
             tool_server_enabled: settings.tool_server_enabled,
             cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
+            pr_status_enabled: settings.pr_status_enabled,
         }
     }
 
@@ -486,7 +491,7 @@ impl StoredSettings {
             tool_server_enabled: self.tool_server_enabled,
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
-            pr_status_enabled: false,
+            pr_status_enabled: self.pr_status_enabled,
         }
     }
 }

@@ -672,3 +672,32 @@ fn pull_request_status_is_off_by_default_and_in_a_file_written_before_the_switch
         "a file that predates the switch never said yes, so it reads as off"
     );
 }
+
+/// U49. Turning the switch on is the user's choice and outlives a restart (FR-030). The field is
+/// additive and defaulted, so the document's version stays where it was (data-model §5).
+#[test]
+fn turning_pull_request_status_on_survives_a_save_and_load_at_the_same_settings_version() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+
+    store
+        .save(&Settings {
+            pr_status_enabled: true,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let outcome = store.load();
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(
+        outcome.settings.pr_status_enabled,
+        "the user turned the switch on; loading the file must not turn it off"
+    );
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        document["settings_version"], 4,
+        "an additive, defaulted field does not move the settings version"
+    );
+}
