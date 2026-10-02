@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design done: plan review clean (round 2), `speckit-tdd-plan`, `speckit-analyze` (0 CRITICAL, 0 HIGH), tasks and milestone review clean (round 2), checklist re-checked by that review (every item true), `mise run test-scripts` green. PR 2 is open: wait for CI, merge, then Phase 4 with M1.
+- **Next step**: Design done: plan review clean (round 2), `speckit-tdd-plan`, `speckit-analyze` (0 CRITICAL, 0 HIGH), tasks and milestone review clean (round 2), checklist re-checked by that review (every item true), `mise run test-scripts` green. PR 2 (#540) is open: wait for CI, merge, then Phase 4 with M1.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
+| #540 | Design | open | |
 
 ## Milestones
 
