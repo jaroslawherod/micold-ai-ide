@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn the_wrapping_label_takes_more_lines_inside_its_bound() {
         let line = ROW_ROLE.line_height_dp();
-        let (node, text_width) = wrapped(LONG_TITLE, vec![0..5], 160.0);
+        let (node, text_width) = wrapped(LONG_TITLE, one(0..5).to_vec(), 160.0);
         assert!(
             node.height >= 2.0 * line - TOLERANCE,
             "a label of {} characters is {}dp high in 160dp: one line is {line}dp, so it did not wrap",

@@ -1,6 +1,10 @@
 //! The two lines an issue row shows, and where a match's emphasis lands on them (feature 038,
 //! contracts/issue-fields.md §3–4, data-model §3–4).
 
+// An emphasis is a list of byte ranges, and here it usually holds exactly one: `vec![0..5]` is the
+// value under test, not a mistyped `(0..5).collect()`.
+#![allow(clippy::single_range_in_vec_init)]
+
 use std::ops::Range;
 
 use micold_core::github::{Issue, RowEmphasis};
