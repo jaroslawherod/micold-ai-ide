@@ -40,7 +40,7 @@ A new step, before the live sessions are taken and dropped:
 
 1. Capture every covered terminal from its live `Term`. The processes are not waited for: they are
    about to be killed. This differs from the capture at a process end (R4), which follows the
-   reader's join and so holds every byte the process wrote. Here the process is still running, so
+   session's teardown and so holds every byte the process wrote. Here the process is still running, so
    the snapshot holds what the `Term` has parsed at that moment; bytes still in flight are not in
    it. That is what story 1 scenario 8 asks of an orderly stop, and nothing the user saw is lost:
    the client draws from the same `Term`.

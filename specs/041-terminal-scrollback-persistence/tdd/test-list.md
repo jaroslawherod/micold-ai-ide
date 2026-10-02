@@ -130,6 +130,9 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U36 | A fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history | R16, EC-Full-screen | example | PENDING | T007 |
 | U37 | A second attached client receives the same lines in its first `full` frame | EC-Several windows | example | PENDING | T007 |
 | U38 | The stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)` | FR-030, R17 | example | PENDING | T007 |
+| U133 | With a client attached and streaming, a stop keeps the last line the process printed | R4, FR-015 | example | PENDING | T007 |
+| U134 | With a client attached and streaming, a self-exit and restart keeps the last line | R4, story 1 scenario 10 | example | PENDING | T007 |
+| U135 | A fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`) | R4, FR-005 | example | PENDING | T007 |
 
 ### `crates/micold-core/src/terminal_history/format.rs` (T014, T019)
 
@@ -275,9 +278,10 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U115 | Setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service exit within 5 s with its file holding the last line (`cfg(windows)`) | SR §6, FR-002, FR-030 | example | PENDING | T061 |
 | U116 | `WM_ENDSESSION` sent to the hidden window raises the same request | SR §3, FR-030 | example | PENDING | T061 |
 | U117 | The event's DACL has one entry, for the current user | SR §1, FR-020 | example | PENDING | T061 |
-| U118 | `terminate_daemon` sets the event and returns once the process exited without `TerminateProcess` | SR §2 | example | PENDING | T062 |
+| U118 | `stop_running_daemon` against the real service makes it exit with the unwind's exit code, not the 1 of `TerminateProcess`, its file holding the last line | SR §2 | example | PENDING | T061 |
 | U119 | Against a process that ignores the event, `terminate_daemon` falls back to `TerminateProcess` after 5 s | SR §2 | example | PENDING | T062 |
 | U120 | With no event to open, `terminate_daemon` falls back at once | SR §3 | example | PENDING | T062 |
+| U136 | In the installer's `StopDaemon`, the step that sets the stop event comes before `Stop-Process` and `taskkill` | SR §2 | example | PENDING | T062 |
 
 ### Sandbox (T067, T068, T069, T070–T072)
 

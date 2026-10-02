@@ -104,10 +104,13 @@ a change of the setting never interleave (R9). It never takes the service's stat
 **Covered terminal**: `SessionProcess::Primary` of a session whose mode is `TerminalMode::AiCli`.
 Nothing else is captured, carried, seeded or saved (FR-014).
 
-**Order at a process end** (R4): clone the `SharedTerm`; take the `PtySession` out of the state and
-drop it off the state lock (kill, close the master, join the reader); capture from the clone; put
-the snapshot in `carried`; save it; then reply to the stop or spawn the next process. No timeout is
-involved, and the order is the same on Unix and on Windows.
+**Order at a process end** (R4): clone the `SharedTerm`; take the `Arc<PtySession>` out of the
+state and, off the state lock, call `PtySession::teardown(&self, TEARDOWN_WAIT)` (kill, close the
+master, wait up to 2 s for the reader's end-of-file and join it); capture from the clone; put the
+snapshot in `carried`; save it; then reply to the stop or spawn the next process. Dropping the `Arc`
+is not the teardown: each window's stream task holds a clone. The order is the same on Unix and on
+Windows. When the 2 s pass without end-of-file, the capture takes what the `Term` holds and one
+warning is logged.
 
 **Choosing the seed at a start**:
 

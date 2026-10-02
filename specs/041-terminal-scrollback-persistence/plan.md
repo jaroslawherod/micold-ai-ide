@@ -150,7 +150,7 @@ No entry in Complexity Tracking.
 | FR-005 | Capture copies rows under the `Term` lock; encode, hash and write run on the blocking pool; the saver never takes the state lock while writing (R6) |
 | FR-006 | Whole-file write to a temporary file, synced, then renamed; the directory synced on Unix ([contracts/saved-history-file.md §3](./contracts/saved-history-file.md), R5) |
 | FR-007 | A failed save leaves the schedule due after 30 s; `logged: HashSet<(SessionId, reason)>` in the saver ([data-model §4, §6](./data-model.md)) |
-| FR-008, FR-015 | The capture at a process end runs after the reader thread was joined, on every platform (R4, [data-model §6](./data-model.md)); `Seed::History` built from `carried` or from `HistoryStore::load`; `seed` writes it into the new `Term` before the reader thread exists (R3, R4, [data-model §6](./data-model.md)) |
+| FR-008, FR-015 | The capture at a process end runs after `PtySession::teardown` closed the master and joined the reader thread (bounded at 2 s), on every platform and with windows attached (R4, [data-model §6](./data-model.md)); `Seed::History` built from `carried` or from `HistoryStore::load`; `seed` writes it into the new `Term` before the reader thread exists (R3, R4, [data-model §6](./data-model.md)) |
 | FR-009 | `separator_line(time, columns)` in the dim style; seeded through `Handler`, so nothing is written to the PTY ([data-model §7](./data-model.md), R11) |
 | FR-010 | `Seed::None` when there is no snapshot or it has no lines |
 | FR-011, FR-012 | Seeded lines are the `Term`'s history: the `Term` trims to its limit, and the next capture includes them; `seed` skips lines beyond the limit first (R3) |
@@ -266,7 +266,7 @@ M10) and ships something observable.
 3. **A running terminal is saved every 30 seconds** (story 1 scenario 7): the schedule, the saver.
 4. **An orderly stop loses nothing** (story 1 scenarios 1 and 8): the save step of `unwind`, the
    stop request on Unix. `docs/daemon.md`.
-5. **Story 2**: the setting end to end, `set_enabled`, `purge`, the deletion retry. User guide.
+5. **Story 2**: the setting end to end, `set_enabled`, `purge`, the deletion retry, and the timing test of SC-005 (its baseline is saving off). User guide.
 6. **Story 3**: the notice line, the damage reasons in the log, log-once of a failed save. User
    guide.
 7. **Story 4**: `forget` on every removal path, the in-flight rule, `sweep`. User guide.
@@ -274,7 +274,7 @@ M10) and ships something observable.
    end-of-session window.
 9. **The sandbox**: the launcher creates the directory, the history mount, `TZ` and `tzdata`, the
    warning for an older container, the real-runtime tests. User guide's sandbox chapter.
-10. **Polish**: the timing test of SC-005, the architecture page, quickstart Part B.
+10. **Polish**: the architecture page, quickstart Part B.
 
 ## Risks
 
