@@ -83,7 +83,7 @@ is in view in no window, stores it, and sends it to every window. Nothing is sho
 
 ### Tests for User Story 1, slice A (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T001 [P] [US1] [A10] [U1] [U2] [U3] [U4] [U5] Unit tests for `in_view(ViewFacts) -> Option<SessionId>` in `crates/micold-core/src/attention.rs` (NEW, `#[cfg(test)]`): the selected session when `window_focused` and not `main_area_taken`; `None` when the window is unfocused (US1.3); `None` when the main area is taken (US1.9); `None` with no selected session; the value does not depend on which tab of the session is shown (US1.10) — `ViewFacts` has no field for it (FR-002, FR-016, spec Terms)
+- [X] T001 [P] [US1] [A10] [U1] [U2] [U3] [U4] [U5] Unit tests for `in_view(ViewFacts) -> Option<SessionId>` in `crates/micold-core/src/attention.rs` (NEW, `#[cfg(test)]`): the selected session when `window_focused` and not `main_area_taken`; `None` when the window is unfocused (US1.3); `None` when the main area is taken (US1.9); `None` with no selected session; the value does not depend on which tab of the session is shown (US1.10) — `ViewFacts` has no field for it (FR-002, FR-016, spec Terms)
 - [ ] T002 [P] [US1] [U6] [U7] [U8] Store tests in `crates/micold-core/src/store.rs`: a `StoredSession` written without `attention_seq` reads as `0`; a round trip keeps the value; `schema_version` is unchanged (FR-008a, research R1)
 - [ ] T003 [P] [US1] [U12] Protocol tests in `crates/micold-core/src/protocol/messages.rs` and `crates/micold-core/tests/schema_hash.rs`: `ClientMsg::WindowView { focused, in_view }` and `SessionSummary::attention_seq` encode and decode; `PROTOCOL_VERSION` is 21 (W1)
 - [ ] T004 [P] [US1] [U50] [U51] [U52] [U53] Unit tests for `Views` in `crates/micold-daemon/src/attention.rs` (NEW): `set_view` stores one report per connection; a report with `focused: false` is stored with `in_view: None` whatever it carried; `is_in_view(session)` is true while any stored report names it; `remove(client)` forgets the report (W1.1, W1.2)
@@ -92,7 +92,7 @@ is in view in no window, stores it, and sends it to every window. Nothing is sho
 
 ### Implementation for User Story 1, slice A
 
-- [ ] T007 [US1] [U1] [U2] [U3] [U4] [U5] `ViewFacts { window_focused, main_area_taken, selected }` and `in_view` in `crates/micold-core/src/attention.rs` (NEW); `pub mod attention` in `crates/micold-core/src/lib.rs` (T001)
+- [X] T007 [US1] [U1] [U2] [U3] [U4] [U5] `ViewFacts { window_focused, main_area_taken, selected }` and `in_view` in `crates/micold-core/src/attention.rs` (NEW); `pub mod attention` in `crates/micold-core/src/lib.rs` (T001)
 - [ ] T008 [US1] [U6] [U7] [U8] `attention_seq: u64` on `Session` in `crates/micold-core/src/session.rs` and, with `#[serde(default)]`, on `StoredSession` in `crates/micold-core/src/store.rs`, with both conversions (T002)
 - [ ] T009 [US1] [U12] `SessionSummary::attention_seq`, `WindowView` and `ClientMsg::WindowView` in `crates/micold-core/src/protocol/messages.rs`; `PROTOCOL_VERSION` 20 → 21 in `crates/micold-core/src/protocol/version.rs` (T003)
 - [ ] T010 [US1] [U50] [U51] [U52] [U53] `Views` with `views: HashMap<ClientId, WindowView>`, `set_view`, `remove`, `is_in_view` in `crates/micold-daemon/src/attention.rs` (NEW, pure, no I/O); declare the module in `crates/micold-daemon/src/lib.rs` (T004)

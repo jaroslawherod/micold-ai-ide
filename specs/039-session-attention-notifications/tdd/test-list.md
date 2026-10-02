@@ -5,7 +5,7 @@ profile: .specify/memory/tdd-profile.md
 spec_criteria: 48 # US1 1-13, US2 1-23, US3 1-6, US4 1-6
 planned_at: a8521731
 updated_at: a8521731
-suite_baseline: unknown # a full run at a8521731 stopped at one daemon test that passed when rerun alone; see cycle-log.md
+suite_baseline: green # 4352 passed, 0 failed of the tests that existed, 9 ignored, 384 binaries at 6b4b6fa9; see cycle-log.md
 ---
 
 # Test List: Notify When a Session Needs Attention, and Track Unread Sessions
@@ -102,11 +102,11 @@ implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U1 | A focused window whose main area is not taken has its selected session in view | FR-002, FR-016 | example | PENDING | T001 / T007 |
-| U2 | An unfocused window has no session in view | US1-3, US2-6 | example | PENDING | T001 / T007 |
-| U3 | A window whose main area is taken has no session in view | US1-9, US2-11 | example | PENDING | T001 / T007 |
-| U4 | A window with no selected session has no session in view | FR-016 | example | PENDING | T001 / T007 |
-| U5 | The result is the same whichever tab of the session is shown: `ViewFacts` has no field for it | US1-10, US2-12 | example | PENDING | T001 / T007 |
+| U1 | A focused window whose main area is not taken has its selected session in view | FR-002, FR-016 | example | DONE | T001 / T007 |
+| U2 | An unfocused window has no session in view | US1-3, US2-6 | example | DONE | T001 / T007 |
+| U3 | A window whose main area is taken has no session in view | US1-9, US2-11 | example | DONE | T001 / T007 |
+| U4 | A window with no selected session has no session in view | FR-016 | example | DONE | T001 / T007 |
+| U5 | The result is the same whichever tab of the session is shown: `ViewFacts` has no field for it | US1-10, US2-12 | example | DONE | T001 / T007 |
 
 ### `crates/micold-core/src/session.rs`, `store.rs`: stored fields
 
