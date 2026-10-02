@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Orchestrator: wait for CI on PR 2 and merge it; then milestone M1 (T001–T013).
+- **Next step**: Orchestrator: wait for CI on PR #536 (design) and merge it; then milestone M1 (T001–T013).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
+| #536 | Design | open | |
 
 ## Milestones
 
