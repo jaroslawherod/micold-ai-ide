@@ -269,6 +269,37 @@ unit handed its test-strength findings to two subagents on Opus: 161 calls, 3.2M
 file now sends them to `autopilot-worker` subagents on Sonnet, one per crate, and the unit runs the
 tests itself afterwards.
 
+## After the hold, the agent types and the read hook, 2026-10-02
+
+The first run that started with all of it merged is `038-issue-list-reporter-tooltip`, through its
+spec and first clarify round: 43 requests, 550k `cost_eq`, no rebuild, no unbatched read. Its units
+ran as `autopilot-unit` and `autopilot-reviewer` and started at 15–17k of context, against 27–33k
+for the `general-purpose` units of the 034 close phase a day earlier. The spec unit held through
+both review rounds with `hold.sh`, and the orchestrator held with `hold.sh --long`.
+
+`autopilot-tokens.py --rebuilds` now lists every rebuild with the context it re-wrote, the idle
+minutes before it and the tool calls it waited on, so the cause of a rebuild is read from the
+report and not from the transcript. Of the 81 rebuilds of `daemon-mcp-server` (13.2M, nearly all
+from before `hold.sh`), 30 followed a turn that ended, 11 a subagent's hand-back, 5 a forked skill,
+and the rest a blocking shell wait.
+
+What the two 034 runs still show, and what changed for it:
+
+- **Unbatched reads: 3.8M and 5.9M, a tenth of each run.** 367 and 528 requests made one
+  read-only call right after another at about 100k of context, two thirds of them `Bash` after
+  `Bash` (a `grep`, then the next `grep`). 14 and 25 chains ran six or more such calls. The batch rules in
+  `unit.md` did not stop it; the converge and visual-pass subagents, which never read `unit.md`,
+  did it too. `context-hook.py` now also counts: after three requests in a row with one read-only
+  call each, at 60k of context or more, it tells the caller once to batch its probes or send the
+  search to an `Explore` subagent, and stays quiet for the next eight requests. The rule for
+  "read-only" is the report's own (`read_only` in `autopilot-tokens.py`), so the hook warns about
+  exactly what the `unbatched` column counts.
+- **A forked skill blocks the unit's turn.** `hold.sh` cannot run while `visual-pass` or
+  `speckit-tdd-verify` runs in the foreground: the close unit came back from one after 23 minutes
+  and re-wrote 109k. `unit.md` now sends a forked skill that runs over 5 minutes through an
+  `autopilot-worker`, whose own context is under 20k when it comes back, while the unit holds.
+  The sentence adds 42 tokens to every unit call.
+
 ## Skill size
 
 What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every

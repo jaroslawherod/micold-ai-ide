@@ -8,6 +8,8 @@ Usage:
   scripts/autopilot-tokens.py <session.jsonl | session-id> [...]   # one or more sessions
   scripts/autopilot-tokens.py --worktree [<dir>]                   # every session of a worktree
   add --json for machine-readable output
+  add --rebuilds to list each cache rebuild instead: its unit, the context it re-wrote, the idle
+  minutes before it, and the tool calls it waited on
 
 A session id is looked up under ~/.claude/projects/*/. --worktree defaults to the current
 directory and maps it to its ~/.claude/projects/ folder the same way Claude Code does.
@@ -37,6 +39,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 PROJECTS = Path.home() / ".claude" / "projects"
@@ -133,6 +136,66 @@ def usage_of(path):
             per_model[model]["unbatched"] += 1
         prev_solo_read = solo_read
     return per_model
+
+
+def tool_label(block):
+    """`Bash:mise` for a shell call (its first word after an optional cd), else the tool's name."""
+    name, args = block.get("name", "?"), block.get("input") or {}
+    if name != "Bash":
+        return name
+    cmd = re.sub(r"^\s*cd\s+\S+\s*(&&|;)\s*", "", args.get("command", ""))
+    cmd = re.sub(r"^(\w+=\S*\s+)+", "", cmd)
+    return "Bash:" + (cmd.split() or ["?"])[0].rsplit("/", 1)[-1]
+
+
+def rebuilds_of(path):
+    """Each cache rebuild of one transcript: (context, cost_eq of its write, idle seconds since the
+    previous request, labels of the tool calls that request made)."""
+    requests, by_id = [], {}
+    for rec in read_jsonl(path):
+        if rec.get("type") != "assistant":
+            continue
+        msg = rec.get("message") or {}
+        u = msg.get("usage")
+        mid = msg.get("id") or rec.get("requestId")
+        if not u or msg.get("model") == "<synthetic>":
+            continue
+        if mid not in by_id:
+            try:
+                when = datetime.fromisoformat(rec.get("timestamp", "").replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                when = None
+            cw = u.get("cache_creation_input_tokens", 0)
+            w1h = (u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens", 0)
+            by_id[mid] = {"ctx": u.get("input_tokens", 0) + cw + u.get("cache_read_input_tokens", 0),
+                          "cw": cw, "w1h": w1h, "when": when, "tools": []}
+            requests.append(by_id[mid])
+        by_id[mid]["tools"] += [tool_label(b) for b in msg.get("content") or []
+                                if isinstance(b, dict) and b.get("type") == "tool_use"]
+    out = []
+    for prev, r in zip(requests, requests[1:]):
+        if r["ctx"] >= REBUILD_MIN_CTX and r["cw"] > r["ctx"] / 2:
+            idle = r["when"] - prev["when"] if r["when"] and prev["when"] else 0
+            cost = 1.25 * (r["cw"] - r["w1h"]) + 2 * r["w1h"]
+            out.append((r["ctx"], cost, idle, prev["tools"] or ["(turn ended)"]))
+    return out
+
+
+def print_rebuilds(path):
+    path = Path(path)
+    rows = [("orchestrator (main session)", r) for r in rebuilds_of(path)]
+    sub = path.with_suffix("") / "subagents"
+    for t in sorted(sub.glob("agent-*.jsonl")) if sub.is_dir() else []:
+        meta_p = t.with_suffix(".meta.json")
+        meta = json.loads(meta_p.read_text()) if meta_p.exists() else {}
+        label = meta.get("description") or meta.get("agentType") or t.stem
+        rows += [(label, r) for r in rebuilds_of(t)]
+    print(f"### {path.stem}: {len(rows)} rebuild(s), {fmt(sum(r[1] for _, r in rows))} cost_eq\n")
+    print("| Unit | context | cost_eq | idle min | waited on |")
+    print("|---|---:|---:|---:|---|")
+    for label, (ctx, cost, idle, tools) in sorted(rows, key=lambda x: -x[1][1]):
+        print(f"| {label.replace('|', '/')} | {fmt(ctx)} | {fmt(cost)} | {idle / 60:.0f} | {', '.join(sorted(set(tools)))} |")
+    print()
 
 
 def add(a, b):
@@ -255,7 +318,8 @@ def worktree_sessions(d):
 
 def main(argv):
     as_json = "--json" in argv
-    argv = [a for a in argv if a != "--json"]
+    rebuilds = "--rebuilds" in argv
+    argv = [a for a in argv if a not in ("--json", "--rebuilds")]
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
@@ -265,6 +329,9 @@ def main(argv):
         paths = [p for a in argv for p in resolve(a)]
     out = []
     for p in paths:
+        if rebuilds:
+            print_rebuilds(p)
+            continue
         units = session_report(p)
         if as_json:
             out.append({"session": str(p), "units": [
