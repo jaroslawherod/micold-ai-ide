@@ -151,6 +151,8 @@ pub fn parse_remote_list(raw: &str) -> Vec<GitRemote> {
 pub fn containment(tip: Option<&str>, head: &str, ancestor: Option<bool>) -> BranchContainment {
     if tip == Some(head) || ancestor == Some(true) {
         BranchContainment::Contained
+    } else if ancestor == Some(false) {
+        BranchContainment::Beyond
     } else {
         BranchContainment::Unknown
     }

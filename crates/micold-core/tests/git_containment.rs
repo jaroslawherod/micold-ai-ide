@@ -25,3 +25,14 @@ fn a_tip_equal_to_the_head_or_an_ancestor_of_it_is_contained() {
         "a branch behind its merged pull request is contained"
     );
 }
+
+/// U51. Commits made on the branch after the merge are work the merge did not take, so no removal
+/// is suggested (FR-017).
+#[test]
+fn a_tip_that_is_not_an_ancestor_of_the_head_is_beyond() {
+    assert_eq!(
+        containment(Some(OTHER), HEAD, Some(false)),
+        BranchContainment::Beyond,
+        "a branch with commits after its merged pull request is beyond it"
+    );
+}
