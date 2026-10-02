@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 2-clarify
-- **Next step**: Clarify round 2 (round 1 raised three questions, so it is not `CLEAN`): run `speckit-clarify` on the spec as it now stands; the round's commits stay local and ship in PR 2.
+- **Next step**: Clarify round 2 found no critical ambiguities (CLEAN). Phase 2 is complete; next is the design phase (plan, tasks), which opens PR 2 with the local clarify commits.
 
 ## Pull requests
 
