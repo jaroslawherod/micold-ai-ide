@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #515 | Spec | merged | 063fa77affbcbcc20a842bffb71dce22212582d6 |
 | #517 | Design | merged | 976b0220d342f1e35608286f0bdec4a77b8ce247 |
 | #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
+| #PRNUM | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
-| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | | in progress |
+| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #PRNUM | open |
 | M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | | pending |
 | M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | | pending |
 
@@ -51,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D17 | milestone | 034's M6 merged PROTOCOL_VERSION 19 after the first rebase; which version does 037's wire change take now? | 20 (19 -> 20). Supersedes D16's number. Code, tests, `docs/daemon.md` and the 037 artifacts updated in the second rebase | agent-resolved | `origin/main` commit 31c8b01b |
 | D18 | milestone | The refusal says "fix the script, then restart", but the service keeps a directory's resolution until environment-include is saved (issue #438 owns cache invalidation). How does the sentence stay true? | A start refused for a missing CLI drops that directory's cached resolution, so the next start and the next availability ask source the script again. Nothing else about the cache changes. A refusal and the answer that follows it are then two attempts and may differ; FR-012 holds per attempt. | agent-resolved | Review A M2 round 1, F1; `crates/micold-daemon/src/state.rs#refuse_and_forget_env`; orchestrator note on #438 |
 | D19 | milestone | Where is a deleted session folder checked, given that resolving in a missing folder reports a timeout? | Inside the gate's CLI-not-found branch, not before the gate: before it, a resume whose folder and conversation are both gone would lose the conversation-gone sentence an existing test requires. | agent-resolved | Review A M2 round 1, F2; `crates/micold-daemon/tests/session_start.rs#resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing` |
+| D20 | milestone | Quickstart B10 expected the pane and the banner to give the reason after a restart; at a display the pane kept its terminal and only the banner said it. Is that a defect of M2? | No. FR-009 governs the failure text where it is shown. The pane shows the service's sentence verbatim, and only when it has no terminal to keep; that rule predates 037 and no task of 037 changes it. The banner carries the sentence in the restart-in-place flow. B10's row now says so; a pane without a terminal (a session that fails to start with the service) is left for M4's Part B record. | agent-resolved | `crates/micold-client/src/ui/terminal.rs#empty_terminal_message`; `specs/037-explain-hidden-cli/evidence/README.md` (B10 rows); visual pass M2 |
 
 ## Review rounds
 
@@ -68,44 +70,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Rebase M1 | 2 | 6a6fdd0d350be640ae526841aed9785ade15630a:65a5fc28465bbc276918bbccee1b30e83733f330 | CLEAN: 2 MINOR, 1 fixed (second rebase, onto 034's M6: nothing of 034 dropped, 037's wire change is version 20 throughout; not counted) |
 | A M2 | 1 | 658bb50d7c40201ec80791e76d82343d60275e9f:e7f3ec7352f5d48be2b4f45ee280a701ff24804a | CHANGES: 2 MAJOR (F1 a refused start left the directory's cached resolution, so "fix the script, then restart" was refused again; F2 a deleted session folder was reported as a script timeout), 3 MINOR — all five fixed |
 | A M2 | 2 | 9754422054820536aa17744be7f7e4f0a960f307:e1253adc9da7adf6974b9eb5ac0b7ee27d8db917 | CLEAN: no findings (scoped re-review of the round-1 fix diff, Sonnet; it took 6 tool calls, so review B should look at `refuse_and_forget_env` and `folder_gone` with care) |
+| B M2 | 1 | 59c1f515f13f2a004b4b96aa3356d9273be21f80:51f82c2c72413242e7253c7612aafaa1c6a4838a | CHANGES: 1 MAJOR (F1 `create_session`'s refusal left the directory's cached resolution, so D18 did not hold for an agent's retry), 3 MINOR — F1 fixed, F4's comment fixed, F2 and F4's cache half declined, F3 is in Follow-ups. Verify: `mise run test-core` 134 ok; `session_start` 27 passed, `mcp_create_session` 18 passed; client `unavailable_default_says_so` 22, `start_failure_notice` 4, `directory_availability` 13 passed |
+| B M2 | 2 | 92862fb9b363a68b0b7c6157527284cdd7eb23fe:1e58735ed332e67f40ed229492165e39eedfddc6 | CLEAN: no findings (scoped re-review of the fix commit, Sonnet; round 1's snapshot went stale in a docs-only rebase, so the fix diff was given as the commit). Verify: `session_start` and `mcp_create_session` green |
+| Visual M2 | 1 | 92862fb9b363a68b0b7c6157527284cdd7eb23fe:1e58735ed332e67f40ed229492165e39eedfddc6 | B9 PASS; B10 banner PASS, pane not shown (D20) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | B round 1 | F2 (MINOR): the gate reports the folder gone on `!cwd.is_dir()`, which is also true of a path that is now a file or cannot be read | A path that is now a file is a folder that no longer exists, and the spawn-site check uses the same test. For an unreadable parent the alternative is the "script timed out" sentence, which is no truer. |
+| M2 | B round 1 | F4, first half (MINOR): `refuse_and_forget_env` removes whatever cell is cached, so a resolve another start has in progress is evicted and the script runs once more | The result stays correct, and `invalidate_env_include` documents the same eviction as intended ("the invalidation wins"). Comparing cells is #438's ground. |
 
 ## Handover
 
-M2, written at the 150k cap. No PR is open; the branch is local only (HEAD is this commit, on top of
-`origin/main` at 7918f7bb). Skip nothing: run `branch-start.sh 520` only if it reports the branch as is
-(the work is unmerged commits on it, so it rebases, it does not reset).
-
-Done and committed: T018–T026, T040, T041 (ticked in tasks.md; cycle log cycles 6–9), review A round 1
-(2 MAJOR, 3 MINOR, all fixed in `e1253adc`) and round 2 (CLEAN).
-
-Next steps, in order:
-
-1. Gate on `e1253adc`: the detached `mise run gate` ended `GATE_EXIT=101` with one failure,
-   `-p micold-daemon --test frame_coalescing`:
-   `a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval` (1 passed; 1 failed). The diff does not
-   touch frame coalescing, the test is timing-based, and the machine was under two builds; the gate on
-   `e7f3ec73` (before the review fixes) ended `GATE_EXIT=0`, 378 ok. Not investigated. Rerun that test
-   file alone, then the gate; if it fails again, run `systematic-debugging` before anything else.
-2. `git fetch origin`; if main moved, rebase and rerun the gate.
-3. Review B round 1 (full, session model) on `origin/main...HEAD` with the brief
-   `scripts/autopilot/brief.py milestone specs/037-explain-hidden-cli M2`; in parallel the
-   `visual-pass` skill for quickstart §B B9 and B10 (T027), screenshots to
-   `specs/037-explain-hidden-cli/evidence/` and a line each in `evidence/README.md`.
-4. T042: record in `tdd/cycle-log.md` that A9–A14 are green with the full suite (the gate's result
-   line), and that A12 was green before T023 changed the gate (cycle 7 already says so). Tick T042 and
-   T027. Update the test list rows U56–U66, U69, U71–U75, A9–A14 to DONE (A12: BASELINE) with the test
-   names from cycles 6–8: this was not done yet.
-5. Set M2's row and the PR table, push, open the PR `feat(037): a failed or refused start gives the
-   same reason` with `Refs #434`.
-
-Open findings: none. Not verified by this unit: the two `Agent`-written test sets were run by the
-agents, and by the gate; no `cargo check --target aarch64-apple-darwin` was run (no `cfg(target_os)`
-arm was added, as far as the agents reported; confirm with `git diff origin/main...HEAD | grep cfg`).
+None.
 
 ## Open escalation
 
@@ -139,6 +117,15 @@ None.
 - Review A M2, F2 remainder (issue #438's ground): with the CLI found and the folder gone, the start fails
   at the spawn with the folder sentence, but the timed-out entry `env_include::resolve` reports for a
   missing folder stays cached; `availability_in` on a missing folder caches the same.
+- Review B M2, F3 (MINOR, issue #438's ground): the spawn-site folder sentence (`state.rs`, the refused
+  spawn) records the failure without dropping the directory's resolution, unlike the gate's two refusals.
+- Flaky test outside this flow: `micold-daemon --test frame_coalescing`,
+  `a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval`, failed once in the gate on `e1253adc`
+  while two other worktrees were building. It passed 5 of 5 runs alone on the same code and in the two
+  gate runs after it; the diff touches no frame code. A timing test that fails under load.
+- Visual pass M2, B10: after a failed restart in place the pane keeps the session's terminal and says
+  nothing; the reason is in the banner and the bar reads "failed restart". Predates 037 (D20). Candidate
+  for a bug record if the pane should say it too.
 - Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
   full Part B record.
