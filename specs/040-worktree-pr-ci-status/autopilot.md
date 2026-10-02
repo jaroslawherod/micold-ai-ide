@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1: all of T001–T013 done and committed; gate, review A, review B, then the PR (phase file steps 2–4).
+- **Next step**: Continue milestone M1 from *Handover*: green gate on `36c2e1d5`, review B, then the PR. No PR open yet.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | in progress (T001–T013 done; gate and reviews pending) |
+| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | in progress (T001–T013 done; review A clean; gate re-run and review B pending) |
 | M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | pending |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
@@ -73,7 +73,29 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-None.
+Milestone M1, part 2, written at the 150k context cap. No PR is open; the branch holds four unpushed
+commits on `origin/main` (`c331d0f8`, rebased by `branch-start.sh 536`), the last `36c2e1d5` plus
+the commit that adds this section. Run `branch-start.sh 536` as usual.
+**Done**: T001–T013, all ticked; `tdd/cycle-log.md` cycles 3 to 9; test-list U1–U47 `DONE`.
+`mise run test-core` 1589 passed, 0 failed at `94362374`. `mise run gate` green (`GATE_EXIT=0`) at
+`94362374`. Review A round 1 at that commit: CLEAN, 3 MINOR (see *Review rounds*); F1 and F2 were
+fixed in `36c2e1d5` (two source files and one test changed, the new test seen red then green).
+**Running when this was written**: a second `mise run gate` on `36c2e1d5`, detached, log
+`/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-worktree-pr-ci-status/3055ea6c-2ee1-4c16-8f70-dcc732b6cc13/scratchpad/gate2.log`
+(ends with `GATE_EXIT=<n>`). If the log is there, `hold.sh <log> 'GATE_EXIT='` and use its result;
+if it is gone or `branch-start.sh` rebased onto a newer `origin/main`, start the gate again.
+**Next step** (phase file steps 2 to 4): 1. a green gate on the tree as it is. Review A need not
+run again unless code changes beyond `36c2e1d5` (its fix diff is small: `AnswerErrors` in
+`pull_request.rs`, `began.elapsed()` in `GhCli::read`, one test). 2. Review B, round 1, full
+(`autopilot-reviewer`, no `model`), conformance rubric; nothing visible changed, so no visual pass.
+3. Ledger, commit, push, open the PR: title `feat(040): micold-core reads pull requests through gh
+and turns recorded answers into per-branch statuses and failure kinds`, body per pr-and-merge.md
+§4, ending `Refs #486`.
+**Open findings**: none of BLOCKER or MAJOR. Review A's F3 is under *Follow-ups not done*.
+**Notes for review B**: `read_outcome`, `BRANCHES_PER_REQUEST`, `PrNode`, `CheckCounts`,
+`Unreadable` and `AnswerErrors` are not named in tasks.md; they are the parts of T010–T013's
+functions (the cycle log's *Notes and deviations (M1, cycles 3 to 8)* says why). The contract's one
+`debug` line of a reading belongs to T028 (M3), not M1.
 
 ## Open escalation
 
