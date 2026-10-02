@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit 4: plan review done (round 2 clean), `speckit-tdd-plan` done (`tdd/test-list.md`: 30 outer, 131 inner). `speckit-analyze` done (0 CRITICAL, 0 HIGH, 4 MEDIUM: F2 fixed in T031, three declined). Next: tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
+- **Next step**: Design done: plan review clean (round 2), `speckit-tdd-plan`, `speckit-analyze` (0 CRITICAL, 0 HIGH), tasks and milestone review clean (round 2), checklist re-checked by that review (every item true), `mise run test-scripts` green. PR 2 is open: wait for CI, merge, then Phase 4 with M1.
 
 ## Pull requests
 
@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 41708445f0bab32dc0145f3f9da07751aea93ab3:028bfc3789510c128d2ef2564482a086dcc55199 | CHANGES: 2 MAJOR (no sync before the rename; capture order on Windows), 3 MINOR; all 5 fixed (R4, R5, new R17, data-model §5 and §6, contracts, tasks) |
 | Plan | 2 | 35953804ee7a306e42b54015fbe569f565edd41d:0968d0249d5a1695ed9b90604828c4a9a0d50822 | CLEAN: 2 MINOR (quickstart lacked the Windows check for R17; stop-request §4 did not say its capture differs from R4), both fixed |
 | Tasks and milestones | 1 | 9a648a7eb410053e3d47ff4a26fb18bd78ef628b:39df441005479f9a8f2f56a7f002863b8ab048a8 | CHANGES: 3 MAJOR (dropping the `Arc<PtySession>` is not the teardown while a window is attached; T062 not workable in `micold-core`; SC-005 measured in Polish), 3 MINOR; all 6 fixed (R4, DM §6, T007, T012, T061, T062, T065, T069, T074 to M5, T076, quickstart Part A) |
+| Tasks and milestones | 2 | 79ba8ae198dcd54098c8a807331f340d644a39d7:6f7cd710a25a78d730479ca0701bb5a566690468 | CLEAN: 2 MINOR (T061 named no exit code; T062 silent on an event that already exists), both fixed |
 
 ## Declined review findings
 

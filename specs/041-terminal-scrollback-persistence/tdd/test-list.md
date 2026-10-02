@@ -278,7 +278,7 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U115 | Setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service exit within 5 s with its file holding the last line (`cfg(windows)`) | SR §6, FR-002, FR-030 | example | PENDING | T061 |
 | U116 | `WM_ENDSESSION` sent to the hidden window raises the same request | SR §3, FR-030 | example | PENDING | T061 |
 | U117 | The event's DACL has one entry, for the current user | SR §1, FR-020 | example | PENDING | T061 |
-| U118 | `stop_running_daemon` against the real service makes it exit with the unwind's exit code, not the 1 of `TerminateProcess`, its file holding the last line | SR §2 | example | PENDING | T061 |
+| U118 | `stop_running_daemon` against the real service makes it exit with code 0, not the 1 of `TerminateProcess`, its file holding the last line | SR §2 | example | PENDING | T061 |
 | U119 | Against a process that ignores the event, `terminate_daemon` falls back to `TerminateProcess` after 5 s | SR §2 | example | PENDING | T062 |
 | U120 | With no event to open, `terminate_daemon` falls back at once | SR §3 | example | PENDING | T062 |
 | U136 | In the installer's `StopDaemon`, the step that sets the stop event comes before `Stop-Process` and `taskkill` | SR §2 | example | PENDING | T062 |
