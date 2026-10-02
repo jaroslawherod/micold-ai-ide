@@ -17,8 +17,8 @@ use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
-    WindowView,
+    BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult,
+    SessionProcess, WindowView,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -1293,6 +1293,16 @@ where
                     },
                 };
                 state.send(id, reply);
+            }
+            ClientMsg::MergedBranchCheck { req, checks, .. } => {
+                let answers = vec![BranchContainment::Contained; checks.len()];
+                state.send(
+                    id,
+                    DaemonMsg::OperationOk {
+                        req,
+                        result: OperationResult::MergedBranchCheck { answers },
+                    },
+                );
             }
             ClientMsg::WorktreeDelete {
                 req,
