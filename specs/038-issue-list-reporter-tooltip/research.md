@@ -179,7 +179,7 @@ construction.
 `shell.rs:71`). The tooltip calls it only while its `RestTimer` is `Waiting`, with the timer's
 deadline. `idle_requests_no_frames.rs` is extended: still no frame request outside `motion.rs`;
 inside it, exactly the `animating()`-guarded `request_redraw` and the one `request_redraw_at` in
-`wake_at`; and a behavioural half proving a waiting tooltip asks for one redraw at its deadline and
+`wake_at`; and a behavioural half proving a waiting tooltip asks for one timed wake at its deadline and
 an open, away or spent one asks for none.
 
 **Rationale**: A still cursor produces no events, so without a timed wake the tooltip would open
@@ -268,8 +268,12 @@ larger than the difference, so the ratio must be measured on a 1,000-issue repos
 says. `run_bounded` already drains pipes while it waits (034 R6), so a large page cannot stall.
 
 **Risk kept**: a repository whose issues all have very long bodies makes each page of 100 large.
-If §B measures more than 1.5×, the fallback is a smaller page size for the listing (more pages,
-same cap), decided then.
+If §B measures more than 1.5×, no fallback is decided in advance: SC-008 then conflicts with
+FR-024 ("the description arrives with the issue"), which is a question for the user (escalation,
+category 1), asked with the measurement.
+
+**Alternative rejected**: a smaller page size for the listing. It multiplies the round trips, which
+cost more than the bytes, and FR-026 keeps the requests as they are.
 
 ## R15 — Which side the row tooltip opens on (FR-023)
 

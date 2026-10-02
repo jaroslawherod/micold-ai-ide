@@ -45,7 +45,9 @@ scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budge
 | Frame requests | `micold-client/tests/idle_requests_no_frames.rs` | FR-018 |
 | No request on hover | `micold-client/tests/issues_are_requested_only_on_named_events.rs` | FR-024, SC-006 |
 | Highlight in view | `micold-client/tests/picker_highlight_into_view.rs` | FR-007, SC-007 |
-| Tooltip glue | `micold-client/tests/tooltip_rest_glue.rs` | FR-015–017, 020 |
+| Tooltip glue | `micold-client/tests/tooltip_rest_glue.rs` | FR-015–017, 019, 020 |
+| Issue rows in the view | `micold-client/tests/issue_picker_rows.rs` | FR-006, 011, 020 |
+| 034's states unchanged | `micold-client/tests/issue_source_state.rs` (existing cases), `layout_snapshot.rs` | FR-027 |
 | Row tooltip geometry | `micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` | FR-021, 023; SC-005 |
 | Wrapping, nothing clipped | `layout_text_overflow.rs`, `gates/containment.rs` over the new covered states | FR-004; SC-001 |
 | Single-line rows unchanged | `material/picker_parity.rs`, `material/menu_anatomy.rs`, `layout_snapshot.rs` | FR-029 |
@@ -69,8 +71,8 @@ Run with the `visual-pass` skill on a private display. Record each step's result
 | B7 | Sweep the cursor over the list for 10 s. Then open a tooltip and move to the next row; then leave the list; then open one and click the row. | No tooltip during the sweep. Moving to another row closes it and the next opens only after 3 s; leaving closes it; the click picks the issue and closes it. | US3 3–5, 10; SC-004 |
 | B8 | Rest on a row with a long description, a short one, and an issue with an empty body. Rest on the first row and on the last visible row. Type to narrow the list while a tooltip is open. | Long: three lines, ends in `…`. Short: whole, no `…`. Empty: no tooltip. The panel is inside the window and does not cover its row in either position. When a different row comes under the cursor the tooltip closes. | US3 7–9; FR-017, 023; SC-005 |
 | B9 | Project `$SCRATCH/small`: rest on an issue created from a template (a heading, checkboxes, an HTML comment). | Words only, in one paragraph: no `#`, `*`, `[ ]`, brackets, addresses or comment text. | US3 12, 13; FR-022 |
-| B10 | Load time. On `main` (before) and on the branch (after), with `$SCRATCH/issue-demo`: choose **GitHub issue** and time from the click to the list appearing, five runs each, alternating builds. | Median after ≤ 1.5 × median before; no run shows 034's timeout failure (each request answered within 10 s). Above 1.5×: apply research R14's fallback and measure again. | SC-008 |
-| B11 | With a tooltip waiting (cursor at rest, under 3 s) and after it opened, count frames for 10 s without touching anything (the frame probe, `MICOLD_FRAME_PROBE`; see `micold_core::frame_probe`). | No continuous redraw: at most the one frame at the deadline. During B6–B8, the client log shows no `gh` invocation caused by resting the cursor. | FR-018; SC-006 |
+| B10 | Load time. On `main` (before) and on the branch (after), with `$SCRATCH/issue-demo`: choose **GitHub issue** and time from the click to the list appearing, five runs each, alternating builds. | Median after ≤ 1.5 × median before; no run shows 034's timeout failure (each request answered within 10 s). Above 1.5×: stop and escalate (research R14). | SC-008 |
+| B11 | Idle cost and requests. With the list open, read the client's CPU time (`utime + stime` in `/proc/<pid>/stat`) over 30 s three times: (a) cursor at rest beside the list, (b) cursor at rest on a row with a description, from before the tooltip opens until 30 s later, (c) the same on a row with no description. During (b) and B6–B8, run `pgrep -x gh` once a second. | (b) and (c) use no more CPU time than (a) plus 10%: waiting for and showing a tooltip adds no steady redraw (the search field's caret blink is in all three). `pgrep` finds no `gh` process while the cursor only rests. | FR-018; SC-006 |
 
 **Not runnable on this host**: macOS and Windows. FR-030 rests on the absence of any `cfg` arm in
 this feature and on `micold-core`'s suite running on all three OSes in CI; B1–B9 are recorded on

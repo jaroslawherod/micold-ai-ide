@@ -117,4 +117,4 @@ Offsets are bytes; the separator `"  ·  "` is 6 bytes.
 ## 6. Load time (SC-008)
 
 Not a contract of this module beyond "no extra request". Measured in
-[quickstart §B10](../quickstart.md); the fallback is in research R14.
+[quickstart §B10](../quickstart.md); what happens above the limit is in research R14.
