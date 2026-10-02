@@ -352,7 +352,9 @@ the issue list while the source is chosen.
 title, then who reported it and its labels. Long text wraps onto further lines instead of being cut
 off, and `ghost` stands for a reporter whose account has been deleted.
 Type in **Issue** to narrow the list by number, by a word of the title, or by a label, and use the
-arrow keys and Enter to pick without leaving the field. The search runs over the loaded issues, on
+arrow keys and Enter to pick without leaving the field. The list follows the highlight as you move
+with Up and Down, so the highlighted issue is always fully visible, however many lines it takes.
+The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
 fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a
 line under the list says "Showing the 1,000 most recently updated of *N* open issues — search also

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: PR #538 (M1) is open: wait for CI, merge, then start M2 (T018–T023).
+- **Next step**: M2 part 2: see *Handover*.
 
 ## Pull requests
 
@@ -17,14 +17,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #525 | Spec | merged | 96bcd68ea422d8f1e8a18dc2ea5f55808482eae1 |
 | #534 | Design: clarify, plan, tasks, milestones | merged | 3d52e83e32344ee4d09964b74b80d24499e3931b |
-| #538 | M1: issue rows show two wrapping lines | open | |
+| #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | PR open |
-| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | | drafted |
+| M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
+| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | | in progress |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | drafted |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
@@ -67,7 +67,30 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 part 1 handed over at the context cap (unit `Milestone M2 038`). No PR is open for M2; the
+branch has three unpushed commits on `origin/main` (e6444615).
+
+Done: T019, T020, T022 ticked. `tests/picker_highlight_into_view.rs` holds five tests; U39–U42 are
+green with red evidence in `tdd/cycle-log.md` cycles 7–10. T021's code is written (`main.rs` arm,
+`shell::issues::on_issue_highlight_moved`). T022's two doc edits were made by a worker and read
+by the unit, not reviewed.
+
+Next steps, in order:
+1. Run `scripts/build-lock.sh cargo test -p micold-client --test picker_highlight_into_view`. U43
+   (`only_the_issue_highlight_move_chains_the_operation`) was red for the right reason, then failed
+   on a whitespace-sensitive assertion that is now fixed and not yet re-run (cycle 11). When it is
+   green: complete cycle 11's entry, set U43 `DONE` in `tdd/test-list.md`, tick T018 and T021.
+2. Phase 4 step 2: `mise run gate` detached, review A (`code-review` high on `origin/main...HEAD`)
+   in its shadow. The gate has not run on this milestone at all; `layout_snapshot` fixtures may
+   record the new container around the highlighted row (regenerate if only that changed) and
+   clippy has not seen the new code. No `cfg(target_os)` code changed.
+3. Step 3: review B and the `visual-pass` skill on quickstart §B3 (screenshots under
+   `specs/038-issue-list-reporter-tooltip/evidence/`), via an `autopilot-worker`. Then tick T023,
+   set A6 `DONE`, and open the PR `feat(038): Up and Down keep the highlighted issue row wholly in
+   view`, body ending `Refs #518`.
+
+Notes: the build lock is contended by other worktrees (waits of 10 to 20 minutes per run), so
+batch cargo runs under one `scripts/build-lock.sh bash -c`. No review rounds have run for M2.
 
 ## Open escalation
 

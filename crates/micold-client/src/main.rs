@@ -683,6 +683,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::IssueRowPicked(index)) => {
             shell::issues::on_issue_row_picked(app, index)
         }
+        // Feature 038 (FR-007): rows differ in height, so the list is scrolled to its highlighted
+        // row after the move rather than by a fixed step.
+        Message::WorktreeForm(FormMsg::IssueHighlightMoved(direction)) => {
+            shell::issues::on_issue_highlight_moved(app, direction)
+        }
         Message::WorktreeForm(FormMsg::IssuesLoaded {
             seq,
             result,

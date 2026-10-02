@@ -187,6 +187,23 @@ pub fn on_issues_loaded(
     Task::none()
 }
 
+/// Up or Down moved the highlight (feature 038, FR-007). The reducer moves the index and nothing
+/// else; the list is then scrolled so the row it landed on is wholly in view, which only the
+/// laid-out tree can answer now that an issue's row is as tall as its lines.
+///
+/// The issue list is the only picker that chains this (FR-029): the branch picker's rows and the
+/// select's are all one base row tall.
+pub fn on_issue_highlight_moved(
+    app: &mut App,
+    direction: micold_core::typeahead::Direction,
+) -> Task<Message> {
+    app.core
+        .update(Message::WorktreeForm(FormMsg::IssueHighlightMoved(
+            direction,
+        )));
+    micold_client::ui::picker_highlight_into_view()
+}
+
 /// The seq the form awaits, if the last message handed out a new one.
 fn newly_awaited(app: &App, before: u64) -> Option<u64> {
     app.core
