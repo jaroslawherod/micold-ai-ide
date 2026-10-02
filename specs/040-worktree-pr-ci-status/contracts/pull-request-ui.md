@@ -69,7 +69,7 @@ not depend on the pull request module.
 ## 3. Tooltip lines
 
 `features::sidebar::worktree_tooltip` gains one argument, `Option<RowPullRequest>` (data-model §4:
-status, `age_secs`, `removable`); with `None` its output is **byte-identical** to today's (FR-011, test against today's
+status, `age_secs`, `stale`, `removable`); with `None` its output is **byte-identical** to today's (FR-011, test against today's
 expected strings). With `Some`, these lines follow today's lines, in this order:
 
 | # | Line | When |
@@ -78,7 +78,7 @@ expected strings). With `Some`, these lines follow today's lines, in this order:
 | 2 | `PR state: open` \| `draft` \| `merged` \| `closed` | always |
 | 3 | `Checks: passing` \| `pending` \| `failing` | open or draft with a check status |
 | 4 | `Review: approved` \| `changes requested` \| `review required` | GitHub reports a decision |
-| 5 | `Read: <n> min ago` | stale (`age_secs > 600`) |
+| 5 | `Read: <n> min ago` | `stale` (data-model §4) |
 | 6 | `Cleanup: merged — this worktree can be removed (right-click, Delete)` | `removable` |
 
 - **Title**: control characters and line breaks become spaces; cut to 72 characters, the 72nd
@@ -94,7 +94,7 @@ expected strings). With `Some`, these lines follow today's lines, in this order:
 
 ## 4. Opening the pull request
 
-- `ui/mod.rs::worktree_menu_items` gains **Open pull request**, placed directly above **Delete**,
+- `ui/mod.rs::worktree_menu_items` (made `pub`, with a `has_pull_request: bool` argument) gains **Open pull request**, placed directly above **Delete**,
   only for a row with `Some(RowPullRequest)`. A row without one has the menu of today, entry for
   entry (story 2 scenario 9).
 - Choosing it sends `WorktreeMsg::PullRequestOpenRequested(dir)`. The shell looks up the row's

@@ -59,7 +59,7 @@ mise run gate          # fmt, clippy, workspace tests, script tests — what CI 
 | Schedule reducer | `micold-client/tests/features_pr_status.rs` | story 4, FR-018 to FR-022, FR-024, FR-025, FR-027, FR-029 |
 | Row projection and tooltip | `micold-client/tests/features_sidebar.rs` (extended) | FR-001, FR-007, FR-010 to FR-012, FR-015 |
 | Row menu | `micold-client/tests/worktree_menu_pull_request.rs` (new) | FR-013, story 2 scenario 9 |
-| Opening the address | `micold-client/tests/pr_open.rs` | FR-014 |
+| Opening the address | `pr_status_open_*` in `micold-client/src/main_tests.rs` | FR-014 |
 | Settings draft | `micold-client/tests/features_settings.rs` (extended) | FR-029 |
 | Only on named events | `micold-client/tests/pr_status_is_read_only_on_named_events.rs` | FR-018, FR-026, SC-008 |
 | No timer while off | `micold-client/tests/idle_subscriptions.rs` (extended) | FR-026, SC-006 |

@@ -105,7 +105,7 @@ Phase = Idle | Reading { seq: u64, again: bool, started: u64 }
 The sidebar's row model gains one optional field, filled at projection time:
 
 ```text
-RowPullRequest { status: &PullRequestStatus, age_secs: u64, removable: bool }
+RowPullRequest { status: &PullRequestStatus, age_secs: u64, stale: bool, removable: bool }
 ```
 
 | Row | Looked up by | Result |
@@ -115,8 +115,9 @@ RowPullRequest { status: &PullRequestStatus, age_secs: u64, removable: bool }
 | the "Default" entry | — | `None`, whatever branch the project root has checked out (FR-007) |
 | session rows | — | untouched |
 
-`age_secs` is `now − read_at`, with `now` passed in by the view glue; the row and the tooltip derive
-the stale form from it (`age_secs > 600`), and the tooltip its `Read:` line. `removable` is
+`age_secs` is `now − read_at`, with `now` passed in by the view glue. `stale` is
+`is_stale(read_at, now)`, decided here and nowhere else: the row draws `.stale(row.stale)` and the
+tooltip shows its `Read:` line when `stale`, with `age_secs` for the number. `removable` is
 `removable.contains(b)`. When the window does not hold the project the map is empty (§3 invariant
 7), so every row gets `None`. A row with `None` is projected, drawn and described by its tooltip exactly
 as today (FR-001, FR-011): the join by branch name is the only coupling, so a worktree removed,

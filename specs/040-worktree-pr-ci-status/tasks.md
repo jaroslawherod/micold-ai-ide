@@ -202,19 +202,19 @@ check status.
 **Goal**: The worktree tooltip names the pull request, its state, checks and review; the row menu
 opens it in the browser.
 
-**Independent Test**: Spec story 2's independent test, as quickstart §B4 and §B5; automated: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test worktree_menu_pull_request --test pr_open`.
+**Independent Test**: Spec story 2's independent test, as quickstart §B4 and §B5; automated: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test worktree_menu_pull_request` and `scripts/build-lock.sh cargo test -p micold-client pr_status_open`.
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
 - [ ] T041 [P] [US2] [A15] [A16] [A17] [A18] [A20] [A24] [U111] [U112] [U113] [U114] Extend `crates/micold-client/tests/features_sidebar.rs` for `worktree_tooltip` (UI §3): with `None` the output equals today's expected strings byte for byte; with a status, lines 1 to 4 follow today's lines in order; no `Checks:` line for merged, closed or no checks; no `Review:` line without a decision; a 200-character title is cut to 72 characters ending in `…` with the number before it; control characters and line breaks in a title become spaces; no line holds the address.
-- [ ] T042 [P] [US2] [A23] [U115] Write `crates/micold-client/tests/worktree_menu_pull_request.rs` (UI §4): `worktree_menu_items` for a row with a status holds **Open pull request** directly above **Delete**; for a row without one the items equal today's, entry for entry.
-- [ ] T043 [P] [US2] [A19] [U116] [U117] Write `crates/micold-client/tests/pr_open.rs` (UI §4) with a recording `LinkOpener`: `WorktreeMsg::PullRequestOpenRequested(dir)` opens exactly the stored address; an address not starting with `https://github.com/` opens nothing; a row that lost its status opens nothing; selection, sessions and sidebar state are equal before and after (FR-014).
+- [ ] T042 [P] [US2] [A23] [U115] Write `crates/micold-client/tests/worktree_menu_pull_request.rs` (UI §4), calling `micold_client::ui::worktree_menu_items` and comparing the items' labels in order. The function is private today: this task makes it `pub` and gives it the `has_pull_request: bool` argument, not yet read, so that the test builds and fails on its assertion. `worktree_menu_items` for a row with a status holds **Open pull request** directly above **Delete**; for a row without one the items equal today's, entry for entry.
+- [ ] T043 [P] [US2] [A19] [U116] [U117] Add shell tests named `pr_status_open_*` to `crates/micold-client/src/main_tests.rs` (UI §4), with a recording `LinkOpener` set through `Capabilities::with_link_opener` as the tests of `shell/links.rs` do (the handler and `LinkOpener` are in the binary's `shell`, which a test under `tests/` cannot reach): `WorktreeMsg::PullRequestOpenRequested(dir)` opens exactly the stored address; an address not starting with `https://github.com/` opens nothing; a row that lost its status opens nothing; selection, sessions and sidebar state are equal before and after (FR-014).
 - [ ] T044 [P] [US2] [A21] [U118] Extend `crates/micold-client/tests/icons_font.rs` for the new `OpenInBrowser` variant (`open_in_new`; `icons.rs` has no variant drawing that glyph today), and assert in `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` that `worktree_tooltip` and the menu builder call nothing in `shell/` (FR-012, SC-008).
 
 ### Implementation for User Story 2
 
 - [ ] T045 [US2] [A15] [A16] [A17] [A18] [A20] [A24] [U111] [U112] [U113] [U114] Extend `worktree_tooltip` in `crates/micold-client/src/features/sidebar.rs` with the `Option<RowPullRequest>` argument and lines 1 to 4 of UI §3, and pass the row's projection at its call sites. T041 passes.
-- [ ] T046 [US2] [A19] [A21] [A23] [U115] [U116] [U117] [U118] Add `Msg::PullRequestOpenRequested` to `crates/micold-client/src/features/worktree.rs`, the menu entry to `crates/micold-client/src/ui/mod.rs::worktree_menu_items`, the `OpenInBrowser` icon to `crates/micold-client/src/icons.rs`, and the handler that hands the address to `LinkOpener` in `crates/micold-client/src/shell/pr_status.rs`. T042, T043 and T044 pass.
+- [ ] T046 [US2] [A19] [A21] [A23] [U115] [U116] [U117] [U118] Add `Msg::PullRequestOpenRequested` to `crates/micold-client/src/features/worktree.rs`, the menu entry to `crates/micold-client/src/ui/mod.rs::worktree_menu_items` (reading the `has_pull_request` argument T042 added, passed from the row's projection at its call site), the `OpenInBrowser` icon to `crates/micold-client/src/icons.rs`, and the handler that hands the address to `LinkOpener` in `crates/micold-client/src/shell/pr_status.rs`. T042, T043 and T044 pass.
 - [ ] T047 [US2] Add the tooltip lines and **Open pull request** to "Pull request status" in `docs/user-guide/worktrees-and-sessions.md`.
 
 **Checkpoint**: stories 1 and 2 work.
@@ -263,7 +263,7 @@ without a successful reading.
   - A `Trigger` 60 s or more after a reading started abandons it, starts a new one with a new `seq`, and the old answer is dropped.
 - [ ] T057 [P] [US4] [U140] [U141] [U142] Extend `crates/micold-client/tests/idle_subscriptions.rs` (RW §1): the 300 s subscription is absent with the switch off, absent in a window that does not hold its project, and present when on and held.
 - [ ] T058 [US4] [A32] [A33] [A34] [A35] [A36] [A37] [A38] [A39] [U143] [U144] [U145] Add shell tests named `pr_status_refresh_*` and `pr_status_tick_*` to `crates/micold-client/src/main_tests.rs` (RW §1 S3–S5): `RefreshFinished` and `RefreshTimedOut` start a reading for the branches the updated listing shows, after the refresh control is idle and its notice shown, and a failed reading changes neither (FR-027); `Message::PrStatusTick` starts one; and raise the counts of `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` to S1 to S5.
-- [ ] T059 [P] [US4] [A22] [U146] [U147] Extend `crates/micold-client/tests/features_sidebar.rs` (UI §3): with `age_secs` above 600 the tooltip gains `Read: <n> min ago` after the review line (`Read: <h> h ago` from 120 minutes); at 600 and below it has no such line; on a removable row the `Read:` line stands before the `Cleanup:` line, which stays last (UI §3 rows 5 and 6).
+- [ ] T059 [P] [US4] [A22] [U146] [U147] [U149] Extend `crates/micold-client/tests/features_sidebar.rs` (DM §4, UI §3): `RowPullRequest.stale` is false with `now` 600 s after `read_at` and true at 601 s; with `age_secs` above 600 the tooltip gains `Read: <n> min ago` after the review line (`Read: <h> h ago` from 120 minutes); at 600 and below it has no such line; on a removable row the `Read:` line stands before the `Cleanup:` line, which stays last (UI §3 rows 5 and 6).
 - [ ] T060 [US4] [U148] Add the covered state "row with a stale indicator" to `crates/micold-client/tests/support/covered_states.rs`: same geometry as the current form.
 
 ### Implementation for User Story 4
@@ -271,7 +271,7 @@ without a successful reading.
 - [ ] T061 [US4] [U129] [U130] [U131] Add `is_stale` to `crates/micold-core/src/pull_request.rs`. T055 passes.
 - [ ] T062 [US4] [U132] [U133] [U134] [U135] [U136] [U137] [U138] [U139] Add `Msg::Trigger`, `again`, the pause check and the abandoned-reading rule to `crates/micold-client/src/features/pr_status.rs`. T056 passes.
 - [ ] T063 [US4] [A32] [A33] [A34] [A35] [A36] [A37] [A38] [A39] [U140] [U141] [U142] [U143] [U144] [U145] Add the guarded `iced::time::every(300 s)` subscription and `Message::PrStatusTick` to `crates/micold-client/src/shell/subscriptions.rs`, and start a reading at the end of a list refresh in `crates/micold-client/src/shell/daemon_sync.rs` (`RefreshFinished`, `RefreshTimedOut`). T057 and T058 pass.
-- [ ] T064 [US4] [A22] [U146] [U147] [U148] Draw the stale form (`.stale(age_secs > 600)`) in `crates/micold-client/src/ui/sidebar.rs` and add the `Read:` line in `crates/micold-client/src/features/sidebar.rs`; regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`. T059 and T060 pass.
+- [ ] T064 [US4] [A22] [U146] [U147] [U148] [U149] Fill `RowPullRequest.stale` in the projection in `crates/micold-client/src/features/sidebar.rs` with `micold_core::pull_request::is_stale(read_at, now)` and add the `Read:` line there, shown when `stale`; draw the stale form in `crates/micold-client/src/ui/sidebar.rs` as `.stale(row.stale)`, with no comparison in `ui/`; regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`. T059 and T060 pass.
 - [ ] T065 [US4] Add "When the status is read" to "Pull request status" in `docs/user-guide/worktrees-and-sessions.md`: on opening, every 5 minutes, with the refresh button; the dimmed (stale) form and the `Read:` line; what happens at GitHub's request limit; that failures are silent and what clears the indicators.
 
 **Checkpoint**: all four stories work.
@@ -282,7 +282,7 @@ without a successful reading.
 
 - [ ] T066 [P] Describe the feature in `docs/development/architecture.md`: the `pull_request` core module, where the reading runs and why (R5), the holding rule (R6), the start events, protocol 21's `MergedBranchCheck` and `pr_status_enabled`.
 - [ ] T067 Run quickstart §B (B1 to B17) with the `visual-pass` skill in both themes and record results and screenshots under `specs/040-worktree-pr-ci-status/evidence/`; fix what it finds under the test-first rule.
-- [ ] T068 Run `mise run gate` on the finished feature and cross-check `cargo check --target aarch64-apple-darwin`; confirm no `cfg` arm was added (FR-034): `git diff <merge-base of M1>..HEAD -- crates/ | grep -n '^+.*cfg[(!]'` prints only `#[cfg(test)]` lines; and tick `specs/040-worktree-pr-ci-status/checklists/requirements.md` items that the implementation closes.
+- [ ] T068 Run `mise run gate` on the finished feature and cross-check `cargo check --target aarch64-apple-darwin`; confirm no `cfg` arm was added (FR-034): `git diff <merge-base of M1>..HEAD -- crates/ | grep -n '^+.*cfg[(!]'` prints only `#[cfg(test)]` lines;.
 
 ---
 
@@ -331,8 +331,11 @@ with the architecture page and the recorded visual pass.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
-Story 1 has 40 tasks and is split along its layers into four milestones (milestones.md rule 3); the
-first three ship no UI (rule 6) and M4 completes them. The PRs of M1 to M3 change no user-visible
+Story 1 has 40 tasks and is split into four milestones along its layers (milestones.md rule 6): no
+subset of its acceptance scenarios can be shown in the application in 15 tasks or fewer, because
+every scenario needs the core rules, the wire setting and the reading before a row can draw
+anything. M1 to M3 ship no UI, each with a Verify that observes `main`, and M4 completes the story
+(the MVP). The PRs of M1 to M3 change no user-visible
 behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-guide task.
 
 ### M1 — The pull request source (US1 core)
@@ -367,7 +370,7 @@ behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-
 - **Tasks**: T030–T040
 - **Deliverable**: On `main`, a user checks **Show pull request status on worktrees** in Settings → GitHub and, within 10 seconds, every worktree row whose branch has a pull request shows the indicator — open, draft, merged or closed, and failing, pending or passing for an open or draft one; unchecking it removes them at once. The showcase shows the indicator in every state.
 - **Satisfies**: US1 scenarios 1–9, 13; FR-001 to FR-003, FR-007, FR-009, FR-029, FR-030, FR-033, FR-035 (indicator and switch); SC-001
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test features_settings --test settings_sections --test showcase_completeness --test layout_snapshot`; quickstart §B1 to §B3
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test features_settings --test settings_sections --test showcase_completeness --test layout_snapshot --test icons_font --test material_builder_api`; quickstart §B1 to §B3
 - **Depends on**: M3
 - **Tier**: full
 
@@ -376,16 +379,16 @@ behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-
 - **Tasks**: T041–T047
 - **Deliverable**: On `main`, hovering a row with an indicator shows the pull request's number and title, state, checks and review; right-clicking it offers **Open pull request**, which opens the page in the browser. Rows without an indicator have today's tooltip and menu.
 - **Satisfies**: US2 scenarios 1–7, 9, 10; FR-010 to FR-014, FR-035 (tooltip, opening); SC-008, SC-009
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test worktree_menu_pull_request --test pr_open`; quickstart §B4, §B5
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test worktree_menu_pull_request --test icons_font --test pr_status_is_read_only_on_named_events`; `scripts/build-lock.sh cargo test -p micold-client pr_status_open`; quickstart §B4, §B5
 - **Depends on**: M4
-- **Tier**: light
+- **Tier**: full
 
 ### M6 — A merged pull request suggests removing the worktree
 
 - **Tasks**: T048–T054
 - **Deliverable**: On `main`, the row of a worktree whose pull request was merged and whose branch holds nothing newer carries the chip **can be removed** and a `Cleanup:` tooltip line; a merged branch with later commits, or one whose last commits were never fetched, does not. Delete and its confirmation are unchanged.
 - **Satisfies**: US3 scenarios 1–6; FR-015 to FR-017, FR-018a, FR-035 (removal suggestion); SC-010
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client pr_status_merged`; `scripts/build-lock.sh cargo test -p micold-client --test features_sidebar --test layout_snapshot`; quickstart §B6, §B7
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client pr_status_merged`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status --test features_sidebar --test layout_snapshot`; quickstart §B6, §B7
 - **Depends on**: M2, M5
 - **Tier**: full
 
@@ -394,7 +397,7 @@ behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-
 - **Tasks**: T055–T065
 - **Deliverable**: On `main`, the indicators follow GitHub every 5 minutes without the user asking and within 10 seconds of pressing the sidebar's refresh; presses during a reading cause one further reading; a rate-limit answer pauses readings until GitHub's reset time; a status older than 10 minutes is drawn dimmed and its tooltip says how old it is. With the switch off the idle window has no new timer.
 - **Satisfies**: US4 scenarios 2–9; US2 scenario 8; FR-018 (interval, refresh), FR-019, FR-022, FR-024, FR-027, FR-035 (when GitHub is contacted); SC-003, SC-006
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client pr_status`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status --test idle_subscriptions`; quickstart §B8
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client pr_status`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status --test idle_subscriptions --test features_sidebar --test layout_snapshot`; `mise run test-core`; quickstart §B8, §B13
 - **Depends on**: M5, M6 (order: both extend the tooltip in `features/sidebar.rs` and the row in `ui/sidebar.rs::build_items`, and each regenerates `layout_snapshot.txt`)
 - **Tier**: full
 
@@ -405,4 +408,4 @@ behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-
 - **Satisfies**: FR-009, FR-034; SC-005, SC-007, SC-009 to SC-011 (observed in §B)
 - **Verify**: `ls specs/040-worktree-pr-ci-status/evidence/`; `mise run gate`
 - **Depends on**: M1–M7
-- **Tier**: light
+- **Tier**: full
