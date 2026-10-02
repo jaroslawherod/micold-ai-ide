@@ -46,8 +46,10 @@ In rest mode its state holds a `RestTimer` and the last subject. On each event:
 | `Mouse(ButtonPressed)` over the trigger | `press()`; the event is **not** captured, so the trigger still receives the click |
 | the subject differs from the stored one | `reset()`, store the new subject |
 
-After each: if `Rest.open` changed, the widget invalidates its layout so the overlay appears or
-goes; if `Rest.wake_at` is `Some(t)`, it calls `motion::wake_at(shell, t)`.
+After each: if `Rest.open` changed, the widget aims its existing `shown` track (the `Progress`
+that today asks for the one frame that paints an open or a close) at the new value, so every open
+and close is painted through the existing door; if `Rest.wake_at` is `Some(t)`, it calls
+`motion::wake_at(shell, t)`.
 
 "Cursor over the trigger" is `cursor.position_over(trigger bounds)`, so a row hidden by the
 list's clip, or covered by another overlay, is not hovered. Each row is its own widget with its
@@ -69,8 +71,9 @@ pub fn wake_at<M>(shell: &mut Shell<'_, M>, at: Instant);   // NEW
   two: the `animating()`-guarded `request_redraw` in `Progress`, and the `request_redraw_at` in
   `wake_at`. `wake_at` has exactly one caller outside `motion.rs`: `cdk/tooltip.rs`.
 - **Behaviour half.** A rest-mode tooltip driven with a cursor at rest asks for exactly one
-  redraw, at `since + delay`, and for none once open. Away, spent, and a tooltip without
-  `after_rest` ask for none.
+  timed wake, at `since + delay`, and for no timed wake once open. Away, spent, and a tooltip
+  without `after_rest` ask for no timed wake. Each open or close asks for its one transition frame
+  through `Progress`, and a tooltip that has settled asks for none.
 
 ## 4. Subject (FR-017)
 
