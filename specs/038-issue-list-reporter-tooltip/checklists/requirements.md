@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -24,17 +24,16 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker is open and waits for the user's answer: FR-022 (how a
-  Markdown body becomes the description text). The three unticked items wait on it alone: FR-022 is
-  not yet testable and has no acceptance scenario of its own. Clarify round 1 closed the other
-  marker, FR-013 (reporter search beyond the load cap); see spec.md, Clarifications.
+- Clarify round 1 closed both `[NEEDS CLARIFICATION]` markers: FR-013 (reporter search beyond the
+  load cap, settled from the repo) and FR-022 (a Markdown body becomes readable plain text, decided
+  by the user). See spec.md, Clarifications.
 - "GitHub", "login", "label" and "Markdown" are named because they are the user-facing terms of the
   thing being listed, not implementation details. FR-028 names the shared component library and the
   showcase because the constitution's Principle VIII makes reuse a requirement of the feature.
