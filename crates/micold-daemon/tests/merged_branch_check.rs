@@ -328,3 +328,28 @@ async fn fifty_queries_are_answered_and_fifty_one_are_refused() {
         other => panic!("51 queries must be refused, got {other:?}"),
     }
 }
+
+/// U65. The question is about a project's repository: a folder the catalog holds that is not one
+/// is refused as the worktree requests are, and a path the catalog does not hold is not found.
+#[tokio::test]
+async fn a_project_that_is_not_a_repository_is_refused() {
+    let folder = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = Arc::new(DaemonState::new(catalog_with_project(
+        folder.path(),
+        store.path(),
+        false,
+    )));
+    let mut client = connect(&state).await;
+
+    match check(&mut client, folder.path(), vec![query("main", NEVER_FETCHED)]).await {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::Refused),
+        other => panic!("a folder that is not a repository must be refused, got {other:?}"),
+    }
+
+    let unknown = folder.path().join("not-a-project");
+    match check(&mut client, &unknown, vec![query("main", NEVER_FETCHED)]).await {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::NotFound),
+        other => panic!("a path that is not a project must be not found, got {other:?}"),
+    }
+}
