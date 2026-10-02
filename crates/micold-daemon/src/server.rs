@@ -1774,6 +1774,12 @@ fn merged_branch_answer(
     repo: &std::path::Path,
     check: &MergedBranchQuery,
 ) -> BranchContainment {
+    // The head arrives from outside: only a full commit id is ever handed to git.
+    let is_commit_id = matches!(check.head.len(), 40 | 64)
+        && check.head.bytes().all(|byte| byte.is_ascii_hexdigit());
+    if !is_commit_id {
+        return BranchContainment::Unknown;
+    }
     let tip = git.branch_tip(repo, &check.branch);
     let ancestor = match tip.as_deref() {
         Some(tip) if tip != check.head => git.is_ancestor(repo, tip, &check.head),

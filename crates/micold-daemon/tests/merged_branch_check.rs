@@ -68,6 +68,7 @@ struct Fixture {
     _store: tempfile::TempDir,
     state: Arc<DaemonState>,
     merged: String,
+    later: String,
 }
 
 fn fixture() -> Fixture {
@@ -88,11 +89,14 @@ fn fixture() -> Fixture {
         store.path(),
         true,
     )));
+    let later = commits.pop().unwrap();
+    let merged = commits.pop().unwrap();
     Fixture {
         project,
         _store: store,
         state,
-        merged: commits.swap_remove(1),
+        merged,
+        later,
     }
 }
 
@@ -231,5 +235,41 @@ async fn a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown() {
         answers(reply),
         vec![BranchContainment::Unknown, BranchContainment::Unknown],
         "a missing branch, then a head the repository does not hold"
+    );
+}
+
+/// U62. A head is used only when it is a full commit id, 40 or 64 hexadecimal characters; anything
+/// else is answered `Unknown` and never reaches git. Each head below is one git itself would
+/// resolve to `later`, which holds branch `at` — so `Contained` here would mean git was asked.
+#[tokio::test]
+async fn a_head_that_is_not_a_full_commit_id_is_unknown_without_running_git() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+    let abbreviated = &f.later[..f.later.len() - 1];
+
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![
+            query("at", &f.later),
+            query("at", "HEAD"),
+            query("at", "ahead"),
+            query("at", abbreviated),
+            query("at", ""),
+        ],
+    )
+    .await;
+
+    assert_eq!(
+        answers(reply),
+        vec![
+            BranchContainment::Contained,
+            BranchContainment::Unknown,
+            BranchContainment::Unknown,
+            BranchContainment::Unknown,
+            BranchContainment::Unknown,
+        ],
+        "the full id is answered from the repository; a ref name, a branch name, an abbreviated \
+         id and an empty head are not passed to git"
     );
 }
