@@ -43,6 +43,7 @@ names a look, in the light and the dark scheme.
 | B12 | Settings → Environment: the **Desktop notifications** switch is on. Turn it off. Let B finish a turn while not in view. | No notification; B marked. Turn it on: the next change notifies. | US4.1 to US4.5 |
 | B13 | Stop the notification service. Let B finish a turn. | No notification, no in-app notice, B marked, one `warn` line in the log for the run. | FR-010 |
 | B14 | Showcase: the three `UnreadMark` entries, both schemes. | As in the contract. | FR-030 |
+| B15 | With A selected, let B and C finish a turn; open no session. From the sidebar and the switcher alone, say which sessions finished a turn not yet looked at, and in which projects. | The answer is B in P and C in Q, read from B's mark, the button's `● 1` and the panel's `● 1 unread` on P and on Q. | SC-008 |
 
 ## §C — By hand
 
