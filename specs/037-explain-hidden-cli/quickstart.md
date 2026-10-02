@@ -45,7 +45,7 @@ Seed `settings.json` per step, start the client, and open Settings → Environme
 | B7 | `true`, a script that adds nothing | the `Applied` host row: "was not found on the PATH sessions get for your home directory". US1 scenario 5 |
 | B8 | every CLI on the login `PATH` | no note. US1 scenario 6 |
 | B9 | B1's seed, stored default Pi Coding Agent, a project open; press start on its row | a notification with `start_refusal`'s `IncludeOff` sentence, the list of available CLIs opens, nothing starts. US2 scenario 1 |
-| B10 | a session on Pi started under B2's settings; then B6's script, Save; restart the session | the pane and one banner give the `ScriptTimedOut` reason, say to restart afterwards, and do not say "install". US2 scenario 2 |
+| B10 | a session on Pi started under B2's settings; then B6's script, Save; restart the session | one banner gives the `ScriptTimedOut` reason, says to restart afterwards, and does not say "install"; the pane gives the same sentence when it has no terminal content to keep (after a restart in place it keeps the terminal and the bar reads "failed restart"). US2 scenario 2 |
 | B11 | two available CLIs and Pi missing for a project's directory; press the row's chevron | the list shows the two CLIs, a divider, and the note naming Pi Coding Agent with the reason and action for that directory. Pressing the note does nothing. US3 scenarios 1 and 4 |
 | B12 | one available CLI | the row has no chevron and nothing new. US3 scenario 1a |
 | B13 | every CLI available for the row | the list has no divider and no note. US3 scenario 2 |

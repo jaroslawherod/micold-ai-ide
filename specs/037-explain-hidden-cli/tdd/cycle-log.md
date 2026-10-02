@@ -233,3 +233,23 @@ existed and failed before the implementation.
   it. `ImageReference` borrows the `NoCliOnPath` that holds `ENV_LOCK`.
   `cargo test -p micold-core --test cli_reason` -> `test result: ok. 35 passed`
 - written by a subagent from the findings; the red and green lines are its runs
+
+## Cycle 10: review B round 1, F1 (T024); A9–A14 with the full suite (T042); B9 and B10 (T027)
+
+- test: `crates/micold-daemon/tests/mcp_create_session.rs`:
+  `create_session_after_the_script_is_fixed_sources_it_again_and_starts`
+- red: in `mise run gate` on the tree with the test and without the fix ->
+  `test result: FAILED. 18 passed; 1 failed`: the second `create_session`, made after the script was
+  fixed and with no setting saved, returned `"… the startup script exited with an error for
+  /tmp/.tmpvRwgYB, so its PATH additions are not applied. Fix the script named in "Script path"."`
+- green: the refusal in `mcp/tools.rs` drops the directory's resolution
+  (`state.invalidate_env_include(&cwd)`), as the launch gate's refusals do (D18). In the gate below:
+  `mcp_create_session` -> `test result: ok. 19 passed; 0 failed`
+- gate (T042), on `1e58735e`: `mise run gate` -> `GATE_EXIT=0`, 380 `test result: ok`, 0 failed;
+  `cargo check --workspace --target aarch64-apple-darwin` -> exit 0. A9
+  (`a_missing_default_says_why_the_list_opened`), A10–A13 (`session_start`, 27 passed) and A14
+  (`mcp_create_session`) are green with the full suite
+- A12 is a characterization test (Story 2 scenario 4): it was green against the untouched gate before
+  T023 changed it (cycle 7) and is `BASELINE` in the test list, with no red
+- T027: quickstart §B B9 passes. B10: the banner passes word for word; after a restart in place the
+  pane keeps its terminal and shows no sentence (`evidence/README.md`, ledger D20)
