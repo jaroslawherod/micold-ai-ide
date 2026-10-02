@@ -13,6 +13,7 @@
 ### Session 2026-10-02
 
 - Q: When the repository has more open issues than the 1,000 loaded, must typing a reporter's login also find that reporter's issues beyond the loaded ones? → A: No. The reporter is searched like a label name is today: among the loaded issues and among the issues the existing search beyond the cap returns for the typed text. No request filtered by author is added, and the existing request is unchanged. _(agent-resolved: specs/034-github-issue-worktree/spec.md#FR-005a and #FR-025; `crates/micold-core/src/github.rs` `search_args` sends only `repo:… is:issue is:open <typed text>`, with no label filter, so label names already behave this way; GitHub issue #518 asks for the reporter to match "as number, title and label already do")_
+- Q: Issue bodies are written in Markdown; should the tooltip show the body's start as readable plain text or exactly as written? → A: Readable plain text. Markdown markers are removed (heading `#`, emphasis, list and checkbox markers, code fences; a link shows its text), HTML comments are dropped, and line breaks are folded into one flowing paragraph. Heading words stay as words. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -78,6 +79,8 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 9. **Given** an issue's description fits in three lines of the tooltip, **When** its tooltip opens, **Then** the whole description is shown with no ellipsis.
 10. **Given** a row's tooltip is open, **When** the user clicks the row, **Then** the issue is picked exactly as without a tooltip, and the tooltip closes.
 11. **Given** an issue found by the search beyond the load cap or by its typed number, **When** the cursor rests on its row for 3 seconds, **Then** its tooltip opens as for a row from the initial listing.
+12. **Given** an issue whose body starts with a hidden HTML comment, then the heading `## Problem`, a blank line and the sentence `The **list** cuts [long titles](https://example.com) off.`, **When** its tooltip opens, **Then** it reads `Problem The list cuts long titles off.` — no `#`, `*`, brackets, address or comment text, and no line break between the heading's word and the sentence.
+13. **Given** an issue whose body holds only an HTML comment or only Markdown markers, **When** the cursor rests on its row for 3 seconds or longer, **Then** no tooltip opens.
 
 ---
 
@@ -92,6 +95,8 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 - **A label spelled like a login**: the reporter is always first on the second line and separated from the labels, so the two cannot be confused.
 - **Empty or whitespace-only description**: no tooltip, however long the cursor rests (story 3, scenario 7).
 - **Description that starts with blank lines**: leading blank space is skipped; the tooltip starts at the first text.
+- **Body that opens with a template** (a heading, checkboxes, a hidden comment): the tooltip shows the words, not the markup — markers and comments are removed and the lines run together as one paragraph (FR-022). A body with nothing but a comment or markers has no tooltip.
+- **Characters that look like markup but are not** (a `*` in a formula, a `#` in the middle of a sentence, an issue reference such as `#12`): the rule removes markers, not characters; text that is not a marker is shown as written.
 - **Very long description**: only its start is ever shown; a description of GitHub's maximum length does not make the tooltip larger than three lines (SC-005), and reading descriptions keeps the list's loading time within SC-008.
 - **The list changes under a still cursor** — the user types and the list narrows, a search beyond the cap adds rows, or the list is scrolled by wheel or keyboard: when a different row, or no row, ends up under the cursor, an open tooltip closes and the 3 seconds start again for the row now under the cursor.
 - **Cursor resting on the list while the user navigates by keyboard**: the tooltip belongs to the row under the cursor, not to the keyboard-highlighted row. Moving the highlight does not open a tooltip.
@@ -134,9 +139,9 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 - **FR-017**: An open tooltip MUST close when the cursor moves to another row or leaves the list, when a different row or no row comes to lie under the cursor because the list changed or scrolled, and when the row is picked.
 - **FR-018**: The tooltip MUST open after its 3 seconds even when nothing else happens in the application meanwhile, and waiting for it MUST NOT make the window redraw continuously.
 - **FR-019**: The tooltip MUST show the description and nothing else.
-- **FR-020**: The description shown MUST be taken from the start of the issue's body, skipping leading blank space. An issue whose body is empty or only whitespace MUST have no tooltip.
+- **FR-020**: The description shown MUST be taken from the start of the issue's body, skipping leading blank space. An issue whose body is empty or only whitespace, or leaves no text once turned into plain text (FR-022), MUST have no tooltip.
 - **FR-021**: The tooltip MUST be at most three lines of text tall at the shared tooltip's standard width. A description that does not fit MUST be cut and end with an ellipsis; one that fits MUST be shown whole, without an ellipsis.
-- **FR-022**: How the body becomes the description text: [NEEDS CLARIFICATION: Issue bodies are written in Markdown and often open with a heading or a template (`## Problem`, checkboxes, links, HTML comments). Should the tooltip show the body's start as readable plain text — markup characters and hidden comments removed, line breaks folded into one flowing paragraph — or the body's first characters exactly as written?]
+- **FR-022**: The description MUST be the body turned into readable plain text: Markdown markers removed — heading `#` marks, emphasis marks, list and checkbox markers, and code fences — with the words they mark kept, so a heading's words stay as words; a link shown as its text, without its address; HTML comments dropped with their content; and line breaks and runs of blank space folded into single spaces, giving one flowing paragraph. FR-020 and FR-021 apply to the result: a body that leaves no text after this (only comments, markers or blank space) has no tooltip, and the three-line limit and the ellipsis are measured on the plain text.
 - **FR-023**: The tooltip MUST NOT cover the row it describes (the rule 029-worktree-tooltip-details FR-013 sets for worktree rows), MUST lie whole inside the window whenever it fits in the window at all, and MUST NOT take keyboard focus or stop a click on the row from picking the issue.
 - **FR-024**: Opening a tooltip MUST NOT contact GitHub: the description arrives with the issue, in the requests the list already makes (034 FR-003, FR-005a), and no request is made because a cursor rests on a row.
 
@@ -155,7 +160,7 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 
 ### Key Entities
 
-- **Issue** (034): gains a **reporter** — the login of the account that opened it, or `ghost` when GitHub reports none — and a **description** — the truncated start of its body, possibly empty. Both are read-only and held only while the form is open.
+- **Issue** (034): gains a **reporter** — the login of the account that opened it, or `ghost` when GitHub reports none — and a **description** — the start of its body as readable plain text (FR-022), truncated, possibly empty. Both are read-only and held only while the form is open.
 - **Issue row**: one issue as shown in the list — a title line (`#<number> <title>`) and a details line (reporter, then labels), each wrapping, with emphasis on the text the search matched.
 - **Description tooltip**: the small panel tied to one row, holding that issue's description; open only while the cursor has rested, and remains, on that row.
 
