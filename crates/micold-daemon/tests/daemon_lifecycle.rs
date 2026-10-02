@@ -166,6 +166,7 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
         pi_activity_component: None,
         tool_server_enabled: None,
         cross_session_access: None,
+        pr_status_enabled: None,
     }))
     .await
     .unwrap();
@@ -198,6 +199,7 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
         pi_activity_component: None,
         tool_server_enabled: Some(false),
         cross_session_access: None,
+        pr_status_enabled: None,
     }))
     .await
     .unwrap();
@@ -247,6 +249,7 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
             pi_activity_component: None,
             tool_server_enabled: None,
             cross_session_access: chosen,
+            pr_status_enabled: None,
         }))
         .await
         .unwrap();

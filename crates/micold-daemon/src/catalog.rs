@@ -158,6 +158,7 @@ impl Catalog {
             pi_activity_component: self.settings.pi_activity_component,
             tool_server_enabled: self.settings.tool_server_enabled,
             cross_session_access: self.settings.cross_session_access,
+            pr_status_enabled: self.settings.pr_status_enabled,
         }
     }
 

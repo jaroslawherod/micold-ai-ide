@@ -283,6 +283,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         pi_activity_component: true,
         tool_server_enabled: true,
         cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
+        pr_status_enabled: false,
     }
 }
 
@@ -2154,6 +2155,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 pi_activity_component: true,
                 tool_server_enabled: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
+                pr_status_enabled: false,
             },
         }),
     );
@@ -2186,6 +2188,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 pi_activity_component: true,
                 tool_server_enabled: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
+                pr_status_enabled: false,
             },
         })),
     );
@@ -2658,6 +2661,7 @@ fn the_service_answers_with(
                 pi_activity_component: false,
                 tool_server_enabled: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
+                pr_status_enabled: false,
             },
         }),
     );
@@ -4622,6 +4626,7 @@ mod script_path_report {
             pi_activity_component: false,
             tool_server_enabled: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
+            pr_status_enabled: false,
         }
     }
 

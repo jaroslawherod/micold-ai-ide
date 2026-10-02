@@ -988,6 +988,7 @@ where
                 pi_activity_component,
                 tool_server_enabled,
                 cross_session_access,
+                pr_status_enabled: _,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
