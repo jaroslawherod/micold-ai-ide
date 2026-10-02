@@ -79,6 +79,19 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::TerminalColorScheme {
             scheme: ColorScheme::Light,
         },
+        // Feature 039, W1.1: a session in view, nothing in view, and a window without focus.
+        ClientMsg::WindowView {
+            focused: true,
+            in_view: Some(sid()),
+        },
+        ClientMsg::WindowView {
+            focused: true,
+            in_view: None,
+        },
+        ClientMsg::WindowView {
+            focused: false,
+            in_view: None,
+        },
         ClientMsg::SessionInput {
             session: sid(),
             serial: 42,
@@ -280,6 +293,8 @@ fn sample_summary() -> SessionSummary {
         // Two, for the same reason: an empty vec would survive a field that never encoded
         // (`012` FR-008, BUG-003).
         live_shells: vec![ShellInstanceId(1), ShellInstanceId(7)],
+        // Non-zero, as above: a field that never encoded would read back as `0` (feature 039).
+        attention_seq: 5,
     }
 }
 

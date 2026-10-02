@@ -640,6 +640,16 @@ impl Catalog {
         Ok(true)
     }
 
+    /// Count one attention event for session `id`, persisting (feature 039, W1.3). Returns whether
+    /// the session is known.
+    ///
+    /// As with [`Self::record_session_name`], the count is added in memory before the disk: a
+    /// persist failure leaves it counted and is returned for the caller to log.
+    pub fn mark_attention(&mut self, id: SessionId) -> io::Result<bool> {
+        let _ = id;
+        Ok(false)
+    }
+
     /// Record a label derived from session `id`'s first turn, persisting — only if the session
     /// still has neither a title nor a label (feature 032, C6.4). Returns whether it changed.
     ///
@@ -1107,6 +1117,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         activity: ActivitySignal::Unknown,
         input_serial: 0,
         live_shells: Vec::new(),
+        attention_seq: 0,
     }
 }
 

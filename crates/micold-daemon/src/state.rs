@@ -22,7 +22,8 @@ use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
-    RefusalReason, SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle, WorktreeSnapshot,
+    WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ToolServerSupport};
 use micold_core::session::{
@@ -34,6 +35,7 @@ use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 
 use crate::activity::{Activity, ActivityEvent, HookKind};
+use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::idle::Presence;
@@ -208,6 +210,9 @@ struct Inner {
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
     confirmations: crate::mcp::confirm::Registry,
+    /// What each connected window has in view (feature 039, W1.2). Under this lock because
+    /// [`DaemonState::note_activity`] reads it in the same step as the change it judges.
+    views: Views,
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -483,6 +488,7 @@ impl DaemonState {
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
+                views: Views::default(),
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1149,6 +1155,12 @@ impl DaemonState {
             .lock()
             .expect("presence mutex poisoned")
             .client_disconnected(micold_core::clock::now());
+    }
+
+    /// Record what window `id` has in view (feature 039, W1.1, W1.2). It replaces the window's
+    /// last report and is forgotten when its connection ends.
+    pub fn set_window_view(&self, id: ClientId, view: WindowView) {
+        let _ = (id, view);
     }
 
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).

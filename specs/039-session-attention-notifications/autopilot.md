@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M1)
-- **Next step**: Continue M1 from *Handover*: cycles 2 to 6 of `speckit-tdd-run`, T016, then the gate and reviews A and B, then PR.
+- **Next step**: Continue M1 from *Handover*: first build of the WIP commit (core green, daemon red), daemon green, cycle 6 (client), T016, then the gate and reviews A and B, then PR.
 
 ## Pull requests
 
@@ -74,40 +74,81 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1, handed over at the 150k context cap (2026-10-03). No PR is open: run `branch-start.sh 539` as usual.
-
-- **Done**: baseline re-measured green on `6b4b6fa9` (4352 passed in 384 binaries; the flaky
-  `mcp_create_session` test passed). Cycle 1 (U1–U5; T001, T007 ticked): `ViewFacts` and `in_view` in
-  `crates/micold-core/src/attention.rs`, committed. `tdd/cycle-log.md` has the baseline, the batching
-  note and cycle 1.
-- **In the stash, not committed** (red not yet observed): `git stash apply 5b7910e42294730b8999f7672a102a67df75a398`
-  (message `039-m1-cycles-2-3-red-wip`; find it with `git stash list --format='%H %gs'`, and drop it
-  once applied). It holds the stub field `Session::attention_seq` (`session.rs`, both
-  constructors), cycle 2's tests (`store.rs`, `mod attention_seq_tests`: U6, U7, U8) and cycle 3's
-  red tests (`tests/schema_hash.rs`: the pin moved to 21 and
-  `the_view_report_and_the_attention_sequence_are_in_the_hashed_source`).
-- **Next step**: apply the stash and run `scripts/build-lock.sh cargo test -p micold-core --all-targets --no-fail-fast`
-  for the red of cycles 2 and 3 (expected: U7 and the two `schema_hash` tests fail; U6 and U8 pass on
-  first run and need a deliberate mutant after the green: drop `#[serde(default)]`, bump
-  `SCHEMA_VERSION`). Then green: `attention_seq` on `StoredSession` with both conversions (T008);
-  `WindowView { focused, in_view }` struct, `ClientMsg::WindowView { focused, in_view }`,
-  `SessionSummary::attention_seq`, `PROTOCOL_VERSION` 21 with its doc line (T009), round-trip tests
-  in `messages.rs` and the samples in `tests/protocol_roundtrip.rs` (mutant: `#[serde(skip)]`).
-  `SessionSummary` literals to extend: `micold-daemon/src/catalog.rs:1095`,
-  `micold-client/src/catalog_sync.rs:394`, `src/shell/daemon_sync.rs:2133`,
-  `tests/start_failure_notice.rs:62`, `tests/session_title_sync.rs:230`,
-  `micold-core/tests/protocol_roundtrip.rs:267`. Then cycle 4 (T004/T010, `Views`), cycle 5
-  (T005/T011–T013), cycle 6 (T006/T014, T015, T123), T016, and phase steps 2 to 4.
-- **Notes for cycle 5**: `tests/exclusivity.rs:22-91` has the two-connection helpers (`connect`,
-  `next_control` over `serve_connection` and a duplex stream); `tests/activity_pipeline.rs:86-151`
-  has `catalog_with_session` on a `JsonFileStore` and `register_cat`. Drive a change as
-  `hooks.rs:202` does: `note_activity(id, Hook(UserPromptSubmit))`, then `Hook(Stop)`, and
-  `broadcast_catalog()` when it returns `true`. `note_activity` is `state.rs:2786`; `deregister` is
-  `state.rs:1142`; `WindowView` goes beside `ClientMsg::TerminalColorScheme` at `server.rs:639`.
-- **Build lock**: other worktrees hold it for 10 minutes and more at a time. Batch each cycle's red
-  and green into as few `build-lock.sh` runs as possible, and run them detached with `hold.sh`.
-- A detached `cargo test -p micold-core --all-targets --no-fail-fast` of this unit may still be
-  queued for the lock (log in the old scratchpad). It changes nothing in the tree; ignore it.
+M1, handed over a second time at the 150k context cap (2026-10-03). No PR is open. The branch is
+rebased on `origin/main` (`34cd2c85`); do NOT run `branch-start.sh` again unless `main` moved (it is
+harmless: it rebases). The stash entry `039-m1-cycles-2-3-red-wip` is applied and committed; it is
+dropped.
+- **Done and observed**: cycle 1 (committed by part 1). Red of cycles 2 and 3 (`tdd/cycle-log.md`).
+- **Written, committed as WIP, NEVER BUILT** (commit `wip(039): M1 cycles 2 to 5`):
+  - core green (T008, T009): `StoredSession::attention_seq`, `ClientMsg::WindowView`, the
+    `WindowView` struct and `SessionSummary::attention_seq` in `protocol/messages.rs` (with
+    `mod attention_wire_tests`), `PROTOCOL_VERSION` 21, samples in `tests/protocol_roundtrip.rs`.
+    `attention_seq: 0` added to the `SessionSummary` literals of the client (`catalog_sync.rs`,
+    `shell/daemon_sync.rs`, `tests/start_failure_notice.rs`, `tests/session_title_sync.rs`).
+  - cycle 4 tests and STUB (T004/T010): `crates/micold-daemon/src/attention.rs` (`Views`:
+    `set_view`, `remove` do nothing, `is_in_view` answers `false`), `pub mod attention` in `lib.rs`.
+  - cycle 5 tests and STUBS (T005/T011–T013): `crates/micold-daemon/tests/attention_events.rs`
+    (U69–U79 and A3); `Catalog::mark_attention` returns `Ok(false)`; `session_summary` sends
+    `attention_seq: 0`; `Inner::views` and `DaemonState::set_window_view` (does nothing) in
+    `state.rs`; the `ClientMsg::WindowView` arm in `server.rs` (final).
+- **Next step** (one build-lock run, detached, `hold.sh`): `scripts/build-lock.sh bash -c 'cargo test -p micold-core --all-targets --no-fail-fast; cargo test -p micold-daemon --lib attention:: --test attention_events --no-fail-fast'`.
+  Expected: core all green (cycles 2, 3 green); daemon red: `Views` tests U50, U52, U53 fail, U51
+  passes (mutant later: store the report as it came); `attention_events` U69, A3, U72, U73, U74,
+  U75, U77 fail, U70, U71, U76, U78, U79 pass (mutants later). Fix any compile error first: nothing
+  was compiled. Then the green:
+  - `Views`: `set_view` inserts `WindowView { focused, in_view: if focused { in_view } else { None } }`;
+    `remove`; `is_in_view` is `views.values().any(|v| v.in_view == Some(session))`.
+  - `Catalog::mark_attention`: `find_session_mut`, `attention_seq += 1`, `persist()?`, `Ok(true)`
+    (copy `record_session_name`, `catalog.rs:626`); `session_summary`: `attention_seq: session.attention_seq`.
+  - `state.rs`: `set_window_view` calls `self.lock().views.set_view(id, view)`; `deregister` adds
+    `inner.views.remove(id)`; `note_activity` (after `live.name_stale |= …`): when `before` is not
+    `AwaitingInput`, the signal after is, and `!inner.views.is_in_view(session)`, call
+    `inner.catalog.mark_attention(session)` and `tracing::warn!` on `Err` (reborrow the guard as
+    `let inner = &mut *inner;` so `sessions`, `views` and `catalog` borrow apart).
+  - Mutants, each one targeted run, restored from a copy (not `git checkout`): U6 drop
+    `#[serde(default)]`; U8 bump `SCHEMA_VERSION`; U12 `#[serde(skip)]` on
+    `SessionSummary::attention_seq`; U51 store the report as it came; U70/U76 the `server.rs` arm
+    does nothing; U71 drop the `before` condition; U79 count any change of signal; U78 is a
+    characterization of existing behaviour (`sessions_for` filters `archived`).
+  - `docs/daemon.md:481` says "It is version 20 today": make it 21.
+- **Cycle 6 (client; T006, T014, T015, T123) and T016: not started. Design, decided here because
+  the gate `tests/feature_registration_cost.rs::only_the_root_drives_a_feature` forbids `main.rs`
+  and `shell/` to call a feature function that takes a `State` mutably** (record it under
+  *Decisions* as agent-resolved when it is built):
+  - `crates/micold-client/src/features/attention.rs`: `pub struct State { pub sent_view: Option<WindowView> }`
+    (`Debug, Clone, Default, PartialEq, Eq`, as `features/help.rs:36`);
+    `pub fn view_report(state: &mut State, facts: ViewFacts) -> Option<WindowView>` (the feature's
+    own `State`): derives `WindowView { focused: facts.window_focused, in_view: micold_core::attention::in_view(facts) }`,
+    returns it and stores it when it differs from `sent_view`, else `None`;
+    `pub fn connection_started(state: &mut State)` sets `sent_view = None`. No `Msg` enum.
+  - `pub mod attention;` in `features/mod.rs`; `pub attention: crate::features::attention::State`
+    on `app::State`; `State::view_facts(&self, window_focused) -> ViewFacts` beside
+    `terminal_focused` (`app.rs:342`): `main_area_taken: self.settings.settings_draft.is_some()`,
+    `selected: self.session.active` (check that `session.active` is the active project's selected
+    session). Two root helpers in `app.rs`, because only `app.rs` may call a feature's reducer:
+    `State::view_report(&mut self, window_focused: bool) -> Option<WindowView>` and
+    `State::view_report_forgotten(&mut self)`.
+  - `main.rs:417` (in `update`, beside `shell::daemon_sync::report_color_scheme(app)`): a
+    `shell::daemon_sync::report_window_view(app)` that calls `app.core.view_report(app.window_focused)`
+    and sends `ClientMsg::WindowView`; only while `app.daemon` is `Some`, or the report is marked
+    sent without being sent. `daemon_sync.rs:264` and `:1119` clear `reported_scheme`: call
+    `app.core.view_report_forgotten()` beside both, and `report_window_view(app)` after
+    `report_color_scheme(app)` at `:1120`. Check where `Welcome` is handled relative to `:1119`
+    (W1.1: the first report follows `Welcome`).
+  - Tests: `tests/attention_view_report.rs` (U111–U115, U176–U178; T006), and
+    `tests/features_attention.rs` must exist (`every_feature_module_has_an_isolation_test`): put
+    the `view_report` tests that build only `features::attention::State` there, or a short
+    isolation test, and keep T006's file for the `app::State` ones. `catalog_sync.rs` tests: U116,
+    then copy `existing.attention_seq = summary.attention_seq` at `catalog_sync.rs:118` and set it
+    on the `Session::restored` branch. Add `--test attention_view_report` (and
+    `--test features_attention`) to the `cargo test -p micold-client` list at
+    `.github/workflows/ci.yml:295`. Other client gates to expect: `feature_write_isolation.rs`
+    (`every_state_field_has_an_owner`, `every_method_called_on_state_is_classified`),
+    `root_state_is_shared.rs`, `root_is_routing_only.rs`.
+- **Then**: tick T002–T006, T008–T016, T123 in `tasks.md`; set the test list rows to their state;
+  finish the cycle log; squash or reword the WIP commit; phase steps 2 to 4 (gate with review A,
+  review B, PR with `docs-not-needed`, body ends `Refs #481`).
+- **Build lock**: waits of 10 minutes and more. One detached run per step, `hold.sh` on its log.
 - **Open findings**: none. No review has run.
 
 ## Open escalation

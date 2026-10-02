@@ -326,6 +326,10 @@ pub struct Session {
     /// marker in the AI CLI provider's own storage (`AiCliProvider::mark_archived`), which
     /// survives even if this field's own persisted copy is lost. Set via [`Session::archive`].
     pub archived: bool,
+    /// How many attention events the session has had (feature 039, FR-008a): changes into awaiting
+    /// input while no window had the session in view. Persisted, and only the session service
+    /// adds to it; a session written before the feature reads `0`.
+    pub attention_seq: u64,
 }
 
 impl Session {
@@ -347,6 +351,7 @@ impl Session {
             active_shell: None,
             next_shell_id: 1,
             archived: false,
+            attention_seq: 0,
         }
     }
 
@@ -376,6 +381,7 @@ impl Session {
             active_shell: None,
             next_shell_id: 1,
             archived: false,
+            attention_seq: 0,
         }
     }
 

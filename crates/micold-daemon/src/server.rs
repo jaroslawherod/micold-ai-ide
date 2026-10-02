@@ -18,6 +18,7 @@ use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
     ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
+    WindowView,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -637,6 +638,11 @@ where
             ClientMsg::Goodbye => break,
             // Every session reads it when a program asks for its colours (`006` FR-003a, BUG-007).
             ClientMsg::TerminalColorScheme { scheme } => state.terminal_colors().set(scheme),
+            // Not an operation: no `req`, no reply, and no attachment is needed (feature 039,
+            // W1.5, W1.6).
+            ClientMsg::WindowView { focused, in_view } => {
+                state.set_window_view(id, WindowView { focused, in_view })
+            }
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
                     Ok(_sessions) => {

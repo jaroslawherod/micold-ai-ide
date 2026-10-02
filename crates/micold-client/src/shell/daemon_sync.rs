@@ -2131,6 +2131,7 @@ pub(crate) mod tests {
             activity: ActivitySignal::Unknown,
             input_serial,
             live_shells: Vec::new(),
+            attention_seq: 0,
         }
     }
 

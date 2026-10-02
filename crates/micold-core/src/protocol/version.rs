@@ -75,7 +75,10 @@
 /// environment the answer was walked in, from which the client says why a CLI is missing. No
 /// `#[serde(default)]` and no compatibility shim: peers that differ are refused at the handshake.
 /// It developed against 17 while feature 034 took 18 and 19 here, so it is 20.
-pub const PROTOCOL_VERSION: u32 = 20;
+/// Bumped 20 → 21 for feature 039's `ClientMsg::WindowView` and `SessionSummary::attention_seq`
+/// (contract W1): a window reports the session it has in view, and every session carries its
+/// count of attention events. An older peer would fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 21;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

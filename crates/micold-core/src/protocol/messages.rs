@@ -214,6 +214,15 @@ pub enum ClientMsg {
         /// The scheme the client's window is drawn in.
         scheme: ColorScheme,
     },
+    /// What this window has in view (feature 039, W1.1). Sent once after every `Welcome` and
+    /// again whenever the value changes. Not an operation: there is no `req` and no reply, and it
+    /// needs no project attachment (W1.5, W1.6).
+    WindowView {
+        /// The window has keyboard focus.
+        focused: bool,
+        /// The session the window has in view. `Some` only with `focused: true`.
+        in_view: Option<SessionId>,
+    },
 
     // --- Session commands (fire-and-forget) ---
     /// Append input bytes to a session's PTY. `serial` is monotonic per session and exists to
@@ -949,6 +958,22 @@ pub struct SessionSummary {
     /// still the only signal that can distinguish an exited shell from a quiet one, which no
     /// amount of watching for frames can do.
     pub live_shells: Vec<ShellInstanceId>,
+    /// How many attention events the session has had (feature 039, W1.3): changes into
+    /// [`ActivitySignal::AwaitingInput`] while no window had the session in view.
+    ///
+    /// Durable, unlike the three fields above: the service stores it with the session, so it
+    /// never decreases while the catalog is intact.
+    pub attention_seq: u64,
+}
+
+/// What a window reports having in view: the fields of [`ClientMsg::WindowView`], as the client
+/// remembers its last report and the service keeps one per connection (feature 039, W1.1, W1.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowView {
+    /// The window has keyboard focus.
+    pub focused: bool,
+    /// The session the window has in view. `Some` only with `focused: true`.
+    pub in_view: Option<SessionId>,
 }
 
 /// The wire form of a session's lifecycle (data-model §SessionLifecycle state machine).
@@ -1222,4 +1247,67 @@ pub struct ExitStatus {
     pub code: Option<i32>,
     /// The terminating signal, if it was killed by one (Unix).
     pub signal: Option<i32>,
+}
+
+#[cfg(test)]
+mod attention_wire_tests {
+    //! Feature 039, contract W1 (version 21): the view report and the attention sequence travel.
+
+    use super::*;
+
+    fn session() -> SessionId {
+        SessionId::from_uuid(uuid::Uuid::from_u128(0x039))
+    }
+
+    fn through_json<T: Serialize + serde::de::DeserializeOwned>(value: &T) -> T {
+        let json = serde_json::to_string(value).expect("the message encodes");
+        serde_json::from_str(&json).expect("the message decodes")
+    }
+
+    #[test]
+    fn a_view_report_encodes_and_decodes() {
+        for report in [
+            ClientMsg::WindowView {
+                focused: true,
+                in_view: Some(session()),
+            },
+            ClientMsg::WindowView {
+                focused: true,
+                in_view: None,
+            },
+            ClientMsg::WindowView {
+                focused: false,
+                in_view: None,
+            },
+        ] {
+            assert_eq!(
+                through_json(&report),
+                report,
+                "a view report is read as it was written"
+            );
+        }
+    }
+
+    #[test]
+    fn a_session_summary_carries_its_attention_sequence() {
+        // A count no default produces, so a field that never encoded cannot read back as it.
+        const COUNTED: u64 = 7;
+        let summary = SessionSummary {
+            id: session(),
+            worktree_dir: None,
+            title: SessionLabel::Pending,
+            lifecycle: WireLifecycle::Running,
+            activity: ActivitySignal::AwaitingInput,
+            provider: AiCli::ClaudeCode,
+            input_serial: 0,
+            live_shells: Vec::new(),
+            attention_seq: COUNTED,
+        };
+
+        assert_eq!(
+            through_json(&summary).attention_seq,
+            COUNTED,
+            "the count of attention events reaches the window"
+        );
+    }
 }

@@ -8,6 +8,7 @@
 //! outlive the UI. The shadow-diff framer that streams the interpreted grid to clients lands next.
 
 pub mod activity;
+pub mod attention;
 pub mod catalog;
 /// Tailing a provider's own append-only event log for busy/idle evidence (feature 026, T064).
 pub mod event_log;
