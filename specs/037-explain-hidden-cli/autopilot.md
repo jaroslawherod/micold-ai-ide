@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
 | #530 | M2 | merged | f169414780363e6e06fa837586ee93c215d9a2b2 |
 | #535 | M3 | merged | bc5699922fd78fa9cc40346c7993827c54058839 |
+| #537 | M4 | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
 | M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #530 | merged |
 | M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | #535 | merged |
-| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | M4-PR | open |
+| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | #537 | open |
 
 ## Decisions
 
