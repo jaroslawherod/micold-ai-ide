@@ -119,7 +119,7 @@ suite runs in the gate.
   a_row_with_details_is_at_least_a_menu_item_high_and_grows_when_it_wraps: a row whose title wraps is 48dp high: it did not grow
   the_wrapping_label_takes_more_lines_inside_its_bound: a label of 77 characters is 18.199999dp high in 160dp: one line is 20dp, so it did not wrap
   a_word_wider_than_the_label_breaks_inside_the_word: 256 characters without a space are 18.199999dp high in 200dp: they did not break
-  a_picked_rows_marker_is_beside_the_first_line_whatever_the_height: no child 1 at depth 2 of [0, 1, 0]
+  a_picked_rows_marker_is_beside_the_first_line_whatever_the_height: no child 0 at depth 2 of [0, 1, 0]: the row's tree changed shape
   test result: FAILED. 6 passed; 4 failed; 0 ignored; 0 measured; 472 filtered out
   ```
   U33 and U35 passed on first run. U35 is the characterization of today's row (BASELINE). U33 is
@@ -161,4 +161,27 @@ suite runs in the gate.
   with `e = issue.emphasis(&matched.spans)`. 3 passed.
 - refactor: none. `issue_rows` is exported as `micold_client::ui::issue_rows` for the test; the
   `worktree_form` view module stays `pub(crate)`.
+
+## Cycle 6 — U44, A1, A2, A4, A5, A9 — T006, T014
+
+- tests: `crates/micold-client/tests/gates/issue_rows_show_all_text.rs` (new, four tests, a
+  `#[path]` module of `tests/layout_snapshot.rs`) over three new covered states with the list open:
+  `add-worktree-dialog-issue-list-longest-titles` (two 256-character titles, one without a space),
+  `add-worktree-dialog-issue-list-labels` (20 labels, one label, none) and
+  `add-worktree-dialog-issue-list-mixed-heights` (titles of 1, 2, 3 and 5 lines). Each state is read
+  at `WINDOW` and at `NARROW` = 440x800 through `support::layout::painted_text_settled_at`.
+- red: the gate was written after T010–T012, so it passed on first run. Deliberate mutant:
+  `Wrapping::WordOrGlyph` -> `Wrapping::None` in `material/picker.rs`; 3 of the 4 tests failed
+  ```
+  6 finding(s): an issue row has to show its whole title, its reporter and every label, inside the row and inside the list (038 SC-001, FR-004). ...
+  add-worktree-dialog-issue-list-longest-titles at 1280x800: row 0 (#2101) paints text 1479.0px wide in a row 464.0px wide, starting at 438.0, 340.0: "#2101 A long issue title is cut off ..."
+  add-worktree-dialog-issue-list-longest-titles at 1280x800: row 1 (#2102) paints text 1586.1px wide in a row 464.0px wide, starting at 438.0, 388.0: "#2102 crates/micold-client/src/ui/material/picker.rs::..."
+  ```
+  restored exactly.
+- green: `layout_snapshot` 47 passed; `gates/containment.rs` passes over the new states unedited.
+  Fixture regenerated: 837 lines added in one hunk, 0 removed; no record of the branch picker,
+  `Select` or 034's `add-worktree-dialog-issue-*` states changed (FR-027, FR-029).
+- notes: one state cannot hold rows of one to five lines: five such rows are 424dp, over the
+  384dp viewport, so the four-line title is in `longest-titles`. `Overflow` gained `layer`, so the
+  gate can tell the floated rows' text from the dialog's under it.
 

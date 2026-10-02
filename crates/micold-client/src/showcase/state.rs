@@ -265,11 +265,15 @@ impl Showcase {
     /// its own rules would demonstrate something the application does not do (FR-020).
     pub fn typeahead_rows(&self) -> Vec<TypeaheadRow> {
         let query = Query::new(&self.typeahead_query);
-        rank(super::samples::SEARCH_RESULTS, |(label, _)| *label, &query)
+        rank(super::samples::SEARCH_RESULTS, |(label, ..)| *label, &query)
             .into_iter()
             .map(|(index, matched)| {
-                let (label, available) = super::samples::SEARCH_RESULTS[index];
+                let (label, details, available) = super::samples::SEARCH_RESULTS[index];
                 let row = TypeaheadRow::new(label, matched.spans);
+                let row = match details {
+                    Some(text) => row.details(text, Vec::new()),
+                    None => row,
+                };
                 if available {
                     row
                 } else {

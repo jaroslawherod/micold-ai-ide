@@ -126,7 +126,7 @@ gives the test task first, then the implementation task(s).
 | U41 | An already wholly visible highlighted row causes no scroll | FR-007 | example | PENDING | T018 / T020 |
 | U42 | A highlighted row taller than the viewport is aligned to its top | FR-007 | example | PENDING | T018 / T020 |
 | U43 | Only `FormMsg::IssueHighlightMoved` chains `picker_highlight_into_view()`; no other picker's message does | FR-029 | example | PENDING | T018 / T021 |
-| U44 | The issue form states (256-character title, 20 labels, none, rows of one to five lines; default and narrow window) show every row's whole title, reporter and labels inside the list | SC-001, FR-004 | example | PENDING | T006 / T012, T014 |
+| U44 | The issue form states (256-character title, 20 labels, none, rows of one to five lines; default and narrow window) show every row's whole title, reporter and labels inside the list | SC-001, FR-004 | example | DONE | T006 / T012, T014 |
 
 ### `crates/micold-client` reducer: issue search by reporter
 

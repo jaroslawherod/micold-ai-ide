@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1 unit 2: T006, T013–T017 (gate states, showcase, docs, gate, visual pass), then reviews A and B, PR 3.
+- **Next step**: M1 continues from *Handover*: finish T013 (highlighted and picked pose), read the workers' diff, T017 gate + review A, review B + visual pass, PR 3.
 
 ## Pull requests
 
@@ -61,7 +61,38 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 2 handed over at the 150k context cap (2026-10-02). No PR open for M1 yet; nothing pushed.
+The branch is on `origin/main` (`branch-start.sh 534` ran: REBASED), commits local only.
+**Done**: T001–T012, T014–T016 ticked. Unit 2 wrote T004, T005, T010–T012 itself (commit
+`f66759b7`) and had two workers do T006 + T014 and T013 + T015 + T016 (this commit).
+- `material/picker.rs`: `Row::details`, `EmphasisedLabel::wrapping()` (one `with_spans` paragraph,
+  `WordOrGlyph`), the two-line branch of `row_element` (strut of `Shrink` width for the 48dp
+  minimum: iced's `Row` drops a `Fixed(0.0)` child). `material/menu_anatomy.rs`: two literals
+  gained `..Default::default()` (the deviation from T014; it goes in the PR body).
+- `ui/worktree_form.rs`: `issue_rows`, exported as `micold_client::ui::issue_rows`.
+- Tests: picker unit tests, `tests/issue_picker_rows.rs`, `tests/gates/issue_rows_show_all_text.rs`,
+  three covered states, `support::layout::painted_text_settled_at`, fixture regenerated (+837, -0).
+- Last runs: `cargo test -p micold-client --lib material::` 364 passed (before the workers);
+  `layout_snapshot` 47 passed and the showcase test targets 100 passed (workers' reports).
+  `tdd/cycle-log.md` has cycles 4–6.
+**Next step**:
+1. **T013 is not ticked, one point open.** The worker changed `showcase/samples.rs`, `state.rs`,
+   `catalogue.rs`: `SEARCH_RESULTS` is `(label, Option<details>, available)` with a short row, a
+   long title, a row with 7 labels, the dimmed in-use row and `main`. The `Typeahead` entry is
+   live and rests closed, so no row is highlighted or picked at rest; a caption says to open it.
+   T013 and contract §6 ask for "one of them highlighted and one picked". Decide: start the
+   showcase's `typeahead_selected` (and highlight) on a row so the pose shows both once the list is
+   open, or give the entry a static open instance; check `showcase_determinism.rs` either way. Then
+   tick T013. `mise run showcase` + the visual pass (§B2) is the proof.
+2. Read the workers' diff before the gate (`git show --stat HEAD`, then file by file): nobody has
+   reviewed `tests/support/layout.rs`, the gate or the docs yet.
+3. Clippy: the worker runs stopped on `single_range_in_vec_init` in a picker test; unit 2 replaced
+   `vec![0..5]` with `one(0..5).to_vec()` afterwards and has **not** re-run clippy.
+4. T017 and Phase 4 step 2: `mise run gate` detached, review A (`code-review` high on
+   `origin/main...HEAD`) in its shadow; step 3: review B and the `visual-pass` skill for quickstart
+   §B1 and §B2, light and dark, screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`;
+   mark A1–A5, A7–A9 DONE in `tdd/test-list.md`; step 4: PR `feat(038): …`, body ends `Refs #518`.
+**Open findings**: none from a review; no review has run for M1 yet.
 
 ## Open escalation
 

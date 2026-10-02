@@ -83,6 +83,66 @@ fn issue_form(issues: IssueList) -> WorktreeForm {
     }
 }
 
+/// The add-worktree form with the issue list **open** over `issues` (feature 038, T006).
+///
+/// Open, so the rows are recorded: the list is floated from `Widget::overlay`, and a closed one
+/// leaves the fixture nothing but the field. `add-worktree-dialog-issue-loaded` keeps it closed and
+/// is where the field is covered; these states are where the rows are.
+///
+/// The load is complete and small. Every row has to lie wholly inside the list's eight-row viewport
+/// for `gates/issue_rows_show_all_text.rs` to read it, and a list that scrolled would hang its
+/// content outside the viewport, which `gates/containment.rs` would then have to be told about.
+fn issue_list_state(issues: Vec<Issue>) -> StateUnderTest {
+    let mut state = with_project();
+    // Derived the way the application derives it, as the branch picker's state does.
+    let issue_matches = rank(&issues, |i| i.row_text(), &Query::new(""));
+    let total_open = issues.len() as u64;
+    let mut form = issue_form(IssueList::Loaded {
+        listing: IssueListing {
+            issues,
+            total_open,
+            complete: true,
+        },
+        gh: std::path::PathBuf::from("/usr/bin/gh"),
+        searched: Vec::new(),
+        search: SearchState::Idle,
+    });
+    form.issue_matches = issue_matches;
+    form.issue_list_open = true;
+    form.type_ = None;
+    state.worktree_form.form = Some(form);
+    StateUnderTest::new(state)
+}
+
+/// An issue as GitHub returns one, reported by `reporter`.
+fn reported_issue(number: u64, title: &str, labels: &[&str], reporter: &str) -> Issue {
+    Issue::new(
+        number,
+        title.to_string(),
+        labels.iter().map(|l| l.to_string()).collect(),
+        "2026-09-29T00:00:00Z".to_string(),
+    )
+    .reported_by(reporter)
+}
+
+/// The longest title GitHub accepts, in characters.
+const LONGEST_TITLE: usize = 256;
+
+/// `pattern` repeated out to exactly the longest title GitHub accepts.
+///
+/// The length is asserted rather than trusted: a pattern whose cut lands on a space would lose it
+/// to nothing visible, and the state would then cover a 255-character title while its name says
+/// otherwise.
+fn longest_title(pattern: &str) -> String {
+    let title: String = pattern.chars().cycle().take(LONGEST_TITLE).collect();
+    assert_eq!(
+        title.trim().chars().count(),
+        LONGEST_TITLE,
+        "the pattern has to end on a visible character at {LONGEST_TITLE}",
+    );
+    title
+}
+
 /// The two action anchors every add-worktree state names.
 const ADD_WORKTREE_ANCHORS: &[Anchor] = &[
     Anchor {
@@ -547,6 +607,108 @@ pub fn covered_states() -> &'static [CoveredState] {
                 form.picked_issue = Some(42);
                 state.worktree_form.form = Some(form);
                 StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 038: the open list's rows, two wrapping lines each (contracts/picker-row.md §6).
+        // `gates/issue_rows_show_all_text.rs` reads all three; nothing in them is truncated.
+        //
+        // The longest title there is, twice. Words break where a title is expected to break; the
+        // second has no space in it anywhere, which is the hard case — there is no place to break
+        // it but between two glyphs, and a wrap that only knew about words would run it out of the
+        // row on one line.
+        CoveredState {
+            name: "add-worktree-dialog-issue-list-longest-titles",
+            build: || {
+                issue_list_state(vec![
+                    reported_issue(
+                        2101,
+                        &longest_title("A long issue title is cut off at the edge of its row. "),
+                        &["bug"],
+                        "octocat",
+                    ),
+                    reported_issue(
+                        2102,
+                        &longest_title("crates/micold-client/src/ui/material/picker.rs::"),
+                        &["bug"],
+                        "a-reporter-with-a-long-login",
+                    ),
+                ])
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // The second line at its three sizes: twenty labels, which wrap; one; and none, where the
+        // line is the reporter alone and the separator must not be left dangling after it.
+        CoveredState {
+            name: "add-worktree-dialog-issue-list-labels",
+            build: || {
+                issue_list_state(vec![
+                    reported_issue(
+                        310,
+                        "Tooltip opens under the pointer",
+                        &[
+                            "area: add-worktree",
+                            "area: daemon",
+                            "area: picker",
+                            "area: sandbox",
+                            "area: sidebar",
+                            "area: terminal",
+                            "bug",
+                            "confirmed",
+                            "design",
+                            "documentation",
+                            "good first issue",
+                            "help wanted",
+                            "linux",
+                            "macos",
+                            "needs reproduction",
+                            "performance",
+                            "priority: high",
+                            "regression",
+                            "ux",
+                            "windows",
+                        ],
+                        "octocat",
+                    ),
+                    reported_issue(42, "Crash when opening empty project", &["bug"], "hubot"),
+                    reported_issue(7, "Sidebar flickers on resize", &[], "monalisa"),
+                ])
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Rows of differing height in one list, the first line taking from one line to several. A
+        // list of equal rows cannot show a row placed by the height of the one above it.
+        CoveredState {
+            name: "add-worktree-dialog-issue-list-mixed-heights",
+            build: || {
+                issue_list_state(vec![
+                    reported_issue(11, "Sidebar flickers on resize", &[], "monalisa"),
+                    reported_issue(
+                        12,
+                        "The add-worktree dialog forgets the base branch after the source \
+                         switch is toggled twice",
+                        &["bug", "area: add-worktree"],
+                        "octocat",
+                    ),
+                    reported_issue(
+                        13,
+                        "Restoring a session after the daemon restarts replays the whole \
+                         scrollback into the terminal before the prompt, so a long-running \
+                         session takes several seconds to become usable again",
+                        &["performance"],
+                        "hubot",
+                    ),
+                    reported_issue(
+                        14,
+                        "When a worktree is deleted from outside the application while one of \
+                         its sessions is still attached, the sidebar keeps the row, the row's \
+                         menu still offers to open a terminal in it, and choosing that reports \
+                         a failure that names neither the worktree nor the directory that is \
+                         gone",
+                        &["bug", "area: sidebar", "needs reproduction"],
+                        "a-reporter-with-a-long-login",
+                    ),
+                ])
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },

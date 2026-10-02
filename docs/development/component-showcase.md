@@ -70,6 +70,10 @@ no arm renders nothing and still passes a name-only check.
 You will not forget, because the build will not let you. Add a component to the library and skip this,
 and `showcase_completeness` fails naming your component.
 
+The `Typeahead` entry is live rather than posed, and its sample rows include two-line ones (`Row::details`):
+a short row, one whose title wraps, one whose second line of many labels wraps, and one-line rows beside
+them. Press the field to open the list and see rows of differing height, the highlight and the picked mark.
+
 ## What the checks are, and what each failure means
 
 | Gate | Fails when |
