@@ -16,8 +16,11 @@
   restarts it, an update replaces it, the user logs out and in, the computer reboots, the service
   stops itself after 30 minutes with no window connected and is started by the next window, or the
   service crashes and is started again. All but a crash and a power loss are *orderly* stops.
-- **Terminal**: in this spec, a session's AI CLI terminal. A session's Regular Terminal instances are
-  covered only by FR-014.
+- **Terminal**: in this spec, a session's AI CLI terminal. A session's Regular Terminal (shell)
+  instances are not covered (FR-014).
+- **Start**: any event after which a session's terminal process runs again: the user starts a
+  stopped session, the session is restarted after its process exited, or a session interrupted by a
+  service restart is opened and resumes.
 - **Removing a session**: any action after which the session is never shown again: **Close**,
   **Remove**, deleting its worktree, forgetting its project, and the app discarding a session that
   was never used.
@@ -25,6 +28,21 @@
   what is on the terminal's screen, with its colours and text styles.
 - **Saved history**: the copy of a terminal history that the session service keeps on disk.
 - **Scrollback limit**: the existing *Scrollback lines* setting (default 10,000 lines).
+
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: When the user turns terminal history saving off, what happens to histories already saved on
+  disk? → A: They are all deleted at once, when the change is saved. The setting's text says that
+  turning it off deletes saved history. _(decided by user)_
+- Q: Is the history of a session's Regular Terminal (shell) instances saved and restored too, or
+  only the AI CLI terminal's? → A: Only the AI CLI terminal's. Shell instances are out of scope.
+  _(decided by user)_
+- Q: When a session is stopped, or its process exits, and it is started again while the same session
+  service keeps running, does its terminal show the earlier output above a separator? → A: Yes.
+  Every start behaves the same: the terminal shows the earlier output above the separator.
+  _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -70,6 +88,13 @@ it.
    after 30 minutes with no window connected, the user reopens the app and opens the session,
    **Then** the whole history from before the stop is shown above the separator, with nothing
    missing.
+9. **Given** a running session whose terminal printed 200 lines, **When** the user stops it and
+   starts it again while the session service keeps running, **Then** the terminal shows the 200
+   lines, then one separator line, then the new output, with nothing missing.
+10. **Given** a session whose process exits by itself while the session service keeps running,
+    **When** the session is restarted, automatically or by the user, **Then** the output from before
+    the exit, including its last lines, is shown above one separator line and the new output below
+    it.
 
 ---
 
@@ -77,22 +102,25 @@ it.
 
 A user who works with secrets in the terminal does not want terminal output written to disk. They
 open Settings, turn terminal history saving off, and from then on the session service writes no
-terminal output to disk. After a restart their sessions come back with an empty terminal, as they
-do today.
+terminal output to disk and the histories it had already saved are deleted. After a service restart
+their sessions come back with an empty terminal, as they do today.
 
 **Why this priority**: Terminal output can hold tokens, passwords and private code. Saving it is new
 behaviour that writes such data to disk, so the user must be able to refuse it before the feature
 is acceptable to ship by default.
 
-**Independent Test**: Turn the setting off, run a session that prints a recognisable marker text,
-restart the session service, and confirm that the marker is nowhere in the service's data location
-and that the session's terminal starts empty with no separator line.
+**Independent Test**: With the setting on, run a session that prints a recognisable marker text and
+wait for it to be saved. Turn the setting off and confirm that the marker is nowhere in the
+service's data location. Print a second marker, restart the session service, and confirm that
+neither marker is in the data location and that the session's terminal starts empty with no
+separator line.
 
 **Acceptance Scenarios**:
 
 1. **Given** a fresh installation, **When** the user opens Settings, **Then** the Terminal section
    shows a control for saving terminal history, turned on, with a sentence saying that terminal
-   output is written to this computer's disk while it is on.
+   output is written to this computer's disk while it is on and that turning it off deletes the
+   saved history.
 2. **Given** the setting is off, **When** a session prints output and the service is restarted,
    **Then** no saved history for that session exists on disk and the session's terminal starts empty
    with no separator line.
@@ -102,11 +130,18 @@ and that the session's terminal starts empty with no separator line.
 4. **Given** the setting is off and a session is running, **When** the user turns it on and saves,
    **Then** that session's history, including output printed while the setting was off and still in
    the terminal, is saved within 60 seconds, without restarting the session.
-5. **Given** the user turns the setting off, **When** saved histories from before already exist,
-   **Then** [NEEDS CLARIFICATION: are the already-saved histories deleted at once when the setting is
-   turned off, or kept until their sessions are removed? Deleting matches the user's wish to have no
-   terminal output on disk but destroys history they may still want; keeping leaves old output on
-   disk after the user said no.]
+5. **Given** the setting is on and several sessions, running and stopped, have saved history,
+   **When** the user turns the setting off and saves, **Then** the saved history of every session is
+   deleted from disk within 5 seconds, without a confirmation dialog and without restarting any
+   session or the service.
+6. **Given** the setting was turned off while a session was running, **When** the user looks at that
+   session's terminal, **Then** the history it shows is unchanged: only the copy on disk is gone.
+7. **Given** the setting was turned off and is turned on again, **When** a session is started after
+   a later service restart, **Then** it shows only what was saved after the setting was turned on
+   again; the histories deleted earlier do not come back.
+8. **Given** the setting is off, **When** a session is stopped and started again while the session
+   service keeps running, **Then** its terminal shows the earlier output above the separator as with
+   the setting on, and nothing is written to disk.
 
 ---
 
@@ -173,7 +208,8 @@ Repeat with Close.
 5. **Given** a session is removed while a save of its history is in progress, **When** the removal
    completes, **Then** no saved history for it exists on disk afterwards.
 6. **Given** a session with saved history, **When** the user stops it, **Then** its saved history is
-   kept and is shown when the session is started again after a service restart.
+   kept, and its earlier output is shown when the session is started again, in the same service run
+   or after a service restart.
 
 ---
 
@@ -184,8 +220,13 @@ Repeat with Close.
 - **Idle terminal**: a terminal with no new output since its last save causes no write.
 - **Several busy sessions at once**: each is saved on its own schedule; a save of one never delays
   the output of that session or of another, and no session ever shows another session's history.
-- **Regular Terminal instances**: whether their history is saved is open (FR-014); until it is
-  decided, nothing in this spec writes their output to disk.
+- **Regular Terminal instances**: their output is never written to disk and is not restored
+  (FR-014). After a service restart they are gone, as they are today.
+- **Setting turned off while the session service is not running**: the saved histories are deleted
+  when the service next starts, before any session can show them.
+- **A saved history that cannot be deleted when the setting is turned off**: the failure is written
+  to the service's log as a warning and the deletion is tried again every 30 seconds; the history is
+  never shown while the setting is off.
 - **Several windows**: every window showing the same session shows the same restored history and the
   same separator.
 - **Service killed in the middle of a save**: the previous complete saved history stays usable; a
@@ -198,7 +239,8 @@ Repeat with Close.
   to scroll back to is restored only as the last screen it showed.
 - **A session that resumes a conversation**: the AI CLI redraws its own view below the separator; the
   saved history above it is unchanged.
-- **Session removed while the setting is off**: saved history left from before is still removed.
+- **Session removed while the setting is off**: a saved history still on disk because its deletion
+  failed is removed with the session.
 - **Where the service runs**: history saved by a service running directly on the computer is restored
   by a service running in a container, and the reverse, because both use the same data location.
 - **Platform differences**: "only the user can read it" is enforced by each platform's own means on
@@ -239,10 +281,12 @@ Repeat with Close.
   service restart (opening an interrupted session resumes it; a session the user had stopped is
   started by the user), its terminal MUST show the saved history, then one separator line, then the
   new output, and the saved history MUST be reachable by scrolling exactly as live history is.
+  FR-015 gives the same for a start within one service run.
 - **FR-009**: The separator MUST read "session restarted at" followed by the local date and time of
   the start, MUST be visually distinct from program output, MUST occupy one line, and MUST NOT be
   sent to the session's process as input.
-- **FR-010**: A terminal with no saved history MUST show no separator.
+- **FR-010**: A terminal with no earlier output to show (no saved history after a service restart,
+  an empty history within one service run) MUST show no separator.
 - **FR-011**: Restored history and separators MUST become part of the terminal's history: they count
   against the scrollback limit, are saved again with later output, and remain after further restarts
   until newer output pushes them past the limit.
@@ -250,18 +294,14 @@ Repeat with Close.
   when it is longer, the most recent lines are kept.
 - **FR-013**: Restoring a history of 10,000 lines MUST NOT delay the start of its session by more
   than 1 second.
-- **FR-014**: Whether a session's Regular Terminal instances are covered: [NEEDS CLARIFICATION: is
-  the history of Regular Terminal (shell) instances saved and restored too, or only the AI CLI
-  terminal's? Today the instances are not brought back after a service restart, so covering them
-  means restoring the instances as well, and removing an instance's saved history when the instance
-  is closed; leaving them out means that shell output is never written to disk and is lost on a
-  restart as it is today.]
-- **FR-015**: Whether a session that is stopped and started again while the session service keeps
-  running shows its earlier output: [NEEDS CLARIFICATION: does the saved history and separator also
-  apply when a session is stopped, or its process exits, and it is started again while the same
-  session service keeps running, or only after a service restart as the issue describes? Applying
-  it everywhere makes every start behave the same; limiting it leaves today's behaviour within one
-  service run unchanged.]
+- **FR-014**: Only a session's AI CLI terminal is covered. The output of a session's Regular Terminal
+  (shell) instances MUST NOT be written to disk by this feature and is not restored; their behaviour
+  is unchanged, including that they are not brought back after a service restart.
+- **FR-015**: When a session is stopped, or its process exits, and it is started again while the
+  same session service keeps running (by the user or automatically), its terminal MUST show the
+  whole history it held when the process ended, then one separator line (FR-009), then the new
+  output, exactly as FR-008 requires after a service restart. This MUST hold whether saving is on or
+  off, because it needs nothing on disk.
 
 **Damaged or unreadable saved history**
 
@@ -298,12 +338,20 @@ Repeat with Close.
 
 - **FR-026**: Settings MUST offer, in the Terminal section, one control that turns saving of terminal
   history on or off for all sessions, with a sentence stating that terminal output is written to
-  this computer's disk while it is on. It MUST be on by default.
+  this computer's disk while it is on and that turning it off deletes the saved history. It MUST be
+  on by default.
 - **FR-027**: A saved change of the setting MUST take effect for running sessions without restarting
-  them or the session service: turned off, no terminal output is written from then on; turned on,
-  each running terminal's history is saved within the next 60 seconds.
+  them or the session service: turned off, no terminal output is written from then on and the saved
+  history of every session, running or stopped, is deleted from disk within 5 seconds, without a
+  confirmation dialog; turned on, each running terminal's history is saved within the next 60
+  seconds.
 - **FR-028**: While the setting is off, the session service MUST NOT write terminal output to disk,
   and a session started after a service restart MUST show no saved history and no separator.
+- **FR-033**: Turning the setting off MUST NOT change the history a running terminal shows. A save
+  in progress at that moment MUST NOT leave a saved history on disk. A deletion that fails MUST be
+  written to the service's log as a warning with the session and the reason and MUST be tried again
+  every 30 seconds until it succeeds. A session service that starts while the setting is off MUST
+  delete every saved history it finds before any session is started.
 - **FR-029**: The setting MUST be stored with the other settings on the user's computer and MUST keep
   its value across restarts and upgrades.
 
@@ -313,17 +361,19 @@ Repeat with Close.
 - **FR-031**: The setting's control MUST be built from the app's shared settings components and look
   and behave like the other controls in the Terminal section.
 - **FR-032**: The user guide MUST describe, in the same change that ships each behaviour: that
-  terminal history survives a service restart and what the separator means, the setting and what
-  turning it off does, where saved histories are stored and who can read them, and what the user
-  sees when a saved history could not be restored.
+  terminal history survives a service restart and a stop and start of the session, what the
+  separator means, the setting and that turning it off deletes the saved history, that Regular
+  Terminal instances are not covered, where saved histories are stored and who can read them, and
+  what the user sees when a saved history could not be restored.
 
 ### Key Entities
 
-- **Saved history**: the on-disk copy of one terminal's history. Belongs to exactly one terminal of
-  one session; holds the lines up to the scrollback limit with their colours and styles, and the
-  separators of earlier restarts; lives until its session is removed.
-- **Restart separator**: one line in a terminal's history that marks where a restart happened,
-  carrying the local date and time of the start that followed it.
+- **Saved history**: the on-disk copy of one terminal's history. Belongs to the AI CLI terminal of
+  exactly one session; holds the lines up to the scrollback limit with their colours and styles, and
+  the separators of earlier starts; lives until its session is removed or the setting is turned off.
+- **Restart separator**: one line in a terminal's history that marks where the session was started
+  again, after a service restart or within one service run, carrying the local date and time of
+  that start.
 - **History saving setting**: one on/off value, global to the installation, on by default.
 
 ## Success Criteria *(mandatory)*
@@ -344,12 +394,15 @@ Repeat with Close.
   app version starts and runs, and the user sees one line saying so.
 - **SC-007**: After a session is closed or removed, a search of the service's data location for text
   that session printed finds nothing.
-- **SC-008**: With the setting off, a search of the service's data location for text printed after
-  it was turned off finds nothing.
+- **SC-008**: From 5 seconds after the setting is turned off, a search of the service's data
+  location for text any terminal printed, before or after it was turned off, finds nothing.
 - **SC-009**: No account on the computer other than the user's can read a saved history, on each of
   Linux, macOS and Windows, and when the service runs in a container.
 - **SC-010**: A user returning after a restart can tell, from the terminal alone and without
   consulting the guide, which output is from before the restart and when the restart happened.
+- **SC-011**: After a session is stopped, or its process exits, and it is started again within one
+  service run, 100% of the lines its terminal held, up to the scrollback limit, can be scrolled
+  back to above the separator, with the same text, colours and styles.
 
 ## Assumptions
 
@@ -360,7 +413,16 @@ Repeat with Close.
   terminal, and with it the output lost when the service is killed without warning is at most the
   last 60 seconds.
 - **The AI CLI terminal is what the issue is about** ("see what an agent did before the restart").
-  Whether Regular Terminal instances are covered is open (FR-014).
+  Regular Terminal instances are not covered (FR-014).
+- **Turning the setting off deletes without asking.** The sentence beside the control is the
+  warning; there is no confirmation dialog and no way to bring the deleted histories back. The 5
+  seconds allowed for the deletion are a default chosen here.
+- **A start within one service run needs nothing on disk.** The session service still holds the
+  terminal's history then, so the earlier output is shown above the separator with the setting on
+  or off (FR-015). The setting decides only what is written to disk, and so what a service restart
+  can bring back.
+- **The separator text is the same for every start**: "session restarted at …", whether the service
+  restarted or only the session's process did.
 - **What is saved is what the user could scroll back to**, plus the last screen. Output a full-screen
   program drew and then cleared is not recoverable, as it is not today.
 - **Clickable links, images and cursor position are not part of the saved history.** Text, colours
@@ -381,9 +443,11 @@ Repeat with Close.
   it keeps the terminal history in memory then, as it does today. Once it has stopped itself after
   30 minutes with no window connected, reopening the app is a service restart (User Story 1,
   scenario 8).
-- **History is shown when the session is opened or started**, not before. Opening a session that was
-  interrupted by the service restart resumes it, and that is when its history and separator appear.
-  A session the user had stopped before the restart shows its history when the user starts it.
+- **After a service restart, history is shown when the session is opened or started**, not before.
+  Opening a session that was interrupted by the service restart resumes it, and that is when its
+  history and separator appear. A session the user had stopped before the restart shows its history
+  when the user starts it. Within one service run the earlier output and the separator are shown at
+  the start that follows the stop or the exit (FR-015).
 
 ### Out of scope
 
@@ -393,3 +457,6 @@ Repeat with Close.
 - Copying saved history to another computer or to any online service.
 - A per-project or per-session choice, and a configurable save interval.
 - Keeping the history of a session that was closed or removed.
+- Saving or restoring the history of Regular Terminal (shell) instances, and bringing those
+  instances back after a service restart.
+- Keeping saved histories on disk, hidden, while the setting is off.
