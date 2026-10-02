@@ -193,7 +193,12 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 20 → 21 for feature 039's `ClientMsg::WindowView` and `SessionSummary::attention_seq`: a
 /// window reports the session it has in view, and every session carries its count of attention
 /// events. Fifteenth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 21;
+///
+/// And 21 → 22 for feature 040's `ClientMsg::MergedBranchCheck` /
+/// `OperationResult::MergedBranchCheck` and `pr_status_enabled` on `DaemonSettings` and
+/// `SettingsSet`: one bump for both, taking 22 as
+/// feature 039 took 21. Sixteenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 22;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -267,6 +272,40 @@ fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
             messages.contains(anchor),
             "`{anchor}` is not in messages.rs, so version 21's hash is not the hash of the \
              message set that reports views and counts attention events"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 040 — one bump for the merged-branch question and the pull request switch
+// ---------------------------------------------------------------------------------------
+
+/// U58 (feature 040, contracts/reading-and-wire.md §5). The merged-branch question and the pull
+/// request switch ship together, so they cost one version: 22, the next free number after
+/// feature 039 took 21. Both are read from the text `build.rs` hashes, as above, so that 22's
+/// hash is the hash of the message set that has all of it.
+#[test]
+fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() {
+    assert_eq!(
+        PROTOCOL_VERSION, 22,
+        "feature 040's wire change is one bump, 21 → 22; if `main` took 22 first, this feature \
+         takes the next free number and this test follows it"
+    );
+
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let hashed = canonicalize(&messages);
+    for anchor in [
+        "pub struct MergedBranchQuery {",
+        "pub enum BranchContainment {",
+        "checks: Vec<MergedBranchQuery>,",
+        "answers: Vec<BranchContainment>,",
+        "pr_status_enabled: Option<bool>,",
+        "pub pr_status_enabled: bool,",
+    ] {
+        assert!(
+            hashed.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 22's hash does not cover all of \
+             feature 040's wire change"
         );
     }
 }

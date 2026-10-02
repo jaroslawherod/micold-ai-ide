@@ -78,7 +78,13 @@
 /// Bumped 20 → 21 for feature 039's `ClientMsg::WindowView` and `SessionSummary::attention_seq`
 /// (contract W1): a window reports the session it has in view, and every session carries its
 /// count of attention events. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 21;
+/// Bumped 21 → 22 for feature 040, once for both of its wire changes:
+/// `ClientMsg::MergedBranchCheck` / `OperationResult::MergedBranchCheck` (with `MergedBranchQuery`
+/// and `BranchContainment`), which ask whether a branch holds commits beyond its merged pull
+/// request, and `pr_status_enabled` on `DaemonSettings` and `ClientMsg::SettingsSet`, the switch
+/// for pull request status. An older peer would fail to decode any of them. It developed against
+/// 20 while feature 039 took 21, so it is 22.
+pub const PROTOCOL_VERSION: u32 = 22;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
