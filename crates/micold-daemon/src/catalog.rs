@@ -299,6 +299,7 @@ impl Catalog {
                 on_disk.pi_activity_component = self.settings.pi_activity_component;
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
+                on_disk.pr_status_enabled = self.settings.pr_status_enabled;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -385,6 +386,13 @@ impl Catalog {
     /// Set the cross-session option, persisting atomically (feature 034, FR-016).
     pub fn set_cross_session_access(&mut self, access: CrossSessionAccess) -> io::Result<()> {
         self.settings.cross_session_access = access;
+        self.persist_service_settings()
+    }
+
+    /// Turn pull request status on or off, persisting atomically (feature 040, FR-030). The
+    /// service only holds the switch for the clients; it reads no pull request itself.
+    pub fn set_pr_status_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.pr_status_enabled = on;
         self.persist_service_settings()
     }
 
