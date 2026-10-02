@@ -317,6 +317,8 @@ jobs:
             --test service_capability_fakes \
             --test outcome_termination \
             --test popover_displacement \
+            --test attention_view_report \
+            --test features_attention \
             --test features_connection \
             --test features_help \
             --test features_notifications \

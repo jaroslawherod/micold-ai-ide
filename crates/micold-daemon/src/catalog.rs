@@ -646,8 +646,12 @@ impl Catalog {
     /// As with [`Self::record_session_name`], the count is added in memory before the disk: a
     /// persist failure leaves it counted and is returned for the caller to log.
     pub fn mark_attention(&mut self, id: SessionId) -> io::Result<bool> {
-        let _ = id;
-        Ok(false)
+        let Some((_project, session)) = self.workspace.find_session_mut(id) else {
+            return Ok(false);
+        };
+        session.attention_seq += 1;
+        self.persist()?;
+        Ok(true)
     }
 
     /// Record a label derived from session `id`'s first turn, persisting — only if the session
@@ -1117,7 +1121,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         activity: ActivitySignal::Unknown,
         input_serial: 0,
         live_shells: Vec::new(),
-        attention_seq: 0,
+        attention_seq: session.attention_seq,
     }
 }
 

@@ -45,14 +45,14 @@ ticked by `speckit-implement`.
 | --- | --- | --- | --- | --- | --- | --- |
 | A1 | With A in view and B working, B's change to awaiting input is granted to one window, which shows exactly one notification naming B's project, worktree and row label | US1-1, FR-001, FR-004 | example | PENDING | T021, T022 | T118 |
 | A2 | A's change to awaiting input while a window reports A in view raises no attention event | US1-2, FR-002 | example | PENDING | T005 | T118 |
-| A3 | A selected in a window that lost keyboard focus is reported as not in view, and its change raises one attention event | US1-3, FR-001 | example | PENDING | T005, T006 | T118 |
+| A3 | A selected in a window that lost keyboard focus is reported as not in view, and its change raises one attention event | US1-3, FR-001 | example | DONE | T005, T006 | T118 |
 | A4 | A granted session of a project that is not the active one is shown with its own project's name, its worktree and its label | US1-4, FR-004 | example | PENDING | T022 | T118 |
 | A5 | A repeated waiting signal for a session already awaiting input raises no further attention event | US1-5, FR-003 | example | PENDING | T005 | T118 |
 | A6 | A session that worked again and changes to awaiting input a second time raises one more attention event | US1-6, FR-003 | example | PENDING | T005 | T118 |
 | A7 | A session of the Default entry is shown with the project, the Default entry's sidebar name and the session | US1-7, FR-004 | example | PENDING | T022 | T118 |
 | A8 | A claim sent over the window's existing connection is granted over that connection, and nothing else reaches the service: the path names no runtime (the guard is U49; the real container is quickstart §C3) | US1-8, FR-007, SC-007 | example | PENDING | T021 | T118 |
-| A9 | With Settings filling the main area the window reports nothing in view, so the selected session's change raises one attention event | US1-9, FR-001 | example | PENDING | T006 | T118 |
-| A10 | A selected session in a focused window is in view whichever of its tabs is shown, so its change raises nothing | US1-10, FR-002 | example | PENDING | T001, T006 | T118 |
+| A9 | With Settings filling the main area the window reports nothing in view, so the selected session's change raises one attention event | US1-9, FR-001 | example | DONE | T006 | T118 |
+| A10 | A selected session in a focused window is in view whichever of its tabs is shown, so its change raises nothing | US1-10, FR-002 | example | DONE | T001, T006 | T118 |
 | A11 | After a reconnect, a session last seen working and found awaiting input with a higher sequence is claimed once and shown once | US1-11, FR-006 | example | PENDING | T022 | T118 |
 | A12 | Sessions that change at the same moment are each granted once, each grant naming its own session | US1-12, FR-009, SC-005 | example | PENDING | T021 | T118 |
 | A13 | A change that happened with no window open is never claimed: the first snapshot a window receives yields no claim and no call to `show` | US1-13, FR-008, FR-005 | example | PENDING | T022 | T118 |
@@ -112,9 +112,9 @@ implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U6 | A `StoredSession` written without `attention_seq` reads as `0` | FR-008a | example | PENDING | T002 / T008 |
-| U7 | A store round trip keeps `attention_seq` | FR-008a | example | PENDING | T002 / T008 |
-| U8 | `schema_version` is the same with and without the new fields | FR-008a | example | PENDING | T002 / T008 |
+| U6 | A `StoredSession` written without `attention_seq` reads as `0` | FR-008a | example | DONE | T002 / T008 |
+| U7 | A store round trip keeps `attention_seq` | FR-008a | example | DONE | T002 / T008 |
+| U8 | `schema_version` is the same with and without the new fields | FR-008a | example | DONE | T002 / T008 |
 | U9 | A `StoredSession` written without `unread` reads as `false` | FR-008a, Edge: first start with this feature | example | PENDING | T045 / T052 |
 | U10 | A store round trip keeps `unread: true` | FR-008a, US2-19 | example | PENDING | T045 / T052 |
 | U11 | `unread` is written to the catalog file and to no other file of the store | FR-025 | example | PENDING | T045 / T052 |
@@ -124,7 +124,7 @@ implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U12 | `ClientMsg::WindowView` and `SessionSummary::attention_seq` encode and decode at version 21 | FR-002, FR-016 | example | PENDING | T003 / T009 |
+| U12 | `ClientMsg::WindowView` and `SessionSummary::attention_seq` encode and decode at version 21 | FR-002, FR-016 | example | DONE | T003 / T009 |
 | U13 | `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted` encode and decode at version 22 | FR-001, FR-006a | example | PENDING | T019 / T026 |
 | U14 | `SessionSummary::unread` encodes and decodes at version 23 | FR-016, FR-024 | example | PENDING | T046 / T053 |
 | U15 | `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession` encode and decode at version 24 | FR-011, FR-012 | example | PENDING | T074 / T082 |
@@ -201,10 +201,10 @@ the same kind.
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U50 | `set_view` keeps one report per connection: a second report replaces the first | FR-002 | example | PENDING | T004 / T010 |
-| U51 | A report with `focused: false` is stored with `in_view: None` whatever it carried | US1-3, FR-016 | example | PENDING | T004 / T010 |
-| U52 | `is_in_view(session)` is true while any stored report names the session, and false otherwise | FR-002, FR-016 | example | PENDING | T004 / T010 |
-| U53 | `remove(client)` forgets that connection's report | FR-016 | example | PENDING | T004 / T010 |
+| U50 | `set_view` keeps one report per connection: a second report replaces the first | FR-002 | example | DONE | T004 / T010 |
+| U51 | A report with `focused: false` is stored with `in_view: None` whatever it carried | US1-3, FR-016 | example | DONE | T004 / T010 |
+| U52 | `is_in_view(session)` is true while any stored report names the session, and false otherwise | FR-002, FR-016 | example | DONE | T004 / T010 |
+| U53 | `remove(client)` forgets that connection's report | FR-016 | example | DONE | T004 / T010 |
 | U54 | `grant` is true the first time a sequence is claimed | FR-006a | example | PENDING | T020 / T027 |
 | U55 | `grant` is false for the same sequence again | FR-006a | example | PENDING | T020 / T027 |
 | U56 | `grant` is false for a sequence above the session's current one | FR-001 | example | PENDING | T020 / T027 |
@@ -225,17 +225,17 @@ the same kind.
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U69 | A change into `AwaitingInput` with the session in view nowhere adds one to `attention_seq` in the `CatalogChanged` both connections receive | FR-001, FR-024 | example | PENDING | T005 / T011, T012 |
-| U70 | With one connection reporting the session in view, the change adds nothing | FR-002 | example | PENDING | T005 / T012, T013 |
-| U71 | A repeated waiting signal adds nothing | FR-003, US1-5 | example | PENDING | T005 / T012 |
-| U72 | Working and awaiting input again adds one more | FR-003, US1-6 | example | PENDING | T005 / T011, T012 |
-| U73 | Three sessions changing at once each add one to their own sequence | FR-009, US1-12 | example | PENDING | T005 / T011, T012 |
-| U74 | With no connection the change still adds one | FR-008 | example | PENDING | T005 / T011, T012 |
-| U75 | After the connection that had the session in view closes, the next change adds one | FR-016 | example | PENDING | T005 / T012 |
-| U76 | A `WindowView` from a connection attached to no project is accepted and gets no `OperationOk` | FR-002 | example | PENDING | T005 / T013 |
-| U77 | `attention_seq` survives a restart of the service on the same store directory | FR-008a | example | PENDING | T005 / T011 |
-| U78 | A removed session is in no later catalog snapshot | FR-020 | example | PENDING | T005 / T012 |
-| U79 | A session that ends adds nothing to its sequence | FR-005, Edge: session ended or crashed | example | PENDING | T005 / T012 |
+| U69 | A change into `AwaitingInput` with the session in view nowhere adds one to `attention_seq` in the `CatalogChanged` both connections receive | FR-001, FR-024 | example | DONE | T005 / T011, T012 |
+| U70 | With one connection reporting the session in view, the change adds nothing | FR-002 | example | DONE | T005 / T012, T013 |
+| U71 | A repeated waiting signal adds nothing | FR-003, US1-5 | example | DONE | T005 / T012 |
+| U72 | Working and awaiting input again adds one more | FR-003, US1-6 | example | DONE | T005 / T011, T012 |
+| U73 | Three sessions changing at once each add one to their own sequence | FR-009, US1-12 | example | DONE | T005 / T011, T012 |
+| U74 | With no connection the change still adds one | FR-008 | example | DONE | T005 / T011, T012 |
+| U75 | After the connection that had the session in view closes, the next change adds one | FR-016 | example | DONE | T005 / T012 |
+| U76 | A `WindowView` from a connection attached to no project is accepted and gets no `OperationOk` | FR-002 | example | DONE | T005 / T013 |
+| U77 | `attention_seq` survives a restart of the service on the same store directory | FR-008a | example | DONE | T005 / T011 |
+| U78 | A removed session is in no later catalog snapshot | FR-020 | example | DONE | T005 / T012 |
+| U79 | A session that ends adds nothing to its sequence | FR-005, Edge: session ended or crashed | example | DONE | T005 / T012 |
 
 ### `crates/micold-daemon/tests/attention_claims.rs`: claim and grant
 
@@ -292,15 +292,15 @@ the same kind.
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U111 | One report follows each `Welcome`, also when nothing is in view | FR-019, US2-23 | example | PENDING | T006 / T015 |
-| U112 | Afterwards a report is sent only when the derived value differs from the last one sent | FR-019 | example | PENDING | T006 / T015 |
-| U113 | Losing focus reports `focused: false, in_view: None` | US1-3, US2-6 | example | PENDING | T006 / T015 |
-| U114 | Opening Settings reports `in_view: None`, and leaving it reports the session again | US1-9, US2-11 | example | PENDING | T006 / T015 |
-| U115 | A reconnect resets what was sent, so the next report is sent whatever its value | FR-006 | example | PENDING | T006 / T015 |
-| U116 | `reconcile_catalog` copies `attention_seq` into `Workspace::sessions` | FR-001 | example | PENDING | T006 / T014 |
-| U176 | `view_facts` names the active project's selected session as `selected` and passes `window_focused` through | US1-1, FR-001 | example | PENDING | T006 / T123 |
-| U177 | With Settings open `view_facts` has `main_area_taken: true` | US1-9, US2-11 | example | PENDING | T006 / T123 |
-| U178 | Showing another tab of the selected session leaves `view_facts` equal | US1-10, US2-12 | example | PENDING | T006 / T123 |
+| U111 | One report follows each `Welcome`, also when nothing is in view | FR-019, US2-23 | example | DONE | T006 / T015 |
+| U112 | Afterwards a report is sent only when the derived value differs from the last one sent | FR-019 | example | DONE | T006 / T015 |
+| U113 | Losing focus reports `focused: false, in_view: None` | US1-3, US2-6 | example | DONE | T006 / T015 |
+| U114 | Opening Settings reports `in_view: None`, and leaving it reports the session again | US1-9, US2-11 | example | DONE | T006 / T015 |
+| U115 | A reconnect resets what was sent, so the next report is sent whatever its value | FR-006 | example | DONE | T006 / T015 |
+| U116 | `reconcile_catalog` copies `attention_seq` into `Workspace::sessions` | FR-001 | example | DONE | T006 / T014 |
+| U176 | `view_facts` names the active project's selected session as `selected` and passes `window_focused` through | US1-1, FR-001 | example | DONE | T006 / T123 |
+| U177 | With Settings open `view_facts` has `main_area_taken: true` | US1-9, US2-11 | example | DONE | T006 / T123 |
+| U178 | Showing another tab of the selected session leaves `view_facts` equal | US1-10, US2-12 | example | DONE | T006 / T123 |
 
 ### `crates/micold-client/src/features/attention.rs`: claim, grant and show
 

@@ -1150,6 +1150,7 @@ impl DaemonState {
             let mut inner = self.lock();
             inner.clients.remove(&id);
             inner.attachments.retain(|_, att| att.client != id);
+            inner.views.remove(id);
         }
         self.presence
             .lock()
@@ -1160,7 +1161,7 @@ impl DaemonState {
     /// Record what window `id` has in view (feature 039, W1.1, W1.2). It replaces the window's
     /// last report and is forgotten when its connection ends.
     pub fn set_window_view(&self, id: ClientId, view: WindowView) {
-        let _ = (id, view);
+        self.lock().views.set_view(id, view);
     }
 
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).
@@ -2801,6 +2802,8 @@ impl DaemonState {
             return false;
         }
         let mut inner = self.lock();
+        // Reborrowed so the live sessions, the views and the catalog borrow apart.
+        let inner = &mut *inner;
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
@@ -2809,6 +2812,19 @@ impl DaemonState {
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
         live.name_stale |= changed || first_turn_evidence;
+        // An attention event (feature 039, FR-001, FR-004): the session came to await input from
+        // another signal while no window had it in view. Counted here, by the service, so it is
+        // counted with no window open as well (FR-008).
+        let began_waiting = before != ActivitySignal::AwaitingInput
+            && live.activity.signal() == &ActivitySignal::AwaitingInput;
+        let counted = if began_waiting && !inner.views.is_in_view(session) {
+            inner.catalog.mark_attention(session)
+        } else {
+            Ok(false)
+        };
+        if let Err(err) = counted {
+            tracing::warn!(session = %session.0, %err, "could not store the attention event");
+        }
         changed
     }
 

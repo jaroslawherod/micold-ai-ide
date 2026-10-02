@@ -159,6 +159,8 @@ pub struct State {
     pub help: crate::features::help::State,
     /// What the agent_confirm feature remembers -- see [`crate::features::agent_confirm::State`].
     pub agent_confirm: crate::features::agent_confirm::State,
+    /// What the attention feature remembers -- see [`crate::features::attention::State`].
+    pub attention: crate::features::attention::State,
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
     ///
@@ -348,6 +350,41 @@ impl State {
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.
             && self.settings.settings_draft.is_none()
+    }
+
+    /// What decides which session this window has in view (feature 039, FR-002).
+    ///
+    /// **Derived, never stored**, like [`Self::terminal_focused`] above it. Whether the window has
+    /// keyboard focus is the binary's fact, so it is handed in; the rest is read here, so that no
+    /// rule about what a window shows is left in `main.rs`. There is nothing about the tab the
+    /// session shows, because [`ViewFacts`](micold_core::attention::ViewFacts) has no field for it
+    /// (US1 scenario 10).
+    pub fn view_facts(&self, window_focused: bool) -> micold_core::attention::ViewFacts {
+        micold_core::attention::ViewFacts {
+            window_focused,
+            main_area_taken: self.settings.settings_draft.is_some(),
+            selected: self.session.active,
+        }
+    }
+
+    /// The view report the session service has not been sent yet, if any (feature 039, W1.1).
+    ///
+    /// A returned report is recorded as sent, so the caller sends it — and asks only while there
+    /// is a connection to send it on. It arrives here rather than the shell calling the feature,
+    /// because the root is the only thing that drives one (SC-002,
+    /// `tests/feature_registration_cost.rs::only_the_root_drives_a_feature`).
+    pub fn view_report(
+        &mut self,
+        window_focused: bool,
+    ) -> Option<micold_core::protocol::messages::WindowView> {
+        let facts = self.view_facts(window_focused);
+        crate::features::attention::view_report(&mut self.attention, facts)
+    }
+
+    /// A new connection has been sent no view report: the next one goes out whatever it says
+    /// (feature 039, FR-006).
+    pub fn view_report_forgotten(&mut self) {
+        crate::features::attention::connection_started(&mut self.attention);
     }
 
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).

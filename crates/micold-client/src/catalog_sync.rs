@@ -116,6 +116,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 }
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
+                existing.attention_seq = summary.attention_seq;
                 // Adopt the daemon's label only when it has a real one: a title, or a label derived
                 // from the first turn (feature 032, C8.5). The daemon now overlays the live OSC-0
                 // title onto the summary (T047), but a summary can still be `Pending` before either
@@ -163,6 +164,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 );
                 s.lifecycle = lifecycle;
                 s.activity = summary.activity.clone();
+                s.attention_seq = summary.attention_seq;
                 list.push(s);
             }
         }
@@ -422,6 +424,30 @@ mod tests {
         let line = attach_log_line(&snapshot(vec![("/a", 0)]), Some(Path::new("/a")));
         assert!(line.starts_with("attach: connected"), "{line}");
         assert!(line.contains("active_sessions=0"), "{line}");
+    }
+
+    /// Feature 039 (FR-001): the count of attention events a session has raised is the service's,
+    /// and a window learns it from the catalog — for a session it sees for the first time, and for
+    /// one it already holds.
+    #[test]
+    fn a_catalog_snapshots_attention_seq_reaches_the_clients_session() {
+        let project = PathBuf::from("/a");
+        let mut catalog = snapshot(vec![("/a", 1)]);
+        catalog.projects[0].sessions[0].attention_seq = 7;
+        let mut core = State::default();
+
+        reconcile_catalog(&mut core, &catalog, false);
+        assert_eq!(
+            core.workspace.sessions[&project][0].attention_seq, 7,
+            "a session first seen in a snapshot arrives with the snapshot's count"
+        );
+
+        catalog.projects[0].sessions[0].attention_seq = 9;
+        reconcile_catalog(&mut core, &catalog, false);
+        assert_eq!(
+            core.workspace.sessions[&project][0].attention_seq, 9,
+            "a later snapshot's count replaces the one held"
+        );
     }
 
     /// A project the daemon does not list at all is a third state again — and saying `0` for it
