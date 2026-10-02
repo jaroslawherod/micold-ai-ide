@@ -64,6 +64,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Plan | 2 | 44432235aa3ef419836025515a694e389a5e0538:68bb925ba96bb73e2b5697fe2572270e6bdc867c | CLEAN: 3 MINOR (`Released` must skip the self-collision early returns; no reducer row for `Held` / `ListingArrived` during a reading; another window's `CatalogChanged` can arrive between `Attached` and the fresh listing), all fixed or recorded as an accepted bound. |
 | Tasks | 1 | 9a09604522b5326d1486e431c38f1de03af866ea:9501106dd083d16e187bf2851014bfa64d139318 | CHANGES: 3 MAJOR (T043's test of the open handler sat under `tests/`, which cannot reach the binary's `shell`, and `worktree_menu_items` is private; the row's stale threshold was a comparison in `ui/` that no test saw; M5 was `light` with a security check), 3 MINOR (rule 6 not rule 3 for the story 1 split; Verify lines missing suites; M8 `light` with open-ended fixes, T068's checklist clause). All six fixed. Checklist: 16 of 16 ticked items confirmed against the edited spec. `speckit-analyze` before it: 0 CRITICAL, 0 HIGH; I1, E2, E3, I2, I3 applied; E1 answered by this round's F1 and F2. |
 | Tasks | 2 | 86514bb7cfe3a10a9d00e54449743e74d39c8730:5ce9f7ffd4d719ce1de292d1a8b91df286732994 | CLEAN: 1 MINOR (T059 and U146 keyed the `Read:` line on `age_secs` while the data model keys it on `stale`), fixed. |
+| Code A (M1) | 1 | be2c688facf99c1a98ccb77330add3bf207b3410:9436237451f36aaa08f6690dd91f5c17d8d14005 | CLEAN: 3 MINOR. F1 (`reading_failure` lost the `errors` when the data beside them could not be read) fixed with a test; F2 (`GhCli::read` gave every chunk the reading's start time) fixed; F3 not fixed, see *Follow-ups not done*. |
 
 ## Declined review findings
 
@@ -82,3 +83,4 @@ None.
 
 ## Follow-ups not done
 
+- M1 review A, F3 (MINOR, not confirmed against GitHub): a sign-in that may read pull requests but not checks could get a field-level `FORBIDDEN` error on `statusCheckRollup`. Contract PS §5 makes any `errors` entry a failure, and `github::classify` reads "resource not accessible" as no access, so the whole project would show nothing (`Unavailable`). Deciding whether such an error is tolerated (checks read as none) needs a recorded answer from a token of that kind and a contract change.

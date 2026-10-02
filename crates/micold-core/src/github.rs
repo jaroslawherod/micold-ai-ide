@@ -1162,8 +1162,11 @@ impl crate::pull_request::PullRequestSource for GhCli {
         std::collections::BTreeMap<String, crate::pull_request::PullRequestStatus>,
         crate::pull_request::ReadingFailure,
     > {
+        // `now` is when the reading began; a later chunk's `Retry-After` counts from its own answer.
+        let began = std::time::Instant::now();
         crate::pull_request::read_in_chunks(branches, |chunk| {
             let outcome = self.outcome(crate::pull_request::status_args(repo, chunk));
+            let now = now.saturating_add(began.elapsed().as_secs());
             crate::pull_request::read_outcome(&outcome, chunk, now)
         })
     }

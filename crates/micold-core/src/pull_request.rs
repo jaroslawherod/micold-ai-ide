@@ -387,6 +387,14 @@ struct AnswerData {
     repository: Option<BTreeMap<String, Connection>>,
 }
 
+/// Only the `errors` of an answer. [`reading_failure`] reads them apart from [`Answer`], so that
+/// data this version cannot read never hides the rate limit or the refusal reported beside it.
+#[derive(serde::Deserialize)]
+struct AnswerErrors {
+    #[serde(default)]
+    errors: Vec<AnswerError>,
+}
+
 /// One entry of GraphQL's `errors`: its `type` and where in the query it applies.
 #[derive(serde::Deserialize)]
 struct AnswerError {
@@ -571,7 +579,7 @@ pub fn reading_failure(outcome: &RunOutcome, now: u64) -> ReadingFailure {
     let response = split_response(stdout);
     let status = response.as_ref().map(|response| response.status);
     let body = response.as_ref().map_or(&[][..], |response| response.body);
-    let errors = serde_json::from_slice::<Answer>(body)
+    let errors = serde_json::from_slice::<AnswerErrors>(body)
         .map(|answer| answer.errors)
         .unwrap_or_default();
     let says_rate_limit = |text: &str| text.to_ascii_lowercase().contains("rate limit");

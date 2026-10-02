@@ -155,3 +155,18 @@ existed and failed before the implementation.
 - suite: `mise run test-core` -> 1589 passed, 0 failed, 7 ignored (142 test-result lines), exit 0:
   the 1513 of cycle 2 and the 76 tests of cycles 3 to 8
 - commit: the commit that adds this entry
+
+## Cycle 9: U33 — a rate limit beside data that cannot be read (review A, F1)
+
+- test: `crates/micold-core/tests/pull_request_failure.rs::a_rate_limit_beside_unreadable_data_is_still_a_rate_limit` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_failure` on the source
+  of cycle 8 -> `26 passed; 1 failed`: `left: Passing`, `right: RateLimited { until: 1790966100 }`
+  (`reading_failure` read `errors` through the strict `Answer`, so a `null` node dropped them)
+- green: `reading_failure` reads `errors` through `AnswerErrors`, which holds nothing else.
+  `27 passed; 0 failed`
+- refactor: none needed
+- also in this commit, untested (it needs a real `gh` and a clock): `GhCli::read` adds the time
+  since the reading began to `now` for each chunk, so a later chunk's `Retry-After` counts from its
+  own answer (review A, F2)
+- suite: `mise run gate` (the workspace suite) before the pull request
+- commit: the commit that adds this entry
