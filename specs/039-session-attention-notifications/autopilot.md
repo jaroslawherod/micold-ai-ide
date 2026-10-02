@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: review the plan (Plan rubric, round 1), then `speckit-tasks`, milestones, `speckit-analyze`, checklists, PR 2.
+- **Next step**: Design unit, part 2: Plan review round 2 (fixes to round 1 committed), then `speckit-tasks`, milestones, `speckit-analyze`, the tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -40,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D12 | design | Several windows are several client processes: who raises the one notification, and which window does a click open? | A window claims an attention event and the service grants each once (FR-006a); a click is sent to the service, which forwards it to the window holding the project (FR-012). | agent-resolved | research.md R3, R6; `messages.rs:92` `ClientInstance`, `RefusalReason::ProjectBusy` |
 | D13 | design | Which notification crates? | Linux `zbus` directly, macOS `mac-usernotifications` 0.3.1, Windows `tauri-winrt-notification` 0.8.1, behind one trait. `notify-rust` rejected: no Wayland activation token, `cc` build on macOS. | agent-resolved | research.md R4 |
 | D14 | design | Is the switch a client or a service setting? | Service-owned (`DaemonSettings`), so every window has one value at once; the service refuses grants while off. | agent-resolved | research.md R8; pattern `tool_server_enabled` |
+| D15 | design | A notification is clicked after the window that raised it was closed, with another window open. Must the session open? | No: the click is reported to the raising process only, on all three systems, so no window learns of it (FR-015's exception). Nothing changes; the unread mark finds the session. Stated in spec Edge Cases, research R6 *Known limit*, contract N9, quickstart B11a, and the user guide in M3. Sharing ids through the service was rejected: it helps only on Linux services that send the click to every listener. | agent-resolved | spec.md FR-015, Edge Cases; Review Plan round 1 F3; `mac-usernotifications` 0.3.1 `src/delegate.rs`, `tauri-winrt-notification` 0.8.1 `src/lib.rs:485` |
+| D16 | design | Do the facts part 1 left unconfirmed hold? | Code: all four hold (`switch_daemon_attachment` sends `Detach` then `Attach`, `daemon_sync.rs:198`; `ProjectMsg::Reopened` `features/project.rs:531`; `SessionMsg::Selected` `features/session.rs:1554`; `Button` is a builder with a `leading` slot, `button.rs:95`; the sandboxed service's `projects.json` is the host's state directory mounted at `/var/lib/micold-ai-ide`, `sandbox/mod.rs:367`, `:659`). Wayland: the foreign-handle binding is confirmed in the sources (winit selects `client_system`; `smithay-clipboard` does the same in this application); whether a compositor honours the notification's token stays unverified and has a probe task in M3. Windows: the notification-centre click stays unverified: no primary source found; a task in M3 checks it on an installed build. | agent-resolved | research.md "Where the code is today", R4, R7 |
 
 ## Review rounds
 
@@ -47,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 188c880b773ff483e9791fdb9842587dcb7f9515:71ea3df9093d57217ceee3caed91301dd78382cf | CHANGES: 3 MAJOR ("in view" defined two ways, unread after reconnection undefined, click with no window open undefined), 3 MINOR; all six fixed |
 | Spec | 2 | b217dc29a9ef4507039fd9ddace7063a33e1ac63:71ea3df9093d57217ceee3caed91301dd78382cf | CLEAN (1 MINOR: FR-019 did not name leaving Settings; fixed) |
+| Plan | 1 | 7dfdd00bfdb595aa473a2abd3e119814606b521d:21c79c9d9bf6fb59b7945d2b4bd0596a9a9aefe7 | CHANGES: 5 MAJOR (`SessionChanged` is never sent, the carrier is `CatalogChanged`; the Wayland token did not reach the window that is raised; no rule for a click after the raising window closed; the raise decision was untested glue; no test layer for FR-015, FR-015a, FR-017, FR-025, FR-028), 3 MINOR (an event while the switch is off claimable after reconnecting; counts need the session in view; `SettingsSet` field is an `Option`); all eight fixed |
 
 ## Declined review findings
 
@@ -55,12 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit handed over at the context cap, after `speckit-plan` (step 1 of `phases/3-design.md`), before its review.
-
-- **Done**: `branch-start.sh 528` (three clarify commits rebased onto `origin/main`). Written and committed, not pushed: `plan.md`, `research.md` (R1–R10), `data-model.md`, `quickstart.md`, `contracts/wire.md`, `contracts/desktop-notification.md`, `contracts/unread-mark.md`. `.specify/extensions.yml` has no `before_plan` or `after_plan` hook. `checklists/requirements.md` has no unchecked item.
-- **Next step**: dispatch the Plan review, round 1 (no round is recorded yet; no snapshot taken). Then `speckit-tasks` (its `after_tasks` hooks: `speckit.tdd.plan`, `speckit.docguard.score`, both optional; `before_tasks` hooks not read yet), cut milestones as plan.md *Delivery order* gives them (M1 story 1 `full`, M2 story 2, M3 story 3 `full`, M4 story 4 follows the `tool_server_enabled` pattern, M5 polish), `speckit-analyze`, the tasks review, checklists, PR 2.
-- **Open findings**: none yet. Points the reviewer should test, not yet verified by me in code: that a window detaches the project it leaves (`shell/daemon_sync.rs:195`), so "open in a window" equals "attached"; the names `ProjectMsg::Reopened` and `SessionMsg::Selected` as the switch and select messages; `Button`'s builder in `ui/material/button.rs` (the contract adds `.trailing_mark`); where the sandbox keeps the service's `projects.json`. Two facts are marked **unverified** in research R4 and R7 (Windows notification-centre click, Wayland activation through foreign handles) and need a task each.
-- **PR**: none opened by this unit.
+None.
 
 ## Open escalation
 

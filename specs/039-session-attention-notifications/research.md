@@ -15,23 +15,31 @@ a task that verifies it.
   single-instance mechanism. Each window connects to the one session service and names itself with
   a `ClientInstance` (`crates/micold-core/src/protocol/messages.rs:92`). A project is attached by
   at most one window (`ClientMsg::Attach`, `RefusalReason::ProjectBusy`); switching projects
-  detaches the one left (`crates/micold-client/src/shell/daemon_sync.rs:195`). "The window in
-  which the project is open" (FR-012) is therefore the client holding the project's attachment.
+  detaches the one left (`switch_daemon_attachment`,
+  `crates/micold-client/src/shell/daemon_sync.rs:198`, sends `Detach` for the old project and
+  `Attach` for the new). "The window in which the project is open" (FR-012) is therefore the
+  client holding the project's attachment.
 - **The session service owns sessions and their activity.** `ActivitySignal { Unknown, Working,
   AwaitingInput, Ended }` (`messages.rs:987`) is computed by the pure machine in
   `crates/micold-daemon/src/activity.rs` and applied in `SharedState::note_activity`
   (`crates/micold-daemon/src/state.rs:2786`), which returns whether the signal changed. Activity is
   not persisted: it is `Unknown` after the service restarts.
 - **Every window receives every session.** `SessionSummary` (`messages.rs:909`) travels in the
-  `CatalogSnapshot` of `Welcome` and `CatalogChanged`, and alone in `SessionChanged`, for all
-  projects. The client mirrors it into `Workspace::sessions`
+  `CatalogSnapshot` of `Welcome` and `CatalogChanged`, for all projects. A change of activity is
+  sent as a whole snapshot: both callers of `note_activity` call `broadcast_catalog`
+  (`crates/micold-daemon/src/hooks.rs:203`, `state.rs:1404`). `DaemonMsg::SessionChanged`
+  (`messages.rs:669`) is declared and never sent; this feature does not use it. The client mirrors it into `Workspace::sessions`
   (`crates/micold-core/src/workspace.rs:28`) in `reconcile_catalog`
   (`crates/micold-client/src/catalog_sync.rs:66`).
 - **The session service is the catalog's only writer.** `StoredSession`
   (`crates/micold-core/src/store.rs:163`) is written to `projects.json` in the service's data
   directory (`JsonFileStore::default_location`, `store.rs:610`) by `Catalog::persist`
   (`crates/micold-daemon/src/catalog.rs:1072`). New fields are added with `#[serde(default)]` and
-  no `schema_version` bump (`store.rs:136`, `:171`, `:186`).
+  no `schema_version` bump (`store.rs:136`, `:171`, `:186`). In a container the service's data
+  directory is `/var/lib/micold-ai-ide` (`STATE_CONTAINER_DIR`,
+  `crates/micold-core/src/sandbox/mod.rs:367`), which is the host's state directory mounted in
+  (`mod.rs:659`): the sandboxed service writes the same `projects.json` on the user's computer as
+  the host service does, so what is stored there outlives the container.
 - **Settings have two owners.** `Settings` (`crates/micold-core/src/settings.rs:110`) is one file;
   the service owns the fields `DaemonSettings` (`messages.rs:1079`) carries and pushes them to
   every window with `SettingsChanged`. `tool_server_enabled` is the pattern for a service-owned
@@ -62,7 +70,7 @@ the wire in `SessionSummary`:
 `note_activity` is the one place a session changes into `AwaitingInput`. When the signal before is
 anything else and the signal after is `AwaitingInput`, and no connected window reports the session
 in view (R2), the service adds one to `attention_seq`, sets `unread`, persists the catalog and
-lets the existing `SessionChanged` broadcast carry both. When a window reports the session in view,
+lets the `CatalogChanged` that follows every change of activity carry both. When a window reports the session in view,
 the service clears `unread`, persists and broadcasts.
 
 **Rationale.** This is the means the clarify round asked the plan to find for FR-008. A window
@@ -126,7 +134,8 @@ so the 1-second limit of FR-019 does not depend on a round trip.
 ## R3 — A window claims an attention event; the service grants each one once (FR-001, FR-003, FR-005, FR-006, FR-006a, FR-009)
 
 **Decision.** The client keeps, per process and in memory, the `attention_seq` and activity it last
-saw for each session (`AttentionTracker` in `micold-core`). On every snapshot or `SessionChanged`:
+saw for each session (`AttentionTracker` in `micold-core`). On every catalog snapshot (`Welcome`,
+`CatalogChanged`):
 
 | Situation | Rule |
 |---|---|
@@ -195,9 +204,19 @@ Registration each system needs:
 - **Windows**: a toast needs an Application User Model ID that the system knows. The installer's
   Start-menu shortcut gets `AppUserModelID: "MicoldAiIde.Client"` in
   `packaging/windows/micold-ai-ide.iss`, and the client passes the same string to `Toast::new`.
-  An unknown ID fails without an error. **Unverified**: whether a body click on a toast that has
-  moved to the notification centre still reaches `on_activated`; the Windows part of
-  quickstart §C checks it, and FR-015 holds either way because the notification is shown.
+  Microsoft's quickstart for desktop toasts says a toast with an ID no shortcut carries "will not
+  be displayed"; whether `show` then returns an error is not documented, so the client does not
+  rely on one. Checked in the crate's source (`src/lib.rs`, 0.8.1): `on_activated` takes
+  `Fn(Option<String>) -> Result<()> + Send + 'static`, called with `None` for a click on the body;
+  the handler is called on a thread of the system's, not the window's, so the backend only sends
+  a `NotifierEvent` over its channel; `show(&self)` attaches the handler and drops the
+  `ToastNotification` when it returns. **Unverified**: whether a body click reaches
+  `on_activated` once the banner has gone and the toast sits in the notification centre.
+  Microsoft documents the `Activated` event for "apps that are running" and says nothing about
+  the notification centre, and no primary source was found (searched 2026-10-02); the system may
+  drop such a toast, or start the shortcut's target instead, which is an ordinary start
+  (FR-015a). A task of story 3 checks it on an installed build (quickstart §C2) and records the
+  result in the user guide. FR-015 holds either way because the notification is shown.
 
 **Alternatives rejected.**
 
@@ -215,9 +234,9 @@ Registration each system needs:
 ## R5 — Counting unread sessions (FR-021, FR-022, FR-023)
 
 **Decision.** Two pure functions on `Workspace` beside `running_session_count`
-(`crates/micold-core/src/workspace.rs:319`): `unread_session_count(&project)` counts the
-project's sessions with `unread`, and `other_projects_unread(&active)` sums it over every project
-but the active one. Both read `Workspace::sessions`, which holds every session of every known
+(`crates/micold-core/src/workspace.rs:319`): `unread_session_count(&project, in_view)` counts
+the project's sessions with `unread`, less the session the window has in view, and
+`other_projects_unread(&active)` sums it over every project but the active one. Both read `Workspace::sessions`, which holds every session of every known
 project, whatever the sidebar's tag filter hides and including the Default entry (FR-022).
 `SwitcherEntry` gains `unread_count`. The count of the session in view is taken as read at once
 (R2).
@@ -229,11 +248,12 @@ source could only drift.
 
 ## R6 — A click is routed by the session service to the right window (FR-011 to FR-015a)
 
-**Decision.** Each notification carries the project path and the session id. On activation the
-window that raised it sends `ClientMsg::SessionReveal { project, session }`. The service picks the
+**Decision.** The window that raises a notification keeps its project path and session id against
+the system's id for it. On activation it sends `ClientMsg::SessionReveal { project, session,
+activation }`, where `activation` is the Wayland token of the click when there is one. The service picks the
 target — the window attached to `project`; when none is, the window that most recently reported
 focus (R2); when none did, the sender — and sends it `DaemonMsg::RevealSession { project,
-session }`. The target brings its window to the front (R7) and resolves the request with a pure
+session, activation }`. The target brings its window to the front (R7) and resolves the request with a pure
 function in `micold-core`:
 
 - the project is known and available and the session exists → make the project active through the
@@ -250,17 +270,31 @@ application, starts it with no argument, which is an ordinary start (FR-015a).
 **Rationale.** A window is a process; FR-012 names a window that may not be the one that raised
 the notification. The service already knows who holds each project.
 
+**Known limit.** A click is reported by the system to the process that raised the notification:
+the D-Bus signals name an id only that process can resolve, and the macOS delegate and the Windows
+handler live in it. When that window has been closed and another is still open, the click reaches
+no window: nothing changes, and the session keeps its unread mark, which is how the user finds it.
+This is the case FR-015 excepts — the notification service cannot report the click to the
+application — and the spec's Edge Cases name it. Any open window can raise a notification, so the
+limit applies only to notifications older than the window that raised them.
+
 **Alternatives rejected.** *The raising window handles the click itself.* It would have to take
-the project from the window that holds it, which is the takeover FR-012 rules out.
+the project from the window that holds it, which is the takeover FR-012 rules out. *The service
+keeps every notification's system id, and every window listens for clicks on ids it did not
+raise.* One more message and a table in the service, for Linux notification services that send
+the click to every listener only; macOS and Windows would gain nothing.
 
 ## R7 — Bringing the window to the front (FR-011)
 
 **Decision.** `shell/window_raise.rs` issues `iced::window::minimize(id, false)` and then
-`iced::window::gain_focus(id)` for the window from `iced::window::latest()`. That is
+`iced::window::gain_focus(id)` for the window from `iced::window::latest()`. Which steps are
+issued is decided by the pure, tested `raise_plan` in `features/attention.rs`; `window_raise.rs`
+only carries them out (Principle I). That is
 `_NET_ACTIVE_WINDOW` on X11, `activateIgnoringOtherApps` on macOS and winit's foreground switch on
 Windows. On Wayland winit's `focus_window` does nothing, so the Linux arm also activates the
 surface with the `xdg_activation_v1` protocol, using the token the notification service sent in
-its `ActivationToken` signal and the `wl_display` and `wl_surface` handles from
+its `ActivationToken` signal — carried to the window that is raised in `RevealSession`, as that
+may be another process — and the `wl_display` and `wl_surface` handles from
 `iced::window::run`, through `wayland-client` and `wayland-protocols` (both in `Cargo.lock`). When
 there is no token, no such protocol, or the compositor declines, it falls back to
 `iced::window::request_user_attention`, and the session is still selected.
@@ -268,11 +302,22 @@ there is no token, no such protocol, or the compositor declines, it falls back t
 **Rationale.** The spec asks for keyboard focus wherever the notification service reports the
 click. The token is the one sanctioned way on Wayland.
 
-**Risk.** The Wayland arm is the only part of this feature with no precedent in the repository.
-Its first task is a probe on a Wayland session; if the foreign-display binding cannot be made to
-work with the `wayland-backend` features winit selects, the fallback is what ships on Wayland and
-the limit is written into the user guide and recorded in the ledger as a follow-up. X11, macOS and
-Windows do not depend on it.
+**Checked in the sources (2026-10-02).** winit 0.30.13 leaves `focus_window` empty on Wayland
+(`src/platform_impl/linux/wayland/window/mod.rs:629`) and takes an activation token only when a
+window is created (`:176`). It selects `wayland-backend` with `client_system` and
+`wayland-protocols` with `staging` (its `Cargo.toml`), so `Backend::from_foreign_display`
+(`wayland-backend` 0.3.17, `src/sys/client_impl/mod.rs:271`) and the `xdg_activation_v1` bindings
+are compiled in already. A second connection over the application's own `wl_display` is what
+`smithay-clipboard` 0.7.3 does today in this application (`src/lib.rs:35`, through iced's
+clipboard). `iced::window::run` hands the closure a `&dyn Window` with the display and window
+handles (`iced_runtime` 0.14.0, `src/window.rs:463`). The client must name `wayland-backend` with
+`client_system` and `wayland-protocols` with `client` and `staging` itself.
+
+**Risk.** **Unverified**: whether a compositor gives keyboard focus for the token a notification
+service hands out; that is the compositor's policy and differs between them. The Wayland arm's
+first task is a probe on a Wayland session (the development host runs one). If the probe fails,
+the fallback is what ships on Wayland and the limit is written into the user guide and recorded in
+the ledger as a follow-up. X11, macOS and Windows do not depend on it.
 
 **Alternatives rejected.** *A second window, or restarting the window with a token.* Destroys the
 user's state. *Only `request_user_attention` everywhere.* Does not meet FR-011 where focus is
@@ -288,8 +333,9 @@ neighbours use. While it is off the service grants no claim (R3).
 **Rationale.** A window that still believed the setting on would claim and notify, so the value
 must be one value for all windows at once; `SettingsChanged` already does that. Refusing at the
 grant makes "off" hold for sessions already running and for the next change, with no restart, and
-a change that happened while it was off is never granted later because each window has already
-moved past its sequence (FR-027). There is one field and no per-CLI field (FR-028). An unreadable
+a change that happened while it was off is never granted later: while the switch is off the
+service records each attention event as granted (`Views::note_event`), which also covers a window
+that was disconnected at the time and claims after reconnecting (FR-027). There is one field and no per-CLI field (FR-028). An unreadable
 settings file yields the defaults, so the switch is on (spec Edge Cases).
 
 **Alternatives rejected.** *A client-owned field.* Each window would read it on its own schedule.

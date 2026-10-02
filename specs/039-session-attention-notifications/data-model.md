@@ -53,6 +53,7 @@ Pure, no I/O. Lost when the service stops.
 | `set_view(client, view)` | Stores the report; returns the session that came into view, if any. |
 | `remove(client)` | Forgets the connection. |
 | `is_in_view(session)` | Whether any stored report names the session. |
+| `note_event(session, seq, enabled)` | Called for each attention event. While `enabled` is `false` it records `seq` as granted, so the event can never be claimed (FR-027). |
 | `grant(session, seq, current_seq, enabled)` | `true` when `enabled`, `seq > granted[session]` and `seq <= current_seq`; then records `seq`. |
 | `reveal_target(holder, sender)` | `holder` when given, else the last entry of `focus_order`, else `sender`. |
 
@@ -98,8 +99,8 @@ placeholder of its own.
 
 | Function | Value |
 |---|---|
-| `unread_session_count(&project) -> usize` | Sessions of the project with `unread`, less the one this window has in view. |
-| `other_projects_unread(&active) -> usize` | The sum of the above over every project except `active`. |
+| `unread_session_count(&project, in_view: Option<SessionId>) -> usize` | Sessions of the project with `unread`, less `in_view`. The client passes the session its window has in view, so the count falls before the service answers (FR-019). |
+| `other_projects_unread(&active) -> usize` | The sum of `unread_session_count(project, None)` over every project except `active`: a session in view is always of the active project. |
 
 `SwitcherEntry` (`crates/micold-client/src/features/project.rs:118`) gains `unread_count: usize`.
 
@@ -110,6 +111,10 @@ placeholder of its own.
 | `tracker` | `AttentionTracker` | Above. |
 | `sent_view` | `Option<WindowView>` | The last report sent on this connection; `None` after a reconnect. |
 | `failure_logged` | `bool` | A show failure was logged in this run (FR-010). |
+
+`raise_plan` and `after_activation` (contract desktop-notification, *Raising the window*) are pure
+functions of this module. The activation token is not kept in the state: it travels in
+`SessionReveal` and comes back in `RevealSession`.
 
 ## Setting
 

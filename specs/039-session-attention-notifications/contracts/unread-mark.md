@@ -30,7 +30,7 @@ UnreadMark::new(roles)          // the mark alone
 | # | Rule | Requirement |
 |---|---|---|
 | U5 | The session row shows the mark when `session.unread` and the session is not the one this window has in view. | FR-016, FR-019 |
-| U6 | A switcher row shows `unread_session_count(project)` when it is one or more, on the active project's row as on the others. | FR-021, FR-022 |
+| U6 | A switcher row shows `unread_session_count(project, in_view)` when it is one or more, on the active project's row as on the others. | FR-021, FR-022 |
 | U7 | The switcher's button shows `other_projects_unread(active)` when it is one or more, with its panel closed and open. | FR-023 |
 | U8 | A row with the mark keeps its height, and its label truncates before the mark is pushed out. | FR-032 |
 

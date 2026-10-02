@@ -29,9 +29,9 @@ open and that sees every window ([research R1](./research.md)):
 
 **Primary Dependencies**: `iced` 0.14 (`window::gain_focus`, `minimize`, `request_user_attention`,
 `run`); new direct dependencies of `micold-client`, each target-specific: `zbus` 5.19 (Linux,
-already in `Cargo.lock`), `wayland-client` 0.31 and `wayland-protocols` 0.32 (Linux, already in
-`Cargo.lock`), `mac-usernotifications` 0.3.1 (macOS, new), `tauri-winrt-notification` 0.8.1
-(Windows, new). Licences are `MIT OR Apache-2.0` throughout ([research R4](./research.md)).
+already in `Cargo.lock`), `wayland-client` 0.31, `wayland-backend` 0.3 (`client_system`) and
+`wayland-protocols` 0.32 (`client`, `staging`) (Linux, all already in `Cargo.lock`),
+`mac-usernotifications` 0.3.1 (macOS, new), `tauri-winrt-notification` 0.8.1 (Windows, new). Licences are `MIT OR Apache-2.0` throughout ([research R4](./research.md)).
 
 **Storage**: two fields per session in the service's `projects.json` (`attention_seq`, `unread`)
 and one field in `settings.json` (`desktop_notifications`). All `#[serde(default)]`, no
@@ -65,7 +65,7 @@ new shared component (`UnreadMark`), three extended components, four wire change
 
 | Principle | Verdict | How |
 |---|---|---|
-| **I. Test-First (NON-NEGOTIABLE)** | PASS | Every rule is a pure function or reducer with a failing test first: `micold_core::attention`, `Workspace` counts, `attention::Views` in the daemon, `features/attention.rs`, each backend's event mapping. The calls into the three notification systems and the window-raise tasks are glue with no branch of their own (`shell/`), validated by quickstart §B and §C under the principle's exception. |
+| **I. Test-First (NON-NEGOTIABLE)** | PASS | Every rule is a pure function or reducer with a failing test first: `micold_core::attention`, `Workspace` counts, `attention::Views` in the daemon, `features/attention.rs` (which holds `raise_plan`, the decision how a window is raised), each backend's event mapping. What is left in `shell/desktop_notify/` and `shell/window_raise.rs` is one call per step into a notification system or `iced::window`, with no branch of its own. `shell/` is declared by the binary's `src/main.rs`, so it cannot be reached from `tests/`; it is validated by quickstart §B and §C under the principle's exception for the binary's glue. |
 | **II. Multi-Session Support** | PASS | `attention_seq` and `unread` are per session, in the session's own record; each session is claimed and granted on its own (FR-009). They are persisted and restored with the session. |
 | **III. Worktree Integration** | PASS | No file or VCS operation. A session of the Default entry is named by the sidebar's own label (FR-004) and counted like any other (FR-022). |
 | **IV. Local-First Storage (NON-NEGOTIABLE)** | PASS | State is in the service's catalog and settings file on the user's computer; the only transport is the existing local connection; the notification is shown by the local operating system. Nothing depends on a network. |
@@ -97,11 +97,11 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | FR-008a | `unread` in `StoredSession`; default `false` | R1; data-model Durable |
 | FR-009 | Per-session sequence, claim and grant | R3; W1.4 |
 | FR-010 | `Err` logged once, ignored | R4; N4 |
-| FR-011 | `RevealSession` → raise → `Reopened` + `Selected` | R6, R7; N5, N6 |
+| FR-011 | `RevealSession` → `raise_plan` → `Reopened` + `Selected` | R6, R7; N5, N6; W3.4 |
 | FR-012 | The service picks the holder, else the most recently focused | R6; W3.1 |
 | FR-013 | `Reveal::Unavailable` → notice, no change | R6; N5 |
 | FR-014 | Only the two existing selection messages are sent | R6; N5; W3.3 |
-| FR-015 | Every backend shows without needing a click report | R4; N7 |
+| FR-015 | Every backend shows without needing a click report; a click nobody can resolve changes nothing | R4, R6 Known limit; N7, N9 |
 | FR-015a | No launch registration, no session argument | R6; N8 |
 | FR-016 | `unread` set with the event, not when in view | R1; W2.1; A1, A3 |
 | FR-017 | `unread` does not depend on claim, grant or setting | W2.3; W4.2 |
@@ -114,7 +114,7 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | FR-024 | One holder, sent to every window | R1 |
 | FR-025 | Catalog file and local connection only | R1 |
 | FR-026 | `Settings::desktop_notifications`, default `true` | R8; W4.1 |
-| FR-027 | The grant is refused while off | R8; W4.2 |
+| FR-027 | The grant is refused while off, and events while off are recorded as granted | R8; W4.2 |
 | FR-028 | One field, no per-CLI field | R8 |
 | FR-029 | Three backends behind one trait | R4; contract Backends |
 | FR-030 | `UnreadMark` and three showcase entries | R9; contract Showcase |
@@ -125,13 +125,14 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 
 | Layer | Runs with | Covers |
 |---|---|---|
-| Core unit (`crates/micold-core/src/attention.rs`, `workspace.rs`, `settings.rs`, `store.rs`) | `mise run test-core` | `in_view` (FR-002, FR-016, story 1 scenarios 9 and 10); `AttentionTracker::observe` (FR-001, FR-003, FR-005, FR-006, FR-009); `notification_text` (FR-004); `resolve_reveal` (FR-011, FR-013); counts (FR-021 to FR-023); defaults of the stored fields and the setting (FR-008a, FR-026) |
+| Core unit (`crates/micold-core/src/attention.rs`, `workspace.rs`, `settings.rs`, `store.rs`) | `mise run test-core` | `in_view` (FR-002, FR-016, story 1 scenarios 9 and 10); `AttentionTracker::observe` (FR-001, FR-003, FR-005, FR-006, FR-009); `notification_text` (FR-004); `resolve_reveal` (FR-011, FR-013); counts with and without a session in view (FR-019, FR-021 to FR-023); defaults of the stored fields and the setting, and a store round trip that writes the two fields to the catalog file and nowhere else (FR-008a, FR-025, FR-026); `Settings` has one notification field and none per AI CLI (FR-028) |
 | Core protocol (`crates/micold-core/tests/schema_hash.rs`, round-trip tests in `messages.rs`) | `mise run test-core` | W1 to W4 encode and decode; one version bump per milestone |
-| Daemon unit (`crates/micold-daemon/src/attention.rs`) | `mise run gate` | `Views`: in view, grant once, grant refused while off, reveal target (FR-006a, FR-012, FR-027) |
-| Daemon integration (`crates/micold-daemon/tests/`) | `mise run gate` | Two connections: event with none in view, no event with one in view, clear on view, persistence across a restart of the service, no event for a repeated signal, removal (FR-002, FR-003, FR-008, FR-008a, FR-016, FR-019, FR-020, FR-024); reveal routing (FR-012); Principle II: several sessions at once (FR-009) |
-| Client reducer (`crates/micold-client/src/features/attention.rs`, `tests/`) | `mise run gate` | `WindowView` sent on change only; a grant calls the recording notifier once with the right text; an error is logged once (FR-010); `RevealSession` selects or notices (FR-011, FR-013, FR-014); switcher entries carry counts |
+| Core source scan (`crates/micold-core/tests/`, in the style of `macos_registers_nothing.rs`) | `mise run test-core` | No backend or packaging file registers the application to be started by a notification, and the client's entry point reads no argument (FR-015a, N8) |
+| Daemon unit (`crates/micold-daemon/src/attention.rs`) | `mise run gate` | `Views`: in view, grant once, grant refused while off, an event while off never granted later, reveal target (FR-006a, FR-012, FR-027) |
+| Daemon integration (`crates/micold-daemon/tests/`) | `mise run gate` | Two connections: event with none in view, no event with one in view, clear on view, persistence across a restart of the service, no event for a repeated signal, removal (FR-002, FR-003, FR-008, FR-008a, FR-016, FR-019, FR-020, FR-024); with the setting off an event still sets `unread` and is never granted (FR-017, FR-027; all three AI CLIs share the one path, FR-028); reveal routing with the token forwarded (FR-012); Principle II: several sessions at once (FR-009) |
+| Client reducer (`crates/micold-client/src/features/attention.rs`, `tests/`) | `mise run gate` | `WindowView` sent on change only; a grant calls the recording notifier once with the right text; an error is logged once (FR-010); `RevealSession` selects or notices (FR-011, FR-013, FR-014); `raise_plan` and `after_activation` for each row of the contract's table (FR-011); switcher entries carry counts |
 | Component gates (`crates/micold-client/src/ui/material/`) | `mise run gate` | `UnreadMark` contrast in both schemes, row height unchanged, label truncates first (FR-018, FR-023, FR-032; U3, U8) |
-| Backend mapping (`shell/desktop_notify/*.rs`, pure functions) | `mise run gate`, on each OS in CI | Signal or callback → `NotifierEvent`; id table |
+| Backend mapping (`shell/desktop_notify/*.rs`, pure functions) | `mise run gate`, on each OS in CI | Signal or callback → `NotifierEvent`; id table; an id the table does not hold yields no event (N9); the Linux request is built the same whether or not the service lists the `actions` capability (FR-015) |
 | Quickstart §B, `visual-pass` | recorded | The mark, the counts and the switch in both schemes; a real notification on a Linux notification service; a click on X11 (FR-018, FR-021, FR-023, SC-001 to SC-006, SC-008 to SC-010) |
 | Quickstart §C, by hand | recorded | macOS and Windows: shown, clicked, refused by the system (FR-029, SC-001, SC-004); the sandbox on Linux (FR-007, SC-007) |
 
@@ -172,7 +173,7 @@ crates/micold-daemon/src/
 └── server.rs                       # WindowView, AttentionClaim, SessionReveal, SettingsSet
 
 crates/micold-client/src/
-├── features/attention.rs           # new: State, reducer
+├── features/attention.rs           # new: State, reducer, raise_plan
 ├── features/project.rs             # SwitcherEntry.unread_count
 ├── features/settings.rs            # the switch's draft field and message
 ├── app.rs                          # switcher_entries
@@ -181,7 +182,7 @@ crates/micold-client/src/
 ├── shell/
 │   ├── daemon_sync.rs              # observe, claim, AttentionGranted, RevealSession
 │   ├── desktop_notify/             # new: mod.rs, linux.rs, macos.rs, windows.rs
-│   └── window_raise.rs             # new
+│   └── window_raise.rs             # new: carries out raise_plan's steps
 ├── ui/
 │   ├── material/unread_mark.rs     # new
 │   ├── material/{tree_view,menu,button}.rs
@@ -203,7 +204,7 @@ the daemon; the client adds one feature module, one platform directory and one c
 |---|---|---|
 | M1 — story 1 | View report, attention sequence, claim and grant, the three backends, the notification text, the reconnect rule; user guide: the notification and the system's permission | 21 |
 | M2 — story 2 | `unread` in the service, `UnreadMark`, the row mark, the switcher counts and button total, showcase; user guide: marks and counts, unread after reopening | 22 |
-| M3 — story 3 | Click reporting in the three backends, reveal routing, raising the window (Wayland probe first), the unavailable notice; user guide: clicking | 23 |
+| M3 — story 3 | Click reporting in the three backends, reveal routing, raising the window (Wayland probe first), the unavailable notice; user guide: clicking, and that a notification of a closed window does not open the session | 23 |
 | M4 — story 4 | The setting and the switch; user guide: Settings | 24 |
 | M5 — polish | Architecture and component-library docs, quickstart §B and §C recorded | — |
 
@@ -214,7 +215,7 @@ the notification, M3 adds the click to M1's notification, M4 adds the switch (on
 
 | Risk | Handling |
 |---|---|
-| Wayland focus from a click needs `xdg_activation_v1` through foreign handles, with no precedent here | M3 starts with a probe; the fallback (`request_user_attention`) ships if it fails, with the limit in the user guide and a follow-up in the ledger ([R7](./research.md)) |
+| Wayland focus from a click needs `xdg_activation_v1` through foreign handles (the binding is the one `smithay-clipboard` uses in this application today); whether a compositor honours the notification's token is unverified | M3 starts with a probe; the fallback (`request_user_attention`) ships if it fails, with the limit in the user guide and a follow-up in the ledger ([R7](./research.md)) |
 | Windows shows nothing without a registered `AppUserModelID`, silently | The installer's shortcut carries it; quickstart §C checks an installed build; the failure is silent by FR-010 |
 | macOS shows nothing for an unbundled or unsigned binary | Development builds log once and continue; the shipped bundle is ad-hoc signed |
 | `mac-usernotifications` is a young crate | It is small, pure `objc2`, by the author of `notify-rust`; it sits behind the trait, so `objc2-user-notifications` can replace it without touching callers |

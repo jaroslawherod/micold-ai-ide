@@ -39,6 +39,7 @@ names a look, in the light and the dark scheme.
 | B9 | Click C's notification from another application (X11). | Window in front and focused, Q active, C shown, C's mark gone. | US3.1 to US3.3, SC-004 |
 | B10 | Remove C, then click an older notification for it. | Window in front, selection unchanged, notice `That session is no longer available.` | US3.4 |
 | B11 | Open a second window on Q. Click a notification for a session of Q from the first. | The second window comes forward and shows it. | US3.6 |
+| B11a | Two windows. Let the first raise a notification, close the first, click the notification. | The second window does not change; the session keeps its mark. | N9 |
 | B12 | Settings → Environment: the **Desktop notifications** switch is on. Turn it off. Let B finish a turn while not in view. | No notification; B marked. Turn it on: the next change notifies. | US4.1 to US4.5 |
 | B13 | Stop the notification service. Let B finish a turn. | No notification, no in-app notice, B marked, one `warn` line in the log for the run. | FR-010 |
 | B14 | Showcase: the three `UnreadMark` entries, both schemes. | As in the contract. | FR-030 |
@@ -50,4 +51,4 @@ names a look, in the light and the dark scheme.
 | C1 | macOS bundle | B1, B2, B9. Deny notifications in System Settings, repeat B1. | Shown and clicked as on Linux; when denied, B13's outcome. |
 | C2 | Windows, installed build | B1, B2, B9; click a toast from the notification centre. | Shown under the application's name; the click shows the session. Record whether the notification-centre click is reported. |
 | C3 | Linux, session service in a container | B1, B6, B9. | Same as with the service on the host (SC-007). |
-| C4 | Linux, Wayland session | B9. | Focus given, or the window marked as needing attention; record which. |
+| C4 | Linux, Wayland session | B9, then B11 (the token crosses to the second window). | Focus given, or the window marked as needing attention; record which, for each. |
