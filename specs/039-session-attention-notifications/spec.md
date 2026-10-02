@@ -22,6 +22,7 @@
 - Q: FR-008: a session changes to awaiting input while no window is open. What must happen? → A: (b) No desktop notification. The session is shown as unread when the application is next opened. Unread state outlives the window and is stored on the user's computer. _(decided by user)_
 - Q: FR-023: must the switcher's button in the top bar show, with its panel closed, that other projects hold unread sessions? → A: (a) Yes. The button carries the total number of unread sessions in projects other than the active one, and nothing when that is zero. _(decided by user)_
 - Q: FR-028: is a separate notification switch per AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent) part of this feature? → A: (a) No. One switch covers every AI CLI; a per-CLI choice is left for a later request and is out of scope. _(decided by user)_
+- Q: FR-011, FR-015a: a notification is clicked after the window that raised it was closed, while another window of the application is still open. Must the session open? → A: No, on all three systems. FR-011 to FR-013 apply while the window that raised the notification is still open; otherwise the click is not required to open the session, which is found by its unread mark. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -145,7 +146,7 @@ A developer who shares their screen, or who finds the notifications distracting,
 - **Project forgotten, or its folder unavailable, after the notification was sent**: clicking brings the window to the front and shows the in-app notice of story 3, scenario 4; nothing else changes.
 - **The operating system refuses or cannot show notifications** (notifications disabled for the application in the system's settings, Do Not Disturb, no notification service running on a Linux desktop): no desktop notification appears and nothing else is affected — sessions run, the activity indicator and unread marks work, and no in-app error is shown per event (FR-010).
 - **The desktop's notification service cannot report a click** (some Linux notification services show text only): the notification still appears; clicking it does whatever that service does. The unread mark is how the user finds the session.
-- **Notification clicked after the window that raised it was closed, while another window is open**: the notification service has no window left to report the click to (FR-015). The open windows do not change; the session is found by its unread mark.
+- **Notification clicked after the window that raised it was closed, while another window is open**: the click is reported only to the window that raised the notification, and that window is gone. The click is not required to open the session (FR-015a), on any of the three systems. The open windows do not change; the session is found by its unread mark.
 - **Notification clicked after the last window was closed**: notifications stay in the operating system's notification list after the application has quit. Clicking one then is not required to open the session; if the operating system starts the application in response, it opens as on any start (FR-015a). No new notification is raised while no window is open (FR-008). The session is found by its unread mark or its activity indicator.
 - **Stale notifications**: a notification for a session the user has since opened is not withdrawn by the application. Clicking it opens the session again, which changes nothing.
 - **Several windows**: one change raises one desktop notification, not one per window (FR-006a). The unread state of a session is the same in every window.
@@ -178,8 +179,8 @@ A developer who shares their screen, or who finds the notifications distracting,
 - **FR-012**: The window MUST be the one in which the session's project is already open. When the project is open in no window, it MUST be the window that most recently had focus.
 - **FR-013**: When the session no longer exists or cannot be shown — it was closed or removed, its worktree was deleted, its project was forgotten or its folder is unavailable — clicking MUST bring the window to the front, leave the selected project and session as they were, and show an in-app notice saying the session is no longer available.
 - **FR-014**: Clicking MUST NOT stop, interrupt, restart or send input to any session. Sessions of a project left by the click keep running, as with any project switch.
-- **FR-015**: Where the desktop's notification service cannot report a click to the application, the notification MUST still be shown. FR-011 to FR-013 apply wherever the service does report it: on macOS and Windows with the system's own notification facility, and on Linux with any notification service that reports that a notification was activated.
-- **FR-015a**: FR-011 to FR-013 apply while the application is running. A notification clicked after the application has quit is not required to open the session, and MUST NOT leave the application in a state different from an ordinary start if the operating system starts it in response. (No notification is raised while no window is open: FR-008.)
+- **FR-015**: Where the desktop's notification service cannot report a click to the application, the notification MUST still be shown. FR-011 to FR-013 apply wherever the service does report it, while the window that raised the notification is still open (FR-015a): on macOS and Windows with the system's own notification facility, and on Linux with any notification service that reports that a notification was activated.
+- **FR-015a**: FR-011 to FR-013 apply while the window that raised the notification is still open. A notification clicked after that window was closed — whether another window of the application is still open or the application has quit — is not required to open the session, which is then found by its unread mark. The rule is the same on Linux, macOS and Windows. Such a click MUST NOT leave the application in a state different from an ordinary start if the operating system starts it in response. (No notification is raised while no window is open: FR-008.)
 
 **Unread sessions**
 
@@ -239,7 +240,7 @@ A developer who shares their screen, or who finds the notifications distracting,
 - Sound, a taskbar or dock badge, and a tray icon.
 - Limiting the rate of notifications, grouping them, and withdrawing a notification once its session was opened.
 - Unread counts in the **Known projects** list of the main window and in the folder browser.
-- Opening the session from a notification clicked after the application has quit (FR-015a).
+- Opening the session from a notification clicked after the window that raised it was closed, whether another window is open or the application has quit (FR-015a).
 - A count of unread turns per session: unread is yes or no.
 - Desktop notifications for changes that happen while no window is open, at the time or after the fact (FR-008).
 - A separate notification switch per AI CLI (FR-028).
