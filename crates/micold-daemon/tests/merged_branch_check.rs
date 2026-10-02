@@ -273,3 +273,33 @@ async fn a_head_that_is_not_a_full_commit_id_is_unknown_without_running_git() {
          id and an empty head are not passed to git"
     );
 }
+
+/// U63. The order is all that ties an answer to its branch (data-model §6): one answer per query,
+/// in the order asked, whatever the answers are.
+#[tokio::test]
+async fn the_answers_are_one_per_query_in_query_order() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![
+            query("ahead", &f.merged),
+            query("at", &f.merged),
+            query("no-such-branch", &f.merged),
+            query("behind", &f.merged),
+        ],
+    )
+    .await;
+
+    assert_eq!(
+        answers(reply),
+        vec![
+            BranchContainment::Beyond,
+            BranchContainment::Contained,
+            BranchContainment::Unknown,
+            BranchContainment::Contained,
+        ]
+    );
+}
