@@ -427,6 +427,7 @@ pub(crate) fn save_and_prepare_check(
             pi_activity_component: Some(settings.pi_activity_component),
             tool_server_enabled: Some(settings.tool_server_enabled),
             cross_session_access: Some(settings.cross_session_access),
+            pr_status_enabled: None,
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }

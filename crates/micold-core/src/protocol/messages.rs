@@ -555,6 +555,9 @@ pub enum ClientMsg {
         /// Whether agents may read and type into other sessions, or `None` to leave unchanged
         /// (feature 034, FR-016).
         cross_session_access: Option<CrossSessionAccess>,
+        /// Read and show pull request status, or `None` to leave unchanged (feature 040,
+        /// FR-029).
+        pr_status_enabled: Option<bool>,
     },
 
     // --- AI CLIs ---
@@ -1140,6 +1143,9 @@ pub struct DaemonSettings {
     /// Whether agents may read and type into other sessions of their project (feature 034,
     /// FR-016). Service-owned because the tool server reads it on every request.
     pub cross_session_access: CrossSessionAccess,
+    /// Whether pull request status is read from GitHub and shown on worktree rows (feature 040,
+    /// FR-029, FR-030). Service-owned so that every window follows one switch.
+    pub pr_status_enabled: bool,
 }
 
 /// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond

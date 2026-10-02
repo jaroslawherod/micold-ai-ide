@@ -257,6 +257,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             tool_server_enabled: Some(false),
             // Feature 034 (FR-016): the option crosses the wire as the value chosen.
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
+            pr_status_enabled: Some(true),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -270,6 +271,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             pi_activity_component: None,
             tool_server_enabled: None,
             cross_session_access: None,
+            pr_status_enabled: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -394,6 +396,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 pi_activity_component: true,
                 tool_server_enabled: true,
                 cross_session_access: CrossSessionAccess::Auto,
+                pr_status_enabled: true,
             },
         },
         DaemonMsg::Refused {
@@ -453,6 +456,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 pi_activity_component: false,
                 tool_server_enabled: false,
                 cross_session_access: CrossSessionAccess::Off,
+                pr_status_enabled: false,
             },
         },
         DaemonMsg::SessionTitleChanged {
@@ -676,6 +680,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             pi_activity_component: true,
             tool_server_enabled: true,
             cross_session_access: access,
+            pr_status_enabled: false,
         };
         json_roundtrip(&DaemonMsg::SettingsChanged {
             settings: settings.clone(),
@@ -690,6 +695,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             pi_activity_component: None,
             tool_server_enabled: None,
             cross_session_access: Some(access),
+            pr_status_enabled: None,
         };
         json_roundtrip(&set);
         let bytes = serde_json::to_vec(&set).unwrap();
@@ -710,6 +716,52 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
         ],
         "the three values FR-016 names, in the order Settings offers them"
     );
+}
+
+/// U57 (feature 040, FR-029, FR-030): the pull request switch survives both directions — on and
+/// off in what the daemon reports, and on, off and "leave it as it is" in what a client sets,
+/// each distinct from the other two.
+#[test]
+fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
+    for on in [true, false] {
+        let settings = DaemonSettings {
+            scrollback_lines: 10_000,
+            env_include_enabled: true,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: 10,
+            default_ai_cli: AiCli::ClaudeCode,
+            pi_activity_component: true,
+            tool_server_enabled: true,
+            cross_session_access: CrossSessionAccess::Auto,
+            pr_status_enabled: on,
+        };
+        let bytes = serde_json::to_vec(&DaemonMsg::SettingsChanged { settings }).unwrap();
+        match serde_json::from_slice::<DaemonMsg>(&bytes).unwrap() {
+            DaemonMsg::SettingsChanged { settings } => assert_eq!(settings.pr_status_enabled, on),
+            other => panic!("expected SettingsChanged, got {other:?}"),
+        }
+    }
+    for chosen in [Some(true), Some(false), None] {
+        let set = ClientMsg::SettingsSet {
+            req: 3,
+            scrollback_lines: None,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            tool_server_enabled: None,
+            cross_session_access: None,
+            pr_status_enabled: chosen,
+        };
+        let bytes = serde_json::to_vec(&set).unwrap();
+        match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
+            ClientMsg::SettingsSet {
+                pr_status_enabled, ..
+            } => assert_eq!(pr_status_enabled, chosen),
+            other => panic!("expected SettingsSet, got {other:?}"),
+        }
+    }
 }
 
 #[test]
