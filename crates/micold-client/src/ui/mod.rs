@@ -61,6 +61,9 @@ pub use material::theme;
 pub mod terminal;
 mod toolbar;
 pub(crate) mod worktree_form;
+/// The issue picker's rows, named individually for `tests/issue_picker_rows.rs` (feature 038): the
+/// test reads what the view hands the picker for each issue, and the module stays `pub(crate)`.
+pub use worktree_form::issue_rows;
 pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};

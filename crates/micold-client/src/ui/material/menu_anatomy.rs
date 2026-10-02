@@ -267,6 +267,7 @@ fn a_typeahead_rows_content_is_centred_in_its_height() {
             label: "feat/short".to_string(),
             spans: Vec::new(),
             enabled: true,
+            ..Default::default()
         },
         false,
         false,
@@ -281,6 +282,7 @@ fn a_typeahead_rows_content_is_centred_in_its_height() {
                 label: "feat/short".to_string(),
                 spans: Vec::new(),
                 enabled: true,
+                ..Default::default()
             },
             false,
             false,

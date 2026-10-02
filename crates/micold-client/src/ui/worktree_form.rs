@@ -311,6 +311,35 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
     col.into()
 }
 
+/// The issue picker's rows and the position of the picked one (feature 038, FR-006).
+///
+/// The one place a row is built, for every issue the form holds: the listing's, then the ones a
+/// search beyond the cap or a typed number brought. `issue_matches` indexes all of them, so a row
+/// cannot differ by where its issue came from. A row's position is its place in `issue_matches`,
+/// the index `IssueRowPicked` carries back.
+///
+/// The emphasis is the matcher's, found in the issue's row text, mapped to the two lines by the
+/// issue itself.
+pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
+    let held = form.issues.held();
+    let mut selected = None;
+    let mut rows: Vec<TypeaheadRow> = Vec::with_capacity(form.issue_matches.len());
+    for (row, (index, matched)) in form.issue_matches.iter().enumerate() {
+        let Some(issue) = held.get(*index) else {
+            continue;
+        };
+        if form.picked_issue == Some(issue.number()) {
+            selected = Some(row);
+        }
+        let emphasis = issue.emphasis(&matched.spans);
+        rows.push(
+            TypeaheadRow::new(issue.title_line(), emphasis.title)
+                .details(issue.details_line(), emphasis.details),
+        );
+    }
+    (rows, selected)
+}
+
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
 fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
@@ -340,26 +369,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
             );
         }
         IssueList::Loaded { .. } => {
-            // The mapping, exactly the branch picker's: one row per match, its label the issue's
-            // row text, the emphasis spans the matcher found in that same text. `issue_matches`
-            // indexes every held issue: the listing's, then the searched ones.
-            // One pass builds the rows and finds the picked one; a row's position is its place in
-            // `issue_matches`, the index `IssueRowPicked` carries back.
-            let held = form.issues.held();
-            let mut selected = None;
-            let mut rows: Vec<TypeaheadRow> = Vec::with_capacity(form.issue_matches.len());
-            for (row, (index, matched)) in form.issue_matches.iter().enumerate() {
-                let Some(issue) = held.get(*index) else {
-                    continue;
-                };
-                if form.picked_issue == Some(issue.number()) {
-                    selected = Some(row);
-                }
-                rows.push(TypeaheadRow::new(
-                    issue.row_text().to_string(),
-                    matched.spans.clone(),
-                ));
-            }
+            let (rows, selected) = issue_rows(form);
             col = col.push(
                 material::Typeahead::new(
                     &form.issue_query,

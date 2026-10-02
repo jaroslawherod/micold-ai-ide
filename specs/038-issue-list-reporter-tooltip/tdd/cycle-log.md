@@ -102,3 +102,63 @@ suite runs in the gate.
   text out. Suite `cargo test -p micold-core --all-targets`: 1527 passed, 0 failed, 7 ignored.
 - refactor: none.
 - notes: U28's description half is T045/T049 (M5).
+
+## Cycle 4 — U31, U32, U33, U34, U35 (baseline), A7 — T004, T010, T011
+
+- tests: unit tests in `crates/micold-client/src/ui/material/picker.rs`:
+  `the_wrapping_label_takes_more_lines_inside_its_bound` (U31),
+  `a_word_wider_than_the_label_breaks_inside_the_word` (U32),
+  `the_wrapping_labels_runs_concatenate_to_the_input` (U33),
+  `a_row_with_details_is_at_least_a_menu_item_high_and_grows_when_it_wraps` (U34),
+  `a_row_without_details_keeps_its_fixed_height_and_single_line` (U35),
+  `a_picked_rows_marker_is_beside_the_first_line_whatever_the_height` (A7)
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib material::picker::tests`, against
+  stubs (`Row::details` storing the text, `EmphasisedLabel::wrapping` setting a flag, `row_element`
+  and the label's layout ignoring both)
+  ```
+  a_row_with_details_is_at_least_a_menu_item_high_and_grows_when_it_wraps: a row whose title wraps is 48dp high: it did not grow
+  the_wrapping_label_takes_more_lines_inside_its_bound: a label of 77 characters is 18.199999dp high in 160dp: one line is 20dp, so it did not wrap
+  a_word_wider_than_the_label_breaks_inside_the_word: 256 characters without a space are 18.199999dp high in 200dp: they did not break
+  a_picked_rows_marker_is_beside_the_first_line_whatever_the_height: no child 1 at depth 2 of [0, 1, 0]
+  test result: FAILED. 6 passed; 4 failed; 0 ignored; 0 measured; 472 filtered out
+  ```
+  U33 and U35 passed on first run. U35 is the characterization of today's row (BASELINE). U33 is
+  over `segments`, the split both modes shape from, which already kept every character; the new
+  case adds multi-byte text and two spans.
+- green: `EmphasisedLabel::wrapping()`: one paragraph through `Paragraph::with_spans`, bounds
+  `(available, INFINITY)`, `Wrapping::WordOrGlyph`, the role's line height, height from
+  `min_bounds()`; the accent is part of the cache key because the spans carry their colour.
+  `row_element` branches on `Row::details`: a column of the two labels (`Body`/`on_surface`,
+  `Caption`/`on_surface_variant`) beside a marker box one first line high, `spacing::XS` vertical
+  padding, height `Shrink`, and a strut of `MENU_ITEM_BASE` less the padding for the minimum.
+  `cargo test -p micold-client --lib material::`: 364 passed, 0 failed.
+- refactor: none.
+- notes: a first green attempt gave the strut `Length::Fixed(0.0)` width; iced's `Row::push` drops
+  a child whose size hint is void, so the row came out 44dp. The strut's width is `Shrink` now.
+  **Deviation from T014**: `material/menu_anatomy.rs` is edited. Its two
+  `TypeaheadRow { label, spans, enabled }` literals stop compiling when `Row` gains a field; each
+  gained `..Default::default()`. No assertion changed and both tests pass.
+
+## Cycle 5 — U36, A1, A2, A3, A8 — T005, T012
+
+- tests: `crates/micold-client/tests/issue_picker_rows.rs` (new):
+  `a_listed_issues_row_carries_the_title_line_and_the_details_line`,
+  `listed_searched_and_typed_number_issues_get_the_same_two_lines`,
+  `the_picked_issues_row_is_the_selected_one`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test issue_picker_rows`, with
+  `issue_rows` extracted from `issue_picker` and still building today's single-line rows
+  ```
+  a_listed_issues_row_carries_the_title_line_and_the_details_line: assertion `left == right` failed
+    left: "#42 Crash when opening empty project  ·  bug, ui"
+   right: "#42 Crash when opening empty project"
+  listed_searched_and_typed_number_issues_get_the_same_two_lines: assertion `left == right` failed: #1100
+    left: "#1100 Titles are cut off  ·  ui, 1100-series"
+   right: "#1100 Titles are cut off"
+  test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+  The one pass is the picked row's position, which the extraction kept.
+- green: `issue_rows` builds `TypeaheadRow::new(issue.title_line(), e.title).details(issue.details_line(), e.details)`
+  with `e = issue.emphasis(&matched.spans)`. 3 passed.
+- refactor: none. `issue_rows` is exported as `micold_client::ui::issue_rows` for the test; the
+  `worktree_form` view module stays `pub(crate)`.
+
