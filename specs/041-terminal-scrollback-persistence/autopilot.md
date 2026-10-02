@@ -8,14 +8,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #485
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
-- **Phase**: 1-spec
-- **Next step**: Merge PR #531 when `ci complete` is green, then run the clarify unit on the three markers (User Story 2 scenario 5, FR-014, FR-015).
+- **Phase**: 2-clarify
+- **Next step**: Ask the user the three questions under *Open escalation*, then continue clarify round 1: record each answer in spec.md under `## Clarifications` / `### Session 2026-10-02` as `_(decided by user)_`, replace the three `[NEEDS CLARIFICATION]` markers (User Story 2 scenario 5, FR-014, FR-015) and the texts that point at them (Terms *Terminal*, Edge Cases *Regular Terminal instances*, Assumptions *The AI CLI terminal…*), re-validate `checklists/requirements.md`, move the answers to *Decisions*, commit without pushing.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #531 | Spec | open | |
+| #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
 
 ## Milestones
 
@@ -51,7 +51,50 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1, 2026-10-02. Category 1 (product or scope decision the repo does not settle) for all
+three. `speckit-clarify` found no further critical ambiguity: these are the round's only questions.
+spec.md is unchanged until they are answered.
+
+**Q1 (User Story 2 scenario 5): when the user turns terminal history saving off, what happens to
+histories already saved on disk?**
+
+- A (Recommended): delete them all at once, when the change is saved. The setting exists "for users
+  who do not want terminal output written to disk" (issue #485), and FR-028 already hides saved
+  history while the setting is off, so kept files would be unreadable to the user yet still on disk.
+  The setting's sentence then also says that turning it off deletes saved history.
+- B: keep them, hidden while the setting is off, shown again if it is turned back on; they go only
+  when their session is removed.
+- C: ask in a confirmation dialog each time the setting is turned off (delete or keep).
+- Checked: no setting in the repo deletes data when turned off (`crates/micold-core/src/settings.rs`),
+  and Constitution IV (Local-First Storage) does not speak to it. A deletes user data, so it is not
+  mine to choose.
+
+**Q2 (FR-014): is the history of a session's Regular Terminal (shell) instances saved and restored
+too, or only the AI CLI terminal's?**
+
+- A (Recommended): only the AI CLI terminal. The issue's problem is "see what an agent did before the
+  restart". Shell instances are not brought back after a service restart today (the service starts
+  with no sessions' shells and opens one only when a window asks:
+  `crates/micold-daemon/src/state.rs` `open_shell`), so covering them means also restoring the
+  instances, which is a second feature. Shell output is also the likelier place for typed secrets.
+- B: cover them too: after a service restart each instance comes back as a stopped tab with its
+  history; closing an instance removes its saved history. Larger scope (roughly one more milestone).
+- Checked: `docs/user-guide/worktrees-and-sessions.md` §Switching to a regular terminal;
+  `docs/daemon.md:60-61`.
+
+**Q3 (FR-015): when a session is stopped, or its process exits, and it is started again while the
+same session service keeps running, does its terminal show the earlier output above a separator?**
+
+- A (Recommended): yes, every start behaves the same: earlier output, a separator, new output. Today
+  a restart within one service run replaces the terminal with an empty one
+  (`crates/micold-daemon/src/supervisor.rs:367`, `state.rs` respawn → `swap_primary`), so the output
+  that explains a crash is lost at the moment of the automatic restart. With B the first save after
+  such a start would also overwrite the saved history from before it, so a later service restart
+  would not bring it back. Cost: a visible change of today's behaviour, and the separator text
+  "session restarted at" then also marks plain process restarts.
+- B: no, only after a service restart, as the issue's title and proposal say ("After a daemon
+  restart"). Within one service run a start gives an empty terminal as today.
+- Checked: issue #485 names only daemon restarts, updates and reboots; the code above.
 
 ## Token usage
 
