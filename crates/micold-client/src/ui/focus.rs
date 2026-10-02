@@ -156,7 +156,13 @@ impl<T> Operation<T> for ShowFocused {
             return;
         }
 
-        let delta = delta_into_view(self.focused, bounds.height, content_bounds.y, translation.y);
+        let delta = delta_into_view(
+            self.focused,
+            bounds.height,
+            content_bounds.y,
+            translation.y,
+            MARGIN,
+        );
         if delta != 0.0 {
             state.scroll_by(AbsoluteOffset { x: 0.0, y: delta }, bounds, content_bounds);
         }
@@ -164,7 +170,11 @@ impl<T> Operation<T> for ShowFocused {
 }
 
 /// How far a panel showing `viewport_height` of content from `translation_y` must scroll for
-/// `focused` to be inside it with [`MARGIN`] to spare. Positive scrolls the content up.
+/// `focused` to be inside it with `margin` to spare. Positive scrolls the content up.
+///
+/// The margin is the caller's: a focused control takes [`MARGIN`], so its ring is not flush against
+/// the panel's edge, and a picker's highlighted row takes none (`picker_scroll`), because a row
+/// that is wholly visible must not move its list (feature 038, FR-007).
 ///
 /// Split out because this is the part that can be wrong in a way no rendered check would name: it
 /// is arithmetic on four numbers, and the failure it guards is "the control is on screen but flush
@@ -174,11 +184,12 @@ pub(super) fn delta_into_view(
     viewport_height: f32,
     content_top: f32,
     translation_y: f32,
+    margin: f32,
 ) -> f32 {
     let top = content_top + translation_y;
     let bottom = top + viewport_height;
-    let wanted_top = focused.y - MARGIN;
-    let wanted_bottom = focused.y + focused.height + MARGIN;
+    let wanted_top = focused.y - margin;
+    let wanted_bottom = focused.y + focused.height + margin;
 
     if wanted_top < top || wanted_bottom - wanted_top > viewport_height {
         // Above the fold — or too tall to fit at all, in which case aligning its top is the
@@ -210,6 +221,7 @@ mod tests {
             400.0,
             0.0,
             translation_y,
+            MARGIN,
         )
     }
 
@@ -260,7 +272,7 @@ mod tests {
             width: 300.0,
             height: 900.0,
         };
-        let d = delta_into_view(tall, 400.0, 0.0, 0.0);
+        let d = delta_into_view(tall, 400.0, 0.0, 0.0, MARGIN);
         assert_eq!(d, 600.0 - MARGIN);
     }
 
@@ -276,7 +288,7 @@ mod tests {
             height: 56.0,
         };
         assert_eq!(
-            delta_into_view(control, 400.0, 120.0, 0.0),
+            delta_into_view(control, 400.0, 120.0, 0.0, MARGIN),
             delta_into_view(
                 Rectangle {
                     y: 880.0,
@@ -284,7 +296,8 @@ mod tests {
                 },
                 400.0,
                 0.0,
-                0.0
+                0.0,
+                MARGIN
             )
         );
     }
