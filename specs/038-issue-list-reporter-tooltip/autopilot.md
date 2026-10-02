@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1 (T001–T017): `speckit-implement` running; then gate + review A, review B + visual pass, PR 3.
+- **Next step**: M1 continues from *Handover*: T004–T006 and T010–T017 (client half), then gate + review A, review B + visual pass, PR 3.
 
 ## Pull requests
 
@@ -61,7 +61,58 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at the 150k context cap (2026-10-02). No PR open for M1 yet; nothing pushed.
+
+**Done** (commit `f5bb6bde`, on top of `4b181473`, base `origin/main` = `3d52e83e`):
+
+- T001, T002, T003, T007, T008, T009 ticked: the core half. `crates/micold-core/src/github.rs` has
+  `GHOST_LOGIN`, `Issue::reporter()`, `.reported_by(login)`, `ISSUE_NODE_SELECTION` (shared by the
+  three queries through `concat!`, with `author { login }`), `title_line()`, `details_line()`,
+  `RowEmphasis { title, details }`, `Issue::emphasis(&[Range<usize>])` and a hand-written `Debug`
+  that prints `reporter: "<redacted>"`. Tests: `tests/github_parse.rs` (extended),
+  `tests/github_issue_lines.rs`, `tests/github_privacy.rs`, fixture `fixtures/gh/issue_node_reporter.json`.
+- `mise run test-core` equivalent (`scripts/build-lock.sh cargo test -p micold-core --all-targets`):
+  1527 passed, 0 failed, 7 ignored. The workspace suite and the gate have **not** run.
+- `tdd/cycle-log.md`: cycles 1–3 with their red output, and a *Batching note (M1)*: cycles are
+  grouped per task pair, tests first against stubs, as `specs/034-daemon-mcp-server/tdd/cycle-log.md`
+  does; the crate's suite runs per cycle, the workspace suite in the gate. `tdd/test-list.md`:
+  U1–U15, U28, U29 are DONE (U6, U13, U28 for their M1 part; A15 stays PENDING, its other half is T025).
+
+**Next step**: `speckit-tdd-run` is mid-run (invoked by `speckit-implement`'s mandatory
+`before_implement` hook; its preflight is done). Continue with the client half, tests first:
+
+1. T004 (unit tests in `crates/micold-client/src/ui/material/picker.rs`, U31–U35, A7), then T010, T011.
+2. T005 (`crates/micold-client/tests/issue_picker_rows.rs`, U36, A1–A3, A8), then T012.
+3. T006 (covered states + `tests/gates/issue_rows_show_all_text.rs`, U44, A1, A2, A4, A5, A9), then T014.
+4. T013 (showcase pose), T015, T016 (docs), T017 (gate, visual pass B1 and B2, evidence).
+5. Phase 4 steps 2–4: gate with review A, review B with the visual pass, PR `feat(038): …`, `Refs #518`.
+
+**What unit 1 read and decided for the client half** (not yet written, no client file changed):
+
+- `material/picker.rs`: `Row { label, spans, enabled }` derives `Default`; `row_element` builds
+  `button(row![marker, EmphasisedLabel])` at `Length::Fixed(density::MENU_ITEM_BASE)`;
+  `EmphasisedLabel` lays `fit_around` segments side by side with `Wrapping::None`. Plan: a
+  `details: Option<(String, Vec<Range<usize>>)>` field and `Row::details(text, spans)`; a wrapping
+  mode of `EmphasisedLabel` built with `Renderer::Paragraph::with_spans` (iced_core 0.14
+  `text::Span { text, font, color, .. }`), bounds `(available, INFINITY)`, `Wrapping::WordOrGlyph`,
+  height from `min_bounds()`; `row_element` branches on `item.details`: with details, a column of
+  the two labels (`TypeRole::Body`/`on_surface`, `TypeRole::Caption`/`on_surface_variant`), height
+  `Shrink`, `spacing::XS` vertical padding, minimum `MENU_ITEM_BASE`, marker aligned to the first
+  line; without details, today's code untouched.
+- In-crate layout tests use `super::test_support::renderer()` and the `bounds_at` walk of
+  `material/menu_anatomy.rs` (`Tree::new`, `layout(&mut tree, &renderer, &Limits::new(Size::ZERO, ROOM))`).
+- **A conflict to settle in T011/T014**: T014 says `material/menu_anatomy.rs` passes unedited, but
+  its lines 266–270 and 280–284 build `super::TypeaheadRow { label, spans, enabled }` as a full
+  struct literal, so any new field of `Row` stops it compiling. The smallest fix is to add
+  `..Default::default()` to those two literals (no assertion changes); record it as a deviation in
+  the cycle log and in the PR body.
+- `ui/worktree_form.rs` `issue_picker` (line 316) builds rows inline at lines 350–362 from
+  `issue.row_text()` and `matched.spans`; T012 extracts `issue_rows` there. `typeahead.rs` only
+  passes `Row`s through to `menu_element`; `TypeaheadRow` is the re-export of `picker::Row`.
+- No file in the privacy scan (`github.rs`, `shell/issues.rs`, `features/worktree_form.rs`,
+  `main.rs`, `ui/`) has a `tracing`/`log` macro call today.
+
+**Open findings**: none. No review has run for M1 yet.
 
 ## Open escalation
 
