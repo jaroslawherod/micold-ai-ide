@@ -265,6 +265,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         tool_server_enabled: app.core.session.tool_server_enabled,
         cross_session_access: app.core.session.cross_session_access,
         issue_label_types: stored.issue_label_types,
+        pr_status_enabled: stored.pr_status_enabled,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -392,7 +393,13 @@ pub(crate) fn save_and_prepare_check(
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
         // through the `notify_error` below, which is T160.
-        let write = store.update_reporting(&mut |stored| *stored = settings.clone());
+        let write = store.update_reporting(&mut |stored| {
+            // The form does not hold the pull request switch yet (feature 040, M4), so the
+            // document keeps the value it has.
+            let pr_status_enabled = stored.pr_status_enabled;
+            *stored = settings.clone();
+            stored.pr_status_enabled = pr_status_enabled;
+        });
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
             app.core
@@ -864,6 +871,7 @@ mod tests {
                 label: "perf".to_string(),
                 type_: micold_core::naming::ConventionalType::Perf,
             }],
+            pr_status_enabled: true,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

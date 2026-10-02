@@ -643,3 +643,32 @@ fn an_unknown_cross_session_value_reads_as_off_and_keeps_the_rest_of_the_file() 
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 040 — the pull request status switch (FR-030)
+// ---------------------------------------------------------------------------------------
+
+/// U48. Nothing is read from GitHub until the user asks for it: the switch is off on a fresh
+/// install, and off for a user whose settings file was written before the switch existed.
+#[test]
+fn pull_request_status_is_off_by_default_and_in_a_file_written_before_the_switch() {
+    assert!(
+        !Settings::default().pr_status_enabled,
+        "FR-030: the switch is off until the user turns it on"
+    );
+
+    let (_dir, store, _path) = store_with(
+        r#"{
+            "settings_version": 4,
+            "theme": "dark",
+            "tool_server_enabled": false
+        }"#,
+    );
+    let outcome = store.load();
+
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(
+        !outcome.settings.pr_status_enabled,
+        "a file that predates the switch never said yes, so it reads as off"
+    );
+}
