@@ -77,6 +77,9 @@ B15 as covered by `sandbox_real_history.rs` in CI's sandbox job and say so.
 
 Not automatable here: a real Windows logout or reboot (stop-request §5), and the file's DACL as seen
 by a second Windows account. Both are covered as far as CI can by the `cfg(windows)` tests of
-stop-request §6 and of `owner_only`; record them as manual checks for a Windows machine.
+stop-request §6 and of `owner_only`; record them as manual checks for a Windows machine. A third
+manual check there, because R17 was not run on Windows and rests on one `cfg(windows)` test: stop
+and start an AI CLI session and confirm the earlier output and the separator are above the new
+output, with none of it overwritten.
 
 Save screenshots under `specs/041-terminal-scrollback-persistence/evidence/`.

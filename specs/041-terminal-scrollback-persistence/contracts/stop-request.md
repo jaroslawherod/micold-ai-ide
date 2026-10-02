@@ -39,7 +39,11 @@ A second request while unwinding changes nothing.
 A new step, before the live sessions are taken and dropped:
 
 1. Capture every covered terminal from its live `Term`. The processes are not waited for: they are
-   about to be killed.
+   about to be killed. This differs from the capture at a process end (R4), which follows the
+   reader's join and so holds every byte the process wrote. Here the process is still running, so
+   the snapshot holds what the `Term` has parsed at that moment; bytes still in flight are not in
+   it. That is what story 1 scenario 8 asks of an orderly stop, and nothing the user saw is lost:
+   the client draws from the same `Term`.
 2. With saving on, encode the snapshots in parallel on the blocking pool; each write takes the
    store's mutex in turn. A terminal whose content equals its last written file is not written
    (FR-004). The whole step is bounded at 3 s.

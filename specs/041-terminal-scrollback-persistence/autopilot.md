@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit 4: plan re-review round 2, `speckit-tdd-plan`, `speckit-analyze`, tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
+- **Next step**: Design unit 4: plan review done (round 2 clean), `speckit-tdd-plan` done (`tdd/test-list.md`: 30 outer, 131 inner). Next: `speckit-analyze`, tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
 
 ## Pull requests
 
@@ -59,7 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | e6ca334adfe00961d2b378af7e552c08264ae279:71ea3df9093d57217ceee3caed91301dd78382cf | CHANGES: 6 MAJOR, 2 MINOR; all 8 fixed |
 | Spec | 2 | 433b819aa8c08256fbf4c7397f02ad45b9a539c0:71ea3df9093d57217ceee3caed91301dd78382cf | CLEAN: 2 MINOR, both fixed |
 | Plan | 1 | 41708445f0bab32dc0145f3f9da07751aea93ab3:028bfc3789510c128d2ef2564482a086dcc55199 | CHANGES: 2 MAJOR (no sync before the rename; capture order on Windows), 3 MINOR; all 5 fixed (R4, R5, new R17, data-model §5 and §6, contracts, tasks) |
-| Plan | 2 | 35953804ee7a306e42b54015fbe569f565edd41d:0968d0249d5a1695ed9b90604828c4a9a0d50822 | pending |
+| Plan | 2 | 35953804ee7a306e42b54015fbe569f565edd41d:0968d0249d5a1695ed9b90604828c4a9a0d50822 | CLEAN: 2 MINOR (quickstart lacked the Windows check for R17; stop-request §4 did not say its capture differs from R4), both fixed |
 
 ## Declined review findings
 
