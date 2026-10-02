@@ -211,6 +211,7 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U82 | With a store that refuses to save (`create_dir = false` and no directory), `unwind` writes nothing | FR-028 | example | PENDING | T031 |
 | U83 | A terminal with no output since its last save is not rewritten by `unwind` | FR-004 | example | PENDING | T031 |
 | U84 | The endpoint is released only after the saves: a second service started during the unwind loads the complete file | SR §4, FR-002 | example | PENDING | T031 |
+| U132 | Ten running sessions each holding 10,000 lines of 100 characters are all saved by one `unwind` within its 3 s bound | SR §4, FR-002, SC-001 | example | PENDING | T031 |
 | U85 | `stop_requested()` is pending until the process receives `SIGTERM`, then completes; a second signal changes nothing | SR §1 | example | PENDING | T032 |
 
 ### `crates/micold-core/src/settings.rs` and the protocol (T037, T038, T042, T043)
