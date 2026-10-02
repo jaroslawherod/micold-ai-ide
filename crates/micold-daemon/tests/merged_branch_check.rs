@@ -209,3 +209,27 @@ async fn a_branch_with_a_commit_after_the_head_is_beyond() {
 
     assert_eq!(answers(reply), vec![BranchContainment::Beyond]);
 }
+
+/// A well-formed commit id the repository does not hold: a pull request head never fetched.
+const NEVER_FETCHED: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// U61. What the repository cannot show is never read as "nothing newer" (FR-017): a branch it
+/// does not have, and a pull request whose last commit never reached this machine.
+#[tokio::test]
+async fn a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![query("no-such-branch", &f.merged), query("at", NEVER_FETCHED)],
+    )
+    .await;
+
+    assert_eq!(
+        answers(reply),
+        vec![BranchContainment::Unknown, BranchContainment::Unknown],
+        "a missing branch, then a head the repository does not hold"
+    );
+}
