@@ -1083,18 +1083,8 @@ impl GhCli {
 }
 
 impl GhCli {
-    /// Run `gh` with `args` and read its answer with `parse`.
-    ///
-    /// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
-    /// good search hits, so an answer `parse` accepts is used whatever the exit status
-    /// (contracts/github-issue-source.md §3), and so is an error it types exactly. An answer it
-    /// cannot type is classified from the exit status and stderr, which name what GraphQL's error
-    /// types do not (SAML, missing scopes).
-    fn run<T>(
-        &self,
-        args: Vec<String>,
-        parse: fn(&[u8]) -> Result<T, IssueLoadError>,
-    ) -> Result<T, IssueLoadError> {
+    /// Run `gh` with `args`, bounded and non-interactive, from the user's home.
+    fn outcome(&self, args: Vec<String>) -> crate::process::RunOutcome {
         let mut cmd = std::process::Command::new(&self.gh);
         crate::process::no_window(&mut cmd)
             .args(args)
@@ -1110,7 +1100,22 @@ impl GhCli {
         if let Some(dirs) = directories::BaseDirs::new() {
             cmd.current_dir(dirs.home_dir());
         }
-        let outcome = crate::process::run_bounded(cmd, self.timeout);
+        crate::process::run_bounded(cmd, self.timeout)
+    }
+
+    /// Run `gh` with `args` and read its answer with `parse`.
+    ///
+    /// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
+    /// good search hits, so an answer `parse` accepts is used whatever the exit status
+    /// (contracts/github-issue-source.md §3), and so is an error it types exactly. An answer it
+    /// cannot type is classified from the exit status and stderr, which name what GraphQL's error
+    /// types do not (SAML, missing scopes).
+    fn run<T>(
+        &self,
+        args: Vec<String>,
+        parse: fn(&[u8]) -> Result<T, IssueLoadError>,
+    ) -> Result<T, IssueLoadError> {
+        let outcome = self.outcome(args);
         match &outcome {
             crate::process::RunOutcome::Exited {
                 code: 0, stdout, ..
@@ -1141,6 +1146,26 @@ impl IssueSource for GhCli {
 
     fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError> {
         self.run(search_args(repo, text), parse_search)
+    }
+}
+
+/// Pull requests through the same runner as issues (feature 040,
+/// contracts/pull-request-source.md §1): one `gh` run per chunk of branches, each bounded on its
+/// own (FR-021), and no retry inside a reading.
+impl crate::pull_request::PullRequestSource for GhCli {
+    fn read(
+        &self,
+        repo: &GithubRepo,
+        branches: &[String],
+        now: u64,
+    ) -> Result<
+        std::collections::BTreeMap<String, crate::pull_request::PullRequestStatus>,
+        crate::pull_request::ReadingFailure,
+    > {
+        crate::pull_request::read_in_chunks(branches, |chunk| {
+            let outcome = self.outcome(crate::pull_request::status_args(repo, chunk));
+            crate::pull_request::read_outcome(&outcome, chunk, now)
+        })
     }
 }
 

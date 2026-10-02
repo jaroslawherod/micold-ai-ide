@@ -71,30 +71,30 @@ recorded fixtures of three branches yield open + failing, merged, and no entry.
 ### Tests for User Story 1, slice A (MANDATORY — Constitution Principle I) ⚠️
 
 - [X] T001 [US1] [U1] Record the fixtures of PS §5 with a real `gh api graphql --include` into `crates/micold-core/tests/fixtures/gh/pr_*.txt` (the 14 files of the table, `pr_rate_limited_secondary_no_retry_after.txt` included) and write `crates/micold-core/tests/fixtures/gh/pr_README.md`: the recording command first, then per file how it was produced and which ones are written from GitHub's documented answer. Strip tokens and request ids; keep status line, headers and body.
-- [ ] T002 [P] [US1] [U2] [U3] [U4] [U5] [U6] Write `crates/micold-core/tests/pull_request_query.rs` (PS §2):
+- [X] T002 [P] [US1] [U2] [U3] [U4] [U5] [U6] Write `crates/micold-core/tests/pull_request_query.rs` (PS §2):
   - `status_query(1)` and `status_query(50)` are pinned; the document holds `o<i>`/`r<i>` for every `i`, `rateLimit`, the fragment, and is one line.
   - No branch name appears in the document.
   - `status_args` for branches holding `"`, `$`, a space, a leading `-`, `true` and `123` yields one `-f b<i>=<branch>` pair each, `--hostname github.com`, `--include`, `owner`, `name`, and nothing else: no `-F`, no token, no header argument (FR-028, FR-031).
-- [ ] T003 [US1] [U1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] Write `crates/micold-core/tests/pull_request_parse.rs` against T001's fixtures (PS §5):
+- [X] T003 [US1] [U1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] Write `crates/micold-core/tests/pull_request_parse.rs` against T001's fixtures (PS §5):
   - `split_response`: `\r\n` and `\n` line ends, header names without case, `None` without a status line or an empty line.
   - `parse_status` on `pr_three_branches.txt`: open, merged, and no entry for the third branch; keys are the branches passed in.
   - Each of `pr_draft`, `pr_closed`, `pr_review_states`, `pr_no_checks`, `pr_checks_*`: number, title, url, state, checks, review, head as recorded (SC-002).
   - `pr_truncated.txt`, a missing alias, a `null` repository and an `errors` entry are failures, never a partial map.
-- [ ] T004 [P] [US1] [U16] [U17] [U18] [U19] [U20] [U21] [U22] Write `crates/micold-core/tests/pull_request_select.rs` (PS §3), one case each: open beats a newer merged; newest of two open; newest of merged and closed when none open; a cross-repository open node ignored and the same-repository closed one shown; only cross-repository nodes → none; a draft; an unknown `state` → unreadable.
-- [ ] T005 [P] [US1] [U23] [U24] [U25] [U26] [U27] [U28] [U29] [U30] Write `crates/micold-core/tests/pull_request_checks.rs` (PS §4): a table-driven case per state name of both lists alone; failing beside pending and passing; pending beside passing; only skipped and neutral → passing; an unknown name alone → pending; `null` rollup and all-zero counts → none.
-- [ ] T006 [US1] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] [U39] [U40] [U41] Write `crates/micold-core/tests/pull_request_failure.rs` (PS §5 table and `rate_limit_pause`), against T001's fixtures and 034's stderr fixtures:
+- [X] T004 [P] [US1] [U16] [U17] [U18] [U19] [U20] [U21] [U22] Write `crates/micold-core/tests/pull_request_select.rs` (PS §3), one case each: open beats a newer merged; newest of two open; newest of merged and closed when none open; a cross-repository open node ignored and the same-repository closed one shown; only cross-repository nodes → none; a draft; an unknown `state` → unreadable.
+- [X] T005 [P] [US1] [U23] [U24] [U25] [U26] [U27] [U28] [U29] [U30] Write `crates/micold-core/tests/pull_request_checks.rs` (PS §4): a table-driven case per state name of both lists alone; failing beside pending and passing; pending beside passing; only skipped and neutral → passing; an unknown name alone → pending; `null` rollup and all-zero counts → none.
+- [X] T006 [US1] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] [U39] [U40] [U41] Write `crates/micold-core/tests/pull_request_failure.rs` (PS §5 table and `rate_limit_pause`), against T001's fixtures and 034's stderr fixtures:
   - Rows 1 to 6 of the `reading_failure` table, one case each, rate limiting checked before access.
   - `rate_limit_pause`: `Retry-After: 30` → `now + 30`; remaining 0 → the reset time; secondary limit with remaining above 0 and no `Retry-After` → `now + 60`; a reset in the past → `now + 1`; an unparsable value skipped.
-- [ ] T007 [P] [US1] [U42] [U43] [U44] [U45] Write `crates/micold-core/tests/pull_request_source.rs` (PS §1): `FakePullRequestSource` scripts answers and records `(owner/name, branches)` per call; an empty branch list answers an empty map with no call; 51 and 120 branches are read in chunks of 50 through a chunk-level seam, and a failing second chunk fails the whole reading with nothing of the first returned.
+- [X] T007 [P] [US1] [U42] [U43] [U44] [U45] Write `crates/micold-core/tests/pull_request_source.rs` (PS §1): `FakePullRequestSource` scripts answers and records `(owner/name, branches)` per call; an empty branch list answers an empty map with no call; 51 and 120 branches are read in chunks of 50 through a chunk-level seam, and a failing second chunk fails the whole reading with nothing of the first returned.
 - [X] T008 [P] [US1] [U46] [U47] Write `crates/micold-core/tests/pull_request_is_never_stored.rs` (DM §1, FR-032, SC-011): a source gate that `crates/micold-core/src/pull_request.rs` derives neither `Serialize`, `Deserialize` nor `Debug` on `PullRequestStatus`, and a unit case that its hand-written `Debug` output holds the number and the enums and neither the title nor the address.
 
 ### Implementation for User Story 1, slice A
 
 - [X] T009 [US1] [U46] [U47] Create `crates/micold-core/src/pull_request.rs` and export it from `crates/micold-core/src/lib.rs`: `PullRequestStatus`, `PrState`, `CheckStatus`, `ReviewState`, `ReadingFailure` (DM §1–2), with the hand-written `Debug`. T008 passes.
-- [ ] T010 [US1] [U2] [U3] [U4] [U5] [U6] Add `status_query` and `status_args` to `crates/micold-core/src/pull_request.rs` (PS §2). T002 passes.
-- [ ] T011 [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U28] [U29] [U30] Add `split_response`, `parse_status`, `select_pull_request` and `reduce_checks` to `crates/micold-core/src/pull_request.rs` (PS §3–5). T003, T004 and T005 pass.
-- [ ] T012 [US1] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] [U39] [U40] [U41] Add `rate_limit_pause` and `reading_failure` to `crates/micold-core/src/pull_request.rs`, on top of `github::classify` (PS §5). T006 passes.
-- [ ] T013 [US1] [U42] [U43] [U44] [U45] Add the `PullRequestSource` trait, `FakePullRequestSource` and the chunking to `crates/micold-core/src/pull_request.rs`, and `impl PullRequestSource for GhCli` in `crates/micold-core/src/github.rs` through the existing bounded runner (PS §1). T007 passes; `mise run test-core` is green.
+- [X] T010 [US1] [U2] [U3] [U4] [U5] [U6] Add `status_query` and `status_args` to `crates/micold-core/src/pull_request.rs` (PS §2). T002 passes.
+- [X] T011 [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U28] [U29] [U30] Add `split_response`, `parse_status`, `select_pull_request` and `reduce_checks` to `crates/micold-core/src/pull_request.rs` (PS §3–5). T003, T004 and T005 pass.
+- [X] T012 [US1] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] [U39] [U40] [U41] Add `rate_limit_pause` and `reading_failure` to `crates/micold-core/src/pull_request.rs`, on top of `github::classify` (PS §5). T006 passes.
+- [X] T013 [US1] [U42] [U43] [U44] [U45] Add the `PullRequestSource` trait, `FakePullRequestSource` and the chunking to `crates/micold-core/src/pull_request.rs`, and `impl PullRequestSource for GhCli` in `crates/micold-core/src/github.rs` through the existing bounded runner (PS §1). T007 passes; `mise run test-core` is green.
 
 **Checkpoint**: the core can turn `gh`'s answer into per-branch statuses and name every failure.
 

@@ -63,3 +63,95 @@ existed and failed before the implementation.
   the enums. -> `2 passed; 0 failed`; `mise run test-core` 1513 passed, 0 failed, 7 ignored
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Notes and deviations (M1, cycles 3 to 8)
+
+- **One stub, six reds, one green.** Cycles 3 to 8 share one stub and one implementation commit. The
+  stub declared every symbol of contracts/pull-request-source.md with an answer chosen to be wrong
+  for every test: `status_query` the empty string, `status_args` no argument, `split_response` a
+  status 0 with no header and an empty body, `parse_status`, `reading_failure`, `read_outcome`,
+  `read_in_chunks` and the fake's `read` `Err(RateLimited { until: 0 })`, `select_pull_request` a
+  closed pull request numbered 0, `reduce_checks` `Failing` for no count and `None` for any count,
+  `rate_limit_pause` 0. Each file's tests were then written and run against it; **every test of the
+  six files failed at red, none passed**, so no deliberate-mutant check was needed. The red runs
+  were `scripts/build-lock.sh cargo test -p micold-core --test <file> --no-fail-fast`.
+- **Three reds failed one step early.** `parse_status_missing_alias_is_passing`,
+  `parse_status_null_repository_is_passing` and `parse_status_graphql_errors_are_passing` build
+  their input from a fixture's body, and the stub's `split_response` returns an empty one, so at
+  red they stopped at `fixture body is JSON: EOF while parsing a value`, not at their own
+  `Err(Passing)` assertion. `a_failed_run_is_its_failure` (four `read_outcome` cases) stopped at
+  its first case. All reach their own assertions at green.
+- **A test's own mistake, fixed at green.** `u3_query_for_fifty_branches_is_pinned` passed its pin
+  comparison and then failed on a check written too widely (`": String!"` must be absent, which
+  `$owner: String!` breaks). The check now names `$b50: String!`. The implementation was not
+  changed for it.
+- **The pin of `status_query(50)`** is `crates/micold-core/tests/fixtures/gh/status_query_50.graphql`,
+  written by a generator independent of the Rust code from the recorded one-branch document, and
+  sent to GitHub once for 50 branch names that do not exist: exit 0, no `errors`,
+  `rateLimit { remaining: 4603 }`.
+- **Beyond the test list.** `read_outcome` (one `gh` run to an answer or a failure kind) is the
+  pure half of `GhCli::read`, so `pull_request_source.rs` holds two tests of it; the review
+  mapping and "a count of 0 does not count" have a test each in the select and checks files.
+
+## Cycle 3: U2–U6 — the query and the arguments
+
+- test: `crates/micold-core/tests/pull_request_query.rs` (new), 5 tests
+- red: `0 passed; 5 failed`. Decisive lines: `u2_…`: `assert_eq!(q, QUERY_1)` left `""`; `u3_…`:
+  left `""`, right the pinned document; `u4_…`: `U4: status_args must hold a query= argument`;
+  `u5_…`: `hits.len()` left 0, right 1 for `b0=feat/"quoted"`; `u6_…`: left `[]`, right the 15
+  arguments of the contract
+- green: T010 — `status_query`, `status_args`. `5 passed; 0 failed`
+- refactor: none needed
+
+## Cycle 4: U23–U30 — the combined check status
+
+- test: `crates/micold-core/tests/pull_request_checks.rs` (new), 8 tests (U23 to U25 are one
+  table of 19 rows)
+- red: `0 passed; 8 failed` (the stub answers `Failing` without counts and `None` with any)
+- green: T011 — `reduce_checks`, `CheckCounts`. `8 passed; 0 failed`
+- refactor: none needed
+
+## Cycle 5: U16–U22 — which pull request a branch is shown with
+
+- test: `crates/micold-core/tests/pull_request_select.rs` (new), 11 tests
+- red: `0 passed; 11 failed`. Decisive lines: U16 `status.number` left 0, right 1; U20
+  `Ok(Some(PullRequestStatus { number: 0, state: Closed, .. }))` where `Ok(None)` is expected; U22
+  the same where `Err(Unreadable)` is expected
+- green: T011 — `select_pull_request`, `PrNode`, `Unreadable`. `11 passed; 0 failed`
+- refactor: none needed
+
+## Cycle 6: U7–U15 — reading the recorded answers
+
+- test: `crates/micold-core/tests/pull_request_parse.rs`, 19 tests added to U1's
+- red: `1 passed; 19 failed` (the one is U1, green since cycle 1). Decisive lines: U7 `status comes
+  from the status line` left 0, right 200; U8 `no status line means no answer (FR-019)`; U9
+  `pr_three_branches.txt is a readable answer, got RateLimited { until: 0 }`; U13 left
+  `Err(RateLimited { until: 0 })`, right `Err(Passing)`
+- green: T011 — `split_response`, `Response`, `parse_status`. `20 passed; 0 failed`. T011 is
+  complete with cycles 4 to 6
+- refactor: none needed
+
+## Cycle 7: U31–U41 — the kind of a failure, and how long a rate limit pauses
+
+- test: `crates/micold-core/tests/pull_request_failure.rs` (new), 26 tests, on T001's answers and
+  034's `*.stderr` fixtures
+- red: `0 passed; 26 failed`: every `reading_failure` case left `RateLimited { until: 0 }`, every
+  `rate_limit_pause` case left 0
+- green: T012 — `rate_limit_pause`, `reading_failure` on top of `github::classify`.
+  `26 passed; 0 failed`
+- refactor: none needed
+
+## Cycle 8: U42–U45 — the source, its fake and the chunks
+
+- test: `crates/micold-core/tests/pull_request_source.rs` (new), 7 tests
+- red: `0 passed; 7 failed`. Decisive lines: U42 the first `read` answers
+  `Err(RateLimited { until: 0 })` where the scripted map is expected; U43 the same where `Ok({})`
+  is; U44 `50 branches are asked for in chunks of [50]` left `[]`; U45 left
+  `Err(RateLimited { until: 0 })`, right `Err(Unavailable)`
+- green: T013 — `PullRequestSource`, `FakePullRequestSource`, `read_in_chunks`, `read_outcome`, and
+  `impl PullRequestSource for GhCli` over the runner `GhCli::run` uses (`GhCli::outcome`, split out
+  of it). `7 passed; 0 failed`
+- refactor: none needed
+- suite: `mise run test-core` -> 1589 passed, 0 failed, 7 ignored (142 test-result lines), exit 0:
+  the 1513 of cycle 2 and the 76 tests of cycles 3 to 8
+- commit: the commit that adds this entry
