@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Open PR 2 (`branch-start.sh 525`, `mise run test-scripts`, push, `gh pr create`), record it under *Pull requests*; the orchestrator then waits on CI and merges. After the merge: Phase 4, milestone M1.
+- **Next step**: PR #534 (design) is open: the orchestrator waits on CI and merges it. After the merge: Phase 4, milestone M1 (T001–T017).
 
 ## Pull requests
 
