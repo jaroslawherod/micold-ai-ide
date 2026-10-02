@@ -139,7 +139,8 @@ pub struct Showcase {
     /// looks the same on every launch (FR-022).
     typeahead_query: String,
     /// Where its keyboard is, as an index into the *current* results — re-seated whenever they
-    /// change, by the same rule the branch picker uses.
+    /// change, by the same rule the branch picker uses. Starts on
+    /// `samples::SEARCH_HIGHLIGHT_AT_REST`, so the open list shows a highlighted row.
     typeahead_highlight: Option<usize>,
     /// Which row was last chosen, held by **label** rather than by index. An index means "the third
     /// row of whatever is showing now", so the marker would jump to an unrelated branch the moment
@@ -177,8 +178,16 @@ impl Showcase {
             section_shown: 0,
             section_rail_collapsed: false,
             typeahead_query: String::new(),
-            typeahead_highlight: None,
-            typeahead_selected: None,
+            // The list opens on a pose, not on a blank: the first row carries the chosen marker and
+            // the second, whose title wraps, the keyboard highlight, so one press on the field shows
+            // a picked and a highlighted two-line row side by side (spec 038, FR-028). Both are
+            // constants, so the page still looks the same on every launch (FR-022).
+            typeahead_highlight: Some(super::samples::SEARCH_HIGHLIGHT_AT_REST),
+            typeahead_selected: Some(
+                super::samples::SEARCH_RESULTS[super::samples::SEARCH_PICKED_AT_REST]
+                    .0
+                    .to_owned(),
+            ),
             typeahead_open: false,
         }
     }

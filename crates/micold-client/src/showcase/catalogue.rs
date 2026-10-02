@@ -381,6 +381,7 @@ pub const COMPONENTS: &[Entry] = &[
             "↑ / ↓ move the highlight, Enter takes the row it is on",
             "press a row to choose it; the dimmed one cannot be chosen",
             "a row with a second line wraps it, and a long title, instead of cutting either",
+            "the list opens with the first row chosen and the second highlighted",
         ],
         interactive: true,
         section: Section::Components,
