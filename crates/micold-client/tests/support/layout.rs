@@ -843,6 +843,13 @@ pub struct Overflow {
     pub natural_width: f32,
     /// The width it was clipped to.
     pub allowed_width: f32,
+    /// The height the shaped paragraph takes: every line it wrapped to, at the width it was given.
+    /// With [`Self::origin`] it says where the last line ends, which a row that stopped growing
+    /// would not contain (feature 038, SC-001).
+    pub natural_height: f32,
+    /// The rectangle the draw call clipped the paragraph to, in the same space as
+    /// [`Self::origin`]. A paragraph taller than its clip is cut, whatever its node measures.
+    pub clip: iced::Rectangle,
     /// The layout node the text was attributed to — the deepest one containing its origin.
     /// Written as a fixture path (`0/2/1`), so it can be looked up in `layout_snapshot.txt`.
     ///
@@ -1365,6 +1372,8 @@ fn painted<'a, M: 'a>(
                             on_screen: *position * *transformation,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
+                            natural_height: paragraph.min_bounds.height,
+                            clip: *clip_bounds,
                             node_path,
                             layer: painted_by,
                         });
