@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1 continues from *Handover*: finish T013 (highlighted and picked pose), read the workers' diff, T017 gate + review A, review B + visual pass, PR 3.
+- **Next step**: M1 unit 3: T001–T016 ticked. T017: `mise run gate` + review A, then review B + visual pass §B1/§B2, then PR 3.
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | design | How is the body turned into plain text (FR-022, D4)? | GitHub's own `bodyText` field, whitespace folded and capped at 600 characters in core. No Markdown crate. | agent-resolved | research.md#R2, R3; `gh api graphql` on issue #518: `body` "## Problem\n\nThe issue picker…" vs `bodyText` "Problem\nThe issue picker…" |
 | D7 | design | FR-007 calls scroll-into-view of the highlighted row existing behaviour. Is it? | No: no picker scrolls on a highlight move. The requirement stands; this feature builds it for the issue picker (an operation modelled on `ui/focus.rs`). | agent-resolved | research.md#R6; no scroll call in `material/picker.rs`, `material/typeahead.rs`, `cdk/picker.rs` |
 | D8 | design | The plan review found 2 MAJOR in its third counted round (all fixed in 6546cc15). Accept the plan as fixed and open PR 2, or review further? | Accept: the plan is accepted as fixed after round 3; no further plan review; open PR 2. | decided by user | Escalation (category 5), answered 2026-10-02, relayed by the orchestrator: option 1, "Accept, open PR 2 (Recommended)"; Tasks review rounds 1 and 2 read the post-fix plan, round 2 CLEAN |
+| D9 | M1 | T013 and contract §6 ask for a row highlighted and a row picked in the showcase's `Typeahead` entry, which is live and rests closed (021 BUG-001). Static open instance, or seed the live one? | Seed the live one: `Showcase::new` starts with the first sample row chosen and the second (long title) highlighted, so one press on the field shows the pose. The list still rests closed; a second, pinned-open instance would float its list over the page (the entry's own doc comment rules it out). `showcase_state.rs`'s "nothing is highlighted at rest" assertion now asserts the seeded pose. | agent-resolved | `showcase/state.rs` `Showcase::new`, `samples::SEARCH_PICKED_AT_REST`, `SEARCH_HIGHLIGHT_AT_REST`; `showcase_state` 35 passed, `showcase_determinism` 23 passed |
 
 ## Review rounds
 
@@ -61,38 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 handed over at the 150k context cap (2026-10-02). No PR open for M1 yet; nothing pushed.
-The branch is on `origin/main` (`branch-start.sh 534` ran: REBASED), commits local only.
-**Done**: T001–T012, T014–T016 ticked. Unit 2 wrote T004, T005, T010–T012 itself (commit
-`f66759b7`) and had two workers do T006 + T014 and T013 + T015 + T016 (this commit).
-- `material/picker.rs`: `Row::details`, `EmphasisedLabel::wrapping()` (one `with_spans` paragraph,
-  `WordOrGlyph`), the two-line branch of `row_element` (strut of `Shrink` width for the 48dp
-  minimum: iced's `Row` drops a `Fixed(0.0)` child). `material/menu_anatomy.rs`: two literals
-  gained `..Default::default()` (the deviation from T014; it goes in the PR body).
-- `ui/worktree_form.rs`: `issue_rows`, exported as `micold_client::ui::issue_rows`.
-- Tests: picker unit tests, `tests/issue_picker_rows.rs`, `tests/gates/issue_rows_show_all_text.rs`,
-  three covered states, `support::layout::painted_text_settled_at`, fixture regenerated (+837, -0).
-- Last runs: `cargo test -p micold-client --lib material::` 364 passed (before the workers);
-  `layout_snapshot` 47 passed and the showcase test targets 100 passed (workers' reports).
-  `tdd/cycle-log.md` has cycles 4–6.
-**Next step**:
-1. **T013 is not ticked, one point open.** The worker changed `showcase/samples.rs`, `state.rs`,
-   `catalogue.rs`: `SEARCH_RESULTS` is `(label, Option<details>, available)` with a short row, a
-   long title, a row with 7 labels, the dimmed in-use row and `main`. The `Typeahead` entry is
-   live and rests closed, so no row is highlighted or picked at rest; a caption says to open it.
-   T013 and contract §6 ask for "one of them highlighted and one picked". Decide: start the
-   showcase's `typeahead_selected` (and highlight) on a row so the pose shows both once the list is
-   open, or give the entry a static open instance; check `showcase_determinism.rs` either way. Then
-   tick T013. `mise run showcase` + the visual pass (§B2) is the proof.
-2. Read the workers' diff before the gate (`git show --stat HEAD`, then file by file): nobody has
-   reviewed `tests/support/layout.rs`, the gate or the docs yet.
-3. Clippy: the worker runs stopped on `single_range_in_vec_init` in a picker test; unit 2 replaced
-   `vec![0..5]` with `one(0..5).to_vec()` afterwards and has **not** re-run clippy.
-4. T017 and Phase 4 step 2: `mise run gate` detached, review A (`code-review` high on
-   `origin/main...HEAD`) in its shadow; step 3: review B and the `visual-pass` skill for quickstart
-   §B1 and §B2, light and dark, screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`;
-   mark A1–A5, A7–A9 DONE in `tdd/test-list.md`; step 4: PR `feat(038): …`, body ends `Refs #518`.
-**Open findings**: none from a review; no review has run for M1 yet.
+None.
 
 ## Open escalation
 

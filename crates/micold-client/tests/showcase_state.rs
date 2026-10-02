@@ -249,15 +249,21 @@ fn the_typeahead_highlight_moves_and_stops_at_the_ends() {
     let mut s = showcase();
     assert_eq!(
         s.typeahead_highlight(),
-        None,
-        "nothing is highlighted at rest"
+        Some(1),
+        "the highlight rests on the row whose title wraps, so the open list is a pose of a picked \
+         and a highlighted two-line row (spec 038, FR-028)"
+    );
+    assert_eq!(
+        s.typeahead_selected(),
+        Some(0),
+        "and the chosen marker rests on the short row above it"
     );
 
     s.update(Message::TypeaheadHighlightMoved(Direction::Next));
     assert_eq!(
         s.typeahead_highlight(),
-        Some(0),
-        "the first move enters the list"
+        Some(2),
+        "a move goes one row on from there"
     );
 
     let last = s.typeahead_rows().len() - 1;

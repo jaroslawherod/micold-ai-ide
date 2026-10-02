@@ -99,6 +99,15 @@ pub const SEARCH_RESULTS: &[(&str, Option<&str>, bool)] = &[
     ("main", None, true),
 ];
 
+/// The row of [`SEARCH_RESULTS`] that carries the chosen marker when the showcase starts: the short
+/// two-line row.
+pub const SEARCH_PICKED_AT_REST: usize = 0;
+
+/// The row of [`SEARCH_RESULTS`] the keyboard highlight starts on: the one whose title wraps. With
+/// [`SEARCH_PICKED_AT_REST`] it makes the open list a pose of rows of differing height, one picked
+/// and one highlighted (spec 038, FR-028).
+pub const SEARCH_HIGHLIGHT_AT_REST: usize = 1;
+
 /// A tag's text, for the chip-shaped components.
 pub const TAG: &str = "feat";
 
