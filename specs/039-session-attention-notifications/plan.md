@@ -57,7 +57,7 @@ count and the in-app notices are not edited (FR-032).
 
 **Scale/Scope**: one new core module (`attention`), one new daemon module (`attention`), one new
 client feature (`features/attention.rs`), one new platform module (`shell/desktop_notify/`), one
-new shared component (`UnreadMark`), three extended components, four wire changes, one setting.
+new shared component (`UnreadMark`), three extended components, six wire changes, one setting.
 
 ## Constitution Check
 
@@ -164,7 +164,7 @@ crates/micold-core/src/
 ├── settings.rs                     # desktop_notifications
 └── protocol/
     ├── messages.rs                 # W1–W4
-    └── version.rs                  # 21, 22, 23, 24
+    └── version.rs                  # 21 to 26, one per milestone that changes the wire
 
 crates/micold-daemon/src/
 ├── attention.rs                    # new: Views
@@ -173,7 +173,7 @@ crates/micold-daemon/src/
 └── server.rs                       # WindowView, AttentionClaim, SessionReveal, SettingsSet
 
 crates/micold-client/src/
-├── features/attention.rs           # new: State, reducer, raise_plan
+├── features/attention.rs           # new: State, reducer, the DesktopNotifier seam, raise_plan
 ├── features/project.rs             # SwitcherEntry.unread_count
 ├── features/settings.rs            # the switch's draft field and message
 ├── app.rs                          # switcher_entries
@@ -202,20 +202,26 @@ the daemon; the client adds one feature module, one platform directory and one c
 
 | Milestone | Ships | Wire |
 |---|---|---|
-| M1 — story 1 | View report, attention sequence, claim and grant, the three backends, the notification text, the reconnect rule; user guide: the notification and the system's permission | 21 |
-| M2 — story 2 | `unread` in the service, `UnreadMark`, the row mark, the switcher counts and button total, showcase; user guide: marks and counts, unread after reopening | 22 |
-| M3 — story 3 | Click reporting in the three backends, reveal routing, raising the window (Wayland probe first), the unavailable notice; user guide: clicking, and that a notification of a closed window does not open the session | 23 |
-| M4 — story 4 | The setting and the switch; user guide: Settings | 24 |
-| M5 — polish | Architecture and component-library docs, quickstart §B and §C recorded | — |
+| M1 — story 1, slice A | View report and attention sequence in the service; nothing new on screen | 21 |
+| M2 — story 1, slice B | Claim and grant, the tracker with the reconnect rule, the notification text, the seam and the Linux backend; user guide: the notification | 22 |
+| M3 — story 1, slice C | The macOS and Windows backends, the installer's application identity; user guide: the three systems and the system's permission | — |
+| M4 — story 2, slice A | `unread` in the service, `UnreadMark`, the row mark, its showcase entry; user guide: the mark, unread after reopening | 23 |
+| M5 — story 2, slice B | The switcher counts and the button total, their showcase entries; user guide: the counts | — |
+| M6 — story 3, slice A | Click reporting in the three backends, reveal routing, raising the window, the unavailable notice; user guide: clicking, and that a notification of a closed window does not open the session | 24 |
+| M7 — story 3, slice B | Wayland: the probe first, then the token on the reveal pair and surface activation; user guide: the result | 25 |
+| M8 — story 4 | The setting and the switch; user guide: Settings | 26 |
+| M9 — polish | Architecture and component-library docs, quickstart §B and §C recorded | — |
 
-Each story stands alone as the spec says: M1 notifies with no mark, M2 marks with no dependence on
-the notification, M3 adds the click to M1's notification, M4 adds the switch (on until then).
+Stories 1 to 3 are cut in slices because each is well past the size one milestone carries
+([tasks.md](./tasks.md), Milestones). Each story stands alone as the spec says: story 1 notifies
+with no mark, story 2 marks with no dependence on the notification (M4 needs M1 only), story 3
+adds the click to story 1's notification, story 4 adds the switch (on until then).
 
 ## Risks
 
 | Risk | Handling |
 |---|---|
-| Wayland focus from a click needs `xdg_activation_v1` through foreign handles (the binding is the one `smithay-clipboard` uses in this application today); whether a compositor honours the notification's token is unverified | M3 starts with a probe; the fallback (`request_user_attention`) ships if it fails, with the limit in the user guide and a follow-up in the ledger ([R7](./research.md)) |
+| Wayland focus from a click (M7) needs `xdg_activation_v1` through foreign handles (the binding is the one `smithay-clipboard` uses in this application today); whether a compositor honours the notification's token is unverified | M7 starts with a probe; the fallback (`request_user_attention`) ships if it fails, with the limit in the user guide and a follow-up in the ledger ([R7](./research.md)) |
 | Windows shows nothing without a registered `AppUserModelID`, silently | The installer's shortcut carries it; quickstart §C checks an installed build; the failure is silent by FR-010 |
 | macOS shows nothing for an unbundled or unsigned binary | Development builds log once and continue; the shipped bundle is ad-hoc signed |
 | `mac-usernotifications` is a young crate | It is small, pure `objc2`, by the author of `notify-rust`; it sits behind the trait, so `objc2-user-notifications` can replace it without touching callers |
