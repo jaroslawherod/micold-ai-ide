@@ -95,7 +95,9 @@ async fn set(
                     req: r,
                     result: OperationResult::Ack,
                 }) if r == req => return,
-                Frame::Control(DaemonMsg::OperationError { req: r, message, .. }) if r == req => {
+                Frame::Control(DaemonMsg::OperationError {
+                    req: r, message, ..
+                }) if r == req => {
                     panic!("the service refused the settings: {message}")
                 }
                 _ => continue,

@@ -209,7 +209,12 @@ async fn a_branch_with_a_commit_after_the_head_is_beyond() {
     let f = fixture();
     let mut client = connect(&f.state).await;
 
-    let reply = check(&mut client, f.project.path(), vec![query("ahead", &f.merged)]).await;
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![query("ahead", &f.merged)],
+    )
+    .await;
 
     assert_eq!(answers(reply), vec![BranchContainment::Beyond]);
 }
@@ -227,7 +232,10 @@ async fn a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown() {
     let reply = check(
         &mut client,
         f.project.path(),
-        vec![query("no-such-branch", &f.merged), query("at", NEVER_FETCHED)],
+        vec![
+            query("no-such-branch", &f.merged),
+            query("at", NEVER_FETCHED),
+        ],
     )
     .await;
 
@@ -342,7 +350,13 @@ async fn a_project_that_is_not_a_repository_is_refused() {
     )));
     let mut client = connect(&state).await;
 
-    match check(&mut client, folder.path(), vec![query("main", NEVER_FETCHED)]).await {
+    match check(
+        &mut client,
+        folder.path(),
+        vec![query("main", NEVER_FETCHED)],
+    )
+    .await
+    {
         DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::Refused),
         other => panic!("a folder that is not a repository must be refused, got {other:?}"),
     }

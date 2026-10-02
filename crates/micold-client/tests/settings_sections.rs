@@ -42,7 +42,10 @@ use std::path::{Path, PathBuf};
 /// T087, and [`a_deferred_setting_that_arrived_is_stale`] is what made deleting them a step rather
 /// than an oversight. Feature 034's label-to-type mapping, stored from its milestone M4, left it
 /// the same way when M5's GitHub issues section claimed it.
-const DEFERRED: &[(&str, &str)] = &[];
+///
+/// Feature 040's pull request switch is stored from its milestone M2 (protocol 21) and gets its
+/// checkbox in the GitHub section with M4.
+const DEFERRED: &[(&str, &str)] = &[("pr_status_enabled", "040 T038")];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
