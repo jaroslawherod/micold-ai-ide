@@ -185,3 +185,24 @@ suite runs in the gate.
   384dp viewport, so the four-line title is in `longest-titles`. `Overflow` gained `layer`, so the
   gate can tell the floated rows' text from the dialog's under it.
 
+## Cycle 6, second red — U44 — T006 (review A, round 1, F2)
+
+- finding: the gate read each paragraph's source text and its width, so a row that stopped growing,
+  or a line cut vertically, passed. `support::layout::Overflow` gained `natural_height` and `clip`;
+  the gate now fails for a paragraph that ends below its row or outside its clip (commit 86ea073c).
+- red, by mutant: the two-line row's button at `height(Length::Fixed(48.0))` instead of `Shrink` in
+  `material/picker.rs`; 3 of the 4 tests failed, 10 findings of the new kind
+  ```
+  ... paints text down to 418.0, below the row's end at 382.0: the row did not grow for every line of ...
+  ```
+- green: mutant reverted, `cargo test -p micold-client --test layout_snapshot issue_rows`: 4 passed.
+
+## T013 — the showcase pose (no cycle)
+
+- `Showcase::new` starts with sample row 0 chosen and row 1 highlighted (ledger D9), and
+  `typeahead_rows` hands each sample row its second line. `tests/showcase_state.rs` asserts the
+  seeded pose (`the_typeahead_highlight_moves_and_stops_at_the_ends`); the assertion and the seed
+  went in together in e8428c23, so no red was recorded. That the rows are two lines of differing
+  height is held by quickstart §B2 only (`evidence/b2-showcase-*.png`); review B, F2, names the
+  missing assertion and it is listed under the ledger's follow-ups.
+

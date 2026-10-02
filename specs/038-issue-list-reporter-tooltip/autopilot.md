@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1 unit 3: T001–T016 ticked. T017: `mise run gate` + review A, then review B + visual pass §B1/§B2, then PR 3.
+- **Next step**: M1 done locally: T001–T017 ticked, gate green at 86ea073c, reviews A and B clean, visual pass recorded. Push and open PR 3; then the orchestrator merges and M2 starts.
 
 ## Pull requests
 
@@ -54,11 +54,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 3 (full: stale snapshot after the rebase; covers the part-2 edits; counted, it found MAJORs) | 7bab6b0f738cf24142cc0c9a03b9b655df4a87ec:d9deabff8423a7318f5b20fd470ed9ba34be9513 | CHANGES: 2 MAJOR (the layers named for SC-001 run `Before::Mounted` and never see an issue row, and no covered state opens the list; Principle VII PASS said docs ship with their milestone while `component-showcase.md` was in M6), 3 MINOR (trees omit `layout_snapshot.rs` and `evidence/README.md`; §B steps against the renumbered milestones; `delta_into_view` is private); all five verified and fixed. Third counted round with a MAJOR: no fourth round run, see *Open escalation* |
 | Tasks | 1 | ec237aaf86f5485f2f287ddef7288c0655175e11:23edb9a83bbe74aee53bada0dec25aa1fceae630 | CHANGES: 2 MAJOR (T006's narrow-window states cannot be laid out, every pass uses the fixed `WINDOW`; T020 reused `delta_into_view`, whose 16 px margin contradicts T018), 3 MINOR (M1 Verify never opened the showcase; T056 named no baseline and §B10 ran three times; plan omitted the M2 and M5 `component-library.md` edits); all five verified and fixed. `speckit-analyze` before it: 0 CRITICAL, 0 HIGH, 2 MEDIUM, 7 LOW, all nine applied |
 | Tasks | 2 | 7d30c44f193dc7230540e9209249191a6d449715:35fc46b8499bcad53a4273a8bd5988bfda712b26 | CLEAN (scoped re-review of the round 1 fixes; 1 MINOR, T020 wording on the focus unit tests, fixed). `checklists/requirements.md`: no unchecked item, no checklist finding in either round |
+| M1 code A | 1 | ceac9e87cd4e6cb4da87f2fd4eeff2943a8f83c6:e8428c23d3b7ee92d254fb1725b699ef456e41a5 | CHANGES: 2 MAJOR (F1 `vec![1..5]` in `issue_picker_rows.rs` would trip clippy: declined, not reproduced; F2 the row gate could not fail for text below its row or cut vertically: fixed in 86ea073c, proven by mutation, 10 findings with the row at a fixed 48dp), 3 MINOR (F5 `parts()` per span: fixed; F3 `Row` derives `Debug`, F4 showcase highlight after typing from rest: not fixed) |
+| M1 code A | 2 (scoped, counted) | ea82f99ec92dbdccc92b20a1388cd376f70029db:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN. `mise run gate` green at 86ea073c |
+| M1 code B | 1 | 211c06a4d065aa189c04ba49e1b1f9e81c601e58:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN, 3 MINOR (F1 the gate's only red was a mutant: a second red recorded in `tdd/cycle-log.md`; F2 no test asserts the showcase rows carry a second line, T013 not in the cycle log: logged, test left as a follow-up; F3 contract §1 "dims both lines" vs the details line always at `on_surface_variant`: contract clarified). Verify: `issue_picker_rows` 3 passed, `layout_snapshot issue_rows_show_all_text` 4 passed, `mise run test-core` 1527 passed. Visual pass §B1, §B2: PASS, light and dark, `evidence/README.md` |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 | F1 [MAJOR] `tests/issue_picker_rows.rs:143` `vec![1..5]` trips `clippy::single_range_in_vec_init` | Not reproduced: `cargo clippy --workspace --all-targets -- -D warnings` exits 0 and `mise run gate` passed at e495fa70 with the line as it is. The reviewer had not run clippy (build lock held). |
 
 ## Handover
 
@@ -78,3 +82,11 @@ None.
 - The existing-branch picker and `Select` do not scroll the keyboard highlight into view (features
   021 and 022). The operation this feature adds for the issue picker is generic; wiring the other
   two is outside this spec (FR-029).
+- M1 review minors left open: no test asserts that the showcase's `Typeahead` rows carry a second
+  line (review B, F2; add it to `tests/showcase_state.rs` with the next code change there);
+  `picker::Row` derives `Debug` and its `details` holds the reporter (review A, F3; nothing logs a
+  `Row`, M5 touches `Row` again and can redact it); the showcase highlight stays on the second
+  result when typing from the rest pose (review A, F4; D9).
+- M1 visual pass: the wide window in the light theme and the pick in the dark theme were not
+  captured; M6's recorded pass (T056) runs §B1 and §B2 again.
+
