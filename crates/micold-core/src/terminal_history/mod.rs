@@ -56,11 +56,21 @@ pub struct StyleFlags(u8);
 
 /// Why a snapshot breaks the rules of data-model §1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnapshotError {}
+pub enum SnapshotError {
+    /// The runs of line `line` (counted from 0, oldest first) do not sum to its number of
+    /// characters.
+    RunsDoNotCoverText { line: usize },
+}
 
 impl HistorySnapshot {
     /// Checks the rules a snapshot must hold before it is seeded or saved.
     pub fn validate(&self) -> Result<(), SnapshotError> {
+        for (index, line) in self.lines.iter().enumerate() {
+            let run_sum: u64 = line.runs.iter().map(|run| u64::from(run.chars)).sum();
+            if run_sum != line.text.chars().count() as u64 {
+                return Err(SnapshotError::RunsDoNotCoverText { line: index });
+            }
+        }
         Ok(())
     }
 }
