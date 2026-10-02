@@ -97,7 +97,7 @@ a change of the setting never interleave (R9). It never takes the service's stat
 
 | Item | Type | Lifetime |
 |---|---|---|
-| `Inner.carried` | `HashMap<SessionId, HistorySnapshot>` | Put when a covered process ends (stop, exit, before a respawn), by the order below; taken by the next start; dropped in `remove_live_by_ids` with the session. Filled whether saving is on or off (FR-015) |
+| `Inner.carried` | `HashMap<SessionId, HistorySnapshot>` | Put when a covered process ends (stop, exit, before a respawn), by the order below; taken by the next start; dropped in `remove_live_by_ids` with the session. Filled whether saving is on or off (FR-015). An entry is written only by the save at its process end: one that is not on disk (saving was off, its file was deleted when saving was turned off, or that save failed) stays in memory until the session runs again, so a history deleted by the setting never comes back (story 2 scenario 7, contracts/setting.md §3) |
 | `Seed` | `None`, `History { snapshot, at: DateTime<Local> }`, `Notice` | Built at a start, passed to `spawn_answering`, consumed before the reader thread exists |
 | Saver state | `HashMap<SessionId, SaveSchedule>`, `logged: HashSet<(SessionId, String)>` | Owned by the saver task; a schedule is dropped when its terminal is no longer live |
 

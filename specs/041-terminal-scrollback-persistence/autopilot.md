@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit 4: plan review done (round 2 clean), `speckit-tdd-plan` done (`tdd/test-list.md`: 30 outer, 131 inner). Next: `speckit-analyze`, tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
+- **Next step**: Design unit 4: plan review done (round 2 clean), `speckit-tdd-plan` done (`tdd/test-list.md`: 30 outer, 131 inner). `speckit-analyze` done (0 CRITICAL, 0 HIGH, 4 MEDIUM: F2 fixed in T031, three declined). Next: tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
 
 ## Pull requests
 
@@ -63,8 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
-| Milestone | Review | Finding | Why declined |
-|---|---|---|---|
+- `speckit-analyze` F1 (MEDIUM): a stopped session's `carried` snapshot that is not on disk is not saved by the saver, the unwind or a turn-on. Declined: that is the design. Saving it later would bring back a history the setting deleted (story 2 scenario 7; contracts/setting.md, the off → on rows). data-model §6 now says so.
+- `speckit-analyze` F3 (MEDIUM): SC-005 is first measured in M10, the saver ships in M3. Declined: the measurement needs the whole feature (the setting's off state is its baseline, M5), and no release is cut before M7 (D13). M3's *Satisfies* now says FR-005's delay bound is measured in M10.
+- `speckit-analyze` F4 (MEDIUM): the join of the reader thread at a process end has no timeout. Declined: dropping the `PtySession` already kills, closes and joins today (research R4, `supervisor.rs:548-564`); 041 adds no wait, it only captures after it.
 
 ## Handover
 

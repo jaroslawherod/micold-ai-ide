@@ -156,7 +156,7 @@ sent `SIGTERM`; a new service restores all 200 lines.
 
 ### Tests for User Story 1, slice D (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T031 [US1] [A1] [A8] [U79] [U80] [U81] [U82] [U83] [U84] Write `crates/micold-daemon/tests/history_stop_request.rs`: `unwind` with the idle reason saves every running covered terminal, and a restart restores all 200 lines with nothing missing (story 1 scenarios 1 and 8, SC-001); a real service process sent `SIGTERM`, `SIGINT` or `SIGHUP` exits within 5 s and its file holds the last line printed (`cfg(unix)`, SR §6; pattern `tests/daemon_stop.rs`); a save that blocks does not hold `unwind` longer than 3 s and the previous file stays (SR §4); with a store that refuses to save (`create_dir = false` and no directory: the `Skipped` result of T015) nothing is written; a terminal with no output since its last save is not rewritten by the unwind (FR-004); the endpoint is released only after the saves (a second service started during the unwind loads the complete file).
+- [ ] T031 [US1] [A1] [A8] [U79] [U80] [U81] [U82] [U83] [U84] [U132] Write `crates/micold-daemon/tests/history_stop_request.rs`: `unwind` with the idle reason saves every running covered terminal, and a restart restores all 200 lines with nothing missing (story 1 scenarios 1 and 8, SC-001); a real service process sent `SIGTERM`, `SIGINT` or `SIGHUP` exits within 5 s and its file holds the last line printed (`cfg(unix)`, SR §6; pattern `tests/daemon_stop.rs`); a save that blocks does not hold `unwind` longer than 3 s and the previous file stays (SR §4); with a store that refuses to save (`create_dir = false` and no directory: the `Skipped` result of T015) nothing is written; a terminal with no output since its last save is not rewritten by the unwind (FR-004); the endpoint is released only after the saves (a second service started during the unwind loads the complete file); ten running sessions each holding 10,000 lines of 100 characters are all saved by one `unwind` within its 3 s bound (FR-002, SC-001).
 - [ ] T032 [P] [US1] [U85] Write the unit test of `stop_requested()` in `crates/micold-daemon/src/platform/unix.rs`: the future is pending until the process receives `SIGTERM`, then completes; a second signal while it is completed changes nothing (SR §1).
 
 ### Implementation for User Story 1, slice D
@@ -263,7 +263,7 @@ it exits within 5 s and a new service restores every line.
 
 - [ ] T063 [US1] Implement `stop_requested()` in `crates/micold-daemon/src/platform/windows.rs`: create the manual-reset named event with the pipe's owner-only DACL, wait for it on a blocking thread, and run a hidden top-level window on its own thread whose `WM_QUERYENDSESSION`/`WM_ENDSESSION` handler raises the request and waits for the unwind to finish (SR §1, §3; `windows-sys` features added to `Cargo.toml` as needed).
 - [ ] T064 [US1] Change `terminate_daemon` in `crates/micold-core/src/spawn.rs` on Windows to open and set the event, wait up to 5 s for the process to exit, then fall back to `TerminateProcess` (SR §2). T061 and T062 pass.
-- [ ] T065 [US1] In `packaging/windows/micold-ai-ide.iss` set the stop event and wait up to 5 s before the existing `Stop-Process` and `taskkill` steps (SR §2); extend the installer script's test under `scripts/tests/` if one covers that section.
+- [ ] T065 [US1] In `packaging/windows/micold-ai-ide.iss` set the stop event and wait up to 5 s before the existing `Stop-Process` and `taskkill` steps (SR §2); first add a case to `scripts/tests/windows-installer.test.sh` (it has none for this section today) that reads the `.iss` and fails unless the event step comes before the `Stop-Process` and `taskkill` steps.
 - [ ] T066 [US1] Update `docs/daemon.md` (the Windows stop event and the end-of-session window), `docs/development/windows-packaging.md` (the installer asks first) and `docs/user-guide/worktrees-and-sessions.md` (the sentence of T036 now names Windows too) (FR-032).
 
 **Checkpoint**: CI's Windows job passes `history_stop_request`.
@@ -378,7 +378,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T025–T030
 - **Deliverable**: a printing session's file is rewritten at most once per 30 s and an idle one never; after the service is killed, a restart restores the history up to the last save.
-- **Satisfies**: US1 acceptance scenario 7; US3 acceptance scenario 6 (retry); FR-003, FR-004, FR-005, FR-007 (warning and retry); SC-002, SC-003
+- **Satisfies**: US1 acceptance scenario 7; US3 acceptance scenario 6 (retry); FR-003, FR-004, FR-005 (nothing dropped; its delay bound is SC-005, measured in M10), FR-007 (warning and retry); SC-002, SC-003
 - **Verify**: `mise run test-core` (`terminal_history_schedule`) and `cargo test -p micold-daemon --test history_periodic_save`
 - **Depends on**: M2
 - **Tier**: full
@@ -441,7 +441,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T074–T077
 - **Deliverable**: SC-005 is held by a test, `docs/development/architecture.md` describes the history modules and the stop request, and quickstart Part B is recorded with screenshots.
-- **Satisfies**: FR-005, SC-005, SC-010; quickstart Part B
+- **Satisfies**: FR-005 (the delay bound), SC-005, SC-010; quickstart Part B
 - **Verify**: `cargo test -p micold-daemon --test history_timing` and the files under `specs/041-terminal-scrollback-persistence/evidence/`
 - **Depends on**: M1–M9
 - **Tier**: full
