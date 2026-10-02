@@ -23,18 +23,26 @@ impl Views {
     /// `focused: false` is stored with `in_view: None` whatever it carried: the rule does not rest
     /// on every client keeping W1.1.
     pub fn set_view(&mut self, client: ClientId, view: WindowView) {
-        let _ = (client, view);
+        let in_view = if view.focused { view.in_view } else { None };
+        self.views.insert(
+            client,
+            WindowView {
+                focused: view.focused,
+                in_view,
+            },
+        );
     }
 
     /// Forget `client`'s report: its connection ended.
     pub fn remove(&mut self, client: ClientId) {
-        let _ = client;
+        self.views.remove(&client);
     }
 
     /// Whether any connection reports `session` in view.
     pub fn is_in_view(&self, session: SessionId) -> bool {
-        let _ = (session, &self.views);
-        false
+        self.views
+            .values()
+            .any(|view| view.in_view == Some(session))
     }
 }
 

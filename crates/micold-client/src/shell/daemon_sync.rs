@@ -262,6 +262,8 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     app.daemon = None;
     // The next connection may be to a restarted daemon that was never told (`006` BUG-007).
     app.reported_scheme = None;
+    // Nor what this window has in view (feature 039, FR-006).
+    app.core.view_report_forgotten();
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
     app.disconnected = true;
@@ -1118,6 +1120,11 @@ pub fn on_connected(
     // FR-003a, BUG-007). Cleared first, because this connection has been told nothing yet.
     app.reported_scheme = None;
     report_color_scheme(app);
+    // The first view report of this connection, sent whatever it says — also "nothing in view" —
+    // so the service never counts against a window it has not heard from (feature 039, W1.1,
+    // FR-019). Here, inside the `Welcome` arm, so it follows `Welcome` and nothing precedes it.
+    app.core.view_report_forgotten();
+    report_window_view(app);
     // Ask the authority whose settings were just adopted above which CLIs it can actually run
     // (feature 027, FR-023c), for the home directory and then for every row on screen (feature
     // 033, contract C1 A1). A reconnect is the one moment every answer can have changed without
@@ -1177,6 +1184,26 @@ pub fn report_color_scheme(app: &mut App) {
     if let Some(daemon) = &app.daemon {
         daemon.send(ClientMsg::TerminalColorScheme { scheme });
         app.reported_scheme = Some(scheme);
+    }
+}
+
+/// Tell the session service which session this window has in view, when this connection has not
+/// been told it yet (feature 039, W1.1, FR-019). The service counts an attention event only for a
+/// session no window has in view. Called from [`on_connected`] and after every message; the rule
+/// for *what* is in view is the core's, and *whether* it is news is the attention feature's — this
+/// is the one call and the send.
+///
+/// Asked only while there is a connection: a report handed back is recorded as sent, so asking
+/// without anywhere to send it would mark a report sent that never left.
+pub fn report_window_view(app: &mut App) {
+    let Some(daemon) = &app.daemon else {
+        return;
+    };
+    if let Some(view) = app.core.view_report(app.window_focused) {
+        daemon.send(ClientMsg::WindowView {
+            focused: view.focused,
+            in_view: view.in_view,
+        });
     }
 }
 

@@ -478,7 +478,7 @@ cannot answer for it", and the filesystem permission is still what enforces it. 
 protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
 repository-root query the container placement also needed (below), version 9 after a window became
 nameable on the wire so it could stop displacing itself, and version 10 after Pi joined the AI CLIs
-a frame can name. It is version 20 today: the later bumps are listed beside `PROTOCOL_VERSION` in
+a frame can name. It is version 21 today: the later bumps are listed beside `PROTOCOL_VERSION` in
 `crates/micold-core/src/protocol/version.rs`, and the latest added the state of a session's
 environment to the answer that says which AI CLIs a session would find, so the application can say
 why one is missing.

@@ -60,7 +60,7 @@ was held by them for 10 minutes and more at a time during this milestone.
   the struct without `..`, so a field added for the tab fails to compile there.
 - notes: A10 stays PENDING; its client half is T006.
 
-## Cycle 2 — U6, U7, U8 — T002, T008 (red observed; green written, not yet run)
+## Cycle 2 — U6, U7, U8 — T002, T008
 
 - tests: `crates/micold-core/src/store.rs::attention_seq_tests::{a_session_stored_without_an_attention_sequence_reads_as_zero (U6),
   a_store_round_trip_keeps_the_attention_sequence (U7), the_attention_sequence_leaves_the_schema_version_as_it_was (U8)}` (new)
@@ -74,12 +74,18 @@ was held by them for 10 minutes and more at a time during this milestone.
   test result: FAILED. 268 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
   ```
 - U6 and U8 passed on first run: nothing is stored yet, so the value reads `0` and the schema
-  version is untouched. They need a deliberate mutant once the green has run: drop
-  `#[serde(default)]` from `StoredSession::attention_seq` (U6), bump `SCHEMA_VERSION` (U8).
-- green (written, NOT YET RUN): `StoredSession::attention_seq` with `#[serde(default)]`, copied in
-  `from_session` and `into_session`.
+  version is untouched. Both were then mutated against the green (below).
+- green: `StoredSession::attention_seq` with `#[serde(default)]`, copied in `from_session` and
+  `into_session`. `scripts/build-lock.sh cargo test -p micold-core --all-targets` (run1.log, `CORE_RC=0`)
+  ```
+  test store::attention_seq_tests::a_session_stored_without_an_attention_sequence_reads_as_zero ... ok
+  test store::attention_seq_tests::the_attention_sequence_leaves_the_schema_version_as_it_was ... ok
+  test store::attention_seq_tests::a_store_round_trip_keeps_the_attention_sequence ... ok
+  ```
+- mutants (run3.log, `== MUTANTS`): U6 `#[serde(default)]` dropped from `StoredSession::attention_seq`
+  -> `MUTANT U6 KILLED`; U8 `SCHEMA_VERSION` 1 -> 2 -> `MUTANT U8 KILLED`.
 
-## Cycle 3 — U12 — T003, T009 (red observed; green written, not yet run)
+## Cycle 3 — U12 — T003, T009
 
 - tests: `crates/micold-core/tests/schema_hash.rs::{the_wire_changes_for_this_feature_cost_exactly_one_version_bump (pin moved to 21),
   the_view_report_and_the_attention_sequence_are_in_the_hashed_source}` (new);
@@ -95,10 +101,125 @@ was held by them for 10 minutes and more at a time during this milestone.
   thread 'the_view_report_and_the_attention_sequence_are_in_the_hashed_source' (392769) panicked at crates/micold-core/tests/schema_hash.rs:266:9:
   `WindowView {` is not in messages.rs, so version 21's hash is not the hash of the message set that reports views and counts attention events
   ```
-- green (written, NOT YET RUN): `ClientMsg::WindowView { focused, in_view }`, the `WindowView`
-  struct, `SessionSummary::attention_seq`, `PROTOCOL_VERSION` 21 with its doc line.
-- the round-trip tests pass on first run by construction; mutant to run after the green:
-  `#[serde(skip)]` on `SessionSummary::attention_seq`.
+- green: `ClientMsg::WindowView { focused, in_view }`, the `WindowView` struct,
+  `SessionSummary::attention_seq`, `PROTOCOL_VERSION` 21 with its doc line. Same core run as cycle 2
+  (run1.log, `CORE_RC=0`)
+  ```
+  test protocol::messages::attention_wire_tests::a_session_summary_carries_its_attention_sequence ... ok
+  test protocol::messages::attention_wire_tests::a_view_report_encodes_and_decodes ... ok
+  test the_view_report_and_the_attention_sequence_are_in_the_hashed_source ... ok
+  ```
+- the round-trip tests pass on first run by construction. Mutant (run3.log): `#[serde(skip)]` on
+  `SessionSummary::attention_seq` -> `MUTANT U12 KILLED`.
+
+## Cycle 4 — U50, U51, U52, U53 — T004, T010
+
+- tests: `crates/micold-daemon/src/attention.rs::tests::{a_second_report_from_a_connection_replaces_its_first (U50),
+  an_unfocused_report_is_stored_with_nothing_in_view (U51), a_session_is_in_view_while_any_report_names_it (U52),
+  a_removed_connection_s_report_is_forgotten (U53)}` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib attention::` (run1.log, `DLIB_RC=101`),
+  against the stub `Views` that stores nothing
+  ```
+  thread 'attention::tests::a_second_report_from_a_connection_replaces_its_first' panicked at crates/micold-daemon/src/attention.rs:67:9:
+  the window's last report names the session it has in view
+  thread 'attention::tests::a_session_is_in_view_while_any_report_names_it' panicked at crates/micold-daemon/src/attention.rs:104:9:
+  the first window has it in view
+  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 78 filtered out
+  ```
+- U51 passed on the stub (it stores nothing, so it reads `None`); killed by a mutant (below).
+- green: `Views { views: HashMap<ClientId, WindowView> }` with `set_view` (clears `in_view` when
+  `focused` is false), `is_in_view`, `remove`. `scripts/build-lock.sh cargo test -p micold-daemon --lib attention::`
+  (run2.log, `DLIB_RC=0`)
+  ```
+  test attention::tests::a_removed_connection_s_report_is_forgotten ... ok
+  test attention::tests::a_second_report_from_a_connection_replaces_its_first ... ok
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out
+  ```
+- mutants (run3.log): U51 `let in_view = if view.focused { view.in_view } else { None };` ->
+  `let in_view = view.in_view;` -> `MUTANT U51 KILLED`.
+- refactor: none.
+
+## Cycle 5 — U69 to U79, A3 — T005, T011, T012, T013
+
+- tests: `crates/micold-daemon/tests/attention_events.rs::{a_change_into_awaiting_input_in_view_nowhere_adds_one_for_every_window (U69),
+  a_change_while_one_window_has_the_session_in_view_adds_nothing (U70),
+  a_repeated_waiting_signal_adds_nothing (U71), working_and_awaiting_input_again_adds_one_more (U72),
+  three_sessions_changing_at_once_each_add_one_to_their_own_sequence (U73),
+  a_change_with_no_connection_still_adds_one (U74),
+  after_the_viewing_connection_closes_the_next_change_adds_one (U75),
+  a_view_report_from_a_connection_attached_to_no_project_is_accepted_without_a_reply (U76),
+  the_sequence_survives_a_restart_of_the_service_on_the_same_store (U77),
+  a_removed_session_is_in_no_later_catalog (U78),
+  a_session_that_ends_adds_nothing_to_its_sequence (U79),
+  a_change_while_the_only_viewer_lost_focus_adds_one (A3)}` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test attention_events` (run1.log, `DEV_RC=101`),
+  against the stub that counts nothing
+  ```
+  thread 'a_change_with_no_connection_still_adds_one' panicked at crates/micold-daemon/tests/attention_events.rs:450:5:
+    left: 0
+   right: 1
+  thread 'a_repeated_waiting_signal_adds_nothing' panicked at crates/micold-daemon/tests/attention_events.rs:366:5:
+    left: 0
+   right: 1
+  thread 'a_removed_session_is_in_no_later_catalog' panicked at crates/micold-daemon/tests/attention_events.rs:538:5:
+  assertion `left == right` failed: precondition: the session has an attention event
+  test result: FAILED. 3 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- the 3 that passed on the stub expect nothing to be added or no reply: U70 (adds nothing), U76, U79.
+  U71 and U78 failed on their precondition asserts (`the first wait counted`, `the session has an
+  attention event`), not on the behaviour they name, since the stub counts nothing; both were
+  mutated against the green. U77 is killed by its red: the stub persisted nothing.
+- U78 is a characterization: removal is existing behaviour (`sessions_for` filters archived sessions);
+  it passed with the green and no change was made for it.
+- green: `Catalog::mark_attention`, the began-waiting check and `Views` held in `state.rs`,
+  `ClientMsg::WindowView` handled in `server.rs` with no reply. `scripts/build-lock.sh cargo test -p micold-daemon --test attention_events`
+  (run2.log, `DEV_RC=0`)
+  ```
+  test a_repeated_waiting_signal_adds_nothing ... ok
+  test a_removed_session_is_in_no_later_catalog ... ok
+  test the_sequence_survives_a_restart_of_the_service_on_the_same_store ... ok
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- mutants (run3.log, all `KILLED`): U70 and U76 `state.set_window_view(id, WindowView { focused, in_view })`
+  replaced by a no-op in server.rs (`MUTANT U70_U76 KILLED`); U70 `if began_waiting && !inner.views.is_in_view(session)`
+  -> `if began_waiting` (`MUTANT U70b KILLED`); U71 `began_waiting` no longer requires `before != AwaitingInput` (`MUTANT U71 KILLED`);
+  U75 `inner.views.remove(id)` -> `let _ = id;` (`MUTANT U75 KILLED`); U79 `began_waiting` replaced by `changed`
+  (`MUTANT U79 KILLED`).
+
+## Cycle 6 — U111 to U116, U176 to U178, A9, A10 — T006, T014, T015, T123
+
+- tests: `crates/micold-client/tests/features_attention.rs::{the_first_report_of_a_connection_is_sent_also_when_nothing_is_in_view (U111),
+  a_report_is_sent_again_only_when_the_derived_value_differs_from_the_last_one_sent (U112),
+  losing_focus_reports_an_unfocused_window_with_nothing_in_view (U113),
+  opening_settings_reports_nothing_in_view_and_leaving_it_reports_the_session_again (U114),
+  a_reconnect_forgets_what_was_sent_so_the_next_report_goes_out_whatever_its_value (U115)}`;
+  `crates/micold-client/tests/attention_view_report.rs::{view_facts_names_the_active_projects_selected_session_and_passes_focus_through (U176),
+  view_facts_has_the_main_area_taken_while_settings_is_open (U177),
+  showing_another_tab_of_the_selected_session_leaves_view_facts_equal (U178),
+  with_settings_filling_the_main_area_the_window_reports_nothing_in_view (A9),
+  a_selected_session_stays_reported_in_view_whichever_of_its_tabs_is_shown (A10)}`;
+  `crates/micold-client/src/catalog_sync.rs::tests::a_catalog_snapshots_attention_seq_reaches_the_clients_session (U116)` (new)
+- red: run3.log `== RED` (`RED_RC=101`), against the stubs `view_report` returning `None` and `view_facts`
+  returning an empty `ViewFacts`
+  ```
+  thread 'the_first_report_of_a_connection_is_sent_also_when_nothing_is_in_view' panicked at crates/micold-client/tests/features_attention.rs:36:5:
+    left: None
+   right: Some(WindowView { focused: true, in_view: None })
+  thread 'view_facts_has_the_main_area_taken_while_settings_is_open' panicked at crates/micold-client/tests/attention_view_report.rs:88:5:
+    left: ViewFacts { window_focused: true, main_area_taken: false, selected: None }
+  test result: FAILED. 0 passed; 5 failed (attention_view_report); 0 passed; 5 failed (features_attention)
+  ```
+- green: `features::attention::{State, view_report}`, `State::view_facts`, `attention_seq` copied in
+  `reconcile_catalog`, and `main.rs` sending the report after each update. run3.log `== GREEN`
+  (`GREEN_RC=0`, `GREENLIB_RC=0`)
+  ```
+  test with_settings_filling_the_main_area_the_window_reports_nothing_in_view ... ok
+  test a_reconnect_forgets_what_was_sent_so_the_next_report_goes_out_whatever_its_value ... ok
+  test catalog_sync::tests::a_catalog_snapshots_attention_seq_reaches_the_clients_session ... ok
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out  (x2)
+  ```
+- mutants (all KILLED): `view_report` sends without comparing (`features_attention`), `connection_started` keeps what was sent (`features_attention`), `view_facts` with `main_area_taken: false` and with `selected: None` (`attention_view_report`), `reconcile_catalog` without the copy on the existing and on the restored branch (`catalog_sync`).
+- refactor: none.
 
 ## Notes and deviations
 
@@ -107,3 +228,7 @@ was held by them for 10 minutes and more at a time during this milestone.
 - Cycles 2 and 3: the red was observed (above). The green and the tests and stubs of cycles 4 and 5
   were written by the second M1 unit, which reached its context cap before any build ran. See the
   ledger's *Handover*.
+- Cycle 6: U111 to U115 live in `tests/features_attention.rs` (the feature isolation gate requires that
+  file), not in `tests/attention_view_report.rs` as T006 words it. Cycle 6's red and green ran in one
+  build-lock run, the green applied by a script after the red.
+- Cycle 5: U78 is a characterization of existing behaviour, not a new one; U77 is killed by its red.
