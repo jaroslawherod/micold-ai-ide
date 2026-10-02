@@ -231,8 +231,8 @@ Tests: `crates/micold-core/tests/settings_roundtrip.rs` (extended, T014).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U48 | `pr_status_enabled` is `false` by default and when read from a `settings.json` written without it | FR-030 | example | PENDING | |
-| U49 | `true` survives a write and a read, and `SETTINGS_VERSION` is unchanged | FR-030, DM §5 | example | PENDING | |
+| U48 | `pr_status_enabled` is `false` by default and when read from a `settings.json` written without it | FR-030 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::pull_request_status_is_off_by_default_and_in_a_file_written_before_the_switch` |
+| U49 | `true` survives a write and a read, and `SETTINGS_VERSION` is unchanged | FR-030, DM §5 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::turning_pull_request_status_on_survives_a_save_and_load_at_the_same_settings_version` |
 
 ### `crates/micold-core/src/git.rs`: `containment`, `branch_tip`, `is_ancestor`
 
@@ -240,12 +240,12 @@ Tests: `crates/micold-core/tests/git_containment.rs` (new, T015).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U50 | `containment` is `Contained` for a tip equal to `head` and for a tip that is an ancestor of it | FR-015 | example | PENDING | |
-| U51 | `containment` is `Beyond` for a tip that is not an ancestor of `head` | FR-017 | example | PENDING | |
-| U52 | `containment` is `Unknown` with no tip and with unknown ancestry | FR-017 | example | PENDING | |
-| U53 | `RealGit::branch_tip` on a temporary repository returns the branch's commit, and none for a missing branch | FR-015, RW §3 | example | PENDING | |
-| U54 | `RealGit::is_ancestor` is true for a branch at and behind a commit, false for one ahead of it, and unknown for a commit id not in the repository | FR-015, FR-017 | example | PENDING | |
-| U55 | `FakeGit` answers `branch_tip` and `is_ancestor` as scripted | RW §3 | example | PENDING | |
+| U50 | `containment` is `Contained` for a tip equal to `head` and for a tip that is an ancestor of it | FR-015 | example | DONE | `crates/micold-core/tests/git_containment.rs::a_tip_equal_to_the_head_or_an_ancestor_of_it_is_contained` |
+| U51 | `containment` is `Beyond` for a tip that is not an ancestor of `head` | FR-017 | example | DONE | `crates/micold-core/tests/git_containment.rs::a_tip_that_is_not_an_ancestor_of_the_head_is_beyond` |
+| U52 | `containment` is `Unknown` with no tip and with unknown ancestry | FR-017 | example | DONE | `crates/micold-core/tests/git_containment.rs::no_tip_or_unknown_ancestry_is_unknown` |
+| U53 | `RealGit::branch_tip` on a temporary repository returns the branch's commit, and none for a missing branch | FR-015, RW §3 | example | DONE | `crates/micold-core/tests/git_containment.rs::the_real_git_reads_a_branch_s_tip_and_none_for_a_missing_branch` |
+| U54 | `RealGit::is_ancestor` is true for a branch at and behind a commit, false for one ahead of it, and unknown for a commit id not in the repository | FR-015, FR-017 | example | DONE | `crates/micold-core/tests/git_containment.rs::the_real_git_tells_an_ancestor_from_a_descendant_and_from_a_commit_it_does_not_hold` |
+| U55 | `FakeGit` answers `branch_tip` and `is_ancestor` as scripted | RW §3 | example | DONE | `crates/micold-core/tests/git_containment.rs::the_fake_git_answers_the_tip_and_the_ancestry_as_scripted` |
 
 ### `crates/micold-core/src/protocol/`: the wire change
 
@@ -253,9 +253,9 @@ Tests: `crates/micold-core/tests/protocol_roundtrip.rs` and `schema_hash.rs` (ex
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U56 | `ClientMsg::MergedBranchCheck` and `OperationResult::MergedBranchCheck` survive a round trip | FR-015, RW §3 | example | PENDING | |
-| U57 | `SettingsSet { pr_status_enabled }` (`Some` and `None`) and `DaemonSettings.pr_status_enabled` survive a round trip | FR-029, FR-030, RW §4 | example | PENDING | |
-| U58 | The schema hash equals its new pin and `PROTOCOL_VERSION` is one above the previous | RW §5 | example | PENDING | |
+| U56 | `ClientMsg::MergedBranchCheck` and `OperationResult::MergedBranchCheck` survive a round trip | FR-015, RW §3 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::a_merged_branch_check_and_its_answers_round_trip_in_order` |
+| U57 | `SettingsSet { pr_status_enabled }` (`Some` and `None`) and `DaemonSettings.pr_status_enabled` survive a round trip | FR-029, FR-030, RW §4 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set` |
+| U58 | The schema hash equals its new pin and `PROTOCOL_VERSION` is one above the previous | RW §5 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_21` |
 
 ### `crates/micold-daemon/src/server.rs`: the `MergedBranchCheck` arm
 
@@ -264,14 +264,14 @@ repository.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U59 | A branch whose tip equals `head`, and one behind `head`, answer `Contained` | FR-015 | example | PENDING | |
-| U60 | A branch with a commit after `head` answers `Beyond` | FR-017, US3-4 | example | PENDING | |
-| U61 | A missing branch, and a `head` that is not a local object, answer `Unknown` | FR-017 | example | PENDING | |
-| U62 | A `head` that is not 40 or 64 hexadecimal characters answers `Unknown` without git being run | RW §3 | example | PENDING | |
-| U63 | The answers are one per query, in query order | DM §6 | example | PENDING | |
-| U64 | 50 queries are answered and 51 are refused | RW §3 | example | PENDING | |
-| U65 | A project that is not a repository is refused with the refusal `RemoteList` gives | RW §3 | example | PENDING | |
-| U66 | No ref and no file of the repository differs after the call | FR-016, SC-010 | example | PENDING | |
+| U59 | A branch whose tip equals `head`, and one behind `head`, answer `Contained` | FR-015 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::a_branch_at_or_behind_the_head_is_contained` |
+| U60 | A branch with a commit after `head` answers `Beyond` | FR-017, US3-4 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::a_branch_with_a_commit_after_the_head_is_beyond` |
+| U61 | A missing branch, and a `head` that is not a local object, answer `Unknown` | FR-017 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown` |
+| U62 | A `head` that is not 40 or 64 hexadecimal characters answers `Unknown` without git being run | RW §3 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::a_head_that_is_not_a_full_commit_id_is_unknown_without_running_git` |
+| U63 | The answers are one per query, in query order | DM §6 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::the_answers_are_one_per_query_in_query_order` |
+| U64 | 50 queries are answered and 51 are refused | RW §3 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::fifty_queries_are_answered_and_fifty_one_are_refused` |
+| U65 | A project that is not a repository is refused with the refusal `RemoteList` gives | RW §3 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::a_project_that_is_not_a_repository_is_refused` |
+| U66 | No ref and no file of the repository differs after the call | FR-016, SC-010 | example | DONE | `crates/micold-daemon/tests/merged_branch_check.rs::the_check_leaves_the_repository_as_it_found_it` |
 
 ### `crates/micold-daemon/src/server.rs`, `catalog.rs`, `state.rs`: the setting
 
@@ -279,9 +279,9 @@ Tests: `crates/micold-daemon/tests/pr_status_setting.rs` (new, T018).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U67 | `SettingsSet { pr_status_enabled: Some(true) }` is persisted and reported in the next `Welcome` | FR-030 | example | PENDING | |
-| U68 | The change is broadcast as `SettingsChanged` to two connected clients | FR-029, FR-030 | example | PENDING | |
-| U69 | `SettingsSet { pr_status_enabled: None }` leaves the stored value as it is | RW §4 | example | PENDING | |
+| U67 | `SettingsSet { pr_status_enabled: Some(true) }` is persisted and reported in the next `Welcome` | FR-030 | example | DONE | `crates/micold-daemon/tests/pr_status_setting.rs::turning_pull_request_status_on_is_persisted_and_reported_in_the_next_welcome` |
+| U68 | The change is broadcast as `SettingsChanged` to two connected clients | FR-029, FR-030 | example | DONE | `crates/micold-daemon/tests/pr_status_setting.rs::turning_pull_request_status_on_is_broadcast_to_two_connected_clients` |
+| U69 | `SettingsSet { pr_status_enabled: None }` leaves the stored value as it is | RW §4 | example | DONE | `crates/micold-daemon/tests/pr_status_setting.rs::a_settings_change_that_does_not_name_the_switch_leaves_it_as_it_is` |
 
 ### `crates/micold-client/src/features/pr_status.rs`: the first reading and the switch
 

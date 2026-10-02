@@ -170,3 +170,280 @@ existed and failed before the implementation.
   own answer (review A, F2)
 - suite: `mise run gate` (the workspace suite) before the pull request
 - commit: the commit that adds this entry
+
+## M2 — protocol 21: the switch and the merged-branch question (U48–U69)
+
+### M2: notes and deviations
+
+- **Prepared ahead of M1's merge.** These cycles ran on a branch cut from `47f73eb1` (the design
+  merge), beside M1's branch, and use nothing of M1's code. Suite counts are therefore counted
+  from the baseline above (1510), not from M1's last cycle.
+- **One behaviour per cycle, run as one batch.** The build lock was held by other worktrees for
+  most of the session, so the tree of every step — test written, then implementation — was recorded
+  as a git tree object first, and one run under one lock then walked them in order: restore the
+  red tree, run the one test (`-- --exact`) and require it to fail; restore the green tree, run it
+  again and require `1 passed`; run the suite. The run stops at the first step that does not go as
+  recorded. Every red below is that run's own output for that step. Refactors were therefore
+  limited to what the green tree already held.
+- **Command.** red and green: `scripts/build-lock.sh cargo test --test <target> <test> -- --exact`.
+  suite: for core cycles `scripts/build-lock.sh cargo test -p micold-core --all-targets`
+  (`mise run test-core`); for service cycles `scripts/build-lock.sh cargo test --test
+  merged_branch_check --test daemon_lifecycle` (plus `--test pr_status_setting` from U67). The
+  whole workspace runs in `mise run gate` at the end of the milestone.
+- **Compile-error reds.** U48, U56 and U57 fail because the field or the variant under test does
+  not exist; there is no stub that would make them fail on an assertion without being the
+  implementation.
+- **Tests that needed no new code** (U61, U63, U65, U66, U69): an earlier cycle's implementation
+  already covered them, so each was held to a deliberate mutant. The batch ran the test against the
+  mutant first (the `red` of those entries) and then against the unchanged implementation (the
+  green); the mutant was never committed.
+- **A discarded run.** The first attempt at U48's red failed with `failed to build archive …
+  libsyn … No such file or directory`: another session swept the shared target directory during
+  the build. It is not counted as a red. A second attempt of the batch stopped at U48's suite
+  because restoring a tree left a later cycle's new test file in place; the restore was fixed
+  (`git read-tree -u --reset`) and the batch run again from U48. The reds below are from that
+  third run.
+- **`BranchContainment` before the bump.** `containment` returns it, so the enum entered
+  `protocol/messages.rs` at U50, while `PROTOCOL_VERSION` moved at U58. The schema hash differs
+  between those commits and the version does not; `tests/schema_hash.rs` pins the version only, and
+  the milestone ships as one change with one bump.
+- **A pin updated on purpose.** `tests/settings_issue_mapping.rs` lists the keys the settings file
+  may hold; `pr_status_enabled` was added to that list in U49's green.
+- **A second pin, found by the gate.** `crates/micold-client/tests/settings_sections.rs` requires
+  every stored setting to have a control or a `DEFERRED` entry naming the task that adds one. The
+  first gate run failed there (`these persisted settings are rendered by no section and recorded
+  as deferred by nothing: ["pr_status_enabled"]`); the entry `("pr_status_enabled", "040 T038")`
+  was added in the commit after U69's. M4's T038 removes it when the checkbox arrives.
+- **Formatting.** The per-cycle commits hold the trees the batch ran; `cargo fmt` changed four
+  files afterwards, in that same later commit.
+- **The client keeps the stored switch.** The Settings form does not have the switch until M4, so
+  `shell/persist.rs` keeps the stored `pr_status_enabled` across a save and sends `None` in
+  `SettingsSet` (U48, U57; T022). `daemon_sync.rs` reads `DaemonSettings` by field and needed no
+  change.
+
+### M2 cycle: U48 — the switch is off by default and in a file written before it
+
+- test: `crates/micold-core/tests/settings_roundtrip.rs::pull_request_status_is_off_by_default_and_in_a_file_written_before_the_switch`
+- red: `error[E0609]: no field `pr_status_enabled` on type `Settings`` (twice: the default, and the
+  loaded settings)
+- green: `pr_status_enabled: bool` on `Settings` (`#[serde(default)]`, default `false`) and on the
+  stored form, read back as `false`; the client's two `Settings` literals carry it. Suite: 1511
+  passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `f1a37671`
+
+### M2 cycle: U49 — on survives a save and a load, at the same settings version
+
+- test: `crates/micold-core/tests/settings_roundtrip.rs::turning_pull_request_status_on_survives_a_save_and_load_at_the_same_settings_version`
+- red: `panicked at crates/micold-core/tests/settings_roundtrip.rs:693:5: the user turned the
+  switch on; loading the file must not turn it off` (`test result: FAILED. 0 passed; 1 failed`)
+- green: the stored form's value is carried into `Settings` on load; `SETTINGS_VERSION` stays 4.
+  Suite: 1512 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `772e7dbf`
+
+### M2 cycle: U50 — a tip equal to the head, or an ancestor of it, is contained
+
+- test: `crates/micold-core/tests/git_containment.rs::a_tip_equal_to_the_head_or_an_ancestor_of_it_is_contained` (new file)
+- stub: `BranchContainment` and a `containment` that returns `Unknown`
+- red: `assertion `left == right` failed: a tip equal to the head is contained without asking git
+  about ancestry  left: Unknown  right: Contained`
+- green: `containment` answers `Contained` for an equal tip and for `Some(true)`. Suite: 1513
+  passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `5e7afb7a`
+
+### M2 cycle: U51 — a tip that is not an ancestor of the head is beyond
+
+- test: `crates/micold-core/tests/git_containment.rs::a_tip_that_is_not_an_ancestor_of_the_head_is_beyond`
+- red: `assertion `left == right` failed: a branch with commits after its merged pull request is
+  beyond it  left: Unknown  right: Beyond`
+- green: `Some(false)` is `Beyond`. Suite: 1514 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `dbb10a74`
+
+### M2 cycle: U52 — no tip, or unknown ancestry, is unknown
+
+- test: `crates/micold-core/tests/git_containment.rs::no_tip_or_unknown_ancestry_is_unknown`
+- red: `assertion `left == right` failed: without a tip there is nothing an ancestry answer could
+  be about  left: Contained  right: Unknown`
+- green: no tip is `Unknown` before the ancestry is looked at. Suite: 1515 passed, 0 failed, 7
+  ignored
+- refactor: none needed
+- commit: `508c8111`
+
+### M2 cycle: U53 — git reads a branch's tip, and none for a missing branch
+
+- test: `crates/micold-core/tests/git_containment.rs::the_real_git_reads_a_branch_s_tip_and_none_for_a_missing_branch`
+- stub: `Git::branch_tip` and `Git::is_ancestor` returning `None`
+- red: `assertion `left == right` failed: the tip is the full id of the commit the branch points at
+  left: None  right: Some("145a94eaac9be8b2ecdafb68ba33ac78f1ef0068")`
+- green: `GitCli::branch_tip` runs `git rev-parse --verify --quiet refs/heads/<branch>^{commit}`.
+  Suite: 1516 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `8e74f34e`
+
+### M2 cycle: U54 — git tells an ancestor from a descendant and from a commit it does not hold
+
+- test: `crates/micold-core/tests/git_containment.rs::the_real_git_tells_an_ancestor_from_a_descendant_and_from_a_commit_it_does_not_hold`
+- red: `assertion `left == right` failed: a branch at the head  left: None  right: Some(true)`
+- green: `GitCli::is_ancestor` runs `git merge-base --is-ancestor`: exit 0 is `Some(true)`, exit 1
+  is `Some(false)`, anything else is `None`. Suite: 1517 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `be2b8a09`
+
+### M2 cycle: U55 — the fake git answers the tip and the ancestry as scripted
+
+- test: `crates/micold-core/tests/git_containment.rs::the_fake_git_answers_the_tip_and_the_ancestry_as_scripted`
+- stub: `FakeGit::with_branch_tip` and `FakeGit::with_ancestry` that record nothing
+- red: `assertion `left == right` failed  left: None  right:
+  Some("1111111111111111111111111111111111111111")`
+- green: `FakeGit` keeps both scripts and answers from them, `None` when nothing was scripted.
+  Suite: 1518 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `2ae9d73d`
+
+### M2 cycle: U56 — the merged-branch question and its answers round-trip in order
+
+- test: `crates/micold-core/tests/protocol_roundtrip.rs::a_merged_branch_check_and_its_answers_round_trip_in_order`
+- red: `error[E0432]: unresolved import `micold_core::protocol::messages::MergedBranchQuery``;
+  `error[E0599]: no variant named `MergedBranchCheck` found for enum `ClientMsg``; the same for
+  `OperationResult`
+- green: `MergedBranchQuery`, `ClientMsg::MergedBranchCheck` and
+  `OperationResult::MergedBranchCheck`. Suite: 1519 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `f58d63af`
+
+### M2 cycle: U57 — the switch round-trips in `DaemonSettings` and `SettingsSet`
+
+- test: `crates/micold-core/tests/protocol_roundtrip.rs::the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set`
+- red: `error[E0559]: variant `ClientMsg::SettingsSet` has no field named `pr_status_enabled``;
+  `error[E0560]: struct `DaemonSettings` has no field named `pr_status_enabled``
+- green: the field on both; every literal in the service, the client and their tests names it (the
+  service ignores it until U67, the client sends `None`). Suite: 1520 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `df11031f`
+
+### M2 cycle: U58 — one bump, to 21, that covers all of it
+
+- test: `crates/micold-core/tests/schema_hash.rs::the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_21`
+  (and the existing pin moved to 21)
+- red: `assertion `left == right` failed: feature 040's wire change is one bump, 20 → 21; …
+  left: 20  right: 21`
+- green: `PROTOCOL_VERSION` is 21. Suite: 1521 passed, 0 failed, 7 ignored
+- refactor: none needed
+- commit: `d648d51f`
+
+### M2 cycle: U59 — a branch at or behind the head is contained
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::a_branch_at_or_behind_the_head_is_contained` (new file)
+- red: `panicked at crates/micold-daemon/tests/merged_branch_check.rs:144:10: the reply arrives:
+  Elapsed(())` — the service does not answer the message (`finished in 30.05s`)
+- green: fake it — the arm answers `Contained` for every query. Suite: 8 passed, 0 failed
+- refactor: none needed
+- commit: `7d9c811b`
+
+### M2 cycle: U60 — a commit after the head is beyond
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::a_branch_with_a_commit_after_the_head_is_beyond`
+- red: `assertion `left == right` failed  left: [Contained]  right: [Beyond]`
+- green: the real arm, a copy of `RemoteList`'s: the project's repository or the refusal, then
+  `branch_tip`, `is_ancestor` and `containment` per query on a blocking thread. Suite: 9 passed, 0
+  failed
+- refactor: none needed (the per-query answer was written as its own function,
+  `merged_branch_answer`)
+- commit: `61752ba2`
+
+### M2 cycle: U61 — a missing branch and a head never fetched are unknown
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown`
+- passed on its first run against U60's arm. Mutant: `Unknown` answered as `Contained`
+- red (mutant): `assertion `left == right` failed: a missing branch, then a head the repository
+  does not hold  left: [Contained, Contained]  right: [Unknown, Unknown]`
+- green: mutant removed, no source change. Suite: 10 passed, 0 failed
+- refactor: none needed
+- commit: `b80a86c3`
+
+### M2 cycle: U62 — a head that is not a full commit id never reaches git
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::a_head_that_is_not_a_full_commit_id_is_unknown_without_running_git`
+- red: `assertion `left == right` failed: the full id is answered from the repository; a ref name,
+  a branch name, an abbreviated id and an empty head are not passed to git  left: [Contained,
+  Contained, Contained, Contained, Unknown]  right: [Contained, Unknown, Unknown, Unknown, Unknown]`
+  — git resolved `HEAD`, a branch name and an abbreviated id
+- green: a head is used only when it is 40 or 64 hexadecimal characters. Suite: 11 passed, 0
+  failed
+- refactor: none needed
+- commit: `6b61de87`
+
+### M2 cycle: U63 — one answer per query, in query order
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::the_answers_are_one_per_query_in_query_order`
+- passed on its first run. Mutant: the queries answered in reverse
+- red (mutant): `assertion `left == right` failed  left: [Contained, Unknown, Contained, Beyond]
+  right: [Beyond, Contained, Unknown, Contained]`
+- green: mutant removed, no source change. Suite: 12 passed, 0 failed
+- refactor: none needed
+- commit: `f80e4fdc`
+
+### M2 cycle: U64 — 50 queries are answered and 51 are refused
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::fifty_queries_are_answered_and_fifty_one_are_refused`
+- red: `51 queries must be refused, got OperationOk { req: 7, result: MergedBranchCheck { answers:
+  [Contained, Contained, …`
+- green: `MERGED_BRANCH_CHECK_LIMIT = 50`; a longer list is `ErrorKind::InvalidInput`. Suite: 13
+  passed, 0 failed
+- refactor: none needed
+- commit: `04affa48`
+
+### M2 cycle: U65 — a project that is not a repository is refused
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::a_project_that_is_not_a_repository_is_refused`
+- passed on its first run (the arm took `reject_non_repo` from `RemoteList`'s at U60). Mutant: the
+  arm accepts a project that is not a repository
+- red (mutant): `a folder that is not a repository must be refused, got OperationOk { req: 7,
+  result: MergedBranchCheck { answers: [Unknown] } }`
+- green: mutant removed, no source change. Suite: 14 passed, 0 failed
+- refactor: none needed
+- commit: `b8ddaeb1`
+
+### M2 cycle: U66 — the check leaves the repository as it found it
+
+- test: `crates/micold-daemon/tests/merged_branch_check.rs::the_check_leaves_the_repository_as_it_found_it`
+  (every file under the project, `.git` included, compared by name and content)
+- passed on its first run. Mutant: the answer writes `.git/FETCH_HEAD`
+- red (mutant): `assertion `left == right` failed: the check added or removed a file` (the right
+  side lists `.git/FETCH_HEAD`)
+- green: mutant removed, no source change. Suite: 15 passed, 0 failed
+- refactor: none needed
+- commit: `8860a643`
+
+### M2 cycle: U67 — the switch is persisted and reported in the next `Welcome`
+
+- test: `crates/micold-daemon/tests/pr_status_setting.rs::turning_pull_request_status_on_is_persisted_and_reported_in_the_next_welcome` (new file)
+- red: `panicked at crates/micold-daemon/tests/pr_status_setting.rs:141:5: the next client to
+  connect is told the switch is on`
+- green: `Catalog::set_pr_status_enabled` (written to the settings file with the other service
+  settings), `DaemonState::set_pr_status_enabled`, and the `SettingsSet` arm calls it for `Some`.
+  Suite: 16 passed, 0 failed
+- refactor: none needed
+- commit: `e45bd4bf`
+
+### M2 cycle: U68 — the change is broadcast to two connected clients
+
+- test: `crates/micold-daemon/tests/pr_status_setting.rs::turning_pull_request_status_on_is_broadcast_to_two_connected_clients`
+- red: `the client was never told the settings changed: Elapsed(())` (`finished in 5.00s`)
+- green: `DaemonState::set_pr_status_enabled` broadcasts `SettingsChanged`, as
+  `set_tool_server_enabled` does. Suite: 17 passed, 0 failed
+- refactor: none needed
+- commit: `4f3f9315`
+
+### M2 cycle: U69 — a change that does not name the switch leaves it as it is
+
+- test: `crates/micold-daemon/tests/pr_status_setting.rs::a_settings_change_that_does_not_name_the_switch_leaves_it_as_it_is`
+- passed on its first run. Mutant: `None` turns the switch off
+- red (mutant): `panicked at crates/micold-daemon/tests/pr_status_setting.rs:223:5: nor in the
+  settings file: a restarted service still has it on`
+- green: mutant removed, no source change. Suite: 18 passed, 0 failed
+- refactor: none needed
+- commit: `d67fb3a4`
