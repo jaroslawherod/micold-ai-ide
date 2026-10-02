@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
-- **Phase**: 5-close
-- **Next step**: the orchestrator waits on CI for the close PR #524 and merges it; then the record PR. Local gate green at 581de30e (tree e6f8ecd4), review round 2 clean. No new milestone (D26).
+- **Phase**: done
+- **Next step**: None.
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #516 | M5: confirmations and the destructive tools | merged | fc1c3ad207bd2439035d0d66047034d7304d7907 |
 | #519 | M6: cross-session read and send; Default may create a worktree | merged | e108619b041f290b415b62f1a76c95bfbe1b4801 |
 | #521 | M7: read latency, sandbox placement, the full real-CLI pass, final docs | merged | 68e483204935171cda1757b57c74be6547e1e560 |
-| #524 | Close: converge, tdd-verify, docguard; test-strength remediation T106–T112 | open | |
+| #524 | Close | merged | 71ea3df9093d57217ceee3caed91301dd78382cf |
 
 ## Milestones
 
@@ -192,3 +192,15 @@ Resolved 2026-10-01, category 4 (environment): the M5 gate ran out of disk durin
 - MCP tests: replace the fixed sleeps before an interrupt and the negative 3 s wait with a readiness signal; share one `Env` guard in `tests/support/` (close, tdd-verify 11, 12).
 
 Settled at close (2026-10-01): none of the items above is behaviour the spec requires and lacks, so none became a milestone (D24, D26). All are carried to the handoff as they stand.
+
+## Token usage
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq | rebuild_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Total** | | **3k** | **6k** | **18.8M** | **322.2M** | **82** | **529** | **158k** | **267k** | **57.7M** | **13.4M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq | rebuild_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 2k | 5k | 16.2M | 288.5M | 76 | 454 | 144k | 267k | 51.0M | 12.9M |
+| sonnet-5-5 | 538 | 1k | 2.5M | 32.5M | 6 | 66 | 15k | 147k | 6.4M | 488k |
+| haiku-4-5 | 38 | 310 | 104k | 1.2M | 0 | 9 | 76 | 64k | 254k | 0 |
