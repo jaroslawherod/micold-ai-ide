@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit 3 handed over at the context cap. Next: a fresh design unit continues from *Handover* (plan re-review round 2, then phase steps 2 to 5).
+- **Next step**: Design unit 4: plan re-review round 2, `speckit-tdd-plan`, `speckit-analyze`, tasks and milestone review, checklist re-check, `mise run test-scripts`, PR 2.
 
 ## Pull requests
 
@@ -48,8 +48,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | clarify 1 | With saving off, does a start within one service run still show the earlier output? | Yes: it needs nothing on disk, and D9 says every start behaves the same. The setting decides only what is on disk. Not asked of the user; derived from D9. | agent-resolved | spec.md User Story 2 scenario 8, FR-015, Assumptions |
 | D11 | design | Claude Code and Copilot CLI draw full-screen by default, where there is no scrollback to save and restored lines are hidden. What should 041 do? | Option 1: ship as specified for output on the normal screen, and say so. Restored history shows in Pi sessions and in Claude Code's scrolling mode; for a full-screen CLI only the last screen is saved and its own resume shows the conversation. FR-008, SC-001 and SC-010 are scoped to a terminal that is not full-screen; the guide says it. No new setting, no change to how a CLI starts. | decided by user, 2026-10-02 | research.md R13, R16; spec.md#Clarifications (design), FR-008, FR-032, SC-001, SC-010 |
 | D12 | design | How is story 1 cut, given it holds the whole mechanism? | Four milestones along its acceptance scenarios: in-run restore (M1), saved at a process end (M2), periodic saves (M3), orderly stop (M4). Then one per story (M5 to M7), Windows stop request (M8), sandbox (M9), Polish (M10). | agent-resolved | references/milestones.md rule 3; tasks.md Milestones |
-| D13 | design | Saving is on from M2, before the setting (M5) and removal (M7) are on `main`. Acceptable? | Yes, with a hold: no release is cut between M2 and M7. Files are owner-only from M2 and M7's sweep removes leftovers. Each of those PR bodies says so. | agent-resolved | plan.md Risks; spec.md User Story 2 "before the feature is acceptable to ship by default" |
+| D13 | design | Saving is on from M2, before the setting (M5) and removal (M7) are on `main`. Acceptable? | Yes: accept the milestone order as planned (saving active from M2, the setting in M5, removal in M7), with a hold: no release is cut between M2 and M7. Files are owner-only from M2 and M7's sweep removes leftovers. Each of those PR bodies says so. | decided by user, 2026-10-02 | plan.md Risks; spec.md User Story 2 "before the feature is acceptable to ship by default" |
 | D14 | design | Plan review: a power loss could leave a renamed but unwritten file; the capture waited on a signal Windows does not give; ConPTY paints from a blank buffer. | Sync before the rename (R5); capture after the reader is joined (R4); the seed ends by moving its rows into history (R17, not run on Windows, pinned by a `cfg(windows)` test in M1); no write for unchanged content (FR-004). | agent-resolved | research.md R4, R5, R17 |
+| D15 | design | The design phase passed the context cap three times. Run a fourth design unit? | Yes: a fourth part continues from the handover. | decided by user, 2026-10-02 | orchestrator prompt of design unit 4 |
 
 ## Review rounds
 
@@ -58,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | e6ca334adfe00961d2b378af7e552c08264ae279:71ea3df9093d57217ceee3caed91301dd78382cf | CHANGES: 6 MAJOR, 2 MINOR; all 8 fixed |
 | Spec | 2 | 433b819aa8c08256fbf4c7397f02ad45b9a539c0:71ea3df9093d57217ceee3caed91301dd78382cf | CLEAN: 2 MINOR, both fixed |
 | Plan | 1 | 41708445f0bab32dc0145f3f9da07751aea93ab3:028bfc3789510c128d2ef2564482a086dcc55199 | CHANGES: 2 MAJOR (no sync before the rename; capture order on Windows), 3 MINOR; all 5 fixed (R4, R5, new R17, data-model §5 and §6, contracts, tasks) |
+| Plan | 2 | 35953804ee7a306e42b54015fbe569f565edd41d:0968d0249d5a1695ed9b90604828c4a9a0d50822 | pending |
 
 ## Declined review findings
 
@@ -66,32 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit 3, 2026-10-02. At the 150k cap after the plan review's fixes; no PR opened, nothing
-pushed. The branch was rebased onto `origin/main` by `branch-start.sh 531` (do not run it again:
-it would be a no-op, but the unmerged commits are this unit's work).
-- **Done**: `plan.md`, `data-model.md`, `contracts/` (`saved-history-file.md`, `setting.md`,
-  `stop-request.md`), `quickstart.md`, `tasks.md` (77 tasks, `## Milestones` M1 to M10, all in the
-  ledger), research R17. Plan review round 1 (2 MAJOR, 3 MINOR) is fixed and committed (D14).
-- **Next step**, in order:
-  1. Plan re-review, round 2 (`model: "sonnet"`): previous findings F1 to F5 all fixed (see the
-     Plan row of *Review rounds* and D14); the fix diff is
-     `scripts/autopilot/review-snapshot.sh diff <round 1 snapshot>` without its `tasks.md` part
-     (tasks.md was first written after that snapshot and is reviewed in step 4).
-  2. `speckit-tdd-plan` (the optional `after_tasks` hook; 040 ran it): delegate to an
-     `autopilot-worker`, telling it to keep every task ID and the milestone ranges as they are and
-     only add behavior ids and `tdd/test-list.md`. Check with `git diff --stat`.
-  3. `speckit-analyze` (a forked skill), fix what it finds.
-  4. Tasks and milestone review, round 1 (fresh reviewer, model omitted).
-  5. `checklists/requirements.md`: no unticked item; have a reviewer re-check it against the spec
-     edits of D11.
-  6. `mise run test-scripts` (not run by this unit; other worktrees held the build lock), then
-     PR 2 `docs(041): clarify, plan and cut milestones for terminal scrollback persistence`, body
-     ending `Refs #485`.
-- **Open findings**: none.
-- **Not verified**: none of the design was written from code read by this unit; file paths in
-  plan.md and tasks.md come from research.md and one `ls`. The plan reviewer confirmed the paths it
-  checked. `terminate_daemon`'s tests "beside it in `spawn.rs`" (T062) and the installer test under
-  `scripts/tests/` (T065) are assumptions the tasks review should check.
+None.
 
 ## Open escalation
 
