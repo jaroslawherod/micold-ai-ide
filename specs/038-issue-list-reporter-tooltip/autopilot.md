@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Answer *Open escalation* (plan review, third counted round found MAJORs). On "accept": rebase with `branch-start.sh 525`, run `mise run test-scripts`, open PR 2 (`docs(038): clarify, plan and cut milestones for the issue list's reporter line and description tooltip`, body ending `Refs #518`). Everything else in phase 3 is done: tdd test list, analyze, tasks review CLEAN, checklists.
+- **Next step**: Open PR 2 (`branch-start.sh 525`, `mise run test-scripts`, push, `gh pr create`), record it under *Pull requests*; the orchestrator then waits on CI and merges. After the merge: Phase 4, milestone M1.
 
 ## Pull requests
 
@@ -39,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | design | Is the tooltip's rest delay built on spec 036's show delay, or here? (D2's open plan decision) | Here, as its own mode of the shared tooltip (`Tooltip::after_rest`). 036 is at phase 1-spec with an open escalation, uncommitted, no PR; its delay counts from pointer entry and cannot restart on movement. Both can coexist; whichever merges second rebases `cdk/tooltip.rs`. | agent-resolved | research.md#R7; `fix-issue-430/specs/036-tooltip-follow-cursor-delay/autopilot.md` (Phase 1-spec), `gh pr list --head fix/issue-430` empty, 2026-10-02 |
 | D6 | design | How is the body turned into plain text (FR-022, D4)? | GitHub's own `bodyText` field, whitespace folded and capped at 600 characters in core. No Markdown crate. | agent-resolved | research.md#R2, R3; `gh api graphql` on issue #518: `body` "## Problem\n\nThe issue picker…" vs `bodyText` "Problem\nThe issue picker…" |
 | D7 | design | FR-007 calls scroll-into-view of the highlighted row existing behaviour. Is it? | No: no picker scrolls on a highlight move. The requirement stands; this feature builds it for the issue picker (an operation modelled on `ui/focus.rs`). | agent-resolved | research.md#R6; no scroll call in `material/picker.rs`, `material/typeahead.rs`, `cdk/picker.rs` |
+| D8 | design | The plan review found 2 MAJOR in its third counted round (all fixed in 6546cc15). Accept the plan as fixed and open PR 2, or review further? | Accept: the plan is accepted as fixed after round 3; no further plan review; open PR 2. | decided by user | Escalation (category 5), answered 2026-10-02, relayed by the orchestrator: option 1, "Accept, open PR 2 (Recommended)"; Tasks review rounds 1 and 2 read the post-fix plan, round 2 CLEAN |
 
 ## Review rounds
 
@@ -63,22 +64,7 @@ None.
 
 ## Open escalation
 
-**Category 5, non-convergence: the plan review found MAJOR findings in its third counted round**, so
-no fourth plan round was run and PR 2 is not open (review-rubrics.md, *Round limit*).
-- Rounds: 1 CHANGES (fixed), 2 CLEAN, then part 2 of the design unit changed the plan (US1 split,
-  milestones renumbered, a new gate) and the rebase made the snapshot stale, so round 3 was a full
-  round. It found 2 MAJOR and 3 MINOR (*Review rounds*); all five were checked against the code and
-  fixed in 6546cc15.
-- Evidence the fixes hold: the Tasks review round 1 (a full round by a fresh reviewer, after the
-  fixes) read the fixed plan against tasks.md and the code and confirmed the round-3 fix ("the
-  state-opened list itself is fine … `Before::Settled` draws the overlay"). It found two further
-  MAJORs on tasks T006 and T020, which also touch plan.md and `contracts/picker-row.md`; fixed in
-  35fc46b8, and Tasks round 2 is CLEAN. `speckit-analyze`: 0 CRITICAL, 0 HIGH.
-- Question: accept the plan as fixed and open PR 2, or review it further?
-  1. (Recommended) Accept: open PR 2. The plan's post-fix text has been read by two later fresh
-     reviewers (Tasks rounds 1 and 2) with no open finding.
-  2. Run one more full plan review beyond the three-round limit, then PR 2 if it is clean.
-  3. Hold: the user reads `plan.md` (Test strategy by layer, Delivery order) before anything merges.
+None.
 
 ## Token usage
 
