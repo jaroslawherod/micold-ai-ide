@@ -6,6 +6,7 @@
 //! `specs/034-github-issue-worktree/contracts/github-issue-source.md` and `remote-list-rpc.md`.
 
 use std::fmt;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use crate::git::GitRemote;
@@ -318,24 +319,62 @@ pub fn locate_gh_on_host(env_include_path: Option<&str>, process_path: &str) -> 
     })
 }
 
-/// One open issue, as the picker shows and ranks it (data-model §2).
+/// The login GitHub shows for an issue whose author's account is gone (038 FR-002).
+pub const GHOST_LOGIN: &str = "ghost";
+
+/// What stands between the parts of a row's line and of its match text.
+const PART_SEPARATOR: &str = "  ·  ";
+
+/// One open issue, as the picker shows and ranks it (034 data-model §2, 038 data-model §1).
 ///
-/// Held only in the open form (FR-023). No `Serialize`, so no code path can persist it (SC-006).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Held only in the open form (034 FR-023). No `Serialize`, so no code path can persist it
+/// (SC-006), and a hand-written `Debug` that redacts the reporter, so no log can print it (038
+/// FR-025).
+#[derive(Clone, PartialEq, Eq)]
 pub struct Issue {
     number: u64,
     title: String,
     labels: Vec<String>,
     updated_at: String,
+    /// The author's login; [`GHOST_LOGIN`] when GitHub reports none. Never empty.
+    reporter: String,
     row_text: String,
 }
 
+/// Where a match's emphasis lands on a row's two lines (038 data-model §3): byte ranges of
+/// [`Issue::title_line`] and of [`Issue::details_line`], each list sorted, non-overlapping and on
+/// character boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RowEmphasis {
+    /// Ranges of the title line.
+    pub title: Vec<Range<usize>>,
+    /// Ranges of the details line.
+    pub details: Vec<Range<usize>>,
+}
+
+/// One of a row's two lines.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Line {
+    Title,
+    Details,
+}
+
+/// A stretch of the match text that is also shown on a line: `len` bytes, at `in_row` of
+/// [`Issue::row_text`] and at `in_line` of `line`.
+struct Part {
+    line: Line,
+    in_row: usize,
+    in_line: usize,
+    len: usize,
+}
+
 impl Issue {
-    /// An issue, with its row text derived once, here.
+    /// An issue reported by [`GHOST_LOGIN`], with its match text derived once, here. The reporter
+    /// is set with [`Issue::reported_by`].
     pub fn new(number: u64, title: String, labels: Vec<String>, updated_at: String) -> Issue {
         let mut row_text = format!("#{number} {title}");
         if !labels.is_empty() {
-            row_text.push_str("  ·  ");
+            row_text.push_str(PART_SEPARATOR);
             row_text.push_str(&labels.join(", "));
         }
         Issue {
@@ -343,8 +382,15 @@ impl Issue {
             title,
             labels,
             updated_at,
+            reporter: GHOST_LOGIN.to_string(),
             row_text,
         }
+    }
+
+    /// The same issue, reported by `login`. An empty login is no author: [`GHOST_LOGIN`].
+    pub fn reported_by(mut self, login: &str) -> Issue {
+        self.reporter = if login.is_empty() { GHOST_LOGIN } else { login }.to_string();
+        self
     }
 
     /// The issue number; the ticket is its decimal text (FR-009).
@@ -367,10 +413,130 @@ impl Issue {
         &self.updated_at
     }
 
-    /// `#<number> <title>`, plus `  ·  <l1>, <l2>` when labelled: the text the picker shows and
-    /// ranks (research R12).
+    /// The login of the issue's author as GitHub reports it, or [`GHOST_LOGIN`] (038 FR-002).
+    pub fn reporter(&self) -> &str {
+        &self.reporter
+    }
+
+    /// The match text, what the picker ranks: `#<number> <title>`, plus `  ·  <l1>, <l2>` when
+    /// labelled (034 research R12). A row shows [`Issue::title_line`] and [`Issue::details_line`]
+    /// instead (038 data-model §4).
     pub fn row_text(&self) -> &str {
         &self.row_text
+    }
+
+    /// A row's first line: `#<number> <title>` (038 FR-001).
+    pub fn title_line(&self) -> String {
+        format!("#{} {}", self.number, self.title)
+    }
+
+    /// A row's second line: the reporter, then `  ·  <l1>, <l2>` when labelled (038 FR-002,
+    /// FR-003).
+    pub fn details_line(&self) -> String {
+        let mut line = self.reporter.clone();
+        if !self.labels.is_empty() {
+            line.push_str(PART_SEPARATOR);
+            line.push_str(&self.labels.join(", "));
+        }
+        line
+    }
+
+    /// The parts of the match text, in its order. The separators between them belong to no part.
+    fn parts(&self) -> Vec<Part> {
+        let title_len = self.title_line().len();
+        let mut parts = vec![Part {
+            line: Line::Title,
+            in_row: 0,
+            in_line: 0,
+            len: title_len,
+        }];
+        if !self.labels.is_empty() {
+            parts.push(Part {
+                line: Line::Details,
+                in_row: title_len + PART_SEPARATOR.len(),
+                in_line: self.reporter.len() + PART_SEPARATOR.len(),
+                len: self.row_text.len() - title_len - PART_SEPARATOR.len(),
+            });
+        }
+        parts
+    }
+
+    /// Where `spans` — byte ranges of [`Issue::row_text`], as a match reports them — fall on the
+    /// two lines (038 data-model §4).
+    ///
+    /// Total: a span is cut to the parts it covers, so a separator is never emphasised and a span
+    /// outside the match text is dropped; one that cuts through a character is widened to it.
+    pub fn emphasis(&self, spans: &[Range<usize>]) -> RowEmphasis {
+        let row = self.row_text.as_str();
+        let mut emphasis = RowEmphasis::default();
+        for span in spans {
+            let start = floor_char_boundary(row, span.start);
+            let end = ceil_char_boundary(row, span.end);
+            for part in self.parts() {
+                let from = start.max(part.in_row);
+                let to = end.min(part.in_row + part.len);
+                if from < to {
+                    let rebased =
+                        from - part.in_row + part.in_line..to - part.in_row + part.in_line;
+                    match part.line {
+                        Line::Title => emphasis.title.push(rebased),
+                        Line::Details => emphasis.details.push(rebased),
+                    }
+                }
+            }
+        }
+        emphasis.title = merged(emphasis.title);
+        emphasis.details = merged(emphasis.details);
+        emphasis
+    }
+}
+
+/// The last character boundary of `text` at or before `at`.
+fn floor_char_boundary(text: &str, at: usize) -> usize {
+    let mut at = at.min(text.len());
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    at
+}
+
+/// The first character boundary of `text` at or after `at`.
+fn ceil_char_boundary(text: &str, at: usize) -> usize {
+    let mut at = at.min(text.len());
+    while !text.is_char_boundary(at) {
+        at += 1;
+    }
+    at
+}
+
+/// `ranges` sorted, with overlapping and touching ranges made one.
+fn merged(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
+    ranges.sort_by_key(|range| range.start);
+    let mut merged: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
+    for range in ranges {
+        match merged.last_mut() {
+            Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+            _ => merged.push(range),
+        }
+    }
+    merged
+}
+
+/// What `Debug` prints in place of a reporter.
+const REDACTED: &str = "<redacted>";
+
+/// Hand-written, so that the reporter is never printed: a `{:?}` in a log line or a panic message
+/// shows which issue, not who reported it (038 FR-025). The match text is left out for the same
+/// reason; it repeats the number, the title and the labels.
+impl fmt::Debug for Issue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Issue")
+            .field("number", &self.number)
+            .field("title", &self.title)
+            .field("labels", &self.labels)
+            .field("updated_at", &self.updated_at)
+            .field("reporter", &REDACTED)
+            .finish_non_exhaustive()
     }
 }
 
@@ -404,12 +570,28 @@ pub enum IssueLoadError {
     Other(String),
 }
 
+/// The fields read from an issue node, wherever the node comes from. A macro, so `concat!` can
+/// put the one text into each query (038 contracts/issue-fields.md §1).
+macro_rules! issue_node_selection {
+    () => {
+        "number title updatedAt labels(first: 20) { nodes { name } } author { login }"
+    };
+}
+
+/// The selection [`LIST_QUERY`], [`SEARCH_QUERY`] and [`SEARCH_WITH_NUMBER_QUERY`] share for an
+/// issue node, so a node from any of them parses alike (038 FR-006).
+pub const ISSUE_NODE_SELECTION: &str = issue_node_selection!();
+
 /// The GraphQL document for one page of open issues (contracts/github-issue-source.md §3). One
 /// line, so every argument `gh` receives is one line.
-pub const LIST_QUERY: &str = "query($owner: String!, $name: String!, $cursor: String) { \
-repository(owner: $owner, name: $name) { issues(states: OPEN, first: 100, after: $cursor, \
-orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount pageInfo { hasNextPage endCursor } \
-nodes { number title updatedAt labels(first: 20) { nodes { name } } } } } }";
+pub const LIST_QUERY: &str = concat!(
+    "query($owner: String!, $name: String!, $cursor: String) { ",
+    "repository(owner: $owner, name: $name) { issues(states: OPEN, first: 100, after: $cursor, ",
+    "orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount pageInfo { hasNextPage endCursor } ",
+    "nodes { ",
+    issue_node_selection!(),
+    " } } } }"
+);
 
 /// Parse `gh api graphql` stdout for [`LIST_QUERY`] into a page.
 ///
@@ -446,7 +628,9 @@ pub fn parse_list_page(stdout: &[u8]) -> Result<IssuePage, IssueLoadError> {
 /// Labels held per issue; the query asks for no more (research R2).
 const LABELS_PER_ISSUE: usize = 20;
 
-/// One `Issue` node: `number`, `title`, `updatedAt`, `labels.nodes[].name`.
+/// One `Issue` node, as [`ISSUE_NODE_SELECTION`] reads it: `number`, `title`, `updatedAt`,
+/// `labels.nodes[].name`, `author.login`. A node without an author — a deleted account — is still
+/// an issue, reported by [`GHOST_LOGIN`].
 fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
     let labels = node["labels"]["nodes"]
         .as_array()
@@ -458,12 +642,13 @@ fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
                 .collect()
         })
         .unwrap_or_default();
-    Some(Issue::new(
+    let issue = Issue::new(
         node["number"].as_u64()?,
         node["title"].as_str()?.to_string(),
         labels,
         node["updatedAt"].as_str().unwrap_or_default().to_string(),
-    ))
+    );
+    Some(issue.reported_by(node["author"]["login"].as_str().unwrap_or_default()))
 }
 
 /// The error a GraphQL `errors[]` array reports, if it has one.
@@ -514,16 +699,25 @@ pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
 
 /// The GraphQL document for a search beyond the loaded issues (contracts/github-issue-source.md
 /// §3). One line, like [`LIST_QUERY`].
-pub const SEARCH_QUERY: &str = "query($q: String!) { search(type: ISSUE, query: $q, first: 50) { \
-nodes { ... on Issue { number title updatedAt state labels(first: 20) { nodes { name } } } } } }";
+pub const SEARCH_QUERY: &str = concat!(
+    "query($q: String!) { search(type: ISSUE, query: $q, first: 50) { ",
+    "nodes { ... on Issue { ",
+    issue_node_selection!(),
+    " state } } } }"
+);
 
 /// [`SEARCH_QUERY`] plus the issue whose number was typed: GitHub's search does not match an issue
 /// by its number (research R2). A second document, because GraphQL rejects a declared variable the
 /// query does not use.
-pub const SEARCH_WITH_NUMBER_QUERY: &str = "query($q: String!, $owner: String!, $name: String!, \
-$n: Int!) { search(type: ISSUE, query: $q, first: 50) { nodes { ... on Issue { number title \
-updatedAt state labels(first: 20) { nodes { name } } } } } repository(owner: $owner, name: $name) \
-{ issue(number: $n) { number title updatedAt state labels(first: 20) { nodes { name } } } } }";
+pub const SEARCH_WITH_NUMBER_QUERY: &str = concat!(
+    "query($q: String!, $owner: String!, $name: String!, ",
+    "$n: Int!) { search(type: ISSUE, query: $q, first: 50) { nodes { ... on Issue { ",
+    issue_node_selection!(),
+    " state } } } repository(owner: $owner, name: $name) ",
+    "{ issue(number: $n) { ",
+    issue_node_selection!(),
+    " state } } }"
+);
 
 /// The arguments after `gh` for a search beyond the loaded issues: only the typed text and — for a
 /// typed number — the repository and that number leave the machine (FR-025).

@@ -57,18 +57,18 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 
 ### Tests for User Story 1, slice A (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T001 [P] [US1] [A15] [U1] [U2] [U3] [U4] [U5] [U6] Extend `crates/micold-core/tests/github_parse.rs` and add a captured node to `crates/micold-core/tests/fixtures/gh/` (contracts/issue-fields.md §1–2):
+- [X] T001 [P] [US1] [A15] [U1] [U2] [U3] [U4] [U5] [U6] Extend `crates/micold-core/tests/github_parse.rs` and add a captured node to `crates/micold-core/tests/fixtures/gh/` (contracts/issue-fields.md §1–2):
   - A node with `"author": {"login": "octocat"}` parses to `reporter() == "octocat"`.
   - `"author": null` and a node with no `author` key parse to `reporter() == "ghost"`; the issue is still listed.
   - A bot's `login` is kept as reported.
   - `LIST_QUERY`, `SEARCH_QUERY` and `SEARCH_WITH_NUMBER_QUERY` each contain the one shared node selection, and it contains `author { login }`; a list node, a search node and a typed-number node with the same fields parse to equal `Issue`s (FR-006).
   - `list_args_send_only_the_repository` and `search_args_send_only_the_query` also assert that no argument contains `author:` and that the arguments are the ones sent today (FR-013, FR-026).
-- [ ] T002 [P] [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] Write `crates/micold-core/tests/github_issue_lines.rs` (NEW; contracts/issue-fields.md §3–4, data-model §3–4):
+- [X] T002 [P] [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] Write `crates/micold-core/tests/github_issue_lines.rs` (NEW; contracts/issue-fields.md §3–4, data-model §3–4):
   - `title_line()` is `#<number> <title>`; `details_line()` is `<reporter>`, then `"  ·  "` + `labels.join(", ")` "only when `labels` is not empty" (the three rows of the contract's table, including `ghost`).
   - `row_text()` is unchanged from today: `#N title` + (`"  ·  "` + labels); it does not contain the reporter in this slice (slice A only; T024 replaces this case when the reporter joins the match text).
   - `emphasis(spans)`: a span in the title part maps to the same range of the title line; a span in the labels part maps to the details line after the reporter and its 6-byte separator; a span crossing the separator is split and "the separator's bytes carry no emphasis"; a span outside every part is dropped; an issue without labels yields no details emphasis.
   - Ranges returned are "sorted, non-overlapping, and lie on character boundaries" for a title and labels with multi-byte characters.
-- [ ] T003 [P] [US1] [U28] [U29] Write `crates/micold-core/tests/github_privacy.rs` (NEW; contracts/issue-fields.md §5, FR-025):
+- [X] T003 [P] [US1] [U28] [U29] Write `crates/micold-core/tests/github_privacy.rs` (NEW; contracts/issue-fields.md §5, FR-025):
   - `format!("{:?}", issue)` contains the number and the title and does not contain the reporter's login.
   - A source check over `crates/micold-core/src/github.rs`, `crates/micold-client/src/shell/issues.rs` and `crates/micold-client/src/features/worktree_form.rs`, and also `crates/micold-client/src/main.rs` and `crates/micold-client/src/ui/`: no `tracing`/`log` macro call names an issue, a reporter or a description.
 - [ ] T004 [P] [US1] [A7] [U31] [U32] [U33] [U34] [U35] Add unit tests to `crates/micold-client/src/ui/material/picker.rs` (contracts/picker-row.md §1–2):
@@ -81,9 +81,9 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 
 ### Implementation for User Story 1, slice A
 
-- [ ] T007 [US1] [U1] [U2] [U3] [U4] [U5] [U6] In `crates/micold-core/src/github.rs`: add `Issue::reporter` ("Never empty"; `GHOST_LOGIN` = `"ghost"` "when the node's `author` is `null` or absent"), the chainable `.reported_by(login)`, and the accessor `reporter()`; `Issue::new` keeps its four arguments and yields `reporter = "ghost"`. Move the node fields of the three queries into one shared selection, add `author { login }` to it, and read it in `issue_from_node` (T001).
-- [ ] T008 [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] In `crates/micold-core/src/github.rs`: add `title_line()`, `details_line()`, `RowEmphasis { title, details }` and `Issue::emphasis(&[Range<usize>])` with slice A's mapping (title part → title line, labels part → details line); `row_text()` stays as today (T002).
-- [ ] T009 [US1] [U28] [U29] In `crates/micold-core/src/github.rs`: replace the derived `Debug` of `Issue` with a hand-written one that prints `reporter` as `<redacted>` (T003).
+- [X] T007 [US1] [U1] [U2] [U3] [U4] [U5] [U6] In `crates/micold-core/src/github.rs`: add `Issue::reporter` ("Never empty"; `GHOST_LOGIN` = `"ghost"` "when the node's `author` is `null` or absent"), the chainable `.reported_by(login)`, and the accessor `reporter()`; `Issue::new` keeps its four arguments and yields `reporter = "ghost"`. Move the node fields of the three queries into one shared selection, add `author { login }` to it, and read it in `issue_from_node` (T001).
+- [X] T008 [US1] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] In `crates/micold-core/src/github.rs`: add `title_line()`, `details_line()`, `RowEmphasis { title, details }` and `Issue::emphasis(&[Range<usize>])` with slice A's mapping (title part → title line, labels part → details line); `row_text()` stays as today (T002).
+- [X] T009 [US1] [U28] [U29] In `crates/micold-core/src/github.rs`: replace the derived `Debug` of `Issue` with a hand-written one that prints `reporter` as `<redacted>` (T003).
 - [ ] T010 [US1] [U31] [U32] [U33] In `crates/micold-client/src/ui/material/picker.rs`: add the wrapping mode of `EmphasisedLabel`, shaped as one paragraph with `Paragraph::with_spans` and `Wrapping::WordOrGlyph`, reporting the paragraph's height (T004; research R5).
 - [ ] T011 [US1] [U34] [U35] In `crates/micold-client/src/ui/material/picker.rs` and `crates/micold-client/src/ui/material/typeahead.rs`: add `Row::details(text, spans)`; a row with details renders the label at `TypeRole::Body` in `on_surface` over the details at `TypeRole::Caption` in `on_surface_variant`, height `Shrink` with `density::MENU_ITEM_BASE` as the minimum and `spacing::XS` vertical padding, the picked-row marker aligned to the first line; a row without details takes today's code path (T004; contracts/picker-row.md §1).
 - [ ] T012 [US1] [U36] [U37] [U44] In `crates/micold-client/src/ui/worktree_form.rs`: build the issue picker's rows in one function (`issue_rows`) used for every issue, as `TypeaheadRow::new(issue.title_line(), e.title).details(issue.details_line(), e.details)` with `e = issue.emphasis(&matched.spans)` (T005).

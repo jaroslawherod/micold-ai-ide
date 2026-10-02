@@ -38,7 +38,7 @@ before the story is complete.
 | A12 | Text matching both title and reporter emphasises both matches in the row | US2-3, FR-010 | example | PENDING | T024, T026 | T031 |
 | A13 | Typing the login in a different letter case still matches the reporter's issues | US2-4, FR-009 | example | PENDING | T024 | T031 |
 | A14 | The empty search field's hint names the reporter alongside number, title and label | US2-5, FR-011 | example | PENDING | T026 | T031 |
-| A15 | With more issues than the cap, typing a login makes the same one search request (typed text, no author filter) and shows loaded matches plus returned issues matching by number, title, label or reporter | US2-6, FR-012, FR-013 | example | PENDING | T001, T025 | T031 |
+| A15 | With more issues than the cap, typing a login makes the same one search request (typed text, no author filter) and shows loaded matches plus returned issues matching by number, title, label or reporter | US2-6, FR-012, FR-013 | example | PENDING (T001 part done: no author filter; T025 in M3) | T001, T025 | T031 |
 | A16 | A tooltip for a row opens when the cursor stays still on a row with a description for 3 seconds | US3-1, FR-015, SC-003 | example | PENDING | T032, T035, T047 | T055 |
 | A17 | No tooltip is open when the cursor has been still for less than 3 seconds | US3-2, FR-015, SC-003 | example | PENDING | T032, T035 | T055 |
 | A18 | While the cursor keeps moving over the list no tooltip opens; each move beyond the tolerance restarts the 3 seconds | US3-3, FR-016, SC-004 | example | PENDING | T032, T035 | T055 |
@@ -62,26 +62,26 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U1 | A node with `author.login` `octocat` parses to reporter `octocat` | US1-1, FR-002 | example | PENDING | T001 / T007 |
-| U2 | `author` null, or no `author` key, parses to reporter `ghost` and the issue is still listed | FR-002, Edge: reporter gone | example | PENDING | T001 / T007 |
-| U3 | A bot's login is kept exactly as reported | FR-002, Edge: bot | example | PENDING | T001 / T007 |
-| U4 | `LIST_QUERY`, `SEARCH_QUERY` and `SEARCH_WITH_NUMBER_QUERY` each contain the one shared node selection, with `author { login }` | FR-002, FR-006 | example | PENDING | T001 / T007 |
-| U5 | A list node, a search node and a typed-number node with the same fields parse to equal `Issue`s | US1-8, FR-006 | example | PENDING | T001 / T007 |
-| U6 | `list_args` and `search_args` are unchanged and no argument contains `author:` | FR-013, FR-026 | example | PENDING | T001, T044 / T007, T049 |
+| U1 | A node with `author.login` `octocat` parses to reporter `octocat` | US1-1, FR-002 | example | DONE | T001 / T007 |
+| U2 | `author` null, or no `author` key, parses to reporter `ghost` and the issue is still listed | FR-002, Edge: reporter gone | example | DONE | T001 / T007 |
+| U3 | A bot's login is kept exactly as reported | FR-002, Edge: bot | example | DONE | T001 / T007 |
+| U4 | `LIST_QUERY`, `SEARCH_QUERY` and `SEARCH_WITH_NUMBER_QUERY` each contain the one shared node selection, with `author { login }` | FR-002, FR-006 | example | DONE | T001 / T007 |
+| U5 | A list node, a search node and a typed-number node with the same fields parse to equal `Issue`s | US1-8, FR-006 | example | DONE | T001 / T007 |
+| U6 | `list_args` and `search_args` are unchanged and no argument contains `author:` | FR-013, FR-026 | example | DONE (M1 part; T044/T049 extend it in M5) | T001, T044 / T007, T049 |
 
 ### `crates/micold-core/src/github.rs`: row lines and emphasis
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U7 | `title_line()` is `#<number> <title>` | US1-1, FR-001 | example | PENDING | T002 / T008 |
-| U8 | `details_line()` is the reporter, then `  ·  ` and the comma-joined labels when there are labels | US1-2, FR-003 | example | PENDING | T002 / T008 |
-| U9 | `details_line()` with no labels is the reporter alone, no separator; no author shows `ghost` | US1-3, FR-003 | example | PENDING | T002 / T008 |
-| U10 | Before M3 `row_text()` is today's `#N title  ·  labels` and omits the reporter | FR-008 (M1 boundary) | characterization | BASELINE | T002 / T008 |
-| U11 | `emphasis`: a span in the title part maps to the same range of the title line | US2-3, FR-010 | example | PENDING | T002 / T008 |
-| U12 | `emphasis`: a span in the labels part maps to the details line after the reporter and its 6-byte separator | FR-010 | example | PENDING | T002 / T008 |
-| U13 | `emphasis`: a span crossing the separator is split and the separator's bytes carry no emphasis; a span over a separator only yields none | FR-010 | example | PENDING | T002, T024 / T008, T028 |
-| U14 | `emphasis`: a span outside every part is dropped; an issue without labels yields no label emphasis | FR-010 | example | PENDING | T002 / T008 |
-| U15 | `emphasis` returns sorted, non-overlapping ranges on character boundaries for multi-byte title and labels | FR-010 | example | PENDING | T002 / T008 |
+| U7 | `title_line()` is `#<number> <title>` | US1-1, FR-001 | example | DONE | T002 / T008 |
+| U8 | `details_line()` is the reporter, then `  ·  ` and the comma-joined labels when there are labels | US1-2, FR-003 | example | DONE | T002 / T008 |
+| U9 | `details_line()` with no labels is the reporter alone, no separator; no author shows `ghost` | US1-3, FR-003 | example | DONE | T002 / T008 |
+| U10 | Before M3 `row_text()` is today's `#N title  ·  labels` and omits the reporter | FR-008 (M1 boundary) | characterization | DONE (baseline held) | T002 / T008 |
+| U11 | `emphasis`: a span in the title part maps to the same range of the title line | US2-3, FR-010 | example | DONE | T002 / T008 |
+| U12 | `emphasis`: a span in the labels part maps to the details line after the reporter and its 6-byte separator | FR-010 | example | DONE | T002 / T008 |
+| U13 | `emphasis`: a span crossing the separator is split and the separator's bytes carry no emphasis; a span over a separator only yields none | FR-010 | example | DONE (M1 part; T024/T028 extend it in M3) | T002, T024 / T008, T028 |
+| U14 | `emphasis`: a span outside every part is dropped; an issue without labels yields no label emphasis | FR-010 | example | DONE | T002 / T008 |
+| U15 | `emphasis` returns sorted, non-overlapping ranges on character boundaries for multi-byte title and labels | FR-010 | example | DONE | T002 / T008 |
 | U16 | `row_text()` from M3 on is `#N title  ·  reporter  ·  labels` (reporter is matchable) | US2-1, FR-009 | example | PENDING | T024 / T028 |
 | U17 | `emphasis` maps a reporter span to the start of the details line (`ana` -> `0..3`) | US2-2, FR-010 | example | PENDING | T024 / T028 |
 | U18 | `typeahead::rank` over issues matches part of a reporter login in a different letter case | US2-1, US2-4, FR-009 | example | PENDING | T024 / T028 |
@@ -99,8 +99,8 @@ gives the test task first, then the implementation task(s).
 | U25 | A node whose `bodyText` is `Problem\nThe list cuts long titles off.` parses to `Problem The list cuts long titles off.`; a comment-only body parses to `""` | US3-12, US3-13, FR-022 | example | PENDING | T044 / T049 |
 | U26 | `bodyText` null or absent gives an empty description and the issue is still listed; a 65,536-character body gives 601 characters | FR-020, Edge: very long | example | PENDING | T044 / T049 |
 | U27 | The shared node selection contains `bodyText`, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | PENDING | T044 / T049 |
-| U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | PENDING | T003, T045 / T009, T049 |
-| U29 | No `tracing`/`log` call in `github.rs`, `shell/issues.rs` or `worktree_form.rs` names an issue, reporter or description | FR-025 | example | PENDING | T003 / T009 |
+| U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | DONE (reporter; T045/T049 add the description in M5) | T003, T045 / T009, T049 |
+| U29 | No `tracing`/`log` call in `github.rs`, `shell/issues.rs` or `worktree_form.rs` names an issue, reporter or description | FR-025 | example | DONE | T003 / T009 |
 | U30 | A malformed page containing a body returns an error whose `Display` and `Debug` carry no part of the body | FR-025 | example | PENDING | T045 / T049 |
 | U81 | `Issue` derives or implements no `Serialize` (source check over `github.rs`) | FR-025 | example | PENDING | T045 / T049 |
 
