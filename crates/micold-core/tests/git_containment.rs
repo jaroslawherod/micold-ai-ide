@@ -181,7 +181,11 @@ fn the_fake_git_answers_the_tip_and_the_ancestry_as_scripted() {
         .with_ancestry(repo, HEAD, OTHER, false);
 
     assert_eq!(fake.branch_tip(repo, "feat/a"), Some(HEAD.to_string()));
-    assert_eq!(fake.branch_tip(repo, "feat/b"), None, "a branch not scripted");
+    assert_eq!(
+        fake.branch_tip(repo, "feat/b"),
+        None,
+        "a branch not scripted"
+    );
     assert_eq!(
         fake.branch_tip(Path::new("/other"), "feat/a"),
         None,
