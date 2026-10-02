@@ -113,6 +113,15 @@ pub trait Git {
     /// Read-only: local ref storage, no fetch, nothing written. `branch` is only ever looked up
     /// under `refs/heads/`, never passed to git as a free argument.
     fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String>;
+
+    /// Whether commit `tip` is `head` or an ancestor of it
+    /// (`git merge-base --is-ancestor <tip> <head>`): `Some(true)` on exit 0, `Some(false)` on
+    /// exit 1, and `None` on anything else — a commit the repository does not hold, or git could
+    /// not be asked (feature 040, FR-015, FR-017).
+    ///
+    /// Read-only: the local object store, no fetch, nothing written. Both arguments must be
+    /// commit ids; the caller checks the one that arrives from outside.
+    fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -410,6 +419,21 @@ impl Git for GitCli {
         let tip = run_git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
         let tip = tip.trim();
         (!tip.is_empty()).then(|| tip.to_string())
+    }
+
+    fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool> {
+        let output = no_window(&mut Command::new("git"))
+            .arg("-C")
+            .arg(repo)
+            .args(["merge-base", "--is-ancestor", tip, head])
+            .output()
+            .ok()?;
+        match output.status.code() {
+            Some(0) => Some(true),
+            Some(1) => Some(false),
+            // 128 for a commit the repository does not hold; anything else is as little an answer.
+            _ => None,
+        }
     }
 
     fn submodule_update_init_recursive(
@@ -1029,6 +1053,10 @@ impl Git for FakeGit {
     }
 
     fn branch_tip(&self, _repo: &Path, _branch: &str) -> Option<String> {
+        None
+    }
+
+    fn is_ancestor(&self, _repo: &Path, _tip: &str, _head: &str) -> Option<bool> {
         None
     }
 
