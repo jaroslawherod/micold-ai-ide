@@ -43,9 +43,8 @@ pub fn into_view<T>() -> impl Operation<T> {
 }
 
 /// No room to spare around the row. The focus operation pads its control so a ring is never flush
-/// against a panel's edge; a row is a whole item of a list that is a whole number of base rows
-/// high, so flush is where it belongs, and padding it would scroll a list whose highlighted row
-/// was already wholly visible.
+/// against a panel's edge; a row is an item of the list itself, so flush is where it belongs: a
+/// wholly visible highlighted row must not move its list, and padding it would.
 const MARGIN: f32 = 0.0;
 
 /// Pass one: where is the highlighted row, and which panel is it in?
