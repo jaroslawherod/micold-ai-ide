@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
 - **Phase**: 5-close
-- **Next step**: close PR open; the orchestrator waits for `ci complete` and merges, then the record PR.
+- **Next step**: close PR #542 open; the orchestrator waits for `ci complete` and merges, then the record PR.
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #530 | M2 | merged | f169414780363e6e06fa837586ee93c215d9a2b2 |
 | #535 | M3 | merged | bc5699922fd78fa9cc40346c7993827c54058839 |
 | #537 | M4 | merged | c331d0f8c0556b5fb30f605a6ebc1bc966c519ab |
+| #542 | Close | open | |
 
 ## Milestones
 
