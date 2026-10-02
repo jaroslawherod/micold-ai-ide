@@ -447,3 +447,16 @@ existed and failed before the implementation.
 - green: mutant removed, no source change. Suite: 18 passed, 0 failed
 - refactor: none needed
 - commit: `d67fb3a4`
+
+### M2 cycle: U61 (review A) — a branch name is only a name under `refs/heads/`
+
+- red: `a_branch_name_with_a_revision_suffix_is_unknown` in `crates/micold-daemon/tests/merged_branch_check.rs`
+  failed on the cherry-picked M2 code: `left: [Contained, Contained, Contained]`, `right: [Unknown, Unknown, Unknown]`
+  (`ahead~1`, `ahead^`, `ahead^{commit}~1` resolved to the merged commit and hid `ahead`'s newer one)
+- green: `is_plain_branch_name` in `crates/micold-daemon/src/server.rs` answers `Unknown` for a name git would
+  read as revision syntax; `merged_branch_check` 9 passed, `pr_status_setting` 3 passed
+- refactor (same review): the `MergedBranchCheck` arm is spawned, not awaited, so its git calls never hold up the
+  connection loop's `Ping` (BUG-009); its join failure uses `task_failed`; `GitCli::is_ancestor` sets
+  `GIT_NO_LAZY_FETCH=1` and `GIT_TERMINAL_PROMPT=0` so a partial clone never fetches (FR-016)
+- suite: `mise run gate` before the pull request
+- commit: the commit that adds this entry

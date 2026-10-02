@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: Orchestrator: wait for CI on #541 (M1) and merge it; then milestone M2.
+- **Next step**: M2: gate and review A round 2 on the review A fixes.
 
 ## Pull requests
 
@@ -17,14 +17,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
-| #541 | M1 | open | |
+| #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | PR open (gate green at e288d6cc; reviews A and B clean) |
-| M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | pending |
+| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | merged |
+| M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | in progress (prepared on `worktree-agent-a1e92fcd09d5df72e`, cherry-picked onto main e496e95c; protocol 21 still free) |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
@@ -67,8 +67,12 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Tasks | 2 | 86514bb7cfe3a10a9d00e54449743e74d39c8730:5ce9f7ffd4d719ce1de292d1a8b91df286732994 | CLEAN: 1 MINOR (T059 and U146 keyed the `Read:` line on `age_secs` while the data model keys it on `stale`), fixed. |
 | Code A (M1) | 1 | be2c688facf99c1a98ccb77330add3bf207b3410:9436237451f36aaa08f6690dd91f5c17d8d14005 | CLEAN: 3 MINOR. F1 (`reading_failure` lost the `errors` when the data beside them could not be read) fixed with a test; F2 (`GhCli::read` gave every chunk the reading's start time) fixed; F3 not fixed, see *Follow-ups not done*. |
 | Code B (M1) | 1 | f50cb67fdfa4082ea4415240e94f795d0dbc1d5d:e288d6cc75625160e5702584b919fe23603d8aa9 | CLEAN: no findings. Verify `mise run test-core` exit 0, 143 `test result: ok`, 0 FAILED. |
+| Code A (M2) | 1 | aeae95f9d6bc9aff627bf0e545263609cd31eabf:22338024d8f1b6ada75d7eddd74425bf9698b587 | CHANGES: 2 MAJOR, 7 MINOR. F1 (arm awaited its blocking task in the connection loop, BUG-009) fixed by spawning; F2 (no `GIT_NO_LAZY_FETCH` on `merge-base`) fixed; F3 (branch name with revision suffix resolved another commit) fixed with a test; F7 (`task_failed`) fixed; F4, F5 declined (see *Declined review findings*); F6, F8, F9 MINOR, not fixed. |
 
 ## Declined review findings
+
+- Code A (M2) F4: `adopt_daemon_settings` ignores `pr_status_enabled` — T022 says the field is accepted and "stored nowhere yet"; holding it in memory is M3/M4 work.
+- Code A (M2) F5: `ValidSettings::into_settings` writes `pr_status_enabled: false` — the one save path restores the stored value; the Settings switch that carries it through the draft is T038 (M4).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
