@@ -197,3 +197,15 @@ async fn a_branch_at_or_behind_the_head_is_contained() {
         "a tip equal to the head, and a tip that is an ancestor of it"
     );
 }
+
+/// U60. Commits made on the branch after the merge are work the merge did not take: no removal
+/// may be suggested for it (FR-017, story 3 scenario 4).
+#[tokio::test]
+async fn a_branch_with_a_commit_after_the_head_is_beyond() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+
+    let reply = check(&mut client, f.project.path(), vec![query("ahead", &f.merged)]).await;
+
+    assert_eq!(answers(reply), vec![BranchContainment::Beyond]);
+}
