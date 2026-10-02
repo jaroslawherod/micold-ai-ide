@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #485
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
-- **Phase**: 2-clarify
-- **Next step**: Clarify round 2 done and committed (CLEAN, not pushed; it ships in PR 2). Next: the plan phase.
+- **Phase**: 3-design
+- **Next step**: Design unit 1 handed over at the context cap after Phase 0 research. Next: a fresh design unit continues from *Handover* (write plan.md from research.md).
 
 ## Pull requests
 
@@ -51,7 +51,28 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design unit 1, 2026-10-02. Over the 150k cap after reading the code; no PR opened, nothing pushed.
+
+- **Done**: `branch-start.sh 531` (branch is `origin/main` + the 3 clarify commits). `.specify/extensions.yml`
+  has no `before_plan` or `after_plan` hooks. `research.md` is written: R1 to R13 are the design
+  decisions with code evidence (capture, seeding the new `Term`, the in-memory carry for FR-015,
+  file format, save schedule, location, permissions, removal and the setting, separator and time,
+  test layers). No review has run yet; *Review rounds* has no Plan row.
+- **Next step**: read `research.md` whole (it replaces re-reading the code), settle its four
+  *Open points* (1 and 2 change the plan: a signal handler, and whether the Windows-host history
+  mount exists), then run `speckit-plan` from its step 1 (`setup-plan.sh --json` copies the plan
+  template again) and write `plan.md`, `data-model.md`, `contracts/` (the saved-history file
+  format; the `save_terminal_history` setting on the wire) and `quickstart.md` (Part A automated,
+  Part B visual pass, as `specs/037-explain-hidden-cli/quickstart.md`). Then the plan review
+  (round 1), and steps 2 to 5 of the phase file.
+- **Milestone cut suggested by the research**: M1 = US1 with FR-015 (capture, seed, carry, file,
+  saver, restore, separator, guide); then the setting (US2, wire bump); damaged files (US3);
+  removal and sweep (US4); the sandbox work of R7, R8 and R11 (history mount, `owner_only` move,
+  `TZ` and `tzdata`); Polish. All but a docs-only Polish are `full`: persistence format,
+  concurrency, wire and sandbox boundary.
+- **Open findings**: none from a review. The risk in research R13 (a real CLI erasing the
+  scrollback when it resumes) is unmeasured; it is checked in quickstart Part B, not escalated.
+- **Checklists**: `checklists/requirements.md` has no unticked item (`grep '\[ \]'` printed nothing).
 
 ## Open escalation
 
