@@ -1632,8 +1632,9 @@ fn a_resume_after_the_script_timed_out_says_to_fix_it_and_restart_this_session()
 /// U66 (037, FR-012, contract A3): a refused start and an availability answer for the same
 /// directory name the same state, in each state a test here can produce quickly.
 ///
-/// The client writes its notes from the answer and the service writes the refusal, so the two
-/// agree only if both read one resolution of the directory's environment.
+/// The client writes its notes from the answer and the service writes the refusal. A refusal
+/// drops the resolution it read (D18), so the answer asked for after it is a second attempt: the
+/// two agree because both attempts ran under the same settings, not because they share one.
 #[test]
 fn a_refused_start_and_an_availability_answer_name_the_same_state() {
     let path = NoCliOnPath::new();

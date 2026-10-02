@@ -1034,6 +1034,10 @@ async fn create_session(
         let image = crate::state::image_reference();
         let Explanation { reason, action } =
             cli_reason::explain_one(cli, env, crate::state::place(&image), AttemptDir::Dir(&cwd));
+        // The reply tells the agent what to change, so the call it makes afterwards has to look
+        // again, as a start refused at the launch gate does (D18, review B F1). Left cached, the
+        // attempt that failed answered the retry in the same words.
+        state.invalidate_env_include(&cwd);
         return Err(OpError::service_error(format!("{reason} {action}")));
     }
 

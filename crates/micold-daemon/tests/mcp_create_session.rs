@@ -385,6 +385,51 @@ async fn a_cli_the_directorys_environment_lacks_is_refused_with_the_reason_and_n
     assert_eq!(s.session_ids(), before, "no session record is left behind");
 }
 
+/// 037 M2 review B, F1 (D18): the refusal tells the agent what to fix, so the call made after the
+/// fix has to look again.
+///
+/// The refusal was written from the directory's cached resolution and left it there. An agent
+/// told to fix the script that fixed it and asked again was refused in the same words, until an
+/// environment-include field was saved. A refused start in the pane already dropped it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn create_session_after_the_script_is_fixed_sources_it_again_and_starts() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    std::fs::remove_file(s.bin.path().join("pi")).unwrap();
+    let before = s.session_ids();
+
+    let script = s.store.path().join("env-include.sh");
+    std::fs::write(&script, "exit 3\n").unwrap();
+    s.state
+        .set_env_include(
+            Some(true),
+            Some(script.to_string_lossy().into_owned()),
+            None,
+        )
+        .unwrap();
+    let error = s.err(json!({"worktree": "default", "ai_cli": "pi"})).await;
+    assert_eq!(
+        error["message"].as_str().unwrap(),
+        refusal(AiCli::Pi, SpawnEnv::ScriptFailed, s.project.path()),
+        "{error}"
+    );
+
+    // The fix the refusal asked for: the script now runs, and puts Pi on the PATH. No setting is
+    // saved, so nothing but the refusal itself can have dropped the failed attempt.
+    let extra = tempfile::tempdir().unwrap();
+    install_cli(extra.path(), "pi", false);
+    std::fs::write(
+        &script,
+        format!("export PATH='{}':\"$PATH\"\n", extra.path().display()),
+    )
+    .unwrap();
+
+    let out = s.ok(json!({"worktree": "default", "ai_cli": "pi"})).await;
+    let id = Sandbox::created(&out);
+    assert!(!before.contains(&id), "a new session was created: {out}");
+    assert!(s.session_ids().contains(&id), "{out}");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_session_in_default_runs_in_the_project_root() {
     let _guard = ENV.lock().await;
