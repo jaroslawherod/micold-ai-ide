@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: `speckit-tdd-plan`, `speckit-analyze`, tasks review, checklists, PR 2.
+- **Next step**: Design unit, part 3: `speckit-analyze`, tasks review, checklists, PR 2 (`speckit-tdd-plan` done: `tdd/test-list.md`, 42 A and 148 U behaviours, ids on tasks.md).
 
 ## Pull requests
 
@@ -68,32 +68,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-Design unit, part 2, handed over at the context cap (2026-10-02) after step 2 of the phase file.
-**Done** (committed, not pushed; no PR open; `origin/main` has moved, so run `branch-start.sh 529`
-again): `data-model.md`, the three contracts, `quickstart.md` (§B: B1 to B17); plan review rounds 1
-(4 MAJOR, fixed) and 2 (CLEAN) — see *Review rounds*; spec.md follows D9 to D11 as corrected by
-round 1 (only the window that holds a project reads and shows; pause kept across a project switch;
-FR-015, FR-017, FR-018, FR-022, FR-024, SC-007); `tasks.md` (T001–T068, phases 3 to 10) with
-`## Milestones` M1 to M8, copied into *Milestones* above.
-**Next steps, in order:**
-1. `speckit-tdd-plan` (the `after_tasks` hook in `.specify/extensions.yml`): it writes
-   `tdd/test-list.md` and adds behaviour ids (`[A#]`, `[U#]`) to the test tasks of tasks.md, as
-   034's tasks.md has them. Have an `autopilot-worker` run the skill and report in 10 lines; check
-   with `git diff --stat` that it kept the task ids, the phases and `## Milestones`. tasks.md's
-   **Tests** header does not yet mention `tdd/test-list.md`; add that sentence then.
-2. `speckit-analyze` (forked skill; pass the feature directory), fix what it finds.
-3. Tasks review: fresh `autopilot-reviewer`, Tasks and milestone rubric, round 1
-   (`review-snapshot.sh` first). No tasks review has run. Points worth its attention: story 1 is
-   split into four milestones of which M1 to M3 ship no UI (milestones.md rules 3 and 6; the
-   rubric's "M1 includes the P1 story" is met by slice A, as in 034); M2 ships the
-   `MergedBranchCheck` RPC that only M6 uses, because the repository takes one protocol bump per
-   feature (research R11); M5 is `light`, M8 is `light`.
-4. Close checklists: `grep -n "\[ \]" specs/040-worktree-pr-ci-status/checklists/*.md` printed
-   nothing on 2026-10-02 (all ticked in the spec phase); have the tasks reviewer confirm the ticked
-   items still hold after this unit's spec edits.
-5. PR 2 `docs(040): clarify, plan and cut milestones for pull request and check status for each
-   worktree`, body ending `Refs #486`; local gate `mise run test-scripts`.
-**Open findings**: none.
+None.
 
 ## Open escalation
 
