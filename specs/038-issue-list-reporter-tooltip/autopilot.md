@@ -8,21 +8,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #518
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
-- **Phase**: 3-design
-- **Next step**: PR #534 (design) is open: the orchestrator waits on CI and merges it. After the merge: Phase 4, milestone M1 (T001–T017).
+- **Phase**: 4-milestone
+- **Next step**: M1 (T001–T017): `speckit-implement` running; then gate + review A, review B + visual pass, PR 3.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #525 | Spec | merged | 96bcd68ea422d8f1e8a18dc2ea5f55808482eae1 |
-| #534 | Design: clarify, plan, tasks, milestones | open | |
+| #534 | Design: clarify, plan, tasks, milestones | merged | 3d52e83e32344ee4d09964b74b80d24499e3931b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | | drafted, tasks not yet reviewed |
+| M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | | in progress |
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | | drafted |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | drafted |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
