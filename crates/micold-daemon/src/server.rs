@@ -11,14 +11,14 @@ use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
-use micold_core::git::{same_path, Git, GitCli};
+use micold_core::git::{containment, same_path, Git, GitCli};
 use micold_core::naming::DerivedNames;
 use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult,
-    SessionProcess, WindowView,
+    BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
+    OperationResult, SessionProcess, WindowView,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -1294,15 +1294,38 @@ where
                 };
                 state.send(id, reply);
             }
-            ClientMsg::MergedBranchCheck { req, checks, .. } => {
-                let answers = vec![BranchContainment::Contained; checks.len()];
-                state.send(
-                    id,
-                    DaemonMsg::OperationOk {
+            ClientMsg::MergedBranchCheck {
+                req,
+                project,
+                checks,
+            } => {
+                // Read-only and local: refs and the object store, never a fetch, and nothing is
+                // written (040 FR-016, FR-018a).
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                let answered = tokio::task::spawn_blocking(move || {
+                    let git = GitCli::new();
+                    checks
+                        .iter()
+                        .map(|check| merged_branch_answer(&git, &repo, check))
+                        .collect::<Vec<_>>()
+                })
+                .await;
+                let reply = match answered {
+                    Ok(answers) => DaemonMsg::OperationOk {
                         req,
                         result: OperationResult::MergedBranchCheck { answers },
                     },
-                );
+                    Err(e) => DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Internal,
+                        message: "could not check the merged branches".into(),
+                        detail: Some(e.to_string()),
+                    },
+                };
+                state.send(id, reply);
             }
             ClientMsg::WorktreeDelete {
                 req,
@@ -1741,6 +1764,22 @@ async fn prune_empty_off_runtime(state: &Arc<DaemonState>, project: &std::path::
         Ok(Err(e)) => tracing::warn!(%e, "empty-session prune failed"),
         _ => {}
     }
+}
+
+/// One answer of `MergedBranchCheck`: whether `check.branch`, as the repository holds it now, has
+/// commits beyond `check.head` (feature 040, contracts/reading-and-wire.md §3). Asks git for the
+/// branch's tip and, unless the tip is the head itself, whether the tip is an ancestor of it.
+fn merged_branch_answer(
+    git: &impl Git,
+    repo: &std::path::Path,
+    check: &MergedBranchQuery,
+) -> BranchContainment {
+    let tip = git.branch_tip(repo, &check.branch);
+    let ancestor = match tip.as_deref() {
+        Some(tip) if tip != check.head => git.is_ancestor(repo, tip, &check.head),
+        _ => None,
+    };
+    containment(tip.as_deref(), &check.head, ancestor)
 }
 
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is
