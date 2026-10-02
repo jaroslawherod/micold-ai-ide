@@ -1129,6 +1129,19 @@ pub struct DaemonSettings {
     pub cross_session_access: CrossSessionAccess,
 }
 
+/// Whether a local branch holds commits beyond its merged pull request (feature 040, FR-015,
+/// FR-017). A removal is suggested for `Contained` only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BranchContainment {
+    /// The branch's tip is the pull request's last commit or an ancestor of it.
+    Contained,
+    /// The branch has commits the pull request did not merge.
+    Beyond,
+    /// The repository cannot tell: the branch does not exist locally, the pull request's last
+    /// commit was never fetched, or git failed.
+    Unknown,
+}
+
 /// The result payload of a successful mutating request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationResult {

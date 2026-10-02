@@ -11,6 +11,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::process::no_window;
+use crate::protocol::messages::BranchContainment;
 
 /// All git side effects the feature needs. See `contracts/git-trait.md`.
 pub trait Git {
@@ -140,6 +141,19 @@ pub fn parse_remote_list(raw: &str) -> Vec<GitRemote> {
         });
     }
     remotes
+}
+
+/// Whether a branch holds commits beyond its merged pull request (feature 040, data-model §6).
+///
+/// `tip` is the branch's commit as the repository holds it now, `head` the pull request's last
+/// commit, and `ancestor` git's answer to "is `tip` an ancestor of `head`" (`None` when git could
+/// not say). Pure, so the rule is tested without a repository.
+pub fn containment(tip: Option<&str>, head: &str, ancestor: Option<bool>) -> BranchContainment {
+    if tip == Some(head) || ancestor == Some(true) {
+        BranchContainment::Contained
+    } else {
+        BranchContainment::Unknown
+    }
 }
 
 /// Production [`Git`] backed by the user's `git` binary (research R7). Cross-platform via the
