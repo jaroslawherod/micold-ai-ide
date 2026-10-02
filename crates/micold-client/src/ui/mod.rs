@@ -553,18 +553,29 @@ pub fn view<'a>(
     let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.session.start_menu.as_ref().map(|menu| {
             let items = session_start_menu_items(state, &menu.location);
+            // What the list does not offer for this row's directory, and why (037 FR-010). Read
+            // from the answer the items above were read from, on every draw, so it follows a
+            // newer answer as they do. The clamp counts its lines: opened from the lowest row, a
+            // panel sized for its items alone would run its note off the window.
+            let note = state
+                .location_dir(&menu.location)
+                .and_then(|dir| state.session.start_menu_note(&dir));
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
-                material::menu_panel_size(items.len()),
+                material::menu_panel_size_with_note(items.len(), note.as_deref()),
                 state.window.window_size,
             );
-            material::MenuOverlay::new(
+            let list = material::MenuOverlay::new(
                 items,
                 Message::Session(SessionMsg::StartMenuDismissed),
                 roles,
             )
-            .anchor(iced::Point::new(x as f32, y as f32))
-            .into()
+            .anchor(iced::Point::new(x as f32, y as f32));
+            let list = match note {
+                Some(note) => list.note(note),
+                None => list,
+            };
+            list.into()
         });
 
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left

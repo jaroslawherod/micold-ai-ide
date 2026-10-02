@@ -6745,3 +6745,263 @@ mod a_missing_default_says_why_the_list_opened {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Feature 037, Story 3: a row's CLI list names what is not offered there, and why
+// ---------------------------------------------------------------------------------------------
+
+mod a_rows_cli_list_names_what_is_not_offered {
+    use super::*;
+    use micold_client::features::session::StartMenu;
+    use micold_core::cli_reason::{explain, start_refusal, AttemptDir, Place, SpawnEnv};
+    use micold_core::terminal::LaunchMode;
+
+    const WITHOUT_PI: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Copilot];
+    const EVERY: &[AiCli] = &AiCli::ALL;
+
+    /// One directory's answer: what a session there finds, and the state it was walked in.
+    type Answer<'a> = (&'a str, &'a [AiCli], Option<SpawnEnv>);
+
+    /// Answer each request in `asked` with its directory's entry of `dirs`. The home directory
+    /// has every CLI and an applied script, so a note can only come from a row's own answer.
+    fn answer_rows(app: &mut App, asked: &[(u64, Option<PathBuf>)], dirs: &[Answer<'_>]) {
+        for (req, cwd) in asked {
+            let (available, env) = match cwd {
+                None => (EVERY, Some(SpawnEnv::Applied)),
+                Some(dir) => dirs
+                    .iter()
+                    .find(|(d, _, _)| Path::new(d) == dir)
+                    .map(|(_, available, env)| (*available, *env))
+                    .unwrap_or_else(|| panic!("fixture: no answer given for {}", dir.display())),
+            };
+            let _ = update_inner(
+                app,
+                Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+                    req: *req,
+                    available: available.to_vec(),
+                    env,
+                })),
+            );
+        }
+    }
+
+    /// `/repo/demo` with the worktrees `feat-a` and `feat-b`, connected, every row answered.
+    fn app_with_rows(
+        dirs: &[Answer<'_>],
+    ) -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        use micold_core::worktree::WorktreeStatus::Valid;
+        let mut app = app_on_demo(&[("feat-a", Valid, true), ("feat-b", Valid, true)]);
+        let mut sent =
+            connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+        let asked = availability_requests(&mut sent);
+        answer_rows(&mut app, &asked, dirs);
+        (app, sent)
+    }
+
+    fn note(app: &App, dir: &str) -> Option<String> {
+        app.core.session.start_menu_note(Path::new(dir))
+    }
+
+    fn offered(app: &App, dir: &str) -> Vec<AiCli> {
+        app.core.session.offered_providers(Some(Path::new(dir)))
+    }
+
+    /// `explain`'s `{reason} {action}` for Pi missing in `dir` on this computer (contract W4, U6).
+    fn pi_missing(env: SpawnEnv, dir: &str) -> String {
+        let said = explain(
+            &[AiCli::Pi],
+            env,
+            Place::ThisComputer,
+            AttemptDir::Dir(Path::new(dir)),
+        )
+        .expect("one CLI is missing");
+        format!("{} {}", said.reason, said.action)
+    }
+
+    fn list_is_open_on(app: &App, location: &SessionLocation) -> bool {
+        matches!(&app.core.session.start_menu, Some(StartMenu { location: open, .. }) if open == location)
+    }
+
+    /// A15 (US3-AS1, FR-010, SC-007): the row's directory provides two CLIs and no Pi, and the
+    /// startup script failed there. With the list open, its note names Pi, the reason, the action
+    /// and the row's own directory, and the two CLIs are still offered.
+    #[test]
+    fn a_list_of_two_names_the_missing_cli_with_the_reason_and_action_for_the_rows_directory() {
+        let (mut app, _sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
+            (FEAT_B, EVERY, Some(SpawnEnv::Applied)),
+        ]);
+        let row = SessionLocation::Worktree("feat-a".into());
+        open_start_list(&mut app, row.clone());
+        assert!(
+            list_is_open_on(&app, &row),
+            "fixture check: the list opened"
+        );
+
+        let said = note(&app, FEAT_A).expect("a list of two that lacks a third says so");
+        assert_eq!(said, pi_missing(SpawnEnv::ScriptFailed, FEAT_A));
+        for part in [
+            "Pi Coding Agent",
+            "the startup script exited with an error",
+            "Fix the script named in \"Script path\".",
+            FEAT_A,
+        ] {
+            assert!(said.contains(part), "the note lacks {part:?}: {said}");
+        }
+        assert_eq!(offered(&app, FEAT_A), WITHOUT_PI);
+    }
+
+    /// A16 (US3-AS1a, FR-010, SC-007): a row with one CLI has no chevron and no note.
+    #[test]
+    fn a_row_with_one_cli_has_no_chevron_and_no_note() {
+        let (app, _sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, CLAUDE, Some(SpawnEnv::ScriptFailed)),
+            (FEAT_B, EVERY, Some(SpawnEnv::Applied)),
+        ]);
+
+        assert!(
+            !offers_a_choice(&app, FEAT_A),
+            "one CLI: no chevron (026 FR-006)"
+        );
+        assert_eq!(note(&app, FEAT_A), None);
+    }
+
+    /// A17 (US3-AS1b, FR-010, FR-008, D6): one CLI, and it is not the stored default. The primary
+    /// press opens the list with Story 2's message; the list itself has no note.
+    #[test]
+    fn a_missing_default_on_a_row_with_one_cli_is_explained_by_the_message_and_not_by_a_note() {
+        let (mut app, _sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, CLAUDE, Some(SpawnEnv::ScriptFailed)),
+            (FEAT_B, EVERY, Some(SpawnEnv::Applied)),
+        ]);
+        app.core.session.default_ai_cli = AiCli::Pi;
+        let row = SessionLocation::Worktree("feat-a".into());
+
+        let StartIntent::OfferChoice {
+            unavailable_default,
+            ..
+        } = primary_press(&app, &row)
+        else {
+            panic!("fixture check: a default the row lacks opens the list");
+        };
+        let _ = update_inner(
+            &mut app,
+            Message::Session(SessionMsg::StartMenuOpened {
+                location: row.clone(),
+                unavailable_default,
+            }),
+        );
+
+        assert!(list_is_open_on(&app, &row));
+        assert_eq!(
+            app.core
+                .notifications
+                .queue
+                .visible()
+                .map(|said| said.message.clone()),
+            Some(start_refusal(
+                AiCli::Pi,
+                SpawnEnv::ScriptFailed,
+                Place::ThisComputer,
+                AttemptDir::Dir(Path::new(FEAT_A)),
+                LaunchMode::Fresh,
+            )),
+            "the message carries the reason there (FR-008)"
+        );
+        assert_eq!(note(&app, FEAT_A), None, "and the list adds nothing (D6)");
+    }
+
+    /// A18 (US3-AS2, FR-011, SC-005): every CLI is offered, so nothing is said.
+    #[test]
+    fn a_row_with_every_cli_has_no_note() {
+        let (mut app, _sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_B, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
+        ]);
+        open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
+
+        assert_eq!(offered(&app, FEAT_A), EVERY);
+        assert_eq!(note(&app, FEAT_A), None);
+    }
+
+    /// A19 (US3-AS3, FR-012): two rows whose answers differ each say their own directory's, and
+    /// opening, answering and closing one row's list leaves the other's note and offer alone.
+    #[test]
+    fn each_row_keeps_its_own_note_while_another_rows_list_is_opened_answered_and_closed() {
+        const WITHOUT_COPILOT: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Pi];
+        let (mut app, mut sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
+            (FEAT_B, WITHOUT_COPILOT, Some(SpawnEnv::IncludeOff)),
+        ]);
+        let a_says = pi_missing(SpawnEnv::ScriptFailed, FEAT_A);
+        let b_says = note(&app, FEAT_B).expect("feat-b lacks Copilot");
+        assert_eq!(note(&app, FEAT_A), Some(a_says.clone()));
+        assert!(
+            b_says.contains("GitHub Copilot") && !b_says.contains("Pi Coding Agent"),
+            "feat-b's note is about what feat-b lacks: {b_says}"
+        );
+        assert_ne!(a_says, b_says);
+
+        // feat-b's list is opened, the press's own question is answered with a newer state, and
+        // the list is closed again.
+        open_start_list(&mut app, SessionLocation::Worktree("feat-b".into()));
+        let asked = availability_requests(&mut sent);
+        assert!(
+            matches!(&asked[..], [(_, Some(dir))] if dir == Path::new(FEAT_B)),
+            "fixture check: opening feat-b's list asks about feat-b only: {asked:?}"
+        );
+        assert_eq!(note(&app, FEAT_A), Some(a_says.clone()), "while it is open");
+        answer_rows(
+            &mut app,
+            &asked,
+            &[(FEAT_B, WITHOUT_PI, Some(SpawnEnv::ScriptTimedOut))],
+        );
+        assert_eq!(
+            note(&app, FEAT_B),
+            Some(pi_missing(SpawnEnv::ScriptTimedOut, FEAT_B)),
+            "feat-b's note follows feat-b's newer answer (contract W6)"
+        );
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::StartMenuDismissed));
+
+        assert_eq!(note(&app, FEAT_A), Some(a_says));
+        assert_eq!(offered(&app, FEAT_A), WITHOUT_PI);
+    }
+
+    /// A20 (US3-AS4, FR-010, FR-015): the list names Pi and has no item for it, and opening the
+    /// list started nothing.
+    #[test]
+    fn the_cli_the_note_names_is_not_among_the_ones_offered_and_nothing_starts() {
+        let (mut app, mut sent) = app_with_rows(&[
+            (DEMO, EVERY, Some(SpawnEnv::Applied)),
+            (FEAT_A, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
+            (FEAT_B, EVERY, Some(SpawnEnv::Applied)),
+        ]);
+        open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
+
+        let said = note(&app, FEAT_A).expect("the list says what it does not offer");
+        assert!(said.contains(&AiCli::Pi.to_string()), "{said}");
+        assert!(
+            !offered(&app, FEAT_A).contains(&AiCli::Pi),
+            "a CLI that is named as not offered has no item to press"
+        );
+
+        let mut after = Vec::new();
+        while let Ok(msg) = sent.try_recv() {
+            after.push(msg);
+        }
+        assert!(
+            after
+                .iter()
+                .all(|msg| matches!(msg, ClientMsg::AiCliAvailabilityRequest { .. })),
+            "opening the list asks about the directory and starts nothing: {after:?}"
+        );
+    }
+}

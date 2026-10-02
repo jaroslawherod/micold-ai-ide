@@ -23,7 +23,8 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, opaque, row, Space};
+use iced::widget::text::Wrapping;
+use iced::widget::{button, column, container, opaque, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
@@ -116,7 +117,7 @@ impl<M> MenuItem<M> {
 /// 240 leaves the same label about 14dp of headroom. That the old value was one character from
 /// wrapping was a latent bug, not something this change introduced — `tests/layout_snapshot.rs` is
 /// what surfaced it, and is what will surface the next label that outgrows the panel.
-const PANEL_WIDTH: f32 = 240.0;
+pub(super) const PANEL_WIDTH: f32 = 240.0;
 /// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
 const CONTEXT_MENU_WIDTH: f32 = 160.0;
 
@@ -158,6 +159,101 @@ pub fn menu_panel_size(items: usize) -> (u16, u16) {
     let item = density::MENU_ITEM_BASE as u16;
     let height = anatomy::menu::VERTICAL_PADDING as u16 * 2 + items as u16 * item;
     (PANEL_WIDTH as u16, height)
+}
+
+/// How the note under a menu's items breaks its lines.
+///
+/// Word breaks where there are any, and inside a token where there are none: a note names a
+/// directory, and a path has no spaces, so word wrapping alone would lay it out at its full width
+/// and past the panel's edge (029 FR-009). One constant, because the widget and
+/// [`menu_panel_size_with_note`] must break at the same places.
+const NOTE_WRAPPING: Wrapping = Wrapping::WordOrGlyph;
+
+/// The width the note's text has: the panel's, less an item's padding at both sides.
+const NOTE_TEXT_WIDTH: f32 = PANEL_WIDTH - 2.0 * anatomy::menu::ITEM_PADDING;
+
+/// The padding around the note's text: an item's 12dp at both sides, so the note starts where the
+/// labels above it start, and the panel's own 8dp between the divider and the first line. Nothing
+/// below, because the panel already pads 8dp under its last entry.
+fn note_padding() -> iced::Padding {
+    iced::Padding {
+        top: anatomy::menu::VERTICAL_PADDING,
+        bottom: 0.0,
+        left: anatomy::menu::ITEM_PADDING,
+        right: anatomy::menu::ITEM_PADDING,
+    }
+}
+
+/// The rendered size of a [`MenuOverlay`] panel holding `items` entries and `note`, as
+/// `(width, height)` in pixels: [`menu_panel_size`] for a menu built with [`MenuOverlay::note`]
+/// (037, contract W7).
+///
+/// The note's height is not a token: it depends on where the sentence wraps. So the text is
+/// shaped here as the widget shapes it (the same role, width and wrapping) and its height read,
+/// which is the paragraph measurement `ellipsized.rs` makes for a width.
+/// `menu_anatomy::the_clamping_estimate_matches_a_panel_with_a_note` holds it to the laid-out
+/// panel, as its neighbour holds [`menu_panel_size`].
+///
+/// With `None` it is [`menu_panel_size`], because a menu without a note is laid out as before.
+pub fn menu_panel_size_with_note(items: usize, note: Option<&str>) -> (u16, u16) {
+    use iced::advanced::graphics::text::Paragraph;
+    use iced::advanced::text::{self, Paragraph as _};
+
+    let (width, height) = menu_panel_size(items);
+    let Some(note) = note else {
+        return (width, height);
+    };
+    let text_height = Paragraph::with_text(text::Text {
+        content: note,
+        bounds: iced::Size::new(NOTE_TEXT_WIDTH, f32::INFINITY),
+        size: iced::Pixels(TypeRole::Label.size()),
+        line_height: TypeRole::Label.line_height(),
+        font: TypeRole::Label.font(),
+        align_x: text::Alignment::Left,
+        align_y: iced::alignment::Vertical::Top,
+        shaping: text::Shaping::default(),
+        wrapping: NOTE_WRAPPING,
+    })
+    .min_bounds()
+    .height;
+    let note_block = NOTE_DIVIDER + note_padding().top + text_height;
+    (width, height + note_block.ceil() as u16)
+}
+
+/// The thickness of the divider between the items and the note: [`Divider`](super::Divider)'s own.
+const NOTE_DIVIDER: f32 = 1.0;
+
+/// What a [`MenuOverlay`]'s panel holds: its items, and under them its note when it has one
+/// (037, contract W7).
+///
+/// The note is a divider and then wrapped supporting text. It is not an entry: it has no
+/// `on_press`, no ripple and no state layer, so it cannot be chosen. It is `opaque` for the reason
+/// an inert item is: a press on it stops there and does not go on to what is behind the panel.
+///
+/// Without a note this is [`item_column`] itself and not a column of one, so every menu that has
+/// none is laid out exactly as before.
+///
+/// `pub(super)` for `menu_anatomy`, for the reason [`item_column`] is.
+pub(super) fn body<'a, M: Clone + 'a>(
+    items: Vec<MenuItem<M>>,
+    note: Option<String>,
+    r: Roles,
+) -> Element<'a, M> {
+    let items = item_column(items, r);
+    let Some(note) = note else {
+        return items;
+    };
+    let text = Text::new(note, TypeRole::Label, r)
+        .muted()
+        .width(Length::Fill)
+        .wrapping(NOTE_WRAPPING);
+    column![
+        items,
+        super::Divider::horizontal(r).thickness(NOTE_DIVIDER),
+        opaque(container(text).width(Length::Fill).padding(note_padding())),
+    ]
+    .width(Length::Fill)
+    .into()
 }
 
 /// The vertical stack of clickable menu entries shared by [`MenuOverlay`] and [`ContextMenu`].
@@ -292,6 +388,7 @@ pub struct MenuOverlay<'a, M> {
     open: bool,
     anchor: Option<iced::Point>,
     on_scroll: Option<M>,
+    note: Option<String>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
 
@@ -306,8 +403,21 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             open: true,
             anchor: None,
             on_scroll: None,
+            note: None,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// Supporting text under the items, after a divider: what the list wants said about itself
+    /// and cannot say with an entry (037 FR-010, contract W7).
+    ///
+    /// The start list uses it to name the AI CLIs it does not offer, with the reason and what to
+    /// change. An entry per missing CLI has no room for that: an item is one 48dp line. The note
+    /// wraps inside the panel and cannot be pressed. A caller that anchors the panel clamps with
+    /// [`menu_panel_size_with_note`], which counts the note's lines.
+    pub fn note(mut self, text: impl Into<String>) -> Self {
+        self.note = Some(text.into());
+        self
     }
 
     /// Whether the menu is open. Going from `true` to `false` plays the fade out.
@@ -347,6 +457,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             open,
             anchor,
             on_scroll,
+            note,
             ..
         } = m;
 
@@ -357,7 +468,10 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         // that fits is exactly as tall as before and `menu_panel_size` stays exact for the menus
         // it estimates — the select's list is the precedent (`picker.rs`). Without it a long
         // project catalog ran the switcher off the bottom of the window, "Add project…" with it.
-        let mut items = super::Scrollable::new(item_column(items, r), r)
+        //
+        // The note scrolls with the items. Outside the scroll it would take its height first and
+        // could leave a short window with no room for the items it is about.
+        let mut items = super::Scrollable::new(body(items, note, r), r)
             .width(Length::Fill)
             .height(Length::Shrink);
         if let Some(message) = on_scroll {

@@ -163,7 +163,9 @@ pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
 pub use labelled_toggle::LabelledToggle;
-pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
+pub use menu::{
+    menu_panel_size, menu_panel_size_with_note, ContextMenu, MenuItem, MenuOverlay, MenuTrigger,
+};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
 pub use picker::Row as TypeaheadRow;

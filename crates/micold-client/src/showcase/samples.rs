@@ -237,6 +237,10 @@ pub fn grid() -> GridCache {
     cache
 }
 
+/// A project directory, for a sentence that names one (the start list's note, 037). A worktree's,
+/// and so wider than a menu panel: the note has to break inside it, which a short path never shows.
+pub const PROJECT_DIR: &str = "/home/dev/projects/atlas/.worktrees/feat-availability-notes";
+
 #[cfg(test)]
 mod tests {
     use super::*;

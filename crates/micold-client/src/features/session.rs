@@ -54,7 +54,9 @@
 use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::cli_reason::{start_refusal, start_refusal_unknown, AttemptDir, Place, SpawnEnv};
+use micold_core::cli_reason::{
+    explain, start_refusal, start_refusal_unknown, AttemptDir, Explanation, Place, SpawnEnv,
+};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
@@ -2044,6 +2046,33 @@ impl State {
     /// opens a list of one is a worse single-CLI experience than the plain button it replaced.
     pub fn start_affordance_offers_a_choice(&self, dir: &Path) -> bool {
         self.known_clis(Some(dir)).len() >= 2
+    }
+
+    /// What the start list of the row for `dir` says about the CLIs it does not offer: the reason
+    /// and its action, for the directory the answer in use was asked for (037 FR-010, contract W4
+    /// surface U6). `None` when the list has nothing to add.
+    ///
+    /// It says something only on a row whose list already opens by its chevron, which takes two
+    /// or more available CLIs (026 FR-006). A row with fewer keeps the control it had, and the
+    /// list a missing default opens there is explained by that press's message (ledger D5, D6).
+    /// It also says nothing when no CLI is missing, when no answer is in use, and when the answer
+    /// carries no environment state: a reason made up here could send the user to the wrong
+    /// setting (FR-011, contract W5).
+    ///
+    /// Read on every draw from the answer [`Self::offered_providers`] reads, so the note and the
+    /// items cannot describe different answers, and both follow a newer one (FR-012, W6).
+    pub fn start_menu_note(&self, dir: &Path) -> Option<String> {
+        let answer = self.answer_in_use(Some(dir))?;
+        if answer.available.len() < 2 {
+            return None;
+        }
+        let Explanation { reason, action } = explain(
+            &answer.missing(),
+            answer.env?,
+            answer.place(),
+            answer.attempt_dir(),
+        )?;
+        Some(format!("{reason} {action}"))
     }
 
     /// Resolve a press into what should happen (T032a).
