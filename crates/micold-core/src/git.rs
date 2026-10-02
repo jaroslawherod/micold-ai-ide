@@ -149,12 +149,14 @@ pub fn parse_remote_list(raw: &str) -> Vec<GitRemote> {
 /// commit, and `ancestor` git's answer to "is `tip` an ancestor of `head`" (`None` when git could
 /// not say). Pure, so the rule is tested without a repository.
 pub fn containment(tip: Option<&str>, head: &str, ancestor: Option<bool>) -> BranchContainment {
-    if tip == Some(head) || ancestor == Some(true) {
-        BranchContainment::Contained
-    } else if ancestor == Some(false) {
-        BranchContainment::Beyond
-    } else {
-        BranchContainment::Unknown
+    let Some(tip) = tip else {
+        return BranchContainment::Unknown;
+    };
+    match ancestor {
+        _ if tip == head => BranchContainment::Contained,
+        Some(true) => BranchContainment::Contained,
+        Some(false) => BranchContainment::Beyond,
+        None => BranchContainment::Unknown,
     }
 }
 
