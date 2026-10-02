@@ -228,6 +228,7 @@ mod derived_labels {
                     provider: AiCli::ClaudeCode,
                     input_serial: 0,
                     live_shells: Vec::new(),
+                    attention_seq: 0,
                 }],
             }],
         }

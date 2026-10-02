@@ -392,6 +392,7 @@ mod tests {
                             activity: micold_core::protocol::messages::ActivitySignal::Unknown,
                             input_serial: 0,
                             live_shells: Vec::new(),
+                            attention_seq: 0,
                             provider: micold_core::session::AiCli::ClaudeCode,
                         })
                         .collect(),

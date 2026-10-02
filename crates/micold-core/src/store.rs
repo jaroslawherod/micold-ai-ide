@@ -187,6 +187,12 @@ struct StoredSession {
     /// `archived` already carry (research R8).
     #[serde(default)]
     provider: StoredAiCli,
+    /// How many attention events the session has had (feature 039, FR-008a). `#[serde(default)]`
+    /// → `0`, which is the answer for every session written before the feature, and no
+    /// `schema_version` bump: additive and defaulted, as `archived` and `provider` are
+    /// (research R1).
+    #[serde(default)]
+    attention_seq: u64,
 }
 
 /// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
@@ -291,6 +297,7 @@ impl StoredSession {
             mode: session.mode.into(),
             archived: session.archived,
             provider: session.provider.into(),
+            attention_seq: session.attention_seq,
         }
     }
 
@@ -314,6 +321,7 @@ impl StoredSession {
             self.provider.into(),
         );
         session.archived = self.archived;
+        session.attention_seq = self.attention_seq;
         session
     }
 }
@@ -1000,5 +1008,83 @@ impl ProjectStore for FakeProjectStore {
             .removals
             .push(project_path.to_path_buf());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod attention_seq_tests {
+    //! Feature 039 (FR-008a, research R1): the attention sequence is stored with the session.
+
+    use super::*;
+
+    /// A count no default produces, so a dropped field cannot read back as it.
+    const COUNTED: u64 = 3;
+
+    fn session_with(attention_seq: u64) -> Session {
+        let mut session = Session::restored(
+            SessionId::from_uuid(uuid::Uuid::from_u128(0x039)),
+            SessionLocation::Default,
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        session.attention_seq = attention_seq;
+        session
+    }
+
+    fn workspace_with(project: &Path, session: Session) -> Workspace {
+        Workspace {
+            projects: vec![Project::new(
+                project.to_path_buf(),
+                false,
+                Availability::Available,
+            )],
+            sessions: BTreeMap::from([(project.to_path_buf(), vec![session])]),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_session_stored_without_an_attention_sequence_reads_as_zero() {
+        let before_the_feature = r#"{ "id": "00000000-0000-0000-0000-000000000039" }"#;
+        let stored: StoredSession = serde_json::from_str(before_the_feature)
+            .expect("a session written before the feature still loads");
+        assert_eq!(
+            stored.into_session().attention_seq,
+            0,
+            "a session stored before the feature has had no attention event"
+        );
+    }
+
+    #[test]
+    fn a_store_round_trip_keeps_the_attention_sequence() {
+        let dir = tempfile::tempdir().expect("a store directory");
+        let project = dir.path().join("project");
+        std::fs::create_dir(&project).expect("a project directory");
+        let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+        store
+            .save(&workspace_with(&project, session_with(COUNTED)))
+            .expect("the catalog saves");
+        let loaded = store.load().workspace;
+
+        assert_eq!(
+            loaded.sessions[&project][0].attention_seq, COUNTED,
+            "the count of attention events is read back as it was written"
+        );
+    }
+
+    #[test]
+    fn the_attention_sequence_leaves_the_schema_version_as_it_was() {
+        let project = Path::new("/project");
+        let state = StoredProjectState::from_workspace(
+            &workspace_with(project, session_with(COUNTED)),
+            project,
+        );
+        let json = serde_json::to_value(&state).expect("the project state serialises");
+        assert_eq!(
+            json["schema_version"], 1,
+            "the field is additive and defaulted, so files keep schema version 1 (research R1)"
+        );
     }
 }

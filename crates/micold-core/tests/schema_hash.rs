@@ -189,7 +189,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 19 → 20 for feature 037's `env` on `DaemonMsg::AiCliAvailability`: the state of the
 /// environment the answer was walked in, which had developed against the 17 that feature 034
 /// took to 18 and then 19. Fourteenth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 20;
+///
+/// And 20 → 21 for feature 039's `ClientMsg::WindowView` and `SessionSummary::attention_seq`: a
+/// window reports the session it has in view, and every session carries its count of attention
+/// events. Fifteenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 21;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -245,4 +249,24 @@ fn the_availability_answer_carries_the_environment_state_in_the_hashed_source() 
         "`DaemonMsg::AiCliAvailability` does not carry `env: Option<SpawnEnv>` in messages.rs, \
          so version 20's hash is not the hash of the answer that says why a CLI is missing"
     );
+}
+
+#[test]
+fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
+    // Feature 039, contract W1 (version 21). Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in [
+        // Inbound: what the window has in view.
+        "WindowView {",
+        "in_view: Option<SessionId>,",
+        // Outbound: the session's count of attention events.
+        "pub attention_seq: u64,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 21's hash is not the hash of the \
+             message set that reports views and counts attention events"
+        );
+    }
 }
