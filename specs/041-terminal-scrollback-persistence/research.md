@@ -4,8 +4,8 @@ Phase 0 of the plan for [spec.md](spec.md). Each section records one decision, w
 rejected. Paths are relative to the repository root; line numbers are as of `origin/main` at
 `bc569992`.
 
-**Status**: written by the first design unit, which handed over before writing `plan.md`. R1 to R13
-are decided. *Open points* at the end lists what was not verified in code.
+**Status**: R1 to R15 are decided. R16 is a finding that the design cannot settle: it is with the
+user (ledger, *Open escalation*). `plan.md` is not written until it is answered.
 
 ## R1. Where the history is today
 
@@ -308,32 +308,122 @@ platforms; `cargo check --target aarch64-apple-darwin` before pushing a `cfg` ar
 
 **Finding.** Restored lines are ordinary history (FR-011). A program that erases the scrollback
 (`ESC [ 3 J`) erases them, as it erases live history today. `ESC [ 2 J` on the primary screen moves
-the screen into history in `alacritty_terminal` and loses nothing.
+the screen into history and loses nothing: in `alacritty_terminal` 0.26.0, `clear_screen` with
+`ClearMode::All` calls `grid.clear_viewport()` when the terminal is not on the alternate screen,
+and only `ClearMode::Saved` calls `grid.clear_history()` (`src/term/mod.rs:1788-1814` of the
+crate).
+
+**Measured**, 2026-10-02, each CLI in a 40 × 120 pseudo-terminal with a clean environment, 16
+seconds from start:
+
+| CLI | Command | `ESC[3J` | `ESC[2J` | Enters the alternate screen (`ESC[?1049h`) |
+|---|---|---|---|---|
+| Claude Code 2.1.288 | `claude --resume <id>` (a conversation of 120 lines) | 0 | 1 | yes, and does not leave it |
+| Claude Code 2.1.288 | the same with `CLAUDE_CODE_NO_FLICKER=0` | 0 | 0 | no |
+| Copilot CLI | `copilot` | 0 | 2 | yes, and does not leave it |
+| Pi Coding Agent | `pi` | 0 | 0 | no |
+
+No CLI erased the scrollback at start-up, so the risk this section recorded did not show. The
+Claude Code binary does hold the sequence `ESC[2J ESC[3J ESC[H`, so it can send it later in a
+session; that erases live history today as well.
 
 **Decision.** Honour the erase. An integration test with a fake CLI that prints `ESC [ 2 J ESC [ H`
-at start asserts that the restored history and the separator are still there. Quickstart Part B
-resumes a real session of each CLI (`claude`, `copilot`, `pi`) and records whether the history
-above the separator survives its start-up.
+at start asserts that the restored history and the separator are still there. No guard against
+`ESC [ 3 J` is planned.
 
-**Risk.** If a real CLI sends `ESC [ 3 J` when it resumes, the restored history is gone at once and
-FR-008 fails for that CLI. This was not measured in the design phase. The fallback, to be taken
-only on that evidence, is a guard in the reader thread that drops the erase-scrollback sequence for
-a seeded terminal. It is not in the plan because it changes what `clear` does for the user.
+The table's last column is the larger finding: see R16.
 
-## Open points for the unit that continues
+## R14. What makes a stop orderly
 
-1. **What makes a stop orderly.** `unwind` runs for `StopReason::Idle` and `StopReason::Requested`
-   (`server.rs:419-431`). A grep for `SIGTERM`, `ctrl_c` and `signal::unix` in
-   `crates/micold-daemon/src` found no handler. Find what raises `Requested`, and whether a restart
-   by the service manager, an update, a logout and a reboot reach `unwind`. The spec calls all of
-   them orderly (Terms) and SC-001 needs the save of R6 to run for them. If one does not reach
-   `unwind`, the plan needs a signal handler (Unix `SIGTERM`, Windows console control event) that
-   does.
-2. **The sandbox on a Windows host.** R7 assumes it is supported (`pathmap::map_for(home,
-   windows_host)`, `sandbox/mod.rs:655`). Confirm in `docs/user-guide/sandboxed-daemon.md`. If it
-   is not, the history mount of R7 and the move of R8 fall away. Adding a mount changes what an
-   existing container is checked against (`sandbox/lifecycle.rs:695`, `sandbox/parse.rs:297-307`).
-3. **`ESC [ 2 J` in `alacritty_terminal` 0.26** (R13) is stated from memory of the crate; the test
-   in R13 settles it.
-4. **Which host function gives the state directory to the launcher**
-   (`crates/micold-client/src/main.rs:1051`, `shell/startup.rs:253` call `data_dir()`).
+**Finding.** `unwind` (`crates/micold-daemon/src/server.rs:419`) is called in two places, both
+with `StopReason::Idle` (`server.rs:99`, `server.rs:353`). `StopReason::Requested`
+(`idle.rs:219-224`) is never raised. The service handles no signal (`grep` for `SIGTERM`,
+`signal::`, `ctrl_c`, `signal_hook`, `sigaction` in `crates/micold-daemon` finds none), and
+workspace `tokio` is built without its `signal` feature (`Cargo.toml:70-77`). So of the stops the
+spec calls orderly, only the idle stop saves anything today:
+
+| Stop | How it arrives | Reaches `unwind` today |
+|---|---|---|
+| Idle for 30 minutes | the idle timer | yes |
+| **Restart service** (Linux, macOS) | `SIGTERM` to the recorded pid (`crates/micold-core/src/spawn.rs:146-159`) | no: the default action ends the process |
+| **Restart service** (Windows) | `TerminateProcess` (`spawn.rs:168-250`) | no, and it cannot be caught |
+| Update (Windows installer) | `Stop-Process -Force`, then `taskkill` (`packaging/windows/micold-ai-ide.iss:102-111`) | no |
+| Logout, reboot (Linux, macOS) | `SIGTERM` from the session manager, then `SIGKILL` | no |
+| Logout, reboot (Windows) | the process is ended; it has no console (`DETACHED_PROCESS`, `spawn.rs:349-351`) and no window, so it is told nothing | no |
+| Sandbox stop (`<runtime> stop`, `sandbox/cli.rs:262`) | `SIGTERM` to pid 1, which is the service (`packaging/sandbox/Containerfile:123`); pid 1 ignores a signal it has no handler for, so the runtime kills it after its grace period | no |
+
+**Decision.** A `platform::stop_requested()` future in `micold-daemon` that the two accept loops
+select on beside the idle timer, and that leads to `unwind(StopReason::Requested)`:
+
+- **Unix**: `SIGTERM`, `SIGINT` and `SIGHUP` through `tokio::signal::unix` (the `signal` feature of
+  the `tokio` already in the workspace; no new crate). This covers Restart service, logout, reboot
+  and the sandbox stop.
+- **Windows**: a named event `Local\Micold.Daemon.Stop.<SID>`, created with the pipe's owner-only
+  DACL. `terminate_daemon` sets it, waits up to 5 seconds for the process to exit, and only then
+  falls back to `TerminateProcess`; the installer script does the same before `Stop-Process`.
+  For logout and reboot, a hidden top-level window on its own thread answers `WM_ENDSESSION` by
+  raising the same request and waiting for the save.
+
+**The save in `unwind`.** A new step before `take_live_sessions`: capture every covered terminal
+from its live `Term` (no wait for the process, which is about to be killed anyway), then save them
+in parallel on the blocking pool, the whole step bounded at 3 seconds. A terminal whose save does
+not finish in time keeps its previous file (at most 60 seconds old). The endpoint is released
+after `unwind`, as today, so a new service cannot start before the old one has saved.
+
+**Not testable here.** A real Windows logout cannot be run in CI; a `cfg(windows)` test sets the
+event and sends `WM_ENDSESSION` to the window instead. Where the request does not arrive, the
+outcome is that of a kill: at most the last 60 seconds are missing (SC-002).
+
+**Rejected.** *Leaving these stops as kills and relying on the 30-second saves*: the spec's Terms
+call them orderly and SC-001 asks for every line. *A wire message that asks the service to stop*:
+Restart service exists for a client that cannot complete the handshake
+(`crates/micold-client/src/shell/service_control.rs:30-36`).
+
+## R15. The sandbox on a Windows host, and a container made before this feature
+
+**Finding.** The sandbox is supported on a Windows host (`sandbox/pathmap.rs:23`,
+`sandbox/mod.rs:15`), so the history mount of R7 and the move of R8 stay. The launcher gets the
+state directory from `ProjectDirs::…data_dir()` in `crates/micold-client/src/shell/startup.rs:252-253`
+and passes it to `MountSet::build` (`shell/sandbox.rs:297`); the history mount is computed beside
+it from `data_local_dir()`.
+
+A container that already exists is attached to or started as it is, with the mounts it was created
+with (`sandbox/lifecycle.rs:305-314`). On a Windows host such a container has no history mount, so
+`/var/lib/micold-ai-ide/terminal-history` inside it would be a directory of the state mount, which
+is the roaming profile (against FR-019).
+
+**Decision.** In a container (`MICOLD_IMAGE_REFERENCE` is set, `state.rs:353-356`) the service
+never creates the history directory: it saves only when the directory exists. The launcher creates
+it on the host, owner-only, at every bring-up, attach included: on Linux and macOS inside the state
+directory, on Windows as the history mount's source. A container made before this feature on a
+Windows host therefore has no such directory and saves nothing; the service logs one warning that
+says to recreate the sandbox, and the user guide says the same. `TZ` (R11) is likewise set only
+when a container is created; an older container shows the separator in UTC with `+00:00`.
+
+**Rejected.** *Replacing an existing container that lacks the mount*: it stops the sessions of a
+sandbox the user asked to keep running. *An environment variable naming the directory*: it is also
+fixed at creation and adds a second way to find the directory.
+
+## R16. AI CLIs that draw on the alternate screen (open: with the user)
+
+**Finding.** Two of the three supported CLIs run full-screen by default on the measured machine
+(R13's table): Claude Code 2.1.288 and Copilot CLI switch to the alternate screen at start, turn on
+mouse reporting and stay there. Pi does not, and Claude Code does not with
+`CLAUDE_CODE_NO_FLICKER=0`. Nothing in `crates/micold-core/src/provider.rs` sets that variable.
+
+For a terminal on the alternate screen:
+
+- it has no scrollback. What the agent did is shown and scrolled by the CLI itself; the app sends
+  the wheel to the program (`docs/user-guide/worktrees-and-sessions.md:1215`). There is nothing to
+  scroll back to before a restart either;
+- R2 captures only the last screen, as the spec's edge case *Full-screen programs* says;
+- R3 seeds that screen and the separator on the primary screen. The CLI covers it with its own
+  view as soon as it starts, so the user sees neither until the CLI exits. FR-008, SC-001 and
+  SC-010 cannot be observed for such a CLI;
+- after a service restart the CLI's own `--resume` redraws the conversation, which is what the
+  issue asks for ("see what an agent did before the restart").
+
+So the feature as specified changes what the user sees only for a CLI that prints on the primary
+screen. The spec treats full-screen programs as an edge case; for two of three CLIs it is the
+normal case. Whether to ship it so, to change how the app starts the CLIs, or to stop, is a product
+decision. `plan.md` waits for it.
