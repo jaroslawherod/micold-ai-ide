@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: Orchestrator: wait for CI on the M1 PR and merge it; then milestone M2.
+- **Next step**: Orchestrator: wait for CI on #541 (M1) and merge it; then milestone M2.
 
 ## Pull requests
 
@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
+| #541 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | PR open (gate green at e288d6cc; reviews A and B clean) |
+| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | PR open (gate green at e288d6cc; reviews A and B clean) |
 | M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | pending |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
