@@ -38,8 +38,9 @@ The design rests on five decisions:
    ([R14](./research.md#r14--the-indicator-a-shared-component-in-the-rows-trailing-slot)); a row
    without a pull request is unchanged.
 
-A project is shown by one window at a time (feature 010), so readings need no coordination between
-windows ([R6](./research.md#r6--several-windows-one-viewer-per-project-already-holds)).
+Only the window that holds a project (feature 010) reads and shows its status, so readings need no
+coordination between windows
+([R6](./research.md#r6--several-windows-only-the-window-that-holds-the-project-reads)).
 
 ## Technical Context
 
@@ -72,7 +73,7 @@ and addresses never stored or logged (FR-032); no error surface of any kind (FR-
 
 **Scale/Scope**: one new core module (`pull_request`), three extended (`git`, `settings`,
 `protocol`); one protocol bump (20 → 21) for one RPC and one settings field; one daemon arm; one
-client feature module and one shell module; one shared component and seven `Icon` variants; one
+client feature module and one shell module; one shared component and eight `Icon` variants; one
 Settings control; the sidebar row, tooltip and row menu extended; user guide and three docs pages.
 
 ## Constitution Check
@@ -137,16 +138,16 @@ No entry in Complexity Tracking.
 | FR-010, FR-011, FR-012 | `worktree_tooltip` extended; byte-identical without a status; built from state only ([pull-request-ui §3](./contracts/pull-request-ui.md)) |
 | FR-013, FR-014 | `worktree_menu_items` entry → `WorktreeMsg::PullRequestOpenRequested` → `LinkOpener` (R15) |
 | FR-015, FR-016, FR-017 | `MergedBranchCheck` RPC + `containment` (R11); chip and tooltip line only; Delete path untouched |
-| FR-018, FR-018a | Named start events; branches from the current listing; refresh trigger is the list refresh's end (R7) |
+| FR-018, FR-018a | Named start events, only in the window that holds the project (R6); branches from the current listing; refresh trigger is the list refresh's end (R7) |
 | FR-019 | `Passing` failures keep statuses; `is_stale` at 600 s; stale form and `Read:` line (R10, R13) |
 | FR-020 | Statuses live in their own state field; the reducer writes nothing else ([reading-and-wire §2](./contracts/reading-and-wire.md)) |
 | FR-021 | `spawn_blocking` + `run_bounded` 10 s; daemon steps bounded 10 s in the client |
-| FR-022 | `Phase::Reading { again }` (R8) |
+| FR-022 | `Phase::Reading { again }` (R8); holding the project is a start condition (R6) |
 | FR-023 | One request per 50 branches; counts, not check nodes (R2) |
 | FR-024 | `rate_limit_pause` from `--include` headers; starts refused while paused (R9) |
 | FR-025, FR-026 | `ReadingFailure::Unavailable` clears; no remote → `gh` not run; no notification anywhere (R10) |
 | FR-027 | Reading starts after `RefreshFinished` settled the control (R7) |
-| FR-028 | `gh` owns the sign-in; no anonymous path exists (034 R1) |
+| FR-028 | `gh` owns the sign-in; no anonymous path exists (034 R1); the arguments carry no credential ([pull-request-source §2](./contracts/pull-request-source.md)) |
 | FR-029, FR-030 | `pr_status_enabled`, default false, service-owned; Settings control and its text (R12) |
 | FR-031 | Arguments are `owner`, `name`, branch names ([pull-request-source §2](./contracts/pull-request-source.md)) |
 | FR-032 | No `Serialize`, redacting `Debug`, source gate (R15) |
@@ -157,12 +158,13 @@ No entry in Complexity Tracking.
 
 | Layer | What it holds | Requirements |
 |---|---|---|
-| `micold-core` unit (`mise run test-core`) | `status_query`/`status_args`, `split_response`, `parse_status` against recorded `gh --include` output in `tests/fixtures/gh/`, `select_pull_request`, `reduce_checks`, `reading_failure`, `rate_limit_pause`, `is_stale`, `containment`, `parse` of `MergedBranchCheck` git answers, settings round trip and default, protocol round trip and schema pin | FR-002 to FR-006, FR-008, FR-019, FR-023 to FR-026, FR-030 to FR-032, SC-002 |
+| `micold-core` unit (`mise run test-core`) | `status_query`/`status_args`, `split_response`, `parse_status` against recorded `gh --include` output in `tests/fixtures/gh/`, `select_pull_request`, `reduce_checks`, `reading_failure`, `rate_limit_pause`, `is_stale`, `containment`, `parse` of `MergedBranchCheck` git answers, settings round trip and default, protocol round trip and schema pin | FR-002 to FR-006, FR-008, FR-019, FR-023 to FR-026, FR-028 (the arguments name no token and no anonymous fallback exists), FR-030 to FR-032, SC-002 |
 | `micold-daemon` integration | `MergedBranchCheck` against a temp repository (equal tip, behind, ahead, missing branch, missing object); non-repository rejection; `SettingsSet { pr_status_enabled }` persisted and broadcast | FR-015, FR-017, FR-018a, FR-029, FR-030 |
-| `micold-client` reducer | `features/pr_status.rs`: start events, one reading at a time, `again`, pause, failure kinds, switch off clears, project switch drops answers; sidebar projection; `worktree_tooltip`; menu items; settings draft | stories 1 to 4, FR-001, FR-007, FR-010 to FR-022, FR-027 |
+| `micold-client` reducer | `features/pr_status.rs`: start events, one reading at a time, `again`, pause (kept across a project switch), failure kinds (each leaves no notice, dialog or error line), switch off clears, project switch drops answers, a window that is refused or displaced clears and reads nothing, a take-over reads once; sidebar projection; `worktree_tooltip`; menu items; settings draft | stories 1 to 4, FR-001, FR-007, FR-010 to FR-022, FR-024, FR-025, FR-027, SC-004, SC-007 |
 | `micold-client` source gates | `pr_status_is_read_only_on_named_events.rs` (new); `idle_subscriptions.rs` (extended); `no_concrete_implementations`; `features_are_render_free`; `material_builder_api`; `showcase_completeness`; `icons_font`; `settings_sections`; a gate that `PullRequestStatus` has no `Serialize` and no derived `Debug` | FR-018, FR-026, FR-032, FR-033, SC-006, SC-008, SC-011 |
 | Layout/geometry gates | new covered states in `tests/support/covered_states.rs` (row with indicator, with indicator and chip, stale, narrow sidebar; Settings GitHub section with the switch) and `tests/fixtures/layout_snapshot.txt` regenerated | FR-001, FR-009, FR-011, FR-029 |
-| quickstart §B (`visual-pass`) | light and dark theme, every state in the showcase, the real `gh`, opening the browser, desktop launch, sandbox placement | FR-009, FR-013, FR-034, SC-001, SC-003, SC-005, SC-009 |
+| quickstart §B (`visual-pass`) | light and dark theme, every state in the showcase, the real `gh`, opening the browser, the delete confirmation, `gh` missing and no remote, a second window, desktop launch, sandbox placement | FR-009, FR-013, FR-016, FR-034, SC-001, SC-003, SC-004, SC-005, SC-007, SC-009, SC-010 |
+| Documentation (CI's user-guide gate, review B) | the user guide's worktree chapter and `settings.md`, updated in the milestone that ships each behaviour | FR-035 |
 
 ## Project Structure
 
@@ -208,7 +210,7 @@ crates/micold-client/
 ├── src/shell/subscriptions.rs     # the guarded 300 s interval
 ├── src/shell/daemon_sync.rs       # PendingOp::MergedBranchCheck; settings mirror
 ├── src/shell/persist.rs           # SettingsSet field
-├── src/icons.rs                   # seven Icon variants + OpenPullRequest menu glyph
+├── src/icons.rs                   # seven indicator Icon variants + OpenInBrowser (menu entry)
 ├── src/ui/material/pull_request_indicator.rs   # NEW shared component
 ├── src/ui/sidebar.rs, src/ui/mod.rs            # trailing slot, chip, menu entry
 ├── src/ui/settings/github.rs      # the switch

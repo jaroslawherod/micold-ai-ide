@@ -62,9 +62,10 @@ half-read is shown (spec Edge Cases).
 
 - **One request for up to 50 worktrees** (FR-023, SC-006): 12 automatic readings an hour are 12
   requests. Probed on 2026-10-02 with `gh` 2.54.0 against this repository with three branches: HTTP
-  200 in 1.7 s, `rateLimit.cost` 1. The cost formula counts requested connections, so 50 branches
-  (100 `pullRequests` connections of 10, each node with one `commits` connection) is about 11 points
-  of the 5,000 an hour.
+  200 in 1.7 s, `rateLimit.cost` 1; 15 branches cost 6. The cost formula counts requested
+  connections, nested ones included, so 50 branches (100 `pullRequests` connections of 10, each node
+  with a `commits` and a `contexts` connection) cost about 21 points of the 5,000 an hour: about 250
+  an hour for the 12 automatic readings.
 - **The response does not grow with the number of checks** (FR-023): `checkRunCountsByState` and
   `statusContextCountsByState` return one count per state however many checks there are, and
   `contexts(first: 1)` selects no nodes. The probe returned all 14 check-run states and all 5
@@ -161,26 +162,33 @@ credential forwarded into the container).
 
 ---
 
-## R6 — Several windows: one viewer per project already holds
+## R6 — Several windows: only the window that holds the project reads
 
-**Decision.** The window that shows a project owns its readings. No coordination between windows is
-added.
+**Decision.** Only the window that **holds** a project reads its pull request status and shows it.
+A window holds its active project from the daemon's `Attached` for it until a `Displaced` or a
+`Refused { ProjectBusy }` for it, a project switch or a disconnect — the facts `app.displaced`
+already records (`shell/daemon_sync.rs`). No coordination between windows is added.
 
 **Rationale.** A window is a client process (`ClientInstance`), and feature 010 lets exactly one
 window hold a project: a second attach is refused with a takeover offer, and a takeover displaces
-the first holder (`crates/micold-daemon/tests/exclusivity.rs`, 010 FR-023 to FR-025). Two windows
-therefore never show the same project at once, so FR-022 ("one reading per project, however many
-windows") and SC-007 hold by construction: a refused second window shows no project and reads
-nothing; a window that takes the project over has opened it (FR-018) and reads once, while the
-displaced window stops showing it and stops reading. Windows on different projects read their own
-project only.
+the first holder (`crates/micold-daemon/tests/exclusivity.rs`, 010 FR-023 to FR-025). The refused or
+displaced window does **not** stop showing the project: it stays on it, read-only, under a
+take-over banner, and its sidebar keeps following the listing because `CatalogChanged` is broadcast
+to every client. So "one reading per project" (FR-022, SC-007) does not hold by itself; it holds
+because holding is a start condition (R7) and a condition of the interval subscription (R8), and
+because losing the hold clears the window's statuses. A read-only window therefore sends nothing
+and shows no indicator; a window that takes the project over receives `Attached` and reads once, as
+on opening (FR-018). Windows on different projects read their own project only.
 
-The spec's "Several windows" edge case and SC-007 were written as if two windows could show one
-project. Both were reworded to the behaviour above (ledger D9).
+The spec's "Several windows" edge case and SC-007 first asked for every window on a project to show
+the same status. They were reworded to the behaviour above (ledger D9): a read-only window cannot
+act on a worktree, and giving it indicators would need either a second reader or the daemon as a
+relay.
 
-**Alternatives rejected.** Holding the status in the daemon and broadcasting it (new wire messages
-and daemon state for a situation that cannot arise; the daemon would hold pull request titles, which
-FR-032 wants in as few places as possible).
+**Alternatives rejected.** Holding the status in the daemon and broadcasting it to read-only
+windows too (new wire messages and daemon state; the daemon would hold pull request titles, which
+FR-032 wants in as few places as possible); letting every window on a project read (two readings
+per interval for one project, against FR-022).
 
 ---
 
@@ -189,12 +197,12 @@ FR-032 wants in as few places as possible).
 **Decision.** A reading takes the branches of the worktrees in the client's current listing
 (`state.worktree.worktrees`, every entry with `branch: Some`), deduplicated. It never sends
 `ClientMsg::WorktreeRefresh` and never changes the listing (FR-018a). It starts on exactly these
-events, and only while the switch is on, a project is shown and the daemon connection is up:
+events, and only while the switch is on and the window holds its active project (R6):
 
 | Event | Source |
 |---|---|
-| the project's first listing arrives after it is opened or switched to | `WorktreeMsg::Loaded` for a new active project |
-| the switch turns on | `DaemonMsg::SettingsChanged` / `Welcome` carrying `pr_status_enabled: true` after `false` |
+| the project's listing arrives after the window came to hold it (opened, switched to, reconnected, taken over) | the first `DaemonMsg::CatalogChanged` after `DaemonMsg::Attached` for the active project |
+| the switch turns on while the project is held and listed | `DaemonMsg::SettingsChanged` carrying `pr_status_enabled: true` after `false` |
 | the interval elapses | `iced::time::every(300 s)` (R8) |
 | a list refresh ends | `WorktreeMsg::RefreshFinished` or `RefreshTimedOut` |
 
@@ -208,12 +216,21 @@ A source gate, `pr_status_is_read_only_on_named_events.rs`, counts the lines tha
 reading, as `issues_are_requested_only_on_named_events.rs` and `refresh_is_only_on_demand.rs` do for
 their requests.
 
+The first event needs a one-shot flag. The daemon sends `Attached` and then, on its heels, a
+`CatalogChanged` with the freshly discovered worktrees (`refresh_worktrees_and_send`); the client
+puts that listing into its state in `reconcile_catalog`. `Attached` sets `awaiting_listing` in the
+pull request state, and the next `CatalogChanged` clears it and starts the reading. Every other
+`CatalogChanged` — a create, delete, rename, include, another window's change — finds the flag
+clear and starts nothing. (`WorktreeMsg::Loaded` is not the carrier: production code never sends
+it.) At start-up the settings arrive in `Welcome` before any `Attached`, so a switch that is already
+on starts nothing by itself; the listing that follows the attach does.
+
 **Rationale.** Rows are joined to statuses by branch name at projection time, so a worktree removed
 or renamed between readings simply stops matching, and an answer for a project that is no longer
 shown is dropped by its sequence number (spec Edge Cases). A worktree created in the application
 appears in the listing at once and is covered by the next reading.
 
-**Alternatives rejected.** Reading on `CatalogChanged` (it fires for every create, delete, rename
+**Alternatives rejected.** Reading on every `CatalogChanged` (it fires for every create, delete, rename
 and include, turning each into a GitHub request the spec did not ask for); asking the daemon for a
 fresh listing before each reading (that is the automatic re-listing 029 FR-012 forbids).
 
@@ -232,7 +249,7 @@ Reading ──finished──▶ Idle, then start again when `again` and not paus
 
 A start is refused while `now < pause_until` (R9), which also drops a pending `again`. The interval
 is `iced::time::every(PR_STATUS_INTERVAL)` (300 s) in `shell/subscriptions.rs`, pushed **only while**
-the switch is on and a project is shown; `tests/idle_subscriptions.rs` gains that condition. With the
+the switch is on and the window holds its active project (R6); `tests/idle_subscriptions.rs` gains that condition. With the
 switch off — the state of a first start — the idle window has no new timer and sends nothing
 (FR-026, FR-030, SC-006).
 
@@ -250,17 +267,23 @@ silently — a subscription is re-declared after every update).
 ## R9 — The request limit: read the reset time from the response headers
 
 **Decision.** `gh api --include` prints the status line and headers before the body. A pure
-`split_response` separates them, and `rate_limit_pause(headers, body, now)` yields the time until
+`split_response` separates them, and `rate_limit_pause(response, now)` yields the time until
 which no reading is sent:
 
 1. `Retry-After: <seconds>` (GitHub's secondary limit) → `now + seconds`;
-2. else `X-RateLimit-Reset: <epoch>` when the answer is a rate-limit answer → that time;
-3. else `now + 60 s` (GitHub's documented minimum wait when it names no time).
+2. else `X-RateLimit-Remaining: 0` → the time in `X-RateLimit-Reset: <epoch>` (the primary limit);
+3. else `now + 60 s` (GitHub's documented minimum wait for a secondary limit that names no time).
+
+`X-RateLimit-Reset` alone decides nothing: GitHub sends it on every answer, as the reset of the
+primary window, so a secondary-limit answer without `Retry-After` would otherwise pause for up to
+an hour.
 
 A rate-limit answer is: a GraphQL error of type `RATE_LIMITED`, HTTP 429, HTTP 403 with "rate limit"
 in the message, or one of 034's rate-limit stderr fixtures. While paused, interval ticks and refresh
 presses start no reading and the rows keep what they show (FR-024, story 4 scenario 7). The pause is
-held in memory by the window that received the answer.
+held in memory by the window that received the answer, and it outlives a project switch in that
+window: the limit belongs to the sign-in, not to the project. It ends at its time, or when the
+switch is turned off.
 
 **Rationale.** FR-024 needs "the time GitHub gives", and only the headers carry it for both kinds of
 limit. `rateLimit.resetAt` in the body is absent from an error answer.
@@ -279,7 +302,7 @@ gives"); asking `rateLimit` before every reading (doubles the requests).
 
 ## R10 — Two kinds of failure: cannot be read at all, and a passing failure
 
-**Decision.** A pure `reading_failure(outcome) -> ReadingFailure` on top of 034's
+**Decision.** A pure `reading_failure(outcome, now) -> ReadingFailure` on top of 034's
 `github::classify`:
 
 | Evidence | `ReadingFailure` | Effect |
@@ -380,7 +403,8 @@ change only at their next start); a per-project switch (FR-029 says one switch f
 
 **Decision.** Times are Unix seconds (`u64`) passed in explicitly: the shell stamps a reading's
 start and each message that needs "now". A project's statuses carry `read_at`, the start time of the
-last successful reading. `is_stale(read_at, now)` is `now - read_at >= 600`. The sidebar projection
+last successful reading. `is_stale(read_at, now)` is `now - read_at > 600` ("older than two
+intervals", FR-019). The sidebar projection
 and `worktree_tooltip` take `now` as an argument; the view glue passes `SystemTime::now()`.
 
 **Rationale.** FR-019's rule needs a clock at the moment of drawing, and a pure function with the
@@ -435,7 +459,8 @@ dots like `ActivityBadge` (FR-009).
 
 **Decision.**
 
-- `worktree_tooltip` gains a fourth argument, the row's pull request facts and `now`, and appends
+- `worktree_tooltip` gains a fourth argument, the row's pull request facts (status, age of the
+  reading in seconds, removable), and appends
   after today's lines: `Pull request: #<n> <title>`, `PR state: open|draft|merged|closed`,
   `Checks: passing|pending|failing` (when any), `Review: approved|changes requested|review required`
   (when GitHub reports one), `Read: <n> min ago` (only when stale), and `Cleanup: merged — this

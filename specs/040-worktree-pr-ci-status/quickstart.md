@@ -93,6 +93,7 @@ Run with the `visual-pass` skill on a private display. Record results and screen
 | B13 | With the switch on, disconnect the network for one reading (a wrapper `gh` that sleeps 30 s); click and type meanwhile. | The application stays responsive; rows keep their status; no error. | FR-019, FR-021, SC-005 |
 | B14 | Linux: start the client from its `.desktop` launcher; repeat B3. | Same indicators as from a terminal launch. | FR-034, 034 FR-026 |
 | B15 | Settings → Session service: sandbox placement; repeat B3 and B6. | Same indicators and the same removal suggestion. | Assumption "where the tooling runs", R5 |
+| B16 | With the switch on and indicators shown, start a second client on the same project (it is refused: read-only, take-over banner). Then press **Take over** in it. | Before: the second window shows no indicator and the logging wrapper `gh` records no call from it. After: the second window shows the indicators after one reading; the first window's indicators are gone and it makes no further call. | SC-007, Edge "several windows" |
 
 B1, B3, B4, B6 are repeated in the dark theme. macOS and Windows arms of B14 are 034's
 `github_locate_desktop_launch.rs`, which this feature reuses unchanged: it adds no platform code
