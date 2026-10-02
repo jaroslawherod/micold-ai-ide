@@ -94,16 +94,34 @@ decides only whether the snapshot is also written to disk.
 captured, carried or saved (FR-014).
 
 **Order at a process end.** Keep a clone of the session's `SharedTerm` (`supervisor.rs:60`, an
-`Arc`), take the `PtySession` out of the state and drop it off the state lock, then capture from
-the clone, then put the snapshot in `carried`, and only then reply to the stop or spawn the next
-process. Dropping the `PtySession` kills the process tree, closes the master and joins the reader
-thread, in that order (`supervisor.rs:548-564`), so every byte the process wrote has reached the
-`Term` before the capture (User Story 1 scenario 10). The same order serves `stop_session` and the
-supervision tick (clean exit, give-up and before `respawn_primary`).
+`Arc`), take the session's `Arc<PtySession>` out of the state, and off the state lock call a new
+`PtySession::teardown(&self, bound)`; then capture from the clone, put the snapshot in `carried`,
+and only then reply to the stop or spawn the next process. The same order serves `stop_session` and
+the supervision tick (clean exit, give-up and before `respawn_primary`).
 
-Waiting for `output_ended` instead does not work on Windows: with ConPTY the reader sees
-end-of-file only when the pseudoconsole is closed, which is the drop of the master, not the kill
-(`supervisor.rs:553-558`). The capture would then rest on a timeout.
+`teardown` does, through a shared reference, what `Drop` does today (`supervisor.rs:548-564`): kill
+the process tree, take the master out of its `Mutex<Option<…>>` and close it, then wait for the
+reader thread to reach end-of-file and join it (`reader` becomes a `Mutex<Option<JoinHandle>>`).
+`Drop` calls it, and it does nothing the second time. So every byte the process wrote has reached
+the `Term` before the capture (User Story 1 scenario 10), on Unix and on Windows.
+
+Dropping the `Arc` is not enough. The state holds an `Arc<PtySession>` (`state.rs:237`), and the
+stream task of every window that shows the session holds a clone (`server.rs`, `stream_view`). With
+a window on the session, which is the usual case at a stop or a self-exit, the state's drop runs no
+`Drop`: the master stays open and the reader is not joined, so a capture after it would race the
+reader on Unix and come before ConPTY's end-of-file on Windows. A resize that arrives after the
+teardown finds no master and is ignored.
+
+The wait for end-of-file is bounded at 2 s (`TEARDOWN_WAIT`): the reader sets `output_ended`, and
+`teardown` joins only once it is set. A process outside the killed tree that keeps the terminal
+open (a detached grandchild) would otherwise hold the stop for ever. When the bound passes, the
+capture takes what the `Term` has parsed, one warning is logged, and the reader thread is left to
+end by itself. The bound is a guard, not the mechanism: closing the master first is what brings the
+end-of-file.
+
+Waiting for `output_ended` without closing the master does not work on Windows: with ConPTY the
+reader sees end-of-file only when the pseudoconsole is closed, which is the close of the master,
+not the kill (`supervisor.rs:553-558`). The capture would then always rest on the timeout.
 
 **Rejected.** *Always reading back from disk at a start.* It cannot serve FR-015 while saving is
 off, and it makes a stop and start depend on a write that may have failed.

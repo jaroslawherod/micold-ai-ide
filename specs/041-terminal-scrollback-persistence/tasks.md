@@ -77,7 +77,7 @@ separator, then the new output.
 - [ ] T004 [P] [US1] [U8] [U9] [U10] [U11] Write `crates/micold-core/tests/terminal_history_text.rs` for `separator_line` (DM §7): at 80 columns the text is `── session restarted at 2026-10-02 14:31 +02:00 ──`; at a width narrower than the full text the rules are dropped; narrower still the text is cut to the width; the result is never wider than `columns` and never holds a line break (FR-009).
 - [ ] T005 [US1] [U14] [U15] [U16] [U17] [U18] [U19] [U20] [U21] [U22] Write the capture unit tests in `crates/micold-daemon/src/history.rs` against a real `Term` with no process (R2, DM §1): text and order of history and screen rows; each of the 16 basic colours, an indexed colour and an RGB colour as foreground and as background; each flag of `StyleFlags`; two rows joined by the wrap flag are one `LogicalLine`; a wide character is one character and its spacer is skipped; a zero-width character follows its base; trailing empty screen rows are not captured (the rule of `Framer::plain_tail`); a `Term` that printed nothing gives an empty snapshot (FR-001).
 - [ ] T006 [US1] [U23] [U24] [U25] [U26] [U27] [U28] Write the seed unit tests in `crates/micold-daemon/src/history.rs` (R3, DM §6): capture after `seed(Seed::History)` equals the input lines followed by the separator in the dim style; afterwards the screen is blank, the cursor is at home, the attributes are reset and the seeded lines are all in the history (R17); a snapshot longer than the `Term`'s history limit leaves the most recent lines (FR-012); seeding at a narrower width wraps and a later capture gives the same logical lines (edge case *Terminal size changed*); `Seed::None` leaves the `Term` untouched (FR-010); a second seed after more output keeps the first separator (FR-011).
-- [ ] T007 [US1] [A9] [A10] [U30] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] Write `crates/micold-daemon/tests/history_restart_in_run.rs` with a fake CLI (patterns: `tests/reattach_snapshot.rs`, `tests/daemon_lifecycle.rs`): stop then start shows 200 styled lines, one separator, the new output (story 1 scenario 9, SC-011); a process that exits by itself and is restarted shows its last lines above one separator (scenario 10); a session with no output shows no separator (FR-010); two stops and starts show two separators in order (FR-011); two sessions each show only their own lines (FR-025); the fake CLI's recorded stdin is empty after a start (FR-009); a Regular Terminal instance stopped and started is empty (FR-014); a fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history (R13); a fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history (R16); a second attached client receives the same lines in its first `full` frame (edge case *Several windows*). Every case asserts the order earlier output, separator, new output in the captured history, not a screen row, and the cases of scenarios 9 and 10 run on a real pseudoconsole under `cfg(windows)` too (R17, FR-030).
+- [ ] T007 [US1] [A9] [A10] [U30] [U31] [U32] [U33] [U34] [U35] [U36] [U37] [U38] [U133] [U134] [U135] Write `crates/micold-daemon/tests/history_restart_in_run.rs` with a fake CLI (patterns: `tests/reattach_snapshot.rs`, `tests/daemon_lifecycle.rs`): stop then start shows 200 styled lines, one separator, the new output (story 1 scenario 9, SC-011); a process that exits by itself and is restarted shows its last lines above one separator (scenario 10); a session with no output shows no separator (FR-010); two stops and starts show two separators in order (FR-011); two sessions each show only their own lines (FR-025); the fake CLI's recorded stdin is empty after a start (FR-009); a Regular Terminal instance stopped and started is empty (FR-014); a fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history (R13); a fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history (R16); a second attached client receives the same lines in its first `full` frame (edge case *Several windows*); with a client attached and streaming at the process end, a stop and a self-exit each keep the last line the process printed (R4: the state's `Arc` is not the last one); a fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`, R4's bound). Every case asserts the order earlier output, separator, new output in the captured history, not a screen row, and the cases of scenarios 9 and 10, with and without a client attached, run on a real pseudoconsole under `cfg(windows)` too (R17, FR-030).
 
 ### Implementation for User Story 1, slice A
 
@@ -85,7 +85,7 @@ separator, then the new output.
 - [ ] T009 [US1] Implement `capture(&Term) -> HistorySnapshot` in `crates/micold-daemon/src/history.rs` to pass T005: maps `alacritty_terminal` colours and flags to the types of DM §1 through an explicit table; an unknown named colour maps to `Default`.
 - [ ] T010 [US1] Implement `Seed` (`None`, `History { snapshot, at }`) and `seed(&mut Term, Seed)` in `crates/micold-daemon/src/history.rs` to pass T006: through `vte::ansi::Handler` (`terminal_attribute`, `input`, `carriage_return`, `linefeed`) only; keeps the most recent `limit + screen rows` lines; ends with `clear_screen(ClearMode::All)` on the primary screen (R17); formats `at` as `YYYY-MM-DD HH:MM ±HH:MM` with `chrono`.
 - [ ] T011 [US1] Give `PtySession::spawn_answering` in `crates/micold-daemon/src/supervisor.rs` a `Seed` argument applied to the new `Term` before the reader thread is spawned (R3); `spawn_ai_cli` passes its caller's seed, `spawn_shell` passes `Seed::None`.
-- [ ] T012 [US1] In `crates/micold-daemon/src/state.rs` add `Inner.carried: HashMap<SessionId, HistorySnapshot>` (DM §6, R4): at every process end (`stop_session`, and the supervision tick's clean exit, give-up and `respawn_primary`) follow DM §6's order: clone the `SharedTerm`, take the `PtySession` out and drop it off the state lock (kill, close the master, join the reader), capture from the clone, insert into `carried`, then reply or spawn; no timeout; only for `SessionProcess::Primary` of a `TerminalMode::AiCli` session; `start_session` and `respawn_primary` take the entry and pass `Seed::History` with `chrono::Local::now()` when it has lines; `remove_live_by_ids` drops the entry. T007 passes.
+- [ ] T012 [US1] In `crates/micold-daemon/src/state.rs` add `Inner.carried: HashMap<SessionId, HistorySnapshot>` (DM §6, R4): at every process end (`stop_session`, and the supervision tick's clean exit, give-up and `respawn_primary`) follow DM §6's order: clone the `SharedTerm`, take the `Arc<PtySession>` out, call `PtySession::teardown(&self, TEARDOWN_WAIT)` off the state lock, capture from the clone, insert into `carried`, then reply or spawn. Add `teardown` to `crates/micold-daemon/src/supervisor.rs` (R4): kill, take and close the master, wait up to 2 s for `output_ended` and then join the reader (`reader` becomes a `Mutex<Option<JoinHandle>>`), a second call does nothing, `Drop` calls it, and a resize after it is ignored; when the wait runs out, log one warning and capture anyway; only for `SessionProcess::Primary` of a `TerminalMode::AiCli` session; `start_session` and `respawn_primary` take the entry and pass `Seed::History` with `chrono::Local::now()` when it has lines; `remove_live_by_ids` drops the entry. T007 passes.
 - [ ] T013 [US1] Update `docs/user-guide/worktrees-and-sessions.md`: a section on terminal history kept across a stop and start of a session, what the "session restarted at" line means, that Regular Terminal instances are not covered, and that for an AI CLI that draws full-screen (Claude Code and Copilot CLI by default) only its last screen is kept and the CLI's own resume shows the conversation (FR-032, D11).
 
 **Checkpoint**: `cargo test -p micold-daemon --test history_restart_in_run` passes.
@@ -194,6 +194,7 @@ running sessions at once.
 - [ ] T046 [US2] In `crates/micold-client/src/features/settings.rs`, `crates/micold-client/src/shell/persist.rs` and `crates/micold-client/src/shell/daemon_sync.rs` add the draft field, its message and the `SettingsSet` field, copying `pi_activity_component`.
 - [ ] T047 [US2] Add the control to `crates/micold-client/src/ui/settings/terminal.rs` below *Scrollback lines*: the shared `Checkbox` with `field_note`, label and note of ST §4, and its `SETTINGS` entry; regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`. T041 passes (FR-031).
 - [ ] T048 [US2] Update `docs/user-guide/settings.md` (the control, its default, that turning it off deletes the saved history without asking, that a very large *Scrollback lines* value makes each save larger) and `docs/user-guide/worktrees-and-sessions.md` (with saving off a stop and start still shows the earlier output; a service restart does not) (FR-032).
+- [ ] T074 [U131] Extend `crates/micold-daemon/tests/history_timing.rs` with SC-005: ten fake CLIs printing continuously, 200 keystroke-to-echo samples in one of them with saving on and with saving off, saves forced through `save_due_at`; the 95th percentile with saving on is at most 20 ms above that with saving off. Fix what it finds in `crates/micold-daemon/src/history.rs`. It is here, after T045, because its baseline is saving turned off.
 
 **Checkpoint**: `cargo test -p micold-daemon --test history_setting` passes and the control is in
 Settings → Terminal.
@@ -256,14 +257,14 @@ it exits within 5 s and a new service restores every line.
 
 ### Tests for the Windows stop request (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T061 [US1] [A1] [U115] [U116] [U117] Extend `crates/micold-daemon/tests/history_stop_request.rs` with `cfg(windows)` cases (SR §6): setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service process exit within 5 s with its file holding the last line; `WM_ENDSESSION` sent to the service's hidden window raises the same request; the event's DACL has one entry, for the current user.
-- [ ] T062 [P] [US1] [U118] [U119] [U120] Add `cfg(windows)` tests beside `terminate_daemon` in `crates/micold-core/src/spawn.rs`: it sets the event and returns once the process exited without calling `TerminateProcess`; against a process that ignores the event it falls back to `TerminateProcess` after 5 s; with no event to open it falls back at once (SR §2, §3).
+- [ ] T061 [US1] [A1] [U115] [U116] [U117] [U118] Extend `crates/micold-daemon/tests/history_stop_request.rs` with `cfg(windows)` cases (SR §6): setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service process exit within 5 s with its file holding the last line; `WM_ENDSESSION` sent to the service's hidden window raises the same request; the event's DACL has one entry, for the current user; `micold_core::spawn::stop_running_daemon` against the real service (`CARGO_BIN_EXE_micold-daemon`) makes it exit with the unwind's exit code, not the 1 of `TerminateProcess`, and its file holds the last line (SR §2). The cases take a `SERIAL` lock as `tests/daemon_stop.rs` does: the event's name is one per user.
+- [ ] T062 [P] [US1] [U119] [U120] [U136] Add one `cfg(windows)` test beside `terminate_daemon` in `crates/micold-core/src/spawn.rs` for its two fallbacks (SR §2, §3), run one after the other in the same test because the event's name is one per user: the target is a system executable copied to a temporary directory as `micold-daemon.exe`, so the image check passes; with the event created by the test and never answered, `terminate_daemon` falls back to `TerminateProcess` after 5 s; with no event to open it falls back at once. The cooperative case needs the real service and is in T061. Add to `crates/micold-core/tests/windows_installer_in_use.rs` a test that uses `routine_body`: inside `StopDaemon` of `packaging/windows/micold-ai-ide.iss` the step that sets the stop event and waits comes before the `Stop-Process` and `taskkill` steps (runs on every platform).
 
 ### Implementation for the Windows stop request
 
 - [ ] T063 [US1] Implement `stop_requested()` in `crates/micold-daemon/src/platform/windows.rs`: create the manual-reset named event with the pipe's owner-only DACL, wait for it on a blocking thread, and run a hidden top-level window on its own thread whose `WM_QUERYENDSESSION`/`WM_ENDSESSION` handler raises the request and waits for the unwind to finish (SR §1, §3; `windows-sys` features added to `Cargo.toml` as needed).
 - [ ] T064 [US1] Change `terminate_daemon` in `crates/micold-core/src/spawn.rs` on Windows to open and set the event, wait up to 5 s for the process to exit, then fall back to `TerminateProcess` (SR §2). T061 and T062 pass.
-- [ ] T065 [US1] In `packaging/windows/micold-ai-ide.iss` set the stop event and wait up to 5 s before the existing `Stop-Process` and `taskkill` steps (SR §2); first add a case to `scripts/tests/windows-installer.test.sh` (it has none for this section today) that reads the `.iss` and fails unless the event step comes before the `Stop-Process` and `taskkill` steps.
+- [ ] T065 [US1] In `packaging/windows/micold-ai-ide.iss` set the stop event and wait up to 5 s before the existing `Stop-Process` and `taskkill` steps (SR §2); T062's test in `windows_installer_in_use.rs` passes.
 - [ ] T066 [US1] Update `docs/daemon.md` (the Windows stop event and the end-of-session window), `docs/development/windows-packaging.md` (the installer asks first) and `docs/user-guide/worktrees-and-sessions.md` (the sentence of T036 now names Windows too) (FR-032).
 
 **Checkpoint**: CI's Windows job passes `history_stop_request`.
@@ -281,7 +282,7 @@ on every host, and shows the host's local time in the separator.
 
 - [ ] T067 [P] [US1] [U121] [U122] Add unit tests in `crates/micold-core/src/sandbox/mod.rs` and `crates/micold-core/src/sandbox/argv.rs` (DM §9): `MountSet::build` adds the history mount (host `data_local_dir()/terminal-history` → `/var/lib/micold-ai-ide/terminal-history`) only when the history directory is not inside the state directory, and none otherwise; the container arguments carry `-e TZ=<zone>` when a zone is given and no `TZ` when none is.
 - [ ] T068 [P] [US1] [U123] [U124] Add tests for the launcher in `crates/micold-client/src/shell/sandbox.rs`: at bring-up, attach included, the host history directory is created through `owner_only::ensure_dir` before the runtime is called; the zone passed is the host's IANA zone.
-- [ ] T069 [US1] [U125] [U126] [U127] [U128] [U129] [U130] Write `crates/micold-daemon/tests/sandbox_real_history.rs` behind the `sandbox-real-runtime` feature (pattern `tests/sandbox_real_session_start.rs`): a history saved by a host service is restored by a container service on the same data directory, and the reverse (FR-022); a file written by the container is `0600` in a `0700` directory as seen from the host (FR-021, SC-009); after the container is recreated the history is restored (FR-021); `<runtime> stop` on a sandbox with a printing session leaves a file holding the last line (SR §6); the separator carries the host's UTC offset; a container without the directory saves nothing and logs one warning that says to recreate the sandbox (R15).
+- [ ] T069 [US1] [U125] [U126] [U127] [U128] [U129] [U130] Write `crates/micold-daemon/tests/sandbox_real_history.rs` behind the `sandbox-real-runtime` feature (pattern `tests/sandbox_real_session_start.rs`; every test function is named `sandbox_real_history_*`, because `mise run test-sandbox` and CI filter on test names): a history saved by a host service is restored by a container service on the same data directory, and the reverse (FR-022); a file written by the container is `0600` in a `0700` directory as seen from the host (FR-021, SC-009); after the container is recreated the history is restored (FR-021); `<runtime> stop` on a sandbox with a printing session leaves a file holding the last line (SR §6); the separator carries the host's UTC offset; a container without the directory saves nothing and logs one warning that says to recreate the sandbox (R15).
 
 ### Implementation for the sandbox
 
@@ -296,9 +297,8 @@ on every host, and shows the host's local time in the separator.
 
 ## Phase 12: Polish & Cross-Cutting Concerns
 
-- [ ] T074 [U131] Extend `crates/micold-daemon/tests/history_timing.rs` with SC-005: ten fake CLIs printing continuously, 200 keystroke-to-echo samples in one of them with saving on and with saving off, saves forced through `save_due_at`; the 95th percentile with saving on is at most 20 ms above that with saving off. Fix what it finds in `crates/micold-daemon/src/history.rs`.
 - [ ] T075 [P] Update `docs/development/architecture.md`: the `terminal_history` core module, the daemon's `history` module, where capture, carry, save, load and seed happen, and the stop request.
-- [ ] T076 Run [quickstart.md](./quickstart.md) Part B with the `visual-pass` skill, save the screenshots under `specs/041-terminal-scrollback-persistence/evidence/`, and record B12 to B15 and the two manual Windows checks as run, not run, or covered by Part A, with the reason.
+- [ ] T076 Run [quickstart.md](./quickstart.md) Part B with the `visual-pass` skill, save the screenshots under `specs/041-terminal-scrollback-persistence/evidence/`, and record B12 to B15 and the three manual Windows checks as run, not run, or covered by Part A, with the reason.
 - [ ] T077 Run `mise run gate` and `cargo check --target aarch64-apple-darwin`; confirm every file under [quickstart.md](./quickstart.md) Part A exists and passes.
 
 ---
@@ -378,7 +378,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T025–T030
 - **Deliverable**: a printing session's file is rewritten at most once per 30 s and an idle one never; after the service is killed, a restart restores the history up to the last save.
-- **Satisfies**: US1 acceptance scenario 7; US3 acceptance scenario 6 (retry); FR-003, FR-004, FR-005 (nothing dropped; its delay bound is SC-005, measured in M10), FR-007 (warning and retry); SC-002, SC-003
+- **Satisfies**: US1 acceptance scenario 7; US3 acceptance scenario 6 (retry); FR-003, FR-004, FR-005 (nothing dropped; its delay bound is SC-005, measured in M5), FR-007 (warning and retry); SC-002, SC-003
 - **Verify**: `mise run test-core` (`terminal_history_schedule`) and `cargo test -p micold-daemon --test history_periodic_save`
 - **Depends on**: M2
 - **Tier**: full
@@ -394,10 +394,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M5 — The setting: keep terminal output off the disk
 
-- **Tasks**: T037–T048
+- **Tasks**: T037–T048, T074
 - **Deliverable**: Settings → Terminal has **Save terminal history**; unticking it and saving deletes every saved history at once and stops further writes, with no restart.
-- **Satisfies**: US2 acceptance scenarios 1–8; FR-026, FR-027, FR-028, FR-029, FR-031, FR-033; SC-008
-- **Verify**: `cargo test -p micold-daemon --test history_setting` and quickstart Part B steps B6–B8
+- **Satisfies**: US2 acceptance scenarios 1–8; FR-005 (the delay bound), FR-026, FR-027, FR-028, FR-029, FR-031, FR-033; SC-005, SC-008
+- **Verify**: `cargo test -p micold-daemon --test history_setting --test history_timing` and quickstart Part B steps B6–B8
 - **Depends on**: M3
 - **Tier**: full
 
@@ -424,7 +424,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T061–T066
 - **Deliverable**: on Windows, **Restart service**, an update and a logout ask the service to stop, and it saves every terminal's history before it exits.
 - **Satisfies**: US1 acceptance scenario 1 on Windows; FR-002, FR-030
-- **Verify**: CI's Windows job: `cargo test -p micold-daemon --test history_stop_request` and `cargo test -p micold-core spawn`
+- **Verify**: CI's Windows job: `cargo test -p micold-daemon --test history_stop_request` and `cargo test -p micold-core spawn`; on any platform `cargo test -p micold-core --test windows_installer_in_use`
 - **Depends on**: M4
 - **Tier**: full
 
@@ -433,15 +433,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T067–T073
 - **Deliverable**: a session service in the sandbox restores a history saved on the host and the reverse, keeps it when the container is recreated, and shows the host's local time in the separator.
 - **Satisfies**: FR-019 (Windows hosts), FR-021, FR-022; SC-009 (container); edge case *Where the service runs*
-- **Verify**: `mise run image && mise run test-sandbox` (`sandbox_real_history`)
+- **Verify**: `mise run image && mise run test-sandbox`; its output lists the `sandbox_real_history_*` tests as run, not filtered out
 - **Depends on**: M4, M5
 - **Tier**: full
 
-### M10 — Echo-delay measurement, architecture page and the recorded visual pass
+### M10 — Architecture page and the recorded visual pass
 
-- **Tasks**: T074–T077
-- **Deliverable**: SC-005 is held by a test, `docs/development/architecture.md` describes the history modules and the stop request, and quickstart Part B is recorded with screenshots.
-- **Satisfies**: FR-005 (the delay bound), SC-005, SC-010; quickstart Part B
-- **Verify**: `cargo test -p micold-daemon --test history_timing` and the files under `specs/041-terminal-scrollback-persistence/evidence/`
+- **Tasks**: T075–T077
+- **Deliverable**: `docs/development/architecture.md` describes the history modules and the stop request, and quickstart Part B is recorded with screenshots.
+- **Satisfies**: SC-010; quickstart Part B
+- **Verify**: `mise run gate` and the files under `specs/041-terminal-scrollback-persistence/evidence/`
 - **Depends on**: M1–M9
 - **Tier**: full

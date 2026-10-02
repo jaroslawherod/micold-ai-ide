@@ -21,12 +21,14 @@ Expected:
 - `crates/micold-core/tests/schema_hash.rs` and `protocol_roundtrip.rs` cover setting §2.
 - `crates/micold-daemon/src/history.rs` unit tests cover capture and seed (FR-001, FR-009, FR-011,
   FR-012).
-- `crates/micold-daemon/tests/history_restart_in_run.rs` covers story 1 scenarios 9 and 10, story 2
-  scenario 8, FR-010, FR-014, `ESC[2J` and the alternate screen (R13, R16).
-- `crates/micold-daemon/tests/history_service_restart.rs` covers story 1 scenarios 2 to 7.
+- `crates/micold-daemon/tests/history_restart_in_run.rs` covers story 1 scenarios 9 and 10 (with
+  and without a window attached, R4), FR-010, FR-014, `ESC[2J` and the alternate screen (R13, R16).
+- `crates/micold-daemon/tests/history_service_restart.rs` covers story 1 scenarios 2 to 6.
+- `crates/micold-daemon/tests/history_periodic_save.rs` covers story 1 scenario 7, FR-003, FR-004,
+  FR-005 (nothing dropped) and FR-007.
 - `crates/micold-daemon/tests/history_stop_request.rs` covers story 1 scenarios 1 and 8 and
   stop-request §6.
-- `crates/micold-daemon/tests/history_setting.rs` covers story 2 scenarios 2 to 7.
+- `crates/micold-daemon/tests/history_setting.rs` covers story 2 scenarios 2 to 8.
 - `crates/micold-daemon/tests/history_damaged.rs` covers story 3.
 - `crates/micold-daemon/tests/history_removal.rs` covers story 4.
 - `crates/micold-daemon/tests/history_timing.rs` covers FR-013, SC-004 and SC-005.
