@@ -232,3 +232,16 @@ was held by them for 10 minutes and more at a time during this milestone.
   file), not in `tests/attention_view_report.rs` as T006 words it. Cycle 6's red and green ran in one
   build-lock run, the green applied by a script after the red.
 - Cycle 5: U78 is a characterization of existing behaviour, not a new one; U77 is killed by its red.
+
+## Review A round 1 fixes (M1)
+
+- F1 (MAJOR): `Catalog::mark_attention` no longer writes the store; `note_activity` counts in
+  memory and sets `attention_unsaved` under the lock, and the supervisor tick writes it in a
+  `spawn_blocking` hop (`DaemonState::persist_attention`), as names are written (feature 029).
+  U77 now calls `persist_attention` before the restart, standing in for the tick.
+- F2 (MINOR): `release_attachments` forgets the connection's view. Test
+  `after_the_viewing_connection_is_released_the_next_change_adds_one`, written after the fix (a
+  review fix); its mutant (drop the `views.remove`) is KILLED.
+- Mutant `server.rs` tick does not call `persist_attention`: SURVIVED. The tick is glue with no
+  test harness in this crate (the names write beside it has none either); quickstart §B covers
+  a restart after an attention event.

@@ -213,6 +213,9 @@ struct Inner {
     /// What each connected window has in view (feature 039, W1.2). Under this lock because
     /// [`DaemonState::note_activity`] reads it in the same step as the change it judges.
     views: Views,
+    /// An attention event was counted in memory and is not written yet (feature 039, FR-008a);
+    /// [`DaemonState::persist_attention`] writes it off the async runtime.
+    attention_unsaved: bool,
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -489,6 +492,7 @@ impl DaemonState {
                 sizes: HashMap::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
+                attention_unsaved: false,
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1175,7 +1179,31 @@ impl DaemonState {
     /// the moment a push to this client fails, which is the earliest observable proof the peer is
     /// gone. Idempotent, and safe to interleave with `deregister`.
     pub fn release_attachments(&self, id: ClientId) {
-        self.lock().attachments.retain(|_, att| att.client != id);
+        let mut inner = self.lock();
+        inner.attachments.retain(|_, att| att.client != id);
+        // Its view goes with it: a stale report would keep a session "in view" until `deregister`.
+        inner.views.remove(id);
+    }
+
+    /// Whether an attention event waits to be written (feature 039); the supervisor tick asks
+    /// before it spends a `spawn_blocking` hop on [`Self::persist_attention`].
+    pub fn has_unsaved_attention(&self) -> bool {
+        self.lock().attention_unsaved
+    }
+
+    /// Write the attention events counted since the last write (feature 039, FR-008a).
+    ///
+    /// **Blocking**, like [`Self::record_observed_names`]: it runs in the supervisor's
+    /// `spawn_blocking` hop. A failed write is logged and the count stays in memory, so the next
+    /// event writes it again; a read-only data directory is not a session failure.
+    pub fn persist_attention(&self) {
+        let mut inner = self.lock();
+        if !std::mem::take(&mut inner.attention_unsaved) {
+            return;
+        }
+        if let Err(err) = inner.catalog.persist() {
+            tracing::warn!(%err, "could not store the attention events; they are still counted");
+        }
     }
 
     /// The per-project gate serializing mutating worktree work (BUG-009, T120). Created on first
@@ -2817,13 +2845,11 @@ impl DaemonState {
         // counted with no window open as well (FR-008).
         let began_waiting = before != ActivitySignal::AwaitingInput
             && live.activity.signal() == &ActivitySignal::AwaitingInput;
-        let counted = if began_waiting && !inner.views.is_in_view(session) {
-            inner.catalog.mark_attention(session)
-        } else {
-            Ok(false)
-        };
-        if let Err(err) = counted {
-            tracing::warn!(session = %session.0, %err, "could not store the attention event");
+        if began_waiting
+            && !inner.views.is_in_view(session)
+            && inner.catalog.mark_attention(session)
+        {
+            inner.attention_unsaved = true;
         }
         changed
     }
