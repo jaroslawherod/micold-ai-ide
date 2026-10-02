@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: Continue milestone M1 from *Handover*: TDD cycle 3 (T002/T010), no PR open yet.
+- **Next step**: M1: all of T001–T013 done and committed; gate, review A, review B, then the PR (phase file steps 2–4).
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | in progress (T001, T008, T009 done) |
+| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | in progress (T001–T013 done; gate and reviews pending) |
 | M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | pending |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
@@ -72,53 +72,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-Milestone M1, written at the 150k context cap. No PR is open; the branch holds two unpushed commits
-on `origin/main` (`47f73eb1`). Skip nothing: run `branch-start.sh 536` as usual (it rebases them).
-
-**Done** (each a TDD cycle in `tdd/cycle-log.md`, committed at green, `mise run test-core` 1513
-passed):
-
-- T001 / U1: the 14 `crates/micold-core/tests/fixtures/gh/pr_*.txt` and `pr_README.md`; a
-  `.gitattributes` line keeps their `\r\n`. `tests/pull_request_parse.rs` holds the U1 test only.
-- T008, T009 / U46, U47: `src/pull_request.rs` with `PullRequestStatus` (hand-written `Debug`),
-  `PrState`, `CheckStatus`, `ReviewState`, `ReadingFailure`; `tests/pull_request_is_never_stored.rs`.
-
-**Next step**: the `speckit-implement` / `speckit-tdd-run` loop for T002–T007 and T010–T013, one
-cycle per test file as the log's *Notes and deviations (M1)* says (write the file's tests and a
-stub, record each red, implement, `mise run test-core`, log, tick, commit). Order: T002+T010
-(U2–U6), T005 (U23–U30), T004 (U16–U22), T003 (U7–U15) — these three close T011 —, T006+T012
-(U31–U41), T007+T013 (U42–U45). Then phase file steps 2–4 (gate, review A, review B, PR). No review
-round has run for M1.
-
-**What the fixtures hold** (so no test needs a re-read of 13 kB files): see `pr_README.md`.
-Numbers: three_branches → `b0` #347 open, rollup `null`, review `null`; `b1` #536 merged; `b2`
-none. closed #302. draft #14578 (checks passing). passing #14566. failing #339083.
-pending #339346. review_states #339339 / #339165 / #339346, all open with `IN_PROGRESS` checks.
-cross_repository: `o0` and `r0` hold only `isCrossRepository: true` nodes. Header names are printed
-as `X-Ratelimit-Remaining`, `X-Ratelimit-Reset` (1790966100), `Retry-After: 30`; line ends `\r\n`.
-`pr_repo_not_found.txt` is HTTP 200 with `errors[0].type == "NOT_FOUND"`, `path == ["repository"]`.
-
-**Design worked out, not yet written** (contracts/pull-request-source.md is the authority):
-
-- The query was recorded with this one-line document for `n = 1`; `status_query` must return it
-  byte for byte, with `o<i>`/`r<i>` and `$b<i>` repeated per branch:
-  `query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) { o0: pullRequests(headRefName: $b0, states: OPEN, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } r0: pullRequests(headRefName: $b0, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } } rateLimit { remaining resetAt } } fragment pr on PullRequest { number title url state isDraft createdAt isCrossRepository headRefOid reviewDecision commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } statusContextCount statusContextCountsByState { state count } } } } } } }`
-  Pin `status_query(50)` as a committed file (not `pr_*.txt`, U1 counts 14) rather than by
-  rebuilding it in the test, and send that document to GitHub once to prove it is valid.
-- `Response<'a> { status: u16, headers, body }` with a case-blind `header(name)`.
-- `parse_status` answers `Err(ReadingFailure::Passing)` for every answer it cannot read;
-  `reading_failure(outcome, now)` names the real kind from the whole outcome (stdout split and
-  parsed for `RATE_LIMITED` / `NOT_FOUND` at `repository`, status 429 / 403 + "rate limit" / 401,
-  then `github::classify`). With no response to read headers from, the pause is `now + 60`.
-- `GhCli::read`: `read_in_chunks(branches, |chunk| …)` (the chunk-level seam of T007, 50 per chunk,
-  empty list → no call); per chunk, exit 0 + HTTP 200 + `parse_status` `Ok` is the answer, anything
-  else is `reading_failure`. The `gh` environment is the one `GhCli::run` sets today; share it.
-- `FakePullRequestSource`: builder as `FakeIssueSource`, one scripted answer and one recorded
-  `(owner/name, branches)` per `read` call.
-
-**Environment**: other worktrees hold the build lock for minutes at a time; one cycle's suite run
-waited over ten minutes. A single-target run once failed with `crate unicode_ident required to be
-available in rlib format` while another build wrote `target-shared`; the re-run passed.
+None.
 
 ## Open escalation
 

@@ -135,11 +135,11 @@ Tests: `crates/micold-core/tests/pull_request_query.rs` (new, T002).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U2  | `status_query(1)` equals the pinned one-line document: `o0`, `r0`, `rateLimit`, the `pr` fragment with check counts by state and no check nodes | FR-023, PS §2 | example | PENDING | |
-| U3  | `status_query(50)` equals its pin and holds `o<i>` and `r<i>` for every `i` in 0..50 and none for 50 | FR-023, SC-006 | example | PENDING | |
-| U4  | No branch name appears in the query document | FR-031 | example | PENDING | |
-| U5  | `status_args` yields exactly one `-f b<i>=<branch>` pair per branch for names holding `"`, `$`, a space, a leading `-`, `true` and `123` | FR-031, PS §2 | example | PENDING | |
-| U6  | `status_args` holds `--hostname github.com`, `--include`, `owner`, `name`, the query and the branches, and nothing else: no `-F`, no token, no header argument | FR-005, FR-028, FR-031 | example | PENDING | |
+| U2  | `status_query(1)` equals the pinned one-line document: `o0`, `r0`, `rateLimit`, the `pr` fragment with check counts by state and no check nodes | FR-023, PS §2 | example | DONE | `crates/micold-core/tests/pull_request_query.rs::u2_query_for_one_branch_is_pinned` |
+| U3  | `status_query(50)` equals its pin and holds `o<i>` and `r<i>` for every `i` in 0..50 and none for 50 | FR-023, SC-006 | example | DONE | `crates/micold-core/tests/pull_request_query.rs::u3_query_for_fifty_branches_is_pinned` |
+| U4  | No branch name appears in the query document | FR-031 | example | DONE | `crates/micold-core/tests/pull_request_query.rs::u4_no_branch_name_appears_in_the_document` |
+| U5  | `status_args` yields exactly one `-f b<i>=<branch>` pair per branch for names holding `"`, `$`, a space, a leading `-`, `true` and `123` | FR-031, PS §2 | example | DONE | `crates/micold-core/tests/pull_request_query.rs::u5_branch_names_pass_through_unchanged` |
+| U6  | `status_args` holds `--hostname github.com`, `--include`, `owner`, `name`, the query and the branches, and nothing else: no `-F`, no token, no header argument | FR-005, FR-028, FR-031 | example | DONE | `crates/micold-core/tests/pull_request_query.rs::u6_args_are_exactly_the_contract` |
 
 ### `crates/micold-core/src/pull_request.rs`: `split_response`, `parse_status`
 
@@ -147,15 +147,15 @@ Tests: `crates/micold-core/tests/pull_request_parse.rs` (new, T003), against T00
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U7  | `split_response` yields status, headers and body for `\r\n` and for `\n` line ends, and finds a header whatever the case of its name | PS §5 | example | PENDING | |
-| U8  | `split_response` is `None` without a status line, and `None` without an empty line | FR-019, PS §5 | example | PENDING | |
-| U9  | `parse_status` on `pr_three_branches.txt` yields open, merged, and no entry for the third branch, keyed by the branches passed in | FR-001, FR-002, SC-002 | example | PENDING | |
-| U10 | `pr_draft.txt` and `pr_closed.txt` yield draft and closed with number, title, url and head as recorded | FR-002, SC-002 | example | PENDING | |
-| U11 | `pr_checks_failing.txt`, `pr_checks_pending.txt`, `pr_checks_passing.txt` and `pr_no_checks.txt` yield an open pull request whose checks are failing, pending, passing and none | FR-003, FR-008, SC-002 | example | PENDING | |
-| U12 | `pr_review_states.txt`: `APPROVED`, `CHANGES_REQUESTED` and `REVIEW_REQUIRED` yield the three review states; `null` and any other value yield none | FR-010, SC-002 | example | PENDING | |
-| U13 | `pr_truncated.txt` is a failure, never a partial map | FR-019 | example | PENDING | |
-| U14 | A missing alias, a `null` repository and an `errors` entry are each a failure, never a partial map | FR-019, FR-025 | example | PENDING | |
-| U15 | `pr_cross_repository.txt` (a fork's pull request with the same head-branch name) yields no entry for the branch | FR-005, FR-006 | example | PENDING | |
+| U7  | `split_response` yields status, headers and body for `\r\n` and for `\n` line ends, and finds a header whatever the case of its name | PS §5 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::split_response_reads_status_headers_and_body_with_crlf` (+2 more in the file) |
+| U8  | `split_response` is `None` without a status line, and `None` without an empty line | FR-019, PS §5 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::split_response_without_a_status_line_is_none` (+1 more in the file) |
+| U9  | `parse_status` on `pr_three_branches.txt` yields open, merged, and no entry for the third branch, keyed by the branches passed in | FR-001, FR-002, SC-002 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_three_branches_keys_by_given_names` |
+| U10 | `pr_draft.txt` and `pr_closed.txt` yield draft and closed with number, title, url and head as recorded | FR-002, SC-002 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_draft` (+1 more in the file) |
+| U11 | `pr_checks_failing.txt`, `pr_checks_pending.txt`, `pr_checks_passing.txt` and `pr_no_checks.txt` yield an open pull request whose checks are failing, pending, passing and none | FR-003, FR-008, SC-002 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_reduces_checks` |
+| U12 | `pr_review_states.txt`: `APPROVED`, `CHANGES_REQUESTED` and `REVIEW_REQUIRED` yield the three review states; `null` and any other value yield none | FR-010, SC-002 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_reads_review_decisions_in_branch_order` (+2 more in the file) |
+| U13 | `pr_truncated.txt` is a failure, never a partial map | FR-019 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_truncated_answer_is_passing` |
+| U14 | A missing alias, a `null` repository and an `errors` entry are each a failure, never a partial map | FR-019, FR-025 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_missing_alias_is_passing` (+4 more in the file) |
+| U15 | `pr_cross_repository.txt` (a fork's pull request with the same head-branch name) yields no entry for the branch | FR-005, FR-006 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::parse_status_only_cross_repository_is_empty` |
 
 ### `crates/micold-core/src/pull_request.rs`: `select_pull_request`
 
@@ -163,13 +163,13 @@ Tests: `crates/micold-core/tests/pull_request_select.rs` (new, T004).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U16 | An open node is selected over a newer merged one | FR-004 | example | PENDING | |
-| U17 | Of two open nodes the one created later is selected | FR-004 | example | PENDING | |
-| U18 | With no open node, the one created later of a merged and a closed node is selected | FR-004 | example | PENDING | |
-| U19 | A cross-repository open node is ignored and the same-repository closed one is selected | FR-005 | example | PENDING | |
-| U20 | Only cross-repository nodes yield `Ok(None)` | FR-005, FR-006 | example | PENDING | |
-| U21 | `OPEN` with `isDraft: true` is `Draft`, and with `false` is `Open` | FR-002 | example | PENDING | |
-| U22 | An unknown `state` is `Err(Unreadable)` | FR-019, PS §3 | example | PENDING | |
+| U16 | An open node is selected over a newer merged one | FR-004 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::an_open_node_is_selected_over_a_newer_merged_one` |
+| U17 | Of two open nodes the one created later is selected | FR-004 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::of_two_open_nodes_the_one_created_later_is_selected` |
+| U18 | With no open node, the one created later of a merged and a closed node is selected | FR-004 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::with_no_open_node_the_later_created_of_merged_and_closed_is_selected` |
+| U19 | A cross-repository open node is ignored and the same-repository closed one is selected | FR-005 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::a_cross_repository_open_node_is_ignored` |
+| U20 | Only cross-repository nodes yield `Ok(None)` | FR-005, FR-006 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::only_cross_repository_nodes_select_nothing` (+1 more in the file) |
+| U21 | `OPEN` with `isDraft: true` is `Draft`, and with `false` is `Open` | FR-002 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::an_open_node_is_a_draft_or_open_by_is_draft_with_its_checks_reduced` (+1 more in the file) |
+| U22 | An unknown `state` is `Err(Unreadable)` | FR-019, PS §3 | example | DONE | `crates/micold-core/tests/pull_request_select.rs::an_unknown_state_is_unreadable` |
 
 ### `crates/micold-core/src/pull_request.rs`: `reduce_checks`
 
@@ -177,14 +177,14 @@ Tests: `crates/micold-core/tests/pull_request_checks.rs` (new, T005).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U23 | Each failed name alone (`FAILURE`, `CANCELLED`, `TIMED_OUT`, `ACTION_REQUIRED`, `STARTUP_FAILURE`; contexts `FAILURE`, `ERROR`) is `Failing` | FR-008 | example | PENDING | |
-| U24 | Each not-finished name alone (`QUEUED`, `IN_PROGRESS`, `PENDING`, `WAITING`, `STALE`; contexts `PENDING`, `EXPECTED`) is `Pending` | FR-008 | example | PENDING | |
-| U25 | Each finished name alone (`SUCCESS`, `NEUTRAL`, `SKIPPED`, `COMPLETED`; context `SUCCESS`) is `Passing` | FR-008 | example | PENDING | |
-| U26 | One failed count beside pending and passing counts is `Failing` | FR-008, US1-5 | example | PENDING | |
-| U27 | A pending count beside passing counts, with no failed one, is `Pending` | FR-008, US1-6 | example | PENDING | |
-| U28 | Only skipped and neutral counts are `Passing` | FR-008 | example | PENDING | |
-| U29 | An unknown state name alone is `Pending` | FR-008, R4 | example | PENDING | |
-| U30 | A `null` rollup is `None`, and counts that are all zero are `None` | FR-003, US1-8 | example | PENDING | |
+| U23 | Each failed name alone (`FAILURE`, `CANCELLED`, `TIMED_OUT`, `ACTION_REQUIRED`, `STARTUP_FAILURE`; contexts `FAILURE`, `ERROR`) is `Failing` | FR-008 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::each_state_name_alone_reduces_to_its_group` |
+| U24 | Each not-finished name alone (`QUEUED`, `IN_PROGRESS`, `PENDING`, `WAITING`, `STALE`; contexts `PENDING`, `EXPECTED`) is `Pending` | FR-008 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::each_state_name_alone_reduces_to_its_group` |
+| U25 | Each finished name alone (`SUCCESS`, `NEUTRAL`, `SKIPPED`, `COMPLETED`; context `SUCCESS`) is `Passing` | FR-008 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::each_state_name_alone_reduces_to_its_group` |
+| U26 | One failed count beside pending and passing counts is `Failing` | FR-008, US1-5 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::a_failed_count_beside_pending_and_passing_is_failing` |
+| U27 | A pending count beside passing counts, with no failed one, is `Pending` | FR-008, US1-6 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::a_pending_count_beside_passing_is_pending` |
+| U28 | Only skipped and neutral counts are `Passing` | FR-008 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::only_skipped_and_neutral_is_passing` |
+| U29 | An unknown state name alone is `Pending` | FR-008, R4 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::an_unknown_state_name_alone_is_pending` |
+| U30 | A `null` rollup is `None`, and counts that are all zero are `None` | FR-003, US1-8 | example | DONE | `crates/micold-core/tests/pull_request_checks.rs::no_rollup_is_no_checks` (+1 more in the file) |
 
 ### `crates/micold-core/src/pull_request.rs`: `reading_failure`, `rate_limit_pause`
 
@@ -193,17 +193,17 @@ Tests: `crates/micold-core/tests/pull_request_failure.rs` (new, T006), against T
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U31 | `RunOutcome::TimedOut` is `Passing` | FR-019, FR-021 | example | PENDING | |
-| U32 | `SpawnFailed` is `Unavailable` when `classify` says `ToolMissing`, else `Passing` | FR-025 | example | PENDING | |
-| U33 | A GraphQL `RATE_LIMITED` error, HTTP 429 and an HTTP 403 that says "rate limit" are each `RateLimited { until }`, also when the same answer would read as no access | FR-024 | example | PENDING | |
-| U34 | A `NOT_FOUND` error on `repository`, HTTP 401, and `classify` saying `NotSignedIn` or `NoAccess` are each `Unavailable` | FR-025 | example | PENDING | |
-| U35 | `classify` saying `Offline` is `Passing` | FR-019 | example | PENDING | |
-| U36 | HTTP 5xx and an answer `parse_status` cannot read are `Passing` | FR-019 | example | PENDING | |
-| U37 | `Retry-After: 30` pauses until `now + 30` | FR-024 | example | PENDING | |
-| U38 | `X-RateLimit-Remaining: 0` pauses until the `X-RateLimit-Reset` time | FR-024 | example | PENDING | |
-| U39 | A secondary limit with remaining above 0 and no `Retry-After` pauses until `now + 60`, not until the reset header | FR-024 | example | PENDING | |
-| U40 | A reset time in the past pauses until `now + 1` | FR-024 | example | PENDING | |
-| U41 | A `Retry-After` or reset value that does not parse is skipped as if absent | FR-024, PS §5 | example | PENDING | |
+| U31 | `RunOutcome::TimedOut` is `Passing` | FR-019, FR-021 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::timed_out_is_passing` |
+| U32 | `SpawnFailed` is `Unavailable` when `classify` says `ToolMissing`, else `Passing` | FR-025 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::missing_gh_is_unavailable` (+1 more in the file) |
+| U33 | A GraphQL `RATE_LIMITED` error, HTTP 429 and an HTTP 403 that says "rate limit" are each `RateLimited { until }`, also when the same answer would read as no access | FR-024 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::graphql_rate_limited_error_pauses_until_reset` (+4 more in the file) |
+| U34 | A `NOT_FOUND` error on `repository`, HTTP 401, and `classify` saying `NotSignedIn` or `NoAccess` are each `Unavailable` | FR-025 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::repository_not_found_answer_is_unavailable` (+2 more in the file) |
+| U35 | `classify` saying `Offline` is `Passing` | FR-019 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::offline_is_passing` |
+| U36 | HTTP 5xx and an answer `parse_status` cannot read are `Passing` | FR-019 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::http_502_is_passing` (+3 more in the file) |
+| U37 | `Retry-After: 30` pauses until `now + 30` | FR-024 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::retry_after_adds_its_seconds` (+1 more in the file) |
+| U38 | `X-RateLimit-Remaining: 0` pauses until the `X-RateLimit-Reset` time | FR-024 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::remaining_zero_waits_for_the_reset` |
+| U39 | A secondary limit with remaining above 0 and no `Retry-After` pauses until `now + 60`, not until the reset header | FR-024 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::remaining_above_zero_ignores_the_reset` |
+| U40 | A reset time in the past pauses until `now + 1` | FR-024 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::a_reset_in_the_past_pauses_one_second` (+1 more in the file) |
+| U41 | A `Retry-After` or reset value that does not parse is skipped as if absent | FR-024, PS §5 | example | DONE | `crates/micold-core/tests/pull_request_failure.rs::unparsable_retry_after_is_skipped` (+3 more in the file) |
 
 ### `crates/micold-core/src/pull_request.rs`: `PullRequestSource`, `FakePullRequestSource`, chunking
 
@@ -211,10 +211,10 @@ Tests: `crates/micold-core/tests/pull_request_source.rs` (new, T007).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U42 | `FakePullRequestSource` returns its scripted answers call by call and records `(owner/name, branches)` of each call | FR-031, PS §1 | example | PENDING | |
-| U43 | An empty branch list answers an empty map and makes no call | FR-023, FR-026 | example | PENDING | |
-| U44 | 50 branches are read in one chunk, 51 in two (50, 1) and 120 in three (50, 50, 20) | FR-023 | example | PENDING | |
-| U45 | A failing second chunk fails the whole reading with that failure and returns nothing of the first chunk | FR-019, FR-023 | example | PENDING | |
+| U42 | `FakePullRequestSource` returns its scripted answers call by call and records `(owner/name, branches)` of each call | FR-031, PS §1 | example | DONE | `crates/micold-core/tests/pull_request_source.rs::fake_answers_in_order_and_records_calls` |
+| U43 | An empty branch list answers an empty map and makes no call | FR-023, FR-026 | example | DONE | `crates/micold-core/tests/pull_request_source.rs::no_branches_makes_no_request` |
+| U44 | 50 branches are read in one chunk, 51 in two (50, 1) and 120 in three (50, 50, 20) | FR-023 | example | DONE | `crates/micold-core/tests/pull_request_source.rs::branches_are_read_in_chunks_of_fifty` |
+| U45 | A failing second chunk fails the whole reading with that failure and returns nothing of the first chunk | FR-019, FR-023 | example | DONE | `crates/micold-core/tests/pull_request_source.rs::a_failing_chunk_ends_the_reading_with_nothing_half_read` (+1 more in the file) |
 
 ### `crates/micold-core/src/pull_request.rs`: `PullRequestStatus` is never stored
 
