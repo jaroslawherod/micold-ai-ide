@@ -158,6 +158,11 @@ pub struct Settings {
     /// rest kept; a value that is not a list reads as the default table (see `known_entries`).
     #[serde(default = "default_mapping", deserialize_with = "known_entries")]
     pub issue_label_types: Vec<LabelTypeEntry>,
+    /// Whether pull request status is read from GitHub and shown on worktree rows (feature 040,
+    /// FR-029). Off until the user turns it on (FR-030): nothing is sent to GitHub for this
+    /// feature before then. Service-owned like the binding toggle, so every window follows it.
+    #[serde(default)]
+    pub pr_status_enabled: bool,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -195,6 +200,7 @@ impl Default for Settings {
             tool_server_enabled: default_tool_server_enabled(),
             cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
+            pr_status_enabled: false,
         }
     }
 }
@@ -480,6 +486,7 @@ impl StoredSettings {
             tool_server_enabled: self.tool_server_enabled,
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
+            pr_status_enabled: false,
         }
     }
 }

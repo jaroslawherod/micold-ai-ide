@@ -474,6 +474,8 @@ impl ValidSettings {
             cross_session_access: self.cross_session_access,
             daemon: self.daemon,
             issue_label_types: self.issue_label_types,
+            // Not in the form yet (feature 040, M4): the save keeps the stored value.
+            pr_status_enabled: false,
         }
     }
 }
