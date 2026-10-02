@@ -2,8 +2,52 @@
 //! contracts/reading-and-wire.md §3): the pure decision, the two git questions behind it against
 //! a real repository, and the fake that scripts them.
 
-use micold_core::git::containment;
+use std::path::Path;
+use std::process::Command;
+
+use micold_core::git::{containment, Git, GitCli};
 use micold_core::protocol::messages::BranchContainment;
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git runs");
+    assert!(out.status.success(), "git {args:?} failed: {out:?}");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A repository whose history is `first` ← `merged` ← `later`, with one branch at each:
+/// `behind` at `first`, `at` at `merged` (the pull request's last commit) and `ahead` at `later`.
+struct Repo {
+    dir: tempfile::TempDir,
+    first: String,
+    merged: String,
+    later: String,
+}
+
+fn repo_with_three_commits() -> Repo {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    git(path, &["init", "-q"]);
+    git(path, &["config", "user.email", "t@t.test"]);
+    git(path, &["config", "user.name", "t"]);
+    let mut commits = Vec::new();
+    for (message, branch) in [("first", "behind"), ("merged", "at"), ("later", "ahead")] {
+        git(path, &["commit", "-q", "--allow-empty", "-m", message]);
+        git(path, &["branch", branch]);
+        commits.push(git(path, &["rev-parse", "HEAD"]));
+    }
+    let [first, merged, later] = <[String; 3]>::try_from(commits).unwrap();
+    Repo {
+        dir,
+        first,
+        merged,
+        later,
+    }
+}
 
 /// The last commit of a merged pull request, as GitHub reports it.
 const HEAD: &str = "1111111111111111111111111111111111111111";
@@ -61,5 +105,33 @@ fn no_tip_or_unknown_ancestry_is_unknown() {
         containment(Some(OTHER), HEAD, None),
         BranchContainment::Unknown,
         "git could not say whether the tip is an ancestor of the head"
+    );
+}
+
+/// U53. The tip is read from the repository as it is now, for local branches only (FR-015,
+/// FR-018a).
+#[test]
+fn the_real_git_reads_a_branch_s_tip_and_none_for_a_missing_branch() {
+    let repo = repo_with_three_commits();
+    let git_cli = GitCli::new();
+
+    assert_eq!(
+        git_cli.branch_tip(repo.dir.path(), "at"),
+        Some(repo.merged.clone()),
+        "the tip is the full id of the commit the branch points at"
+    );
+    assert_eq!(
+        git_cli.branch_tip(repo.dir.path(), "behind"),
+        Some(repo.first.clone())
+    );
+    assert_eq!(
+        git_cli.branch_tip(repo.dir.path(), "no-such-branch"),
+        None,
+        "a branch the repository does not have has no tip"
+    );
+    assert_eq!(
+        git_cli.branch_tip(repo.dir.path(), &repo.later),
+        None,
+        "only a name under refs/heads/ is a branch: a commit id is not one"
     );
 }

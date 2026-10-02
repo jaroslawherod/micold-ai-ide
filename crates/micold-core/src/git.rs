@@ -105,6 +105,14 @@ pub trait Git {
     /// config, so the answer is the same wherever the daemon runs (FR-026). No remotes is
     /// `Ok("")`, not an error. Contract: `specs/034-github-issue-worktree/contracts/remote-list-rpc.md`.
     fn remote_list(&self, repo: &Path) -> io::Result<String>;
+
+    /// The commit local branch `branch` points at
+    /// (`git rev-parse --verify --quiet refs/heads/<branch>^{commit}`), or `None` when the
+    /// repository has no such branch or git could not be asked (feature 040, FR-015).
+    ///
+    /// Read-only: local ref storage, no fetch, nothing written. `branch` is only ever looked up
+    /// under `refs/heads/`, never passed to git as a free argument.
+    fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -393,6 +401,15 @@ impl Git for GitCli {
                 String::from_utf8_lossy(&output.stderr).trim()
             ))),
         }
+    }
+
+    fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String> {
+        // `--verify --quiet` answers a missing ref with a bare non-zero exit; `^{commit}` makes
+        // the answer a commit id whatever the ref points at.
+        let rev = format!("refs/heads/{branch}^{{commit}}");
+        let tip = run_git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
+        let tip = tip.trim();
+        (!tip.is_empty()).then(|| tip.to_string())
     }
 
     fn submodule_update_init_recursive(
@@ -1009,6 +1026,10 @@ impl Git for FakeGit {
             out.push_str(&format!("remote.{name}.url {url}\n"));
         }
         Ok(out)
+    }
+
+    fn branch_tip(&self, _repo: &Path, _branch: &str) -> Option<String> {
+        None
     }
 
     fn submodule_update_init_recursive(
