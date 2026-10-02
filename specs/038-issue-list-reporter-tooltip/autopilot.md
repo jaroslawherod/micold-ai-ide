@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 2-clarify
-- **Next step**: Dispatch clarify round 2 (round 1 asked 2 questions, so it is not `CLEAN`). Round 1's commits are not pushed; they ship in PR 2.
+- **Next step**: Clarify round 2 found no critical ambiguities (CLEAN). Proceed to design (plan, tasks). Clarify commits are not pushed; they ship in PR 2.
 
 ## Pull requests
 
