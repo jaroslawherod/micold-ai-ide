@@ -8,21 +8,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #485
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
-- **Phase**: 3-design
-- **Next step**: Design done: plan review clean (round 2), `speckit-tdd-plan`, `speckit-analyze` (0 CRITICAL, 0 HIGH), tasks and milestone review clean (round 2), checklist re-checked by that review (every item true), `mise run test-scripts` green. PR 2 (#540) is open: wait for CI, merge, then Phase 4 with M1.
+- **Phase**: 4-milestone
+- **Next step**: M1, step 1 (`speckit-implement` → mandatory `speckit-tdd-run` pre-hook): no cycle has run and no code is written. Continue from *Handover*.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
-| #540 | Design | open | |
+| #540 | Design | merged | 34cd2c85309171eef68ccce20ff4f709544e5cee |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | | pending |
+| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | | in progress |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | pending |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | pending |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
@@ -73,7 +73,80 @@ Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5
 
 ## Handover
 
-None.
+M1, written by the first M1 unit at the 150k cap. It read the skills and the code and wrote nothing
+but this ledger. No PR is open; the branch is `origin/main` (`34cd2c85`) plus this commit, so run
+`branch-start.sh 540` as usual.
+
+**Done.** `branch-start.sh 540` (RESET). `speckit-implement` pre-checks: `checklists/requirements.md`
+16/16, so no "proceed anyway" question. Its mandatory pre-hook `speckit-tdd-run` was entered: profile,
+playbook and test list read; **no cycle run, `tdd/cycle-log.md` not created, no task ticked**.
+
+**Why it ran out.** The unit's own reading (unit.md, phase file, both skills, the playbook, the
+profile, R2–R4/R11/R13/R16/R17, DM §1/§6/§7, `supervisor.rs`, the process-end paths of `state.rs`)
+costs about 150k before the first test. M1 has about 40 behaviours; at two calls a cycle the loop
+cannot be driven from the unit's context. **Next unit: do not re-read all of that.** Use the notes
+below, and run the cycles in fresh-context subagents on the session model (no `model` override), one
+per component group, each told to follow `speckit-tdd-run` for its behaviour ids, commit per cycle,
+append to `tdd/cycle-log.md`, tick its tasks, and return the ids done and the commits:
+
+1. T001 (scaffold, no behaviour) then U1–U7 (T002/T003) and U8–U11 (T004/T008): `micold-core` only,
+   fast (`cargo test -p micold-core --test terminal_history_snapshot`).
+2. U14–U22 (T005/T009) then U23–U28 (T006/T010): unit tests in `crates/micold-daemon/src/history.rs`
+   against a `Term` with no process.
+3. A9, A10, U30–U38, U133–U135 (T007/T011/T012): `tests/history_restart_in_run.rs`, `supervisor.rs`,
+   `state.rs`. This is the non-trivial part; consider driving it in the unit itself.
+4. T013 (doc), then phase file step 2 (gate with review A), 3 (review B; nothing visible changes in
+   M1, so no visual pass), 4 (PR, body ends `Refs #485`).
+
+**Baseline.** A full-suite baseline (`scripts/build-lock.sh cargo test --workspace`) was started
+detached and was still waiting on another worktree's build lock (`fix-github-issues`) at handover. Its
+log, if the scratchpad still exists, ends with `BASELINE_EXIT=<n>`:
+`/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-terminal-scrollback-persistence/938fc32b-5154-4603-8b97-3ab5fae600cd/scratchpad/baseline.log`.
+Otherwise record the baseline as features 039/040 did (CI's green `main` at the merge base). The full
+suite takes about 6 minutes: run the touched crate's tests in a cycle, the full suite in the gate, and
+say so under the cycle log's *Notes and deviations*.
+
+**Code facts found (so they need not be found again).**
+
+- `supervisor.rs`: `PtySession::spawn_answering` (line 296) builds the `Term` at line 367 and spawns
+  the reader thread at 375; the seed goes between them. `reader: Option<JoinHandle>` (87),
+  `master: Mutex<Option<Box<dyn MasterPty + Send>>>` (71), `reader_done` is what `output_ended()`
+  reads (518), `Drop` (548) is kill → drop master → join: `teardown(&self, bound)` takes that over.
+  `resize` (442) returns an error when the master is gone; R4 wants it ignored after a teardown.
+  `spawn` (279) and both `spawn_ai_cli`/`spawn_shell` call `spawn_answering`; many tests call `spawn`.
+- `state.rs`: `Inner` (114) holds `ended` and `sizes`, the models for `carried`. `stop_session`
+  (1487) removes the `LiveSession`, kills every proc, drops it. `supervise_exited_sessions_at` (2640)
+  gathers `to_drop` (clean exit, give-up, orphan) and `to_respawn`, then calls `remove_session` (2617)
+  and `respawn_primary` (3012) off the lock; `swap_primary` (3068) returns the old `Proc`.
+  `start_session` (2287) spawns at 2415–2447 and registers through `register_session` (2494).
+  `remove_live_by_ids` (2070) is the archive/forget path. The primary is
+  `live.procs[&SessionProcess::Primary]`, the mode comes from the catalog (`SpawnPlan.mode`, and the
+  `mode` passed to `respawn_primary`).
+- `framer.rs` `plain_tail` (line 253) is the "last row that shows anything" rule; buffer offset `o`
+  is grid `Line(o - history)`.
+- `alacritty_terminal` 0.26.0: cell `Flags` has `WRAPLINE`, `WIDE_CHAR`, `WIDE_CHAR_SPACER`,
+  `LEADING_WIDE_CHAR_SPACER`, `DIM`, `HIDDEN`, `STRIKEOUT`, `ALL_UNDERLINES`; `cell.zerowidth()`;
+  `vte::ansi::Color` is `Named(NamedColor)` (0–15 basic, `DimBlack`…`DimWhite`, `Foreground`,
+  `Background`, …), `Spec(Rgb)`, `Indexed(u8)`; `Attr` has `Reset`, `Bold`, `Dim`, `Italic`,
+  `Underline`, `Reverse`, `Hidden`, `Strike`, `Foreground(Color)`, `Background(Color)`.
+  `clear_screen(ClearMode::All)` off the alternate screen calls `grid.clear_viewport()`, which scrolls
+  the rows up to the last non-empty one into the history; it does not move the cursor, so `seed` homes
+  it itself (`goto(0, 0)`).
+- `chrono` 0.4.45 and `iana-time-zone` are in `Cargo.lock`; `[workspace.dependencies]` starts at
+  `Cargo.toml:20`.
+- Test patterns: `tests/support/mod.rs` `DrivenTerm` (a `Term` fed bytes, no process);
+  `tests/pi_launch_wiring.rs` (a `#!/bin/sh` fake CLI on a prepended `PATH`, an `Env` guard that
+  restores variables, `Catalog::load` over `JsonFileStore`, `start_session(id, LaunchMode::Fresh)`;
+  one test per binary because `PATH` is process-wide, and Pi needs `PI_CODING_AGENT_DIR`,
+  `XDG_DATA_HOME`, `HOME`); `tests/supervision_slow_crash_loop.rs` (`FakeProjectStore` +
+  `FakeSettingsStore` catalog, `supervise_exited_sessions_at` with injected readings);
+  `tests/stream_view.rs` (a client over `tokio::io::duplex`, `serve_connection`, `Hello`,
+  `SetViewedSession`, `wait_for_grid(|f| f.full)`); `tests/session_identity_env.rs` lines 75–135 (a
+  stand-in CLI compiled with `rustc` for Windows, where a `.cmd` cannot be spawned). U38's
+  `cfg(windows)` red and green are observable only on the CI Windows leg (profile, *Additions from
+  feature 030*).
+
+**Open findings.** None. **PR.** None.
 
 ## Open escalation
 
