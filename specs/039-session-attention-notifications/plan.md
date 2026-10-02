@@ -150,7 +150,7 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | Daemon integration (`crates/micold-daemon/tests/`) | `mise run gate` | Two connections: event with none in view, no event with one in view, clear on view, persistence across a restart of the service, no event for a repeated signal, removal (FR-002, FR-003, FR-008, FR-008a, FR-016, FR-019, FR-020, FR-024); with the setting off an event still sets `unread` and is never granted (FR-017, FR-027; all three AI CLIs share the one path, FR-028); reveal routing with the token forwarded (FR-012); Principle II: several sessions at once (FR-009) |
 | Client reducer (`crates/micold-client/src/features/attention.rs`, `tests/`) | `mise run gate` | `WindowView` sent on change only; a grant calls the recording notifier once with the right text; an error is logged once (FR-010); `RevealSession` selects or notices (FR-011, FR-013, FR-014); `raise_plan` and `after_activation` for each row of the contract's table (FR-011); switcher entries carry counts |
 | Component gates (`crates/micold-client/src/ui/material/`) | `mise run gate` | `UnreadMark` contrast in both schemes, row height unchanged, label truncates first (FR-018, FR-023, FR-032; U3, U8) |
-| Backend mapping (`shell/desktop_notify/*.rs`, pure functions) | `mise run gate`, on each OS in CI | Signal or callback → `NotifierEvent`; id table; an id the table does not hold yields no event (N9); the Linux request is built the same whether or not the service lists the `actions` capability (FR-015) |
+| Backend mapping (`shell/desktop_notify/*.rs`, pure functions) | `mise run gate` for `linux.rs`; `macos.rs` and `windows.rs` on CI's legs for those systems, by the step T122 adds to `ci.yml` (the enumerated client list runs no unit test of the binary) | Signal or callback → `NotifierEvent`; id table; an id the table does not hold yields no event (N9); the Linux request is built the same whether or not the service lists the `actions` capability (FR-015) |
 | Quickstart §B, `visual-pass` | recorded | The mark, the counts and the switch in both schemes; a real notification on a Linux notification service; a click on X11 (FR-018, FR-021, FR-023, SC-001 to SC-006, SC-008 to SC-010) |
 | Quickstart §C, by hand | recorded | macOS and Windows: shown, clicked, refused by the system (FR-029, SC-001, SC-004); the sandbox on Linux (FR-007, SC-007) |
 
@@ -218,7 +218,7 @@ the daemon; the client adds one feature module, one platform directory and one c
 
 ## Delivery order
 
-| Milestone | Ships | Wire |
+| Milestone | Ships | Wire (planned) |
 |---|---|---|
 | M1 — story 1, slice A | View report and attention sequence in the service; nothing new on screen | 21 |
 | M2 — story 1, slice B | Claim and grant, the tracker with the reconnect rule, the notification text, the seam and the Linux backend; user guide: the notification | 22 |
@@ -230,9 +230,14 @@ the daemon; the client adds one feature module, one platform directory and one c
 | M8 — story 4 | The setting and the switch; user guide: Settings | 26 |
 | M9 — polish | Architecture and component-library docs, quickstart §B and §C recorded | — |
 
+The wire numbers are the planned ones. Each bump takes the next free number when its milestone is
+implemented: if another feature has taken one on `main` by then, or M7 closes on its probe without
+a wire change, the later numbers move with it (research R10).
+
 Stories 1 to 3 are cut in slices because each is well past the size one milestone carries
 ([tasks.md](./tasks.md), Milestones). Each story stands alone as the spec says: story 1 notifies
-with no mark, story 2 marks with no dependence on the notification (M4 needs M1 only), story 3
+with no mark, story 2 marks with no dependence on the notification (its rules need M1 only; its test that a
+claim changes no mark, and its wire number, put M4 after M2), story 3
 adds the click to story 1's notification, story 4 adds the switch (on until then).
 
 ## Risks

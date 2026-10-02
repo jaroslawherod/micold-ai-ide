@@ -37,7 +37,9 @@ service raises no attention event" or "the window makes no claim and calls `show
 
 The `tests` column names the task that writes the outer test; that task carries the `[A…]` marker.
 The `final` column names the story's final run task, which must be green before the story is
-complete.
+complete. T119 to T121 carry their story's `[A…]` markers. T118 carries none: A1 to A13 are all
+done by the end of M2, and T118 is the run of those tests on CI's macOS and Windows legs in M3,
+ticked by `speckit-implement`.
 
 | id | behavior | traces | kind | state | tests (tasks.md) | final |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -50,7 +52,7 @@ complete.
 | A7 | A session of the Default entry is shown with the project, the Default entry's sidebar name and the session | US1-7, FR-004 | example | PENDING | T022 | T118 |
 | A8 | A claim sent over the window's existing connection is granted over that connection, and nothing else reaches the service: the path names no runtime (the guard is U49; the real container is quickstart §C3) | US1-8, FR-007, SC-007 | example | PENDING | T021 | T118 |
 | A9 | With Settings filling the main area the window reports nothing in view, so the selected session's change raises one attention event | US1-9, FR-001 | example | PENDING | T006 | T118 |
-| A10 | A selected session in a focused window is in view whichever of its tabs is shown, so its change raises nothing | US1-10, FR-002 | example | PENDING | T001 | T118 |
+| A10 | A selected session in a focused window is in view whichever of its tabs is shown, so its change raises nothing | US1-10, FR-002 | example | PENDING | T001, T006 | T118 |
 | A11 | After a reconnect, a session last seen working and found awaiting input with a higher sequence is claimed once and shown once | US1-11, FR-006 | example | PENDING | T022 | T118 |
 | A12 | Sessions that change at the same moment are each granted once, each grant naming its own session | US1-12, FR-009, SC-005 | example | PENDING | T021 | T118 |
 | A13 | A change that happened with no window open is never claimed: the first snapshot a window receives yields no claim and no call to `show` | US1-13, FR-008, FR-005 | example | PENDING | T022 | T118 |
@@ -296,6 +298,9 @@ the same kind.
 | U114 | Opening Settings reports `in_view: None`, and leaving it reports the session again | US1-9, US2-11 | example | PENDING | T006 / T015 |
 | U115 | A reconnect resets what was sent, so the next report is sent whatever its value | FR-006 | example | PENDING | T006 / T015 |
 | U116 | `reconcile_catalog` copies `attention_seq` into `Workspace::sessions` | FR-001 | example | PENDING | T006 / T014 |
+| U176 | `view_facts` names the active project's selected session as `selected` and passes `window_focused` through | US1-1, FR-001 | example | PENDING | T006 / T123 |
+| U177 | With Settings open `view_facts` has `main_area_taken: true` | US1-9, US2-11 | example | PENDING | T006 / T123 |
+| U178 | Showing another tab of the selected session leaves `view_facts` equal | US1-10, US2-12 | example | PENDING | T006 / T123 |
 
 ### `crates/micold-client/src/features/attention.rs`: claim, grant and show
 
@@ -367,7 +372,8 @@ the same kind.
 ### `crates/micold-client/src/shell/desktop_notify/`: backend mappings
 
 Pure functions inside the three backend files, tested where they are (`#[cfg(test)]`); the macOS
-and Windows ones run on CI's legs for those systems only (profile, *Windows-only behaviour*).
+and Windows ones run on CI's legs for those systems only (profile, *Windows-only behaviour*), by
+the step T122 adds to `.github/workflows/ci.yml`; their red phase is that step's first run.
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |

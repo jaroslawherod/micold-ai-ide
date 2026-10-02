@@ -366,7 +366,10 @@ existing indicator (FR-018, FR-032). *A text suffix built at each call site.* Th
 `crates/micold-core/src/protocol/version.rs` requires: 21 for the view report and the sequence; 22
 for the claim and the grant; 23 for `unread`; 24 for the reveal pair; 25 for the activation token
 on the reveal pair; 26 for the setting. Each milestone ships only the wire it uses. No `#[serde(default)]` on wire
-types: peers that differ are refused at the handshake, as today.
+types: peers that differ are refused at the handshake, as today. The numbers are the planned ones:
+each bump takes the next free number when its milestone is implemented. If another feature has
+taken 21 on `main` by then (040 plans to), or M7 closes on its probe without the token (R7), every
+later number of this feature moves with it.
 
 **Alternatives rejected.** *One bump for the whole feature in the first milestone.* It would ship
 `unread`, the reveal pair and the setting on `main` with nothing using them. *The activation token
