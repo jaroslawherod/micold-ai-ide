@@ -1409,9 +1409,16 @@ impl DaemonState {
         Ok(())
     }
 
-    /// Turn pull request status on or off (feature 040, FR-030).
+    /// Turn pull request status on or off (feature 040, FR-030). Pushes `SettingsChanged` to every
+    /// client, so each open window starts or stops reading pull requests.
     pub fn set_pr_status_enabled(&self, on: bool) -> std::io::Result<()> {
-        self.lock().catalog.set_pr_status_enabled(on)
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_pr_status_enabled(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
     }
 
     /// Set any of the three environment-include settings and push `SettingsChanged` to every

@@ -122,6 +122,19 @@ async fn next_settings_changed(client: &mut Client) -> DaemonSettings {
         .expect("the client was never told the settings changed")
 }
 
+/// Wait until the service counts two clients, so a push cannot be sent before the second one is
+/// there to receive it.
+async fn both_registered(state: &Arc<DaemonState>) {
+    let registered = async {
+        while state.client_count() != 2 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), registered)
+        .await
+        .expect("two clients are registered");
+}
+
 /// U67 (FR-030). The switch is off until the user turns it on; once on, the service holds it — a
 /// client that connects next is told so — and it is in the settings file, so the service still
 /// holds it after a restart.
@@ -147,5 +160,40 @@ async fn turning_pull_request_status_on_is_persisted_and_reported_in_the_next_we
     assert!(
         welcomed.pr_status_enabled,
         "the switch is in the settings file: a restarted service still has it on"
+    );
+}
+
+/// U68 (FR-029, FR-030). Every open window follows the switch: the client that turned it on and
+/// a second one that did nothing are both pushed the settings with the switch on.
+#[tokio::test]
+async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() {
+    let store = tempfile::tempdir().unwrap();
+    let state = service(store.path());
+    let (mut a, _) = connect(&state).await;
+    let (mut b, _) = connect(&state).await;
+    both_registered(&state).await;
+
+    a.send(Frame::Control(ClientMsg::SettingsSet {
+        req: 1,
+        scrollback_lines: None,
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
+        default_ai_cli: None,
+        pi_activity_component: None,
+        tool_server_enabled: None,
+        cross_session_access: None,
+        pr_status_enabled: Some(true),
+    }))
+    .await
+    .unwrap();
+
+    assert!(
+        next_settings_changed(&mut b).await.pr_status_enabled,
+        "the window that did nothing is told the switch is on"
+    );
+    assert!(
+        next_settings_changed(&mut a).await.pr_status_enabled,
+        "the window that turned it on is told too"
     );
 }
