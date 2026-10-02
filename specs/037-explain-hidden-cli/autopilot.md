@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #515 | Spec | merged | 063fa77affbcbcc20a842bffb71dce22212582d6 |
 | #517 | Design | merged | 976b0220d342f1e35608286f0bdec4a77b8ce247 |
 | #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
-| #PRNUM | M2 | open | |
+| #530 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
-| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #PRNUM | open |
+| M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #530 | open |
 | M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | | pending |
 | M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | | pending |
 
