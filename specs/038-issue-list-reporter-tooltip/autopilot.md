@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design part 3: `speckit-tdd-plan` done, plan review round 3 done and fixed (see *Review rounds*), `speckit-analyze` run (0 CRITICAL, 0 HIGH; 9 MEDIUM/LOW being fixed). Then tasks and milestone review round 1, checklists, and the plan-review escalation before PR 2.
+- **Next step**: Answer *Open escalation* (plan review, third counted round found MAJORs). On "accept": rebase with `branch-start.sh 525`, run `mise run test-scripts`, open PR 2 (`docs(038): clarify, plan and cut milestones for the issue list's reporter line and description tooltip`, body ending `Refs #518`). Everything else in phase 3 is done: tdd test list, analyze, tasks review CLEAN, checklists.
 
 ## Pull requests
 
@@ -49,7 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 9923485e69511a2c10e2f2e1e22316a07dff8c5b:24a25da1e708257eeac7a9fca0088a73bb210c35 | CHANGES: 2 MAJOR (quickstart B11 cannot observe FR-018 or SC-006; seven FRs in no test layer), 3 MINOR (SC-008 fallback against FR-026, transition frames in rest mode, M-numbers undefined in the plan); all five fixed |
 | Plan | 2 | 08de3d166cc2661eb82c085ccd62e810fdc147d0:4dbb2d7617200602dce3057abad6733f53a0bab8 | CLEAN (scoped re-review of the round 1 fixes; it made 4 tool calls, so FR coverage of the plan's two tables was also checked by script: none missing) |
 | Plan | 3 (full: stale snapshot after the rebase; covers the part-2 edits; counted, it found MAJORs) | 7bab6b0f738cf24142cc0c9a03b9b655df4a87ec:d9deabff8423a7318f5b20fd470ed9ba34be9513 | CHANGES: 2 MAJOR (the layers named for SC-001 run `Before::Mounted` and never see an issue row, and no covered state opens the list; Principle VII PASS said docs ship with their milestone while `component-showcase.md` was in M6), 3 MINOR (trees omit `layout_snapshot.rs` and `evidence/README.md`; §B steps against the renumbered milestones; `delta_into_view` is private); all five verified and fixed. Third counted round with a MAJOR: no fourth round run, see *Open escalation* |
-| Tasks | 1 | ec237aaf86f5485f2f287ddef7288c0655175e11:23edb9a83bbe74aee53bada0dec25aa1fceae630 | pending (`speckit-analyze` before it: 0 CRITICAL, 0 HIGH, 2 MEDIUM, 7 LOW, all nine applied) |
+| Tasks | 1 | ec237aaf86f5485f2f287ddef7288c0655175e11:23edb9a83bbe74aee53bada0dec25aa1fceae630 | CHANGES: 2 MAJOR (T006's narrow-window states cannot be laid out, every pass uses the fixed `WINDOW`; T020 reused `delta_into_view`, whose 16 px margin contradicts T018), 3 MINOR (M1 Verify never opened the showcase; T056 named no baseline and §B10 ran three times; plan omitted the M2 and M5 `component-library.md` edits); all five verified and fixed. `speckit-analyze` before it: 0 CRITICAL, 0 HIGH, 2 MEDIUM, 7 LOW, all nine applied |
+| Tasks | 2 | 7d30c44f193dc7230540e9209249191a6d449715:35fc46b8499bcad53a4273a8bd5988bfda712b26 | CLEAN (scoped re-review of the round 1 fixes; 1 MINOR, T020 wording on the focus unit tests, fixed). `checklists/requirements.md`: no unchecked item, no checklist finding in either round |
 
 ## Declined review findings
 
@@ -62,7 +63,22 @@ None.
 
 ## Open escalation
 
-None.
+**Category 5, non-convergence: the plan review found MAJOR findings in its third counted round**, so
+no fourth plan round was run and PR 2 is not open (review-rubrics.md, *Round limit*).
+- Rounds: 1 CHANGES (fixed), 2 CLEAN, then part 2 of the design unit changed the plan (US1 split,
+  milestones renumbered, a new gate) and the rebase made the snapshot stale, so round 3 was a full
+  round. It found 2 MAJOR and 3 MINOR (*Review rounds*); all five were checked against the code and
+  fixed in 6546cc15.
+- Evidence the fixes hold: the Tasks review round 1 (a full round by a fresh reviewer, after the
+  fixes) read the fixed plan against tasks.md and the code and confirmed the round-3 fix ("the
+  state-opened list itself is fine … `Before::Settled` draws the overlay"). It found two further
+  MAJORs on tasks T006 and T020, which also touch plan.md and `contracts/picker-row.md`; fixed in
+  35fc46b8's successor commit, and Tasks round 2 is CLEAN. `speckit-analyze`: 0 CRITICAL, 0 HIGH.
+- Question: accept the plan as fixed and open PR 2, or review it further?
+  1. (Recommended) Accept: open PR 2. The plan's post-fix text has been read by two later fresh
+     reviewers (Tasks rounds 1 and 2) with no open finding.
+  2. Run one more full plan review beyond the three-round limit, then PR 2 if it is clean.
+  3. Hold: the user reads `plan.md` (Test strategy by layer, Delivery order) before anything merges.
 
 ## Token usage
 
