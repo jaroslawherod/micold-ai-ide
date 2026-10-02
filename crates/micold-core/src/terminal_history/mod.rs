@@ -50,6 +50,19 @@ pub enum HistoryColor {
     Rgb(u8, u8, u8),
 }
 
+/// How many basic colours there are: `Basic` takes 0 to 15.
+pub const BASIC_COLORS: u8 = 16;
+
+impl HistoryColor {
+    /// Whether a `Basic` index names one of the 16 basic colours.
+    fn is_in_palette(self) -> bool {
+        match self {
+            HistoryColor::Basic(index) => index < BASIC_COLORS,
+            _ => true,
+        }
+    }
+}
+
 /// The text attributes of a run, as a bit set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StyleFlags(u8);
@@ -62,6 +75,8 @@ pub enum SnapshotError {
     RunsDoNotCoverText { line: usize },
     /// The text of line `line` holds a C0 or C1 control character (`ESC` among them).
     ControlCharacter { line: usize },
+    /// A run of line `line` uses a `Basic` or `Dim` colour index outside its palette.
+    ColorOutOfRange { line: usize },
 }
 
 impl HistorySnapshot {
@@ -70,6 +85,10 @@ impl HistorySnapshot {
         for (index, line) in self.lines.iter().enumerate() {
             if line.text.chars().any(char::is_control) {
                 return Err(SnapshotError::ControlCharacter { line: index });
+            }
+            let mut colors = line.runs.iter().flat_map(|run| [run.style.fg, run.style.bg]);
+            if !colors.all(HistoryColor::is_in_palette) {
+                return Err(SnapshotError::ColorOutOfRange { line: index });
             }
             let run_sum: u64 = line.runs.iter().map(|run| u64::from(run.chars)).sum();
             if run_sum != line.text.chars().count() as u64 {
