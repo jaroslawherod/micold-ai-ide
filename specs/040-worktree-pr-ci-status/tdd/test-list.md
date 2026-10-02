@@ -515,7 +515,7 @@ Tests: `crates/micold-client/tests/features_sidebar.rs` (extended, T059). A22 sh
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U146 | With `age_secs` of 600 the tooltip has no `Read:` line; with 601 it reads `Read: 10 min ago` | FR-019 | example | PENDING | |
+| U146 | With `stale` false (`age_secs` 600) the tooltip has no `Read:` line; with `stale` true (`age_secs` 601) it reads `Read: 10 min ago` | FR-019 | example | PENDING | |
 | U147 | At 119 minutes the line reads `Read: 119 min ago`; from 120 minutes it reads `Read: 2 h ago` | FR-019, UI §3 | example | PENDING | |
 | U149 | `RowPullRequest.stale` is false with `now` 600 s after `read_at` and true at 601 s | FR-019, DM §4 | example | PENDING | |
 
