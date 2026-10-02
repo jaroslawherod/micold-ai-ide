@@ -8,6 +8,12 @@
 
 **Input**: User description: "Implement GitHub issue #518 (https://github.com/jaroslawherod/micold-ai-ide/issues/518): in the new-worktree form's issue list, show the reporter and labels on a second, wrapping line, and show a truncated description in a tooltip after the cursor rests on a row for 3 seconds. Read the issue with `gh issue view 518` for the acceptance criteria and code pointers."
 
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: When the repository has more open issues than the 1,000 loaded, must typing a reporter's login also find that reporter's issues beyond the loaded ones? → A: No. The reporter is searched like a label name is today: among the loaded issues and among the issues the existing search beyond the cap returns for the typed text. No request filtered by author is added, and the existing request is unchanged. _(agent-resolved: specs/034-github-issue-worktree/spec.md#FR-005a and #FR-025; `crates/micold-core/src/github.rs` `search_args` sends only `repo:… is:issue is:open <typed text>`, with no label filter, so label names already behave this way; GitHub issue #518 asks for the reporter to match "as number, title and label already do")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See who reported an issue, and its labels, without anything cut off (Priority: P1)
@@ -47,6 +53,7 @@ The developer remembers that a colleague filed the issue but not its title. They
 3. **Given** the typed text matches a row's title and its reporter, **When** the row is shown, **Then** both matches are emphasised.
 4. **Given** the user types the login in a different letter case, **When** the list narrows, **Then** the reporter's issues still match.
 5. **Given** the search field is empty, **When** the user reads its hint, **Then** the hint names the reporter among the things the search covers, alongside number, title and label.
+6. **Given** the repository has more open issues than the load cap, **When** the user types a reporter's login, **Then** the request to GitHub is the same one any other typed text causes — one search for that text, with no filter by author — and the list shows that reporter's loaded issues plus any returned issue that matches by number, title, label or reporter.
 
 ---
 
@@ -81,6 +88,7 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 - **A title or label with no spaces** (a long identifier, a URL): it breaks inside the word rather than running off the row.
 - **Reporter no longer exists**: GitHub reports no author for an issue whose account was deleted. The row shows `ghost`, the name GitHub itself shows for such issues, and typing `ghost` matches it.
 - **Reporter is an app or bot**: the row shows the login GitHub reports for it; nothing marks it as a bot.
+- **Reporter's issue beyond the load cap**: on a repository with more open issues than the 1,000 loaded, typing a login lists that reporter's loaded issues; one of their issues beyond the cap appears only when the existing search for the typed text returns it (FR-013). The list's notice that only the most recent issues are loaded (034 FR-004) already tells the user the list is incomplete.
 - **A label spelled like a login**: the reporter is always first on the second line and separated from the labels, so the two cannot be confused.
 - **Empty or whitespace-only description**: no tooltip, however long the cursor rests (story 3, scenario 7).
 - **Description that starts with blank lines**: leading blank space is skipped; the tooltip starts at the first text.
@@ -116,7 +124,7 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 - **FR-010**: The matched part of a reporter's login MUST be emphasised in the row, as matched text in the number, title and labels is.
 - **FR-011**: The search field's hint MUST name the reporter among the things the search covers.
 - **FR-012**: An issue returned by the search beyond the load cap MUST be shown when it matches the typed text by number, title, label name or reporter — the rule for loaded issues — and not otherwise (034's "one matching rule" clarification, extended to the reporter).
-- **FR-013**: Reporter search beyond the load cap: [NEEDS CLARIFICATION: When the repository has more open issues than the 1,000 loaded, must typing a reporter's login also find that reporter's issues beyond the loaded ones — which means asking GitHub for issues by that author on each search, and GitHub matches an author only by the whole login, not part of it — or is it enough that the reporter is searched among the loaded issues and any issue the existing text search returns?]
+- **FR-013**: Searching by reporter MUST NOT add a request to GitHub or change the one the search beyond the load cap already makes (034 FR-005a): that request carries the typed text as it does today, with no filter by author. The reporter is therefore matched among the loaded issues and the issues that request returns (FR-012). An issue beyond the load cap that matches the typed text only by its reporter, and that the request does not return, is not listed — as is already the case for an issue beyond the cap that matches only by a label name.
 - **FR-014**: The description MUST NOT be searched: typing text that appears only in an issue's description does not match that issue.
 
 **Description tooltip**
