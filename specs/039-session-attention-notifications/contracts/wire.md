@@ -1,7 +1,8 @@
 # Contract: wire protocol additions
 
 **Feature**: 039 | Types live in `crates/micold-core/src/protocol/messages.rs`. Each group bumps
-`PROTOCOL_VERSION` once, in the milestone that ships it (research R10). No `#[serde(default)]`.
+`PROTOCOL_VERSION` once, in the milestone that ships it (research R10). No `#[serde(default)]`. The version numbers
+below are the planned ones; a bump takes the next free number when its milestone is implemented.
 
 ## W1 — View report and attention sequence (version 21), claim and grant (version 22)
 

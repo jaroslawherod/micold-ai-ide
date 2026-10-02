@@ -11,9 +11,11 @@ description: "Task list for feature 039 — notify when a session needs attentio
 
 **Tests**: Per Constitution Principle I (Test-First Development, NON-NEGOTIABLE), test tasks are
 MANDATORY and must be observed failing before their implementation. Every phase lists its failing
-tests first. The glue exception is claimed only for `crates/micold-client/src/shell/desktop_notify/`
-and `shell/window_raise.rs` (one call per step into a notification system or `iced::window`, no
-branch) and for `src/ui/` composition; both are verified by the recorded quickstart §B and §C.
+tests first. The glue exception is claimed where plan.md *Constitution Check* records it: the system call of
+each backend in `crates/micold-client/src/shell/desktop_notify/` and the `iced::window` task per
+step in `shell/window_raise.rs` (one call per step, no branch); the wiring lines in `src/main.rs`,
+`shell/daemon_sync.rs`, `shell/startup.rs` and `shell/persist.rs` (T016, T033, T089, T110), which
+decide nothing; and `src/ui/` composition. All are verified by the recorded quickstart §B and §C.
 
 **Documentation**: Per Constitution Principle VII, each slice that changes what the user sees
 carries its own user-guide task in the milestone that ships it (CI's user-guide gate).
@@ -43,11 +45,16 @@ Ids in square brackets, `[A1]` and `[U69]`, are the behavior ids of
 [tdd/test-list.md](./tdd/test-list.md). `speckit-tdd-run` ticks a task when the behaviors it
 carries are done; a task without one (dependencies, `shell/` and `ui/` glue, docs, recorded
 passes) is left to `speckit-implement`. T118 to T121 are each story's final run of its outer
-tests; they were added after T117 and keep their numbers.
+tests. T118 carries no behavior id: story 1's behaviors are all done by the end of M2, and T118 is
+ticked in M3, by `speckit-implement`, when CI's three legs have run them. T118 to T123 were added
+after T117 and keep their numbers; each stands in the phase it belongs to.
 
 Each wire change bumps `PROTOCOL_VERSION` in `crates/micold-core/src/protocol/version.rs` by one,
 in one edit, and updates `crates/micold-core/tests/schema_hash.rs`. The numbers below (21 to 26)
-are the plan's; if another feature has taken one by then, use the next free number.
+are the plan's. Each bump takes the next free number: one more than `PROTOCOL_VERSION` on `main`
+when the milestone is implemented. When another feature has taken a number by then, or M7 closes
+without its wire change (T091), every later number of this feature moves with it, and the protocol
+test of that milestone asserts the number actually taken.
 
 ---
 
@@ -81,7 +88,7 @@ is in view in no window, stores it, and sends it to every window. Nothing is sho
 - [ ] T003 [P] [US1] [U12] Protocol tests in `crates/micold-core/src/protocol/messages.rs` and `crates/micold-core/tests/schema_hash.rs`: `ClientMsg::WindowView { focused, in_view }` and `SessionSummary::attention_seq` encode and decode; `PROTOCOL_VERSION` is 21 (W1)
 - [ ] T004 [P] [US1] [U50] [U51] [U52] [U53] Unit tests for `Views` in `crates/micold-daemon/src/attention.rs` (NEW): `set_view` stores one report per connection; a report with `focused: false` is stored with `in_view: None` whatever it carried; `is_in_view(session)` is true while any stored report names it; `remove(client)` forgets the report (W1.1, W1.2)
 - [ ] T005 [P] [US1] [A2] [A3] [A5] [A6] [U69] [U70] [U71] [U72] [U73] [U74] [U75] [U76] [U77] [U78] [U79] Integration tests in `crates/micold-daemon/tests/attention_events.rs` (NEW), two connections: a change into `AwaitingInput` with the session in view nowhere adds one to `attention_seq` in the `CatalogChanged` both receive (W1.3, A2); with one connection reporting it in view nothing changes (A3, FR-002); a repeated waiting signal changes nothing (FR-003, US1.5); working and awaiting input again adds one more (US1.6); three sessions changing at once each add one to their own (FR-009, US1.12); with no connection the change still counts (A6); after the connection that had it in view closes, the next change counts; a `WindowView` from a connection attached to no project is accepted (W1.6) and gets no `OperationOk` (W1.5); the value survives a restart of the service on the same store directory; a removed session leaves the catalog (A5); a session that ends adds nothing to its sequence (FR-005)
-- [ ] T006 [P] [US1] [A3] [A9] [U111] [U112] [U113] [U114] [U115] [U116] Client tests in `crates/micold-client/tests/attention_view_report.rs` (NEW) for `features::attention::view_report(&mut State, ViewFacts) -> Option<WindowView>`: one report after each `Welcome`, also when nothing is in view; afterwards a report only when the derived value differs from the last one sent; losing focus reports `focused: false, in_view: None`; opening Settings reports `in_view: None` and leaving it reports the session again; a reconnect resets `sent_view` (W1.1). In `crates/micold-client/src/catalog_sync.rs` tests: `reconcile_catalog` copies `attention_seq` into `Workspace::sessions`
+- [ ] T006 [P] [US1] [A3] [A9] [A10] [U111] [U112] [U113] [U114] [U115] [U116] [U176] [U177] [U178] Client tests in `crates/micold-client/tests/attention_view_report.rs` (NEW) for `features::attention::view_report(&mut State, ViewFacts) -> Option<WindowView>`: one report after each `Welcome`, also when nothing is in view; afterwards a report only when the derived value differs from the last one sent; losing focus reports `focused: false, in_view: None`; opening Settings reports `in_view: None` and leaving it reports the session again; a reconnect resets `sent_view` (W1.1). In the same file, for `State::view_facts(window_focused) -> ViewFacts` of `crates/micold-client/src/app.rs`: `selected` is the active project's selected session and `window_focused` is passed through; with Settings open `main_area_taken` is true (US1.9); showing another tab of the selected session leaves the facts equal (US1.10). Add `--test attention_view_report` to the enumerated `cargo test -p micold-client` list in `.github/workflows/ci.yml`, so the macOS and Windows legs run it (T122 adds the macOS and Windows backend step later; this line is the list's). In `crates/micold-client/src/catalog_sync.rs` tests: `reconcile_catalog` copies `attention_seq` into `Workspace::sessions`
 
 ### Implementation for User Story 1, slice A
 
@@ -94,7 +101,8 @@ is in view in no window, stores it, and sends it to every window. Nothing is sho
 - [ ] T013 [US1] [U70] [U76] Handle `ClientMsg::WindowView` in `crates/micold-daemon/src/server.rs`: no `req`, no reply, no attachment needed (W1.5, W1.6) (T005)
 - [ ] T014 [US1] [U116] Copy `attention_seq` in `reconcile_catalog` in `crates/micold-client/src/catalog_sync.rs` (T006)
 - [ ] T015 [US1] [U111] [U112] [U113] [U114] [U115] `features::attention::State { sent_view: Option<WindowView> }` and `view_report` in `crates/micold-client/src/features/attention.rs` (NEW); register the module in `crates/micold-client/src/features/mod.rs` and the state in `crates/micold-client/src/app.rs` (T006)
-- [ ] T016 [US1] In `crates/micold-client/src/main.rs`: after each update build `ViewFacts` from `App::window_focused`, `state.settings.settings_draft.is_some()` and the active project's selected session, and send `ClientMsg::WindowView` when `view_report` returns one; clear `sent_view` where `crates/micold-client/src/shell/daemon_sync.rs` handles a new connection, so the first report follows `Welcome`
+- [ ] T123 [US1] [U176] [U177] [U178] `State::view_facts(&self, window_focused: bool) -> ViewFacts` in `crates/micold-client/src/app.rs`, beside `terminal_focused`: `main_area_taken` is `settings.settings_draft.is_some()`, `selected` is the active project's selected session; render-free, so that no rule is left in `main.rs` (T006)
+- [ ] T016 [US1] In `crates/micold-client/src/main.rs`: after each update pass `state.view_facts(app.window_focused)` to `view_report` and send `ClientMsg::WindowView` when it returns one — one call and the send, no rule of its own; clear `sent_view` where `crates/micold-client/src/shell/daemon_sync.rs` handles a new connection, so the first report follows `Welcome`
 
 **Checkpoint**: `mise run gate` green. The service counts attention events; no window shows
 anything new. The PR carries the `docs-not-needed` label: nothing the user sees has changed.
@@ -144,11 +152,12 @@ session. On macOS and Windows the backend reports that it cannot show one, which
 **Goal**: The notification appears through `UNUserNotificationCenter` on macOS and as a toast on
 Windows. Story 1 is complete on the three systems (FR-029).
 
-**Independent Test**: CI's macOS and Windows jobs run T035 and T036; quickstart §C1 and §C2 (B1,
+**Independent Test**: CI's macOS and Windows jobs run T035 and T036, by the step T122 adds; quickstart §C1 and §C2 (B1,
 B2) on a bundle and an installed build.
 
 ### Tests for User Story 1, slice C (MANDATORY — Constitution Principle I) ⚠️
 
+- [ ] T122 [US1] In `.github/workflows/ci.yml`, first in this phase: add `--test attention_notify` to the enumerated `cargo test -p micold-client` list, and beside it a step for the macOS and Windows legs, `cargo test -p micold-client --bin micold-ai-ide desktop_notify`. The backends' tests are `#[cfg(test)]` modules of the binary behind an operating-system `cfg`: the list reaches no unit test of the binary, and `cargo test --workspace` runs on the Linux leg only, so without this step T035, T036, T079 and T080 run nowhere. Their red phase cannot be seen on the development host: push this task with T035 and T036 before T039 and T040, and record the failing macOS and Windows runs (the run's URL and the failing test names) in `specs/039-session-attention-notifications/tdd/cycle-log.md`
 - [ ] T035 [P] [US1] [U167] [U168] Unit tests in `crates/micold-client/src/shell/desktop_notify/macos.rs` (NEW, `#[cfg(test)]`): the pure mapping from `DesktopNotification` to the title and message passed to `mac-usernotifications`; each `mac_usernotifications::Error` (no bundle, authorisation refused) maps to a `NotifyError`
 - [ ] T036 [P] [US1] [U172] [U173] Unit tests in `crates/micold-client/src/shell/desktop_notify/windows.rs` (NEW, `#[cfg(test)]`): the pure mapping to the toast's title and first text line; `APP_USER_MODEL_ID` is `"MicoldAiIde.Client"`; an error from `show` maps to a `NotifyError`
 - [ ] T037 [P] [US1] [U46] [U47] [U48] [U49] Source-scan test `crates/micold-core/tests/notification_registers_nothing.rs` (NEW, in the style of `crates/micold-core/tests/macos_registers_nothing.rs`): `packaging/windows/micold-ai-ide.iss` puts `AppUserModelID: "MicoldAiIde.Client"` on the Start-menu shortcut, the same string as `APP_USER_MODEL_ID` in `windows.rs`, and registers no toast activator and no protocol handler; the macOS bundle's `Info.plist` template registers no URL scheme; `crates/micold-client/src/main.rs` reads no command-line argument (FR-015a, N8); `crates/micold-daemon/Cargo.toml` names none of `zbus`, `mac-usernotifications` and `tauri-winrt-notification` — the session service shows nothing itself (FR-007). The three cases that hold against today's sources (`[U47]` to `[U49]`) are green when written: for each, break the rule once on purpose, record the failing output in `specs/039-session-attention-notifications/tdd/cycle-log.md`, and revert
@@ -162,7 +171,7 @@ B2) on a bundle and an installed build.
 - [ ] T042 [US1] [U46] `AppUserModelID: "MicoldAiIde.Client"` on the Start-menu shortcut in `packaging/windows/micold-ai-ide.iss` (T037)
 - [ ] T043 [US1] Cross-check the arms from Linux: `cargo check -p micold-client --target aarch64-apple-darwin` for `crates/micold-client/src/shell/desktop_notify/macos.rs`, and the Windows target when its toolchain is installed; otherwise CI's Windows job is the check
 - [ ] T044 [US1] User guide: `docs/user-guide/worktrees-and-sessions.md` names the three systems and says the system may ask for, or withhold, permission; `docs/user-guide/install-macos.md` and `docs/user-guide/install-windows.md` say where notifications are allowed or turned off in the system's settings, and that Windows shows them only for an installed build (FR-031)
-- [ ] T118 [US1] [A1] [A2] [A3] [A4] [A5] [A6] [A7] [A8] [A9] [A10] [A11] [A12] [A13] Story 1's outer tests are green, on CI's Linux, macOS and Windows legs: `scripts/build-lock.sh cargo test --test attention_events`, `--test attention_claims`, `--test attention_view_report`, `--test attention_notify`, and `mise run test-core`. Story 1 is not complete until they pass
+- [ ] T118 [US1] Story 1's outer tests (behaviors A1 to A13 of the test list) are green on CI's Linux, macOS and Windows legs: locally `scripts/build-lock.sh cargo test --test attention_events`, `--test attention_claims`, `--test attention_view_report`, `--test attention_notify`, and `mise run test-core`; on the pull request, the macOS and Windows jobs with the list and the step of T122. Record the three jobs' result in `specs/039-session-attention-notifications/tdd/cycle-log.md`. Story 1 is not complete until they pass
 
 **Checkpoint**: `mise run gate` green; CI green on Linux, macOS and Windows.
 
@@ -185,7 +194,7 @@ every window and outlives the last one.
 - [ ] T048 [P] [US2] [A14] [A15] [A19] [A20] [A21] [A22] [A24] [A25] [A26] [A31] [A32] [A33] [A34] [A35] [A36] [U84] [U85] [U86] [U87] [U88] [U89] [U90] [U91] [U92] [U93] [U94] [U95] [U96] Integration tests in `crates/micold-daemon/tests/unread_state.rs` (NEW), two connections: an attention event sets `unread` (W2.1, A1, US2.1); a change while in view does not (US2.2, US2.12); a `WindowView` naming an unread session clears it and every connection receives the `CatalogChanged` (W2.2, FR-024, US2.3); working again does not clear it (FR-020, US2.8); a claim and a grant change nothing (W2.3, FR-017); with no connection the event sets it (US2.18) and it stays set when the session works again (US2.22); a restart of the service keeps `true` (US2.19) and keeps `false` for a session that did not change (US2.20); read at closing, then working and awaiting input again with no connection, is unread (US2.21); a removed session is gone from the snapshot (US2.9, A5); a session of a connection that dropped is not in view, so its change sets `unread` (US2.13); a session created with no connection that reaches `AwaitingInput` is unread (FR-008)
 - [ ] T049 [P] [US2] [U145] [U146] [U147] [U148] Component tests in `crates/micold-client/src/ui/material/unread_mark.rs` (NEW, `#[cfg(test)]`) and the gates `crates/micold-client/src/ui/material/composition_contrast.rs` and `anatomy_size.rs`: the mark is an 8dp filled circle in the `primary` role (U1); it meets 3:1 against its surface in the light and the dark scheme (U3); `count(0)` renders nothing (U2); `.worded(true)` adds the word `unread`
 - [ ] T050 [P] [US2] [U149] [U150] [U151] Tests in `crates/micold-client/src/ui/material/tree_view.rs`: a `TreeItem` with `.unread(true)` has the height of one without; its label truncates before the mark is pushed out (U8); the badge slot and its `ActivityBadge` are the same node as before (FR-018, FR-032)
-- [ ] T051 [P] [US2] [A14] [A36] [U125] [U126] [U127] Client tests in `crates/micold-client/tests/unread_rows.rs` (NEW): `features::attention::row_unread(&Session, in_view) -> bool` is true when `unread` and the session is not the one in view, and false at once for the session in view, before the service's answer arrives (U5, FR-019); `reconcile_catalog` copies `unread`
+- [ ] T051 [P] [US2] [A14] [A36] [U125] [U126] [U127] Client tests in `crates/micold-client/tests/unread_rows.rs` (NEW): `features::attention::row_unread(&Session, in_view) -> bool` is true when `unread` and the session is not the one in view, and false at once for the session in view, before the service's answer arrives (U5, FR-019); `reconcile_catalog` copies `unread`. Add `--test unread_rows` to the enumerated `cargo test -p micold-client` list in `.github/workflows/ci.yml`, so the macOS and Windows legs run it
 
 ### Implementation for User Story 2, slice A
 
@@ -215,7 +224,7 @@ its panel closed or open.
 ### Tests for User Story 2, slice B (MANDATORY — Constitution Principle I) ⚠️
 
 - [ ] T062 [P] [US2] [A27] [A30] [U36] [U37] [U38] [U39] [U40] [U41] Unit tests in `crates/micold-core/src/workspace.rs`: `unread_session_count(&project, in_view)` counts sessions of the Default entry and of every worktree, whatever the sidebar's filter hides (FR-022, US2.14), less `in_view`, and is zero for a project with none; `other_projects_unread(&active)` sums the other projects and never the active one (US2.15, US2.16), and after a switch to Q counts R only (US2.17)
-- [ ] T063 [P] [US2] [A16] [A17] [A18] [A28] [A29] [A30] [U128] [U129] [U130] Client tests in `crates/micold-client/tests/switcher_unread.rs` (NEW): every `SwitcherEntry` from `State::switcher_entries` carries `unread_count`, the active project's too (US2.4, US2.5); the count falls at once for the session in view (FR-019); the button's total equals `other_projects_unread`
+- [ ] T063 [P] [US2] [A16] [A17] [A18] [A28] [A29] [A30] [U128] [U129] [U130] Client tests in `crates/micold-client/tests/switcher_unread.rs` (NEW): every `SwitcherEntry` from `State::switcher_entries` carries `unread_count`, the active project's too (US2.4, US2.5); the count falls at once for the session in view (FR-019); the button's total equals `other_projects_unread`. Add `--test switcher_unread` to the enumerated `cargo test -p micold-client` list in `.github/workflows/ci.yml`, so the macOS and Windows legs run it
 - [ ] T064 [P] [US2] [A17] [U152] [U153] [U154] [U155] Tests in `crates/micold-client/src/ui/material/menu.rs` and the gate `crates/micold-client/src/ui/material/menu_anatomy.rs`: `trailing_mark: Some(n)` renders `● n unread` after `trailing_text`; `None` renders what the row renders today (FR-032); with no running count the mark alone trails; the row's height is unchanged (FR-021)
 - [ ] T065 [P] [US2] [A28] [U156] [U157] [U158] Tests in `crates/micold-client/src/ui/material/button.rs` and the gate `crates/micold-client/src/ui/material/button_anatomy.rs`: `.trailing_mark(n, tooltip)` renders `● n` after the label inside the button; the button's height is unchanged; the pure `unread_total_tooltip(n)` gives `1 unread session in other projects` and `{n} unread sessions in other projects` (FR-023)
 
@@ -248,7 +257,7 @@ for the user's attention until slice B.
 - [ ] T074 [P] [US3] [U15] Protocol tests in `crates/micold-core/src/protocol/messages.rs` and `crates/micold-core/tests/schema_hash.rs`: `ClientMsg::SessionReveal { project, session }` and `DaemonMsg::RevealSession { project, session }`; `PROTOCOL_VERSION` is 24 (W3)
 - [ ] T075 [P] [US3] [U61] [U62] [U63] [U64] [U65] Unit tests in `crates/micold-daemon/src/attention.rs`: `focus_order` puts the connection that last reported `focused: true` last; `remove` takes a connection out of it; `reveal_target(holder, sender)` is the holder, else the last of `focus_order`, else the sender (FR-012)
 - [ ] T076 [P] [US3] [A41] [A42] [U97] [U98] [U99] [U100] [U101] Integration tests in `crates/micold-daemon/tests/session_reveal.rs` (NEW), two connections: `SessionReveal` is forwarded as `RevealSession` to exactly one connection — the one attached to the project (US3.6), else the one that last reported focus, else the sender (W3.1); it is forwarded for a session that does not exist (W3.2); no session, attachment or stored state changes (W3.3, FR-014)
-- [ ] T077 [P] [US3] [A37] [A38] [A39] [A40] [A41] [U131] [U132] [U133] [U134] [U135] [U136] [U137] Client tests in `crates/micold-client/tests/attention_reveal.rs` (NEW): `NotifierEvent::Activated` yields one `SessionReveal`; `RevealSession` with `Reveal::Show` yields `ProjectMsg::Reopened` then `SessionMsg::Selected` when the project is not active, `SessionMsg::Selected` alone when it is, and no other message (N5, FR-014, US3.1, US3.2, US3.5); `Reveal::Unavailable` pushes `That session is no longer available.` at `Level::Info` and changes no selection (FR-013, US3.4); the session shown is then in view, so `row_unread` is false (US3.3); `raise_plan(false)` is `[Unminimize, Focus]` and `raise_plan(true)` is `[Unminimize, RequestAttention]` (N6)
+- [ ] T077 [P] [US3] [A37] [A38] [A39] [A40] [A41] [U131] [U132] [U133] [U134] [U135] [U136] [U137] Client tests in `crates/micold-client/tests/attention_reveal.rs` (NEW): `NotifierEvent::Activated` yields one `SessionReveal`; `RevealSession` with `Reveal::Show` yields `ProjectMsg::Reopened` then `SessionMsg::Selected` when the project is not active, `SessionMsg::Selected` alone when it is, and no other message (N5, FR-014, US3.1, US3.2, US3.5); `Reveal::Unavailable` pushes `That session is no longer available.` at `Level::Info` and changes no selection (FR-013, US3.4); the session shown is then in view, so `row_unread` is false (US3.3); `raise_plan(false)` is `[Unminimize, Focus]` and `raise_plan(true)` is `[Unminimize, RequestAttention]` (N6). Add `--test attention_reveal` to the enumerated `cargo test -p micold-client` list in `.github/workflows/ci.yml`, so the macOS and Windows legs run it; T079 and T080 run there by the step T122 added
 - [ ] T078 [P] [US3] [U161] [U162] [U163] [U164] [U165] Unit tests in `crates/micold-client/src/shell/desktop_notify/linux.rs`: `notify_request` now offers the `default` action, the same whether or not the service lists the `actions` capability (FR-015, N7); `ActionInvoked(id, "default")` for an id in the table maps to `NotifierEvent::Activated { project, session }`; an id the table does not hold maps to nothing (N9); another action key maps to nothing; `NotificationClosed` removes the id
 - [ ] T079 [P] [US3] [U169] [U170] [U171] Unit tests in `crates/micold-client/src/shell/desktop_notify/macos.rs`: a response with the default action maps to `Activated`; a dismissal or a timeout maps to nothing; an unknown notification id maps to nothing (N9)
 - [ ] T080 [P] [US3] [U174] Unit tests in `crates/micold-client/src/shell/desktop_notify/windows.rs`: `on_activated` called with `None` maps to `Activated` for the toast's session; the id table is keyed per toast
@@ -264,7 +273,7 @@ for the user's attention until slice B.
 - [ ] T087 [P] [US3] [U174] `crates/micold-client/src/shell/desktop_notify/windows.rs`: `on_activated` only sends the event over the channel — it is called on a thread of the system's (T080)
 - [ ] T088 [US3] `crates/micold-client/src/shell/window_raise.rs` (NEW): one `iced::window` task per `RaiseStep` for the window from `iced::window::latest()` — `minimize(id, false)`, `gain_focus(id)`, `request_user_attention(id, ..)`; it decides nothing (N6)
 - [ ] T089 [US3] Wire it in `crates/micold-client/src/shell/daemon_sync.rs` and `crates/micold-client/src/main.rs`: a subscription delivers `NotifierEvent`s; `DaemonMsg::RevealSession` runs the raise steps and dispatches the reducer's messages
-- [ ] T090 [US3] User guide, `docs/user-guide/worktrees-and-sessions.md`: what clicking does; which window comes forward with several open; the notice for a session that is gone; that a notification raised by a window since closed, or shown by a text-only notification service, does not open the session; that on Wayland the window asks for attention instead of taking focus (FR-031)
+- [ ] T090 [US3] User guide, `docs/user-guide/worktrees-and-sessions.md`: what clicking does; which window comes forward with several open; the notice for a session that is gone; that a notification raised by a window since closed, or shown by a text-only notification service, does not open the session; that on Wayland the window asks for attention instead of taking focus (FR-031). In `docs/user-guide/install-windows.md`: a click on a toast that has moved to the notification centre may not open the session (research R4, not yet verified)
 - [ ] T120 [US3] [A37] [A38] [A39] [A40] [A41] [A42] Story 3's outer tests are green: `scripts/build-lock.sh cargo test --test session_reveal` and `--test attention_reveal`. Story 3's six scenarios are not complete until they pass
 
 **Checkpoint**: `mise run gate` green; quickstart §B9 to B11a pass on X11.
@@ -280,7 +289,7 @@ as before.
 **Independent Test**: quickstart §C4 on the development host's Wayland session; the
 `raise_plan` rows in `attention_reveal.rs`.
 
-- [ ] T091 [US3] **Probe first** (research R7, *Unverified*). On a Wayland session, outside the worktree: bind `xdg_activation_v1` on a second connection made with `Backend::from_foreign_display` from the handles `iced::window::run` gives, and activate the window with the token of a notification's `ActivationToken` signal. Record the compositor, the notification service and the outcome in `specs/039-session-attention-notifications/research.md` R7 in place of the **Unverified** paragraph. If no compositor at hand gives focus, or the binding cannot be made to work: do not start T092 to T100; write the limit into `docs/user-guide/worktrees-and-sessions.md` (it is already stated by T090), add a follow-up to `specs/039-session-attention-notifications/autopilot.md`, and close this milestone with the record alone; in that case mark `[U16]`, `[U102]`, `[U138]` to `[U141]` and `[U166]` as `DROPPED` in `specs/039-session-attention-notifications/tdd/test-list.md`, with the probe's result as the reason
+- [ ] T091 [US3] **Probe first** (research R7, *Unverified*). On a Wayland session, outside the worktree: bind `xdg_activation_v1` on a second connection made with `Backend::from_foreign_display` from the handles `iced::window::run` gives, and activate the window with the token of a notification's `ActivationToken` signal. Record the compositor, the notification service and the outcome in `specs/039-session-attention-notifications/research.md` R7 in place of the **Unverified** paragraph. If no compositor at hand gives focus, or the binding cannot be made to work: do not start T092 to T100; write the limit into `docs/user-guide/worktrees-and-sessions.md` (it is already stated by T090), add a follow-up to `specs/039-session-attention-notifications/autopilot.md`, and close this milestone with the record alone: tick T092 to T100 without doing them, each with the suffix `— DROPPED (probe, R7)`, so that the milestone's range is closed, and note in `specs/039-session-attention-notifications/autopilot.md` that M7 shipped T091 only and took no wire number; in that case mark `[U16]`, `[U102]`, `[U138]` to `[U141]` and `[U166]` as `DROPPED` in `specs/039-session-attention-notifications/tdd/test-list.md`, with the probe's result as the reason
 
 ### Tests for User Story 3, slice B (MANDATORY — Constitution Principle I) ⚠️
 
@@ -311,7 +320,7 @@ the same in every window. While it is off nothing is notified; unread marks are 
 ### Tests for User Story 4 (MANDATORY — Constitution Principle I) ⚠️
 
 - [ ] T101 [P] [US4] [A43] [A48] [U42] [U43] [U44] [U45] Unit tests in `crates/micold-core/src/settings.rs`: `desktop_notifications` is `true` by default and when the field is missing from the file (FR-026, spec Edge Cases); `false` survives a round trip; the serialised settings hold exactly one key that names notifications, and none per AI CLI (FR-028)
-- [ ] T102 [P] [US4] [U17] Protocol tests in `crates/micold-core/src/protocol/messages.rs` and `crates/micold-core/tests/schema_hash.rs`: `DaemonSettings::desktop_notifications: bool` and `ClientMsg::SettingsSet::desktop_notifications: Option<bool>`; `PROTOCOL_VERSION` is 26 (W4)
+- [ ] T102 [P] [US4] [U17] Protocol tests in `crates/micold-core/src/protocol/messages.rs` and `crates/micold-core/tests/schema_hash.rs`: `DaemonSettings::desktop_notifications: bool` and `ClientMsg::SettingsSet::desktop_notifications: Option<bool>`; `PROTOCOL_VERSION` is one more than before this milestone — 26 as planned, 25 when M7 took no number (W4)
 - [ ] T103 [P] [US4] [U66] [U67] [U68] Unit tests in `crates/micold-daemon/src/attention.rs`: `grant(.., enabled: false)` is false and records nothing; `note_event(session, seq, enabled: false)` records `seq` as granted, so a later `grant(session, seq, seq, true)` is false (FR-027); `note_event(.., true)` records nothing
 - [ ] T104 [P] [US4] [A23] [A44] [A45] [A46] [A47] [A48] [U103] [U104] [U105] [U106] [U107] [U108] [U109] [U110] Integration tests in `crates/micold-daemon/tests/settings_desktop_notifications.rs` (NEW, in the style of `crates/micold-daemon/tests/settings_default_ai_cli.rs`): `SettingsSet { desktop_notifications: Some(false) }` reaches every connection as `SettingsChanged` and survives a restart of the service (US4.4); `None` leaves it unchanged; while off a claim is not granted (US4.2, US4.3) and the event still sets `unread` (FR-017, US2.10, SC-003); after it is turned on the next event is granted and the events made while off are not, also for a connection that reconnects (US4.5, W4.2); the rule is the same for a session of each AI CLI, as none is named anywhere on the path (FR-028, US4.6)
 - [ ] T105 [P] [US4] [A43] [U142] [U143] [U144] Client tests beside those of `tool_server_enabled` in `crates/micold-client/src/features/settings.rs`: the draft holds `desktop_notifications`; its message changes the draft; saving sends `SettingsSet` with `Some(value)`; `SettingsChanged` updates the draft's source (US4.1)
@@ -319,7 +328,7 @@ the same in every window. While it is off nothing is notified; unread marks are 
 ### Implementation for User Story 4
 
 - [ ] T106 [US4] [U42] [U43] [U44] [U45] `Settings::desktop_notifications` with `#[serde(default = "default_desktop_notifications")]` returning `true`, in `crates/micold-core/src/settings.rs` (T101)
-- [ ] T107 [US4] [U17] The two wire fields in `crates/micold-core/src/protocol/messages.rs`; `PROTOCOL_VERSION` 25 → 26 in `crates/micold-core/src/protocol/version.rs` (T102)
+- [ ] T107 [US4] [U17] The two wire fields in `crates/micold-core/src/protocol/messages.rs`; `PROTOCOL_VERSION` plus one (25 → 26 as planned) in `crates/micold-core/src/protocol/version.rs` (T102)
 - [ ] T108 [US4] [U66] [U67] [U68] `note_event` and the `enabled` parameter of `grant` in `crates/micold-daemon/src/attention.rs`; the calls in T020's tests pass `true` and assert what they asserted (T103)
 - [ ] T109 [US4] [U103] [U104] [U105] [U106] [U107] [U108] [U109] [U110] In `crates/micold-daemon/src/catalog.rs` the field joins `persist_service_settings` and `DaemonSettings`, as `tool_server_enabled` does; in `crates/micold-daemon/src/state.rs` the claim path passes the setting to `grant` and `note_activity` calls `note_event`; `crates/micold-daemon/src/server.rs` applies `SettingsSet` (T104)
 - [ ] T110 [US4] [U142] [U143] [U144] Mirror the field wherever the client mirrors `tool_server_enabled`: `crates/micold-client/src/features/settings.rs`, `crates/micold-client/src/shell/startup.rs`, `crates/micold-client/src/shell/persist.rs`, `crates/micold-client/src/shell/daemon_sync.rs` (T105)
@@ -336,7 +345,7 @@ the same in every window. While it is off nothing is notified; unread marks are 
 - [ ] T113 [P] `docs/development/architecture.md`: the attention flow — view report, attention sequence, claim and grant, reveal routing — and why the session service is the arbiter (research R1 to R3, R6)
 - [ ] T114 [P] `docs/development/component-library.md`: `UnreadMark` and the three host APIs (`TreeItem::unread`, `MenuItem::trailing_mark`, `Button::trailing_mark`)
 - [ ] T115 Run quickstart §B (B1 to B15) with the `visual-pass` skill, in the light and the dark scheme, and record each step's result — for B7 and B9 the time measured (SC-006, SC-004) — under a `## Record` heading in `specs/039-session-attention-notifications/quickstart.md`
-- [ ] T116 Run quickstart §C and record it in the same section of `specs/039-session-attention-notifications/quickstart.md`: C3 (the session service in a container: `mise run image`, then B1, B6, B9) and C4 on the development host; C1 on a macOS bundle and C2 on an installed Windows build, including whether a click on a toast in the notification centre is reported (research R4, **Unverified**) — write the answer into R4 and `docs/user-guide/install-windows.md`. A pass that needs a machine that is not at hand is listed under *Follow-ups not done* in `specs/039-session-attention-notifications/autopilot.md`, with the steps to run
+- [ ] T116 Run quickstart §C and record it in the same section of `specs/039-session-attention-notifications/quickstart.md`: C3 (the session service in a container: `mise run image`, then B1, B6, B9) and C4 on the development host; C1 on a macOS bundle and C2 on an installed Windows build, including whether a click on a toast in the notification centre is reported (research R4, **Unverified**) — write the answer into R4; only if it contradicts the sentence T090 put in `docs/user-guide/install-windows.md`, correct that sentence. A pass that needs a machine that is not at hand is listed under *Follow-ups not done* in `specs/039-session-attention-notifications/autopilot.md`, with the steps to run
 - [ ] T117 `mise run gate` green on the branch, and CI green on Linux, macOS and Windows for `crates/micold-client/src/shell/desktop_notify/` (Principle VI)
 
 ---
@@ -348,11 +357,11 @@ the same in every window. While it is off nothing is notified; unread marks are 
 - **US1 slice A (Phase 3)** has no prerequisite.
 - **US1 slice B (Phase 4)** depends on slice A (the view report and `attention_seq`).
 - **US1 slice C (Phase 5)** depends on slice B (the seam and `system()`).
-- **US2 slice A (Phase 6)** depends on US1 slice A only (the attention event and `set_view`). It is ordered after story 1 by priority.
+- **US2 slice A (Phase 6)** needs the rules of US1 slice A only (the attention event and `set_view`), but T048 asserts that a claim and a grant leave `unread` alone and T053 takes the wire number after slice B's, so it depends on US1 slice B.
 - **US2 slice B (Phase 7)** depends on US2 slice A (`unread`, `UnreadMark`).
-- **US3 slice A (Phase 8)** depends on US1 slices B and C (the backends that raise the notification).
+- **US3 slice A (Phase 8)** depends on US1 slices B and C (the backends that raise the notification) and on US2 slice A (`row_unread` in T077).
 - **US3 slice B (Phase 9)** depends on US3 slice A.
-- **US4 (Phase 10)** depends on US1 slice B (`grant`). Its `unread` assertion in T104 depends on US2 slice A.
+- **US4 (Phase 10)** depends on US1 slice B (`grant`). Its `unread` assertion in T104 depends on US2 slice A, and its wire number follows US3 slice B's, taken or not.
 - **Polish (Phase 11)** depends on all stories.
 
 ### Within Each Phase
@@ -361,12 +370,13 @@ the same in every window. While it is off nothing is notified; unread marks are 
 - Core (`micold-core`) before the daemon, the daemon before the client's features, features before `shell/` and `ui/`.
 - The user-guide task lands in the same phase as the behaviour it describes.
 - A story's final run task (T118 to T121) comes last in the phase that completes the story.
+- T122 comes first in US1 slice C: it is what lets the macOS and Windows tests of that slice run.
 
 ### Parallel Opportunities
 
 - US1 slice A: T001 to T006 touch different files.
 - US1 slice B: T019 to T023; T017 and T018 share `attention.rs`.
-- US1 slice C: T035 to T037; T039 and T040 are different files.
+- US1 slice C: T035 to T037, after T122; T039 and T040 are different files.
 - US2 slice A: T045 to T051; T060 beside the code tasks.
 - US2 slice B: T062 to T065; T071 beside the code tasks.
 - US3 slice A: T074 to T080; T086 and T087.
@@ -395,7 +405,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — The service knows what is in view and counts attention events 🎯 MVP
 
-- **Tasks**: T001–T016
+- **Tasks**: T001–T016, T123
 - **Deliverable**: On `main`, every window reports the session it has in view, and the session
   service counts, stores and sends to every window one attention event for each change into
   awaiting input that happens while the session is in view nowhere. A developer observes it in the
@@ -415,19 +425,19 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   system that cannot show it changes nothing else. The user guide describes it.
 - **Satisfies**: US1 acceptance scenarios 1–13 on Linux; FR-001–FR-010; SC-001, SC-002, SC-005,
   SC-007 on Linux
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test attention_claims`; `scripts/build-lock.sh cargo test -p micold-client --test attention_notify`; quickstart §B1–B5, B13
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test attention_claims`; `scripts/build-lock.sh cargo test -p micold-client --test attention_notify`; the notification part of quickstart §B1–B5 and B13 (their marks and counts ship in M4 and M5)
 - **Depends on**: M1
 - **Tier**: full
 
 ### M3 — The notification on macOS and Windows
 
-- **Tasks**: T035–T044, T118
+- **Tasks**: T035–T044, T118, T122
 - **Deliverable**: On `main`, the same notification is shown through the system's own facility on
   macOS (a signed bundle) and Windows (an installed build); the installer's shortcut carries the
   application's identity; the user guide covers the three systems and the system's permission.
 - **Satisfies**: US1 acceptance scenarios 1–13 on macOS and Windows; FR-029 (story 1), FR-015a
   (nothing registered); SC-001
-- **Verify**: `mise run test-core` (`notification_registers_nothing`); CI's macOS and Windows jobs green (T035, T036); `cargo check -p micold-client --target aarch64-apple-darwin`; quickstart §C1, §C2 (B1, B2) where the machine is at hand
+- **Verify**: `mise run test-core` (`notification_registers_nothing`); CI's macOS and Windows jobs green, running T035 and T036 by the step T122 adds; `cargo check -p micold-client --target aarch64-apple-darwin`; quickstart §C1, §C2 (B1, B2) where the machine is at hand
 - **Depends on**: M2
 - **Tier**: full
 
@@ -441,7 +451,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US2 acceptance scenarios 1–3 (mark), 6–9, 11–13, 18–23; FR-008, FR-008a, FR-016–FR-020,
   FR-024, FR-025, FR-030 (row), FR-032; SC-002, SC-006, SC-009
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test unread_state`; `scripts/build-lock.sh cargo test -p micold-client --test unread_rows`; quickstart §B6 (row), B7, B8; `mise run showcase` for the row
-- **Depends on**: M1
+- **Depends on**: M2
 - **Tier**: full
 
 ### M5 — Unread counts on the switcher
@@ -465,7 +475,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   attention. The user guide describes clicking and its limits.
 - **Satisfies**: US3 acceptance scenarios 1–6; FR-011–FR-015; SC-004 on X11 (quickstart B9; macOS and Windows as recorded in M9)
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test session_reveal`; `scripts/build-lock.sh cargo test -p micold-client --test attention_reveal`; quickstart §B9–B11a
-- **Depends on**: M2, M3
+- **Depends on**: M3, M4
 - **Tier**: full
 
 ### M7 — Keyboard focus from a click on Wayland
@@ -474,7 +484,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: On `main`, on a Wayland session whose compositor honours the notification's
   activation token, a click gives the window keyboard focus, also when the window raised is not
   the one that showed the notification; research R7 records the probe. If the probe fails, the
-  deliverable is that record and the limit in the user guide.
+  deliverable is that record and the limit in the user guide; T092–T100 are then ticked as
+  `DROPPED` (T091) and the milestone takes no wire number.
 - **Satisfies**: US3 acceptance scenario 1 on Wayland; FR-011 (keyboard focus), FR-015
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test attention_reveal`; quickstart §C4 on the development host; `specs/039-session-attention-notifications/research.md` R7 holds the probe's result
 - **Depends on**: M6
@@ -489,7 +500,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   describes it.
 - **Satisfies**: US4 acceptance scenarios 1–6; US2 scenario 10; FR-017, FR-026–FR-028; SC-003
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test settings_desktop_notifications`; quickstart §B12
-- **Depends on**: M2, M4
+- **Depends on**: M4, M7
 - **Tier**: full
 
 ### M9 — Developer docs and the recorded passes

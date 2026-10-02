@@ -14,7 +14,7 @@
 ## Requirement Completeness
 
 - [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
+- [ ] Requirements are testable and unambiguous — open: the Edge Case "clicked after the window that raised it was closed" narrows FR-011 without FR-015 or FR-015a saying so (tasks review round 1, F2); waits on the escalation in autopilot.md
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
