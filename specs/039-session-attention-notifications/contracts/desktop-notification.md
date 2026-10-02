@@ -1,6 +1,8 @@
 # Contract: desktop notification
 
-**Feature**: 039 | Code: `crates/micold-client/src/shell/desktop_notify/` *(new)*,
+**Feature**: 039 | Code: `crates/micold-client/src/features/attention.rs` *(new; the seam and every
+decision, where `tests/` reach them)*, `crates/micold-client/src/shell/desktop_notify/` *(new; the
+backends)*,
 `crates/micold-client/src/shell/window_raise.rs` *(new)*, `micold_core::attention` *(new)*.
 
 ## The seam
@@ -26,8 +28,10 @@ pub enum NotifierEvent {
 }
 ```
 
-`desktop_notify::system(events) -> Box<dyn DesktopNotifier>` returns the backend of the operating
-system the client was built for. Tests use a recording implementation.
+The types above are declared in `features/attention.rs`. `desktop_notify::system(events) ->
+Box<dyn DesktopNotifier>` returns the backend of the operating system the client was built for.
+Tests use a recording implementation. `NotifierEvent` and the `events` channel arrive with the
+click (story 3); `activation` with the Wayland slice.
 
 | # | Rule | Requirement |
 |---|---|---|

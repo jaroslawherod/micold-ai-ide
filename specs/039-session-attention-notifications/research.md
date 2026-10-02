@@ -27,7 +27,7 @@ a task that verifies it.
 - **Every window receives every session.** `SessionSummary` (`messages.rs:909`) travels in the
   `CatalogSnapshot` of `Welcome` and `CatalogChanged`, for all projects. A change of activity is
   sent as a whole snapshot: both callers of `note_activity` call `broadcast_catalog`
-  (`crates/micold-daemon/src/hooks.rs:203`, `state.rs:1404`). `DaemonMsg::SessionChanged`
+  (`crates/micold-daemon/src/hooks.rs:202`, `state.rs:2591`). `DaemonMsg::SessionChanged`
   (`messages.rs:669`) is declared and never sent; this feature does not use it. The client mirrors it into `Workspace::sessions`
   (`crates/micold-core/src/workspace.rs:28`) in `reconcile_catalog`
   (`crates/micold-client/src/catalog_sync.rs:66`).
@@ -363,9 +363,12 @@ existing indicator (FR-018, FR-032). *A text suffix built at each call site.* Th
 ## R10 — One wire change per milestone
 
 **Decision.** Each milestone that changes the wire bumps `PROTOCOL_VERSION` once, in one edit, as
-`crates/micold-core/src/protocol/version.rs` requires: 21 for the view report, the sequence and the
-claim; 22 for `unread`; 23 for the reveal pair; 24 for the setting. No `#[serde(default)]` on wire
+`crates/micold-core/src/protocol/version.rs` requires: 21 for the view report and the sequence; 22
+for the claim and the grant; 23 for `unread`; 24 for the reveal pair; 25 for the activation token
+on the reveal pair; 26 for the setting. Each milestone ships only the wire it uses. No `#[serde(default)]` on wire
 types: peers that differ are refused at the handshake, as today.
 
 **Alternatives rejected.** *One bump for the whole feature in the first milestone.* It would ship
-`unread`, the reveal pair and the setting on `main` with nothing using them.
+`unread`, the reveal pair and the setting on `main` with nothing using them. *The activation token
+with the reveal pair.* The token is used only by the Wayland path, which starts with a probe (R7);
+if the probe fails the field would stay on the wire unused.

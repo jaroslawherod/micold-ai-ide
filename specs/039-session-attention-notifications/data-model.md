@@ -53,7 +53,7 @@ Pure, no I/O. Lost when the service stops.
 | `set_view(client, view)` | Stores the report; returns the session that came into view, if any. |
 | `remove(client)` | Forgets the connection. |
 | `is_in_view(session)` | Whether any stored report names the session. |
-| `note_event(session, seq, enabled)` | Called for each attention event. While `enabled` is `false` it records `seq` as granted, so the event can never be claimed (FR-027). |
+| `note_event(session, seq, enabled)` | Added with the setting (story 4), as is `grant`'s `enabled`. Called for each attention event. While `enabled` is `false` it records `seq` as granted, so the event can never be claimed (FR-027). |
 | `grant(session, seq, current_seq, enabled)` | `true` when `enabled`, `seq > granted[session]` and `seq <= current_seq`; then records `seq`. |
 | `reveal_target(holder, sender)` | `holder` when given, else the last entry of `focus_order`, else `sender`. |
 
