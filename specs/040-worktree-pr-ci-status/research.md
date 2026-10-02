@@ -222,7 +222,10 @@ puts that listing into its state in `reconcile_catalog`. `Attached` sets `awaiti
 pull request state, and the next `CatalogChanged` clears it and starts the reading. Every other
 `CatalogChanged` — a create, delete, rename, include, another window's change — finds the flag
 clear and starts nothing. (`WorktreeMsg::Loaded` is not the carrier: production code never sends
-it.) At start-up the settings arrive in `Welcome` before any `Attached`, so a switch that is already
+it.) Accepted bound: the daemon discovers the worktrees between `Attached` and its `CatalogChanged`,
+so a `CatalogChanged` broadcast for another window's change can arrive in that gap and be taken for
+the listing; the first reading then covers the listing the client already had, and a branch only
+the fresh one shows is read at the next interval or refresh. At start-up the settings arrive in `Welcome` before any `Attached`, so a switch that is already
 on starts nothing by itself; the listing that follows the attach does.
 
 **Rationale.** Rows are joined to statuses by branch name at projection time, so a worktree removed

@@ -12,7 +12,9 @@ project, that project's listing has arrived from the daemon, and `now ≥ pause_
 
 **Holding** (R6). The window holds its active project from `DaemonMsg::Attached { project }` for it
 until `DaemonMsg::Displaced` or `Refused { ProjectBusy }` for it, a switch to another project, or a
-disconnect — the facts `app.displaced` and `app.disconnected` already record. A refused or
+disconnect — the facts `app.displaced` and `app.disconnected` already record. `Released` is sent
+exactly where `app.displaced.insert` runs: the two early returns for a window's own superseded
+connection (010 BUG-022) record no displacement and send none. A refused or
 displaced window stays on the project read-only; it does not hold it, reads nothing and shows no
 indicator.
 
@@ -88,6 +90,8 @@ pub fn update(state: &mut State, msg: Msg) -> Effect
 | any | `Held` | `held = true`, `awaiting_listing = true` | `None` |
 | `awaiting_listing` | `ListingArrived` | `awaiting_listing = false`; then as `Trigger` in `Idle` (refused while off or paused) | `Read { seq }` or `None` |
 | not `awaiting_listing` | `ListingArrived` | unchanged | `None` |
+| `Reading` | `Held` | `held = true`, `awaiting_listing = true`; the reading goes on | `None` |
+| `Reading`, `awaiting_listing` | `ListingArrived` | `awaiting_listing = false`, `again = true` | `None` (one further reading when this one ends) |
 | `Reading { seq }` | `Finished { seq }` | data-model "State transitions"; then `Idle` | `Read` when `again` and not paused, else `None` |
 | any | `Finished` with another `seq` | unchanged | `None` |
 | any | `EnabledChanged { false }` | data-model §3 invariant 3 | `None` |

@@ -76,7 +76,7 @@ One per window. It describes the window's active project, and no other.
 | `pause_until` | `Option<u64>` | no reading starts while `now < pause_until` (R9); belongs to the sign-in, so it outlives a project switch |
 
 ```text
-Phase = Idle | Reading { seq: u64, again: bool }
+Phase = Idle | Reading { seq: u64, again: bool, started: u64 }
 ```
 
 **Invariants** (each a reducer test):
