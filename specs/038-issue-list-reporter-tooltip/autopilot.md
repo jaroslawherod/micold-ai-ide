@@ -9,12 +9,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 1-spec
-- **Next step**: Review spec.md against the spec rubric, then open PR 1 `docs(038): specify reporter, labels and a description tooltip in the issue list`.
+- **Next step**: Merge PR #525 when `ci complete` is green, then run the clarify unit on the two markers (FR-013, FR-022).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #525 | Spec | open | |
 
 ## Milestones
 
