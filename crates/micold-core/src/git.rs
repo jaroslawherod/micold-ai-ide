@@ -205,6 +205,15 @@ impl GitCli {
 
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying
 /// stderr on a non-zero exit.
+/// Keep a read-only question to local objects (040 FR-016): in a partial clone git 2.44 and later
+/// would otherwise fetch a missing object from the promisor remote, and no credential prompt may
+/// hold the call. Older git ignores `GIT_NO_LAZY_FETCH`.
+fn local_only(command: &mut Command) -> &mut Command {
+    command
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+}
+
 fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
     let output = no_window(&mut Command::new("git"))
         .arg("-C")
@@ -413,23 +422,30 @@ impl Git for GitCli {
     }
 
     fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String> {
+        // A name carrying revision syntax (`~`, `^`, `@{`, `:`) would make git resolve another
+        // commit than the branch's tip: such a name has no tip here.
+        if !crate::naming::is_valid_branch(branch) {
+            return None;
+        }
         // `--verify --quiet` answers a missing ref with a bare non-zero exit; `^{commit}` makes
         // the answer a commit id whatever the ref points at.
         let rev = format!("refs/heads/{branch}^{{commit}}");
-        let tip = run_git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
+        let output = local_only(no_window(&mut Command::new("git")))
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", &rev])
+            .output()
+            .ok()?;
+        let tip = String::from_utf8_lossy(&output.stdout);
         let tip = tip.trim();
-        (!tip.is_empty()).then(|| tip.to_string())
+        (output.status.success() && !tip.is_empty()).then(|| tip.to_string())
     }
 
     fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool> {
-        let output = no_window(&mut Command::new("git"))
+        let output = local_only(no_window(&mut Command::new("git")))
             .arg("-C")
             .arg(repo)
             .args(["merge-base", "--is-ancestor", tip, head])
-            // In a partial clone a missing `head` would otherwise be fetched from the promisor
-            // remote; this question is answered from local objects only (040 FR-016).
-            .env("GIT_NO_LAZY_FETCH", "1")
-            .env("GIT_TERMINAL_PROMPT", "0")
             .output()
             .ok()?;
         match output.status.code() {

@@ -261,11 +261,12 @@ async fn a_branch_name_with_a_revision_suffix_is_unknown() {
             query("ahead~1", &f.merged),
             query("ahead^", &f.merged),
             query("ahead^{commit}~1", &f.merged),
+            query("ahead@{0}~1", &f.merged),
         ],
     )
     .await;
 
-    assert_eq!(answers(reply), vec![BranchContainment::Unknown; 3]);
+    assert_eq!(answers(reply), vec![BranchContainment::Unknown; 4]);
 }
 
 /// U62. A head is used only when it is a full commit id, 40 or 64 hexadecimal characters; anything

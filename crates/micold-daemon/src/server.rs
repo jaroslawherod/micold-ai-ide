@@ -1800,9 +1800,7 @@ fn merged_branch_answer(
     // The head arrives from outside: only a full commit id is ever handed to git.
     let is_commit_id = matches!(check.head.len(), 40 | 64)
         && check.head.bytes().all(|byte| byte.is_ascii_hexdigit());
-    // The branch arrives from outside too: a name carrying revision syntax (`~`, `^`, `@{`, `:`)
-    // would make git resolve another commit than the branch's tip.
-    if !is_commit_id || !is_plain_branch_name(&check.branch) {
+    if !is_commit_id {
         return BranchContainment::Unknown;
     }
     let tip = git.branch_tip(repo, &check.branch);
@@ -1811,21 +1809,6 @@ fn merged_branch_answer(
         _ => None,
     };
     containment(tip.as_deref(), &check.head, ancestor)
-}
-
-/// Whether `branch` can only name a ref under `refs/heads/`: no revision syntax, no characters
-/// git refuses in a ref name, no leading `-` that git would read as an option.
-fn is_plain_branch_name(branch: &str) -> bool {
-    !branch.is_empty()
-        && !branch.starts_with(['-', '/', '.'])
-        && !branch.ends_with(['/', '.'])
-        && !branch.ends_with(".lock")
-        && !branch.contains("..")
-        && !branch.contains("@{")
-        && !branch.contains("//")
-        && !branch
-            .chars()
-            .any(|c| c.is_ascii_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is

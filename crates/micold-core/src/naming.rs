@@ -165,8 +165,9 @@ fn is_windows_reserved(s: &str) -> bool {
 }
 
 /// Validate the git-ref-format-relevant subset for a single branch string. Our slugified
-/// output should always pass; this is defense in depth (contract naming.md, research R7).
-fn is_valid_branch(branch: &str) -> bool {
+/// output should always pass; this is defense in depth (contract naming.md, research R7). Also
+/// keeps a branch name from outside free of revision syntax (feature 040, `Git::branch_tip`).
+pub(crate) fn is_valid_branch(branch: &str) -> bool {
     if branch.is_empty() || branch == "@" {
         return false;
     }
