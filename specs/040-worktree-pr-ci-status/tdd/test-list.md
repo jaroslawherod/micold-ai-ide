@@ -5,7 +5,7 @@ profile: .specify/memory/tdd-profile.md
 spec_criteria: 42 # US1 1–14, US2 1–10, US3 1–6, US4 1–12
 planned_at: 52ccc184
 updated_at: 52ccc184
-suite_baseline: pending # not measured at planning: the design PR changes no code; the first M1 cycle measures it on its own base
+suite_baseline: green # fast subset `mise run test-core` at 9501106d: 1510 passed, 0 failed, 7 ignored; workspace suite: CI's green `main` at 3d52e83e (merge-base)
 ---
 
 # Test List: Pull Request and Check Status for Each Worktree
@@ -63,7 +63,7 @@ Tests: A1–A9 in `crates/micold-client/tests/features_sidebar.rs` (T030); A10�
 ### User Story 2 — the tooltip and Open pull request
 
 Tests: A15–A18, A20, A24 in `features_sidebar.rs` (T041); A19 in
-`crates/micold-client/tests/pr_open.rs` (T043); A21 in
+`crates/micold-client/src/main_tests.rs` as `pr_status_open_*` (T043); A21 in
 `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` (T044); A22 in
 `features_sidebar.rs` (T059); A23 in `crates/micold-client/tests/worktree_menu_pull_request.rs`
 (T042).
@@ -406,8 +406,8 @@ Tests: `crates/micold-client/tests/worktree_menu_pull_request.rs` (new, T042). A
 
 ### `crates/micold-client/src/shell/pr_status.rs`: opening the pull request
 
-Tests: `crates/micold-client/tests/pr_open.rs` (new, T043), with a recording `LinkOpener`. A19
-shares the file.
+Tests: `pr_status_open_*` in `crates/micold-client/src/main_tests.rs` (T043), with a recording
+`LinkOpener` set through `Capabilities::with_link_opener`. A19 stands beside them.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
@@ -517,6 +517,7 @@ Tests: `crates/micold-client/tests/features_sidebar.rs` (extended, T059). A22 sh
 | --- | --- | --- | --- | --- | --- |
 | U146 | With `age_secs` of 600 the tooltip has no `Read:` line; with 601 it reads `Read: 10 min ago` | FR-019 | example | PENDING | |
 | U147 | At 119 minutes the line reads `Read: 119 min ago`; from 120 minutes it reads `Read: 2 h ago` | FR-019, UI §3 | example | PENDING | |
+| U149 | `RowPullRequest.stale` is false with `now` 600 s after `read_at` and true at 601 s | FR-019, DM §4 | example | PENDING | |
 
 ### Layout: the stale indicator
 
