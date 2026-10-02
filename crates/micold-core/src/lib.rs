@@ -47,6 +47,7 @@ pub mod settings;
 pub mod spawn;
 pub mod store;
 pub mod terminal;
+pub mod terminal_history;
 pub mod theme;
 pub mod tokens;
 pub mod tooltip;

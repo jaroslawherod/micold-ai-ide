@@ -13,6 +13,8 @@ pub mod catalog;
 /// Tailing a provider's own append-only event log for busy/idle evidence (feature 026, T064).
 pub mod event_log;
 pub mod framer;
+/// Capturing, seeding and saving a session terminal's history (feature 041).
+pub mod history;
 pub mod hooks;
 /// Bounded HTTP/1.1 request handling shared by the loopback listeners (hooks, tool server).
 pub mod http;

@@ -43,6 +43,9 @@ directories = { workspace = true }
 # a Copilot session's busy/idle signal is the tail of its own `events.jsonl`, and FR-019 forbids a
 # polling timer of ours. One vetted abstraction instead of three platform backends (research R14).
 notify = { workspace = true }
+# The local time and UTC offset of a session start, for the separator a restored terminal history
+# ends with (feature 041, FR-009). The core takes the formatted text, so it needs no time crate.
+chrono = { workspace = true }
 # PTY/VT stack (plan W3, tasks T030/T031): the daemon now owns every `Term` and PTY child so
 # sessions outlive the UI. `alacritty_terminal` interprets VT/ANSI into a grid; `portable-pty`
 # hosts the child process. Stable `LineId` diffing (T006/T032) rides on top via a trait, so the
