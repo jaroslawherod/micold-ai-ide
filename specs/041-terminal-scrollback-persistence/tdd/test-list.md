@@ -72,7 +72,7 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1 | `validate` accepts a line whose runs' `chars` sum to its character count | DM §1, FR-001 | example | PENDING | T002 |
+| U1 | `validate` accepts a line whose runs' `chars` sum to its character count | DM §1, FR-001 | example | DONE | `crates/micold-core/tests/terminal_history_snapshot.rs::validate_accepts_a_line_whose_runs_sum_to_its_character_count` |
 | U2 | `validate` rejects a line whose run sum is one more, and one less, than its character count | DM §1 | example | PENDING | T002 |
 | U3 | `validate` rejects a `text` holding a C0 character (`\u{7}`), a C1 character (`\u{9b}`) and `ESC` | DM §1, FR-016 | example | PENDING | T002 |
 | U4 | `HistoryColor::Basic` accepts 0 and 15 and rejects 16 | DM §1, FR-001 | example | PENDING | T002 |
