@@ -31,10 +31,10 @@
 
 ## Notes
 
-- Two `[NEEDS CLARIFICATION]` markers are open and wait for the clarify phase: FR-013 (reporter
-  search beyond the load cap) and FR-022 (how a Markdown body becomes the description text). The
-  three unticked items wait on them alone: FR-013 and FR-022 are not yet testable and have no
-  acceptance scenario of their own.
+- One `[NEEDS CLARIFICATION]` marker is open and waits for the user's answer: FR-022 (how a
+  Markdown body becomes the description text). The three unticked items wait on it alone: FR-022 is
+  not yet testable and has no acceptance scenario of its own. Clarify round 1 closed the other
+  marker, FR-013 (reporter search beyond the load cap); see spec.md, Clarifications.
 - "GitHub", "login", "label" and "Markdown" are named because they are the user-facing terms of the
   thing being listed, not implementation details. FR-028 names the shared component library and the
   showcase because the constitution's Principle VIII makes reuse a requirement of the feature.
