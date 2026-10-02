@@ -1409,6 +1409,11 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Turn pull request status on or off (feature 040, FR-030).
+    pub fn set_pr_status_enabled(&self, on: bool) -> std::io::Result<()> {
+        self.lock().catalog.set_pr_status_enabled(on)
+    }
+
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
     /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T098/BUG-003):
     /// each cached directory's snapshot was resolved under the now-stale configuration — and so

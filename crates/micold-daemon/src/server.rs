@@ -988,7 +988,7 @@ where
                 pi_activity_component,
                 tool_server_enabled,
                 cross_session_access,
-                pr_status_enabled: _,
+                pr_status_enabled,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -1022,6 +1022,10 @@ where
                 })
                 .and_then(|()| match cross_session_access {
                     Some(access) => state.set_cross_session_access(access),
+                    None => Ok(()),
+                })
+                .and_then(|()| match pr_status_enabled {
+                    Some(on) => state.set_pr_status_enabled(on),
                     None => Ok(()),
                 });
                 match result {
