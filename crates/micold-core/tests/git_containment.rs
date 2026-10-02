@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use micold_core::git::{containment, Git, GitCli};
+use micold_core::git::{containment, FakeGit, Git, GitCli};
 use micold_core::protocol::messages::BranchContainment;
 
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -167,5 +167,36 @@ fn the_real_git_tells_an_ancestor_from_a_descendant_and_from_a_commit_it_does_no
         git_cli.is_ancestor(path, &repo.merged, NEVER_FETCHED),
         None,
         "a head the repository does not hold is unknown, not `false`"
+    );
+}
+
+/// U55. The fake answers both questions as a test scripts them, per repository, and knows
+/// nothing it was not told — so the code that asks can be tested without a repository.
+#[test]
+fn the_fake_git_answers_the_tip_and_the_ancestry_as_scripted() {
+    let repo = Path::new("/repo");
+    let fake = FakeGit::new()
+        .with_branch_tip(repo, "feat/a", HEAD)
+        .with_ancestry(repo, OTHER, HEAD, true)
+        .with_ancestry(repo, HEAD, OTHER, false);
+
+    assert_eq!(fake.branch_tip(repo, "feat/a"), Some(HEAD.to_string()));
+    assert_eq!(fake.branch_tip(repo, "feat/b"), None, "a branch not scripted");
+    assert_eq!(
+        fake.branch_tip(Path::new("/other"), "feat/a"),
+        None,
+        "another repository"
+    );
+    assert_eq!(fake.is_ancestor(repo, OTHER, HEAD), Some(true));
+    assert_eq!(fake.is_ancestor(repo, HEAD, OTHER), Some(false));
+    assert_eq!(
+        fake.is_ancestor(repo, OTHER, NEVER_FETCHED),
+        None,
+        "a pair not scripted is unknown"
+    );
+    assert_eq!(
+        fake.is_ancestor(Path::new("/other"), OTHER, HEAD),
+        None,
+        "another repository"
     );
 }

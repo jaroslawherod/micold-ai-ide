@@ -618,6 +618,10 @@ struct FakeState {
     upstreams: BTreeMap<PathBuf, BTreeMap<String, String>>,
     /// repo -> (remote name, URL), in the order added (feature 034).
     remotes: BTreeMap<PathBuf, Vec<(String, String)>>,
+    /// repo -> local branch -> the commit it points at, as scripted (feature 040).
+    branch_tips: BTreeMap<PathBuf, BTreeMap<String, String>>,
+    /// repo -> (tip, head) -> whether `tip` is an ancestor of `head`, as scripted (feature 040).
+    ancestry: BTreeMap<PathBuf, BTreeMap<(String, String), bool>>,
     /// repo -> list of (worktree path, branch).
     worktrees: BTreeMap<PathBuf, Vec<(PathBuf, String)>>,
     /// Branches passed to `worktree_add_existing_branch`, in call order (feature 016 assertions).
@@ -798,6 +802,36 @@ impl FakeGit {
             .entry(repo.into())
             .or_default()
             .push((name.to_string(), url.to_string()));
+        self
+    }
+
+    /// Script [`Git::branch_tip`]: `branch` of `repo` points at `commit` (feature 040). A branch
+    /// not scripted has no tip.
+    pub fn with_branch_tip(self, repo: impl Into<PathBuf>, branch: &str, commit: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .branch_tips
+            .entry(repo.into())
+            .or_default()
+            .insert(branch.to_string(), commit.to_string());
+        self
+    }
+
+    /// Script [`Git::is_ancestor`] for one `(tip, head)` pair of `repo` (feature 040). A pair not
+    /// scripted is unknown, as a commit the repository does not hold is.
+    pub fn with_ancestry(
+        self,
+        repo: impl Into<PathBuf>,
+        tip: &str,
+        head: &str,
+        is_ancestor: bool,
+    ) -> Self {
+        self.inner
+            .borrow_mut()
+            .ancestry
+            .entry(repo.into())
+            .or_default()
+            .insert((tip.to_string(), head.to_string()), is_ancestor);
         self
     }
 
@@ -1052,12 +1086,22 @@ impl Git for FakeGit {
         Ok(out)
     }
 
-    fn branch_tip(&self, _repo: &Path, _branch: &str) -> Option<String> {
-        None
+    fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String> {
+        self.inner
+            .borrow()
+            .branch_tips
+            .get(repo)
+            .and_then(|tips| tips.get(branch))
+            .cloned()
     }
 
-    fn is_ancestor(&self, _repo: &Path, _tip: &str, _head: &str) -> Option<bool> {
-        None
+    fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool> {
+        self.inner
+            .borrow()
+            .ancestry
+            .get(repo)
+            .and_then(|pairs| pairs.get(&(tip.to_string(), head.to_string())))
+            .copied()
     }
 
     fn submodule_update_init_recursive(
