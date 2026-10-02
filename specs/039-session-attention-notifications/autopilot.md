@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Open PR 2 after a green `mise run test-scripts`; the orchestrator then waits on CI and merges.
+- **Next step**: PR #539 (design) is open: wait for CI and merge. Then Phase 4, milestone M1 (T001–T016, T123). M1's first cycle measures the suite baseline (`unknown` in `tdd/test-list.md`).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #528 | Spec | merged | 824e0a9bc58ad5f977ef56fa813e58217c563ea5 |
+| #539 | Design | open | |
 
 ## Milestones
 
