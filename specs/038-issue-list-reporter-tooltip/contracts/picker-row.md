@@ -25,7 +25,9 @@ A row **with** details renders as:
   below the text column. Width fills the list.
 - The picked-row marker and the row's leading inset are aligned to the label's first line.
 - Emphasis uses today's two channels (accent colour and bold) on both lines.
-- A disabled row with details dims both lines as a single-line row dims its label.
+- A disabled row with details dims both lines as a single-line row dims its label. The details
+  line is drawn in the lower-emphasis colour a disabled label takes (`on_surface_variant`) whether
+  the row is enabled or not, so dimming changes the first line and the emphasis of both.
 
 A row **without** details is built by today's code path: fixed `MENU_ITEM_BASE` height, one line,
 `fit_around` truncation. Nothing about it changes (FR-029). `picker_parity.rs`, `menu_anatomy.rs`

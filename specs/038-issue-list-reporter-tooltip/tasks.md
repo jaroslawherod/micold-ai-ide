@@ -91,7 +91,7 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 - [X] T014 [US1] [U44] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`, docs/development/layout-snapshot.md) and confirm in the diff that the records of the branch picker, `Select` and 034's loading, empty and failure states did not change (FR-027, FR-029); `material/picker_parity.rs` and `material/menu_anatomy.rs` pass unedited.
 - [X] T015 [P] [US1] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue": each issue takes two lines, the number and title, then who reported it and its labels; long text wraps; `ghost` for a deleted account (FR-031).
 - [X] T016 [P] [US1] Update `docs/development/component-library.md` § "Pickers" (`Row::details`, the wrapping label, and that a row without details is unchanged) and `docs/development/component-showcase.md` (the two-line `Typeahead` pose).
-- [ ] T017 [US1] [A1] [A2] [A3] [A4] [A5] [A7] [A8] [A9] Run `mise run gate`; run quickstart §B1 and §B2 (B2 ends in the showcase, `mise run showcase`) with the `visual-pass` skill in the light and dark themes and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [x] T017 [US1] [A1] [A2] [A3] [A4] [A5] [A7] [A8] [A9] Run `mise run gate`; run quickstart §B1 and §B2 (B2 ends in the showcase, `mise run showcase`) with the `visual-pass` skill in the light and dark themes and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: US1 scenarios 1–5 and 7–9 work; `mise run gate` passes.
 
