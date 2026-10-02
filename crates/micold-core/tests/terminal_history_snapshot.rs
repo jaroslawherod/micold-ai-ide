@@ -3,7 +3,7 @@
 //! colour index stays inside its palette.
 
 use micold_core::terminal_history::{
-    HistorySnapshot, HistoryStyle, LogicalLine, SnapshotError, StyleRun,
+    HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, SnapshotError, StyleRun,
 };
 
 /// A line of `text` covered by default-style runs of the given lengths.
@@ -18,6 +18,28 @@ fn line(text: &str, run_chars: &[u32]) -> LogicalLine {
             })
             .collect(),
     }
+}
+
+/// A one-character snapshot in `style`.
+fn styled(style: HistoryStyle) -> HistorySnapshot {
+    snapshot_of(LogicalLine {
+        text: "x".to_string(),
+        runs: vec![StyleRun { chars: 1, style }],
+    })
+}
+
+/// The two places a colour sits in a style: as foreground and as background.
+fn as_fg_and_bg(color: HistoryColor) -> [HistoryStyle; 2] {
+    [
+        HistoryStyle {
+            fg: color,
+            ..HistoryStyle::default()
+        },
+        HistoryStyle {
+            bg: color,
+            ..HistoryStyle::default()
+        },
+    ]
 }
 
 fn snapshot_of(line: LogicalLine) -> HistorySnapshot {
@@ -69,6 +91,31 @@ fn validate_rejects_a_line_holding_a_c0_a_c1_or_an_escape_character() {
             Err(SnapshotError::ControlCharacter { line: 0 }),
             "{:?} is a control character, which a line's text never holds",
             control
+        );
+    }
+}
+
+// U4: the 16 basic colours are numbered 0 to 15; 16 names no basic colour.
+#[test]
+fn basic_color_accepts_0_and_15_and_rejects_16() {
+    const FIRST: u8 = 0;
+    const LAST: u8 = 15;
+
+    for index in [FIRST, LAST] {
+        for style in as_fg_and_bg(HistoryColor::Basic(index)) {
+            assert_eq!(
+                styled(style).validate(),
+                Ok(()),
+                "Basic({index}) is one of the 16 basic colours"
+            );
+        }
+    }
+    for style in as_fg_and_bg(HistoryColor::Basic(LAST + 1)) {
+        assert_eq!(
+            styled(style).validate(),
+            Err(SnapshotError::ColorOutOfRange { line: 0 }),
+            "Basic({}) is past the 16 basic colours",
+            LAST + 1
         );
     }
 }

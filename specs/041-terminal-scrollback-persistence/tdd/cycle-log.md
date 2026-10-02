@@ -51,3 +51,16 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   and C1). File run -> 3 passed, 0 failed
 - refactor: none needed
 - commit: `feat(041): a snapshot whose text holds a control character is invalid (U3)`
+
+## Cycle 4: U4 `HistoryColor::Basic` accepts 0 and 15 and rejects 16
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::basic_color_accepts_0_and_15_and_rejects_16` (new; foreground and background)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot basic_color_accepts_0_and_15_and_rejects_16 -- --exact`
+  with the palette check disabled -> ``assertion `left == right` failed: Basic(16) is past the 16 basic colours`` /
+  `left: Ok(())` / `right: Err(ColorOutOfRange { line: 0 })` (1 failed). The
+  `SnapshotError::ColorOutOfRange` variant was declared first so the test compiles. (Written by part 2's
+  worker, which stopped before committing; part 3 re-proved red and green on the same diff.)
+- green: `validate` checks each run's `fg` and `bg` with `HistoryColor::is_in_palette` (`Basic` below
+  `BASIC_COLORS` = 16). File run -> 4 passed, 0 failed
+- refactor: none needed
+- commit: `feat(041): a basic colour past 15 is invalid (U4)`
