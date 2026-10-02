@@ -73,7 +73,7 @@ no fourth plan round was run and PR 2 is not open (review-rubrics.md, *Round lim
   fixes) read the fixed plan against tasks.md and the code and confirmed the round-3 fix ("the
   state-opened list itself is fine … `Before::Settled` draws the overlay"). It found two further
   MAJORs on tasks T006 and T020, which also touch plan.md and `contracts/picker-row.md`; fixed in
-  35fc46b8's successor commit, and Tasks round 2 is CLEAN. `speckit-analyze`: 0 CRITICAL, 0 HIGH.
+  35fc46b8, and Tasks round 2 is CLEAN. `speckit-analyze`: 0 CRITICAL, 0 HIGH.
 - Question: accept the plan as fixed and open PR 2, or review it further?
   1. (Recommended) Accept: open PR 2. The plan's post-fix text has been read by two later fresh
      reviewers (Tasks rounds 1 and 2) with no open finding.
