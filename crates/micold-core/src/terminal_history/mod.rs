@@ -60,12 +60,17 @@ pub enum SnapshotError {
     /// The runs of line `line` (counted from 0, oldest first) do not sum to its number of
     /// characters.
     RunsDoNotCoverText { line: usize },
+    /// The text of line `line` holds a C0 or C1 control character (`ESC` among them).
+    ControlCharacter { line: usize },
 }
 
 impl HistorySnapshot {
     /// Checks the rules a snapshot must hold before it is seeded or saved.
     pub fn validate(&self) -> Result<(), SnapshotError> {
         for (index, line) in self.lines.iter().enumerate() {
+            if line.text.chars().any(char::is_control) {
+                return Err(SnapshotError::ControlCharacter { line: index });
+            }
             let run_sum: u64 = line.runs.iter().map(|run| u64::from(run.chars)).sum();
             if run_sum != line.text.chars().count() as u64 {
                 return Err(SnapshotError::RunsDoNotCoverText { line: index });
