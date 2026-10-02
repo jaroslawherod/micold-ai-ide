@@ -135,3 +135,37 @@ fn the_real_git_reads_a_branch_s_tip_and_none_for_a_missing_branch() {
         "only a name under refs/heads/ is a branch: a commit id is not one"
     );
 }
+
+/// A well-formed commit id no repository made here holds: a pull request head never fetched.
+const NEVER_FETCHED: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// U54. Ancestry is asked of the local object store alone: a branch at or behind the pull
+/// request's last commit is an ancestor of it, one ahead is not, and a commit that was never
+/// fetched leaves the question unanswered (FR-015, FR-017).
+#[test]
+fn the_real_git_tells_an_ancestor_from_a_descendant_and_from_a_commit_it_does_not_hold() {
+    let repo = repo_with_three_commits();
+    let git_cli = GitCli::new();
+    let path = repo.dir.path();
+
+    assert_eq!(
+        git_cli.is_ancestor(path, &repo.merged, &repo.merged),
+        Some(true),
+        "a branch at the head"
+    );
+    assert_eq!(
+        git_cli.is_ancestor(path, &repo.first, &repo.merged),
+        Some(true),
+        "a branch behind the head"
+    );
+    assert_eq!(
+        git_cli.is_ancestor(path, &repo.later, &repo.merged),
+        Some(false),
+        "a branch ahead of the head"
+    );
+    assert_eq!(
+        git_cli.is_ancestor(path, &repo.merged, NEVER_FETCHED),
+        None,
+        "a head the repository does not hold is unknown, not `false`"
+    );
+}
