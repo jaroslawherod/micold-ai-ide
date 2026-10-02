@@ -108,12 +108,12 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U31 | The wrapping label at a width narrower than its text lays out several lines high and no wider than the bound | US1-4, FR-004 | example | PENDING | T004 / T010 |
-| U32 | A 256-character title without spaces breaks inside the word and stays inside the bound | US1-4, FR-004, SC-001 | example | PENDING | T004 / T010 |
-| U33 | Emphasised and plain runs of the wrapping label concatenate to the input | FR-010 | property | PENDING | T004 / T010 |
-| U34 | A row with details is at least `MENU_ITEM_BASE` high and higher when either line wraps | US1-4, US1-5, FR-004 | example | PENDING | T004 / T011 |
+| U31 | The wrapping label at a width narrower than its text lays out several lines high and no wider than the bound | US1-4, FR-004 | example | DONE | T004 / T010 |
+| U32 | A 256-character title without spaces breaks inside the word and stays inside the bound | US1-4, FR-004, SC-001 | example | DONE | T004 / T010 |
+| U33 | Emphasised and plain runs of the wrapping label concatenate to the input | FR-010 | property | DONE | T004 / T010 |
+| U34 | A row with details is at least `MENU_ITEM_BASE` high and higher when either line wraps | US1-4, US1-5, FR-004 | example | DONE | T004 / T011 |
 | U35 | A row without details keeps today's fixed `MENU_ITEM_BASE` height and single-line label | FR-029 | characterization | BASELINE | T004 / T011 |
-| U36 | Rows for a listed, a searched and a typed-number issue carry `title_line()` as label, `details_line()` as details and `emphasis` as spans | US1-8, FR-006 | example | PENDING | T005 / T012 |
+| U36 | Rows for a listed, a searched and a typed-number issue carry `title_line()` as label, `details_line()` as details and `emphasis` as spans | US1-8, FR-006 | example | DONE | T005 / T012 |
 | U37 | A row matched by its reporter carries the emphasis in its details at the reporter's range | US2-2, FR-010 | example | PENDING | T026 / T012, T028 |
 | U38 | The issue search field's placeholder is `Search by number, title, label or reporter` | US2-5, FR-011 | example | PENDING | T026 / T029 |
 

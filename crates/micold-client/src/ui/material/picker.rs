@@ -37,8 +37,8 @@ use std::time::Duration;
 ///
 /// A plain record the caller fills in, like [`MenuItem`](super::MenuItem) and
 /// [`TreeItem`](super::TreeItem) — deliberately not a component. Whatever explains an unavailable
-/// row must already be part of `label`; this module has no second text slot and no idea why any row
-/// is disabled.
+/// row must already be part of `label` or `details`; this module has no idea why any row is
+/// disabled.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
     /// The full text of the row.
@@ -47,6 +47,11 @@ pub struct Row {
     pub spans: Vec<Range<usize>>,
     /// Whether this row can be chosen. A row that cannot is still shown (contract §2).
     pub enabled: bool,
+    /// A second line under the label, with the byte ranges of it that matched (feature 038).
+    ///
+    /// `None` is the single-line row every picker had before; `Some` makes the row two wrapping
+    /// lines. See [`Row::details`].
+    pub details: Option<(String, Vec<Range<usize>>)>,
 }
 
 impl Row {
@@ -56,7 +61,18 @@ impl Row {
             label: label.into(),
             spans,
             enabled: true,
+            details: None,
         }
+    }
+
+    /// Give the row a second line: `text` under the label, smaller and lower in emphasis, with
+    /// `spans` the byte ranges of `text` that matched.
+    ///
+    /// A row with details wraps both lines instead of truncating the label, and is as tall as its
+    /// text needs (038 contracts/picker-row.md §1). A row without them is unchanged.
+    pub fn details(mut self, text: impl Into<String>, spans: Vec<Range<usize>>) -> Self {
+        self.details = Some((text.into(), spans));
+        self
     }
 
     /// Mark the row present but unchoosable.
@@ -69,6 +85,10 @@ impl Row {
 /// The role a result row's label is set in. A branch name is content, so it is body text — named
 /// once here rather than at each of the three places the row measures, draws and spaces itself.
 pub(super) const ROW_ROLE: TypeRole = TypeRole::Body;
+
+/// The role a row's second line is set in: supporting text under the label, so it is one step
+/// smaller and drawn in the lower-emphasis colour (038 contracts/picker-row.md §1).
+const DETAILS_ROLE: TypeRole = TypeRole::Caption;
 
 /// The distance between the field and its list.
 pub(super) const GAP: f32 = spacing::XS;
@@ -121,25 +141,75 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
     };
     let accent = if item.enabled { r.primary } else { base };
 
-    let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent);
+    let pressable = match item.details {
+        Some((details, detail_spans)) => {
+            // Two wrapping lines (feature 038). Nothing is truncated: each line takes as many
+            // lines as the row's width needs, and the row is as tall as they come to.
+            let details_base = r.on_surface_variant;
+            let details_accent = if item.enabled {
+                r.primary
+            } else {
+                details_base
+            };
+            let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent)
+                .wrapping();
+            let details = EmphasisedLabel::<M>::new(
+                details,
+                detail_spans,
+                DETAILS_ROLE,
+                details_base,
+                details_accent,
+            )
+            .wrapping();
 
-    // `height(Fill)` for the reason `material::menu`'s item row states: a `Row`'s `align_y`
-    // centres its children against each other inside the cross size the flex computed, and that
-    // band lands at the top of the node `button` stretched to 48dp. This row is the same shape and
-    // had the same defect — found while fixing the menu's (FR-030a).
-    let content = row![marker(selected, r), label]
-        .spacing(spacing::SM)
-        .align_y(alignment::Vertical::Center)
-        .height(Length::Fill);
+            // The marker is centred on the label's first line, not on the row: a row five lines
+            // tall with its check half-way down would point at no line in particular.
+            let marker = iced::widget::container(marker(selected, r))
+                .height(Length::Fixed(ROW_ROLE.line_height_dp()))
+                .align_y(alignment::Vertical::Center);
+            let lines = row![marker, column![label, details].width(Length::Fill)]
+                .spacing(spacing::SM)
+                .align_y(alignment::Vertical::Top)
+                .width(Length::Fill);
 
-    let pressable = button(content)
-        .width(Length::Fill)
-        // Material's menu-item height, from the density scale rather than from whatever the padding
-        // happened to add up to — so a row keeps its touch target when its label is short.
-        .height(Length::Fixed(density::MENU_ITEM_BASE))
-        .padding([0.0, spacing::SM])
-        .style(style::menu_row(r, highlighted, selected))
-        .on_press_maybe(press.clone());
+            // The menu item's height is the least a row is, as its touch target; `button` has no
+            // minimum height, so a strut as tall as that height less the padding holds it, and
+            // lines shorter than it are centred beside it. Lines taller than it set the height.
+            // Its width is `Shrink`, which comes to nothing: a `Row` drops a child whose width is
+            // stated as zero, and the strut would go with it.
+            let strut = Space::new()
+                .width(Length::Shrink)
+                .height(Length::Fixed(density::MENU_ITEM_BASE - 2.0 * spacing::XS));
+            let content = row![strut, lines].align_y(alignment::Vertical::Center);
+
+            button(content)
+                .width(Length::Fill)
+                .height(Length::Shrink)
+                .padding([spacing::XS, spacing::SM])
+        }
+        None => {
+            let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent);
+
+            // `height(Fill)` for the reason `material::menu`'s item row states: a `Row`'s `align_y`
+            // centres its children against each other inside the cross size the flex computed, and
+            // that band lands at the top of the node `button` stretched to 48dp. This row is the
+            // same shape and had the same defect — found while fixing the menu's (FR-030a).
+            let content = row![marker(selected, r), label]
+                .spacing(spacing::SM)
+                .align_y(alignment::Vertical::Center)
+                .height(Length::Fill);
+
+            button(content)
+                .width(Length::Fill)
+                // Material's menu-item height, from the density scale rather than from whatever
+                // the padding happened to add up to — so a row keeps its touch target when its
+                // label is short.
+                .height(Length::Fixed(density::MENU_ITEM_BASE))
+                .padding([0.0, spacing::SM])
+        }
+    }
+    .style(style::menu_row(r, highlighted, selected))
+    .on_press_maybe(press.clone());
 
     match press {
         // Every pressable surface ripples (feature 019, FR-024c), and a menu row is one — built
@@ -240,6 +310,10 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
 /// A single-line label whose matched characters are drawn in the emphasis treatment, truncated so
 /// that the emphasis stays visible (FR-009, FR-010, FR-011c, FR-011d).
 ///
+/// In its [wrapping](EmphasisedLabel::wrapping) mode it is not truncated: label and emphasis are
+/// shaped as one paragraph that breaks onto as many lines as the width needs, and the label is as
+/// tall as that paragraph (feature 038).
+///
 /// A widget rather than a `rich_text` because truncation has to happen at layout time, when the
 /// renderer can shape text and the available width is known — the same reason
 /// [`Ellipsized`](super::Ellipsized) is a widget. It shares that module's technique and none of its
@@ -251,6 +325,8 @@ struct EmphasisedLabel<M> {
     role: TypeRole,
     base: Rgb,
     accent: Rgb,
+    /// Wrap onto further lines instead of truncating to one. See [`EmphasisedLabel::wrapping`].
+    wrap: bool,
     marker: PhantomData<M>,
 }
 
@@ -268,8 +344,18 @@ impl<M> EmphasisedLabel<M> {
             role,
             base,
             accent,
+            wrap: false,
             marker: PhantomData,
         }
+    }
+
+    /// Show the whole text, on as many lines as the width needs, instead of one truncated line.
+    ///
+    /// A word wider than the label breaks inside the word, so nothing is cut or drawn outside the
+    /// label (038 FR-004).
+    fn wrapping(mut self) -> Self {
+        self.wrap = true;
+        self
     }
 }
 
@@ -284,6 +370,12 @@ struct Segment<P> {
 /// text reuses the paragraphs rather than measuring again on every frame.
 struct State<P> {
     segments: Vec<Segment<P>>,
+    /// The wrapping mode's one paragraph; `None` in the single-line mode.
+    wrapped: Option<P>,
+    /// The accent the wrapped paragraph's emphasised spans were shaped with. The single-line mode
+    /// picks its colours when it draws; a paragraph of spans carries them, so a change of theme
+    /// has to shape it again.
+    for_accent: Option<Rgb>,
     width: f32,
     height: f32,
     source: String,
@@ -299,6 +391,8 @@ impl<P> Default for State<P> {
     fn default() -> Self {
         Self {
             segments: Vec::new(),
+            wrapped: None,
+            for_accent: None,
             width: 0.0,
             height: 0.0,
             source: String::new(),
@@ -378,6 +472,59 @@ where
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
         let available = limits.max().width;
 
+        if self.wrap {
+            if state.wrapped.is_none()
+                || state.source != self.content
+                || state.source_spans != self.spans
+                || state.for_width != available
+                || state.for_accent != Some(self.accent)
+            {
+                let font = self.role.font();
+                let accent = style::color(self.accent);
+                // The same split, and the same two channels, as the single-line mode below.
+                let runs = segments(&self.content, &self.spans);
+                let spans: Vec<text::Span<'_, (), Renderer::Font>> = runs
+                    .iter()
+                    .map(|(piece, emphasised)| {
+                        let span = text::Span::new(piece.as_str());
+                        if *emphasised {
+                            span.font(emphasis_font(font)).color(accent)
+                        } else {
+                            span
+                        }
+                    })
+                    .collect();
+                let paragraph = Renderer::Paragraph::with_spans(CoreText {
+                    content: spans.as_slice(),
+                    // Bounded by the width alone: the height is what is being asked for.
+                    bounds: Size::new(available, f32::INFINITY),
+                    size: Pixels(self.role.size()),
+                    line_height: self.role.line_height(),
+                    font,
+                    align_x: text::Alignment::Left,
+                    align_y: alignment::Vertical::Top,
+                    shaping: text::Shaping::Advanced,
+                    // A word wider than the label breaks inside the word (FR-004).
+                    wrapping: text::Wrapping::WordOrGlyph,
+                });
+                let bounds = paragraph.min_bounds();
+                state.segments.clear();
+                state.wrapped = Some(paragraph);
+                state.width = bounds.width;
+                state.height = bounds.height;
+                state.source = self.content.clone();
+                state.source_spans = self.spans.clone();
+                state.for_width = available;
+                state.for_accent = Some(self.accent);
+            }
+
+            return layout::Node::new(limits.resolve(
+                Length::Fill,
+                Length::Shrink,
+                Size::new(state.width, state.height),
+            ));
+        }
+
         let template: CoreText<(), Renderer::Font> = CoreText {
             content: (),
             bounds: Size::INFINITE,
@@ -390,10 +537,12 @@ where
             wrapping: text::Wrapping::None,
         };
 
-        if state.source != self.content
+        if state.wrapped.is_some()
+            || state.source != self.content
             || state.source_spans != self.spans
             || state.for_width != available
         {
+            state.wrapped = None;
             let measure = |candidate: &str| {
                 Renderer::Paragraph::with_text(template.with_content(candidate))
                     .min_bounds()
@@ -456,6 +605,12 @@ where
         let state = tree.state.downcast_ref::<State<Renderer::Paragraph>>();
         let bounds = layout.bounds();
         let clip = bounds.intersection(viewport).unwrap_or(bounds);
+
+        if let Some(paragraph) = &state.wrapped {
+            // The emphasised spans carry their own colour; this one is every other character's.
+            renderer.fill_paragraph(paragraph, bounds.position(), style::color(self.base), clip);
+            return;
+        }
 
         for segment in &state.segments {
             let colour = if segment.emphasised {
@@ -561,5 +716,225 @@ mod tests {
         let out = segments("main", &one(2..99));
         let rejoined: String = out.iter().map(|(s, _)| s.as_str()).collect();
         assert_eq!(rejoined, "main");
+    }
+
+    // --- Feature 038: the wrapping label and the two-line row (contracts/picker-row.md §1–2) ---
+
+    use iced::advanced::layout::Limits;
+    use micold_core::theme::ColorScheme;
+
+    /// Taller than any row here grows, so the limit never decides a height.
+    const TALL: f32 = 4000.0;
+    /// Layout arithmetic accumulates over a nested tree; far below a line of text.
+    const TOLERANCE: f32 = 0.5;
+
+    fn roles() -> Roles {
+        micold_core::tokens::roles(ColorScheme::Light)
+    }
+
+    /// The absolute bounds of the node at `path` with `element` laid out `width` wide.
+    fn bounds_at(element: Element<'_, ()>, width: f32, path: &[usize]) -> Rectangle {
+        let mut element = element;
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &Limits::new(Size::ZERO, Size::new(width, TALL)),
+        );
+        let mut layout = Layout::new(&node);
+        for (depth, &index) in path.iter().enumerate() {
+            layout = layout.children().nth(index).unwrap_or_else(|| {
+                panic!(
+                    "no child {index} at depth {depth} of {path:?}: the row's tree changed shape"
+                )
+            });
+        }
+        layout.bounds()
+    }
+
+    /// The node of a wrapping label laid out `width` wide, and the width its shaped text needs.
+    fn wrapped(content: &str, spans: Vec<Range<usize>>, width: f32) -> (Size, f32) {
+        let r = roles();
+        let mut element: Element<'_, ()> = EmphasisedLabel::<()>::new(
+            content.to_string(),
+            spans,
+            ROW_ROLE,
+            r.on_surface,
+            r.primary,
+        )
+        .wrapping()
+        .into();
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &Limits::new(Size::ZERO, Size::new(width, TALL)),
+        );
+        let state = tree
+            .state
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph>>();
+        (node.size(), state.width)
+    }
+
+    fn two_line_row<'a>(label: &str, details: &str, selected: bool) -> Element<'a, ()> {
+        row_element(
+            Row::new(label, Vec::new()).details(details, Vec::new()),
+            false,
+            selected,
+            Some(()),
+            roles(),
+        )
+    }
+
+    /// The path of the label, the details and the marker inside a row with details.
+    const LABEL: &[usize] = &[0, 1, 1, 0];
+    const DETAILS: &[usize] = &[0, 1, 1, 1];
+    const MARKER: &[usize] = &[0, 1, 0];
+
+    const LONG_TITLE: &str =
+        "#1234 The issue list cuts long titles off so nobody can tell two issues apart";
+
+    /// U31: narrower than its text, the wrapping label is several lines high and no wider than its
+    /// bound.
+    #[test]
+    fn the_wrapping_label_takes_more_lines_inside_its_bound() {
+        let line = ROW_ROLE.line_height_dp();
+        let (node, text_width) = wrapped(LONG_TITLE, vec![0..5], 160.0);
+        assert!(
+            node.height >= 2.0 * line - TOLERANCE,
+            "a label of {} characters is {}dp high in 160dp: one line is {line}dp, so it did not wrap",
+            LONG_TITLE.len(),
+            node.height,
+        );
+        assert!(
+            node.width <= 160.0 + TOLERANCE && text_width <= 160.0 + TOLERANCE,
+            "the label's node is {}dp wide and its text {text_width}dp, in a bound of 160dp",
+            node.width,
+        );
+    }
+
+    /// U32: a word wider than the label breaks inside the word (FR-004).
+    #[test]
+    fn a_word_wider_than_the_label_breaks_inside_the_word() {
+        let line = ROW_ROLE.line_height_dp();
+        let title = "a".repeat(256);
+        let (node, text_width) = wrapped(&title, Vec::new(), 200.0);
+        assert!(
+            text_width <= 200.0 + TOLERANCE,
+            "256 characters without a space are shaped {text_width}dp wide in a bound of 200dp",
+        );
+        assert!(
+            node.height >= 2.0 * line - TOLERANCE,
+            "256 characters without a space are {}dp high in 200dp: they did not break",
+            node.height,
+        );
+    }
+
+    /// U33: the runs the wrapping label shapes are the input, in order, with nothing lost.
+    #[test]
+    fn the_wrapping_labels_runs_concatenate_to_the_input() {
+        let text = "#7 Zażółć gęślą jaźń — naprawić";
+        let start = text.find("gęślą").expect("the word is in the text");
+        let spans = vec![0..2, start..start + "gęślą".len()];
+        let runs = segments(text, &spans);
+        let rejoined: String = runs.iter().map(|(piece, _)| piece.as_str()).collect();
+        assert_eq!(rejoined, text);
+        let emphasised: Vec<&str> = runs
+            .iter()
+            .filter(|(_, emphasised)| *emphasised)
+            .map(|(piece, _)| piece.as_str())
+            .collect();
+        assert_eq!(emphasised, vec!["#7", "gęślą"]);
+    }
+
+    /// U34: a row with details is never shorter than a menu item, and grows when a line wraps.
+    #[test]
+    fn a_row_with_details_is_at_least_a_menu_item_high_and_grows_when_it_wraps() {
+        let short = bounds_at(two_line_row("#7 Short", "octocat", false), 400.0, &[]);
+        assert!(
+            (short.height - density::MENU_ITEM_BASE).abs() < TOLERANCE,
+            "a row of two short lines is {}dp high, not the menu item's {}dp",
+            short.height,
+            density::MENU_ITEM_BASE,
+        );
+
+        let long_title = bounds_at(two_line_row(LONG_TITLE, "octocat", false), 200.0, &[]);
+        assert!(
+            long_title.height > density::MENU_ITEM_BASE + TOLERANCE,
+            "a row whose title wraps is {}dp high: it did not grow",
+            long_title.height,
+        );
+
+        let labels = "octocat  ·  bug, good first issue, needs triage, area: worktrees, regression";
+        let many_labels = bounds_at(two_line_row("#7 Short", labels, false), 200.0, &[]);
+        assert!(
+            many_labels.height > density::MENU_ITEM_BASE + TOLERANCE,
+            "a row whose details wrap is {}dp high: it did not grow",
+            many_labels.height,
+        );
+
+        // Both lines are inside the row, whatever its height.
+        for path in [LABEL, DETAILS] {
+            let row = bounds_at(two_line_row(LONG_TITLE, labels, false), 200.0, &[]);
+            let line = bounds_at(two_line_row(LONG_TITLE, labels, false), 200.0, path);
+            assert!(
+                line.y >= row.y - TOLERANCE
+                    && line.y + line.height <= row.y + row.height + TOLERANCE
+                    && line.x >= row.x - TOLERANCE
+                    && line.x + line.width <= row.x + row.width + TOLERANCE,
+                "the line at {path:?} is {line:?}, outside its row {row:?}",
+            );
+        }
+    }
+
+    /// U35 (FR-029): a row without details is the fixed-height, single-line row it was.
+    #[test]
+    fn a_row_without_details_keeps_its_fixed_height_and_single_line() {
+        let row = || {
+            row_element(
+                Row::new(LONG_TITLE, Vec::new()),
+                false,
+                false,
+                Some(()),
+                roles(),
+            )
+        };
+        let outer = bounds_at(row(), 200.0, &[]);
+        assert!(
+            (outer.height - density::MENU_ITEM_BASE).abs() < TOLERANCE,
+            "a single-line row is {}dp high, not {}dp",
+            outer.height,
+            density::MENU_ITEM_BASE,
+        );
+        // The label is the second child of the content row, as `menu_anatomy` reads it.
+        let label = bounds_at(row(), 200.0, &[0, 1]);
+        let one_line = ROW_ROLE.size() * 1.3;
+        assert!(
+            label.height <= one_line + TOLERANCE,
+            "a single-line row's label is {}dp high: more than one line of {one_line}dp",
+            label.height,
+        );
+    }
+
+    /// A7 (US1 scenario 7): the picked-row marker sits beside the first line, whatever the row's
+    /// height.
+    #[test]
+    fn a_picked_rows_marker_is_beside_the_first_line_whatever_the_height() {
+        let line = ROW_ROLE.line_height_dp();
+        let labels = "octocat  ·  bug, good first issue, needs triage, area: worktrees, regression";
+        for (label, details, width) in [("#7 Short", "octocat", 400.0), (LONG_TITLE, labels, 200.0)]
+        {
+            let marker = bounds_at(two_line_row(label, details, true), width, MARKER);
+            let first = bounds_at(two_line_row(label, details, true), width, LABEL);
+            let marker_centre = marker.y + marker.height / 2.0;
+            let first_line_centre = first.y + line / 2.0;
+            assert!(
+                (marker_centre - first_line_centre).abs() < 1.0,
+                "the marker is centred on {marker_centre}dp and the first line of {label:?} on \
+                 {first_line_centre}dp",
+            );
+        }
     }
 }
