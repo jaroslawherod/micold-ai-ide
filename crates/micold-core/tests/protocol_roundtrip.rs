@@ -16,10 +16,10 @@ use micold_core::protocol::grid::{
     WireStyle,
 };
 use micold_core::protocol::messages::{
-    ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg, ConfirmOperation,
-    DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult,
-    ProjectSnapshot, RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot,
-    WorktreeStatus,
+    ActivitySignal, BranchContainment, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg,
+    ConfirmOperation, DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink,
+    MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
+    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
@@ -188,6 +188,17 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::RemoteList {
             req: 45,
             project: PathBuf::from("/a"),
+        },
+        // Feature 040 (FR-015): one query per merged branch, and the form with none.
+        ClientMsg::MergedBranchCheck {
+            req: 46,
+            project: PathBuf::from("/a"),
+            checks: merged_branch_queries(),
+        },
+        ClientMsg::MergedBranchCheck {
+            req: 47,
+            project: PathBuf::from("/a"),
+            checks: vec![],
         },
         ClientMsg::WorktreeDelete {
             req: 5,
@@ -494,6 +505,17 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             req: 9,
             result: OperationResult::RemoteList { remotes: vec![] },
         },
+        // Feature 040 (FR-015, FR-017): every answer the daemon can give, in one reply.
+        DaemonMsg::OperationOk {
+            req: 46,
+            result: OperationResult::MergedBranchCheck {
+                answers: vec![
+                    BranchContainment::Contained,
+                    BranchContainment::Beyond,
+                    BranchContainment::Unknown,
+                ],
+            },
+        },
         DaemonMsg::OperationError {
             req: 4,
             kind: ErrorKind::GitFailed,
@@ -566,6 +588,64 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             }],
         },
     ]
+}
+
+/// Two merged branches and the last commit of each one's pull request (feature 040).
+fn merged_branch_queries() -> Vec<MergedBranchQuery> {
+    vec![
+        MergedBranchQuery {
+            branch: "feat/a".into(),
+            head: "1111111111111111111111111111111111111111".into(),
+        },
+        MergedBranchQuery {
+            branch: "fix/b".into(),
+            head: "2222222222222222222222222222222222222222".into(),
+        },
+    ]
+}
+
+/// U56 (feature 040, FR-015): the merged-branch question keeps its queries in order with each
+/// branch beside its head, and the reply keeps one answer per query in that order — the order is
+/// the only thing that ties an answer to its branch.
+#[test]
+fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
+    let asked = ClientMsg::MergedBranchCheck {
+        req: 46,
+        project: PathBuf::from("/a"),
+        checks: merged_branch_queries(),
+    };
+    let bytes = serde_json::to_vec(&asked).unwrap();
+    match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
+        ClientMsg::MergedBranchCheck {
+            req,
+            project,
+            checks,
+        } => {
+            assert_eq!((req, project), (46, PathBuf::from("/a")));
+            assert_eq!(checks, merged_branch_queries());
+        }
+        other => panic!("expected MergedBranchCheck, got {other:?}"),
+    }
+
+    let answers = vec![
+        BranchContainment::Beyond,
+        BranchContainment::Contained,
+        BranchContainment::Unknown,
+    ];
+    let answered = DaemonMsg::OperationOk {
+        req: 46,
+        result: OperationResult::MergedBranchCheck {
+            answers: answers.clone(),
+        },
+    };
+    let bytes = serde_json::to_vec(&answered).unwrap();
+    match serde_json::from_slice::<DaemonMsg>(&bytes).unwrap() {
+        DaemonMsg::OperationOk {
+            req: 46,
+            result: OperationResult::MergedBranchCheck { answers: back },
+        } => assert_eq!(back, answers),
+        other => panic!("expected a MergedBranchCheck result, got {other:?}"),
+    }
 }
 
 #[test]

@@ -412,6 +412,19 @@ pub enum ClientMsg {
         /// Project path.
         project: PathBuf,
     },
+    /// Ask, for each merged pull request's branch, whether the local branch holds commits beyond
+    /// the pull request's last commit (feature 040, FR-015, FR-017). Read-only and local: the
+    /// daemon reads refs and the object store, fetches nothing and writes nothing. At most 50
+    /// queries; a longer list is refused. A non-repository is refused exactly as
+    /// [`ClientMsg::RemoteList`] refuses it.
+    MergedBranchCheck {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// The branches to check, each with its pull request's last commit.
+        checks: Vec<MergedBranchQuery>,
+    },
     /// Show a worktree the repository already knows about that lives outside the directory this
     /// app creates its own in (016 BUG-002, FR-027). **Mutates nothing but the app's own settings**
     /// — no git command runs, because the worktree is already registered, which is precisely why it
@@ -1129,6 +1142,18 @@ pub struct DaemonSettings {
     pub cross_session_access: CrossSessionAccess,
 }
 
+/// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond
+/// `head`, the last commit of its merged pull request (feature 040, FR-015)? A branch name and a
+/// commit id, never a title or an address.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergedBranchQuery {
+    /// The local branch, as the worktree listing shows it.
+    pub branch: String,
+    /// The pull request's last commit: 40 or 64 hexadecimal characters. Anything else is
+    /// answered [`BranchContainment::Unknown`] without git being run.
+    pub head: String,
+}
+
 /// Whether a local branch holds commits beyond its merged pull request (feature 040, FR-015,
 /// FR-017). A removal is suggested for `Contained` only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1183,6 +1208,11 @@ pub enum OperationResult {
     RemoteList {
         /// Every remote with a URL, in config order, URLs as written.
         remotes: Vec<crate::git::GitRemote>,
+    },
+    /// The answers to [`ClientMsg::MergedBranchCheck`] (feature 040, FR-015).
+    MergedBranchCheck {
+        /// One answer per query, in the order of the queries.
+        answers: Vec<BranchContainment>,
     },
     /// A worktree is now shown (016 BUG-002, FR-027). Carries it as discovery sees it, so the
     /// client renders the daemon's answer rather than deriving a second one.
