@@ -9,7 +9,11 @@
 //! the two exemptions in the catalogue name: it decides *where* a panel sits and what dismisses it,
 //! and draws nothing itself, so it is exercised by this section rather than posed in it.
 
+use std::path::Path;
+
 use iced::{Element, Length};
+use micold_core::cli_reason;
+use micold_core::session::AiCli;
 use micold_core::tokens::{anatomy, spacing, Roles};
 
 use crate::icons::{icon_role, Icon, IconSurface};
@@ -119,11 +123,44 @@ pub fn surfaces<'a>(
         );
     }
 
+    // The row's start list with a CLI it does not offer: the same `MenuOverlay` again, with the
+    // note `ui::view` gives it (037 FR-010).
+    if open == Some(Floating::MenuWithNote) {
+        out.push(
+            material::MenuOverlay::new(start_list_items(), Message::Dismissed, roles)
+                .note(start_list_note())
+                .open(true)
+                .into(),
+        );
+    }
+
     if open == Some(Floating::Modal) {
         out.push(modal_surface(roles));
     }
 
     out
+}
+
+/// The CLIs a row's start list offers when its directory lacks Pi.
+fn start_list_items() -> Vec<material::MenuItem<Message>> {
+    [AiCli::ClaudeCode, AiCli::Copilot]
+        .into_iter()
+        .map(|cli| material::MenuItem::labeled(cli.to_string(), Message::NoOp))
+        .collect()
+}
+
+/// The note that list carries: `cli_reason`'s own sentence for a startup script that failed in an
+/// invented directory. The real text and not a stand-in, because how a sentence of that length
+/// and a path wrap in the panel is what this pose is for.
+fn start_list_note() -> String {
+    let said = cli_reason::explain(
+        &[AiCli::Pi],
+        cli_reason::SpawnEnv::ScriptFailed,
+        cli_reason::Place::ThisComputer,
+        cli_reason::AttemptDir::Dir(Path::new(samples::PROJECT_DIR)),
+    )
+    .expect("one CLI is missing");
+    format!("{} {}", said.reason, said.action)
 }
 
 /// The dialog the modal entry opens.
@@ -180,6 +217,15 @@ pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
                 opener(
                     "Open the project switcher",
                     Floating::ProjectSwitcher,
+                    roles,
+                ),
+                roles,
+            ),
+            posed(
+                "with a note under its items",
+                opener(
+                    "Open a start list with a note",
+                    Floating::MenuWithNote,
                     roles,
                 ),
                 roles,

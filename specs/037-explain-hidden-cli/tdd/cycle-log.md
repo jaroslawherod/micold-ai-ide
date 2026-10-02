@@ -253,3 +253,60 @@ existed and failed before the implementation.
   T023 changed it (cycle 7) and is `BASELINE` in the test list, with no red
 - T027: quickstart §B B9 passes. B10: the banner passes word for word; after a restart in place the
   pane keeps its terminal and shows no sentence (`evidence/README.md`, ledger D20)
+
+## Cycle 11: U78–U85, U87–U90, A15–A20 the row list's note (T043, T028, T029, T030–T033)
+
+- test: `crates/micold-client/tests/directory_availability.rs` (U78–U85),
+  `src/ui/material/menu_anatomy.rs` (U87–U90), `src/main_tests.rs`
+  `a_rows_cli_list_names_what_is_not_offered` (A15–A20); the names are in `test-list.md`
+- red, against stubs (`start_menu_note` returned `None`; `MenuOverlay::note` and
+  `menu_panel_size_with_note` ignored the note):
+  - `cargo test -p micold-client --test directory_availability` -> `test result: FAILED. 27 passed; 3
+    failed`: U78 `left: None, right: Some("A session would not find Pi Coding Agent: the startup
+    script exited with an error for /repo, …")`, U84 `the home answer is in use for the row`, U85
+    `left: None`
+  - `cargo test -p micold-client --lib -- menu_anatomy` -> `test result: FAILED. 12 passed; 3 failed`:
+    U87 and U89 `no child 2 at depth 1 of [0, 2]`, U88 `the panel lays out no note under its items`
+  - `cargo test -p micold-client --bin micold-ai-ide -- a_rows_cli_list_names_what_is_not_offered` ->
+    `test result: FAILED. 3 passed; 3 failed`: A15 `a list of two that lacks a third says so`, A19
+    `feat-b lacks Copilot`, A20 `the list says what it does not offer`
+- green: `State::start_menu_note` (T030), `MenuOverlay::note`, `menu::body` and
+  `menu_panel_size_with_note` (T031), the start list in `ui/mod.rs` (T032), the showcase's
+  "Open a start list with a note" (T033). `scripts/build-lock.sh cargo test -p micold-client
+  --no-fail-fast` -> exit 0, 146 `test result: ok`, 0 failed; `directory_availability` 30 passed,
+  `menu_anatomy` 15 passed, `a_rows_cli_list_names_what_is_not_offered` 6 passed
+- U79–U83, U90 and A16–A18 assert an absence or an equality the stubs already met, and passed
+  before the implementation. Each has a mutant that turns it red, applied to the green tree and
+  reverted (`git checkout`), one at a time:
+  - drop `if answer.available.len() < 2 { return None; }` -> `directory_availability`: `28 passed; 2
+    failed` (U80 `a_list_of_one_has_no_note`, U81 `a_list_of_none_has_no_note`); the bin group: `4
+    passed; 2 failed` (A16, A17)
+  - `answer.env?` -> `answer.env.unwrap_or(SpawnEnv::ScriptFailed)` -> `29 passed; 1 failed` (U82)
+  - `&answer.missing()` -> `&[AiCli::Pi]` -> `28 passed; 2 failed` (U79, and U85); the bin group: `4
+    passed; 2 failed` (A18, and A19)
+  - no answer in use returns `Some("made up")` instead of `None` -> `29 passed; 1 failed` (U83)
+  - `menu_panel_size_with_note` returns the height without the note's block -> `menu_anatomy`: `14
+    passed; 1 failed` (U90)
+- T032 and T033 are GUI glue with no test of their own (tasks.md); T035 looks at them
+- the tests and the implementation were written in one sitting and the implementation first compiled
+  after the reds above were recorded; it was green on its first build
+
+## Cycle 12: review A round 1, F2 (T029); A15–A20 with the full suite (T044)
+
+- test: `src/ui/material/menu_anatomy.rs`: `PATH_NOTE`, a sentence naming a directory wider than the
+  panel, added to `the_clamping_estimate_matches_a_panel_with_a_note` (U90) and to
+  `a_note_wraps_at_the_panels_width_less_the_item_padding_at_both_sides` (U88: it takes more than
+  the five lines its words alone need)
+- no red: a characterization of the green code, written after review A said the estimate was held
+  only for sentences without a path. It passed on its first run. The cycle 11 mutant of the
+  estimate turns U90 red for every fixture
+- the showcase's sample directory (`samples::PROJECT_DIR`) is now a worktree path wider than the
+  panel, so its pose shows the break the first visual pass could not
+- gate (T044), on the code tree of `5662df9b` (tree `41ede9e7414b`, before the squash and the rebase onto 038's docs): `mise run gate` -> `GATE_EXIT=0`, 380 `test result: ok`, 0 failed. A15–A20
+  (`a_rows_cli_list_names_what_is_not_offered`, 6 passed), U78–U85 (`directory_availability`, 30
+  passed) and U87–U90 (`menu_anatomy`, 15 passed) are green with the full suite. The mutants for
+  A16, A17 and A18 are in cycle 11. No `cfg(target_os)` arm is touched, so no macOS cross-check
+- T035: quickstart §B B11, B12 and B13 pass (`evidence/README.md`). B11 and B12 at the real client
+  (B11 light and dark; opened with too little room under the row, the panel moves up and stays in
+  the window); B11 and B13 at the showcase in both themes. B13 was not run at the real client: a
+  row with every CLI has the list it had, and `a_row_with_every_cli_has_no_note` holds the absence

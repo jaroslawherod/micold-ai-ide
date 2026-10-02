@@ -683,6 +683,12 @@ decided when the session is created.
   reconnecting to the session service, or opening another row's list never changes what a row
   offers. Until a row's own answer arrives — for a moment after a project opens — it offers what
   your home directory has.
+- **A list of two or more says what it leaves out.** When a row's list offers two or more CLIs and
+  another one is not available for that row's directory, a note under the entries, below a divider,
+  names the missing CLI, says why a session started there would not find it, and says what to
+  change — for example that the environment-include script failed for that directory, and to fix
+  the script named in "Script path". The note is text, not an entry: pressing it does nothing. A
+  row that offers every CLI has no note, and a row with one CLI has no chevron and is unchanged.
 - **Installed means installed where sessions run.** With the session service directly on this
   computer, that is your `PATH`. With it [in a container](./sandboxed-daemon.md), it is the
   container's image, and what is on your own `PATH` makes no difference. The image this app

@@ -392,3 +392,211 @@ fn a_switcher_row_is_the_same_row_as_a_menu_item() {
         density::MENU_ITEM_BASE,
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// 037 contract W7: the note under a menu's items (U87–U90)
+// ---------------------------------------------------------------------------------------------
+
+/// A note that fits one line of the panel.
+const ONE_LINE_NOTE: &str = "Pi Coding Agent isn't offered here.";
+
+/// A note that takes three lines of the panel: one of `cli_reason`'s shorter sentences.
+const THREE_LINE_NOTE: &str = "A session would not find Pi Coding Agent: no script is sourced, \
+                               because \"Script path\" is empty.";
+
+/// A note that names a directory, as four of `cli_reason`'s six reasons do. The path has no space
+/// and is wider than the panel, so it is laid out only by breaking inside the token: the case the
+/// note's wrapping exists for, and the one the estimate has to break at the same places.
+const PATH_NOTE: &str = "A session would not find Pi Coding Agent: the startup script exited with \
+                         an error for \
+                         /home/someone/workspaces/a-project-with-a-long-name/.worktrees/a-feature-branch, \
+                         so its PATH additions are not applied. Fix the script named in \"Script \
+                         path\".";
+
+/// Two items and `note`, in a panel as wide as [`super::MenuOverlay`] makes it.
+fn noted_panel(note: &str) -> Element<'static, Message> {
+    menu_panel(
+        menu::body(two_items(), Some(note.to_string()), roles()),
+        Length::Fixed(menu::PANEL_WIDTH),
+        roles(),
+        true,
+        menu::panel_padding(),
+    )
+}
+
+/// The panel's three parts, top to bottom: the items, the divider and the note's block.
+fn noted_parts(note: &str) -> [Rectangle; 3] {
+    [0, 1, 2].map(|part| bounds_at(noted_panel(note), &[0, part]))
+}
+
+/// The bounds of the note's text itself: the innermost node of the note's block.
+fn note_text(note: &str) -> Rectangle {
+    let mut element = noted_panel(note);
+    let renderer = super::test_support::renderer();
+    let mut tree = Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, ROOM),
+    );
+    let mut layout = Layout::new(&node)
+        .children()
+        .next()
+        .and_then(|body| body.children().nth(2))
+        .expect("the panel lays out no note under its items");
+    while let Some(inner) = layout.children().next() {
+        layout = inner;
+    }
+    layout.bounds()
+}
+
+fn lines(text: Rectangle) -> f32 {
+    text.height / super::TypeRole::Label.line_height_dp()
+}
+
+/// U87 (FR-010, W7): the items, then a divider, then the note, with nothing between them, and the
+/// panel's own 8dp under the note as under a last item.
+#[test]
+fn a_menu_with_a_note_lays_out_its_items_then_a_divider_then_the_note() {
+    let panel_box = bounds_at(noted_panel(ONE_LINE_NOTE), &[]);
+    let [items, divider, note] = noted_parts(ONE_LINE_NOTE);
+    let (_, items_alone) = menu::menu_panel_size(2);
+
+    assert!(
+        (items.height - (items_alone as f32 - 2.0 * anatomy::menu::VERTICAL_PADDING)).abs()
+            < TOLERANCE,
+        "the items take {}dp with a note under them; without one they take what \
+         `menu_panel_size` says",
+        items.height
+    );
+    assert!(
+        (divider.y - (items.y + items.height)).abs() < TOLERANCE
+            && (divider.height - 1.0).abs() < TOLERANCE
+            && (divider.width - panel_box.width).abs() < TOLERANCE,
+        "a 1dp divider runs the panel's width directly under the last item: {divider:?}"
+    );
+    assert!(
+        (note.y - (divider.y + divider.height)).abs() < TOLERANCE && note.height > 0.0,
+        "the note starts where the divider ends: {note:?}"
+    );
+    let below = (panel_box.y + panel_box.height) - (note.y + note.height);
+    assert!(
+        (below - anatomy::menu::VERTICAL_PADDING).abs() < TOLERANCE,
+        "the panel pads {below}dp under the note; §7.5 states {}dp under its last entry",
+        anatomy::menu::VERTICAL_PADDING
+    );
+}
+
+/// U88 (FR-010, W7): the note is inset by the item padding at both sides and wraps there.
+#[test]
+fn a_note_wraps_at_the_panels_width_less_the_item_padding_at_both_sides() {
+    let panel_box = bounds_at(noted_panel(THREE_LINE_NOTE), &[]);
+    let text = note_text(THREE_LINE_NOTE);
+
+    let leading = text.x - panel_box.x;
+    let trailing = (panel_box.x + panel_box.width) - (text.x + text.width);
+    assert!(
+        (leading - anatomy::menu::ITEM_PADDING).abs() < TOLERANCE
+            && (trailing - anatomy::menu::ITEM_PADDING).abs() < TOLERANCE,
+        "the note's text is inset {leading}dp and {trailing}dp; an item's content is inset \
+         {}dp at both ends",
+        anatomy::menu::ITEM_PADDING
+    );
+    assert!(
+        (lines(text) - 3.0).abs() < 0.1,
+        "a sentence longer than the panel wraps inside it: it takes {} lines, not 3",
+        lines(text)
+    );
+    assert!(
+        (lines(note_text(ONE_LINE_NOTE)) - 1.0).abs() < 0.1,
+        "fixture check: the short note is one line"
+    );
+    // A path is one token wider than the panel. Broken at words alone it would take the 5 lines
+    // its words need and run past the panel's edge; broken inside the token it takes more.
+    assert!(
+        lines(note_text(PATH_NOTE)) > 5.5,
+        "a path wider than the panel is broken inside the panel: the note takes {} lines",
+        lines(note_text(PATH_NOTE))
+    );
+}
+
+/// What a press and release at `at` over a noted panel did.
+fn press_noted_panel(at: iced::Point) -> (bool, usize) {
+    use iced::advanced::{clipboard, mouse, Shell};
+    use iced::Event;
+
+    let mut element = noted_panel(THREE_LINE_NOTE);
+    let renderer = super::test_support::renderer();
+    let mut tree = Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, ROOM),
+    );
+    let mut messages: Vec<Message> = Vec::new();
+    let mut captured = false;
+    for (button_event, is_press) in [
+        (mouse::Event::ButtonPressed(mouse::Button::Left), true),
+        (mouse::Event::ButtonReleased(mouse::Button::Left), false),
+    ] {
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            &mut tree,
+            &Event::Mouse(button_event),
+            Layout::new(&node),
+            mouse::Cursor::Available(at),
+            &renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(ROOM),
+        );
+        if is_press {
+            captured = shell.is_event_captured();
+        }
+    }
+    (captured, messages.len())
+}
+
+/// U89 (US3-AS4, FR-010, W7): the note is not something to press. A press on it publishes
+/// nothing, and it stops there instead of reaching what is behind the panel.
+#[test]
+fn a_note_has_no_pressable_region() {
+    let [items, _, note] = noted_parts(THREE_LINE_NOTE);
+
+    let (_, from_item) = press_noted_panel(iced::Point::new(
+        items.center_x(),
+        items.y + density::MENU_ITEM_BASE / 2.0,
+    ));
+    assert_eq!(from_item, 1, "fixture check: a press on an item publishes");
+
+    let (captured, from_note) = press_noted_panel(note.center());
+    assert_eq!(from_note, 0, "a press on the note published a message");
+    assert!(
+        captured,
+        "a press on the note went on to whatever is behind the panel"
+    );
+}
+
+/// U90 (FR-010, W7): `menu_panel_size_with_note` is the laid-out panel's size, so a list with a
+/// note opened from the lowest row is clamped by what it really takes.
+#[test]
+fn the_clamping_estimate_matches_a_panel_with_a_note() {
+    for note in [ONE_LINE_NOTE, THREE_LINE_NOTE, PATH_NOTE] {
+        let measured = bounds_at(noted_panel(note), &[]);
+        let (width, height) = menu::menu_panel_size_with_note(2, Some(note));
+
+        assert!(
+            (measured.width - f32::from(width)).abs() < TOLERANCE
+                && (measured.height - f32::from(height)).abs() < TOLERANCE,
+            "`menu_panel_size_with_note` predicts {width}x{height}dp for a panel that lays out \
+             at {}x{}dp with the note {note:?}",
+            measured.width,
+            measured.height
+        );
+    }
+    assert_eq!(
+        menu::menu_panel_size_with_note(2, None),
+        menu::menu_panel_size(2),
+        "without a note the estimate is the one every other menu uses"
+    );
+}

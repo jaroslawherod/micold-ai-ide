@@ -64,12 +64,12 @@ What is actually rendered is the quickstart §B visual pass (T017, T027, T035, T
 | A12 | Service, `MICOLD_IMAGE_REFERENCE` set, script succeeded without the CLI: the `Fresh` and `Resume` reasons are today's `missing_cli_reason` sentences byte for byte. Written before T023 and green against the untouched gate, then `BASELINE` | US2-AS4, FR-005 | characterization | BASELINE | `crates/micold-daemon/tests/session_start.rs::in_an_image_whose_script_ran_a_missing_cli_keeps_the_sentences_it_had` |
 | A13 | Service, `MICOLD_IMAGE_REFERENCE` set, environment-include off: the reason is the `IncludeOff` image sentence, names the image as where sessions run, and contains neither "isn't in" nor "isn't installed" | US2-AS5, FR-005, FR-002, SC-003 | example | DONE | `crates/micold-daemon/tests/session_start.rs::in_an_image_with_environment_include_off_the_refusal_does_not_blame_the_image` |
 | A14 | Service: `create_session` for a CLI the target directory's environment lacks is refused with `explain(&[cli], env, place, Dir(cwd))`'s `{reason} {action}`, leaves no session record, and with environment-include off does not contain "is not installed" | US2-AS6, FR-009a, FR-002 | example | DONE | `crates/micold-daemon/tests/mcp_create_session.rs::a_cli_the_directorys_environment_lacks_is_refused_with_the_reason_and_no_record` |
-| A15 | A row whose own answer offers two CLIs, lacks Pi and carries `env: Some(ScriptFailed)`: with its list open, `start_menu_note(dir)` names Pi Coding Agent with that reason and action and names the row's directory, and the two CLIs are still offered | US3-AS1, FR-010, SC-007 | example | PENDING | |
-| A16 | A row whose own answer offers one CLI: it offers no choice (no chevron) and `start_menu_note(dir)` is `None` | US3-AS1a, FR-010, SC-007 | example | PENDING | |
-| A17 | A row whose own answer offers one CLI that is not the stored default: the primary press opens the list with A9's message, and `start_menu_note(dir)` is `None` | US3-AS1b, FR-010, FR-008 | example | PENDING | |
-| A18 | A row whose own answer offers every supported CLI: with its list open, `start_menu_note(dir)` is `None` | US3-AS2, FR-011, SC-005 | example | PENDING | |
-| A19 | Two rows whose answers differ: each row's note is its own directory's, and opening, answering and closing one row's list leaves the other row's note and offer as they were | US3-AS3, FR-012 | example | PENDING | |
-| A20 | With the list open on a row that lacks Pi: the CLIs the list offers for that row do not include Pi although the note names it, and opening the list sent no start to the service | US3-AS4, FR-010, FR-015 | example | PENDING | |
+| A15 | A row whose own answer offers two CLIs, lacks Pi and carries `env: Some(ScriptFailed)`: with its list open, `start_menu_note(dir)` names Pi Coding Agent with that reason and action and names the row's directory, and the two CLIs are still offered | US3-AS1, FR-010, SC-007 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::a_list_of_two_names_the_missing_cli_with_the_reason_and_action_for_the_rows_directory` |
+| A16 | A row whose own answer offers one CLI: it offers no choice (no chevron) and `start_menu_note(dir)` is `None` | US3-AS1a, FR-010, SC-007 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::a_row_with_one_cli_has_no_chevron_and_no_note` |
+| A17 | A row whose own answer offers one CLI that is not the stored default: the primary press opens the list with A9's message, and `start_menu_note(dir)` is `None` | US3-AS1b, FR-010, FR-008 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::a_missing_default_on_a_row_with_one_cli_is_explained_by_the_message_and_not_by_a_note` |
+| A18 | A row whose own answer offers every supported CLI: with its list open, `start_menu_note(dir)` is `None` | US3-AS2, FR-011, SC-005 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::a_row_with_every_cli_has_no_note` |
+| A19 | Two rows whose answers differ: each row's note is its own directory's, and opening, answering and closing one row's list leaves the other row's note and offer as they were | US3-AS3, FR-012 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::each_row_keeps_its_own_note_while_another_rows_list_is_opened_answered_and_closed` |
+| A20 | With the list open on a row that lacks Pi: the CLIs the list offers for that row do not include Pi although the note names it, and opening the list sent no start to the service | US3-AS4, FR-010, FR-015 | example | DONE | `crates/micold-client/src/main_tests.rs::a_rows_cli_list_names_what_is_not_offered::the_cli_the_note_names_is_not_among_the_ones_offered_and_nothing_starts` |
 
 Notes on the outer loop:
 
@@ -241,14 +241,14 @@ Tests in `crates/micold-client/tests/directory_availability.rs`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U78 | An answer offering two of three CLIs with `env: Some(..)` gives `Some` of `explain`'s `{reason} {action}` for the missing one and the answer's `asked_for` | FR-010, US3-AS1, SC-007 (R6) | example | PENDING | |
-| U79 | An answer offering all three gives `None` | FR-011, US3-AS2 (W5) | example | PENDING | |
-| U80 | An answer offering one CLI gives `None`: the other side of U78's "two or more" | FR-010, US3-AS1a, US3-AS1b (D5, D6) | example | PENDING | |
-| U81 | An answer offering none gives `None` | FR-010, Edge Cases nothing is available | example | PENDING | |
-| U82 | An answer offering two with `env: None` gives `None` | FR-011 (W5) | example | PENDING | |
-| U83 | With no answer in use (neither the row's nor home's) the note is `None` | FR-011, Edge Cases not answered yet | example | PENDING | |
-| U84 | A row reading the home answer says "your home directory", and names its own directory once its own answer is filed | FR-004a, FR-012 (D7) | example | PENDING | |
-| U85 | Two rows with different answers each get their own note, and filing one row's answer does not change the other's | US3-AS3, FR-012, Edge Cases several rows at once | example | PENDING | |
+| U78 | An answer offering two of three CLIs with `env: Some(..)` gives `Some` of `explain`'s `{reason} {action}` for the missing one and the answer's `asked_for` | FR-010, US3-AS1, SC-007 (R6) | example | DONE | `crates/micold-client/tests/directory_availability.rs::a_list_of_two_says_which_cli_is_missing_and_why_for_the_directory_asked_about` |
+| U79 | An answer offering all three gives `None` | FR-011, US3-AS2 (W5) | example | DONE | `crates/micold-client/tests/directory_availability.rs::a_list_of_every_cli_has_no_note` |
+| U80 | An answer offering one CLI gives `None`: the other side of U78's "two or more" | FR-010, US3-AS1a, US3-AS1b (D5, D6) | example | DONE | `crates/micold-client/tests/directory_availability.rs::a_list_of_one_has_no_note` |
+| U81 | An answer offering none gives `None` | FR-010, Edge Cases nothing is available | example | DONE | `crates/micold-client/tests/directory_availability.rs::a_list_of_none_has_no_note` |
+| U82 | An answer offering two with `env: None` gives `None` | FR-011 (W5) | example | DONE | `crates/micold-client/tests/directory_availability.rs::an_answer_without_a_state_has_no_note` |
+| U83 | With no answer in use (neither the row's nor home's) the note is `None` | FR-011, Edge Cases not answered yet | example | DONE | `crates/micold-client/tests/directory_availability.rs::no_answer_in_use_has_no_note` |
+| U84 | A row reading the home answer says "your home directory", and names its own directory once its own answer is filed | FR-004a, FR-012 (D7) | example | DONE | `crates/micold-client/tests/directory_availability.rs::a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_filed` |
+| U85 | Two rows with different answers each get their own note, and filing one row's answer does not change the other's | US3-AS3, FR-012, Edge Cases several rows at once | example | DONE | `crates/micold-client/tests/directory_availability.rs::two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other` |
 | U86 | A row whose own answer offers one CLI offers no choice (no chevron), whatever home holds | FR-010, US3-AS1a, SC-007 (026 FR-006) | example | DONE | `crates/micold-client/tests/features_session.rs::the_chevron_follows_the_rows_own_answer` |
 
 ### `crates/micold-client/src/ui/material/menu.rs`: `MenuOverlay::note`, `menu_panel_size_with_note`
@@ -258,10 +258,10 @@ binary).
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U87 | A menu with a note lays out its items, then a `Divider`, then the note | FR-010 (W7) | example | PENDING | |
-| U88 | The note wraps at the panel's width less the item padding at both sides | FR-010 (W7) | example | PENDING | |
-| U89 | The note has no pressable region | US3-AS4, FR-010 (W7) | example | PENDING | |
-| U90 | `menu_panel_size_with_note(items, note)` equals the laid-out panel's size for a one-line note and for a three-line note | FR-010 (W7) | example | PENDING | |
+| U87 | A menu with a note lays out its items, then a `Divider`, then the note | FR-010 (W7) | example | DONE | `crates/micold-client/src/ui/material/menu_anatomy.rs::a_menu_with_a_note_lays_out_its_items_then_a_divider_then_the_note` |
+| U88 | The note wraps at the panel's width less the item padding at both sides | FR-010 (W7) | example | DONE | `crates/micold-client/src/ui/material/menu_anatomy.rs::a_note_wraps_at_the_panels_width_less_the_item_padding_at_both_sides` |
+| U89 | The note has no pressable region | US3-AS4, FR-010 (W7) | example | DONE | `crates/micold-client/src/ui/material/menu_anatomy.rs::a_note_has_no_pressable_region` |
+| U90 | `menu_panel_size_with_note(items, note)` equals the laid-out panel's size for a one-line note and for a three-line note | FR-010 (W7) | example | DONE | `crates/micold-client/src/ui/material/menu_anatomy.rs::the_clamping_estimate_matches_a_panel_with_a_note` |
 | U91 | A menu without a note is laid out as `menu_panel_size` says today | FR-010 (W7, "laid out exactly as before") | example | DONE | `crates/micold-client/src/ui/material/menu_anatomy.rs` `the_clamping_estimate_matches_the_panel_it_estimates` |
 
 ## Existing tests this feature rewrites
