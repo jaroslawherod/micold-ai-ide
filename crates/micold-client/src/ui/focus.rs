@@ -169,7 +169,7 @@ impl<T> Operation<T> for ShowFocused {
 /// Split out because this is the part that can be wrong in a way no rendered check would name: it
 /// is arithmetic on four numbers, and the failure it guards is "the control is on screen but flush
 /// against the edge", which a screenshot shows and a layout gate does not.
-fn delta_into_view(
+pub(super) fn delta_into_view(
     focused: Rectangle,
     viewport_height: f32,
     content_top: f32,

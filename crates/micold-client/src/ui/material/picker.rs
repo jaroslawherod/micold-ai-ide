@@ -110,6 +110,14 @@ pub(super) const EXIT: Duration = Duration::from_millis(duration::SHORT_2);
 /// would otherwise silently change how many rows fit.
 const MAX_ROWS_BEFORE_SCROLL: f32 = 8.0;
 
+/// The widget `Id` of the highlighted row, and of no other (feature 038, FR-007).
+///
+/// It is how `ui::picker_scroll` finds the row the keyboard is on: a row's height is whatever its
+/// wrapping lines come to, so where the highlighted one lies cannot be computed from its index.
+/// One `Id` for every list is enough, because one list has the keyboard at a time.
+pub static PICKER_HIGHLIGHT: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("picker-highlight"));
+
 /// One result row — Material's menu item, in the library's own assembly of it.
 ///
 /// The same three parts `material::menu`'s items are built from, in the same order: a leading slot,
@@ -286,13 +294,18 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
         // A disabled row is present and readable but has nowhere to send a press, so it renders
         // unpressable rather than carrying a flag that could disagree with one (FR-012a).
         let press = item.enabled.then(|| on_pick.map(|f| f(index))).flatten();
-        list = list.push(row_element(
-            item,
-            highlighted == Some(index),
-            selected == Some(index),
-            press,
-            r,
-        ));
+        let is_highlighted = highlighted == Some(index);
+        let row = row_element(item, is_highlighted, selected == Some(index), press, r);
+        list = list.push(if is_highlighted {
+            // A container for its `Id` alone: it is the one widget that reports an `Id` with its
+            // bounds to an operation, and it sizes itself as its content does, so the row lies
+            // where it would without it.
+            iced::widget::container(row)
+                .id(PICKER_HIGHLIGHT.clone())
+                .into()
+        } else {
+            row
+        });
     }
 
     // The cap is a layout constraint rather than a treatment, so it is a plain container: the
