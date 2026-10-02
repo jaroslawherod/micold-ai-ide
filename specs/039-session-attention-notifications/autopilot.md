@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: `speckit-tdd-plan`, `speckit-analyze`, the tasks review (round 1), checklists, PR 2.
+- **Next step**: Continue the design unit from *Handover*: the tasks review (round 1), checklists, PR 2.
 
 ## Pull requests
 
@@ -23,12 +23,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | | pending |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | | pending |
-| M3 | T035–T044 | full | The same notification on macOS and Windows | | pending |
+| M3 | T035–T044, T118 | full | The same notification on macOS and Windows | | pending |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
-| M5 | T062–T072 | full | Unread counts on the switcher's rows and button | | pending |
-| M6 | T073–T090 | full | A click on the notification opens the session | | pending |
+| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
+| M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
-| M8 | T101–T112 | full | The Desktop notifications switch | | pending |
+| M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
 
 ## Decisions
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D14 | design | Is the switch a client or a service setting? | Service-owned (`DaemonSettings`), so every window has one value at once; the service refuses grants while off. | agent-resolved | research.md R8; pattern `tool_server_enabled` |
 | D15 | design | A notification is clicked after the window that raised it was closed, with another window open. Must the session open? | No: the click is reported to the raising process only, on all three systems, so no window learns of it (FR-015's exception). Nothing changes; the unread mark finds the session. Stated in spec Edge Cases, research R6 *Known limit*, contract N9, quickstart B11a, and the user guide in M3. Sharing ids through the service was rejected: it helps only on Linux services that send the click to every listener. | agent-resolved | spec.md FR-015, Edge Cases; Review Plan round 1 F3; `mac-usernotifications` 0.3.1 `src/delegate.rs`, `tauri-winrt-notification` 0.8.1 `src/lib.rs:485` |
 | D17 | design | How are the stories cut into milestones? | Nine: story 1 in three slices (service rules; Linux notification; macOS and Windows), story 2 in two (row mark; switcher counts), story 3 in two (click; Wayland focus, which starts with a probe), story 4, polish. Each story is well past 15 tasks; M1 is observable by its integration test only and its PR takes `docs-not-needed`. The wire is bumped once per milestone that changes it (21 to 26), so the claim pair moved to 22 and the activation token to 25. | agent-resolved | `references/milestones.md` rules 1, 3; tasks.md Milestones; research.md R10 |
+| D18 | design | How does the test list bind the tasks? | `tdd/test-list.md`: 48 acceptance behaviors (one per scenario) and 175 unit behaviors; the outer loop is two halves of integration tests (service, window) that meet at the catalog snapshot, with the real desktop left to quickstart §B and §C. Markers `[A…]`/`[U…]` on the test and implementation tasks; four final run tasks T118–T121 (M3, M5, M6, M8); five cases added to T005, T022, T037, T045, T048 for rules no task tested (FR-005 ended session, US1.4, FR-007 guard, FR-008a unreadable store, FR-008 session created with no window) | `speckit-tdd-plan`; a marker's tasks stay inside one milestone so `speckit-tdd-run` can tick them | autopilot |
 | D16 | design | Do the facts part 1 left unconfirmed hold? | Code: all four hold (`switch_daemon_attachment` sends `Detach` then `Attach`, `daemon_sync.rs:198`; `ProjectMsg::Reopened` `features/project.rs:531`; `SessionMsg::Selected` `features/session.rs:1554`; `Button` is a builder with a `leading` slot, `button.rs:95`; the sandboxed service's `projects.json` is the host's state directory mounted at `/var/lib/micold-ai-ide`, `sandbox/mod.rs:367`, `:659`). Wayland: the foreign-handle binding is confirmed in the sources (winit selects `client_system`; `smithay-clipboard` does the same in this application); whether a compositor honours the notification's token stays unverified and has a probe task in M3. Windows: the notification-centre click stays unverified: no primary source found; a task in M3 checks it on an installed build. | agent-resolved | research.md "Where the code is today", R4, R7 |
 
 ## Review rounds
@@ -69,11 +70,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit, part 2, handed over at the context cap after `speckit-tasks` (step 2 of `phases/3-design.md`), before `speckit-analyze`.
-
-- **Done**: `branch-start.sh 528` (rebased; nothing pushed). The plan's unconfirmed facts checked (D16). Plan review: round 1 CHANGES, all fixed; round 2 CLEAN. `tasks.md` written with 117 tasks and `## Milestones` M1–M9 (D17); plan.md *Delivery order*, research R10 and `contracts/wire.md` aligned with it (versions 21 to 26) **after** the plan review's last snapshot, so the tasks reviewer should also read those three edits (commit `7f0f72fd`). The `before_tasks` hook (`speckit.docguard.review`, optional) was not run.
-- **Next step**: the `after_tasks` hooks — run `speckit-tdd-plan` (it writes `tdd/test-list.md`, which the mandatory `before_implement` hook `speckit.tdd.run` reads; feature 038 has one) and skip `speckit.docguard.score` (optional, a score only). Then `speckit-analyze` and fix what it finds; the Tasks and milestone review, round 1 (no round recorded, no snapshot taken); checklists (`checklists/requirements.md` has no unchecked item; re-check after the spec's new Edge Case line); PR 2 `docs(039): clarify, plan and cut milestones for session attention notifications`, body ending `Refs #481`, local gate `mise run test-scripts`.
-- **Open findings**: none. Points for the tasks reviewer, not yet reviewed by anyone: M1 ships nothing a user sees (deliverable is the integration test) — rule 1 of `milestones.md` read with rule 3; M2 leaves macOS and Windows returning `NotifyError::Unsupported` until M3 (Principle VI is met at M3); the spec gained one Edge Case line for D15 without an escalation; T017/T018/T073 share `attention.rs` and carry no `[P]`; M9's tier is `light` although T115 runs the visual pass.
+Design unit, part 3, handed over at the context cap after `speckit-analyze` and its fixes (step 3 of `phases/3-design.md`), before the tasks review.
+- **Done**: `branch-start.sh 528` again (rebased onto `origin/main`; nothing pushed). `speckit-tdd-plan`: `tdd/test-list.md`, `tdd/cycle-log.md`, markers and T118–T121 in `tasks.md` (121 tasks; D18). `speckit-analyze`: 0 CRITICAL, 0 HIGH, 4 MEDIUM, 11 LOW; fixed C1 and C2 (two recorded paragraphs under plan.md *Constitution Check*: the glue exception in `shell/`, and the Linux-only interval between M2 and M3), C3 (T037 records a deliberate violation), G1 (SC-004 in M6), G2 (`[U175]` on T045), G3 (quickstart B15 for SC-008), G4, G5, I1, I2, I3. Not changed: G6 (A10 is the unit test of `in_view`, as no window-side value depends on the tab), T1 (spec `Status: Draft`; "switch" in the docs, `Checkbox` the component), T2 (contract ids keep their names; round and square brackets tell them apart).
+- **Suite baseline**: `unknown`. The first run of `cargo test --workspace` stopped at `micold-daemon --test mcp_create_session::a_pi_session_start_event_makes_pi_ready` (4004 passed, 1 failed up to there; this branch changes only `specs/`); that test binary passed 19 of 19 when rerun alone. A `--no-fail-fast` rerun was queued behind another worktree's build: its log is `/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-notify-session-needs-attention/4922067d-38d0-4f20-a41f-9c0bae9ef34b/scratchpad/suite2.log` (ends with `_EXIT=`). If it is there and green, set `suite_baseline: green` with its counts in `tdd/test-list.md` and `tdd/cycle-log.md`; otherwise leave `unknown` — M1's first cycle re-measures.
+- **Next step**: the Tasks and milestone review, round 1 (no round recorded, no snapshot taken) — give the reviewer `tasks.md`, `tdd/test-list.md`, the ledger's milestones, and the edits no reviewer has seen: plan.md *Delivery order* and the two recorded paragraphs, research R10, `contracts/wire.md` (versions 21 to 26), quickstart B15, spec.md's Edge Case line for D15. Then checklists (`checklists/requirements.md` has no unchecked item; re-check against that Edge Case line); PR 2 `docs(039): clarify, plan and cut milestones for session attention notifications`, body ending `Refs #481`, local gate `mise run test-scripts`.
+- **Open findings**: none. Points for the tasks reviewer: M1 ships nothing a user sees (deliverable is the integration test); M2 leaves macOS and Windows on `NotifyError::Unsupported` until M3 (now recorded in plan.md); the spec's Edge Case line for D15 was added without an escalation; T017/T018/T073 share `attention.rs` and carry no `[P]`; M9's tier is `light` although T115 runs the visual pass; T118 sits in M3 although its tests are green from M2 (it adds the three CI legs); the five test cases D18 added; behavior ids and contract ids share the names `A1…`/`U1…`. The optional hooks `speckit.docguard.review` and `speckit.docguard.score` were not run.
 - **PR**: none opened by this unit.
 
 ## Open escalation
@@ -84,3 +85,4 @@ None.
 
 ## Follow-ups not done
 
+- `crates/micold-daemon/tests/mcp_create_session.rs::a_pi_session_start_event_makes_pi_ready` failed once in a full-suite run on a docs-only branch (`left: ""`, line 600) and passed when rerun alone: a timing flake in code this flow does not own. Not fixed here.

@@ -76,6 +76,24 @@ new shared component (`UnreadMark`), three extended components, six wire changes
 
 No violation; Complexity Tracking is empty.
 
+**Recorded for Principle I — the glue exception in `shell/`.** The principle names `src/main.rs`,
+`src/ui/` and `src/showcase/`. `shell/` is the same binary's module tree, declared by `src/main.rs`
+and unreachable from `tests/` for the same reason, so this plan uses the exception there and
+records where: the system call of each backend in `shell/desktop_notify/` (the D-Bus call, the
+notification centre, the toast), the `iced::window` task per step in `shell/window_raise.rs`, its
+`unsafe` foreign-display call on Wayland, and the wiring lines added to `shell/daemon_sync.rs`,
+`shell/startup.rs` and `shell/persist.rs`. None of these decides anything. Whatever decides is
+tested first: the request, the id table and the signal or callback mapping of each backend are
+pure functions with `#[cfg(test)]` tests in the backend's own file (as `shell/daemon_sync.rs` has
+today), and `raise_plan` and `after_activation` are in `features/attention.rs`.
+
+**Recorded for Principle VI — the interval between two milestones.** After the milestone that
+ships the Linux backend and before the one that ships the macOS and Windows backends, `main`
+shows the notification on Linux only; the other two log once that they cannot show it (FR-010)
+and nothing else differs. The user guide says so for that interval. The feature is not done, and
+story 1 is not complete, until the three backends are on `main`; the same holds for the Wayland
+focus path, whose limit is declared in the table above.
+
 ### Re-check after Phase 1 design
 
 Unchanged. The design added no storage outside the two existing files, no OS branch outside
