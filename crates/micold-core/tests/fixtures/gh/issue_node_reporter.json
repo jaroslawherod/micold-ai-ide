@@ -1,0 +1,19 @@
+{
+  "number": 518,
+  "title": "Issue list: show reporter and labels on a second line",
+  "updatedAt": "2026-10-01T08:15:00Z",
+  "state": "OPEN",
+  "author": {
+    "login": "octocat"
+  },
+  "labels": {
+    "nodes": [
+      {
+        "name": "enhancement"
+      },
+      {
+        "name": "ui"
+      }
+    ]
+  }
+}

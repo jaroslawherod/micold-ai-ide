@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use micold_core::github::{
     list_args, parse_list_page, parse_search, search_args, GithubRepo, Issue, IssueLoadError,
-    LIST_QUERY, SEARCH_QUERY, SEARCH_WITH_NUMBER_QUERY,
+    GHOST_LOGIN, ISSUE_NODE_SELECTION, LIST_QUERY, SEARCH_QUERY, SEARCH_WITH_NUMBER_QUERY,
 };
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -161,6 +161,15 @@ fn list_args_send_only_the_repository() {
         3,
         "query, owner and name are the only values sent: {values:?}"
     );
+    assert_no_author_qualifier(&paged);
+}
+
+/// 038 FR-013, FR-026: the reporter is read from each node; no request filters by author.
+fn assert_no_author_qualifier(args: &[String]) {
+    assert!(
+        !args.iter().any(|a| a.contains("author:")),
+        "no argument carries an `author:` qualifier: {args:?}"
+    );
 }
 
 // --- M3: the search beyond the loaded issues (FR-005a) -------------------------------------
@@ -280,6 +289,22 @@ fn search_args_send_only_the_query() {
         .concat(),
         "plain text: one variable, the search query"
     );
+    assert_eq!(
+        search_args(&o_r, "octocat"),
+        [
+            &head[..],
+            &[
+                &format!("query={SEARCH_QUERY}"),
+                "-f",
+                "q=repo:o/r is:issue is:open octocat",
+            ][..],
+        ]
+        .concat(),
+        "a typed login is sent as text, like any other word (038 FR-013)"
+    );
+    for typed in ["octocat", "4312", "#4312", "crash on open"] {
+        assert_no_author_qualifier(&search_args(&o_r, typed));
+    }
 
     for typed in ["4312", "#4312"] {
         assert_eq!(
@@ -322,5 +347,139 @@ fn search_args_send_only_the_query() {
         search_args(&o_r, "42 crash")[5],
         format!("query={SEARCH_QUERY}"),
         "a number followed by words is text"
+    );
+}
+
+// --- 038: the reporter (contracts/issue-fields.md §1–2) --------------------------------------
+
+/// A list page holding `nodes`, as `LIST_QUERY` answers.
+fn list_page_of(nodes: &str) -> Vec<u8> {
+    format!(
+        r#"{{"data":{{"repository":{{"issues":{{"totalCount":1,
+        "pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[{nodes}]}}}}}}}}"#
+    )
+    .into_bytes()
+}
+
+fn only_issue(nodes: &str) -> Issue {
+    let mut page = parse_list_page(&list_page_of(nodes)).expect("a well-formed page");
+    assert_eq!(page.issues.len(), 1, "the page holds one node");
+    page.issues.remove(0)
+}
+
+/// 038 U1 — the reporter is the author's login as GitHub reports it (FR-002).
+#[test]
+fn a_node_with_an_author_parses_to_that_reporter() {
+    let issue = only_issue(
+        r#"{"number":1,"title":"T","updatedAt":"t","labels":{"nodes":[]},
+            "author":{"login":"octocat"}}"#,
+    );
+    assert_eq!(
+        issue.reporter(),
+        "octocat",
+        "the reporter is the author's login"
+    );
+}
+
+/// 038 U2 — GitHub reports no author for a deleted account: the issue is listed, by `ghost`.
+#[test]
+fn a_node_without_an_author_is_reported_by_ghost() {
+    for (case, node) in [
+        (
+            "`author: null`",
+            r#"{"number":1,"title":"T","updatedAt":"t","labels":{"nodes":[]},"author":null}"#,
+        ),
+        (
+            "no `author` key",
+            r#"{"number":1,"title":"T","updatedAt":"t","labels":{"nodes":[]}}"#,
+        ),
+    ] {
+        let issue = only_issue(node);
+        assert_eq!(issue.number(), 1, "{case}: the issue is still listed");
+        assert_eq!(
+            issue.reporter(),
+            GHOST_LOGIN,
+            "{case}: the reporter is the ghost login"
+        );
+    }
+    assert_eq!(
+        GHOST_LOGIN, "ghost",
+        "the login GitHub shows for a deleted account"
+    );
+    assert_eq!(
+        Issue::new(5, "Title".into(), vec![], "t".into()).reporter(),
+        GHOST_LOGIN,
+        "an issue built without a reporter has the ghost login, never an empty one"
+    );
+}
+
+/// 038 U3 — a bot is a reporter like any other: its login is kept as reported, nothing marks it.
+#[test]
+fn a_bots_login_is_kept_as_reported() {
+    let issue = only_issue(
+        r#"{"number":1,"title":"T","updatedAt":"t","labels":{"nodes":[]},
+            "author":{"login":"dependabot"}}"#,
+    );
+    assert_eq!(
+        issue.reporter(),
+        "dependabot",
+        "a bot's login is shown as GitHub reports it"
+    );
+}
+
+/// 038 U4 — the three queries ask for an issue's fields with one shared selection, so a node from
+/// any of them parses alike (FR-006), and that selection asks for the author's login.
+#[test]
+fn every_query_holds_the_shared_node_selection() {
+    assert!(
+        ISSUE_NODE_SELECTION.contains("author { login }"),
+        "the shared selection asks for the author's login: {ISSUE_NODE_SELECTION}"
+    );
+    for (name, query, nodes) in [
+        ("LIST_QUERY", LIST_QUERY, 1),
+        ("SEARCH_QUERY", SEARCH_QUERY, 1),
+        ("SEARCH_WITH_NUMBER_QUERY", SEARCH_WITH_NUMBER_QUERY, 2),
+    ] {
+        assert_eq!(
+            query.matches(ISSUE_NODE_SELECTION).count(),
+            nodes,
+            "{name} selects every issue node with the shared selection"
+        );
+        assert_eq!(
+            query.matches("author").count(),
+            nodes,
+            "{name} names the author only inside the shared selection"
+        );
+    }
+}
+
+/// 038 U5 — the same node, answered by the listing, by the search and by the typed-number lookup,
+/// is the same issue (FR-006).
+#[test]
+fn a_node_parses_alike_from_every_source() {
+    let node = String::from_utf8(fixture("issue_node_reporter.json")).expect("UTF-8");
+    let listed = only_issue(&node);
+    assert_eq!(listed.number(), 518, "the captured node is issue 518");
+    assert_eq!(listed.reporter(), "octocat", "with its reporter");
+    assert_eq!(listed.labels(), ["enhancement", "ui"], "and its labels");
+
+    let searched =
+        parse_search(format!(r#"{{"data":{{"search":{{"nodes":[{node}]}}}}}}"#).as_bytes())
+            .expect("a search answer");
+    assert_eq!(
+        searched,
+        [listed.clone()],
+        "a search hit parses to the issue the listing gives"
+    );
+
+    let looked_up = parse_search(
+        format!(r#"{{"data":{{"search":{{"nodes":[]}},"repository":{{"issue":{node}}}}}}}"#)
+            .as_bytes(),
+    )
+    .expect("a lookup answer");
+    assert_eq!(
+        looked_up,
+        [listed],
+        "a typed-number lookup parses to the issue the listing gives"
     );
 }
