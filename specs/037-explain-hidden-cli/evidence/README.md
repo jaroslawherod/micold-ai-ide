@@ -1,4 +1,4 @@
-# Evidence: 037 visual pass, T017 (B1-B8, B14)
+# Evidence: 037 visual pass, T017 (B1-B8, B14) and the M4 full pass (T036, T037, last section)
 
 Date 2026-10-01. Ran on Xvfb :87 + lavapipe (software Vulkan), not a real display; private HOME, XDG dirs and PATH (stub claude/copilot, pi only via the include script). Binaries built from HEAD b205f81d and pinned in ~/vp037/bin. Window 1200x900; crops show Settings > Environment from the Default AI CLI field down.
 Geometry (all rows): note's left edge aligns with the select's text inset, wraps inside the column, ends before the select's right edge, no overlap with the next control. Legible in both themes.
@@ -35,3 +35,44 @@ B9-B13 were run with their milestones (rows below). Mid-flight animation not cov
 | B12 dark | real client, only stub `claude` on PATH | the Default row's start action is the "+" alone: no chevron, nothing new | PASS | b12-client.png |
 | B13 light | showcase, "Open the menu panel" (a menu without a note) | Copy name, Rename, Delete; no divider, no note | PASS | b13-light.png |
 | B13 dark | same as above | same | PASS | b13-dark.png |
+
+## T036 and T037: the full pass on the merged result (M4, 2026-10-02, HEAD bc569992)
+
+### Part A
+
+| Command | Result |
+|---|---|
+| `mise run gate` (fmt, clippy core and workspace, `cargo test --workspace`, `scripts/tests/*.test.sh`) on bc569992 | PASS, exit 0. `cargo test --workspace` covers the core crate; `mise run test-core` was not run on its own. |
+
+The Linux, macOS and Windows jobs on CI hold "each platform" for the core and service tests.
+
+### Part B, every step
+
+| Step | Recorded in | Result |
+|---|---|---|
+| B1-B8, both themes | the table above (M1, T017) | PASS |
+| B9 | B9 light row (M2) | PASS |
+| B10 | B10 banner and pane rows (M2, D20), and the row below | PASS |
+| B11 | B11 rows (M3): real client both themes, lowest row, showcase, short window | PASS |
+| B12 | B12 row (M3) | PASS |
+| B13 | B13 showcase rows (M3), and the real-client rows below | PASS |
+| B14 | B14 row: container image not built, covered by Part A | covered by Part A |
+
+Run at M4 (Xvfb :241 + lavapipe, private HOME, XDG dirs and PATH, binaries built from bc569992):
+
+| Step | Seed | Sentence or result seen | Result | Screenshot |
+|---|---|---|---|---|
+| B10 pane without a terminal, light (D20) | include on, `env.sh` puts a stub `pi` on the PATH, a Pi session with a recorded conversation; client and service quit, `env_include_enabled` set to false, client started again so the session fails to start | the pane has no terminal grid and says: "A session would not find Pi Coding Agent: sessions get only the login PATH, because "Source a script before each session" is off. Turn it on if your startup file puts it on the PATH, or install it on the login PATH. Then restart this session: its conversation can only continue in Pi Coding Agent." The bar reads "failed restart". No banner showed: the sentence is in the pane only. | PASS (W3 Resume, IncludeOff) | b10-noterm-light.png (a text crop: the missing grid, the bar and the absent banner were seen on the full window and are not in the crop) |
+| B13 real client, light | stub `claude`, `copilot` and `pi` all on the login PATH, one project, default Claude Code; pressed the Default row's chevron | three CLIs, no divider, no note | PASS | b13-client-light.png |
+| B13 real client, dark | same | same | PASS | b13-client-dark.png |
+
+With B10 banner (restart in place: the banner carries the sentence) and B10 pane (no terminal: the pane carries it), each place the service's failure text is shown has been seen once.
+
+### Wording cross-check (T037)
+
+Compared by a fresh reader, word for word with W1's placeholders expanded:
+
+- `contracts/reason-wording.md` W2 (all seven rows: `IncludeOff`, `NoScriptPath`, `ScriptNotFound`, `ScriptFailed`, `ScriptTimedOut`, `Applied` host, `Applied` image, with the "were", "aren't" and "their directories" plurals) equals the strings in `crates/micold-core/src/cli_reason.rs`.
+- W3 (`Fresh` and `Resume`, the generic rows and the `Applied`/image rows) equals them, and so does `start_refusal_unknown` against W5's R8 sentence.
+- The user guide pages: `settings.md` (lines 74-82) paraphrases each state in a table (bold labels, "the CLI" for the name, "Fix the script") and contradicts no sentence; `agent-tools.md` (106-108), `worktrees-and-sessions.md` (688-690, 787-803) and `sandboxed-daemon.md` (104-107) quote only setting labels and causes that match. None says "not installed", "the image lacks it" or install as the only action for a state where the script was not applied (SC-003).
+- No difference found; the contract and the guide are unchanged.

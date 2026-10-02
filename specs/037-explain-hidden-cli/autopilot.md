@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #434
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
-- **Phase**: 4-milestone (M3)
-- **Next step**: M3 PR open; the orchestrator waits for CI and merges. Then M4 (T036–T037).
+- **Phase**: 4-milestone (M4)
+- **Next step**: M4 PR open (docs only); the orchestrator waits for CI and merges, then the close phase.
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #517 | Design | merged | 976b0220d342f1e35608286f0bdec4a77b8ce247 |
 | #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
 | #530 | M2 | merged | f169414780363e6e06fa837586ee93c215d9a2b2 |
-| #535 | M3 | open | |
+| #535 | M3 | merged | bc5699922fd78fa9cc40346c7993827c54058839 |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
 | M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #530 | merged |
-| M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | #535 | open |
-| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | | pending |
+| M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | #535 | merged |
+| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | M4-PR | open |
 
 ## Decisions
 
@@ -146,5 +146,6 @@ None.
   for a bug record if the pane should say it too.
 - Quickstart B14 (container placement) was not run at a display in M1: `mise run image` would replace the
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
-  full Part B record.
+  full Part B record. Recorded at M4 as covered by Part A (no image built).
+- M4: no defect found in product code. The D20 pane without a terminal was seen at the real client (Resume form, no banner) and B13 at the real client.
 
