@@ -9,12 +9,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 1-spec
-- **Next step**: Open PR 1 (`docs(041): specify terminal history that survives a session service restart`), body ending `Refs #485`.
+- **Next step**: Merge PR #531 when `ci complete` is green, then run the clarify unit on the three markers (User Story 2 scenario 5, FR-014, FR-015).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #531 | Spec | open | |
 
 ## Milestones
 
