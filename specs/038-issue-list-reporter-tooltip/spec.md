@@ -62,7 +62,7 @@ The developer remembers that a colleague filed the issue but not its title. They
 
 Two issues have near-identical titles. Rather than opening the browser, the developer rests the cursor on a row; after 3 seconds a small tooltip shows the start of that issue's description. Moving on closes it. While they sweep the cursor down the list or keep it moving, nothing pops up.
 
-**Why this priority**: A convenience on top of a list that is already complete without it. It may also build on the shared tooltip's show delay (feature 036, GitHub issue #430; see Assumptions), which the first two stories do not need.
+**Why this priority**: A convenience on top of a list that is already complete without it. The rest delay is built in this feature, not on spec 036's show delay (see Assumptions).
 
 **Independent Test**: Rest the cursor on the row of an issue with a long description, wait 3 seconds, and confirm a tooltip opens showing only the start of the description, at most three lines, ending in an ellipsis; move the cursor to another row and confirm it closes.
 
@@ -187,5 +187,5 @@ Two issues have near-identical titles. Rather than opening the browser, the deve
 - The description is not searched (FR-014), as 034 decided for the issue body.
 - The row's exact separator, text sizes and colours are plan decisions within FR-003 and FR-005.
 - The existing-branch picker keeps single-line rows; wrapping long branch names there is a separate request.
-- **Dependency — feature 036 (GitHub issue #430)**: the shared tooltip gains an optional show delay there. That delay counts time since the cursor entered the control; this feature needs time since the cursor last moved (FR-015, FR-016). The plan decides whether the rest-delay is built on 036's delay once 036 has merged or is added here; stories 1 and 2 do not depend on 036. 036 is being specified in another flow at the time of writing and is not on `main`.
+- **Feature 036 (GitHub issue #430) is not a dependency**: the rest delay is built in this feature, as its own mode of the shared tooltip (plan.md, research R7); spec 036's show delay counts from pointer entry and is not a dependency of this feature.
 - Reading the reporter and the description adds no new consent: choosing "GitHub issue" already is the user's opt-in to reading the repository's issues from GitHub (034, Principle IV).

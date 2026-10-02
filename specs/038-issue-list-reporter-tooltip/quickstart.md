@@ -45,8 +45,8 @@ scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budge
 | Frame requests | `micold-client/tests/idle_requests_no_frames.rs` | FR-018 |
 | No request on hover | `micold-client/tests/issues_are_requested_only_on_named_events.rs` | FR-024, SC-006 |
 | Highlight in view | `micold-client/tests/picker_highlight_into_view.rs` | FR-007, SC-007 |
-| Tooltip glue | `micold-client/tests/tooltip_rest_glue.rs` | FR-015–017, 019, 020 |
-| Issue rows in the view | `micold-client/tests/issue_picker_rows.rs` | FR-006, 011, 020 |
+| Tooltip glue | `micold-client/tests/tooltip_rest_glue.rs` | FR-015–017, 021 |
+| Issue rows in the view | `micold-client/tests/issue_picker_rows.rs` | FR-006, 010, 011, 019, 020 |
 | 034's states unchanged | `micold-client/tests/issue_source_state.rs` (existing cases), `layout_snapshot.rs` | FR-027 |
 | Row tooltip geometry | `micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` | FR-021, 023; SC-005 |
 | Wrapping, nothing clipped | `gates/issue_rows_show_all_text.rs` (text, read with the overlay drawn) and `gates/containment.rs` (layout records) over the new covered states with the list open | FR-004; SC-001 |

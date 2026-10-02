@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design part 3 in progress: plan re-review (round 3) and `speckit-tdd-plan` running; then `speckit-analyze`, tasks review, checklists, PR 2.
+- **Next step**: Design part 3: `speckit-tdd-plan` done, plan review round 3 done and fixed (see *Review rounds*), `speckit-analyze` run (0 CRITICAL, 0 HIGH; 9 MEDIUM/LOW being fixed). Then tasks and milestone review round 1, checklists, and the plan-review escalation before PR 2.
 
 ## Pull requests
 
