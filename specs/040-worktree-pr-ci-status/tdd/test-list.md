@@ -127,7 +127,7 @@ Recorded by T001; the check itself sits in `crates/micold-core/tests/pull_reques
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | Each of the 14 files of PS §5 is present, and none holds a token (`gho_`, `ghp_`, `github_pat_`) or an `Authorization` header | FR-028, FR-032, PS §5 | example | PENDING | |
+| U1  | Each of the 14 files of PS §5 is present, and none holds a token (`gho_`, `ghp_`, `github_pat_`) or an `Authorization` header | FR-028, FR-032, PS §5 | example | DONE | `crates/micold-core/tests/pull_request_parse.rs::every_recorded_answer_is_present_and_holds_no_credential` |
 
 ### `crates/micold-core/src/pull_request.rs`: `status_query`, `status_args`
 

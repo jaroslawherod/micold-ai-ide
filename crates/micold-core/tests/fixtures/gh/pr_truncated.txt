@@ -1,0 +1,22 @@
+HTTP/2.0 200 OK
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning
+Content-Security-Policy: default-src 'none'
+Content-Type: application/json; charset=utf-8
+Date: Fri, 02 Oct 2026 18:30:22 GMT
+Referrer-Policy: origin-when-cross-origin, strict-origin-when-cross-origin
+Server: github.com
+Strict-Transport-Security: max-age=31536000; includeSubdomains; preload
+Vary: Accept-Encoding, Accept, X-Requested-With
+X-Content-Type-Options: nosniff
+X-Frame-Options: deny
+X-Github-Edge-Region: fra
+X-Github-Media-Type: github.v4; format=json
+X-Ratelimit-Limit: 5000
+X-Ratelimit-Remaining: 3685
+X-Ratelimit-Reset: 1790966100
+X-Ratelimit-Resource: graphql
+X-Ratelimit-Used: 1315
+X-Xss-Protection: 0
+
+{"data":{"repository":{"o0":{"nodes":[{"number":347,"title":"chore(main): release micold-ai-ide 0.16.0","url":"https://github.com/jaroslawherod/micold-ai-ide/pull/347","state":"OPEN","isDraft":false,"createdAt":"2026-09-15T17:52:21Z","isCrossRepository":false,"headRefOid":"b9e8917918758c1f236350a25d3660d6904a3e2b","reviewDecision":null,"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]},"r0":{"nodes":[{"number":347,"title":"chore(main): release micold-ai-ide 0.16.0","url":"https://github.com/jaroslawherod/micold-ai-ide/pull/347","state":"OPEN","isDraft":false,"createdAt":"2026-09-15T17:52:21Z","isCrossRepository":false,"headRefOid":"b9e8917918758c1f236350a25d3660d6904a3e2b","reviewDecision":null,"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}},{"number":310,"title":"chore(main): release micold-ai-ide 0.15.0","url":"https://github.com/jaroslawherod/micold-ai-ide/pull/310","state":"MERGED","isDraft":false,"createdAt":"2026-09-13T18:20:48Z","isCrossReposi

@@ -70,7 +70,7 @@ recorded fixtures of three branches yield open + failing, merged, and no entry.
 
 ### Tests for User Story 1, slice A (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T001 [US1] [U1] Record the fixtures of PS §5 with a real `gh api graphql --include` into `crates/micold-core/tests/fixtures/gh/pr_*.txt` (the 14 files of the table, `pr_rate_limited_secondary_no_retry_after.txt` included) and write `crates/micold-core/tests/fixtures/gh/pr_README.md`: the recording command first, then per file how it was produced and which ones are written from GitHub's documented answer. Strip tokens and request ids; keep status line, headers and body.
+- [X] T001 [US1] [U1] Record the fixtures of PS §5 with a real `gh api graphql --include` into `crates/micold-core/tests/fixtures/gh/pr_*.txt` (the 14 files of the table, `pr_rate_limited_secondary_no_retry_after.txt` included) and write `crates/micold-core/tests/fixtures/gh/pr_README.md`: the recording command first, then per file how it was produced and which ones are written from GitHub's documented answer. Strip tokens and request ids; keep status line, headers and body.
 - [ ] T002 [P] [US1] [U2] [U3] [U4] [U5] [U6] Write `crates/micold-core/tests/pull_request_query.rs` (PS §2):
   - `status_query(1)` and `status_query(50)` are pinned; the document holds `o<i>`/`r<i>` for every `i`, `rateLimit`, the fragment, and is one line.
   - No branch name appears in the document.

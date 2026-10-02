@@ -16,6 +16,10 @@
 # which is how it was found (feature 027, T115).
 * text=auto eol=lf
 
+# The recorded `gh api --include` answers (feature 040) keep the `\r\n` the HTTP header block is
+# printed with: they are recordings, and `split_response` is tested on the bytes `gh` wrote.
+crates/micold-core/tests/fixtures/gh/pr_*.txt -text
+
 # The documentation set (feature 023).
 #
 # `micold-docs` marks paths whose contents cannot affect what is built, linted, packaged or
