@@ -14,6 +14,8 @@
 
 - Q: Is the Settings switch for pull request status off until the user turns it on, or on from the start whenever the GitHub tooling is installed and signed in? → A: Off until the user turns it on. Being signed in to the GitHub tooling is a precondition, not consent; the switch, which states what is read, how often and what is sent (FR-029), is the explicit, informed opt-in. Turning it on reads the status of every project open in a window at once. _(agent-resolved: .specify/memory/constitution.md#IV. Local-First Storage — "Nothing is transmitted off-device without the user's explicit, informed opt-in"; specs/034-github-issue-worktree/spec.md#Assumptions — a choice the user makes in the application is what counts as the opt-in, and FR-003 forbids contacting GitHub in the background without one)_
 - Q: How does the user act on the removal suggestion? → A: With the worktree's existing **Delete** action in the row's right-click menu. The suggestion is a passive mark and a tooltip line; it adds no button, menu entry or dialog of its own. _(agent-resolved: specs/040-worktree-pr-ci-status/spec.md#Assumptions — "a passive mark and a tooltip line that lead to the existing delete confirmation"; specs/008-worktree-sidebar-refinement/spec.md#User Story 2 — Delete lives in the worktree's right-click menu)_
+- Q: How does the user open a worktree's pull request in the browser, given that a worktree tooltip closes when the cursor leaves the row (029-worktree-tooltip-details FR-010) and so cannot hold a reachable link? → A: With an **Open pull request** entry in the row's right-click menu, shown only when the row has an indicator. The worktree tooltip stays as 029 defines it: it names the pull request but holds no link. _(decided by user)_
+- Q: When the project's GitHub remote is the user's fork and the pull request lives in the upstream repository, must the worktree show that pull request? → A: No, out of scope for this feature. Only pull requests in the project's own GitHub repository are shown; a worktree in a fork whose pull request is upstream shows no indicator. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -40,16 +42,17 @@ A developer has several worktrees open in the sidebar, some started from GitHub 
 11. **Given** the project's repository has no GitHub remote, **When** the project is open, **Then** no row shows an indicator, no error appears, and nothing is sent to GitHub.
 12. **Given** the status is being read, **When** the user clicks, types, scrolls or switches sessions, **Then** the application responds as it does when nothing is being read.
 13. **Given** the indicator's states, **When** the user sees them in the light and the dark theme, **Then** each pull request state and each check status can be told apart by its shape or symbol, not by colour alone.
+14. **Given** the project's GitHub repository is the user's fork and a worktree's branch has a pull request only in the repository the fork was made from, **When** the status has been read, **Then** the worktree's row shows no indicator, no error appears, and nothing was sent about any repository other than the project's own.
 
 ---
 
 ### User Story 2 - Read the pull request's details and open it in the browser (Priority: P2)
 
-The developer sees "failing" on a worktree and wants to know which pull request it is and whether it has been reviewed. They hover the row: the worktree's tooltip (feature 029-worktree-tooltip-details) now also names the pull request — its number and title, its state and check status in words, and its review state — and they can open the pull request in their browser without typing its address.
+The developer sees "failing" on a worktree and wants to know which pull request it is and whether it has been reviewed. They hover the row: the worktree's tooltip (feature 029-worktree-tooltip-details) now also names the pull request — its number and title, its state and check status in words, and its review state. To see it on GitHub they right-click the row and choose **Open pull request**: the pull request opens in their browser without typing its address.
 
 **Why this priority**: The indicator says that something needs attention; the tooltip and the way to the browser say what, and get the user there. It depends on story 1's data and adds no new reading of GitHub.
 
-**Independent Test**: Hover the row of a worktree whose branch has an approved open pull request, confirm the tooltip names its number, title, state, check status and "approved", then open the pull request from the application and confirm the browser shows that pull request.
+**Independent Test**: Hover the row of a worktree whose branch has an approved open pull request, confirm the tooltip names its number, title, state, check status and "approved", then right-click the row, choose **Open pull request** and confirm the browser shows that pull request.
 
 **Acceptance Scenarios**:
 
@@ -57,10 +60,12 @@ The developer sees "failing" on a worktree and wants to know which pull request 
 2. **Given** GitHub reports a review decision for the pull request — approved, changes requested, or review required — **When** the tooltip is shown, **Then** it states that review state in words.
 3. **Given** GitHub reports no review decision for the pull request, **When** the tooltip is shown, **Then** it has no review line.
 4. **Given** a worktree has no pull request indicator, **When** the user hovers its row, **Then** the tooltip is exactly as it is today, with no pull request lines and no placeholder.
-5. **Given** a worktree's row shows a pull request indicator, **When** the user opens the pull request from the application, **Then** the pull request's page opens in the user's default browser, and the application's own state — selection, sessions, the sidebar — is unchanged.
+5. **Given** a worktree's row shows a pull request indicator, **When** the user right-clicks the row and chooses **Open pull request**, **Then** the pull request's page opens in the user's default browser, and the application's own state — selection, sessions, the sidebar — is unchanged.
 6. **Given** a pull request title longer than the tooltip is wide, **When** the tooltip is shown, **Then** the title wraps or is shortened within the tooltip's bounded width (029 FR-009), and the number stays readable.
 7. **Given** the user hovers a row, **When** the tooltip opens, **Then** nothing is sent to GitHub and the disk is not read: the tooltip shows what the last reading found (029 FR-012).
 8. **Given** the shown status was read longer ago than two refresh intervals, **When** the tooltip is shown, **Then** it states how long ago the status was read.
+9. **Given** a worktree's row shows no pull request indicator, **When** the user right-clicks the row, **Then** the menu is as it is today and has no **Open pull request** entry.
+10. **Given** a worktree's row shows a pull request indicator, **When** the user hovers the row, **Then** the tooltip holds no link or other control, and it closes when the cursor leaves the row, as every worktree tooltip does today (029 FR-010).
 
 ---
 
@@ -116,6 +121,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **Several pull requests for one branch**: one is shown. An open (or draft) one wins over merged and closed ones; among several of the same kind, the most recently created wins (FR-004).
 - **Pull request reopened, or a merged branch reused for a new pull request**: the row follows the rule above at the next reading — it shows the open one, and a removal suggestion disappears.
 - **Same branch name in someone else's fork**: a pull request whose branch merely has the same name but lives in another repository is not the worktree's pull request (FR-005).
+- **The project's repository is a fork, and the pull request is in the repository it was forked from**: no indicator, and that other repository is never looked up or contacted (FR-006). A pull request opened inside the fork itself is shown like any other.
 - **Branch renamed, or the worktree switched to another branch, outside the application**: the row keeps the branch the sidebar last listed, and its pull request, until the worktree list is refreshed (the listing stays manual, 029-refresh-worktrees-list FR-012). The refresh control updates the listing and then reads pull request status for the branches it now shows, so the row and its tooltip's branch line never name one branch while the indicator describes another (FR-018a). A listed branch that no longer exists has no indicator.
 - **Worktree removed or project closed while a reading is under way**: the answer is dropped for rows that no longer exist; nothing reappears and no error is shown.
 - **Worktree created between readings**: one created in the application is listed at once and gains its indicator at the next reading, automatic or on demand. One created by an agent or by hand is not in the sidebar until the list is refreshed; that refresh also reads its pull request status.
@@ -148,7 +154,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **FR-003**: For an open or draft pull request that has checks, the indicator MUST also show one combined check status: failing, pending or passing. For a merged or closed pull request, and for one with no checks, no check status is shown.
 - **FR-004**: When a branch has several pull requests, the one shown MUST be an open or draft one if any exists, otherwise the most recently created; among several open ones, the most recently created.
 - **FR-005**: The project's GitHub repository MUST be determined by the rule feature 034 uses for issues (034 FR-002: github.com only). A pull request counts as a branch's pull request only when its source branch has the worktree's branch name and lives in that repository.
-- **FR-006**: Pull requests opened from a fork: [NEEDS CLARIFICATION: When the project's GitHub remote is the user's fork and the pull request lives in the upstream repository — the usual open-source arrangement — must the worktree show that pull request too? Doing so means finding the upstream repository and reading pull requests there, matched by the fork owner and branch; not doing so means such worktrees show no indicator.]
+- **FR-006**: Only pull requests that live in the project's GitHub repository (FR-005) MUST be shown. When that repository is a fork and a worktree's pull request lives in the repository it was forked from, the worktree MUST show no indicator, and the application MUST NOT look up or contact that other repository.
 - **FR-007**: A worktree with no branch, and the "Default" entry, MUST show no indicator.
 - **FR-008**: The combined check status MUST be: failing when any check failed, was cancelled, timed out or needs action; otherwise pending when any check is queued or running; otherwise passing. Skipped and neutral checks count as finished without failure.
 - **FR-009**: Each pull request state and each check status MUST be distinguishable without relying on colour alone, in the light and the dark theme, and the indicator MUST keep its size at every sidebar width the application allows.
@@ -158,7 +164,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **FR-010**: The tooltip of a worktree that shows an indicator MUST add, each on its own labelled line (029 FR-008) and after the lines it has today: the pull request's number and title; its state; its check status, when it has one; and its review state — approved, changes requested or review required — when GitHub reports one.
 - **FR-011**: The tooltip of a worktree without an indicator MUST be unchanged, and the pull request lines MUST respect the tooltip's bounded width (029 FR-009) and MUST NOT make it cover its row (029 FR-013).
 - **FR-012**: Showing the tooltip MUST NOT contact GitHub or read the disk (029 FR-012).
-- **FR-013**: The user MUST be able to open the shown pull request's page in their default browser from the application. How: [NEEDS CLARIFICATION: The issue asks for a link in the tooltip, but a worktree tooltip closes when the cursor leaves the row (029 FR-010), so a link inside it cannot be reached. Should the pull request open by clicking the indicator on the row, by an entry in the worktree's right-click menu, by both, or should the tooltip be changed to stay open while the cursor moves into it?]
+- **FR-013**: The right-click menu of a worktree row that shows an indicator MUST offer an **Open pull request** entry, beside the entries it has today, that opens the shown pull request's page in the user's default browser. The menu of a row without an indicator MUST NOT offer it. The tooltip MUST NOT hold a link or any other control, and it MUST keep closing when the cursor leaves the row (029 FR-010).
 - **FR-014**: Opening the pull request MUST NOT change the application's selection, sessions or sidebar, and the address opened MUST be the one GitHub reported for that pull request.
 
 **Merged pull requests**
@@ -218,7 +224,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **SC-006**: Automatic readings send at most 30 requests to GitHub per hour for one open project with up to 50 worktrees; 0 for a project no window shows; 0 while the switch is off, as it is on a first start; and 0 between a rate-limit answer and the limit's reset.
 - **SC-007**: A second window on the same project adds 0 requests.
 - **SC-008**: Hovering worktree rows causes 0 requests to GitHub and 0 disk reads.
-- **SC-009**: From seeing a "failing" indicator, a user has the pull request open in their browser in at most 2 actions, without typing.
+- **SC-009**: From seeing a "failing" indicator, a user has the pull request open in their browser in at most 2 actions — a right-click on the row and a choice from its menu — without typing.
 - **SC-010**: 0 worktrees, sessions or branches are removed without the user confirming the existing delete confirmation.
 - **SC-011**: After the application has run with pull request status on, its stored files contain 0 pull request data and its logs contain 0 pull request titles or addresses.
 
@@ -231,7 +237,9 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - "A modest interval" is 5 minutes, fixed; making it configurable is out of scope. "On demand" is the sidebar's existing refresh control — no new button is added.
 - "Suggests removing" is a passive mark and a tooltip line that lead to the existing delete confirmation through the row's existing **Delete** action (FR-016). It is never a dialog that interrupts, and never an automatic removal. Whether the branch is deleted too is the existing confirmation's choice.
 - A worktree counts as holding no newer work when its branch has no commits beyond those the pull request merged. This is worked out at each reading (FR-018a), so a commit made after a reading withdraws the suggestion at the next one, not at once; the existing delete confirmation remains the safeguard in between. Uncommitted changes in the worktree are not examined for the suggestion; the existing delete confirmation already speaks to what is removed.
+- "A link that opens it in the browser", which the issue places in the tooltip, is the **Open pull request** entry of the row's right-click menu (FR-013): a worktree tooltip closes when the cursor leaves the row (029 FR-010), so a link inside it could not be reached. Opening the pull request by clicking the indicator, and a tooltip that stays open, are out of scope.
 - Only github.com is supported, as in 034. GitHub Enterprise, GitLab and other hosts show no indicator.
+- Only the project's own GitHub repository is read. A pull request opened from a fork into the repository it was forked from is out of scope (FR-006): such a worktree shows no indicator.
 - The user is signed in to GitHub through the same GitHub tooling feature 034 relies on (the GitHub CLI, `gh`); signing in is outside this feature. Where that tooling runs when the session service runs in a container is a plan decision; the behaviour above holds either way.
 - Acting on a pull request from the application — merging, closing, approving, re-running checks, creating one — is out of scope. So are notifications (sound, system notification) when a status changes.
 - The exact shape, size, colours and position of the indicator, and the wording of the tooltip lines, are plan decisions within FR-009 to FR-011.

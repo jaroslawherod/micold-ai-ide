@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -24,18 +24,19 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are open and wait for the clarify phase: FR-006 (pull
-  requests opened from a fork), FR-013 (how the pull request is opened, given that a worktree
-  tooltip cannot hold a reachable link) and FR-030 (whether background reading starts on or off).
-  The three unticked items wait on them alone: those three requirements are not yet testable and
-  have no acceptance scenario of their own.
+- Re-validated after clarify round 1 (2026-10-02): no `[NEEDS CLARIFICATION]` marker remains. The
+  three the spec started with are closed — FR-030 (the switch is off until the user turns it on;
+  story 4 scenarios 11 and 12), FR-006 (only the project's own repository; story 1 scenario 14) and
+  FR-013 (an **Open pull request** entry in the row's right-click menu; story 2 scenarios 5, 9 and
+  10) — and each now has an acceptance scenario of its own, so the three items that waited on them
+  are ticked.
 - "GitHub", "pull request", "check", "draft" and "review" are named because they are the user-facing
   terms of the thing being shown, not implementation details. FR-033 names the shared component
   library and the showcase because the constitution's Principle VIII makes reuse a requirement of

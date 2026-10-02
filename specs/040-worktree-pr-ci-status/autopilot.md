@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 2-clarify
-- **Next step**: Clarify round 1 is waiting on the user: ask the two questions under *Open escalation*, then continue the round 1 unit with the answers. It records them in spec.md as `_(decided by user)_`, replaces the FR-006 and FR-013 markers, re-validates `checklists/requirements.md` and commits (no push; the round ships in PR 2).
+- **Next step**: Dispatch clarify round 2. Round 1 is committed and not pushed (it ships in PR 2); it asked questions, so it was not `CLEAN`. All `[NEEDS CLARIFICATION]` markers are closed and `checklists/requirements.md` is fully ticked.
 
 ## Pull requests
 
@@ -32,9 +32,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | spec | What does "suggests removing" mean? | A passive mark and tooltip line that lead to the existing delete confirmation; only when the branch has no commits beyond the merged pull request; never automatic. | agent-resolved | spec.md FR-015 to FR-017 |
 | D5 | clarify 1 | Does the Settings switch for pull request status start on or off? | Off until the user turns it on. Being signed in to `gh` is a precondition, not consent; the switch that states what is sent is the opt-in. Turning it on reads open projects at once. | agent-resolved | constitution.md#IV ("explicit, informed opt-in"); 034 spec.md#Assumptions (a choice in the application is the opt-in) and FR-003; spec.md FR-030, FR-018, story 4 scenarios 11 and 12 |
 | D6 | clarify 1 | How does the user act on the removal suggestion? | With the existing **Delete** action in the row's right-click menu; the suggestion adds no control of its own. | agent-resolved | spec.md#Assumptions ("passive mark"); 008 spec.md#User Story 2; spec.md FR-016 |
+| D7 | clarify 1 | How does the user open a worktree's pull request in the browser? (the issue asks for a link in the tooltip, which closes on unhover, 029 FR-010) | An **Open pull request** entry in the row's right-click menu, shown only when the row has an indicator. The tooltip stays as 029 defines it, with no link. Clicking the indicator and a tooltip that stays open are out of scope. | decided by user | Escalation of clarify round 1 (Q1, option A); spec.md FR-013, story 2 scenarios 5, 9 and 10, SC-009, Assumptions |
+| D8 | clarify 1 | When the project's GitHub remote is a fork and the pull request lives in the upstream repository, is it shown? | No, out of scope. Only pull requests in the project's own GitHub repository are shown; such a worktree shows no indicator and the upstream repository is never contacted. | decided by user | Escalation of clarify round 1 (Q2, option A); spec.md FR-006, story 1 scenario 14, Edge Cases, Assumptions |
 
-Still open after clarify round 1 (two `[NEEDS CLARIFICATION]` markers, both with the user — see
-*Open escalation*): FR-006 pull requests opened from a fork; FR-013 how the pull request is opened.
+No `[NEEDS CLARIFICATION]` marker is open after clarify round 1. The round asked questions, so it is
+not `CLEAN`.
 
 ## Review rounds
 
@@ -54,36 +56,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, 2026-10-02. Two questions the repo does not settle (category 1, product or scope
-decision). The agent-resolved answers of the round (D5, D6) are committed; nothing is pushed.
-
-**Q1 (FR-013) — How does the user open a worktree's pull request in the browser?** The issue asks
-for a link in the worktree tooltip, but that tooltip closes when the cursor leaves the row
-(029-worktree-tooltip-details FR-010), so a link inside it cannot be reached.
-
-- A (Recommended): an **Open pull request** entry in the row's right-click menu, shown only when the
-  row has an indicator. Worktree actions already live there (008: Delete, Rename), 012 FR-010b chose
-  a context menu over a control inside a fixed-size row element, and it is 2 actions (SC-009). The
-  tooltip stays as 029 defines it.
-- B: clicking the indicator on the row opens the pull request. One action, but a small target inside
-  a row whose click selects the worktree, so a near-miss changes the selection or opens a browser by
-  accident.
-- C: both A and B.
-- D: change the worktree tooltip to stay open while the cursor moves into it, and put a link in it,
-  as the issue words it. Changes 029 FR-010 ("dismiss on unhover exactly as the current location
-  tooltip does; no new gesture") for every worktree tooltip.
-
-**Q2 (FR-006) — When the project's GitHub remote is the user's fork and the pull request lives in the
-upstream repository, must the worktree show that pull request?**
-
-- A (Recommended): no, out of scope for this feature. Only pull requests in the project's own GitHub
-  repository are shown; a worktree in a fork whose pull request is upstream shows no indicator.
-  034 defines the project's GitHub repository as one repository (FR-002, edge case "Several GitHub
-  remotes") and no feature looks at an upstream; FR-031 limits what is sent to that repository's
-  identity, and SC-006's request budget is counted for one repository.
-- B: yes. The application also finds the repository the fork was made from and reads pull requests
-  there, matched by the fork's owner and the branch name. Adds a second repository rule, more
-  requests per reading (SC-006 would be restated), and widens FR-031.
+None.
 
 ## Token usage
 
