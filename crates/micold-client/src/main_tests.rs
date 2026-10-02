@@ -6711,6 +6711,24 @@ mod a_missing_default_says_why_the_list_opened {
             ),
             "one message, and it gives the reason of the answer the row offers from (FR-008)"
         );
+        let said = queue
+            .visible()
+            .expect("one message is showing")
+            .message
+            .clone();
+        for (fragment, why) in [
+            (
+                "A session would not find Pi Coding Agent:",
+                "the CLI refused",
+            ),
+            ("sessions get only the login PATH", "the Off state's reason"),
+            (
+                "Or start this session on another AI CLI.",
+                "a fresh start's ending",
+            ),
+        ] {
+            assert!(said.contains(fragment), "{why} (`{fragment}`): {said}");
+        }
         assert!(
             matches!(
                 &app.core.session.start_menu,

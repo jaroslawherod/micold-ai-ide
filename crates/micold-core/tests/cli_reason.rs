@@ -150,10 +150,15 @@ fn only_applied_counts_as_the_script_applied() {
 #[test]
 fn a_name_list_reads_as_prose() {
     assert_eq!(name_list(&[]), None, "nothing to name");
-    assert_eq!(name_list(&[AiCli::Pi]).as_deref(), Some("Pi Coding Agent"));
+    assert_eq!(
+        name_list(&[AiCli::Pi]).as_deref(),
+        Some("Pi Coding Agent"),
+        "name_list of one CLI [Pi]"
+    );
     assert_eq!(
         name_list(&[AiCli::ClaudeCode, AiCli::Copilot]).as_deref(),
-        Some("Claude Code and GitHub Copilot")
+        Some("Claude Code and GitHub Copilot"),
+        "name_list of two CLIs [Claude Code, Copilot]"
     );
     assert_eq!(
         name_list(&[AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi]).as_deref(),
@@ -188,11 +193,13 @@ fn include_off_on_this_computer() {
     assert_eq!(
         said.reason,
         "A session would not find Pi Coding Agent: sessions get only the login PATH, because \
-         \"Source a script before each session\" is off."
+         \"Source a script before each session\" is off.",
+        "reason: IncludeOff on this computer, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
         said.action,
-        "Turn it on if your startup file puts it on the PATH, or install it on the login PATH."
+        "Turn it on if your startup file puts it on the PATH, or install it on the login PATH.",
+        "action: IncludeOff on this computer, CLI set [Pi Coding Agent]"
     );
 }
 
@@ -207,12 +214,14 @@ fn include_off_in_an_image() {
     assert_eq!(
         said.reason,
         "A session in img:tag would not find Pi Coding Agent: sessions get only the image's \
-         PATH, because \"Source a script before each session\" is off."
+         PATH, because \"Source a script before each session\" is off.",
+        "reason: IncludeOff in an image, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
         said.action,
         "Turn it on if your startup file puts it on the PATH, or use an image that puts it on \
-         its PATH."
+         its PATH.",
+        "action: IncludeOff in an image, CLI set [Pi Coding Agent]"
     );
 }
 
@@ -227,12 +236,14 @@ fn no_script_path_on_this_computer() {
     assert_eq!(
         said.reason,
         "A session would not find Pi Coding Agent: no script is sourced, because \"Script \
-         path\" is empty."
+         path\" is empty.",
+        "reason: NoScriptPath on this computer, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
         said.action,
         "Set \"Script path\" if a startup file puts it on the PATH, or install it on the login \
-         PATH."
+         PATH.",
+        "action: NoScriptPath on this computer, CLI set [Pi Coding Agent]"
     );
 }
 
@@ -247,12 +258,14 @@ fn no_script_path_in_an_image() {
     assert_eq!(
         said.reason,
         "A session in img:tag would not find Pi Coding Agent: no script is sourced, because \
-         \"Script path\" is empty."
+         \"Script path\" is empty.",
+        "reason: NoScriptPath in an image, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
         said.action,
         "Set \"Script path\" if a startup file puts it on the PATH, or use an image that puts \
-         it on its PATH."
+         it on its PATH.",
+        "action: NoScriptPath in an image, CLI set [Pi Coding Agent]"
     );
 }
 
@@ -267,9 +280,13 @@ fn script_not_found_names_the_directory_and_the_field() {
     assert_eq!(
         said.reason,
         "A session would not find Pi Coding Agent: the startup script was not found for your \
-         home directory, so its PATH additions are not applied."
+         home directory, so its PATH additions are not applied.",
+        "reason: ScriptNotFound on this computer, CLI set [Pi Coding Agent]"
     );
-    assert_eq!(said.action, "Correct \"Script path\".");
+    assert_eq!(
+        said.action, "Correct \"Script path\".",
+        "action: ScriptNotFound on this computer, CLI set [Pi Coding Agent]"
+    );
 
     let in_image = told(
         &[AiCli::Pi],
@@ -280,9 +297,10 @@ fn script_not_found_names_the_directory_and_the_field() {
     assert_eq!(
         in_image.reason,
         "A session in img:tag would not find Pi Coding Agent: the startup script was not found \
-         for your home directory, so its PATH additions are not applied."
+         for your home directory, so its PATH additions are not applied.",
+        "reason: ScriptNotFound in an image, CLI set [Pi Coding Agent]"
     );
-    assert_eq!(in_image.action, said.action);
+    assert_eq!(in_image.action, said.action, "action in an image matches the one on this computer: ScriptNotFound, CLI set [Pi Coding Agent]");
 }
 
 #[test]
@@ -296,9 +314,13 @@ fn script_failed_names_the_directory_and_the_field() {
     assert_eq!(
         said.reason,
         "A session would not find Pi Coding Agent: the startup script exited with an error for \
-         your home directory, so its PATH additions are not applied."
+         your home directory, so its PATH additions are not applied.",
+        "reason: ScriptFailed on this computer, CLI set [Pi Coding Agent]"
     );
-    assert_eq!(said.action, "Fix the script named in \"Script path\".");
+    assert_eq!(
+        said.action, "Fix the script named in \"Script path\".",
+        "action: ScriptFailed on this computer, CLI set [Pi Coding Agent]"
+    );
 
     let in_image = told(
         &[AiCli::Pi],
@@ -309,9 +331,10 @@ fn script_failed_names_the_directory_and_the_field() {
     assert_eq!(
         in_image.reason,
         "A session in img:tag would not find Pi Coding Agent: the startup script exited with \
-         an error for your home directory, so its PATH additions are not applied."
+         an error for your home directory, so its PATH additions are not applied.",
+        "reason: ScriptFailed in an image, CLI set [Pi Coding Agent]"
     );
-    assert_eq!(in_image.action, said.action);
+    assert_eq!(in_image.action, said.action, "action in an image matches the one on this computer: ScriptFailed, CLI set [Pi Coding Agent]");
 }
 
 #[test]
@@ -325,11 +348,12 @@ fn script_timed_out_names_the_directory_and_both_fields() {
     assert_eq!(
         said.reason,
         "A session would not find Pi Coding Agent: the startup script timed out for your home \
-         directory, so its PATH additions are not applied."
+         directory, so its PATH additions are not applied.",
+        "reason: ScriptTimedOut on this computer, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
-        said.action,
-        "Fix the script named in \"Script path\", or raise \"Timeout\"."
+        said.action, "Fix the script named in \"Script path\", or raise \"Timeout\".",
+        "action: ScriptTimedOut on this computer, CLI set [Pi Coding Agent]"
     );
 
     let in_image = told(
@@ -341,9 +365,10 @@ fn script_timed_out_names_the_directory_and_both_fields() {
     assert_eq!(
         in_image.reason,
         "A session in img:tag would not find Pi Coding Agent: the startup script timed out for \
-         your home directory, so its PATH additions are not applied."
+         your home directory, so its PATH additions are not applied.",
+        "reason: ScriptTimedOut in an image, CLI set [Pi Coding Agent]"
     );
-    assert_eq!(in_image.action, said.action);
+    assert_eq!(in_image.action, said.action, "action in an image matches the one on this computer: ScriptTimedOut, CLI set [Pi Coding Agent]");
 }
 
 #[test]
@@ -357,11 +382,12 @@ fn applied_on_this_computer_names_both_ways_out() {
     assert_eq!(
         said.reason,
         "Pi Coding Agent was not found on the PATH sessions get for your home directory: the \
-         login PATH plus what the startup script adds."
+         login PATH plus what the startup script adds.",
+        "reason: Applied on this computer, CLI set [Pi Coding Agent]"
     );
     assert_eq!(
-        said.action,
-        "Install it, or make the script add its directory."
+        said.action, "Install it, or make the script add its directory.",
+        "action: Applied on this computer, CLI set [Pi Coding Agent]"
     );
 }
 
@@ -378,7 +404,8 @@ fn applied_in_an_image_keeps_the_sentence_of_027() {
     assert_eq!(
         format!("{} {}", one.reason, one.action),
         "GitHub Copilot isn't in img:tag. Sessions run in that image, so it has to provide any \
-         AI CLI you want to use."
+         AI CLI you want to use.",
+        "Applied in an image, CLI set [Copilot]: reason and action joined are the 027 sentence"
     );
     let all = told(
         &AiCli::ALL,
@@ -389,7 +416,8 @@ fn applied_in_an_image_keeps_the_sentence_of_027() {
     assert_eq!(
         format!("{} {}", all.reason, all.action),
         "Claude Code, GitHub Copilot and Pi Coding Agent aren't in img:tag. Sessions run in \
-         that image, so it has to provide any AI CLI you want to use."
+         that image, so it has to provide any AI CLI you want to use.",
+        "Applied in an image, CLI set [all three]: reason and action joined are the 027 sentence"
     );
 }
 
@@ -405,7 +433,8 @@ fn several_clis_are_them_and_were() {
     assert_eq!(
         off.reason,
         "A session would not find GitHub Copilot and Pi Coding Agent: sessions get only the \
-         login PATH, because \"Source a script before each session\" is off."
+         login PATH, because \"Source a script before each session\" is off.",
+        "reason: IncludeOff on this computer, CLI set [Copilot, Pi]"
     );
     assert_eq!(
         off.action,
@@ -422,7 +451,8 @@ fn several_clis_are_them_and_were() {
     assert_eq!(
         in_image.action,
         "Set \"Script path\" if a startup file puts them on the PATH, or use an image that \
-         puts them on its PATH."
+         puts them on its PATH.",
+        "action: NoScriptPath in an image, CLI set [Copilot, Pi]"
     );
 
     let applied = told(
@@ -434,11 +464,12 @@ fn several_clis_are_them_and_were() {
     assert_eq!(
         applied.reason,
         "GitHub Copilot and Pi Coding Agent were not found on the PATH sessions get for your \
-         home directory: the login PATH plus what the startup script adds."
+         home directory: the login PATH plus what the startup script adds.",
+        "reason: Applied on this computer, CLI set [Copilot, Pi]"
     );
     assert_eq!(
-        applied.action,
-        "Install them, or make the script add their directories."
+        applied.action, "Install them, or make the script add their directories.",
+        "action: Applied on this computer, CLI set [Copilot, Pi]"
     );
 
     let three = told(
@@ -468,13 +499,15 @@ fn a_row_s_own_directory_is_named_as_displayed() {
     assert_eq!(
         timed_out.reason,
         "A session would not find Pi Coding Agent: the startup script timed out for \
-         /work/project, so its PATH additions are not applied."
+         /work/project, so its PATH additions are not applied.",
+        "ScriptTimedOut on this computer in a row's own directory, CLI set [Pi]: reason"
     );
     let applied = told(&[AiCli::Pi], SpawnEnv::Applied, Place::ThisComputer, dir);
     assert_eq!(
         applied.reason,
         "Pi Coding Agent was not found on the PATH sessions get for /work/project: the login \
-         PATH plus what the startup script adds."
+         PATH plus what the startup script adds.",
+        "Applied on this computer in a row's own directory, CLI set [Pi]: reason"
     );
 }
 
@@ -677,7 +710,8 @@ fn w3b_applied_in_an_image_keeps_the_refusal_of_027() {
             format!(
                 "{cli} isn't in {IMAGE}, where sessions run. Choose an image that provides it, or \
                  start this session on another AI CLI."
-            )
+            ),
+            "W3b: Applied in an image, fresh launch, refusal for {cli:?}"
         );
         assert_eq!(
             start_refusal(
@@ -690,7 +724,8 @@ fn w3b_applied_in_an_image_keeps_the_refusal_of_027() {
             format!(
                 "{cli} isn't in {IMAGE}, where sessions run, and this conversation can only \
                  continue in it. Choose an image that provides it, then restart this session."
-            )
+            ),
+            "W3b: Applied in an image, resume launch, refusal for {cli:?}"
         );
     }
 }
@@ -762,7 +797,8 @@ fn a_refusal_with_no_known_state_claims_nothing_about_the_cause() {
             start_refusal_unknown(cli),
             format!(
                 "{cli} would not be found by a session here. Start this session on another AI CLI."
-            )
+            ),
+            "refusal with no known state for {cli:?}"
         );
     }
 }

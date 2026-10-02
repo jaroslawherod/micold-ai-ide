@@ -15,10 +15,10 @@
 //! - it is not phrased as this application failing. It is a fact about a machine, with the remedy
 //!   on the machine, because that is where the user can act.
 //!
-//! The wording is asserted by its parts rather than verbatim. Pinning the whole sentence makes
-//! every rephrasing a test edit, which trains the edit rather than the reading — but the parts are
-//! exactly what FR-023b enumerates, so an assertion that loses one of them is a requirement that
-//! stopped being met.
+//! The wording is asserted two ways. The 027 tests below pin the parts FR-023b enumerates (the CLI,
+//! the place, the obligation), so an assertion that loses one of them is a requirement that stopped
+//! being met. The 037 tests compare the whole note with `explain`'s reason and action, whose words
+//! `micold-core`'s `cli_reason` tests pin, and a few pin an opening or a fragment literally.
 
 use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
 use micold_client::features::settings::missing_cli_notice;
@@ -186,16 +186,21 @@ fn a_missing_pi_is_named_as_pi_coding_agent_and_never_as_its_command() {
     // Feature 029, T032 (FR-001a). The same sentence the other two get, in the menu register: the
     // select beside it lists "Pi Coding Agent", so that is the string the user matches it against.
     // `pi` in a sentence is a two-letter word that reads as a typo.
-    for availability in [
-        in_image(&[AiCli::ClaudeCode, AiCli::Copilot]),
-        on_host(&[AiCli::ClaudeCode, AiCli::Copilot]),
+    for (availability, opening) in [
+        (
+            in_image(&[AiCli::ClaudeCode, AiCli::Copilot]),
+            format!("Pi Coding Agent isn't in {IMAGE}."),
+        ),
+        (
+            on_host(&[AiCli::ClaudeCode, AiCli::Copilot]),
+            "Pi Coding Agent was not found on the PATH".to_string(),
+        ),
     ] {
         let notice = missing_cli_notice(Some(&availability))
             .expect("a place without pi has something to report");
         assert!(
-            notice.starts_with("Pi Coding Agent isn't")
-                || notice.starts_with("Pi Coding Agent was not found"),
-            "the notice names Pi by its display name, singular: {notice}"
+            notice.starts_with(&opening),
+            "the notice names Pi by its display name, singular, as this place words it: {notice}"
         );
         assert!(
             !notice.contains(" pi "),

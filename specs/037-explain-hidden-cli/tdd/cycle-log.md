@@ -310,3 +310,36 @@ existed and failed before the implementation.
   (B11 light and dark; opened with too little room under the row, the panel moves up and stays in
   the window); B11 and B13 at the showcase in both themes. B13 was not run at the real client: a
   row with every CLI has the list it had, and `a_row_with_every_cli_has_no_note` holds the absence
+
+## Close: tdd-verify remediation (T045–T050)
+
+- T045: the image placement asserts `starts_with("Pi Coding Agent isn't in {IMAGE}.")`, the host
+  `starts_with("Pi Coding Agent was not found on the PATH")`; the disjunction is gone.
+- T047: `a_press_with_no_answer_in_use_says_only_that_the_cli_would_not_be_found`
+  (`unavailable_default_says_so.rs`) asserts equality with `start_refusal_unknown(Pi)` and the
+  literals "Pi Coding Agent would not be found by a session here" and "Start this session on
+  another AI CLI."; U72 gained the first literal.
+- T048: U69 asserts a per-state fragment, whether "your home directory" is named, and the Fresh
+  ending; the `main_tests.rs` IncludeOff press asserts "A session would not find Pi Coding Agent:",
+  "sessions get only the login PATH" and the Fresh ending. The IncludeOff sentence names no
+  directory, so the directory argument there is held by U73 and the `AttemptDir` mutants below.
+- T049: 35 assertions in `crates/micold-core/tests/cli_reason.rs` gained a message (35 tests before
+  and after, `35 passed`).
+- T046, mutants (each applied alone to c331d0f8 plus the test edits, restored by reversing the
+  edit; `cargo test -p micold-client --no-fail-fast`):
+  - `session.rs:2180` `None => String::new()` -> KILLED (U72 and 3 more; 10 passed, 4 failed)
+  - `session.rs:2185` `None => String::new()` -> KILLED (T047's test; 13 passed, 1 failed)
+  - U43: `answered` keeps the old home `env` (`session.rs:405`) -> KILLED
+    (`a_newer_answer_replaces_the_state_together_with_the_set`; 29 passed, 1 failed)
+  - U44: drop the stale-request guard (`session.rs:402`) -> KILLED (28 passed, 2 failed)
+  - `session.rs:335` `Home` -> `Dir("/mutant")` -> KILLED (U73 and 3 more)
+  - `session.rs:336` `Dir(dir)` -> `Home` -> KILLED (U73 and 3 more)
+  - `settings.rs:1680` `Home` -> `Dir("/mutant")` -> KILLED (U47, U48 and the host test)
+  - `session.rs:2073` `attempt_dir()` -> `Home` -> KILLED (3 tests)
+  - `session.rs:2176` `attempt_dir()` -> `Home` -> KILLED (U75)
+  - `showcase/sections/floating.rs:160` `Dir(PROJECT_DIR)` -> `Home` -> SURVIVED: the showcase
+    sample's directory only sets the pose's text; held by the visual pass (B11 showcase), not a test
+  - U55: no compilable mutant. `missing_cli_notice` takes `Option<&CliAvailability>` and the type
+    has no interior mutability, so the property is held by the compiler; U55 is a characterization
+- not done (MED/LOW, no behaviour): finding 4's daemon half, 5, 7, 9, 10 (ledger D24)
+

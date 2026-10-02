@@ -251,3 +251,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - M1 is 19 tasks and is not split: all six states come from one `classify` and one `explain`, so no acceptance scenario of Story 1 can ship without the Foundational phase, and none is a deliverable without the note.
 - The chevron rule of 026 FR-006 is unchanged (ledger D5). No task amends a closed spec.
 - Nothing is persisted. No task touches `settings.json`'s schema or the session store.
+
+## Phase 7: TDD remediation
+
+**Verdict FAIL** (`tdd/verification.md`, at c331d0f8; suite and mutation unmeasured by the audit). None of these adds behaviour; all are test-strength or docs.
+
+- [X] T045 [US1] [U47] (finding 1, FAIL-trigger, test-strength) Make the loosened assertion in `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs` (`a_missing_pi_is_named_as_pi_coding_agent_and_never_as_its_command`) exact per place: the image says "Pi Coding Agent isn't in {IMAGE}.", the host "Pi Coding Agent was not found on the PATH".
+- [X] T046 [US1] [US3] [U43] [U44] [U55] (finding 2, FAIL-trigger, test-strength) Give U43, U44 and U55 a red: a deliberate mutant per behaviour in `crates/micold-client/src/features/session.rs` (`answered`), recorded in `tdd/cycle-log.md` "Close".
+- [X] T047 [US2] [U72] (finding 3, MED, test-strength) Pin the `start_menu_toggled` branch for a press with no answer in use (`crates/micold-client/src/features/session.rs:2180`, `:2185`): `a_press_with_no_answer_in_use_says_only_that_the_cli_would_not_be_found` in `crates/micold-client/tests/unavailable_default_says_so.rs`, with an independent literal beside the equality.
+- [X] T048 [US2] [U69] [A9] (finding 4, MED, test-strength, client half) Add independent literal fragments beside the `start_refusal(..)` equality in `crates/micold-client/tests/unavailable_default_says_so.rs` (U69) and `crates/micold-client/src/main_tests.rs` (`pressing_start_says_include_is_off_opens_the_list_and_starts_nothing`).
+- [X] T049 (finding 6, MED, smell) Give every assertion in `crates/micold-core/tests/cli_reason.rs` a message naming the state, place and CLI set it checks.
+- [X] T050 (finding 8, LOW, docs) Make the module doc of `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs` say how the 037 tests assert the wording.
+
