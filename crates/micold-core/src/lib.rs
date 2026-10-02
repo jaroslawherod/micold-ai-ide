@@ -37,6 +37,7 @@ pub mod process;
 pub mod project;
 pub mod protocol;
 pub mod provider;
+pub mod pull_request;
 pub mod sandbox;
 pub mod script_path_check;
 pub mod selector;
