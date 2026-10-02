@@ -47,7 +47,7 @@ as `crates/micold-daemon/tests/daemon_lifecycle.rs` does.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create the empty modules and wire them in: `crates/micold-core/src/terminal_history/mod.rs` (declared in `crates/micold-core/src/lib.rs`) and `crates/micold-daemon/src/history.rs` (declared in `crates/micold-daemon/src/lib.rs`); add `chrono` (the version already in `Cargo.lock`, `default-features = false`, features `clock`) to `[workspace.dependencies]` in `Cargo.toml` and to `crates/micold-daemon/Cargo.toml`. `cargo deny`/`Cargo.lock` gain no new crate.
+- [x] T001 Create the empty modules and wire them in: `crates/micold-core/src/terminal_history/mod.rs` (declared in `crates/micold-core/src/lib.rs`) and `crates/micold-daemon/src/history.rs` (declared in `crates/micold-daemon/src/lib.rs`); add `chrono` (the version already in `Cargo.lock`, `default-features = false`, features `clock`) to `[workspace.dependencies]` in `Cargo.toml` and to `crates/micold-daemon/Cargo.toml`. `cargo deny`/`Cargo.lock` gain no new crate.
 
 ---
 

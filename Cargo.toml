@@ -100,6 +100,10 @@ notify = "8.2.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 file-rotate = "0.8.0"
+# The local date, time and UTC offset in the "session restarted at" separator (feature 041, FR-009,
+# research R11). Already in Cargo.lock at this version through file-rotate; `clock` is the one
+# feature that reads the local zone, MIT/Apache-2.0.
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
 iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy"] }

@@ -2093,6 +2093,7 @@ version = "0.16.0"
 dependencies = [
  "alacritty_terminal",
  "bytes",
+ "chrono",
  "directories",
  "embed-resource",
  "file-rotate",
