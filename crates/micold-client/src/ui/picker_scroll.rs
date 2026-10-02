@@ -42,6 +42,12 @@ pub fn into_view<T>() -> impl Operation<T> {
     FindHighlight::default()
 }
 
+/// No room to spare around the row. The focus operation pads its control so a ring is never flush
+/// against a panel's edge; a row is a whole item of a list that is a whole number of base rows
+/// high, so flush is where it belongs, and padding it would scroll a list whose highlighted row
+/// was already wholly visible.
+const MARGIN: f32 = 0.0;
+
 /// Pass one: where is the highlighted row, and which panel is it in?
 #[derive(Default)]
 struct FindHighlight {
@@ -138,6 +144,7 @@ impl<T> Operation<T> for ShowHighlight {
             bounds.height,
             content_bounds.y,
             translation.y,
+            MARGIN,
         );
         if delta != 0.0 {
             state.scroll_by(AbsoluteOffset { x: 0.0, y: delta }, bounds, content_bounds);

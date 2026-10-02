@@ -424,3 +424,46 @@ fn the_highlighted_row_is_in_view_after_every_down_and_up() {
     }
     assert_eq!(form.highlight(), Some(0));
 }
+
+/// Eight issues with one-line titles: eight base rows, which is exactly the list's height.
+fn eight_short_issues() -> Vec<Issue> {
+    (0..8)
+        .map(|row| issue(FIRST_NUMBER + row, SHORT_TITLE.to_string()))
+        .collect()
+}
+
+/// U41 (FR-007): a highlighted row that is already wholly visible causes no scroll, flush against
+/// the list's edge included. Eight base rows fill the list exactly, so the last one's bottom edge
+/// is the viewport's: an operation that wanted room to spare around the row would move the list.
+#[test]
+fn a_row_already_wholly_visible_causes_no_scroll() {
+    use keyboard::key::Named;
+
+    let mut issues = eight_short_issues();
+    // A ninth, so the list can scroll at all: a list that cannot move proves nothing by not moving.
+    issues.push(issue(FIRST_NUMBER + 8, SHORT_TITLE.to_string()));
+    let mut form = Form::new(issues);
+
+    for row in 0..8 {
+        form.step(Named::ArrowDown);
+        let (bounds, list) = form.highlighted_row();
+        assert_eq!(
+            list.scrolled, 0.0,
+            "row {row} spans {}..{} of a list showing {:?}, and the list moved",
+            bounds.y,
+            bounds.y + bounds.height,
+            list.visible(),
+        );
+    }
+    let (last, list) = form.highlighted_row();
+    assert!(
+        (last.y + last.height - list.visible().1).abs() <= SLACK,
+        "precondition: the eighth row ends at {} and the viewport at {}",
+        last.y + last.height,
+        list.visible().1
+    );
+
+    // And the ninth, which is below the fold, does move it.
+    form.step(Named::ArrowDown);
+    assert!(form.highlighted_row().1.scrolled > 0.0);
+}
