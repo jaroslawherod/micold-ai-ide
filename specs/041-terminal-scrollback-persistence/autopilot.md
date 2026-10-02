@@ -73,6 +73,17 @@ Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5
 
 ## Handover
 
+**Part 2 update (2026-10-03 ~01:35).** Part 2 ran `branch-start.sh 540` (REBASED). **Baseline:
+the full suite passed on this tree (`BASELINE_EXIT=0`)**, so do not run it again. It dispatched the
+group 1 TDD subagent (T001–T004, T008; U1–U11). By 01:32 the branch held the T001 scaffold
+(`ee2780f0`) and cycles U1–U3 (`7cd805ad`, `c1e62066`, `083b3cd5`), with U4 in progress, and that
+subagent was still running. Each cycle takes about 25 minutes because four other worktrees were
+queued on the shared build lock. **Next unit:** first check whether the group 1 subagent is still
+running (`pgrep -af terminal_history`; uncommitted changes in `crates/micold-core`). Wait for it to
+stop. Then continue from the first behaviour in U4–U11 that has no commit, and after that run
+groups 2 to 4 below. The branch is not pushed and is 7 commits behind `origin/main`.
+`branch-start.sh 540` rebases it.
+
 M1, written by the first M1 unit at the 150k cap. It read the skills and the code and wrote nothing
 but this ledger. No PR is open; the branch is `origin/main` (`34cd2c85`) plus this commit, so run
 `branch-start.sh 540` as usual.
