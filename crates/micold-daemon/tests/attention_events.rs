@@ -19,6 +19,7 @@ use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, SessionSummary,
+    WindowView,
 };
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
@@ -481,6 +482,37 @@ async fn after_the_viewing_connection_closes_the_next_change_adds_one() {
     );
 }
 
+/// U75 (W1.2, FR-016), review A F2: a connection released early (dead or superseded, before its
+/// loop deregisters it) has nothing in view either.
+#[test]
+fn after_the_viewing_connection_is_released_the_next_change_adds_one() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    let viewer = 41;
+    service.state.set_window_view(
+        viewer,
+        WindowView {
+            focused: true,
+            in_view: Some(a),
+        },
+    );
+    service.finishes_a_turn(a);
+    assert_eq!(
+        service.attention_seq(a),
+        0,
+        "precondition: the session was in view, so its first wait did not count"
+    );
+
+    service.state.release_attachments(viewer);
+    service.finishes_a_turn(a);
+
+    assert_eq!(
+        service.attention_seq(a),
+        1,
+        "the released connection's report is forgotten, so the next change counts"
+    );
+}
+
 /// U76 (W1.5, W1.6): the report needs no attachment and is not an operation.
 #[tokio::test]
 async fn a_view_report_from_a_connection_attached_to_no_project_is_accepted_without_a_reply() {
@@ -518,6 +550,8 @@ fn the_sequence_survives_a_restart_of_the_service_on_the_same_store() {
         2,
         "precondition: two attention events"
     );
+    // The supervisor tick's write: counting happens under the state lock, the write off it.
+    service.state.persist_attention();
 
     let restarted = DaemonState::new(catalog_on(service.store.path()));
 

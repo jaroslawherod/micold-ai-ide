@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 6f5590e2f6b7bd8ef3510df31aee2a75532299d2:80af04fa661ea74bd8f32172b5dd8b92c2813ecb | CLEAN (1 MINOR: wrong line cited for the second `note_activity` caller; fixed) |
 | Tasks | 1 | c85dac2f537bb711fcce428ed56ceeef88af19dc:897f84cedd8e9e405d34fa1ff8b79c1fbf646097 | CHANGES: 5 MAJOR, 3 MINOR. Fixed: F1 the macOS and Windows backend tests ran on no CI leg (new T122 edits `ci.yml`; client test files join the enumerated list in T006, T051, T063, T077); F3 T118 would be ticked in M2 (markers removed); F4 a failed probe left T092–T100 open and version 25 untaken (T091 closes them as `DROPPED`; versions are "next free"); F5 the rules of the view report sat untested in `main.rs` (new T123 `State::view_facts` in the lib, tested in T006 with `[A9]`, `[A10]`, U176–U178; this replaces the reason given for analysis finding G6); F6 dependencies (M4 on M2, M6 on M3 and M4, M8 on M7); F7 the "next free number" rule in R10, wire.md and the plan; F8 the Windows notification-centre sentence moved to T090, milestone ids in D15 and D16, the header's glue list. F2 (the D15 Edge Case narrowed FR-011 by agent decision): escalated, decided by the user (D19), FR-015 and FR-015a amended, `checklists/requirements.md` line 17 ticked again |
 | Tasks | 2 | 87798c9ef7f66cc737705e1027bdd8ac800df22f:3e048fa2f8aedc3fdf5b0c9a8a0acfe60351f003 | CLEAN (1 MINOR: T016 named no dependency on T123; fixed) |
+| M1 A | 1 | f0755331e896218cbb4aee5d412514a99a0285a0:42e5f39236de396343a5def84b90d15f7207c92f | CHANGES: 1 MAJOR (`mark_attention` wrote the store under the state lock on the async runtime; now counted in memory and written by `persist_attention` in the supervisor tick's `spawn_blocking` hop), 2 MINOR (F2 `release_attachments` kept the view: fixed, with a test; F3 a displaced window reports its session in view: follow-up) |
 
 ## Declined review findings
 
@@ -84,5 +85,7 @@ None.
 ## Token usage
 
 ## Follow-ups not done
+
+- M1 review A F3 (MINOR): a focused window displaced from or refused its project still reports its selected session in view (`app.rs` `view_facts`), so that session's attention events are not counted. Consider in M2 or M4: treat a displaced project as `main_area_taken`, or have `set_window_view` ignore `in_view` outside the connection's attachments.
 
 - `crates/micold-daemon/tests/mcp_create_session.rs::a_pi_session_start_event_makes_pi_ready` failed once in a full-suite run on a docs-only branch (`left: ""`, line 600) and passed when rerun alone: a timing flake in code this flow does not own. Not fixed here.

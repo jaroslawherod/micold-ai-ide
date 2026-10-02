@@ -640,18 +640,18 @@ impl Catalog {
         Ok(true)
     }
 
-    /// Count one attention event for session `id`, persisting (feature 039, W1.3). Returns whether
-    /// the session is known.
+    /// Count one attention event for session `id` (feature 039, FR-001), in memory only. Returns
+    /// whether a session was found.
     ///
-    /// As with [`Self::record_session_name`], the count is added in memory before the disk: a
-    /// persist failure leaves it counted and is returned for the caller to log.
-    pub fn mark_attention(&mut self, id: SessionId) -> io::Result<bool> {
+    /// It does not write the store: the caller holds the state lock on the async runtime, and a
+    /// write is blocking I/O. [`crate::state::DaemonState::persist_attention`] writes it from the
+    /// supervisor's `spawn_blocking` hop, as names are written (feature 029, FR-003).
+    pub fn mark_attention(&mut self, id: SessionId) -> bool {
         let Some((_project, session)) = self.workspace.find_session_mut(id) else {
-            return Ok(false);
+            return false;
         };
         session.attention_seq += 1;
-        self.persist()?;
-        Ok(true)
+        true
     }
 
     /// Record a label derived from session `id`'s first turn, persisting — only if the session

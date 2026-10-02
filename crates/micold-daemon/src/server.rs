@@ -316,6 +316,12 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
                 let _ =
                     tokio::task::spawn_blocking(move || writer.record_observed_names(&names)).await;
             }
+            // Attention events counted under the lock (feature 039, FR-008a) are written here for
+            // the same reason: blocking I/O, off the async runtime.
+            if state.has_unsaved_attention() {
+                let writer = Arc::clone(&state);
+                let _ = tokio::task::spawn_blocking(move || writer.persist_attention()).await;
+            }
         }
     });
 }
