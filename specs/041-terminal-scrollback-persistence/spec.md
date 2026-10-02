@@ -44,6 +44,16 @@
   Every start behaves the same: the terminal shows the earlier output above the separator.
   _(decided by user)_
 
+### Session 2026-10-02 (round 2)
+
+- Q: With saving off, does a start within one service run still show the earlier output? → A: Yes;
+  it needs nothing on disk and every start behaves the same. _(agent-resolved:
+  spec.md#Functional Requirements FR-015, ledger D9/D10)_
+- Q: Are the 5-second deletion bound, no confirmation dialog and 30-second deletion retry
+  acceptable? → A: Yes, as written in FR-027 and FR-033. SC-008 now excepts a deletion that failed
+  and is being retried (FR-033). _(agent-resolved: spec.md#FR-027, FR-033; docs/daemon.md retry
+  conventions not required)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Scroll back to what happened before the service restarted (Priority: P1)
@@ -394,7 +404,8 @@ Repeat with Close.
   app version starts and runs, and the user sees one line saying so.
 - **SC-007**: After a session is closed or removed, a search of the service's data location for text
   that session printed finds nothing.
-- **SC-008**: From 5 seconds after the setting is turned off, a search of the service's data
+- **SC-008**: From 5 seconds after the setting is turned off, except for a deletion that failed and
+  is being retried under FR-033, a search of the service's data
   location for text any terminal printed, before or after it was turned off, finds nothing.
 - **SC-009**: No account on the computer other than the user's can read a saved history, on each of
   Linux, macOS and Windows, and when the service runs in a container.

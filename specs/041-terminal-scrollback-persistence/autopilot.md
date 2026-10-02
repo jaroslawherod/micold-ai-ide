@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 2-clarify
-- **Next step**: Clarify round 1 is applied and committed (not pushed; it ships in PR 2). Run clarify round 2: one `speckit-clarify` run on the updated spec.md. It should look at D10 (derived from the user's Q3 answer, not asked), at the 5-second deletion bound (FR-027, SC-008) and at the 30-second deletion retry (FR-033), which the spec chose.
+- **Next step**: Clarify round 2 done and committed (CLEAN, not pushed; it ships in PR 2). Next: the plan phase.
 
 ## Pull requests
 
