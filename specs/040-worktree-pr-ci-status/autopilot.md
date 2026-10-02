@@ -38,6 +38,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 No `[NEEDS CLARIFICATION]` marker is open after clarify round 1. The round asked questions, so it is
 not `CLEAN`.
 
+Clarify round 2 (2026-10-02): coverage scan of all taxonomy categories found no critical ambiguity; no
+questions asked, spec.md unchanged. `CLEAN`.
+
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
