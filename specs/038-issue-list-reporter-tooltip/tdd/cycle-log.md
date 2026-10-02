@@ -275,7 +275,7 @@ suite runs in the gate.
   restored with `git checkout`.
 - green: 1 passed unmutated. No refactor.
 
-## Cycle 11 — U43 — T018, T021 (M2) — OPEN: green not yet observed
+## Cycle 11 — U43 — T018, T021 (M2)
 
 - test: `only_the_issue_highlight_move_chains_the_operation` (source check over `src/`).
 - red, before T021:
@@ -289,4 +289,11 @@ suite runs in the gate.
   still failed, on its own second assertion: it looked for
   `FormMsg::IssueHighlightMoved(direction)` in the handler's text and rustfmt had wrapped that
   call over three lines. The assertion now compares without whitespace (a defect of the test, not
-  a loosened check). Not re-run yet: the handover below picks it up.
+  a loosened check). Run again, it still failed: rustfmt's wrap also adds a trailing comma,
+  `IssueHighlightMoved(direction,)` (review A, F1). The check now folds `,)` to `)` as well.
+- green, in `mise run gate` (GATE_EXIT=0):
+  ```
+  test only_the_issue_highlight_move_chains_the_operation ... ok
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+  ```
+- refactor: none.

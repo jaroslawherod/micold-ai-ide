@@ -585,13 +585,15 @@ fn only_the_issue_highlight_move_chains_the_operation() {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/issues.rs"),
     )
     .expect("the issue shell");
-    // Without whitespace: rustfmt wraps the handler's `update` call as it sees fit.
+    // Without whitespace or trailing commas: rustfmt wraps the handler's `update` call as it sees
+    // fit, and a wrapped argument list gains a trailing comma.
     let handler: String = shell
         .split("\npub fn ")
         .find(|item| item.starts_with("on_issue_highlight_moved("))
         .expect("the issue shell handles the highlight move")
         .split_whitespace()
-        .collect();
+        .collect::<String>()
+        .replace(",)", ")");
     assert!(
         handler.contains("FormMsg::IssueHighlightMoved(direction)")
             && handler.contains("picker_highlight_into_view()"),

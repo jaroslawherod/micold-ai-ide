@@ -353,7 +353,8 @@ title, then who reported it and its labels. Long text wraps onto further lines i
 off, and `ghost` stands for a reporter whose account has been deleted.
 Type in **Issue** to narrow the list by number, by a word of the title, or by a label, and use the
 arrow keys and Enter to pick without leaving the field. The list follows the highlight as you move
-with Up and Down, so the highlighted issue is always fully visible, however many lines it takes.
+with Up and Down, so the highlighted issue is always fully visible, however many lines it takes;
+an issue taller than the whole list shows from its top.
 The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
 fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a

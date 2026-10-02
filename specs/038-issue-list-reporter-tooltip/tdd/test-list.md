@@ -125,7 +125,7 @@ gives the test task first, then the implementation task(s).
 | U40 | After each of 11 Down and 11 Up presses over rows of one to five lines the highlighted row lies inside the viewport | US1-6, FR-007, SC-007 | example | DONE | T018 / T019, T020, T021 |
 | U41 | An already wholly visible highlighted row causes no scroll | FR-007 | example | DONE | T018 / T020 |
 | U42 | A highlighted row taller than the viewport is aligned to its top | FR-007 | example | DONE | T018 / T020 |
-| U43 | Only `FormMsg::IssueHighlightMoved` chains `picker_highlight_into_view()`; no other picker's message does | FR-029 | example | RED | T018 / T021 |
+| U43 | Only `FormMsg::IssueHighlightMoved` chains `picker_highlight_into_view()`; no other picker's message does | FR-029 | example | DONE | T018 / T021 |
 | U44 | The issue form states (256-character title, 20 labels, none, rows of one to five lines; default and narrow window) show every row's whole title, reporter and labels inside the list | SC-001, FR-004 | example | DONE | T006 / T012, T014 |
 
 ### `crates/micold-client` reducer: issue search by reporter

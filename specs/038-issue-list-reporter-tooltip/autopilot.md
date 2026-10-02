@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2 part 2: see *Handover*.
+- **Next step**: M2: review B and visual pass §B3, then open the M2 PR.
 
 ## Pull requests
 
@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 code A | 1 | ceac9e87cd4e6cb4da87f2fd4eeff2943a8f83c6:e8428c23d3b7ee92d254fb1725b699ef456e41a5 | CHANGES: 2 MAJOR (F1 `vec![1..5]` in `issue_picker_rows.rs` would trip clippy: declined, not reproduced; F2 the row gate could not fail for text below its row or cut vertically: fixed in 86ea073c, proven by mutation, 10 findings with the row at a fixed 48dp), 3 MINOR (F5 `parts()` per span: fixed; F3 `Row` derives `Debug`, F4 showcase highlight after typing from rest: not fixed) |
 | M1 code A | 2 (scoped, counted) | ea82f99ec92dbdccc92b20a1388cd376f70029db:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN. `mise run gate` green at 86ea073c |
 | M1 code B | 1 | 211c06a4d065aa189c04ba49e1b1f9e81c601e58:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN, 3 MINOR (F1 the gate's only red was a mutant: a second red recorded in `tdd/cycle-log.md`; F2 no test asserts the showcase rows carry a second line, T013 not in the cycle log: logged, test left as a follow-up; F3 contract §1 "dims both lines" vs the details line always at `on_surface_variant`: contract clarified). Verify: `issue_picker_rows` 3 passed, `layout_snapshot issue_rows_show_all_text` 4 passed, `mise run test-core` 1527 passed. Visual pass §B1, §B2: PASS, light and dark, `evidence/README.md` |
+| M2 code A | 1 | e97b12f17b7a00c35f77e36c60959da6da42774b:2b1bcfab678a314f083e173fe50e67ff02544528 | CHANGES: 1 BLOCKER (F1 U43's handler check missed rustfmt's trailing comma, so the test failed: fixed, `,)` folded to `)` before the match), 2 MINOR (F2 re-ranking keeps the scroll offset: follow-up; F3 guide promised a too-tall row wholly visible, `MARGIN` comment stale: both fixed) |
 
 ## Declined review findings
 
@@ -67,30 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 part 1 handed over at the context cap (unit `Milestone M2 038`). No PR is open for M2; the
-branch has three unpushed commits on `origin/main` (e6444615).
-
-Done: T019, T020, T022 ticked. `tests/picker_highlight_into_view.rs` holds five tests; U39–U42 are
-green with red evidence in `tdd/cycle-log.md` cycles 7–10. T021's code is written (`main.rs` arm,
-`shell::issues::on_issue_highlight_moved`). T022's two doc edits were made by a worker and read
-by the unit, not reviewed.
-
-Next steps, in order:
-1. Run `scripts/build-lock.sh cargo test -p micold-client --test picker_highlight_into_view`. U43
-   (`only_the_issue_highlight_move_chains_the_operation`) was red for the right reason, then failed
-   on a whitespace-sensitive assertion that is now fixed and not yet re-run (cycle 11). When it is
-   green: complete cycle 11's entry, set U43 `DONE` in `tdd/test-list.md`, tick T018 and T021.
-2. Phase 4 step 2: `mise run gate` detached, review A (`code-review` high on `origin/main...HEAD`)
-   in its shadow. The gate has not run on this milestone at all; `layout_snapshot` fixtures may
-   record the new container around the highlighted row (regenerate if only that changed) and
-   clippy has not seen the new code. No `cfg(target_os)` code changed.
-3. Step 3: review B and the `visual-pass` skill on quickstart §B3 (screenshots under
-   `specs/038-issue-list-reporter-tooltip/evidence/`), via an `autopilot-worker`. Then tick T023,
-   set A6 `DONE`, and open the PR `feat(038): Up and Down keep the highlighted issue row wholly in
-   view`, body ending `Refs #518`.
-
-Notes: the build lock is contended by other worktrees (waits of 10 to 20 minutes per run), so
-batch cargo runs under one `scripts/build-lock.sh bash -c`. No review rounds have run for M2.
+None.
 
 ## Open escalation
 
@@ -113,4 +91,9 @@ None.
   result when typing from the rest pose (review A, F4; D9).
 - M1 visual pass: the wide window in the light theme and the pick in the dark theme were not
   captured; M6's recorded pass (T056) runs §B1 and §B2 again.
+- M2 review A, F2 (MINOR): when the issue rows are re-ranked (typing, a load or a search result),
+  `rematch_issues` keeps or resets the highlight index while the list keeps its scroll offset, so
+  the highlighted row can sit off screen until the next Up or Down. FR-007 and SC-007 cover moves
+  with Up and Down only; chaining the operation after those handlers too (and widening U43) is a
+  small follow-up, best taken with M3, which changes how typing narrows the list.
 
