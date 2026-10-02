@@ -27,3 +27,15 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot` -> 1 passed, 0 failed
 - refactor: none needed
 - commit: `feat(041): a snapshot whose runs cover its text is valid (U1)`
+
+## Cycle 2: U2 `validate` rejects a line whose run sum is one more, and one less, than its character count
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::validate_rejects_a_line_whose_run_sum_is_one_more_or_one_less_than_its_character_count` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot validate_rejects_a_line_whose_run_sum_is_one_more_or_one_less_than_its_character_count -- --exact`
+  -> `assertion \`left == right\` failed: runs summing to 6 do not cover a line of 5 characters` /
+  `left: Ok(())` / `right: Err(RunsDoNotCoverText { line: 0 })` (1 failed). The
+  `SnapshotError::RunsDoNotCoverText` variant was declared first so the test compiles.
+- green: `validate` sums each line's run `chars` (as `u64`, so no overflow) and compares with
+  `text.chars().count()`. File run -> 2 passed, 0 failed
+- refactor: none needed
+- commit: `feat(041): a snapshot whose runs miss or overrun its text is invalid (U2)`
