@@ -9,12 +9,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 1-spec
-- **Next step**: Merge the spec PR when `ci complete` is green, then run the clarify unit on the three markers (FR-008, FR-023, FR-028).
+- **Next step**: Merge PR #528 when `ci complete` is green, then run the clarify unit on the three markers (FR-008, FR-023, FR-028).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #528 | Spec | open | |
 
 ## Milestones
 
