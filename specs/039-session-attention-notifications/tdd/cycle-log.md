@@ -243,5 +243,5 @@ was held by them for 10 minutes and more at a time during this milestone.
   `after_the_viewing_connection_is_released_the_next_change_adds_one`, written after the fix (a
   review fix); its mutant (drop the `views.remove`) is KILLED.
 - Mutant `server.rs` tick does not call `persist_attention`: SURVIVED. The tick is glue with no
-  test harness in this crate (the names write beside it has none either); quickstart §B covers
-  a restart after an attention event.
+  test harness in this crate (the names write beside it has none either). A known gap: no test
+  observes the tick's write; U77 observes `persist_attention` itself.
