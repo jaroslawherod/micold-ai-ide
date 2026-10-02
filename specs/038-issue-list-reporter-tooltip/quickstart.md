@@ -49,23 +49,23 @@ scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budge
 | Issue rows in the view | `micold-client/tests/issue_picker_rows.rs` | FR-006, 011, 020 |
 | 034's states unchanged | `micold-client/tests/issue_source_state.rs` (existing cases), `layout_snapshot.rs` | FR-027 |
 | Row tooltip geometry | `micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` | FR-021, 023; SC-005 |
-| Wrapping, nothing clipped | `gates/issue_rows_show_all_text.rs`, `layout_text_overflow.rs`, `gates/containment.rs` over the new covered states | FR-004; SC-001 |
+| Wrapping, nothing clipped | `gates/issue_rows_show_all_text.rs` (text, read with the overlay drawn) and `gates/containment.rs` (layout records) over the new covered states with the list open | FR-004; SC-001 |
 | Single-line rows unchanged | `material/picker_parity.rs`, `material/menu_anatomy.rs`, `layout_snapshot.rs` | FR-029 |
 | Component API and showcase | `material_builder_api.rs`, `showcase_completeness.rs`, `typeahead_is_generic.rs` | FR-028 |
 
 ## §B — Recorded pass
 
 Run with the `visual-pass` skill on a private display. Record each step's result and screenshot in
-`specs/038-issue-list-reporter-tooltip/evidence/README.md`, screenshots beside it. Steps B1–B4 and B6–B10 use the client
+`specs/038-issue-list-reporter-tooltip/evidence/README.md`, screenshots beside it. Steps B1–B4 and B6–B11 use the client
 (`mise run run`) with the project `$SCRATCH/issue-demo` unless stated; B5 uses the showcase
 (`mise run showcase`).
 
 | Step | Do | Expect | Covers |
 |---|---|---|---|
-| B1 | Open the create-worktree form, choose **GitHub issue**. | Every row: `#<number> <title>` on the first line; below it the reporter's login, then ` · ` and the labels in smaller, lower-emphasis text. A row without labels shows the login alone. Check in the light and the dark theme. | US1 1–3; FR-005 |
-| B2 | Find rows with a long title and with many labels; narrow the window to its minimum width, then widen it. | Titles and details wrap inside the row at every width; nothing is cut, ellipsized or outside the list. | US1 4, 5, 9; SC-001 |
-| B3 | Press Down 15 times, then Up 15 times; press Enter on a tall row; reopen the list. | Each press moves one issue; the highlighted row is always wholly visible; Enter picks it; its row carries the picked marker. Ticket, name and type are filled as before. | US1 6, 7; FR-008; SC-007 |
-| B4 | Read the empty search field's hint. Type a login seen in B1, then the same login in capitals. Then type a term that returns issues from beyond the 1,000 loaded. | The hint names the reporter. The list narrows to that reporter's issues (plus other matches); the login is emphasised in the details line; capitals match too. Searched issues have the same two lines. | US2 1–5; US1 8 |
+| B1 | Open the create-worktree form, choose **GitHub issue**. Then type a term that returns issues from beyond the 1,000 loaded, and clear it. | Every row: `#<number> <title>` on the first line; below it the reporter's login, then ` · ` and the labels in smaller, lower-emphasis text. A row without labels shows the login alone. A searched issue's row has the same two lines. Check in the light and the dark theme. | US1 1–3, 8; FR-005 |
+| B2 | Find rows with a long title and with many labels; narrow the window to its minimum width, then widen it. Click a row that wraps; reopen the list. | Titles and details wrap inside the row at every width; nothing is cut, ellipsized or outside the list. The click picks the issue: ticket, name and type are filled as before, and its row carries the picked marker beside its first line. | US1 4, 5, 7, 9; FR-008; SC-001 |
+| B3 | Press Down 15 times, then Up 15 times; press Enter on a tall row; reopen the list. | Each press moves one issue; the highlighted row is always wholly visible; Enter picks it; its row carries the picked marker. | US1 6; FR-007; SC-007 |
+| B4 | Read the empty search field's hint. Type a login seen in B1, then the same login in capitals. Then type a term that returns issues from beyond the 1,000 loaded. | The hint names the reporter. The list narrows to that reporter's issues (plus other matches); the login is emphasised in the details line; capitals match too. Searched issues have the same two lines, with the login emphasised. | US2 1–5 |
 | B5 | Showcase → Tooltip: rest the cursor on the rest-delay instance; then keep the cursor moving over it for 10 s. Showcase → Typeahead: look at the two-line pose. | A tooltip of at most three lines ending in `…` opens after about 3 s at rest, and never while moving. The pose shows rows of differing height, one highlighted, one picked. | FR-028; SC-004 |
 | B6 | Rest the cursor on a row with a description. Time it with a stopwatch from rest to open, 20 trials. | The tooltip opens between 3.0 and 3.5 s in every trial, never before 3.0 s. It shows only description text. | US3 1, 2, 6; SC-003 |
 | B7 | Sweep the cursor over the list for 10 s. Then open a tooltip and move to the next row; then leave the list; then open one and click the row. | No tooltip during the sweep. Moving to another row closes it and the next opens only after 3 s; leaving closes it; the click picks the issue and closes it. | US3 3–5, 10; SC-004 |
@@ -75,5 +75,5 @@ Run with the `visual-pass` skill on a private display. Record each step's result
 | B11 | Idle cost and requests. With the list open, read the client's CPU time (`utime + stime` in `/proc/<pid>/stat`) over 30 s three times: (a) cursor at rest beside the list, (b) cursor at rest on a row with a description, from before the tooltip opens until 30 s later, (c) the same on a row with no description. During (b) and B6–B8, run `pgrep -x gh` once a second. | (b) and (c) use no more CPU time than (a) plus 10%: waiting for and showing a tooltip adds no steady redraw (the search field's caret blink is in all three). `pgrep` finds no `gh` process while the cursor only rests. | FR-018; SC-006 |
 
 **Not runnable on this host**: macOS and Windows. FR-030 rests on the absence of any `cfg` arm in
-this feature and on `micold-core`'s suite running on all three OSes in CI; B1–B9 are recorded on
+this feature and on `micold-core`'s suite running on all three OSes in CI; B1–B11 are recorded on
 Linux.

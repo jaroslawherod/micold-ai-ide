@@ -82,8 +82,8 @@ lines and a mapping between them (all NEW, `github.rs`):
   Vec<Range<usize>> }`: each span of the match text is clipped to the parts that are shown and
   rebased to the line that shows them; a span crossing a separator is split; separator bytes carry
   no emphasis.
-- Milestone US1: match text is unchanged from today (`#N title` + `"  ·  "` + labels); the parts
-  are title → title line, labels → details line after the reporter. Milestone US2: the match text
+- M1 and M2 (US1): match text is unchanged from today (`#N title` + `"  ·  "` + labels); the parts
+  are title → title line, labels → details line after the reporter. From M3 (US2): the match text
   becomes `#N title` + `"  ·  "` + reporter + (`"  ·  "` + labels), and the reporter becomes a
   mapped part. The description is never part of the match text (FR-014).
 
@@ -128,7 +128,7 @@ longer than eight rows. The requirement stands, so this feature builds it.
 **Decision**: An operation `picker_highlight_into_view()` (NEW, `crates/micold-client/src/ui/`,
 beside `focus.rs`), modelled on `scroll_focused_into_view`: pass one finds the rectangle of the row
 the shared list marks as highlighted (a widget `Id` set by `menu_element` on that row only), pass
-two scrolls the enclosing scrollable by `delta_into_view` (reused, already unit-tested). The shell
+two scrolls the enclosing scrollable by `delta_into_view` (reused, already unit-tested; made `pub(super)`). The shell
 chains it after `IssueHighlightMoved` where it routes the issue messages (`main.rs:677`,
 `shell/issues.rs`). It reads laid-out rectangles, so rows of any height work.
 
