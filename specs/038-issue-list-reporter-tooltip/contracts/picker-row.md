@@ -55,7 +55,7 @@ pub fn picker_highlight_into_view<M: Send + 'static>() -> Task<M>;
 
 - `menu_element` gives the highlighted row, and only it, the widget `Id` `PICKER_HIGHLIGHT`.
 - The operation is two passes, as `focus::into_view`: find that `Id`'s bounds, then scroll the
-  enclosing scrollable by `focus::delta_into_view(row, viewport)` (reused). A row already wholly
+  enclosing scrollable by `focus::delta_into_view(row, viewport)` (reused; private to `ui/focus.rs` today, it becomes `pub(super)`). A row already wholly
   visible causes no scroll. A row taller than the viewport is aligned to its top.
 - The shell chains it after `FormMsg::IssueHighlightMoved` (`main.rs` where it routes issue
   messages; `shell/issues.rs`). The reducer stays render-free and unchanged.
@@ -131,9 +131,16 @@ row, and is at most three `Caption` lines plus the panel's padding tall.
   with two-line rows of differing height — a short row, a row with a long title, a row with many
   labels — one of them highlighted and one picked. `showcase_completeness.rs` and
   `showcase_captions.rs` hold it.
-- `tests/support/covered_states.rs` gains issue lists with a 256-character title, 20 labels and
-  mixed heights, at the default window and at a narrow one. `layout_text_overflow.rs` and
-  `gates/containment.rs` then fail on any text record clipped or outside the list, and NEW
-  `gates/issue_rows_show_all_text.rs` fails when a row's text records, joined, lack any part of
-  the title, the reporter or a label (SC-001).
+- `tests/support/covered_states.rs` gains states with the issue list open (`form.issue_list_open =
+  true`; the list is then in the overlay layer of the snapshot): a 256-character title, 20 labels,
+  no labels and mixed heights, at the default window and at a narrow one. Each state is small
+  enough that the rows under test are inside the list's eight-row viewport.
+- NEW `gates/issue_rows_show_all_text.rs`, a `#[path]` module of `tests/layout_snapshot.rs` (SC-001).
+  It reads each state's text with `support::layout::painted_text_settled`, a pass that draws and
+  settles the overlay; `painted_text` and `layout_text_overflow.rs` run `Before::Mounted`, which
+  draws no overlay. For every row it fails when the row is not wholly inside the list's viewport,
+  when the row's text records, joined, lack any part of the title, the reporter or a label, or
+  when a record lies outside its row.
+- `gates/containment.rs` holds the new states' overlay layout records: each row inside the list.
+  The states stay under the cap, so `PICKER_LIST_CONTENT` gains no entry.
   `fixtures/layout_snapshot.txt` is regenerated in the same change.

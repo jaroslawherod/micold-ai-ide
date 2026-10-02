@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: `speckit-tdd-plan` on the drafted tasks.md, `speckit-analyze`, tasks review, checklists, PR 2.
+- **Next step**: Design part 3 in progress: plan re-review (round 3) and `speckit-tdd-plan` running; then `speckit-analyze`, tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | drafted |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
-| M6 | T056–T058 | light | Quickstart §B recorded, SC-008 measured, showcase doc | | drafted |
+| M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
 
 ## Decisions
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 8b82c5e2181ac182fb31b8e4e9aad9f2b2e5603a:91e721245225f5de62861883e63a5ad816a190d7 | CLEAN |
 | Plan | 1 | 9923485e69511a2c10e2f2e1e22316a07dff8c5b:24a25da1e708257eeac7a9fca0088a73bb210c35 | CHANGES: 2 MAJOR (quickstart B11 cannot observe FR-018 or SC-006; seven FRs in no test layer), 3 MINOR (SC-008 fallback against FR-026, transition frames in rest mode, M-numbers undefined in the plan); all five fixed |
 | Plan | 2 | 08de3d166cc2661eb82c085ccd62e810fdc147d0:4dbb2d7617200602dce3057abad6733f53a0bab8 | CLEAN (scoped re-review of the round 1 fixes; it made 4 tool calls, so FR coverage of the plan's two tables was also checked by script: none missing) |
+| Plan | 3 (full: stale snapshot after the rebase; covers the part-2 edits; counted, it found MAJORs) | 7bab6b0f738cf24142cc0c9a03b9b655df4a87ec:d9deabff8423a7318f5b20fd470ed9ba34be9513 | CHANGES: 2 MAJOR (the layers named for SC-001 run `Before::Mounted` and never see an issue row, and no covered state opens the list; Principle VII PASS said docs ship with their milestone while `component-showcase.md` was in M6), 3 MINOR (trees omit `layout_snapshot.rs` and `evidence/README.md`; §B steps against the renumbered milestones; `delta_into_view` is private); all five verified and fixed. Third counted round with a MAJOR: no fourth round run, see *Open escalation* |
 
 ## Declined review findings
 
@@ -56,32 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit, part 2, handed over at the context cap after drafting tasks.md. No PR is open; nothing
-is pushed.
-- **Done**: `branch-start.sh 525` (rebased; the branch is behind `origin/main` again, so run it
-  again first). `plan.md`, `data-model.md`, `contracts/` (`issue-fields.md`, `picker-row.md`,
-  `rest-tooltip.md`), `quickstart.md`. Plan review: round 1 CHANGES (all five fixed), round 2 CLEAN.
-  `tasks.md` drafted by hand to the `speckit-tasks` format (T001–T058, six milestones, `##
-  Milestones` section), and the milestones are in the table above.
-- **Changed after the plan's round 2 snapshot**, so not yet seen by any reviewer: US1 split in two
-  milestones (M1 rows, M2 highlight in view; the plan's Delivery order and the contracts'
-  M-numbers renumbered to M1–M6); a new gate `gates/issue_rows_show_all_text.rs` named in the
-  plan, `picker-row.md` §6 and quickstart §A; `Row::key` moved to M5 in `data-model.md` §7 and
-  `picker-row.md` §4; quickstart evidence path is `evidence/README.md`. The tasks review must
-  check these against each other. If it finds the plan itself wrong, that is a plan fix, and a
-  further plan round counts as round 3.
-- **Next step**: (1) `speckit-tdd-plan` (the `after_tasks` hook; 034 shipped `tdd/test-list.md` in
-  its design PR, and `tdd.run` needs it): have an `autopilot-worker` run it and return the
-  behaviour count and what it reordered; it adds the `[A#]`/`[U#]` ids to tasks.md. (2)
-  `speckit-analyze`, fix what it finds. (3) Tasks and milestone review, round 1. (4) Checklists:
-  `checklists/requirements.md` has no unchecked item today; re-check after analyze. (5) PR 2,
-  `docs(038): clarify, plan and cut milestones for …`, body ending `Refs #518`; local gate `mise
-  run test-scripts`.
-- **Known soft spots for the tasks review**: gates under `tests/gates/` are `#[path]` modules of
-  `tests/layout_snapshot.rs`, so the Verify commands filter that test binary; T018's "the shell
-  chains it" is a source check; M4's PR needs the `docs-not-needed` label; M6 is tier `light`
-  (visual pass and measurement, no code expected).
-- **Open findings**: none.
+None.
 
 ## Open escalation
 
