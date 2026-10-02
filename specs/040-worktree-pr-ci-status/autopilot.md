@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: finish `speckit-plan` (data-model.md, three contracts, quickstart.md), then the plan review.
+- **Next step**: Design unit: plan review round 1, then `speckit-tasks`, milestones, `speckit-analyze`, tasks review, close checklists, PR 2.
 
 ## Pull requests
 
@@ -58,68 +58,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-Design unit, step 1 (`speckit-plan`) partly done; handed over at the context cap (2026-10-02).
-
-**Done** (committed, not pushed; no PR open): `branch-start.sh 529` (clarify commits rebased onto
-`origin/main`); `setup-plan.sh`; `research.md` (R1 to R15, complete); `plan.md` (complete: summary,
-technical context, constitution check, requirement map, test strategy, structure, delivery order,
-risks); spec.md reworded per D9 to D11 (Edge Cases, FR-024, SC-007, Assumptions).
-
-**Next steps, in order:**
-
-1. Write the artifacts plan.md already links to. Their content is decided in research.md; do not
-   redesign:
-   - `data-model.md`: §1 `PullRequestStatus` (number, title, url, `PrState`, `CheckStatus` only for
-     open/draft, `ReviewState`, `head` oid; no `Serialize`, redacting `Debug`); §2 `ReadingFailure`
-     (`Unavailable` / `Passing` / `RateLimited { until }`); §3 the client state
-     (`enabled`, `Phase::Idle | Reading { seq, again }`, `statuses: BTreeMap<branch, status>`,
-     `removable: BTreeSet<branch>`, `read_at`, `pause_until`, keyed to the shown project); §4 the
-     row projection (join by `Worktree.branch`; "Default" and branchless rows get nothing); §5
-     `Settings.pr_status_enabled`; §6 `MergedBranchQuery` / `BranchContainment`.
-   - `contracts/pull-request-source.md`: §1 trait `PullRequestSource` + `GhCli` impl + fake, in
-     `micold_core::pull_request`; §2 the command and query (research R2; arguments are owner, name,
-     `b0…`; `--include`); §3 `select_pull_request` (R3); §4 `reduce_checks` table (R4); §5
-     `split_response`, `rate_limit_pause` (R9), `reading_failure` (R10); fixtures
-     `crates/micold-core/tests/fixtures/gh/pr_*.txt` recorded with `--include`.
-   - `contracts/reading-and-wire.md`: §1 start events (R7) and the source gate; §2 the schedule
-     reducer and its invariants (R8), what a reading writes (FR-020); §3 `MergedBranchCheck` RPC
-     (R11) and the 10 s bound per step; §4 the setting on `Settings`, `DaemonSettings`,
-     `SettingsSet` (R12); §5 protocol 20 → 21.
-   - `contracts/pull-request-ui.md`: §1 `PullRequestIndicator` builder, glyph and role table, stale
-     form, showcase poses (R14); §2 row placement and the "can be removed" chip; §3 tooltip lines
-     and their order (R15); §4 menu entry and opening; §5 the Settings control and its text (R12);
-     §6 covered layout states.
-   - `quickstart.md`: Part A automated (`mise run test-core`, `mise run gate`), Part B visual pass
-     (showcase states in both themes; real `gh` against a repository with open/failing, merged and
-     no pull request; **Open pull request**; removal suggestion then Delete confirmation; refresh;
-     switch off; `gh` missing; no GitHub remote; desktop launch; sandbox placement).
-2. Plan review: fresh `autopilot-reviewer`, Plan rubric, round 1 (`review-snapshot.sh` first). Tell
-   it spec.md was reworded in this unit (D9 to D11) and to check those edits too.
-3. `speckit-tasks`, milestones (`references/milestones.md`; the Settings switch and the wire change
-   are foundational, so they go in M1 with US1; split M1 if over about 15 tasks), `speckit-analyze`,
-   tasks review, close checklists, PR 2 (`Refs #486`).
-
-**Code anchors found while planning** (so the next unit need not search again):
-`crates/micold-core/src/github.rs` (`GhCli` :869, `classify` :804, `choose_remote` :113,
-`locate_gh_on_host` :309); `crates/micold-client/src/shell/issues.rs` (the pattern for
-`RemoteList` → `spawn_blocking` → `gh`); `shell/capabilities.rs` (`IssueTooling` :116);
-`shell/daemon_sync.rs` (`PendingOp::RemoteList` :111, `RefreshFinished` :306/:835/:899, settings
-mirror :566); `crates/micold-daemon/src/server.rs` (`RemoteList` arm :1252, `WorktreeRefresh` arm
-:1552 — broadcast before ack, `SettingsSet` :977); `features/sidebar.rs::worktree_tooltip` :411;
-`ui/sidebar.rs::build_items` :539 (trailing element :616, chips :564); `ui/mod.rs::worktree_menu_items`
-:666; `ui/settings/github.rs` (section title "GitHub issues" also at `features/settings.rs` :272);
-`ui/settings/environment.rs` :128 (`Checkbox` + `field_note`, the `tool_server_enabled` pattern);
-`ui/material/tree_view.rs` (`TreeItem`); `showcase/catalogue.rs` :219 (`ActivityBadge` entry);
-`shell/subscriptions.rs` :66; `protocol/version.rs` :78 (`PROTOCOL_VERSION` 20);
-`tests/idle_subscriptions.rs`, `tests/refresh_is_only_on_demand.rs`,
-`tests/issues_are_requested_only_on_named_events.rs` (gate patterns).
-
-**Evidence**: the GraphQL query of R2 was run on 2026-10-02 with `gh` 2.54.0 against
-`jaroslawherod/micold-ai-ide` (HTTP 200, 1.7 s, cost 1; an unknown repository answers `NOT_FOUND`
-with headers on stdout and exit 1). The raw output is in the scratchpad as `probe1.txt` and
-`probe2.txt`; it may be gone after a reboot and is not needed again before the fixtures task.
-
-**Open findings**: none. No review has run in this unit.
+None.
 
 ## Open escalation
 
