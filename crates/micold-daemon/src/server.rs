@@ -1323,27 +1323,27 @@ where
                     reject_non_repo(state, id, req, &project);
                     continue;
                 };
-                let answered = tokio::task::spawn_blocking(move || {
-                    let git = GitCli::new();
-                    checks
-                        .iter()
-                        .map(|check| merged_branch_answer(&git, &repo, check))
-                        .collect::<Vec<_>>()
-                })
-                .await;
-                let reply = match answered {
-                    Ok(answers) => DaemonMsg::OperationOk {
-                        req,
-                        result: OperationResult::MergedBranchCheck { answers },
-                    },
-                    Err(e) => DaemonMsg::OperationError {
-                        req,
-                        kind: ErrorKind::Internal,
-                        message: "could not check the merged branches".into(),
-                        detail: Some(e.to_string()),
-                    },
-                };
-                state.send(id, reply);
+                // Spawned, not awaited (BUG-009): up to 100 git calls must not keep this loop from
+                // answering the client's `Ping`.
+                let task_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let answered = tokio::task::spawn_blocking(move || {
+                        let git = GitCli::new();
+                        checks
+                            .iter()
+                            .map(|check| merged_branch_answer(&git, &repo, check))
+                            .collect::<Vec<_>>()
+                    })
+                    .await;
+                    let reply = match answered {
+                        Ok(answers) => DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::MergedBranchCheck { answers },
+                        },
+                        Err(e) => task_failed(req, "merged branch check", &e),
+                    };
+                    task_state.send(id, reply);
+                });
             }
             ClientMsg::WorktreeDelete {
                 req,
@@ -1800,7 +1800,9 @@ fn merged_branch_answer(
     // The head arrives from outside: only a full commit id is ever handed to git.
     let is_commit_id = matches!(check.head.len(), 40 | 64)
         && check.head.bytes().all(|byte| byte.is_ascii_hexdigit());
-    if !is_commit_id {
+    // The branch arrives from outside too: a name carrying revision syntax (`~`, `^`, `@{`, `:`)
+    // would make git resolve another commit than the branch's tip.
+    if !is_commit_id || !is_plain_branch_name(&check.branch) {
         return BranchContainment::Unknown;
     }
     let tip = git.branch_tip(repo, &check.branch);
@@ -1809,6 +1811,21 @@ fn merged_branch_answer(
         _ => None,
     };
     containment(tip.as_deref(), &check.head, ancestor)
+}
+
+/// Whether `branch` can only name a ref under `refs/heads/`: no revision syntax, no characters
+/// git refuses in a ref name, no leading `-` that git would read as an option.
+fn is_plain_branch_name(branch: &str) -> bool {
+    !branch.is_empty()
+        && !branch.starts_with(['-', '/', '.'])
+        && !branch.ends_with(['/', '.'])
+        && !branch.ends_with(".lock")
+        && !branch.contains("..")
+        && !branch.contains("@{")
+        && !branch.contains("//")
+        && !branch
+            .chars()
+            .any(|c| c.is_ascii_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is

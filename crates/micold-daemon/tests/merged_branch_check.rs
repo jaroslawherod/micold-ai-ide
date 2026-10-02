@@ -246,6 +246,28 @@ async fn a_missing_branch_and_a_head_that_is_not_a_local_object_are_unknown() {
     );
 }
 
+/// U61 (review A). A branch is only ever a name under `refs/heads/`: a name carrying a revision
+/// suffix is answered `Unknown`. Each name below is one git would resolve to `merged`, the
+/// commit before branch `ahead`'s tip — so `Contained` here would hide `ahead`'s newer commit.
+#[tokio::test]
+async fn a_branch_name_with_a_revision_suffix_is_unknown() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![
+            query("ahead~1", &f.merged),
+            query("ahead^", &f.merged),
+            query("ahead^{commit}~1", &f.merged),
+        ],
+    )
+    .await;
+
+    assert_eq!(answers(reply), vec![BranchContainment::Unknown; 3]);
+}
+
 /// U62. A head is used only when it is a full commit id, 40 or 64 hexadecimal characters; anything
 /// else is answered `Unknown` and never reaches git. Each head below is one git itself would
 /// resolve to `later`, which holds branch `at` — so `Contained` here would mean git was asked.

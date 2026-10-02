@@ -426,6 +426,10 @@ impl Git for GitCli {
             .arg("-C")
             .arg(repo)
             .args(["merge-base", "--is-ancestor", tip, head])
+            // In a partial clone a missing `head` would otherwise be fetched from the promisor
+            // remote; this question is answered from local objects only (040 FR-016).
+            .env("GIT_NO_LAZY_FETCH", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
             .output()
             .ok()?;
         match output.status.code() {
