@@ -100,12 +100,13 @@ The issue picker (`ui/worktree_form.rs` `issue_picker`) builds, for every issue 
 let e = issue.emphasis(&matched.spans);
 TypeaheadRow::new(issue.title_line(), e.title)
     .details(issue.details_line(), e.details)
+    // from M5:
     .key(issue.number)
-    // from M4, only when !issue.description().is_empty():
+    // and only when !issue.description().is_empty():
     .tooltip(issue.description())
 ```
 
-and its placeholder becomes `"Search by number, title, label or reporter"` in M2 (FR-011).
+and its placeholder becomes `"Search by number, title, label or reporter"` in M3 (FR-011).
 
 ## 5. A tooltip inside the floating list (FR-023)
 
@@ -132,5 +133,7 @@ row, and is at most three `Caption` lines plus the panel's padding tall.
   `showcase_captions.rs` hold it.
 - `tests/support/covered_states.rs` gains issue lists with a 256-character title, 20 labels and
   mixed heights, at the default window and at a narrow one. `layout_text_overflow.rs` and
-  `gates/containment.rs` then fail on any text record clipped or outside the list (SC-001).
+  `gates/containment.rs` then fail on any text record clipped or outside the list, and NEW
+  `gates/issue_rows_show_all_text.rs` fails when a row's text records, joined, lack any part of
+  the title, the reporter or a label (SC-001).
   `fixtures/layout_snapshot.txt` is regenerated in the same change.

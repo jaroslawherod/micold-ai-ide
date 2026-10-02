@@ -49,14 +49,14 @@ scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budge
 | Issue rows in the view | `micold-client/tests/issue_picker_rows.rs` | FR-006, 011, 020 |
 | 034's states unchanged | `micold-client/tests/issue_source_state.rs` (existing cases), `layout_snapshot.rs` | FR-027 |
 | Row tooltip geometry | `micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` | FR-021, 023; SC-005 |
-| Wrapping, nothing clipped | `layout_text_overflow.rs`, `gates/containment.rs` over the new covered states | FR-004; SC-001 |
+| Wrapping, nothing clipped | `gates/issue_rows_show_all_text.rs`, `layout_text_overflow.rs`, `gates/containment.rs` over the new covered states | FR-004; SC-001 |
 | Single-line rows unchanged | `material/picker_parity.rs`, `material/menu_anatomy.rs`, `layout_snapshot.rs` | FR-029 |
 | Component API and showcase | `material_builder_api.rs`, `showcase_completeness.rs`, `typeahead_is_generic.rs` | FR-028 |
 
 ## §B — Recorded pass
 
 Run with the `visual-pass` skill on a private display. Record each step's result and screenshot in
-`specs/038-issue-list-reporter-tooltip/visual-pass.md`. Steps B1–B4 and B6–B10 use the client
+`specs/038-issue-list-reporter-tooltip/evidence/README.md`, screenshots beside it. Steps B1–B4 and B6–B10 use the client
 (`mise run run`) with the project `$SCRATCH/issue-demo` unless stated; B5 uses the showcase
 (`mise run showcase`).
 
