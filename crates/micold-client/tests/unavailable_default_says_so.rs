@@ -306,6 +306,31 @@ fn in_each_state_the_press_says_that_states_refusal_once() {
             ),
             "{env:?}: the reason is the state of the answer in use, said once"
         );
+        let message = said(&state).0.expect("the press said something");
+        let (fragment, home_named) = match env {
+            SpawnEnv::IncludeOff => ("is off", false),
+            SpawnEnv::NoScriptPath => ("is empty", false),
+            SpawnEnv::ScriptNotFound => ("was not found for your home directory", true),
+            SpawnEnv::ScriptFailed => ("exited with an error for your home directory", true),
+            SpawnEnv::ScriptTimedOut => ("timed out for your home directory", true),
+            SpawnEnv::Applied => (
+                "was not found on the PATH sessions get for your home directory",
+                true,
+            ),
+        };
+        assert!(
+            message.contains(fragment),
+            "{env:?}: the reason of this state (`{fragment}`): {message}"
+        );
+        assert_eq!(
+            message.contains("your home directory"),
+            home_named,
+            "{env:?}: the directory is named where the state depends on it: {message}"
+        );
+        assert!(
+            message.ends_with("Or start this session on another AI CLI."),
+            "{env:?}: a fresh start ends by offering another CLI: {message}"
+        );
     }
 }
 
@@ -383,6 +408,12 @@ fn an_answer_without_a_state_says_only_that_the_cli_would_not_be_found() {
         (Some(start_refusal_unknown(AiCli::Pi)), 0),
         "the home answer's reason is not borrowed for an offer drawn from the row's answer \
          (FR-012)"
+    );
+    let message = said(&state).0.expect("the press said something");
+    assert!(
+        message.contains("Pi Coding Agent would not be found by a session here")
+            && !message.contains("is off"),
+        "no cause is claimed, and the home answer's is not borrowed: {message}"
     );
 }
 
@@ -501,5 +532,28 @@ fn an_answer_settled_in_an_image_says_the_image_form() {
              provides it, or start this session on another AI CLI."
         ),
         "027's sentence for an image that lacks the CLI, byte for byte"
+    );
+}
+
+/// 037 FR-002, contract W5: the answers went away between the draw and the press. Nothing is
+/// known, so the press says only that the CLI would not be found, and claims no cause.
+#[test]
+fn a_press_with_no_answer_in_use_says_only_that_the_cli_would_not_be_found() {
+    let mut state = State::default();
+    state.session.default_ai_cli = AiCli::Pi;
+
+    open(&mut state, Some(AiCli::Pi));
+
+    let message = said(&state);
+    assert_eq!(
+        message,
+        (Some(start_refusal_unknown(AiCli::Pi)), 0),
+        "with no answer, the sentence is the one for an answer without a state"
+    );
+    let text = message.0.expect("the press said something");
+    assert!(
+        text.contains("Pi Coding Agent would not be found by a session here")
+            && text.contains("Start this session on another AI CLI."),
+        "the sentence names the CLI and the way out, and no cause: {text}"
     );
 }

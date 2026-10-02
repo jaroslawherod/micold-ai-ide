@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Draft
+**Status**: Closed 2026-10-03 — shipped in PRs #520, #530, #535, #537
 
 **Input**: GitHub issue #434, "A CLI that is not installed where sessions run is hidden with no
 explanation". An AI CLI that cannot be found in the environment sessions are spawned with is absent

@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #434
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
-- **Phase**: 4-milestone (M4)
-- **Next step**: M4 PR open (docs only); the orchestrator waits for CI and merges, then the close phase.
+- **Phase**: 5-close
+- **Next step**: close PR open; the orchestrator waits for `ci complete` and merges, then the record PR.
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #520 | M1 | merged | 7918f7bbfb44d7d5bb9134e17b825202a94c7c88 |
 | #530 | M2 | merged | f169414780363e6e06fa837586ee93c215d9a2b2 |
 | #535 | M3 | merged | bc5699922fd78fa9cc40346c7993827c54058839 |
-| #537 | M4 | open | |
+| #537 | M4 | merged | c331d0f8c0556b5fb30f605a6ebc1bc966c519ab |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017, T038–T039 | full | The Settings note under Default AI CLI (and Image reference) gives the reason for the home directory's environment state and the action; the availability answer carries the state (protocol 20); user guide updated | #520 | merged |
 | M2 | T018–T027, T040–T042 | full | The missing-default message, a start or restart failure and the reply to an AI session's `create_session` give the same reason and action; user guide updated | #530 | merged |
 | M3 | T028–T035, T043–T044 | full | A row's CLI list with two or more CLIs shows a non-pressable note naming the CLIs not offered, with reason and action; showcase entry; user guide updated | #535 | merged |
-| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | #537 | open |
+| M4 | T036–T037 | docs | `evidence/README.md` records quickstart Part A, all of Part B and the wording cross-check | #537 | merged |
 
 ## Decisions
 
@@ -56,6 +56,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D19 | milestone | Where is a deleted session folder checked, given that resolving in a missing folder reports a timeout? | Inside the gate's CLI-not-found branch, not before the gate: before it, a resume whose folder and conversation are both gone would lose the conversation-gone sentence an existing test requires. | agent-resolved | Review A M2 round 1, F2; `crates/micold-daemon/tests/session_start.rs#resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing` |
 | D20 | milestone | Quickstart B10 expected the pane and the banner to give the reason after a restart; at a display the pane kept its terminal and only the banner said it. Is that a defect of M2? | No. FR-009 governs the failure text where it is shown. The pane shows the service's sentence verbatim, and only when it has no terminal to keep; that rule predates 037 and no task of 037 changes it. The banner carries the sentence in the restart-in-place flow. B10's row now says so; a pane without a terminal (a session that fails to start with the service) is left for M4's Part B record. | agent-resolved | `crates/micold-client/src/ui/terminal.rs#empty_terminal_message`; `specs/037-explain-hidden-cli/evidence/README.md` (B10 rows); visual pass M2 |
 | D21 | milestone | Where does the note sit in the panel, and how is its height known to the clamp? | Inside the panel's scrollable, under the items and a divider, so a short window scrolls it with them. It is `opaque`: a press on it is captured and publishes nothing. It wraps with `Wrapping::WordOrGlyph` because it names a path. `menu_panel_size_with_note(items, note)` shapes the text at `PANEL_WIDTH - 2 * ITEM_PADDING` to count its lines. Without a note `body` returns `item_column` itself, so other menus are laid out as before. | contract W7; 029 FR-009; `menu_anatomy` U87–U90 |
+| D22 | 5-close | `speckit-converge` | Converged: FR-001–FR-017 (with FR-004a, FR-009a), SC-001–SC-007, the 20 acceptance scenarios, the behavioural edge cases and every plan touch-point are met; tasks.md unchanged by converge. No unbuilt behaviour. | agent-resolved | converge subagent |
+| D23 | 5-close | `speckit-tdd-verify` | FAIL at c331d0f8 (suite and mutation unmeasured: the build lock was held): a loosened assertion (1), U43/U44/U55 without a red (2), plus MED/LOW smells. No spec behaviour unbuilt. Remediation T045–T050 (Phase 7): findings 1, 2, 3, 4 (client half), 6, 8 done; 9 of 10 hand mutants killed, the survivor is the showcase sample (cycle log, "Close"). | agent-resolved | `tdd/verification.md`; `tdd/cycle-log.md` |
+| D24 | 5-close | Which tdd-verify findings are left? | Finding 4's daemon half (`session_start.rs` builds expectations with `start_refusal`; A10–A12 already add literals), 5 (U61 repeats U56/U57), 7 (timeout tests sleep a real script), 9 (magic seeds), 10 (`w2c`'s `matches!`): MED/LOW, no behaviour, each a refactor of a green test. Listed in Follow-ups. | agent-resolved | `tdd/verification.md` Findings |
+| D25 | 5-close | `speckit-docguard-guard` | FAIL repo-wide (6 `STR001` for `docs-canonical/*` scaffolding, changelog, spec-number reuse). The only 037 findings are `TRC004` (`@req` annotations, a convention no feature here uses, 035 D42) and one low-confidence `DLC002` ("checked tasks and no open tasks"), answered by the Closed status. Nothing changed. | agent-resolved | `docguard-cli@latest guard`, filtered to 037 |
 
 ## Review rounds
 
@@ -80,6 +84,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M3 | 1 | 9a777a87fa00e2d729247bf566998492aa2acff9:8a5f4246e04f3ab5a2185bd793fe6c09d5682545 | CLEAN: 2 MINOR — F1 fixed (the WIP commits are squashed, so no commit on main fails to build); F2 noted (the reds of cycle 11 rest on the log: tests and implementation share a commit). Verify: `directory_availability` 30 passed, `menu_anatomy` 15 passed, `a_rows_cli_list_names_what_is_not_offered` 6 passed |
 | Visual M3 | 1 | 9a777a87fa00e2d729247bf566998492aa2acff9:8a5f4246e04f3ab5a2185bd793fe6c09d5682545 | B11 and B13 PASS at the showcase, both themes; path wrapping not exercised (short sample path), B12 and the lowest row not reached |
 | Visual M3 | 2 | tree 41ede9e7414bb4ff5f3b7cd02f2b9f077bc95401 (commit 5662df9b before the squash) | showcase B11 with a path wider than the panel: PASS, both themes. Real client: B11 light and dark PASS, lowest row PASS, B12 PASS |
+| Close diff | 1 | 6b60322e3c14f738bde591e6d8d0220cdf31f53f:c331d0f8c0556b5fb30f605a6ebc1bc966c519ab | CLEAN: 3 MINOR, not fixed (they would change the tree the gate ran on): F1 the new `cli_reason.rs` messages name the case, not the rule (tdd-profile asks for the rule); F2 `main_tests.rs:6716-6718` labels a fragment "the CLI refused" where it checks the CLI is named; F3 three `assert_eq!` lines of ~150 columns in `cli_reason.rs:267,296,325` |
 
 ## Declined review findings
 
@@ -149,4 +154,4 @@ None.
   `micold-daemon:dev` tag other worktrees share. It is covered by the automated image rows; M4 owns the
   full Part B record. Recorded at M4 as covered by Part A (no image built).
 - M4: no defect found in product code. The D20 pane without a terminal was seen at the real client (Resume form, no banner) and B13 at the real client.
-
+- tdd-verify 037 (D24), not fixed: finding 4's daemon half (`crates/micold-daemon/tests/session_start.rs:1491-1500,1530,1735` take the expected sentence from `start_refusal`), 5 (`w3d_both_forms_begin_with_the_explanation` repeats U56/U57), 7 (`ai_cli_availability.rs:653-676` and `session_start.rs` sleep a real script past a 1 s timeout), 9 (magic seeds in `session_start.rs:1489,1730`), 10 (`w2c`'s `matches!`). The showcase sample's `AttemptDir` (`showcase/sections/floating.rs:160`) has no test.
