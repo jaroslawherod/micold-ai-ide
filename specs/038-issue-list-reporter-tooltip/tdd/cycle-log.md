@@ -206,3 +206,87 @@ suite runs in the gate.
   height is held by quickstart §B2 only (`evidence/b2-showcase-*.png`); review B, F2, names the
   missing assertion and it is listed under the ledger's follow-ups.
 
+
+## Cycle 7 — U39 — T018 (M2)
+
+- test: `crates/micold-client/tests/picker_highlight_into_view.rs`
+  `each_press_moves_the_highlight_by_one_issue_and_enter_picks_it`. It drives the real add-worktree
+  form (`support::layout::view_of`): keys go to the floated list and then the window with one
+  shell, and what is published is applied to the real reducer.
+- red: the behaviour exists since 034, so it passed on first run. Deliberate mutant in
+  `features/worktree_form.rs` `issue_highlight_moved`: `Some(next)` ->
+  `Some((next + 1).min(len - 1))`;
+  `scripts/build-lock.sh cargo test -p micold-client --test picker_highlight_into_view`
+  ```
+  assertion `left == right` failed: after Down 0
+    left: Some(1)
+   right: Some(0)
+  ```
+  restored with `git checkout`.
+- green: 1 passed. No refactor. Commit 84fb1c76 (with cycle 8: the two were not committed apart).
+
+## Cycle 8 — U40 — T018, T019, T020 (M2)
+
+- test: same file, `the_highlighted_row_is_in_view_after_every_down_and_up`: 12 issues with titles
+  of 1 to 5 lines; after each of 11 Down and 11 Up presses the operation is run to the end of its
+  chain over the base tree and the overlay, and the row with `PICKER_HIGHLIGHT` must lie inside the
+  viewport of the scrollable it is in. Asserts the list is 384 high and that it scrolled at all.
+- red, against stubs (`PICKER_HIGHLIGHT` declared and unused, a no-op operation):
+  `... --test picker_highlight_into_view the_highlighted_row_is_in_view_after_every_down_and_up -- --exact`
+  ```
+  assertion `left == right` failed: exactly one row carries the highlight's Id
+    left: 0
+   right: 1
+  ```
+- green: `menu_element` wraps the highlighted row in a container with the `Id` (T019);
+  `ui/picker_scroll.rs` finds it and scrolls the innermost scrollable around it by
+  `focus::delta_into_view`, now `pub(super)` (T020). File: 2 passed. Commit 84fb1c76.
+- notes: pass two moves only the panel the row was found in, by its ordinal in the traversal. The
+  focus operation's rule (every panel whose content overlaps the control) would also move a
+  scrolling form under the floated list, which shares window coordinates with it.
+  The full suite was not run per cycle: the build lock is shared with other worktrees and each run
+  queued for many minutes. Per cycle: this file, `focus_scroll` and the `focus` unit tests; the
+  full suite is T023's gate.
+
+## Cycle 9 — U41 — T018, T020 (M2)
+
+- test: `a_row_already_wholly_visible_causes_no_scroll`: eight one-line issues fill the list
+  exactly, so the eighth row is flush with the viewport's bottom; a ninth lets the list scroll.
+- red (the operation still passed `focus::MARGIN`):
+  ```
+  assertion `left == right` failed: row 7 spans 670..718 of a list showing (350.0, 734.0), and the list moved
+    left: 16.0
+   right: 0.0
+  ```
+- green: `delta_into_view` takes `margin`; the focus caller and its unit tests pass `MARGIN`
+  unchanged, the picker passes 0. `picker_highlight_into_view` 3 passed, `focus_scroll` 2 passed.
+  Commit 9bdf94d8.
+
+## Cycle 10 — U42 — T018 (M2)
+
+- test: `a_row_taller_than_the_list_is_aligned_to_its_top` (a 40-line title among one-line rows;
+  reached from above and from below).
+- red: passed on first run, since margin 0 and `delta_into_view`'s too-tall branch already give
+  it. Deliberate mutant in `ui/focus.rs`: the condition
+  `wanted_top < top || wanted_bottom - wanted_top > viewport_height` -> `wanted_top < top`
+  ```
+  the row starts at 430 and the list shows from 630
+  ```
+  restored with `git checkout`.
+- green: 1 passed unmutated. No refactor.
+
+## Cycle 11 — U43 — T018, T021 (M2) — OPEN: green not yet observed
+
+- test: `only_the_issue_highlight_move_chains_the_operation` (source check over `src/`).
+- red, before T021:
+  ```
+  assertion `left == right` failed: the operation has exactly one caller, the tail of the issue shell's handler
+    left: []
+   right: [("src/shell/issues.rs", "micold_client::ui::picker_highlight_into_view()")]
+  ```
+- green attempt: `main.rs` routes `FormMsg::IssueHighlightMoved` to the new
+  `shell::issues::on_issue_highlight_moved`, which applies the move and returns the task. The test
+  still failed, on its own second assertion: it looked for
+  `FormMsg::IssueHighlightMoved(direction)` in the handler's text and rustfmt had wrapped that
+  call over three lines. The assertion now compares without whitespace (a defect of the test, not
+  a loosened check). Not re-run yet: the handover below picks it up.

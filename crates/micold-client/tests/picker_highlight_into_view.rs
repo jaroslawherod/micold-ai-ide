@@ -231,11 +231,9 @@ impl Form {
             Vector::ZERO,
         ) {
             let overlay_node = overlay.as_overlay_mut().layout(&self.renderer, WINDOW);
-            overlay.as_overlay_mut().operate(
-                Layout::new(&overlay_node),
-                &self.renderer,
-                operation,
-            );
+            overlay
+                .as_overlay_mut()
+                .operate(Layout::new(&overlay_node), &self.renderer, operation);
         };
     }
 }
@@ -417,7 +415,10 @@ fn the_highlighted_row_is_in_view_after_every_down_and_up() {
         form.assert_highlight_in_view(&format!("Down {press}"));
         scrolled |= form.highlighted_row().1.scrolled > 0.0;
     }
-    assert!(scrolled, "twelve rows fitted in the list, so nothing was tested");
+    assert!(
+        scrolled,
+        "twelve rows fitted in the list, so nothing was tested"
+    );
     for press in 1..ISSUES {
         form.step(Named::ArrowUp);
         form.assert_highlight_in_view(&format!("Up {press}"));
@@ -448,7 +449,8 @@ fn a_row_already_wholly_visible_causes_no_scroll() {
         form.step(Named::ArrowDown);
         let (bounds, list) = form.highlighted_row();
         assert_eq!(
-            list.scrolled, 0.0,
+            list.scrolled,
+            0.0,
             "row {row} spans {}..{} of a list showing {:?}, and the list moved",
             bounds.y,
             bounds.y + bounds.height,
@@ -466,4 +468,161 @@ fn a_row_already_wholly_visible_causes_no_scroll() {
     // And the ninth, which is below the fold, does move it.
     form.step(Named::ArrowDown);
     assert!(form.highlighted_row().1.scrolled > 0.0);
+}
+
+/// U42 (FR-007): a highlighted row taller than the list cannot be shown whole, so its top is
+/// aligned to the viewport's top: that is where its number and title start.
+#[test]
+fn a_row_taller_than_the_list_is_aligned_to_its_top() {
+    use keyboard::key::Named;
+
+    // GitHub's longest title is 256 characters, which is not tall enough to outgrow eight rows;
+    // the list makes no promise about the length of what it is handed, so this is longer.
+    const TALL_ROW: usize = 2;
+    let mut issues = eight_short_issues();
+    issues[TALL_ROW] = issue(FIRST_NUMBER + TALL_ROW as u64, title_of(40));
+    let mut form = Form::new(issues);
+
+    for _ in 0..=TALL_ROW {
+        form.step(Named::ArrowDown);
+    }
+    assert_eq!(form.highlight(), Some(TALL_ROW));
+    let (row, list) = form.highlighted_row();
+    assert!(
+        row.height > list.viewport_height,
+        "precondition: the row is {} tall and the list {}",
+        row.height,
+        list.viewport_height
+    );
+    let (top, _) = list.visible();
+    assert!(
+        (row.y - top).abs() <= SLACK,
+        "the row starts at {} and the list shows from {top}",
+        row.y
+    );
+
+    // From below, too: Up onto it from the row after shows its top, not its end.
+    form.step(Named::ArrowDown);
+    form.assert_highlight_in_view("on the row after the tall one");
+    form.step(Named::ArrowUp);
+    let (row, list) = form.highlighted_row();
+    assert!(
+        (row.y - list.visible().0).abs() <= SLACK,
+        "back on it, the row starts at {} and the list shows from {}",
+        row.y,
+        list.visible().0
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// U43 — who chains the operation
+// ---------------------------------------------------------------------------------------------
+
+/// Every `.rs` file under `dir`, with its path relative to the crate.
+fn sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for entry in std::fs::read_dir(dir).expect("a source directory") {
+        let path = entry.expect("a directory entry").path();
+        if path.is_dir() {
+            sources(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let relative = path
+                .strip_prefix(root)
+                .expect("under the crate")
+                .to_string_lossy()
+                .replace('\\', "/");
+            out.push((
+                relative,
+                std::fs::read_to_string(&path).expect("a source file"),
+            ));
+        }
+    }
+}
+
+/// The non-comment lines under `src/` that contain `needle`, as `(file, trimmed line)`.
+fn lines_naming(needle: &str) -> Vec<(String, String)> {
+    let mut files = Vec::new();
+    sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    files.sort();
+    let mut found = Vec::new();
+    for (file, text) in files {
+        for line in text.lines().map(str::trim) {
+            if !line.starts_with("//") && line.contains(needle) {
+                found.push((file.clone(), line.to_string()));
+            }
+        }
+    }
+    found
+}
+
+/// U43 (FR-007, FR-029): the shell chains the operation after `FormMsg::IssueHighlightMoved`, and
+/// after no other message. The branch picker and `Select` have rows of one height and are not
+/// wired, so a second caller would be a change of scope this feature did not make.
+///
+/// A source check, because the shell's `update` returns an opaque `Task`: nothing can ask one
+/// whether it holds this operation.
+#[test]
+fn only_the_issue_highlight_move_chains_the_operation() {
+    // The call, with its parentheses: the definition and the export do not match.
+    let calls: Vec<(String, String)> = lines_naming("picker_highlight_into_view()")
+        .into_iter()
+        .filter(|(_, line)| !line.starts_with("pub fn "))
+        .collect();
+    assert_eq!(
+        calls,
+        vec![(
+            "src/shell/issues.rs".to_string(),
+            "micold_client::ui::picker_highlight_into_view()".to_string()
+        )],
+        "the operation has exactly one caller, the tail of the issue shell's handler"
+    );
+
+    // That call is in the handler of the highlight move, and nowhere else in the file.
+    let shell = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/issues.rs"),
+    )
+    .expect("the issue shell");
+    // Without whitespace: rustfmt wraps the handler's `update` call as it sees fit.
+    let handler: String = shell
+        .split("\npub fn ")
+        .find(|item| item.starts_with("on_issue_highlight_moved("))
+        .expect("the issue shell handles the highlight move")
+        .split_whitespace()
+        .collect();
+    assert!(
+        handler.contains("FormMsg::IssueHighlightMoved(direction)")
+            && handler.contains("picker_highlight_into_view()"),
+        "the handler applies the move and then chains the operation:\n{handler}"
+    );
+
+    // And `main.rs` routes the message to that handler, which has no other caller.
+    let handler_calls = lines_naming("on_issue_highlight_moved(");
+    assert_eq!(
+        handler_calls
+            .iter()
+            .map(|(file, _)| file.as_str())
+            .collect::<Vec<_>>(),
+        vec!["src/main.rs", "src/shell/issues.rs"],
+        "one route and one definition: {handler_calls:?}"
+    );
+    let main: String = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs"),
+    )
+    .expect("the shell")
+    .split_whitespace()
+    .collect();
+    let arm = "Message::WorktreeForm(FormMsg::IssueHighlightMoved(direction))=>";
+    let routed = main
+        .split(arm)
+        .nth(1)
+        .expect("main.rs has an arm for the highlight move");
+    assert!(
+        routed
+            .trim_start_matches('{')
+            .starts_with("shell::issues::on_issue_highlight_moved(app,direction)"),
+        "the arm routes to the issue shell's handler"
+    );
 }

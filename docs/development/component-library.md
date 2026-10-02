@@ -191,6 +191,21 @@ So: if the list's contents depend on something the screen holds, the screen hold
 If they do not, the widget holds it. Do not make a new picker symmetric with the other one for
 symmetry's sake — that is the mistake this arrangement exists to avoid.
 
+### Keeping the highlighted row in view
+
+When rows differ in height, a fixed scroll step cannot keep the highlight visible. `menu_element`
+wraps the highlighted row, and only it, in a container carrying the widget `Id` `PICKER_HIGHLIGHT`.
+`ui::picker_scroll::picker_highlight_into_view` is a `Task` that runs a two-pass widget operation,
+like `focus::scroll_focused_into_view`: pass one finds that row and the innermost scrollable it is
+inside, pass two scrolls only that scrollable, by `focus::delta_into_view` with a margin of 0 (the
+focus operation uses its 16dp `MARGIN`). A row already wholly visible does not move the list, and a
+row taller than the list is aligned to its top.
+
+Only the issue picker chains it today, after `FormMsg::IssueHighlightMoved`
+(`shell::issues::on_issue_highlight_moved`). The branch picker and `Select` have rows of one base
+row height and are not wired. A caller with rows of differing height chains the task after its own
+highlight-moved message.
+
 ## Switching between options: `ToggleChip`
 
 ```rust

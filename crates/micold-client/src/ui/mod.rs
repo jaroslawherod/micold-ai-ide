@@ -9,7 +9,6 @@ pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_placement;
 pub(crate) mod confirm_session_remove;
 mod focus;
-mod picker_scroll;
 /// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
 /// is running from a mounted image or a translocated path.
 mod install_location;
@@ -20,17 +19,13 @@ mod install_location;
 /// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
+mod picker_scroll;
 /// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
 ///
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
 pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
-/// The issue list following its highlight (feature 038, FR-007): the task the shell chains, the
-/// operation under it for `tests/picker_highlight_into_view.rs` to drive, and the `Id` that test
-/// finds the highlighted row by. Named individually; `material` stays `pub(crate)`.
-pub use material::PICKER_HIGHLIGHT;
-pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_view};
 /// The reveal control's `label · N` rule (feature 029, FR-025a), named individually for the same
 /// reason the ripple below is: `tests/toggle_chip_count.rs` asserts the rule — zero renders the
 /// label alone — and the module itself stays `pub(crate)` so a call site cannot reach past it into
@@ -38,6 +33,11 @@ pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_vie
 pub use material::chip_label;
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
+/// The issue list following its highlight (feature 038, FR-007): the task the shell chains, the
+/// operation under it for `tests/picker_highlight_into_view.rs` to drive, and the `Id` that test
+/// finds the highlighted row by. Named individually; `material` stays `pub(crate)`.
+pub use material::PICKER_HIGHLIGHT;
+pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_view};
 /// The bring-up indicator, and the wording it shows. Named individually — like the ripple
 /// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
 /// no reason to be public.
