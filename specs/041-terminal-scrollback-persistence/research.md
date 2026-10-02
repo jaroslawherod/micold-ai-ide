@@ -4,8 +4,7 @@ Phase 0 of the plan for [spec.md](spec.md). Each section records one decision, w
 rejected. Paths are relative to the repository root; line numbers are as of `origin/main` at
 `bc569992`.
 
-**Status**: R1 to R15 are decided. R16 is a finding that the design cannot settle: it is with the
-user (ledger, *Open escalation*). `plan.md` is not written until it is answered.
+**Status**: R1 to R16 are decided. R16 was decided by the user (ledger D11).
 
 ## R1. Where the history is today
 
@@ -404,7 +403,7 @@ when a container is created; an older container shows the separator in UTC with 
 sandbox the user asked to keep running. *An environment variable naming the directory*: it is also
 fixed at creation and adds a second way to find the directory.
 
-## R16. AI CLIs that draw on the alternate screen (open: with the user)
+## R16. AI CLIs that draw on the alternate screen
 
 **Finding.** Two of the three supported CLIs run full-screen by default on the measured machine
 (R13's table): Claude Code 2.1.288 and Copilot CLI switch to the alternate screen at start, turn on
@@ -425,5 +424,18 @@ For a terminal on the alternate screen:
 
 So the feature as specified changes what the user sees only for a CLI that prints on the primary
 screen. The spec treats full-screen programs as an edge case; for two of three CLIs it is the
-normal case. Whether to ship it so, to change how the app starts the CLIs, or to stop, is a product
-decision. `plan.md` waits for it.
+normal case.
+
+**Decision** (the user, 2026-10-02). Ship as specified for output on the normal screen, and say so
+in the spec and the guide. No new setting, no change to how a CLI is started. The design of R2 and
+R3 is unchanged: on the alternate screen the capture is the last screen, and the seed goes to the
+primary screen before the process starts.
+
+**Consequences for the plan.** The fake CLI of the integration tests prints on the normal screen.
+One test starts a fake CLI that enters the alternate screen and asserts that the seeded lines and
+the separator are in the primary grid's history and are not lost when it leaves. Quickstart Part B
+checks the restored history with Pi and with `CLAUDE_CODE_NO_FLICKER=0 claude`, and records what a
+default Claude Code and Copilot session shows.
+
+**Rejected.** *Starting the CLIs in a scrolling mode behind a setting* (new scope; Copilot has no
+known one). *Stopping the feature.*
