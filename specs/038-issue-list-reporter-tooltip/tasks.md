@@ -77,7 +77,7 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
   - A row without details has today's fixed `MENU_ITEM_BASE` height and today's single-line label (FR-029).
   - A picked row with details lays its marker out beside the first line, whatever the row's height (US1 scenario 7).
 - [ ] T005 [P] [US1] [A1] [A2] [A3] [A8] [U36] Write `crates/micold-client/tests/issue_picker_rows.rs` (NEW; contracts/picker-row.md §4): the rows the issue picker's view builds for a listed issue, an issue from the search beyond the cap and an issue from a typed number carry `title_line()` as label and `details_line()` as details, with the emphasis `Issue::emphasis` gives for the match's spans (FR-006).
-- [ ] T006 [US1] [A1] [A2] [A4] [A5] [A9] [U44] Add issue-list states to `crates/micold-client/tests/support/covered_states.rs` (contracts/picker-row.md §6) with the list open (`form.issue_list_open = true`, so the rows are recorded in the overlay layer): a 256-character title, an issue with 20 labels, an issue without labels and rows of one to five lines, at the default window and at a narrow one, each state small enough that its rows are inside the list's eight-row viewport. Write `crates/micold-client/tests/gates/issue_rows_show_all_text.rs` (NEW, registered as a `#[path]` module in `crates/micold-client/tests/layout_snapshot.rs` as the other gates are): it reads each state's text with `support::layout::painted_text_settled` (a pass that draws the overlay; `painted_text` does not) and asserts for every row that the row is wholly inside the list's viewport, that its text records, joined, hold the whole title, the reporter and every label, and that every record lies inside its row (SC-001, FR-004). `gates/containment.rs` runs over the new states unedited.
+- [ ] T006 [US1] [A1] [A2] [A4] [A5] [A9] [U44] Add issue-list states to `crates/micold-client/tests/support/covered_states.rs` (contracts/picker-row.md §6) with the list open (`form.issue_list_open = true`, so the rows are recorded in the overlay layer): a 256-character title, an issue with 20 labels, an issue without labels and rows of one to five lines, each state small enough that its rows are inside the list's eight-row viewport. Write `crates/micold-client/tests/gates/issue_rows_show_all_text.rs` (NEW, registered as a `#[path]` module in `crates/micold-client/tests/layout_snapshot.rs` as the other gates are): it reads each state's text with `support::layout::painted_text_settled` (a pass that draws the overlay; `painted_text` does not) at the canonical `WINDOW`, and again at a narrow window whose size the gate declares, through a size-taking variant of that pass added to `crates/micold-client/tests/support/layout.rs` (the existing function calls it with `WINDOW`; a covered state carries no window size), and asserts in both for every row that the row is wholly inside the list's viewport, that its text records, joined, hold the whole title, the reporter and every label, and that every record lies inside its row (SC-001, FR-004). `gates/containment.rs` runs over the new states unedited.
 
 ### Implementation for User Story 1, slice A
 
@@ -91,7 +91,7 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 - [ ] T014 [US1] [U44] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`, docs/development/layout-snapshot.md) and confirm in the diff that the records of the branch picker, `Select` and 034's loading, empty and failure states did not change (FR-027, FR-029); `material/picker_parity.rs` and `material/menu_anatomy.rs` pass unedited.
 - [ ] T015 [P] [US1] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue": each issue takes two lines, the number and title, then who reported it and its labels; long text wraps; `ghost` for a deleted account (FR-031).
 - [ ] T016 [P] [US1] Update `docs/development/component-library.md` § "Pickers" (`Row::details`, the wrapping label, and that a row without details is unchanged) and `docs/development/component-showcase.md` (the two-line `Typeahead` pose).
-- [ ] T017 [US1] [A1] [A2] [A3] [A4] [A5] [A7] [A8] [A9] Run `mise run gate`; run quickstart §B1 and §B2 with the `visual-pass` skill in the light and dark themes and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [ ] T017 [US1] [A1] [A2] [A3] [A4] [A5] [A7] [A8] [A9] Run `mise run gate`; run quickstart §B1 and §B2 (B2 ends in the showcase, `mise run showcase`) with the `visual-pass` skill in the light and dark themes and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: US1 scenarios 1–5 and 7–9 work; `mise run gate` passes.
 
@@ -115,7 +115,7 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 ### Implementation for User Story 1, slice B
 
 - [ ] T019 [US1] [U39] [U40] In `crates/micold-client/src/ui/material/picker.rs`: give the highlighted row, and only it, the widget `Id` `PICKER_HIGHLIGHT` in `menu_element`.
-- [ ] T020 [US1] [U39] [U40] [U41] [U42] Add `crates/micold-client/src/ui/picker_scroll.rs` (NEW) with `picker_highlight_into_view<M>() -> Task<M>`: two passes as `focus::into_view`, reusing `focus::delta_into_view` (private to `crates/micold-client/src/ui/focus.rs` today; make it `pub(super)`); "a row taller than the viewport is aligned to its top". Export it from `crates/micold-client/src/ui/mod.rs` (T018).
+- [ ] T020 [US1] [U39] [U40] [U41] [U42] Add `crates/micold-client/src/ui/picker_scroll.rs` (NEW) with `picker_highlight_into_view<M>() -> Task<M>`: two passes as `focus::into_view`, reusing `focus::delta_into_view` (in `crates/micold-client/src/ui/focus.rs`: make it `pub(super)` and give it a `margin` parameter, since it pads the target by `MARGIN` (16) today; the focus caller passes `MARGIN` and its unit tests stay green, the picker passes `0.0`, so a wholly visible row does not scroll and a too-tall row lands on the viewport's top); "a row taller than the viewport is aligned to its top". Export it from `crates/micold-client/src/ui/mod.rs` (T018).
 - [ ] T021 [US1] [U39] [U40] [U43] In `crates/micold-client/src/main.rs` and `crates/micold-client/src/shell/issues.rs`: chain `picker_highlight_into_view()` after `FormMsg::IssueHighlightMoved`; the reducer is not changed (T018).
 - [ ] T022 [P] [US1] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue" (the list follows the highlight when moving with Up and Down) and `docs/development/component-library.md` § "Pickers" (the operation, and that only the issue picker chains it).
 - [ ] T023 [US1] [A6] Run `mise run gate`; run quickstart §B3 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
@@ -248,8 +248,8 @@ when the list changes under the cursor. No request is made for it.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T056 Repeat quickstart §B10 on `main` after M5 (five runs before, five after, alternating) and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
-- [ ] T057 Run quickstart §A (`mise run test-core`, `mise run gate`, the release rank budget) and the whole of §B (B1–B11, light and dark themes) with the `visual-pass` skill on the merged result, and record each step's outcome in `specs/038-issue-list-reporter-tooltip/evidence/README.md`.
+- [ ] T056 Repeat quickstart §B10 on the merged result, five runs each, alternating: "before" is the commit on `main` just before M1's merge (record its SHA), "after" is `main` after M5; and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
+- [ ] T057 Run quickstart §A (`mise run test-core`, `mise run gate`, the release rank budget) and §B1–B9 and §B11 (light and dark themes; §B10 is T056) with the `visual-pass` skill on the merged result, and record each step's outcome in `specs/038-issue-list-reporter-tooltip/evidence/README.md`.
 
 ---
 
@@ -304,7 +304,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   differing height; the user guide describes the two lines.
 - **Satisfies**: US1 acceptance scenarios 1–5, 7–9; FR-001–FR-006, FR-008, FR-025 (reporter),
   FR-026, FR-027, FR-028 (row), FR-029, FR-030, FR-031 (two lines); SC-001
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test issue_picker_rows`; `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot issue_rows_show_all_text`; `mise run test-core`; quickstart §B1, B2
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test issue_picker_rows`; `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot issue_rows_show_all_text`; `mise run test-core`; quickstart §B1, B2 (the client, then `mise run showcase` for the `Typeahead` pose)
 - **Depends on**: —
 - **Tier**: full
 
