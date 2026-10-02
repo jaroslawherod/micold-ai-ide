@@ -150,8 +150,8 @@ CI's order).
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T036 Run quickstart Part A (`mise run test-core`, `mise run gate`) and the whole of Part B (B1–B14, light and dark themes) with the `visual-pass` skill on the merged result (the rendering half of SC-001 is checked on Linux; "each platform" is held by the core and service tests on CI's Linux, macOS and Windows jobs), and record each step's outcome in `specs/037-explain-hidden-cli/evidence/README.md`.
-- [ ] T037 Cross-check the spec artifacts against what shipped: every sentence in `specs/037-explain-hidden-cli/contracts/reason-wording.md` W2 and W3 equals the string in `crates/micold-core/src/cli_reason.rs`, and the four user guide pages quote no sentence that differs. Correct the contract or the guide where they differ, and record the check in `specs/037-explain-hidden-cli/evidence/README.md`.
+- [X] T036 Run quickstart Part A (`mise run test-core`, `mise run gate`) and the whole of Part B (B1–B14, light and dark themes) with the `visual-pass` skill on the merged result (the rendering half of SC-001 is checked on Linux; "each platform" is held by the core and service tests on CI's Linux, macOS and Windows jobs), and record each step's outcome in `specs/037-explain-hidden-cli/evidence/README.md`.
+- [X] T037 Cross-check the spec artifacts against what shipped: every sentence in `specs/037-explain-hidden-cli/contracts/reason-wording.md` W2 and W3 equals the string in `crates/micold-core/src/cli_reason.rs`, and the four user guide pages quote no sentence that differs. Correct the contract or the guide where they differ, and record the check in `specs/037-explain-hidden-cli/evidence/README.md`.
 
 ---
 
