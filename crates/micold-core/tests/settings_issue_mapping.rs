@@ -186,6 +186,7 @@ fn other_writers_preserve_the_mapping() {
             "env_include_timeout_secs",
             "issue_label_types",
             "pi_activity_component",
+            "pr_status_enabled",
             "scrollback_lines",
             "settings_version",
             "theme",
