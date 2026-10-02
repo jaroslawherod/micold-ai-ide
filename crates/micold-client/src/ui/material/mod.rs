@@ -169,6 +169,7 @@ pub use menu::{
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
 pub use picker::Row as TypeaheadRow;
+pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
