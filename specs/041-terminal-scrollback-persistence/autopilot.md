@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit 3: plan, data-model, contracts, quickstart and tasks written; plan review round 1 fixed. Next: plan re-review, `speckit-tdd-plan`, `speckit-analyze`, tasks review, checklists, PR 2.
+- **Next step**: Design unit 3 handed over at the context cap. Next: a fresh design unit continues from *Handover* (plan re-review round 2, then phase steps 2 to 5).
 
 ## Pull requests
 
@@ -66,7 +66,32 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design unit 3, 2026-10-02. At the 150k cap after the plan review's fixes; no PR opened, nothing
+pushed. The branch was rebased onto `origin/main` by `branch-start.sh 531` (do not run it again:
+it would be a no-op, but the unmerged commits are this unit's work).
+- **Done**: `plan.md`, `data-model.md`, `contracts/` (`saved-history-file.md`, `setting.md`,
+  `stop-request.md`), `quickstart.md`, `tasks.md` (77 tasks, `## Milestones` M1 to M10, all in the
+  ledger), research R17. Plan review round 1 (2 MAJOR, 3 MINOR) is fixed and committed (D14).
+- **Next step**, in order:
+  1. Plan re-review, round 2 (`model: "sonnet"`): previous findings F1 to F5 all fixed (see the
+     Plan row of *Review rounds* and D14); the fix diff is
+     `scripts/autopilot/review-snapshot.sh diff <round 1 snapshot>` without its `tasks.md` part
+     (tasks.md was first written after that snapshot and is reviewed in step 4).
+  2. `speckit-tdd-plan` (the optional `after_tasks` hook; 040 ran it): delegate to an
+     `autopilot-worker`, telling it to keep every task ID and the milestone ranges as they are and
+     only add behavior ids and `tdd/test-list.md`. Check with `git diff --stat`.
+  3. `speckit-analyze` (a forked skill), fix what it finds.
+  4. Tasks and milestone review, round 1 (fresh reviewer, model omitted).
+  5. `checklists/requirements.md`: no unticked item; have a reviewer re-check it against the spec
+     edits of D11.
+  6. `mise run test-scripts` (not run by this unit; other worktrees held the build lock), then
+     PR 2 `docs(041): clarify, plan and cut milestones for terminal scrollback persistence`, body
+     ending `Refs #485`.
+- **Open findings**: none.
+- **Not verified**: none of the design was written from code read by this unit; file paths in
+  plan.md and tasks.md come from research.md and one `ls`. The plan reviewer confirmed the paths it
+  checked. `terminate_daemon`'s tests "beside it in `spawn.rs`" (T062) and the installer test under
+  `scripts/tests/` (T065) are assumptions the tasks review should check.
 
 ## Open escalation
 
