@@ -8,6 +8,13 @@
 
 **Input**: User description: "Implement GitHub issue #486 (https://github.com/jaroslawherod/micold-ai-ide/issues/486): Show pull request and CI status for each worktree. For each worktree whose branch has a pull request, show a small PR indicator in the sidebar: open, draft, merged or closed, plus a combined check status (pending, passing, failing). The worktree tooltip shows the PR number, title, review state and a link that opens it in the browser. A merged PR suggests removing the worktree. Data comes from the `gh` CLI, refreshed on a modest interval and on demand, and only when `gh` is installed and signed in. Acceptance criteria: no indicator and no error when `gh` is missing or the repository has no GitHub remote; refreshing never blocks the UI and respects GitHub rate limits; status parsing lives in the render-free core with tests against recorded `gh` output."
 
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: Is the Settings switch for pull request status off until the user turns it on, or on from the start whenever the GitHub tooling is installed and signed in? → A: Off until the user turns it on. Being signed in to the GitHub tooling is a precondition, not consent; the switch, which states what is read, how often and what is sent (FR-029), is the explicit, informed opt-in. Turning it on reads the status of every project open in a window at once. _(agent-resolved: .specify/memory/constitution.md#IV. Local-First Storage — "Nothing is transmitted off-device without the user's explicit, informed opt-in"; specs/034-github-issue-worktree/spec.md#Assumptions — a choice the user makes in the application is what counts as the opt-in, and FR-003 forbids contacting GitHub in the background without one)_
+- Q: How does the user act on the removal suggestion? → A: With the worktree's existing **Delete** action in the row's right-click menu. The suggestion is a passive mark and a tooltip line; it adds no button, menu entry or dialog of its own. _(agent-resolved: specs/040-worktree-pr-ci-status/spec.md#Assumptions — "a passive mark and a tooltip line that lead to the existing delete confirmation"; specs/008-worktree-sidebar-refinement/spec.md#User Story 2 — Delete lives in the worktree's right-click menu)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See at a glance which worktrees have a pull request, and whether its checks pass (Priority: P1)
@@ -16,7 +23,7 @@ A developer has several worktrees open in the sidebar, some started from GitHub 
 
 **Why this priority**: It is the core of the request and stands alone: the indicator alone removes most trips to the browser. Everything else in this feature adds detail to it.
 
-**Independent Test**: In a project whose repository is on GitHub, with one worktree whose branch has an open pull request with failing checks, one whose branch has a merged pull request, and one whose branch has no pull request, open the project and confirm the first row shows "open" with "failing", the second shows "merged", and the third shows no indicator.
+**Independent Test**: With pull request status turned on in Settings, in a project whose repository is on GitHub, with one worktree whose branch has an open pull request with failing checks, one whose branch has a merged pull request, and one whose branch has no pull request, open the project and confirm the first row shows "open" with "failing", the second shows "merged", and the third shows no indicator.
 
 **Acceptance Scenarios**:
 
@@ -63,12 +70,12 @@ The developer's pull request was merged. The worktree that produced it is now cl
 
 **Why this priority**: Housekeeping on top of the first two stories. It saves a later clean-up but nothing is blocked without it.
 
-**Independent Test**: With a worktree whose branch's pull request was merged and whose branch has no commits after the merged ones, confirm the row and its tooltip suggest removing the worktree, follow the suggestion, and confirm the existing delete confirmation appears and nothing is removed until it is confirmed.
+**Independent Test**: With a worktree whose branch's pull request was merged and whose branch has no commits after the merged ones, confirm the row and its tooltip suggest removing the worktree, choose **Delete** from the row's right-click menu, and confirm the existing delete confirmation appears and nothing is removed until it is confirmed.
 
 **Acceptance Scenarios**:
 
 1. **Given** a worktree's pull request is merged and the worktree's branch has no commits beyond those the pull request merged, **When** the row is shown, **Then** the row is marked as removable and its tooltip states that the pull request was merged and the worktree can be removed.
-2. **Given** such a suggestion is shown, **When** the user chooses to remove the worktree, **Then** the application's existing delete confirmation opens (the one **Delete** opens today), and nothing is removed unless the user confirms it.
+2. **Given** such a suggestion is shown, **When** the user chooses **Delete** from the row's right-click menu, **Then** the application's existing delete confirmation opens, as it does today, and nothing is removed unless the user confirms it.
 3. **Given** a worktree's pull request is merged, **When** any amount of time passes, **Then** the application never removes the worktree, its sessions or its branch on its own.
 4. **Given** a worktree's pull request is merged but its branch has commits made after the merged ones, **When** the row is shown, **Then** the indicator shows "merged" and no removal is suggested.
 5. **Given** a worktree's pull request was closed without merging, **When** the row is shown, **Then** no removal is suggested.
@@ -96,7 +103,8 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 8. **Given** a reading fails for a passing reason — no network, no answer within 10 seconds, GitHub's request limit, or an answer that cannot be understood — **When** it fails, **Then** the rows keep the last status read, no error, notice or dialog appears, and the next reading is tried at the next interval.
 9. **Given** a reading finds that pull requests cannot be read at all — the GitHub tooling is no longer installed, the user is no longer signed in, the sign-in cannot see the repository, or the repository no longer has a GitHub remote — **When** it finds this, **Then** every indicator, pull request tooltip line and removal suggestion of that project is removed, no error, notice or dialog appears, and the next reading is tried at the next interval.
 10. **Given** no window shows a project, **When** any amount of time passes, **Then** no pull request status is read for that project.
-11. **Given** the user has turned pull request status off, **When** a project is open, **Then** no indicator is shown and nothing is sent to GitHub for it.
+11. **Given** pull request status is off — as it is until the user turns it on in Settings, and after they turn it off again — **When** a project is open, **Then** no indicator is shown and nothing is sent to GitHub for it.
+12. **Given** pull request status is off and a project is open in a window, **When** the user turns it on in Settings, **Then** the status of that project is read at once, without waiting for the interval.
 
 ---
 
@@ -119,6 +127,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **Rate limit reached**: automatic readings pause until the limit resets; nothing is shown as an error. A reading the user asks for with the refresh button during the pause is not sent either.
 - **Stale status**: when the last successful reading is older than two intervals, the indicator is drawn in a lower-emphasis form and the tooltip says how old it is, so an out-of-date "passing" is not mistaken for a current one (FR-019).
 - **Sign-in lost, tooling removed, access withdrawn or GitHub remote removed while the application runs**: the next reading finds that pull requests cannot be read at all, and the indicators disappear, as if the project had been opened that way; no error is shown (FR-025). This differs from a passing failure — no network, no answer, the request limit — which keeps the last status and lets it age to stale (FR-019).
+- **First start, or the switch never touched**: pull request status is off; no indicator appears and nothing is sent to GitHub, even when the GitHub tooling is installed and signed in (FR-030).
 - **Offline start**: every existing function works; no indicator appears until a reading succeeds (Principle IV).
 - **Application restarted**: status is not stored; rows start without indicators and gain them at the first reading.
 - **Several windows** (Principle II): windows showing the same project show the same status, and one reading serves them all — a second window adds no requests. Windows showing different projects read and show their own project's status only; pressing refresh in one window reads that window's project only.
@@ -155,12 +164,12 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 **Merged pull requests**
 
 - **FR-015**: When the shown pull request is merged and the worktree's branch has no commits beyond those the pull request merged, the row MUST be marked as removable and the tooltip MUST state that the pull request was merged and the worktree can be removed.
-- **FR-016**: Acting on the suggestion MUST lead to the application's existing delete confirmation for that worktree, with its existing choices and wording. The application MUST NOT remove a worktree, a session or a branch because a pull request was merged without that confirmation.
+- **FR-016**: The suggestion MUST NOT add a control of its own: the user acts on it with the worktree's existing **Delete** action in the row's right-click menu, which MUST open the application's existing delete confirmation for that worktree, with its existing choices and wording. The application MUST NOT remove a worktree, a session or a branch because a pull request was merged without that confirmation.
 - **FR-017**: No removal MUST be suggested for a closed pull request, for a merged one whose branch has later commits, or while the branch has an open pull request.
 
 **Refreshing**
 
-- **FR-018**: While pull request status is enabled, the status of a project MUST be read: once when the project is opened in a window; again every 5 minutes while at least one window shows the project; and whenever the user refreshes the worktree list with the sidebar's refresh control (029-refresh-worktrees-list). It MUST NOT be read for a project no window shows.
+- **FR-018**: While pull request status is enabled, the status of a project MUST be read: once when the project is opened in a window; once when the switch is turned on, for every project a window shows (FR-030); again every 5 minutes while at least one window shows the project; and whenever the user refreshes the worktree list with the sidebar's refresh control (029-refresh-worktrees-list). It MUST NOT be read for a project no window shows.
 - **FR-018a**: A reading MUST cover the worktrees the sidebar lists for the project, each by the branch the listing shows for it; it MUST NOT change the listing. A refresh with the sidebar's control MUST update the listing first and read pull request status for the branches the updated listing shows. Whether a branch has commits beyond its merged pull request (FR-015) MUST be worked out anew at every reading, from that branch as the repository holds it then.
 - **FR-019**: A row MUST keep the last status read until a newer reading replaces it or FR-025 removes it. A reading that fails for a passing reason — no network, no answer within 10 seconds, the request limit, or an answer that cannot be understood — MUST leave every row's status as it was. When the last successful reading is older than two intervals (10 minutes), the indicator MUST be drawn in a lower-emphasis form and the tooltip MUST state how long ago the status was read.
 - **FR-020**: A new reading MUST NOT disturb the sidebar: selection, expansion, scroll position, filters and running sessions stay as they are; only indicators, tooltip lines and removal suggestions change.
@@ -179,7 +188,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 
 - **FR-028**: The application MUST use the user's existing GitHub sign-in on the machine, MUST NOT ask for, store or display GitHub credentials, and MUST NOT fall back to anonymous access (034 FR-022).
 - **FR-029**: Settings MUST offer one switch that turns pull request status on or off for the application, stating that it reads pull requests of the open project's repository from GitHub in the background, how often, and what is sent. Turning it off MUST remove every indicator at once and stop all readings.
-- **FR-030**: Whether that switch starts on: [NEEDS CLARIFICATION: Reading in the background means the application contacts GitHub without a per-use action, which feature 034 deliberately avoided (034 FR-003) and Principle IV allows only with the user's explicit, informed opt-in. Is the switch off until the user turns it on, or on from the start whenever the tooling is installed and signed in — treating the sign-in as the opt-in, as the issue's wording suggests?]
+- **FR-030**: The switch MUST be off until the user turns it on; the GitHub tooling being installed and signed in MUST NOT turn it on. While it is off, the application MUST show no indicator and send nothing to GitHub for this feature (FR-026). Turning it on MUST start a reading at once for every project a window shows. The user's choice MUST be kept across restarts.
 - **FR-031**: Requests MUST carry nothing about the project beyond its GitHub repository's identity and the names of its worktrees' branches.
 - **FR-032**: Pull request status MUST be held only while the application runs, MUST NOT be written to the application's stored files, and pull request titles and addresses MUST NOT be written to its logs.
 
@@ -195,18 +204,18 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - **Pull request indicator**: the small mark on a worktree row that shows the state and the check status, in a current or a stale form.
 - **Reading**: one refresh of a project's pull request status — started by opening the project, by the interval or by the refresh control — that succeeds, fails quietly, or is held back by the request limit.
 - **Removal suggestion**: the mark and tooltip line on a worktree whose merged pull request holds all of the branch's work; it leads to the existing delete confirmation.
-- **Pull request status setting**: the one application-wide switch that allows or forbids readings.
+- **Pull request status setting**: the one application-wide switch that allows or forbids readings. Off until the user turns it on; the choice is stored, unlike the status itself.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: On a working connection, within 10 seconds of opening a project, 100% of its worktrees whose branch has a pull request show an indicator, and 0 worktrees without one do.
+- **SC-001**: On a working connection with pull request status turned on, within 10 seconds of opening a project, 100% of its worktrees whose branch has a pull request show an indicator, and 0 worktrees without one do.
 - **SC-002**: For every combination of pull request state (open, draft, merged, closed) and check outcome (none, pending, passing, failing), and for each review state, the row and tooltip show, in 100% of cases, the state, the check status by the rule of FR-008 and the review decision that GitHub reports for the pull request FR-004 selects.
 - **SC-003**: On a working connection with no rate-limit pause in force, a change on GitHub — checks finishing, a merge, a close — is visible in the sidebar within 6 minutes with no user action, and within 10 seconds of pressing refresh (counted from the end of a reading already under way, when there is one).
 - **SC-004**: With the GitHub tooling missing, with no sign-in, with no GitHub remote, and with no network, the application shows 0 indicators and 0 errors, notices or dialogs about pull requests, and every worktree and session function works as before.
 - **SC-005**: While a reading is under way — including one GitHub never answers — the application responds to every click and key press within 100 milliseconds, as it does when idle.
-- **SC-006**: Automatic readings send at most 30 requests to GitHub per hour for one open project with up to 50 worktrees; 0 for a project no window shows; 0 while the switch is off; and 0 between a rate-limit answer and the limit's reset.
+- **SC-006**: Automatic readings send at most 30 requests to GitHub per hour for one open project with up to 50 worktrees; 0 for a project no window shows; 0 while the switch is off, as it is on a first start; and 0 between a rate-limit answer and the limit's reset.
 - **SC-007**: A second window on the same project adds 0 requests.
 - **SC-008**: Hovering worktree rows causes 0 requests to GitHub and 0 disk reads.
 - **SC-009**: From seeing a "failing" indicator, a user has the pull request open in their browser in at most 2 actions, without typing.
@@ -220,7 +229,7 @@ The developer pushes a fix and goes back to work. Without doing anything, a few 
 - Check status is shown for open and draft pull requests only; for a merged or closed one it no longer calls for action.
 - "Review state" is GitHub's overall review decision for the pull request. Individual reviewers, comments and requested reviewers are out of scope.
 - "A modest interval" is 5 minutes, fixed; making it configurable is out of scope. "On demand" is the sidebar's existing refresh control — no new button is added.
-- "Suggests removing" is a passive mark and a tooltip line that lead to the existing delete confirmation. It is never a dialog that interrupts, and never an automatic removal. Whether the branch is deleted too is the existing confirmation's choice.
+- "Suggests removing" is a passive mark and a tooltip line that lead to the existing delete confirmation through the row's existing **Delete** action (FR-016). It is never a dialog that interrupts, and never an automatic removal. Whether the branch is deleted too is the existing confirmation's choice.
 - A worktree counts as holding no newer work when its branch has no commits beyond those the pull request merged. This is worked out at each reading (FR-018a), so a commit made after a reading withdraws the suggestion at the next one, not at once; the existing delete confirmation remains the safeguard in between. Uncommitted changes in the worktree are not examined for the suggestion; the existing delete confirmation already speaks to what is removed.
 - Only github.com is supported, as in 034. GitHub Enterprise, GitLab and other hosts show no indicator.
 - The user is signed in to GitHub through the same GitHub tooling feature 034 relies on (the GitHub CLI, `gh`); signing in is outside this feature. Where that tooling runs when the session service runs in a container is a plan decision; the behaviour above holds either way.
