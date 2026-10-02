@@ -469,10 +469,11 @@ impl Issue {
     pub fn emphasis(&self, spans: &[Range<usize>]) -> RowEmphasis {
         let row = self.row_text.as_str();
         let mut emphasis = RowEmphasis::default();
+        let parts = self.parts();
         for span in spans {
             let start = floor_char_boundary(row, span.start);
             let end = ceil_char_boundary(row, span.end);
-            for part in self.parts() {
+            for part in &parts {
                 let from = start.max(part.in_row);
                 let to = end.min(part.in_row + part.len);
                 if from < to {

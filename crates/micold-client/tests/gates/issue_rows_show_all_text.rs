@@ -250,8 +250,32 @@ fn findings(name: &str, window: Size) -> Vec<String> {
         }
 
         // Every paragraph inside the row. Its origin is inside by selection, so what is left is its
-        // width: a paragraph that did not wrap wants more than the row has, and is drawn across the
-        // list's edge or cut off at it.
+        // extent. `content` is the paragraph's source text, which is whole however much of it was
+        // painted, so the checks above cannot see a cut: these do. Downwards, a paragraph that
+        // wrapped to more lines than the row grew for ends below the row, over the next one, and
+        // one taller than its clip loses its last lines.
+        for t in &text {
+            let bottom = t.origin.y + t.natural_height;
+            if bottom > row.y + row.height + TOLERANCE {
+                found.push(format!(
+                    "{row_name} paints text down to {bottom:.1}, below the row's end at {:.1}: the \
+                     row did not grow for every line of {:?}",
+                    row.y + row.height,
+                    t.content,
+                ));
+            }
+            let clip_bottom = t.clip.y + t.clip.height;
+            if t.origin.y < t.clip.y - TOLERANCE || bottom > clip_bottom + TOLERANCE {
+                found.push(format!(
+                    "{row_name} paints text from {:.1} to {bottom:.1} under a clip from {:.1} to \
+                     {clip_bottom:.1}: lines of {:?} are cut",
+                    t.origin.y, t.clip.y, t.content,
+                ));
+            }
+        }
+
+        // Sideways: a paragraph that did not wrap wants more than the row has, and is drawn across
+        // the list's edge or cut off at it.
         for t in &text {
             if t.natural_width > row.width + TOLERANCE {
                 found.push(format!(
