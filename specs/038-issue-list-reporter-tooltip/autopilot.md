@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Continue the design unit from *Handover*: write plan.md from research.md, then data-model, contracts, quickstart; plan review; tasks and milestones.
+- **Next step**: Plan review round 1; then `speckit-tasks`, milestones, `speckit-analyze`, tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -48,26 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Design unit, handed over at the context cap after the research step. No PR is open.
-
-- **Done**: `branch-start.sh 525` (3 clarify commits rebased on `origin/main`); the codebase and
-  spec 036's state investigated; `research.md` written (R1–R15, with a table of where the code is
-  today). Decisions D5–D7 recorded above.
-- **Next step**: `speckit-plan` from the top, but do not redo the research: run
-  `.specify/scripts/bash/setup-plan.sh --json` (it copies the plan template; the copy made earlier
-  was removed so no raw template is committed), fill `plan.md` from `research.md` (use
-  `specs/034-github-issue-worktree/plan.md` as the shape: summary, technical context, constitution
-  check, requirement → design map for FR-001–FR-031, test strategy by layer, structure, delivery
-  order, risks), then `data-model.md`, `contracts/` (suggested: `issue-fields.md` for R1–R4 and
-  R13, `picker-row.md` for R5, R6, R10 and R12, `rest-tooltip.md` for R7–R9, R11 and R15),
-  `quickstart.md` (§A automated, §B recorded pass, SC-008 measured before and after). Then the plan
-  review (round 1 not yet run), `speckit-tasks`, milestones, `speckit-analyze`, tasks review,
-  checklists, PR 2.
-- **Milestone sketch** (to confirm when tasks exist): M1 US1 two-line rows with the reporter,
-  highlight kept in view, showcase, guide; M2 US2 search by reporter, hint, guide; US3 likely split
-  in two (the rest-delay tooltip in the component library and showcase; then descriptions on issue
-  rows, guide); last, Polish.
-- **Open findings**: none. No review has run in this phase.
+None.
 
 ## Open escalation
 
