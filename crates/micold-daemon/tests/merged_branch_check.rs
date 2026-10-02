@@ -353,3 +353,52 @@ async fn a_project_that_is_not_a_repository_is_refused() {
         other => panic!("a path that is not a project must be not found, got {other:?}"),
     }
 }
+
+/// Every file under `dir`, the repository's own `.git` included, with its content.
+fn files_under(dir: &Path) -> BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = BTreeMap::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for entry in std::fs::read_dir(&next).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let content = std::fs::read(&path).unwrap();
+                files.insert(path, content);
+            }
+        }
+    }
+    files
+}
+
+/// U66. The question only reads (FR-016, FR-018a): after every kind of answer the repository holds
+/// the same files with the same content — no ref moved, nothing fetched, nothing left behind.
+#[tokio::test]
+async fn the_check_leaves_the_repository_as_it_found_it() {
+    let f = fixture();
+    let mut client = connect(&f.state).await;
+    let before = files_under(f.project.path());
+
+    let reply = check(
+        &mut client,
+        f.project.path(),
+        vec![
+            query("at", &f.merged),
+            query("ahead", &f.merged),
+            query("no-such-branch", &f.merged),
+            query("at", NEVER_FETCHED),
+            query("at", "HEAD"),
+        ],
+    )
+    .await;
+
+    assert_eq!(answers(reply).len(), 5, "the check ran");
+    let after = files_under(f.project.path());
+    assert_eq!(
+        before.keys().collect::<Vec<_>>(),
+        after.keys().collect::<Vec<_>>(),
+        "the check added or removed a file"
+    );
+    assert!(before == after, "the check changed a file's content");
+}
