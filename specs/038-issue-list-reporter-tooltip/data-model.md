@@ -48,7 +48,7 @@ line and the details line. Ranges are sorted, non-overlapping, and lie on charac
 | Milestone | `row_text` | Parts mapped by `emphasis` |
 |---|---|---|
 | M1 (US1) | `#N title` + (`"  ·  "` + labels) — as today | title part → title line; labels part → details line, after the reporter and its separator |
-| M2 (US2) on | `#N title` + `"  ·  "` + reporter + (`"  ·  "` + labels) | title part → title line; reporter part → start of the details line; labels part → details line |
+| M3 (US2) on | `#N title` + `"  ·  "` + reporter + (`"  ·  "` + labels) | title part → title line; reporter part → start of the details line; labels part → details line |
 
 Rules of `emphasis(spans)`, where `spans` are byte ranges of `row_text` from `Match.spans`:
 
@@ -113,7 +113,7 @@ anchor.
 | `key` NEW | `Option<u64>` | The identity of what the row describes; passed to the tooltip as its subject. |
 
 The issue picker builds `Row::new(title_line, emphasis.title).details(details_line,
-emphasis.details).key(number)` and, from M4, `.tooltip(description)` when the description is not
+emphasis.details)` and, from M5, `.key(number)` and `.tooltip(description)` when the description is not
 empty.
 
 ## 8. State ownership (Principle II)

@@ -13,7 +13,7 @@ author { login }
 bodyText
 ```
 
-- `author { login }` ships in milestone M1; `bodyText` ships in M4.
+- `author { login }` ships in milestone M1; `bodyText` ships in M5.
 - Nothing else in the query text changes: not the arguments, the page size, the ordering, the
   `states` filter or the search string. `list_args` and `search_args` are untouched (FR-013,
   FR-026). The existing tests `list_args_send_only_the_repository` and
@@ -76,14 +76,14 @@ for the reporter: the reporter is always first.
 | Milestone | `row_text()` for #7 above |
 |---|---|
 | M1 | `#7 Fix it  ·  bug, ui` (as today) |
-| M2 on | `#7 Fix it  ·  ana  ·  bug, ui` |
+| M3 on | `#7 Fix it  ·  ana  ·  bug, ui` |
 
 ```rust
 pub struct RowEmphasis { pub title: Vec<Range<usize>>, pub details: Vec<Range<usize>> }
 impl Issue { pub fn emphasis(&self, spans: &[Range<usize>]) -> RowEmphasis; }
 ```
 
-Cases the tests hold (M2 match text, issue #7):
+Cases the tests hold (M3 match text, issue #7):
 
 | Typed | Span of `row_text` | `title` | `details` |
 |---|---|---|---|
