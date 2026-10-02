@@ -460,3 +460,13 @@ existed and failed before the implementation.
   `GIT_NO_LAZY_FETCH=1` and `GIT_TERMINAL_PROMPT=0` so a partial clone never fetches (FR-016)
 - suite: `mise run gate` before the pull request
 - commit: the commit that adds this entry
+
+### M2 refactor: review A round 2 — the branch guard lives in `GitCli::branch_tip`
+
+- the revision-syntax guard moved from the daemon into `GitCli::branch_tip`, reusing
+  `naming::is_valid_branch` (now `pub(crate)`) instead of a second copy of the ref-format rules
+- `branch_tip` and `is_ancestor` both run through `local_only` (`GIT_NO_LAZY_FETCH=1`, git 2.44+;
+  `GIT_TERMINAL_PROMPT=0`)
+- `a_branch_name_with_a_revision_suffix_is_unknown` also asks for `ahead@{0}~1`
+- green: `merged_branch_check`, `pr_status_setting`, `git_containment` in the gate
+- commit: the commit that adds this entry
