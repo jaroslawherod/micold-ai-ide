@@ -99,6 +99,10 @@ B1, B3, B4, B6 are repeated in the dark theme. macOS and Windows arms of B14 are
 `github_locate_desktop_launch.rs`, which this feature reuses unchanged: it adds no platform code
 (FR-034).
 
+After the pass, **B17**: search the pass's `settings.json`, every other file under its configuration
+and data directories, and its client and daemon logs for the title and the address of each pull
+request of the §B project. Expected: 0 matches (FR-032, SC-011).
+
 **Not in §B**: the 5-minute interval, the `again` rule, the rate-limit pause and the stale form's
 timing are decided by the reducer and covered in §A with an injected clock; the stale form's look
 is B1.
