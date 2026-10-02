@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 3-design
-- **Next step**: Design unit: `speckit-tdd-plan` (after_tasks hook), milestones into this ledger, `speckit-analyze`, tasks review, close checklists, PR 2.
+- **Next step**: Continue the design unit from *Handover*: `speckit-tdd-plan`, `speckit-analyze`, tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -21,6 +21,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | | pending |
+| M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | | pending |
+| M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
+| M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
+| M5 | T041–T047 | light | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
+| M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | pending |
+| M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | | pending |
+| M8 | T066–T068 | light | Architecture page and the recorded quickstart §B pass | | pending |
 
 ## Decisions
 
@@ -60,7 +68,32 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-None.
+Design unit, part 2, handed over at the context cap (2026-10-02) after step 2 of the phase file.
+**Done** (committed, not pushed; no PR open; `origin/main` has moved, so run `branch-start.sh 529`
+again): `data-model.md`, the three contracts, `quickstart.md` (§B: B1 to B17); plan review rounds 1
+(4 MAJOR, fixed) and 2 (CLEAN) — see *Review rounds*; spec.md follows D9 to D11 as corrected by
+round 1 (only the window that holds a project reads and shows; pause kept across a project switch;
+FR-015, FR-017, FR-018, FR-022, FR-024, SC-007); `tasks.md` (T001–T068, phases 3 to 10) with
+`## Milestones` M1 to M8, copied into *Milestones* above.
+**Next steps, in order:**
+1. `speckit-tdd-plan` (the `after_tasks` hook in `.specify/extensions.yml`): it writes
+   `tdd/test-list.md` and adds behaviour ids (`[A#]`, `[U#]`) to the test tasks of tasks.md, as
+   034's tasks.md has them. Have an `autopilot-worker` run the skill and report in 10 lines; check
+   with `git diff --stat` that it kept the task ids, the phases and `## Milestones`. tasks.md's
+   **Tests** header does not yet mention `tdd/test-list.md`; add that sentence then.
+2. `speckit-analyze` (forked skill; pass the feature directory), fix what it finds.
+3. Tasks review: fresh `autopilot-reviewer`, Tasks and milestone rubric, round 1
+   (`review-snapshot.sh` first). No tasks review has run. Points worth its attention: story 1 is
+   split into four milestones of which M1 to M3 ship no UI (milestones.md rules 3 and 6; the
+   rubric's "M1 includes the P1 story" is met by slice A, as in 034); M2 ships the
+   `MergedBranchCheck` RPC that only M6 uses, because the repository takes one protocol bump per
+   feature (research R11); M5 is `light`, M8 is `light`.
+4. Close checklists: `grep -n "\[ \]" specs/040-worktree-pr-ci-status/checklists/*.md` printed
+   nothing on 2026-10-02 (all ticked in the spec phase); have the tasks reviewer confirm the ticked
+   items still hold after this unit's spec edits.
+5. PR 2 `docs(040): clarify, plan and cut milestones for pull request and check status for each
+   worktree`, body ending `Refs #486`; local gate `mise run test-scripts`.
+**Open findings**: none.
 
 ## Open escalation
 
