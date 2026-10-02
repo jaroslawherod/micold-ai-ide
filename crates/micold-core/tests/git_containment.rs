@@ -36,3 +36,30 @@ fn a_tip_that_is_not_an_ancestor_of_the_head_is_beyond() {
         "a branch with commits after its merged pull request is beyond it"
     );
 }
+
+/// U52. What the repository cannot show is never read as "nothing newer" (FR-017): a branch that
+/// does not exist locally has no tip, whatever was said about ancestry, and a pull request whose
+/// last commit was never fetched leaves the ancestry unknown.
+#[test]
+fn no_tip_or_unknown_ancestry_is_unknown() {
+    assert_eq!(
+        containment(None, HEAD, None),
+        BranchContainment::Unknown,
+        "a branch that does not exist locally"
+    );
+    assert_eq!(
+        containment(None, HEAD, Some(true)),
+        BranchContainment::Unknown,
+        "without a tip there is nothing an ancestry answer could be about"
+    );
+    assert_eq!(
+        containment(None, HEAD, Some(false)),
+        BranchContainment::Unknown,
+        "without a tip there is nothing an ancestry answer could be about"
+    );
+    assert_eq!(
+        containment(Some(OTHER), HEAD, None),
+        BranchContainment::Unknown,
+        "git could not say whether the tip is an ancestor of the head"
+    );
+}
