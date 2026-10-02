@@ -101,8 +101,9 @@ pages. Six milestones.
 - [x] **VII. Documentation First-Class**: PASS. The user guide's "From a GitHub issue" section
   gains the two lines with US1, searching by reporter with US2 and the description tooltip with the
   milestone that ships it on issue rows (FR-031). `component-library.md` and
-  `component-showcase.md` describe the two-line row with M1 and the tooltip's modes with M4, the
-  milestones that add them.
+  `component-showcase.md` describe the two-line row with M1 and the tooltip's modes with M4, and
+  `component-library.md` the scroll operation with M2 and `Row::tooltip` and `Row::key` with M5:
+  each in the milestone that adds it.
 - [x] **VIII. Reusable UI Component Foundation**: PASS. No new component: the two-line row is
   `material::picker::Row::details`, the tooltip is `material::Tooltip` with `after_rest`,
   `max_lines` and `subject` (FR-028). Appearance stays in `material/`, behaviour in `cdk/`
@@ -169,7 +170,7 @@ No entry in Complexity Tracking.
 | `micold-client` reducer | `issue_source_state.rs`: a login narrows the list; a searched issue matching only by reporter is kept; description-only text matches nothing; a pick is unchanged; 034's loading, empty, failure and retry cases stay green, unedited (FR-027) | FR-008, 009, 012, 014, 027 |
 | `micold-client` source gates | `idle_requests_no_frames.rs` (two doors, both in `motion.rs`; a waiting tooltip asks for one timed wake at its deadline, others for no timed wake); `issues_are_requested_only_on_named_events.rs`; `material_builder_api.rs`; `material_boundary.rs`; `cdk_no_appearance.rs`; `typeahead_is_generic.rs`; `showcase_completeness.rs` | FR-018, 024, 028 |
 | `micold-client` widget tests | `material/picker.rs` unit tests: a row with details is taller than `MENU_ITEM_BASE` when it wraps and never clips; a row without details matches today's. NEW `tests/picker_highlight_into_view.rs`: Down through rows of one to five lines keeps the highlighted row inside the list's viewport at every step. NEW `tests/tooltip_rest_glue.rs`: the widget feeds `RestTimer` cursor and redraw events; a press closes; a changed subject resets; the panel is at most three lines. NEW `tests/issue_picker_rows.rs`: the view's rows for a listed, a searched and a typed-number issue carry the same two lines (FR-006); the placeholder names the reporter (FR-011); a row gets a tooltip only for a non-empty description (FR-020), and the panel's text equals the text passed to `Row::tooltip` (FR-019) | FR-004, 006, 007, 011, 015–017, 019, 020; SC-004, SC-007 |
-| Layout/geometry gates | `tests/support/covered_states.rs`: NEW states with the issue list **open** (`form.issue_list_open = true`, so the list is recorded in the overlay layer, as `worktree-menu-open` is; today's `add-worktree-dialog-issue-*` states leave it closed and record no row): a 256-character title, 20 labels, no labels and mixed heights, at the default window and a narrow one, each state small enough that the rows under test are inside the list's eight-row viewport. NEW `gates/issue_rows_show_all_text.rs` holds SC-001: it reads each state's text with an overlay-drawing pass (`support::layout::painted_text_settled`; `painted_text` and `layout_text_overflow.rs` run `Before::Mounted`, which draws no overlay, so they cannot see a row) and asserts, for every row, that the row is wholly inside the list's viewport (a state that outgrows the cap fails rather than passing on unpainted rows), that its text records, joined, hold the whole title, the reporter and every label, and that each record lies inside its row. `gates/containment.rs` holds the new states' overlay layout records (each row inside the list); they stay under the cap, so `PICKER_LIST_CONTENT` gains no entry. NEW `gates/picker_row_tooltip_clears_its_row.rs`: first row, last row, a row at the list's lower edge; the panel is inside the window, does not intersect its row and is at most three lines tall. Both new gates are `#[path]` modules of `tests/layout_snapshot.rs`, as every gate under `tests/gates/` is. `fixtures/layout_snapshot.txt` regenerated; its records for the branch picker, `Select` and 034's loading, empty and failure states do not change, and `material/picker_parity.rs` and `material/menu_anatomy.rs` stay green (FR-027, FR-029) | FR-004, 021, 023, 027, 029; SC-001, SC-005 |
+| Layout/geometry gates | `tests/support/covered_states.rs`: NEW states with the issue list **open** (`form.issue_list_open = true`, so the list is recorded in the overlay layer, as `worktree-menu-open` is; today's `add-worktree-dialog-issue-*` states leave it closed and record no row): a 256-character title, 20 labels, no labels and mixed heights, each state small enough that the rows under test are inside the list's eight-row viewport. NEW `gates/issue_rows_show_all_text.rs` holds SC-001: it reads each state's text with an overlay-drawing pass, at the canonical `WINDOW` and at a narrow window (`support::layout::painted_text_settled`, and a NEW size-taking variant of it in `tests/support/layout.rs`: a covered state carries no window size and every existing pass lays out at the fixed `WINDOW`, so the gate declares the narrow size itself, as `gates/tooltip_clears_its_row.rs` does; `painted_text` and `layout_text_overflow.rs` run `Before::Mounted`, which draws no overlay, so they cannot see a row) and asserts, for every row, that the row is wholly inside the list's viewport (a state that outgrows the cap fails rather than passing on unpainted rows), that its text records, joined, hold the whole title, the reporter and every label, and that each record lies inside its row. `gates/containment.rs` holds the new states' overlay layout records (each row inside the list); they stay under the cap, so `PICKER_LIST_CONTENT` gains no entry. NEW `gates/picker_row_tooltip_clears_its_row.rs`: first row, last row, a row at the list's lower edge; the panel is inside the window, does not intersect its row and is at most three lines tall. Both new gates are `#[path]` modules of `tests/layout_snapshot.rs`, as every gate under `tests/gates/` is. `fixtures/layout_snapshot.txt` regenerated; its records for the branch picker, `Select` and 034's loading, empty and failure states do not change, and `material/picker_parity.rs` and `material/menu_anatomy.rs` stay green (FR-027, FR-029) | FR-004, 021, 023, 027, 029; SC-001, SC-005 |
 | quickstart §B (visual-pass) | emphasis and hierarchy in both themes; the 3 s timing by stopwatch over 20 trials; a 10 s sweep; a real `gh` against a real repository; a template body's text; idle CPU with a tooltip waiting and open (FR-018); SC-008 before and after; the guide read against the app (FR-031) | FR-005, 018, 022, 030, 031; SC-003, 004, 006, 008 |
 | CI's user-guide gate (`scripts/check-user-guide-updated.sh`) | each `feat` PR that ships user-facing behaviour edits the guide | FR-031 |
 
@@ -221,7 +222,7 @@ crates/micold-client/
 │   │                            #   ROW_TOOLTIP_REST, ROW_TOOLTIP_LINES; highlighted-row Id
 │   ├── ui/material/typeahead.rs # passes the row modes through (TypeaheadRow)
 │   ├── ui/picker_scroll.rs      # NEW — picker_highlight_into_view (beside focus.rs)
-│   ├── ui/focus.rs              # delta_into_view becomes pub(super)
+│   ├── ui/focus.rs              # delta_into_view: pub(super), margin as a parameter
 │   ├── ui/worktree_form.rs      # issue rows: two lines, emphasis, key, tooltip; placeholder
 │   ├── shell/issues.rs, main.rs # chain the operation after IssueHighlightMoved
 │   └── showcase/                # two-line rows of differing height; a rest-delay tooltip
@@ -231,6 +232,7 @@ crates/micold-client/
     ├── gates/issue_rows_show_all_text.rs  gates/picker_row_tooltip_clears_its_row.rs   # NEW
     ├── layout_snapshot.rs                                              # + a #[path] mod for each new gate
     ├── support/covered_states.rs                                       # + open issue lists, mixed heights
+    ├── support/layout.rs                                               # + a size-taking settled text pass
     └── fixtures/layout_snapshot.txt                                    # regenerated
 
 docs/
@@ -250,10 +252,10 @@ Sliced by story priority; each slice ships something observable (milestones in `
 | Slice | Milestone | Delivers | Gate |
 |---|---|---|---|
 | **1a (US1, P1)** | M1 | `author` read and held; the two display lines and the emphasis mapping (match text unchanged); `Row::details` and the wrapping label; the issue picker's rows; showcase pose; redacting `Debug`; guide: two lines; `component-library.md` and `component-showcase.md`: the two-line row | `mise run gate`; quickstart §B1, B2 |
-| **1b (US1 AS6)** | M2 | The highlighted row kept wholly in view: `picker_highlight_into_view`, chained by the shell | §B3 |
+| **1b (US1 AS6)** | M2 | The highlighted row kept wholly in view: `picker_highlight_into_view`, chained by the shell; guide and `component-library.md`: the list follows the highlight | §B3 |
 | **2 (US2, P2)** | M3 | Reporter in the match text; reporter emphasis; the hint; guide: search by reporter | §B4 |
 | **3a (US3, component)** | M4 | `RestTimer`, `clamp_to_lines`; `Tooltip::after_rest`, `max_lines`, `subject`; `wake_at` and the extended frame gate; showcase pose; `component-library.md` and `component-showcase.md`: the tooltip's modes | §B5 |
-| **3b (US3, issue rows)** | M5 | `bodyText` read, `description_from`; `Menu` forwards overlays; `Row::tooltip`, `Row::key`; the issue picker passes both; the row-tooltip geometry gate; guide: the tooltip | §B6–B11 |
+| **3b (US3, issue rows)** | M5 | `bodyText` read, `description_from`; `Menu` forwards overlays; `Row::tooltip`, `Row::key`; the issue picker passes both; the row-tooltip geometry gate; guide: the tooltip; `component-library.md`: `Row::tooltip`, `Row::key` | §B6–B11 |
 | **Polish** | M6 | §B recorded in full, SC-008 measured before and after | quickstart §B complete |
 
 US1 is split along acceptance scenario 6: 1a ships the rows (scenarios 1–5 and 7–9), 1b the
