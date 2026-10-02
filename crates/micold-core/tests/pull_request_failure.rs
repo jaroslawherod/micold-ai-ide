@@ -107,6 +107,33 @@ fn graphql_rate_limited_error_pauses_until_reset() {
     );
 }
 
+/// U33 (a): the errors are read whatever the data beside them holds.
+#[test]
+fn a_rate_limit_beside_unreadable_data_is_still_a_rate_limit() {
+    let bytes = answer(
+        "HTTP/2.0 200 OK",
+        &["X-Ratelimit-Remaining: 0", "X-Ratelimit-Reset: 1790966100"],
+        r#"{"data":{"repository":{"o0":{"nodes":[null]}}},"errors":[{"type":"RATE_LIMITED","message":"API rate limit already exceeded"}]}"#,
+    );
+    assert_eq!(
+        reading_failure(&exited(1, bytes, ""), NOW),
+        ReadingFailure::RateLimited {
+            until: 1_790_966_100
+        },
+        "data this version cannot read must not hide the RATE_LIMITED error beside it (FR-024)"
+    );
+    let bytes = answer(
+        "HTTP/2.0 200 OK",
+        &[],
+        r#"{"data":{"repository":7},"errors":[{"type":"NOT_FOUND","path":["repository"],"message":"x"}]}"#,
+    );
+    assert_eq!(
+        reading_failure(&exited(1, bytes, ""), NOW),
+        ReadingFailure::Unavailable,
+        "nor the NOT_FOUND on the repository (FR-025)"
+    );
+}
+
 /// U33 (b)
 #[test]
 fn http_429_pauses_a_minute() {
