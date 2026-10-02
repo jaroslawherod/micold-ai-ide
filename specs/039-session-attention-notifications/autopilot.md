@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 2-clarify
-- **Next step**: Clarify round 2 found no critical ambiguities (CLEAN). Phase 2 is complete; next is the design phase (plan, tasks), which opens PR 2 with the local clarify commits.
+- **Phase**: 3-design
+- **Next step**: Continue the design unit from *Handover*: review the plan (Plan rubric, round 1), then `speckit-tasks`, milestones, `speckit-analyze`, checklists, PR 2.
 
 ## Pull requests
 
@@ -36,6 +36,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | clarify | FR-023: does the switcher's button show unread with its panel closed? | (a) Yes: the total of unread sessions in projects other than the active one, nothing when zero. | user | Orchestrator relayed the user's answer, 2026-10-02; spec.md#Clarifications |
 | D9 | clarify | FR-028: a notification switch per AI CLI? | (a) No: one switch for every AI CLI; per-CLI is out of scope. | user | Orchestrator relayed the user's answer, 2026-10-02; spec.md#Clarifications |
 | D10 | clarify | What is unread on the first start with the feature, or when the stored unread state cannot be read? | Nothing, and no error is shown: there is no record of what the user viewed (FR-008a). Same fallback as an unreadable settings file. | agent-resolved | spec.md#Edge Cases ("Settings file unreadable"); follows from D7 |
+| D11 | design | FR-008: how is a change known that happened with no window open? | The session service keeps `attention_seq` and `unread` per session in its catalog and sets them itself; windows report what is in view (`WindowView`). Within FR-007: the existing connection only. | agent-resolved | research.md R1, R2 |
+| D12 | design | Several windows are several client processes: who raises the one notification, and which window does a click open? | A window claims an attention event and the service grants each once (FR-006a); a click is sent to the service, which forwards it to the window holding the project (FR-012). | agent-resolved | research.md R3, R6; `messages.rs:92` `ClientInstance`, `RefusalReason::ProjectBusy` |
+| D13 | design | Which notification crates? | Linux `zbus` directly, macOS `mac-usernotifications` 0.3.1, Windows `tauri-winrt-notification` 0.8.1, behind one trait. `notify-rust` rejected: no Wayland activation token, `cc` build on macOS. | agent-resolved | research.md R4 |
+| D14 | design | Is the switch a client or a service setting? | Service-owned (`DaemonSettings`), so every window has one value at once; the service refuses grants while off. | agent-resolved | research.md R8; pattern `tool_server_enabled` |
 
 ## Review rounds
 
@@ -51,7 +55,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design unit handed over at the context cap, after `speckit-plan` (step 1 of `phases/3-design.md`), before its review.
+
+- **Done**: `branch-start.sh 528` (three clarify commits rebased onto `origin/main`). Written and committed, not pushed: `plan.md`, `research.md` (R1–R10), `data-model.md`, `quickstart.md`, `contracts/wire.md`, `contracts/desktop-notification.md`, `contracts/unread-mark.md`. `.specify/extensions.yml` has no `before_plan` or `after_plan` hook. `checklists/requirements.md` has no unchecked item.
+- **Next step**: dispatch the Plan review, round 1 (no round is recorded yet; no snapshot taken). Then `speckit-tasks` (its `after_tasks` hooks: `speckit.tdd.plan`, `speckit.docguard.score`, both optional; `before_tasks` hooks not read yet), cut milestones as plan.md *Delivery order* gives them (M1 story 1 `full`, M2 story 2, M3 story 3 `full`, M4 story 4 follows the `tool_server_enabled` pattern, M5 polish), `speckit-analyze`, the tasks review, checklists, PR 2.
+- **Open findings**: none yet. Points the reviewer should test, not yet verified by me in code: that a window detaches the project it leaves (`shell/daemon_sync.rs:195`), so "open in a window" equals "attached"; the names `ProjectMsg::Reopened` and `SessionMsg::Selected` as the switch and select messages; `Button`'s builder in `ui/material/button.rs` (the contract adds `.trailing_mark`); where the sandbox keeps the service's `projects.json`. Two facts are marked **unverified** in research R4 and R7 (Windows notification-centre click, Wayland activation through foreign handles) and need a task each.
+- **PR**: none opened by this unit.
 
 ## Open escalation
 
