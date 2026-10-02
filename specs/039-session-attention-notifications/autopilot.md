@@ -8,21 +8,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 3-design
-- **Next step**: PR #539 (design) is open: wait for CI and merge. Then Phase 4, milestone M1 (T001–T016, T123). M1's first cycle measures the suite baseline (`unknown` in `tdd/test-list.md`).
+- **Phase**: 4-milestone (M1)
+- **Next step**: Continue M1 from *Handover*: cycles 2 to 6 of `speckit-tdd-run`, T016, then the gate and reviews A and B, then PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #528 | Spec | merged | 824e0a9bc58ad5f977ef56fa813e58217c563ea5 |
-| #539 | Design | open | |
+| #539 | Design | merged | 6b4b6fa9afc27f134a5f4fc80048dc3f9a115a38 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | | pending |
+| M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | | in progress |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | | pending |
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | | pending |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
@@ -74,7 +74,41 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1, handed over at the 150k context cap (2026-10-03). No PR is open: run `branch-start.sh 539` as usual.
+
+- **Done**: baseline re-measured green on `6b4b6fa9` (4352 passed in 384 binaries; the flaky
+  `mcp_create_session` test passed). Cycle 1 (U1–U5; T001, T007 ticked): `ViewFacts` and `in_view` in
+  `crates/micold-core/src/attention.rs`, committed. `tdd/cycle-log.md` has the baseline, the batching
+  note and cycle 1.
+- **In the stash, not committed** (red not yet observed): `git stash apply 5b7910e42294730b8999f7672a102a67df75a398`
+  (message `039-m1-cycles-2-3-red-wip`; find it with `git stash list --format='%H %gs'`, and drop it
+  once applied). It holds the stub field `Session::attention_seq` (`session.rs`, both
+  constructors), cycle 2's tests (`store.rs`, `mod attention_seq_tests`: U6, U7, U8) and cycle 3's
+  red tests (`tests/schema_hash.rs`: the pin moved to 21 and
+  `the_view_report_and_the_attention_sequence_are_in_the_hashed_source`).
+- **Next step**: apply the stash and run `scripts/build-lock.sh cargo test -p micold-core --all-targets --no-fail-fast`
+  for the red of cycles 2 and 3 (expected: U7 and the two `schema_hash` tests fail; U6 and U8 pass on
+  first run and need a deliberate mutant after the green: drop `#[serde(default)]`, bump
+  `SCHEMA_VERSION`). Then green: `attention_seq` on `StoredSession` with both conversions (T008);
+  `WindowView { focused, in_view }` struct, `ClientMsg::WindowView { focused, in_view }`,
+  `SessionSummary::attention_seq`, `PROTOCOL_VERSION` 21 with its doc line (T009), round-trip tests
+  in `messages.rs` and the samples in `tests/protocol_roundtrip.rs` (mutant: `#[serde(skip)]`).
+  `SessionSummary` literals to extend: `micold-daemon/src/catalog.rs:1095`,
+  `micold-client/src/catalog_sync.rs:394`, `src/shell/daemon_sync.rs:2133`,
+  `tests/start_failure_notice.rs:62`, `tests/session_title_sync.rs:230`,
+  `micold-core/tests/protocol_roundtrip.rs:267`. Then cycle 4 (T004/T010, `Views`), cycle 5
+  (T005/T011–T013), cycle 6 (T006/T014, T015, T123), T016, and phase steps 2 to 4.
+- **Notes for cycle 5**: `tests/exclusivity.rs:22-91` has the two-connection helpers (`connect`,
+  `next_control` over `serve_connection` and a duplex stream); `tests/activity_pipeline.rs:86-151`
+  has `catalog_with_session` on a `JsonFileStore` and `register_cat`. Drive a change as
+  `hooks.rs:202` does: `note_activity(id, Hook(UserPromptSubmit))`, then `Hook(Stop)`, and
+  `broadcast_catalog()` when it returns `true`. `note_activity` is `state.rs:2786`; `deregister` is
+  `state.rs:1142`; `WindowView` goes beside `ClientMsg::TerminalColorScheme` at `server.rs:639`.
+- **Build lock**: other worktrees hold it for 10 minutes and more at a time. Batch each cycle's red
+  and green into as few `build-lock.sh` runs as possible, and run them detached with `hold.sh`.
+- A detached `cargo test -p micold-core --all-targets --no-fail-fast` of this unit may still be
+  queued for the lock (log in the old scratchpad). It changes nothing in the tree; ignore it.
+- **Open findings**: none. No review has run.
 
 ## Open escalation
 
