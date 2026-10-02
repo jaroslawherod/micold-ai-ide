@@ -52,3 +52,23 @@ fn validate_rejects_a_line_whose_run_sum_is_one_more_or_one_less_than_its_charac
         );
     }
 }
+
+// U3: a restored line is printed back into a terminal, so a control character in it would be
+// interpreted instead of shown (FR-016).
+#[test]
+fn validate_rejects_a_line_holding_a_c0_a_c1_or_an_escape_character() {
+    const BELL: char = '\u{7}';
+    const CSI_C1: char = '\u{9b}';
+    const ESCAPE: char = '\u{1b}';
+
+    for control in [BELL, CSI_C1, ESCAPE] {
+        let snapshot = snapshot_of(line(&format!("a{control}b"), &[3]));
+
+        assert_eq!(
+            snapshot.validate(),
+            Err(SnapshotError::ControlCharacter { line: 0 }),
+            "{:?} is a control character, which a line's text never holds",
+            control
+        );
+    }
+}

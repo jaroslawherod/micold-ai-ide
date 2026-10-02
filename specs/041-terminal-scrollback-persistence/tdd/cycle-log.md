@@ -39,3 +39,15 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   `text.chars().count()`. File run -> 2 passed, 0 failed
 - refactor: none needed
 - commit: `feat(041): a snapshot whose runs miss or overrun its text is invalid (U2)`
+
+## Cycle 3: U3 `validate` rejects a `text` holding a C0 character, a C1 character and `ESC`
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::validate_rejects_a_line_holding_a_c0_a_c1_or_an_escape_character` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot validate_rejects_a_line_holding_a_c0_a_c1_or_an_escape_character -- --exact`
+  -> ``assertion `left == right` failed: '\u{7}' is a control character, which a line's text never holds`` /
+  `left: Ok(())` / `right: Err(ControlCharacter { line: 0 })` (1 failed). The
+  `SnapshotError::ControlCharacter` variant was declared first so the test compiles.
+- green: `validate` rejects a line whose text has any `char::is_control` character (C0, `DEL`
+  and C1). File run -> 3 passed, 0 failed
+- refactor: none needed
+- commit: `feat(041): a snapshot whose text holds a control character is invalid (U3)`
