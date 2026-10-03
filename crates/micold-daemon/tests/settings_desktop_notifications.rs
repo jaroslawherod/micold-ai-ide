@@ -531,6 +531,52 @@ async fn turned_on_again_the_next_event_is_granted_and_the_ones_made_while_off_a
     );
 }
 
+/// FR-027, W4.2: what was granted is kept in memory only, so a service restarted between the
+/// event and the switch being turned on has forgotten that the event was made while off. Turning
+/// the switch on uses up every event made so far, and the event is still not granted.
+#[tokio::test]
+async fn an_event_made_while_off_is_not_granted_after_a_restart_and_the_switch_turned_on() {
+    let b = session_id(B);
+    let service = Service::with_sessions(&[b]);
+    let (mut window, _) = connect(&service.state, "window").await;
+    sets(&mut window, Some(false), None).await;
+    service.finishes_a_turn(b);
+    service.state.persist_attention();
+    closes(window).await;
+
+    let restarted = service.restarted();
+    let (mut after_restart, welcomed) = connect(&restarted, "after-restart").await;
+    assert!(
+        !welcomed.desktop_notifications,
+        "precondition: the restarted service has the switch off"
+    );
+    sets(&mut after_restart, Some(true), None).await;
+
+    assert_eq!(
+        claims(&mut after_restart, b, 1).await,
+        [],
+        "the event made while the switch was off raises nothing after the restart either"
+    );
+}
+
+/// FR-027: saving the switch as on while it is on already uses up nothing, so an event that
+/// waits for its claim is still granted.
+#[tokio::test]
+async fn saving_the_switch_as_on_while_it_is_on_leaves_a_waiting_event_to_be_granted() {
+    let b = session_id(B);
+    let service = Service::with_sessions(&[b]);
+    let (mut window, _) = connect(&service.state, "window").await;
+    service.finishes_a_turn(b);
+
+    sets(&mut window, Some(true), None).await;
+
+    assert_eq!(
+        claims(&mut window, b, 1).await,
+        [(b, 1)],
+        "the switch did not change, so the event is granted"
+    );
+}
+
 /// U110, A48 (US4 scenario 6, FR-028): one switch for a session of each AI CLI. With it off none
 /// of the three is granted; with it on each is.
 #[tokio::test]
