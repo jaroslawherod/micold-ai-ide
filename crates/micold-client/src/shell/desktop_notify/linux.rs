@@ -3,7 +3,8 @@
 //!
 //! Pure functions decide everything and are tested with no bus: [`notify_request`], the call's
 //! arguments; [`notify_error`], what a bus failure means; [`signal`], which of the service's
-//! signals a bus message is; and [`Shown::on_signal`], what that signal means for this window.
+//! signals a bus message is; and [`Shown::on_signal`], what that signal means for this window —
+//! a click, and the Wayland activation token the service sent just before it (research R7).
 //! [`Notifier::show`] is the call and [`Notifier::listen`] the loop that reads the signals.
 //!
 //! The request offers the `default` action, which the specification gives a click on the
@@ -31,7 +32,6 @@ const DEFAULT_ACTION_LABEL: &str = "Open";
 /// The three signals of the notification service this window reads.
 const ACTION_INVOKED: &str = "ActionInvoked";
 const NOTIFICATION_CLOSED: &str = "NotificationClosed";
-#[allow(dead_code)] // T099
 const ACTIVATION_TOKEN: &str = "ActivationToken";
 /// Every signal of the notification service's interface.
 const SIGNALS: &str = "type='signal',interface='org.freedesktop.Notifications',\
@@ -95,11 +95,10 @@ pub(super) enum Signal {
     NotificationClosed { id: u32 },
     /// `ActivationToken(id, token)`: the Wayland activation token of the click on notification
     /// `id` that an `ActionInvoked` is about to report.
-    #[allow(dead_code)] // T099
     ActivationToken { id: u32, token: String },
 }
 
-/// The signal `message` carries, when it is one of the two this window reads.
+/// The signal `message` carries, when it is one of the three this window reads.
 pub(super) fn signal(message: &zbus::Message) -> Option<Signal> {
     let header = message.header();
     let body = message.body();
@@ -112,22 +111,45 @@ pub(super) fn signal(message: &zbus::Message) -> Option<Signal> {
             let (id, _reason) = body.deserialize::<(u32, u32)>().ok()?;
             Some(Signal::NotificationClosed { id })
         }
+        ACTIVATION_TOKEN => {
+            let (id, token) = body.deserialize::<(u32, String)>().ok()?;
+            Some(Signal::ActivationToken { id, token })
+        }
         _ => None,
     }
+}
+
+/// One notification this window has on screen.
+#[derive(Debug)]
+struct Entry {
+    project: PathBuf,
+    session: SessionId,
+    /// The activation token the service sent for the click on it, until that click is reported.
+    activation: Option<String>,
 }
 
 /// The notifications this window raised that are still shown: the service's id for each, against
 /// what it named. It is this window's own (contract N9): an id it does not hold is another
 /// window's notification, or one raised before this window started.
+///
+/// A token lives in its notification's entry and nowhere else, so it goes when the entry goes — at
+/// the click or at the close — and a token for an id this window does not hold is not kept.
 #[derive(Debug, Default)]
 pub(super) struct Shown {
-    by_id: HashMap<u32, (PathBuf, SessionId)>,
+    by_id: HashMap<u32, Entry>,
 }
 
 impl Shown {
     /// The service showed a notification for `session` of `project` under `id`.
     pub(super) fn record(&mut self, id: u32, project: PathBuf, session: SessionId) {
-        self.by_id.insert(id, (project, session));
+        self.by_id.insert(
+            id,
+            Entry {
+                project,
+                session,
+                activation: None,
+            },
+        );
     }
 
     /// Whether `id` is a notification of this window that is still shown.
@@ -143,21 +165,34 @@ impl Shown {
     }
 
     /// What `signal` means for this window: the `default` action of a notification it holds is
-    /// a click on that notification's session, reported once; a closed notification is forgotten;
+    /// a click on that notification's session, reported once, with the activation token that
+    /// preceded it when one did; a closed notification is forgotten, and its token with it;
     /// anything else is nothing (N9).
+    ///
+    /// GNOME Shell sends every signal twice, from two bus names (research R7). The click removes
+    /// the entry, so the second `ActionInvoked` finds nothing, and so does a second token that
+    /// arrives after it; a second token that arrives before it replaces the first with its equal.
     pub(super) fn on_signal(&mut self, signal: Signal) -> Option<NotifierEvent> {
         match signal {
             Signal::ActionInvoked { id, key } if key == DEFAULT_ACTION => {
-                let (project, session) = self.by_id.remove(&id)?;
+                let Entry {
+                    project,
+                    session,
+                    activation,
+                } = self.by_id.remove(&id)?;
                 Some(NotifierEvent::Activated {
                     project,
                     session,
-                    activation: None,
+                    activation,
                 })
             }
             Signal::ActionInvoked { .. } => None,
-            // T099.
-            Signal::ActivationToken { .. } => None,
+            Signal::ActivationToken { id, token } => {
+                if let Some(entry) = self.by_id.get_mut(&id) {
+                    entry.activation = Some(token);
+                }
+                None
+            }
             Signal::NotificationClosed { id } => {
                 self.by_id.remove(&id);
                 None
