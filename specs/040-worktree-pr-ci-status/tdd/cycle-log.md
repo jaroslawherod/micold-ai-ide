@@ -230,7 +230,7 @@ existed and failed before the implementation.
   stored form, read back as `false`; the client's two `Settings` literals carry it. Suite: 1511
   passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `f1a37671`
+- commit: `9492415e`
 
 ### M2 cycle: U49 — on survives a save and a load, at the same settings version
 
@@ -240,7 +240,7 @@ existed and failed before the implementation.
 - green: the stored form's value is carried into `Settings` on load; `SETTINGS_VERSION` stays 4.
   Suite: 1512 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `772e7dbf`
+- commit: `7d594206`
 
 ### M2 cycle: U50 — a tip equal to the head, or an ancestor of it, is contained
 
@@ -251,7 +251,7 @@ existed and failed before the implementation.
 - green: `containment` answers `Contained` for an equal tip and for `Some(true)`. Suite: 1513
   passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `5e7afb7a`
+- commit: `fbccc65a`
 
 ### M2 cycle: U51 — a tip that is not an ancestor of the head is beyond
 
@@ -260,7 +260,7 @@ existed and failed before the implementation.
   beyond it  left: Unknown  right: Beyond`
 - green: `Some(false)` is `Beyond`. Suite: 1514 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `dbb10a74`
+- commit: `54b2e51c`
 
 ### M2 cycle: U52 — no tip, or unknown ancestry, is unknown
 
@@ -270,7 +270,7 @@ existed and failed before the implementation.
 - green: no tip is `Unknown` before the ancestry is looked at. Suite: 1515 passed, 0 failed, 7
   ignored
 - refactor: none needed
-- commit: `508c8111`
+- commit: `fbb1f553`
 
 ### M2 cycle: U53 — git reads a branch's tip, and none for a missing branch
 
@@ -281,7 +281,7 @@ existed and failed before the implementation.
 - green: `GitCli::branch_tip` runs `git rev-parse --verify --quiet refs/heads/<branch>^{commit}`.
   Suite: 1516 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `8e74f34e`
+- commit: `ee326382`
 
 ### M2 cycle: U54 — git tells an ancestor from a descendant and from a commit it does not hold
 
@@ -290,7 +290,7 @@ existed and failed before the implementation.
 - green: `GitCli::is_ancestor` runs `git merge-base --is-ancestor`: exit 0 is `Some(true)`, exit 1
   is `Some(false)`, anything else is `None`. Suite: 1517 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `be2b8a09`
+- commit: `39bb4eda`
 
 ### M2 cycle: U55 — the fake git answers the tip and the ancestry as scripted
 
@@ -301,7 +301,7 @@ existed and failed before the implementation.
 - green: `FakeGit` keeps both scripts and answers from them, `None` when nothing was scripted.
   Suite: 1518 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `2ae9d73d`
+- commit: `3a1ccfd9`
 
 ### M2 cycle: U56 — the merged-branch question and its answers round-trip in order
 
@@ -312,7 +312,7 @@ existed and failed before the implementation.
 - green: `MergedBranchQuery`, `ClientMsg::MergedBranchCheck` and
   `OperationResult::MergedBranchCheck`. Suite: 1519 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `f58d63af`
+- commit: `8a729e24`
 
 ### M2 cycle: U57 — the switch round-trips in `DaemonSettings` and `SettingsSet`
 
@@ -322,7 +322,7 @@ existed and failed before the implementation.
 - green: the field on both; every literal in the service, the client and their tests names it (the
   service ignores it until U67, the client sends `None`). Suite: 1520 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `df11031f`
+- commit: `60cffec2`
 
 ### M2 cycle: U58 — one bump, to 21, that covers all of it
 
@@ -332,7 +332,7 @@ existed and failed before the implementation.
   left: 20  right: 21`
 - green: `PROTOCOL_VERSION` is 21. Suite: 1521 passed, 0 failed, 7 ignored
 - refactor: none needed
-- commit: `d648d51f`
+- commit: `09905e9d`
 
 ### M2 cycle: U59 — a branch at or behind the head is contained
 
@@ -341,7 +341,7 @@ existed and failed before the implementation.
   Elapsed(())` — the service does not answer the message (`finished in 30.05s`)
 - green: fake it — the arm answers `Contained` for every query. Suite: 8 passed, 0 failed
 - refactor: none needed
-- commit: `7d9c811b`
+- commit: `de26bcd8`
 
 ### M2 cycle: U60 — a commit after the head is beyond
 
@@ -352,7 +352,7 @@ existed and failed before the implementation.
   failed
 - refactor: none needed (the per-query answer was written as its own function,
   `merged_branch_answer`)
-- commit: `61752ba2`
+- commit: `978f39db`
 
 ### M2 cycle: U61 — a missing branch and a head never fetched are unknown
 
@@ -362,7 +362,7 @@ existed and failed before the implementation.
   does not hold  left: [Contained, Contained]  right: [Unknown, Unknown]`
 - green: mutant removed, no source change. Suite: 10 passed, 0 failed
 - refactor: none needed
-- commit: `b80a86c3`
+- commit: `b619e7ad`
 
 ### M2 cycle: U62 — a head that is not a full commit id never reaches git
 
@@ -374,7 +374,7 @@ existed and failed before the implementation.
 - green: a head is used only when it is 40 or 64 hexadecimal characters. Suite: 11 passed, 0
   failed
 - refactor: none needed
-- commit: `6b61de87`
+- commit: `818249e2`
 
 ### M2 cycle: U63 — one answer per query, in query order
 
@@ -384,7 +384,7 @@ existed and failed before the implementation.
   right: [Beyond, Contained, Unknown, Contained]`
 - green: mutant removed, no source change. Suite: 12 passed, 0 failed
 - refactor: none needed
-- commit: `f80e4fdc`
+- commit: `efe687c7`
 
 ### M2 cycle: U64 — 50 queries are answered and 51 are refused
 
@@ -394,7 +394,7 @@ existed and failed before the implementation.
 - green: `MERGED_BRANCH_CHECK_LIMIT = 50`; a longer list is `ErrorKind::InvalidInput`. Suite: 13
   passed, 0 failed
 - refactor: none needed
-- commit: `04affa48`
+- commit: `6c3a383b`
 
 ### M2 cycle: U65 — a project that is not a repository is refused
 
@@ -405,7 +405,7 @@ existed and failed before the implementation.
   result: MergedBranchCheck { answers: [Unknown] } }`
 - green: mutant removed, no source change. Suite: 14 passed, 0 failed
 - refactor: none needed
-- commit: `b8ddaeb1`
+- commit: `69b38555`
 
 ### M2 cycle: U66 — the check leaves the repository as it found it
 
@@ -416,7 +416,7 @@ existed and failed before the implementation.
   side lists `.git/FETCH_HEAD`)
 - green: mutant removed, no source change. Suite: 15 passed, 0 failed
 - refactor: none needed
-- commit: `8860a643`
+- commit: `c5a1e060`
 
 ### M2 cycle: U67 — the switch is persisted and reported in the next `Welcome`
 
@@ -427,7 +427,7 @@ existed and failed before the implementation.
   settings), `DaemonState::set_pr_status_enabled`, and the `SettingsSet` arm calls it for `Some`.
   Suite: 16 passed, 0 failed
 - refactor: none needed
-- commit: `e45bd4bf`
+- commit: `ac563b2e`
 
 ### M2 cycle: U68 — the change is broadcast to two connected clients
 
@@ -436,7 +436,7 @@ existed and failed before the implementation.
 - green: `DaemonState::set_pr_status_enabled` broadcasts `SettingsChanged`, as
   `set_tool_server_enabled` does. Suite: 17 passed, 0 failed
 - refactor: none needed
-- commit: `4f3f9315`
+- commit: `c6cab0b3`
 
 ### M2 cycle: U69 — a change that does not name the switch leaves it as it is
 
@@ -446,7 +446,7 @@ existed and failed before the implementation.
   settings file: a restarted service still has it on`
 - green: mutant removed, no source change. Suite: 18 passed, 0 failed
 - refactor: none needed
-- commit: `d67fb3a4`
+- commit: `97b0191a`
 
 ### M2 cycle: U61 (review A) — a branch name is only a name under `refs/heads/`
 
@@ -459,7 +459,7 @@ existed and failed before the implementation.
   connection loop's `Ping` (BUG-009); its join failure uses `task_failed`; `GitCli::is_ancestor` sets
   `GIT_NO_LAZY_FETCH=1` and `GIT_TERMINAL_PROMPT=0` so a partial clone never fetches (FR-016)
 - suite: `mise run gate` before the pull request
-- commit: the commit that adds this entry
+- commit: `2940ceb8`
 
 ### M2 refactor: review A round 2 — the branch guard lives in `GitCli::branch_tip`
 
@@ -469,4 +469,14 @@ existed and failed before the implementation.
   `GIT_TERMINAL_PROMPT=0`)
 - `a_branch_name_with_a_revision_suffix_is_unknown` also asks for `ahead@{0}~1`
 - green: `merged_branch_check`, `pr_status_setting`, `git_containment` in the gate
+- commit: `773e98e6`
+
+### M2 cycle: U48 (review B) — a Settings save keeps the stored pull request switch
+
+- red: `a_settings_save_keeps_the_stored_pr_status_switch` in `crates/micold-client/src/main_tests.rs`, run with
+  `persist.rs`'s `stored.pr_status_enabled = pr_status_enabled;` removed: `left: Some(false)`, `right: Some(true)`
+- green: the line restored; the test passes
+- also (review B): the M2 `commit:` hashes above are the ones on `feat/worktree-pr-ci-status` after the
+  cherry-pick, not the preparation branch's
+- suite: `mise run gate` before the pull request
 - commit: the commit that adds this entry
