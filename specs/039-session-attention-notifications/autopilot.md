@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3 continues from *Handover*: reviews A and B, full gate, push, `gh pr ready 557`, T118.
+- **Next step**: M3 continues from *Handover*: record CI's three legs for T118, tick it, push; the orchestrator then merges #557.
 
 ## Pull requests
 
@@ -77,47 +77,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A | 2 | b335b552c718e80437c9096936e32a92acbc77ca:8f5886349019ae746877ee10aef897c156812511 | CLEAN (1 MINOR: `Notifier::connection` holds its mutex across the connect and handshake, which `method_timeout` does not cover: follow-up) |
 | M2 B | 1 | f2083e379371594a8e7ba931a1e28f92f7331c6b:267c3ab777d9ca024030b57b56b0fa65e7348d53 | CLEAN (Verify: attention_claims 5 passed, attention_notify 11 passed; the first reviewer ran only Verify, so a second read the diff file by file on the same snapshot; 1 MINOR: US1.8 (container) and US1.13 (no window open) have no M2 test of their own — 13 rests on U18 and M1's count, 8 on the visual pass and §C: follow-up) |
 | M2 visual | 1 | same tree | PASS: quickstart §B1–B5 and B13, notification part, on a private bus with a stand-in `org.freedesktop.Notifications` service (no dunst or mako installed); evidence in `visual-pass/M2/` |
+| M3 A | 1 | 272bc48cbee8e8b08b48852c798bfec26d9e83a0:a0a230930461a240142697d440b9d66e64073ded | CLEAN: no BLOCKER or MAJOR. Two passes on one snapshot (a reviewer by hand, which read the vendored `mac-usernotifications` 0.3.1 and `tauri-winrt-notification` 0.8.1 sources, then the `code-review` skill at `high`, 10 findings). All judged MINOR: 2 declined, 8 under *Follow-ups not done*; none fixed, as the full gate had already run on this tree |
+| M3 B | 1 | 272bc48cbee8e8b08b48852c798bfec26d9e83a0:a0a230930461a240142697d440b9d66e64073ded | CLEAN (Verify: `mise run test-core` all ok, `notification_registers_nothing` 5 passed; `attention_notify` 11 passed; `cargo check -p micold-client --target aarch64-apple-darwin` finished; 1 MINOR fixed: cycle 12 said 8 macOS tests, there are 10) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | `desktop_notify/mod.rs`: the catch-all arm is gone, so `system()` exists for Linux, macOS and Windows only and `NotifyError::Unsupported` has no constructor | T041 asks for exactly the three arms and the constitution (VI) names three systems; the client is built for no fourth. Removing the unused variant is not an M3 task |
+| M3 | A | `desktop_notify/windows.rs`: `Toast::show` returns `Ok` on a build no shortcut registers, so nothing is logged (FR-010) | The system reports success, so the client has no failure to log; FR-031 and T044 say in the user guide that Windows shows notifications only for an installed build |
 
 ## Handover
 
-M3, PR #557 (draft, open). The pushed head is the red tree `022a6b60` plus a docs commit; the green
-commits (`9bc77d34` ledger, `ef1b1234` implementation) are local and NOT pushed: the push hook wants
-a full green gate on this tree first.
-
-Done and committed: T122, T035–T044 (all ticked). Red runs of the macOS and Windows legs are
-recorded in `tdd/cycle-log.md` (cycle 12); cycle 11 holds T037/T042. T043: clippy `-D warnings`
-passed from Linux for both `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on the green tree.
-
-Next steps, in order:
-1. Scoped gate: one was started detached on `ef1b1234`; its log was in the previous unit's
-   scratchpad and is not kept. Start `scripts/autopilot/scoped-gate.sh` again.
-2. Review A round 1 (`code-review` at `high` on `origin/main...HEAD`) and review B round 1
-   (conformance, sonnet). Neither has run. Snapshot taken for them:
-   `120011a8946d625842f17e8fab255a692ef76712:ef1b12340804d517ca494ddfc89d98e6431af8ec` (take a new
-   one if the tree changed). No visual pass: nothing visible changed on Linux.
-3. Full gate (`mise run gate`), plus the two cross-target checks again if `desktop_notify/` changed:
-   `scripts/build-lock.sh cargo clippy -p micold-client --bin micold-ai-ide --tests --target
-   aarch64-apple-darwin -- -D warnings`, and the same for `x86_64-pc-windows-msvc`.
-4. Push, replace the PR body with the milestone body (pr-and-merge.md §4; it must end `Refs #481`),
-   `gh pr ready 557`.
-5. T118: when CI's three `build + test` legs are green on the pushed head, record them (run URL,
-   the "Test (desktop notification backends)" step: macOS 10 passed, Windows 5 passed expected) in
-   `tdd/cycle-log.md` under cycle 12, tick T118, commit (docs only), push. Then return `DONE`.
-
-Notes for the next unit:
-- The disk filled during this unit (`No space left on device`); `SWEEP_ARGS='--maxsize 25GB' mise
-  run sweep` freed it, and another session then emptied `target-shared/`, so builds are cold.
-- `NotifyError::Unsupported` is no longer constructed by any backend after T041; the variant was
-  left in `features/attention.rs` (removing it is not a task of M3). `system()` has no arm for a
-  fourth operating system, by T041's wording.
-- Design choices a reviewer may ask about are written in cycle 12 of `tdd/cycle-log.md` (macOS
-  `blocking::send`, the 2 s wait on a thread of its own, authorisation asked on every `show`).
-- Quickstart §C1 and §C2 need a Mac and a Windows machine: not run; M9 records the passes.
+M3, PR #557. Reviews A and B are clean (see *Review rounds*), `mise run gate` passed at `a0a23093`,
+the green tree is pushed and the PR is ready. Left: T118. When CI's three `build + test` legs are
+green on the pushed head, record them (run URL; the "Test (desktop notification backends)" step:
+macOS 10 passed, Windows 5 passed expected) in `tdd/cycle-log.md` under cycle 12, tick T118, commit
+(docs only), push, set this section to `None.` and return `DONE`.
 
 ## Open escalation
 
@@ -139,3 +115,7 @@ None.
 - M2 review B (MINOR): US1 scenario 13 (no window open: nothing then, nothing on the next open) has no single test; it rests on U18 (first snapshot adopted) and M1's `a_change_with_no_connection_still_adds_one`. Scenario 8 (service in a container) rests on the protocol being the same; quickstart §C or a sandbox test should show it (SC-007).
 - M2 visual pass, the marks on rows A and B (examined, nothing to do): they are the existing activity badge — the dot between the row's icon and its name, drawn by `ui/sidebar.rs` with `ui/material/activity_badge.rs` (feature 010) for a session awaiting input. `visual-pass/M2/B3.png` shows it at the leading edge, not the trailing edge where M4's unread mark goes, and the M2 diff touches no file under `crates/micold-client/src/ui/`.
 - M2 cycle 10 (linux.rs U159, U160): red was not recorded (the worker died); `speckit-tdd-verify` at close should mutation-test `notify_request` and `notify_error`.
+- M3 review A (MINOR, macOS, `desktop_notify/macos.rs`): while the system's permission prompt is unanswered, every `show` leaves one detached thread parked in `request_auth()` with its banner; when the user allows, all of them send at once (a burst of banners, some for sessions no longer waiting). Fix when M6 next edits the file: a "request in flight" flag so later `show`s return `NOT_ANSWERED` without a thread, or drop a banner whose `show` timed out.
+- M3 review A (MINOR, macOS): the 2 s timeout is reported as `Refused(NOT_ANSWERED)`, which takes the run's one failure line (FR-010 says at most once) although the notification is shown once allowed; a later real failure in that run is then not logged. And a system error on the authorisation request arrives as `Ok(false)` from the crate, so it is logged as the user's refusal (an unsigned staged bundle, for example); the U168 test comment about an unsigned bundle yielding `NoBundleIdentifier` is wrong for a bundle that has a `CFBundleIdentifier`.
+- M3 review A (MINOR, Windows, not verified on a machine): only the Start-menu shortcut carries the AppUserModelID (`packaging/windows/micold-ai-ide.iss`); the desktop shortcut, the installer's launch and the process itself do not, so a pinned icon and the running window may show as two taskbar buttons. And a click on the toast has no activator, so Windows may start a second client (FR-015a allows an ordinary start; M6 adds the click). Check both in quickstart §C2 (M9) and in M6's T080.
+- M3 review A (MINOR): CI's "Test (desktop notification backends)" step selects by the substring `desktop_notify` and passes on 0 tests if the module is renamed; `notification_registers_nothing.rs::rust_comment` treats any line starting with `*` as a comment and scans only `main.rs` for argument reading; `ToastText`/`Banner` copy the title and body of `DesktopNotification` field for field, and the test `notification()` helper is pasted into three backends.
