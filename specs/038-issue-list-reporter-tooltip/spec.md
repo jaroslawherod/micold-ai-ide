@@ -51,7 +51,7 @@ The developer remembers that a colleague filed the issue but not its title. They
 
 1. **Given** the issue list has loaded, **When** the user types a reporter's login, or part of it, into the search field, **Then** the list narrows to the issues that reporter filed, alongside any issue whose number, title or label matches the same text.
 2. **Given** a row is listed because the typed text matches its reporter, **When** the row is shown, **Then** the matching part of the reporter's login is emphasised as matched text is in the title and labels.
-3. **Given** the typed text matches a row's title and its reporter, **When** the row is shown, **Then** both matches are emphasised.
+3. **Given** the typed text matches a row's title and its reporter, **When** the row is shown, **Then** both matches are emphasised: when one match falls partly in the title and partly in the reporter, both parts are emphasised; text found literally in both is marked at its leftmost occurrence, as in a title that holds it twice (the matching rule is unchanged, FR-009; ledger D11).
 4. **Given** the user types the login in a different letter case, **When** the list narrows, **Then** the reporter's issues still match.
 5. **Given** the search field is empty, **When** the user reads its hint, **Then** the hint names the reporter among the things the search covers, alongside number, title and label.
 6. **Given** the repository has more open issues than the load cap, **When** the user types a reporter's login, **Then** the request to GitHub is the same one any other typed text causes — one search for that text, with no filter by author — and the list shows that reporter's loaded issues plus any returned issue that matches by number, title, label or reporter.
