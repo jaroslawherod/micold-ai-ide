@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3: T122, T035–T038, T042, T044 done and committed (backends are `todo!()` stubs). Full gate, push, open the PR, record the red macOS and Windows runs in `tdd/cycle-log.md` (replace `RED_RUN_PLACEHOLDER`), then T039–T041, T043, reviews, full gate, push, T118.
+- **Next step**: M3: red tree pushed as draft PR #557 (T122, T035–T038, T042, T044 done; backends are `todo!()`). Record the red macOS and Windows runs in `tdd/cycle-log.md` (replace `RED_RUN_PLACEHOLDER`), then T039–T041 (patch prepared, not committed), T043, reviews A and B, full gate, push, `gh pr ready 557`, T118.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #539 | Design | merged | 6b4b6fa9afc27f134a5f4fc80048dc3f9a115a38 |
 | #544 | M1 | merged | a8d628b8a9b089033a05b1194c8fc5f5fe5b3c7c |
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
+| #557 | M3 | open (draft until green) | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | #544 | merged |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
-| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | | in progress |
+| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | in progress |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
