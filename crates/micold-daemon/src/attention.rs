@@ -24,15 +24,22 @@ impl Views {
     /// A window without keyboard focus has no session in view (FR-016), so a report that says
     /// `focused: false` is stored with `in_view: None` whatever it carried: the rule does not rest
     /// on every client keeping W1.1.
-    pub fn set_view(&mut self, client: ClientId, view: WindowView) {
+    ///
+    /// Returns the session the report brought into view (W2.2, FR-019): the one it names, unless
+    /// this connection's last report named it already.
+    pub fn set_view(&mut self, client: ClientId, view: WindowView) -> Option<SessionId> {
         let in_view = if view.focused { view.in_view } else { None };
-        self.views.insert(
-            client,
-            WindowView {
-                focused: view.focused,
-                in_view,
-            },
-        );
+        let before = self
+            .views
+            .insert(
+                client,
+                WindowView {
+                    focused: view.focused,
+                    in_view,
+                },
+            )
+            .and_then(|last| last.in_view);
+        in_view.filter(|session| before != Some(*session))
     }
 
     /// Forget `client`'s report: its connection ended.
@@ -97,6 +104,60 @@ mod tests {
         assert!(
             !views.is_in_view(a),
             "one window has one session in view: its earlier report is replaced, not kept"
+        );
+    }
+
+    /// U59 (FR-019): the report tells the service which session came into view.
+    #[test]
+    fn a_report_returns_the_session_that_came_into_view() {
+        let (a, b) = (session(1), session(2));
+        let mut views = Views::default();
+
+        assert_eq!(
+            views.set_view(FIRST_WINDOW, viewing(a)),
+            Some(a),
+            "the window's first report brings its session into view"
+        );
+        assert_eq!(
+            views.set_view(FIRST_WINDOW, viewing(b)),
+            Some(b),
+            "a report naming another session brings that one into view"
+        );
+    }
+
+    /// U60 (FR-019): a report that brings nothing into view returns nothing.
+    #[test]
+    fn a_report_naming_the_same_session_or_none_returns_nothing() {
+        let a = session(1);
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, viewing(a));
+
+        assert_eq!(
+            views.set_view(FIRST_WINDOW, viewing(a)),
+            None,
+            "the session was in this window's view already"
+        );
+        assert_eq!(
+            views.set_view(
+                FIRST_WINDOW,
+                WindowView {
+                    focused: true,
+                    in_view: None,
+                },
+            ),
+            None,
+            "a report with no session brings none into view"
+        );
+        assert_eq!(
+            views.set_view(
+                FIRST_WINDOW,
+                WindowView {
+                    focused: false,
+                    in_view: Some(a),
+                },
+            ),
+            None,
+            "a window without keyboard focus has no session in view"
         );
     }
 
