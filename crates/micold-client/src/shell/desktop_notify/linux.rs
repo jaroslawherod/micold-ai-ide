@@ -28,9 +28,11 @@ const DESKTOP_ENTRY: &str = "micold-ai-ide";
 const DEFAULT_ACTION: &str = "default";
 /// The label of that action, for a service that shows actions as buttons.
 const DEFAULT_ACTION_LABEL: &str = "Open";
-/// The two signals of the notification service this window reads.
+/// The three signals of the notification service this window reads.
 const ACTION_INVOKED: &str = "ActionInvoked";
 const NOTIFICATION_CLOSED: &str = "NotificationClosed";
+#[allow(dead_code)] // T099
+const ACTIVATION_TOKEN: &str = "ActivationToken";
 /// Every signal of the notification service's interface.
 const SIGNALS: &str = "type='signal',interface='org.freedesktop.Notifications',\
                        path='/org/freedesktop/Notifications'";
@@ -91,6 +93,10 @@ pub(super) enum Signal {
     ActionInvoked { id: u32, key: String },
     /// `NotificationClosed(id, _)`: notification `id` is gone, whatever the reason.
     NotificationClosed { id: u32 },
+    /// `ActivationToken(id, token)`: the Wayland activation token of the click on notification
+    /// `id` that an `ActionInvoked` is about to report.
+    #[allow(dead_code)] // T099
+    ActivationToken { id: u32, token: String },
 }
 
 /// The signal `message` carries, when it is one of the two this window reads.
@@ -130,6 +136,12 @@ impl Shown {
         self.by_id.contains_key(&id)
     }
 
+    /// Whether this window holds nothing: no notification, and no token of one.
+    #[cfg(test)]
+    pub(super) fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
+    }
+
     /// What `signal` means for this window: the `default` action of a notification it holds is
     /// a click on that notification's session, reported once; a closed notification is forgotten;
     /// anything else is nothing (N9).
@@ -144,6 +156,8 @@ impl Shown {
                 })
             }
             Signal::ActionInvoked { .. } => None,
+            // T099.
+            Signal::ActivationToken { .. } => None,
             Signal::NotificationClosed { id } => {
                 self.by_id.remove(&id);
                 None
@@ -470,10 +484,148 @@ mod tests {
 
     #[test]
     fn any_other_signal_and_a_signal_with_another_body_is_not_read() {
-        // U164: `ActivationToken` is read with the Wayland slice; a body of another shape is not
-        // a signal of the specification.
-        assert_eq!(signal(&message("ActivationToken", &(SHOWN, "token"))), None);
+        // U164: a signal this window does not know, and a body of another shape, are not signals
+        // of the specification.
+        assert_eq!(signal(&message("SomethingElse", &(SHOWN, "default"))), None);
         assert_eq!(signal(&message("ActionInvoked", &(SHOWN,))), None);
+        assert_eq!(signal(&message("ActivationToken", &(SHOWN,))), None);
+        assert_eq!(signal(&message("ActivationToken", &(SHOWN, 2u32))), None);
+    }
+
+    const TOKEN: &str = "gnome-shell/Micold AI IDE/2596-1-host_TIME1300";
+
+    fn token(id: u32, token: &str) -> Signal {
+        Signal::ActivationToken {
+            id,
+            token: token.to_string(),
+        }
+    }
+
+    fn activated(session: SessionId, activation: Option<&str>) -> Option<NotifierEvent> {
+        Some(NotifierEvent::Activated {
+            project: PathBuf::from("/repo"),
+            session,
+            activation: activation.map(str::to_string),
+        })
+    }
+
+    #[test]
+    fn the_activation_token_is_read_from_the_bus_message_that_carries_it() {
+        // U166: the id and the token of `ActivationToken`.
+        assert_eq!(
+            signal(&message("ActivationToken", &(SHOWN, TOKEN))),
+            Some(token(SHOWN, TOKEN))
+        );
+    }
+
+    #[test]
+    fn a_token_that_precedes_the_click_on_the_same_notification_is_carried_in_the_activation() {
+        // U166 (FR-011): the service sends the token just before `ActionInvoked`.
+        let session = SessionId::new();
+        let mut shown = shown_for(session);
+        assert_eq!(
+            shown.on_signal(token(SHOWN, TOKEN)),
+            None,
+            "the token alone is no click"
+        );
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(session, Some(TOKEN))
+        );
+    }
+
+    #[test]
+    fn a_click_with_no_token_before_it_carries_none() {
+        // U166: a service that sends no token (X11, or one that does not know the signal).
+        let session = SessionId::new();
+        let mut shown = shown_for(session);
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(session, None)
+        );
+    }
+
+    #[test]
+    fn a_token_for_another_notification_is_not_this_ones() {
+        // U166: the signals are matched by notification id.
+        let (first, second) = (SessionId::new(), SessionId::new());
+        let mut shown = shown_for(first);
+        shown.record(NOT_OURS, PathBuf::from("/repo"), second);
+        assert_eq!(shown.on_signal(token(NOT_OURS, TOKEN)), None);
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(first, None)
+        );
+        assert_eq!(
+            shown.on_signal(invoked(NOT_OURS, "default")),
+            activated(second, Some(TOKEN))
+        );
+    }
+
+    #[test]
+    fn every_signal_sent_twice_is_still_one_click_with_its_token() {
+        // U166, U162 (research R7): GNOME Shell sends each signal twice, from two bus names. In
+        // either order the click is reported once, with the token, and nothing is left behind.
+        let orders: [[fn() -> Signal; 4]; 2] = [
+            [
+                || token(SHOWN, TOKEN),
+                || token(SHOWN, TOKEN),
+                || invoked(SHOWN, "default"),
+                || invoked(SHOWN, "default"),
+            ],
+            [
+                || token(SHOWN, TOKEN),
+                || invoked(SHOWN, "default"),
+                || token(SHOWN, TOKEN),
+                || invoked(SHOWN, "default"),
+            ],
+        ];
+        for order in orders {
+            let session = SessionId::new();
+            let mut shown = shown_for(session);
+            let events: Vec<_> = order
+                .iter()
+                .filter_map(|signal| shown.on_signal(signal()))
+                .collect();
+            assert_eq!(events, Vec::from_iter(activated(session, Some(TOKEN))));
+            assert!(shown.is_empty(), "the notification and its token are gone");
+        }
+    }
+
+    #[test]
+    fn a_token_for_a_notification_the_table_does_not_hold_is_not_kept() {
+        // U166, U163 (N9): another window's notification, or the second copy of a token whose
+        // click was already reported. Kept, it would never be dropped — and it would be given to
+        // a later notification the service shows under the same id.
+        let session = SessionId::new();
+        let mut shown = Shown::default();
+        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
+        assert!(shown.is_empty(), "nothing is stored for it");
+
+        shown.record(SHOWN, PathBuf::from("/repo"), session);
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(session, None)
+        );
+    }
+
+    #[test]
+    fn a_closed_notification_drops_its_token() {
+        // U166, U165: a token is the click's, and the click did not come.
+        let session = SessionId::new();
+        let mut shown = shown_for(SessionId::new());
+        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
+        assert_eq!(
+            shown.on_signal(Signal::NotificationClosed { id: SHOWN }),
+            None
+        );
+        assert!(shown.is_empty());
+
+        shown.record(SHOWN, PathBuf::from("/repo"), session);
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(session, None)
+        );
     }
 
     #[test]
