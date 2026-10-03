@@ -12,7 +12,7 @@ use micold_client::features::attention::{raise_plan, RaiseStep};
 pub fn raise<T: Send + 'static>() -> Task<T> {
     window::latest().and_then(|id| {
         on_wayland(id).then(move |wayland| {
-            raise_plan(wayland)
+            raise_plan(wayland, None)
                 .into_iter()
                 .fold(Task::none(), |done, next| done.chain(step(id, next)))
         })
@@ -24,6 +24,8 @@ fn step<T: Send + 'static>(id: Id, step: RaiseStep) -> Task<T> {
     match step {
         RaiseStep::Unminimize => window::minimize(id, false),
         RaiseStep::Focus => window::gain_focus(id),
+        // T100.
+        RaiseStep::Activate(_) => Task::none(),
         RaiseStep::RequestAttention => {
             window::request_user_attention(id, Some(UserAttention::Informational))
         }

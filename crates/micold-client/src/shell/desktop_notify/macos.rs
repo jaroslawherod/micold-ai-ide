@@ -116,8 +116,14 @@ impl Shown {
     /// nothing (N9). Either way the notification is over, and is forgotten.
     pub(super) fn on_response(&mut self, response: &NotificationResponse) -> Option<NotifierEvent> {
         let (project, session) = self.by_id.remove(&response.notification_id)?;
-        (response.close_reason.is_none() && response.is_default_action())
-            .then_some(NotifierEvent::Activated { project, session })
+        (response.close_reason.is_none() && response.is_default_action()).then_some(
+            NotifierEvent::Activated {
+                project,
+                session,
+                // The Wayland token: there is none on macOS.
+                activation: None,
+            },
+        )
     }
 }
 
@@ -354,6 +360,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/repo"),
                 session,
+                activation: None,
             })
         );
         assert_eq!(
@@ -361,6 +368,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/other"),
                 session: other,
+                activation: None,
             })
         );
     }

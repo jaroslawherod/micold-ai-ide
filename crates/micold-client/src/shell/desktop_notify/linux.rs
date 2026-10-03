@@ -137,7 +137,11 @@ impl Shown {
         match signal {
             Signal::ActionInvoked { id, key } if key == DEFAULT_ACTION => {
                 let (project, session) = self.by_id.remove(&id)?;
-                Some(NotifierEvent::Activated { project, session })
+                Some(NotifierEvent::Activated {
+                    project,
+                    session,
+                    activation: None,
+                })
             }
             Signal::ActionInvoked { .. } => None,
             Signal::NotificationClosed { id } => {
@@ -391,6 +395,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/repo"),
                 session,
+                activation: None,
             })
         );
     }

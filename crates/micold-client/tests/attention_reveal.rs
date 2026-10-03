@@ -8,7 +8,8 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::attention::{
-    in_view, notifier_event, raise_plan, row_unread, NotifierEvent, RaiseStep,
+    after_activation, after_send, in_view, notifier_event, raise_plan, row_unread, AfterSend,
+    NotifierEvent, RaiseStep, ACTIVATION_SETTLE,
 };
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -67,6 +68,7 @@ fn an_activated_notification_yields_one_session_reveal() {
         notifier_event(NotifierEvent::Activated {
             project: PathBuf::from(OTHER),
             session,
+            activation: None,
         }),
         ClientMsg::SessionReveal {
             project: PathBuf::from(OTHER),
@@ -213,16 +215,111 @@ fn the_session_shown_by_a_reveal_is_in_view_so_its_row_is_not_unread() {
 #[test]
 fn off_wayland_the_window_is_unminimised_then_focused() {
     assert_eq!(
-        raise_plan(false),
+        raise_plan(false, None),
         vec![RaiseStep::Unminimize, RaiseStep::Focus]
     );
 }
 
-/// U137 (FR-011, FR-015, N6): on Wayland a window cannot take focus, so it asks for attention.
+/// U137, U139 (FR-011, FR-015, N6): on Wayland a window cannot take focus, so with no token it
+/// asks for attention.
 #[test]
-fn on_wayland_the_window_is_unminimised_then_asks_for_attention() {
+fn on_wayland_with_no_token_the_window_is_unminimised_then_asks_for_attention() {
     assert_eq!(
-        raise_plan(true),
+        raise_plan(true, None),
         vec![RaiseStep::Unminimize, RaiseStep::RequestAttention]
+    );
+}
+
+const TOKEN: &str = "gnome-shell/Micold AI IDE/2596-1-host_TIME1300";
+
+/// U138 (FR-011, N6): on Wayland the token of the click is what the window is activated with.
+#[test]
+fn on_wayland_with_a_token_the_window_is_unminimised_then_activated_with_it() {
+    assert_eq!(
+        raise_plan(true, Some(TOKEN.to_string())),
+        vec![
+            RaiseStep::Unminimize,
+            RaiseStep::Activate(TOKEN.to_string())
+        ]
+    );
+}
+
+/// U139 (FR-011): off Wayland the window takes focus itself, and a token changes nothing.
+#[test]
+fn off_wayland_a_token_changes_nothing() {
+    assert_eq!(
+        raise_plan(false, Some(TOKEN.to_string())),
+        raise_plan(false, None)
+    );
+}
+
+/// U140 (FR-011, FR-015): an activation that was not done falls back to asking for attention; one
+/// that was done needs nothing more.
+#[test]
+fn an_activation_that_was_not_done_asks_for_attention_and_one_that_was_asks_for_nothing() {
+    assert_eq!(after_activation(false), Some(RaiseStep::RequestAttention));
+    assert_eq!(after_activation(true), None);
+}
+
+/// U141 (FR-011, W3.4), the clicked end: the token the backend reports is the one sent to the
+/// service, and a click without a token sends none.
+#[test]
+fn the_token_of_an_activated_notification_is_put_into_the_session_reveal() {
+    let session = SessionId::new();
+    assert_eq!(
+        notifier_event(NotifierEvent::Activated {
+            project: PathBuf::from(OTHER),
+            session,
+            activation: Some(TOKEN.to_string()),
+        }),
+        ClientMsg::SessionReveal {
+            project: PathBuf::from(OTHER),
+            session,
+            activation: Some(TOKEN.to_string()),
+        }
+    );
+}
+
+/// U141 (FR-011, N6), the raised end: what the service forwards in `RevealSession` is the
+/// `activation` of the `SessionReveal` it was sent, unread, and the window that is raised gives it
+/// to `raise_plan`. Followed here from the click to the step, through the two functions the shell
+/// calls.
+#[test]
+fn the_token_of_a_reveal_is_the_one_the_window_is_activated_with() {
+    let ClientMsg::SessionReveal { activation, .. } = notifier_event(NotifierEvent::Activated {
+        project: PathBuf::from(OTHER),
+        session: SessionId::new(),
+        activation: Some(TOKEN.to_string()),
+    }) else {
+        panic!("a click is a session reveal");
+    };
+
+    assert_eq!(
+        raise_plan(true, activation).last(),
+        Some(&RaiseStep::Activate(TOKEN.to_string()))
+    );
+}
+
+/// T100 (research R7, "What done means"): a request that did not go out is not done, and the
+/// fallback is taken at once.
+#[test]
+fn an_activation_request_that_was_not_sent_falls_back_at_once() {
+    assert_eq!(
+        after_send(false),
+        AfterSend::Now(Some(RaiseStep::RequestAttention))
+    );
+}
+
+/// T100 (research R7): a compositor says nothing about a token it declines, so a request that
+/// went out is judged by the window's keyboard focus a moment later.
+#[test]
+fn an_activation_request_that_was_sent_is_judged_by_the_focus_a_moment_later() {
+    assert_eq!(
+        after_send(true),
+        AfterSend::CheckFocusAfter(ACTIVATION_SETTLE)
+    );
+    assert!(
+        (300..=500).contains(&ACTIVATION_SETTLE.as_millis()),
+        "long enough for the compositor (12 ms in the probe), short enough to be one gesture"
     );
 }
