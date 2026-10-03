@@ -167,7 +167,9 @@ impl Capabilities {
                     Arc::new(GhCli::new(gh))
                 }),
             },
-            notifier: Arc::from(crate::shell::desktop_notify::system()),
+            notifier: Arc::from(crate::shell::desktop_notify::system(
+                crate::shell::desktop_notify::events(),
+            )),
         }
     }
 
