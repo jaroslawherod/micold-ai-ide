@@ -38,9 +38,10 @@ use crate::activity::{Activity, ActivityEvent, HookKind};
 use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
+use crate::history::{self, Seed};
 use crate::idle::Presence;
 use crate::supervision::{ExitOutcome, SupervisionAction};
-use crate::supervisor::PtySession;
+use crate::supervisor::{PtySession, TEARDOWN_WAIT};
 use crate::terminal::TerminalColors;
 
 /// A per-connection client identity (ephemeral; never persisted).
@@ -206,6 +207,11 @@ struct Inner {
     /// still that size); dropped when the session is archived. Never persisted — it describes a
     /// client's window, not the session.
     sizes: HashMap<SessionId, (u16, u16)>,
+    /// The history a covered terminal's last process left, kept for the session's next start
+    /// (feature 041, data-model §6, R4). Put at every end of such a process, by [`DaemonState::carry_history`];
+    /// taken by the next start; dropped with the session in `remove_live_by_ids`. Filled whether
+    /// saving is on or off (FR-015).
+    carried: HashMap<SessionId, micold_core::terminal_history::HistorySnapshot>,
     /// Agents' destructive requests waiting for the user (feature 034, FR-014). Beside `clients`
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
@@ -490,6 +496,7 @@ impl DaemonState {
                 starting: HashMap::new(),
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
+                carried: HashMap::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
@@ -1623,15 +1630,21 @@ impl DaemonState {
     /// invariant), so the supervisor never sees the kill as a crash. Returns whether the session is
     /// known.
     pub fn stop_session(&self, session: SessionId) -> bool {
-        let (removed, owner) = {
+        let (removed, owner, covered) = {
             let mut inner = self.lock();
             let removed = inner.sessions.remove(&session);
+            let covered = Self::covered(&inner, session);
             let owner = inner.catalog.mark_session_stopped(session);
-            (removed, owner)
+            (removed, owner, covered)
         };
         if let Some(live) = &removed {
-            for proc in live.procs.values() {
-                let _ = proc.pty.kill();
+            for (key, proc) in &live.procs {
+                if covered && *key == SessionProcess::Primary {
+                    // Its history is carried to the next start, before the stop replies (R4).
+                    self.carry_history(session, &proc.pty);
+                } else {
+                    let _ = proc.pty.kill();
+                }
             }
         }
         drop(removed);
@@ -2217,6 +2230,8 @@ impl DaemonState {
             inner.sizes.remove(&id);
             // Same reasoning for how it ended (BUG-018): an archived session has no row to badge.
             inner.ended.remove(&id);
+            // And the history its last process left (feature 041, R4).
+            inner.carried.remove(&id);
         }
         removed
     }
@@ -2572,6 +2587,7 @@ impl DaemonState {
                     size,
                     &extra,
                     &self.terminal_colors,
+                    self.carried_seed(id),
                 )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
@@ -2603,8 +2619,13 @@ impl DaemonState {
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
-        // It started, so whatever was wrong before is no longer true.
-        self.lock().start_failures.remove(&id);
+        // It started, so whatever was wrong before is no longer true, and the history it was
+        // seeded with has been taken (R4).
+        {
+            let mut inner = self.lock();
+            inner.start_failures.remove(&id);
+            inner.carried.remove(&id);
+        }
         self.register_session(session);
         // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
         // will tell it: the live registry above is a separate map, and `overlay_live_summaries`
@@ -2784,7 +2805,8 @@ impl DaemonState {
         // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
         let scrollback;
         let mut changed: Vec<PathBuf> = Vec::new();
-        let mut to_drop: Vec<SessionId> = Vec::new();
+        // Each with whether its primary is a covered terminal, whose history is carried (R4).
+        let mut to_drop: Vec<(SessionId, bool)> = Vec::new();
         let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli)> = Vec::new();
         {
             let mut inner = self.lock();
@@ -2819,21 +2841,21 @@ impl DaemonState {
                         changed.push(project);
                         to_respawn.push((id, cwd, mode, provider));
                     }
-                    Some((project, SupervisionAction::GiveUp, _, _, _)) => {
+                    Some((project, SupervisionAction::GiveUp, _, mode, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
                         Self::note_ended(&mut inner, id, "crash loop");
-                        to_drop.push(id);
+                        to_drop.push((id, mode == TerminalMode::AiCli));
                     }
-                    Some((project, SupervisionAction::Stop, _, _, _)) => {
+                    Some((project, SupervisionAction::Stop, _, mode, _)) => {
                         tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
                         changed.push(project.to_path_buf());
                         Self::note_ended(&mut inner, id, "clean exit");
-                        to_drop.push(id);
+                        to_drop.push((id, mode == TerminalMode::AiCli));
                     }
                     // Session already gone from the catalog (closed concurrently) — just reap the
                     // orphaned live entry, no catalog change to broadcast.
-                    None => to_drop.push(id),
+                    None => to_drop.push((id, false)),
                 }
             }
             // Shell instances that have stopped since the last tick (`012` FR-008, BUG-003). They
@@ -2879,8 +2901,12 @@ impl DaemonState {
             }
         }
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
-        for id in to_drop {
+        for (id, covered) in to_drop {
+            let primary = if covered { self.primary_pty(id) } else { None };
             self.remove_session(id);
+            if let Some(pty) = primary {
+                self.carry_history(id, &pty);
+            }
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
         for (id, cwd, mode, provider) in to_respawn {
@@ -3160,6 +3186,36 @@ impl DaemonState {
         }
     }
 
+    /// Whether `id`'s primary is a covered terminal: the AI CLI of an `AiCli` session. Nothing else
+    /// is captured, carried or seeded (FR-014, data-model §6).
+    fn covered(inner: &Inner, id: SessionId) -> bool {
+        inner
+            .catalog
+            .workspace()
+            .find_session(id)
+            .is_some_and(|(_, session)| session.mode == TerminalMode::AiCli)
+    }
+
+    /// Data-model §6's order at the end of a covered process, once its `Arc` is out of the state:
+    /// tear it down off the state lock, so every byte it wrote has reached the `Term`, then capture
+    /// the history and carry it to the session's next start. The caller replies or spawns after.
+    fn carry_history(&self, id: SessionId, pty: &PtySession) {
+        pty.teardown(TEARDOWN_WAIT);
+        let snapshot = history::capture(&pty.term().lock());
+        self.lock().carried.insert(id, snapshot);
+    }
+
+    /// The seed for `id`'s next start: the history its last process left, when it has lines.
+    fn carried_seed(&self, id: SessionId) -> Seed {
+        match self.lock().carried.get(&id) {
+            Some(snapshot) if !snapshot.is_empty() => Seed::History {
+                snapshot: snapshot.clone(),
+                at: chrono::Local::now(),
+            },
+            _ => Seed::None,
+        }
+    }
+
     /// Respawn a session's primary process after a crash and swap it into the live registry. The
     /// session stays `Restarting { attempts }` — the policy set that, and only an explicit healthy
     /// signal clears it — so a process that dies again right away keeps advancing toward `Failed`.
@@ -3186,6 +3242,10 @@ impl DaemonState {
         let size = self.desired_size(id);
         let spawned = match mode {
             TerminalMode::AiCli => {
+                // The dead process's history first, whole, then the seed from it (R4).
+                if let Some(old) = self.primary_pty(id) {
+                    self.carry_history(id, &old);
+                }
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
@@ -3195,7 +3255,15 @@ impl DaemonState {
                 };
                 let mut extra = self.activity_launch_for(id, &mut spec);
                 extra.extend(self.tool_server_launch_for(id, &spec, true));
-                PtySession::spawn_ai_cli(id, &spec, scrollback, size, &extra, &self.terminal_colors)
+                PtySession::spawn_ai_cli(
+                    id,
+                    &spec,
+                    scrollback,
+                    size,
+                    &extra,
+                    &self.terminal_colors,
+                    self.carried_seed(id),
+                )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -3214,6 +3282,7 @@ impl DaemonState {
                 // crash-loop counter toward `Failed`. `now` is recorded as the respawn's reading:
                 // the tick resets the counter only once the process has outlived
                 // `RESTART_STABLE_AFTER` from it (`005` BUG-004).
+                self.lock().carried.remove(&id);
                 let _old = self.swap_primary(id, session, now);
             }
             Err(_) => {

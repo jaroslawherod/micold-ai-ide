@@ -39,8 +39,8 @@ a rendered screen; the rendered half is quickstart Part B (T076).
 | A6  | Two sessions with different output each show only their own history after a restart | US1-6, FR-025 | example | PENDING | T017 |
 | A7  | After the service is dropped without an unwind while a session prints, a restart restores the history up to the last save, at most 60 s old | US1-7, FR-003, SC-002 | example | PENDING | T026 |
 | A8  | After the service unwinds for the idle stop, a start shows the whole history above the separator, nothing missing | US1-8, FR-002, SC-001 | example | PENDING | T031 |
-| A9  | Stop then start in one service run shows the 200 lines, one separator, the new output, nothing missing | US1-9, FR-015, SC-011 | example | PENDING | T007 |
-| A10 | A process that exits by itself and is restarted shows its last lines above one separator and the new output below | US1-10, FR-015, FR-002 | example | PENDING | T007, T017 |
+| A9  | Stop then start in one service run shows the 200 lines, one separator, the new output, nothing missing | US1-9, FR-015, SC-011 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output` |
+| A10 | A process that exits by itself and is restarted shows its last lines above one separator and the new output below | US1-10, FR-015, FR-002 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a10_a_process_that_exits_by_itself_is_restarted_below_its_last_lines` |
 | A11 | The Terminal section of Settings holds the save-history control, on by default, with the sentence about disk and deletion | US2-1, FR-026, FR-031 | example | PENDING | T041 |
 | A12 | With the setting off, output and a service restart leave no file and the terminal starts empty with no separator | US2-2, FR-028 | example | PENDING | T040 |
 | A13 | Turning the setting off while a session prints stops every later write, with no restart | US2-3, FR-027 | example | PENDING | T040 |
@@ -121,18 +121,18 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U30 | A session with no output shows no separator after stop and start | FR-010, EC-No history | example | PENDING | T007 |
-| U31 | Two stops and starts show two separators in order | FR-011 | example | PENDING | T007 |
-| U32 | Two sessions each show only their own lines after stop and start | FR-025 | example | PENDING | T007 |
-| U33 | The fake CLI's recorded stdin is empty after a start: the separator is not sent as input | FR-009 | example | PENDING | T007 |
-| U34 | A Regular Terminal instance stopped and started has an empty history | FR-014 | example | PENDING | T007 |
-| U35 | A fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history | R13, EC-Full-screen | example | PENDING | T007 |
-| U36 | A fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history | R16, EC-Full-screen | example | PENDING | T007 |
-| U37 | A second attached client receives the same lines in its first `full` frame | EC-Several windows | example | PENDING | T007 |
-| U38 | The stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)` | FR-030, R17 | example | PENDING | T007 |
-| U133 | With a client attached and streaming, a stop keeps the last line the process printed | R4, FR-015 | example | PENDING | T007 |
-| U134 | With a client attached and streaming, a self-exit and restart keeps the last line | R4, story 1 scenario 10 | example | PENDING | T007 |
-| U135 | A fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`) | R4, FR-005 | example | PENDING | T007 |
+| U30 | A session with no output shows no separator after stop and start | FR-010, EC-No history | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u30_a_session_with_no_output_shows_no_separator_after_stop_and_start` |
+| U31 | Two stops and starts show two separators in order | FR-011 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u31_two_stops_and_starts_show_two_separators_in_order` |
+| U32 | Two sessions each show only their own lines after stop and start | FR-025 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u32_two_sessions_each_show_only_their_own_lines_after_stop_and_start` |
+| U33 | The fake CLI's recorded stdin is empty after a start: the separator is not sent as input | FR-009 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u33_the_cli_receives_nothing_on_stdin_at_a_start` |
+| U34 | A Regular Terminal instance stopped and started has an empty history | FR-014 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u34_a_regular_terminal_stopped_and_started_has_an_empty_history` |
+| U35 | A fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history | R13, EC-Full-screen | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u35_a_cli_that_erases_the_screen_at_start_leaves_the_restored_lines` |
+| U36 | A fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history | R16, EC-Full-screen | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u36_a_cli_that_uses_the_alternate_screen_leaves_the_restored_lines_in_the_primary_history` |
+| U37 | A second attached client receives the same lines in its first `full` frame | EC-Several windows | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u37_a_second_window_gets_the_same_lines_in_its_first_full_frame` |
+| U38 | The stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)` | FR-030, R17 | example | PENDING | T007 (`crates/micold-daemon/tests/history_restart_in_run.rs`: A9, A10, U133, U134 are not `cfg`-gated; red/green on the CI Windows leg) |
+| U133 | With a client attached and streaming, a stop keeps the last line the process printed | R4, FR-015 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u133_with_a_window_streaming_a_stop_keeps_the_last_line` |
+| U134 | With a client attached and streaming, a self-exit and restart keeps the last line | R4, story 1 scenario 10 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u134_with_a_window_streaming_a_self_exit_and_restart_keeps_the_last_line` |
+| U135 | A fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`) | R4, FR-005 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u135_a_detached_grandchild_does_not_hold_the_stop_and_the_output_is_carried` |
 
 ### `crates/micold-core/src/terminal_history/format.rs` (T014, T019)
 

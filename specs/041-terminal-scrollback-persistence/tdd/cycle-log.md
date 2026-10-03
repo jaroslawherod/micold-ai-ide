@@ -290,3 +290,142 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: none needed
 - notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
 - commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 27: A9 Stop then start in one service run shows the 200 lines, one separator, the new output, nothing missing
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `no line reads "line 1" in [ "new output", ]`
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 28: A10 A process that exits by itself and is restarted shows its last lines above one separator and the new output below
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::a10_a_process_that_exits_by_itself_is_restarted_below_its_last_lines` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `no line reads "before exit A" in [ "after restart", ]`
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 29: U30 A session with no output shows no separator after stop and start
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u30_a_session_with_no_output_shows_no_separator_after_stop_and_start` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> passed at once; see notes
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: passed at once against the stubs (nothing is seeded). Shown able to fail by a temporary mutation, gated by an environment variable in one build so the four mutations ran as separate runs of the same test binary and none could cause another's failure; removed before the commit: `carried_seed` also seeds an empty snapshot (`MICOLD_MUT_U30`) -> `nothing to restore, so no separator: [ "── session restarted at 2026-10-03 09:35 +02:00 ──", ]`
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 30: U31 Two stops and starts show two separators in order
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u31_two_stops_and_starts_show_two_separators_in_order` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `assertion left == right failed: [ "three", ]` / `left: 0` / `right: 2`
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 31: U32 Two sessions each show only their own lines after stop and start
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u32_two_sessions_each_show_only_their_own_lines_after_stop_and_start` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `assertion left == right failed` / `left: 0` / `right: 1` (no separator)
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 32: U33 The fake CLI's recorded stdin is empty after a start
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u33_the_cli_receives_nothing_on_stdin_at_a_start` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> passed at once; see notes
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: passed at once against the stubs. Shown able to fail by a temporary mutation, gated by an environment variable in one build so the four mutations ran as separate runs of the same test binary and none could cause another's failure; removed before the commit: `spawn_answering` also writes a separator line to the PTY writer when it has a history seed (`MICOLD_MUT_U33`) -> `only what was typed reached the process` / `left: "── session restarted at mutation ──\ndone\n"` / `right: "done\n"`
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 33: U34 A Regular Terminal instance stopped and started has an empty history
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u34_a_regular_terminal_stopped_and_started_has_an_empty_history` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> passed at once; see notes
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: the stub run failed on a test bug (the shell printed `$ MARK-42`, the wait wanted a line reading `MARK-42`); the wait was fixed, after which it passes at once against the stubs. Shown able to fail by a temporary mutation, gated by an environment variable in one build so the four mutations ran as separate runs of the same test binary and none could cause another's failure; removed before the commit: `covered` returns true for every mode and the Regular arm of `start_session` seeds after the spawn (`MICOLD_MUT_U34`) -> `nothing of the earlier shell: [ "$ echo MARK-$((40+2))", "MARK-42", "$", "── session restarted at …", …`
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 34: U35 A fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u35_a_cli_that_erases_the_screen_at_start_leaves_the_restored_lines` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `assertion left == right failed` / `left: 0` / `right: 1` (no separator)
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 35: U36 A fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u36_a_cli_that_uses_the_alternate_screen_leaves_the_restored_lines_in_the_primary_history` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `assertion left == right failed` / `left: 0` / `right: 1` (no separator)
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 36: U37 A second attached client receives the same lines in its first `full` frame
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u37_a_second_window_gets_the_same_lines_in_its_first_full_frame` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `there is history above the screen` (the two first full frames agreed, but held no history)
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 37: U133 With a client attached and streaming, a stop keeps the last line the process printed
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u133_with_a_window_streaming_a_stop_keeps_the_last_line` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `one separator: []` / `left: 0` / `right: 1`
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: also shown to depend on the teardown by a temporary mutation, gated by an environment variable in one build so the four mutations ran as separate runs of the same test binary and none could cause another's failure; removed before the commit: `carry_history` kills without `teardown` (`MICOLD_MUT_NOTEARDOWN`) -> `the last line the process printed is above the separator: [ "burst 2477", …` (3 of 3 runs red, the capture ending 500 to 1000 lines short)
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 38: U134 With a client attached and streaming, a self-exit and restart keeps the last line
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u134_with_a_window_streaming_a_self_exit_and_restart_keeps_the_last_line` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `one separator: []` / `left: 0` / `right: 1`
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: also shown to depend on the teardown by the same `MICOLD_MUT_NOTEARDOWN` mutation -> `the last line the process printed is above the separator: [ "burst 2233", …` (3 of 3 runs red)
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 39: U135 A fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`)
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::u135_a_detached_grandchild_does_not_hold_the_stop_and_the_output_is_carried` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run` (one shared run, all 13 tests written together against stubs: the `Seed` argument added to `spawn_answering`/`spawn_ai_cli` and ignored, no `carried`, no `teardown`: `test result: FAILED. 2 passed; 11 failed`)
+  -> `the stop replied within 3 s (took 3.000150378s)` / `left: Err(Timeout)` / `right: Ok(true)` (the old `Drop` joined the reader, which the grandchild kept open)
+- green: `spawn_answering` seeds the new `Term` before the reader thread starts; `PtySession::teardown(&self, wait)` (kill, close the master, wait up to `TEARDOWN_WAIT` = 2 s for `output_ended`, join; once only; `Drop` calls it; `resize` ignored after it); `Inner.carried`, filled by `carry_history` (teardown, then capture) in `stop_session`, the tick's clean exit and give-up, and `respawn_primary` before its spawn, for the primary of an `AiCli` session only; `start_session` and `respawn_primary` seed from it when it has lines and remove it after a successful spawn; `remove_live_by_ids` drops it. Same run -> 13 passed, 0 failed (three more runs of the binary: 13 passed each)
+- refactor: none needed
+- notes: assertion-level red from the stubs.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Cycle 40: U38 the stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)`
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs`: A9, A10, U133 and U134 carry no `cfg` gate, so they run on the `windows-latest` CI leg against ConPTY with the compiled stand-in (new)
+- red: not observable on this host (profile, *Additions from feature 030*). The Linux red of the same four tests is in cycles 27, 28, 37 and 38; the Windows red and green are to be recorded from the CI run of the pushed branch (run URL and log line).
+- green: pending the CI Windows leg
+- refactor: none needed
+- notes: row stays PENDING until the CI evidence is recorded here, so T007 stays unticked.
+- commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
