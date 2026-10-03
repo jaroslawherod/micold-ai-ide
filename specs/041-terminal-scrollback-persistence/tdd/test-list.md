@@ -109,12 +109,12 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U23 | Capture after `seed(Seed::History)` equals the input lines followed by the separator in the dim style | DM §6, FR-009, FR-011 | example | PENDING | T006 |
-| U24 | After seeding the screen is blank, the cursor is at home, attributes are reset and the seeded lines are all in the history | DM §6, R17, FR-008 | example | PENDING | T006 |
-| U25 | A snapshot longer than the `Term`'s history limit leaves the most recent lines, and one exactly at the limit leaves all | FR-012 | example | PENDING | T006 |
-| U26 | Seeding at a narrower width wraps, and a later capture gives the same logical lines | EC-Terminal size | example | PENDING | T006 |
-| U27 | `Seed::None` leaves the `Term` untouched | FR-010 | example | PENDING | T006 |
-| U28 | A second seed after more output keeps the first separator | FR-011 | example | PENDING | T006 |
+| U23 | Capture after `seed(Seed::History)` equals the input lines followed by the separator in the dim style | DM §6, FR-009, FR-011 | example | DONE | `crates/micold-daemon/src/history.rs::tests::capture_after_a_seed_is_the_input_lines_then_the_separator_in_the_dim_style` |
+| U24 | After seeding the screen is blank, the cursor is at home, attributes are reset and the seeded lines are all in the history | DM §6, R17, FR-008 | example | DONE | `crates/micold-daemon/src/history.rs::tests::after_a_seed_the_screen_is_blank_at_home_with_attributes_reset_and_the_lines_in_history` |
+| U25 | A snapshot longer than the `Term`'s history limit leaves the most recent lines, and one exactly at the limit leaves all | FR-012 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_snapshot_longer_than_the_history_limit_leaves_the_most_recent_lines` |
+| U26 | Seeding at a narrower width wraps, and a later capture gives the same logical lines | EC-Terminal size | example | DONE | `crates/micold-daemon/src/history.rs::tests::seeding_at_a_narrower_width_wraps_and_a_later_capture_gives_the_same_logical_lines` |
+| U27 | `Seed::None` leaves the `Term` untouched | FR-010 | example | DONE | `crates/micold-daemon/src/history.rs::tests::seed_none_leaves_the_term_untouched` |
+| U28 | A second seed after more output keeps the first separator | FR-011 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_second_seed_after_more_output_keeps_the_first_separator` |
 | U29 | `Seed::Notice` leaves exactly one line, the notice in the dim style, no separator, the cursor on the row below | DM §6, FR-017 | example | PENDING | T050 |
 
 ### In-run restart through `DaemonState` (T007, T011, T012)

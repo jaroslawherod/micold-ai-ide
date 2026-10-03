@@ -230,3 +230,63 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: none needed
 - notes: the fake was chosen as "no trimming" rather than "empty snapshot" so this test, which an empty fake would pass, has its own assertion-level red.
 - commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 21: U23 capture after `seed(Seed::History)` equals the input lines followed by the separator in the dim style
+
+- test: `crates/micold-daemon/src/history.rs::tests::capture_after_a_seed_is_the_input_lines_then_the_separator_in_the_dim_style` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed` / `left: [LogicalLine { text: "unseeded", runs: [StyleRun { chars: 8, ... }] }]` / `right: [LogicalLine { text: "plain", ...`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 22: U24 after seeding the screen is blank, the cursor is at home, attributes are reset and the seeded lines are all in the history
+
+- test: `crates/micold-daemon/src/history.rs::tests::after_a_seed_the_screen_is_blank_at_home_with_attributes_reset_and_the_lines_in_history` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed: lines and separator in history` / `left: 0` / `right: 3`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake. Attributes reset is observed by feeding `x` afterwards and capturing it in the default style, since a fresh term's blank screen and home cursor alone would pass on a no-op.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 23: U25 a snapshot longer than the `Term`'s history limit leaves the most recent lines, and one exactly at the limit leaves all
+
+- test: `crates/micold-daemon/src/history.rs::tests::a_snapshot_longer_than_the_history_limit_leaves_the_most_recent_lines` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed: exactly at the limit` / `left: [LogicalLine { text: "unseeded", ... }]` / `right: [LogicalLine { text: "line0", ...`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake. Decided: "exactly at the limit" means the seeded rows (lines plus separator) fill the history exactly, so `limit - 1` lines all stay; the separator takes one history row.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 24: U26 seeding at a narrower width wraps, and a later capture gives the same logical lines
+
+- test: `crates/micold-daemon/src/history.rs::tests::seeding_at_a_narrower_width_wraps_and_a_later_capture_gives_the_same_logical_lines` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed: the lines wrapped` / `left: 0` / `right: 6`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 25: U27 `Seed::None` leaves the `Term` untouched
+
+- test: `crates/micold-daemon/src/history.rs::tests::seed_none_leaves_the_term_untouched` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed` / `left: HistorySnapshot { lines: [... LogicalLine { text: "lastunseeded", ...` / `right: HistorySnapshot { lines: [... LogicalLine { text: "last", ...`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: the fake writes whatever it is given, so this test, which a no-op fake would pass, has its own assertion-level red.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
+
+## Cycle 26: U28 a second seed after more output keeps the first separator
+
+- test: `crates/micold-daemon/src/history.rs::tests::a_second_seed_after_more_output_keeps_the_first_separator` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U23 to U28 written together against a fake `seed` that writes `unseeded` at the cursor whatever it is given: `test result: FAILED. 9 passed; 6 failed` (the 9 passing are U14 to U22))
+  -> `assertion `left == right` failed` / `left: [LogicalLine { text: "unseeded", ... }]` / `right: [LogicalLine { text: "earlier", ... }, LogicalLine { text: "── session restarted at 2026-10-02 14:31 +02:00 ──", ...`
+- green: `seed` returns on `Seed::None`; for `Seed::History` it keeps the last `limit + screen rows` lines, writes each run through `Handler::terminal_attribute` (reset, colours, flags via `FLAG_ATTRIBUTES`) and `input`, then reset, `carriage_return`, `linefeed`; then the `separator_line` for `at` formatted `%Y-%m-%d %H:%M %:z` in the dim style the same way; then `clear_screen(ClearMode::All)` and `goto(0, 0)`. Shared run -> 15 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): seed a terminal with its earlier history and the separator (U23-U28)`
