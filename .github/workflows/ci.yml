@@ -319,6 +319,7 @@ jobs:
             --test popover_displacement \
             --test attention_notify \
             --test attention_view_report \
+            --test unread_rows \
             --test features_attention \
             --test features_connection \
             --test features_help \
