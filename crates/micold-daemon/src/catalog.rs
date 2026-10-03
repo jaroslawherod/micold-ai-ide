@@ -159,6 +159,7 @@ impl Catalog {
             tool_server_enabled: self.settings.tool_server_enabled,
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
+            desktop_notifications: self.settings.desktop_notifications,
         }
     }
 
@@ -300,6 +301,7 @@ impl Catalog {
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
+                on_disk.desktop_notifications = self.settings.desktop_notifications;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -393,6 +395,19 @@ impl Catalog {
     /// service only holds the switch for the clients; it reads no pull request itself.
     pub fn set_pr_status_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.pr_status_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Whether a session that needs attention raises a desktop notification (feature 039,
+    /// FR-026). Read on every claim and every attention event, so a change applies to sessions
+    /// already running (FR-027).
+    pub fn desktop_notifications(&self) -> bool {
+        self.settings.desktop_notifications
+    }
+
+    /// Turn desktop notifications on or off, persisting atomically (feature 039, FR-026).
+    pub fn set_desktop_notifications(&mut self, on: bool) -> io::Result<()> {
+        self.settings.desktop_notifications = on;
         self.persist_service_settings()
     }
 
