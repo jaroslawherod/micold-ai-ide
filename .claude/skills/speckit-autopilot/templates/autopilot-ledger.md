@@ -1,14 +1,15 @@
-# Autopilot ledger — <NNN>-<slug> [BUG-<k>]
+# Autopilot ledger — #<issue> <slug> [BUG-<k>]
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
 
-- **Input**: <the user's original prompt, verbatim>
-- **Kind**: feature | bug | quick
-- **Issue**: <#n, or none>
+- **Input**: <the user's original prompt, verbatim; then `labels: <those read at entry>`>
+- **Kind**: bug | bugfix | feature | chore
+- **Effort**: high | low | default
+- **Issue**: #<n>
 - **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
-- **Phase**: 1-spec | 2-clarify | 3-design | 4-milestones | 5-close | done (set in the run's last PR)
+- **Phase**: <the unit at work: spec, clarify, plan, tasks, milestones, close, bug, bugfix, chore> | done (set in the run's last PR)
 - **Next step**: <the one concrete action a resumed session takes first>
 
 ## Pull requests

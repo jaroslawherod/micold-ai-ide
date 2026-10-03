@@ -1,6 +1,6 @@
 ---
 name: autopilot-reviewer
-description: A fresh-context reviewer of a speckit-autopilot artifact or diff. Dispatched by an autopilot unit with the prompt parts review-rubrics.md lists. It reads and runs checks; it cannot edit.
+description: A fresh-context reviewer of a speckit-autopilot artifact or diff. Dispatched by an autopilot unit with the prompt parts tasks/review.md lists. It reads and runs checks; it cannot edit.
 disallowedTools: Edit, Write, NotebookEdit, Agent, Artifact, ArtifactComments, ArtifactData, AskUserQuestion, Workflow, ScheduleWakeup, SendFeedback, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, CronCreate, CronDelete, CronList, RemoteTrigger, DesignSync, PushNotification
 ---
 

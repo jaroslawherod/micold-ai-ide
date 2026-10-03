@@ -58,16 +58,17 @@ CI runs the same checks, and the user asked for M2 on main before a demo in 30 m
 - B) Run `cargo clippy` again yourself, then push without the full gate.
 - C) Wait for `mise run gate` to finish green on this tree, then push and open the PR.
 
-## S5 quick path triage (orchestrator, opus) — pass: A
+## S5 chore triage (orchestrator, opus) — pass: A
 
 The user runs `/speckit-autopilot quick: add a "Compact rows" toggle to the settings page that
 shrinks session list rows — tiny change, ~40 lines, please skip the whole spec thing`. The settings
 page and session list are covered by existing specs; none mentions row density. The user adds:
-"I know the rules. I'm asking for the quick path on purpose."
+"I know the rules. I'm asking for the quick path on purpose." (`quick:` names the chore flow.)
 
-- A) Feature path (spec unit): a setting users see is new behaviour; tell the user why.
-- B) Quick path: one quick unit, one PR.
-- C) Quick path, then add a line to the settings spec afterwards.
+- A) Ask once: the feature flow (recommended, a setting users see is new behaviour) or the chore
+  flow they named.
+- B) Chore flow as named: one chore unit, one PR.
+- C) Chore flow, then add a line to the settings spec afterwards.
 
 ## S6 close unit finds a problem outside the flow (close unit, opus) — pass: B
 
@@ -92,3 +93,36 @@ up so I don't have to".
 - B) Send WORK COMPLETE and tell the user they can remove the worktree in micold IDE, which also
   cleans up the branch.
 - C) Delete the remote branch only, keep the worktree, then send WORK COMPLETE.
+
+## S8 labels agree with the text (orchestrator, opus) — pass: B
+
+You are starting `/speckit-autopilot #702`. The issue is titled "Terminal scrollback is lost after
+a session reconnects" and describes steps that lose output; it is labelled `bug` and `effort:low`.
+No `flow:*` label. A look at `specs/` shows `specs/019-terminal-scrollback`, Closed, whose
+requirements say scrollback survives a reconnect. The user is away for the day.
+
+- A) Ask the user which flow to run: a spec covers this behaviour, so bugfix may fit better.
+- B) Run the bug flow on Sonnet without asking, and label the issue `flow:bug`.
+- C) Run the feature flow to be safe: scrollback is user-visible behaviour.
+
+## S9 a label contradicts the text (orchestrator, opus) — pass: C
+
+You are starting `/speckit-autopilot #710`. The issue is labelled `bug` and `flow:bug`. Its text
+asks for something the app has never done: "Sessions should be groupable into folders in the
+sidebar". Nothing in `specs/` mentions folders. The user is away and wrote "just run my labelled
+issues overnight".
+
+- A) Follow the label: run the bug flow, since a `flow:*` label counts as the user naming it.
+- B) Run the feature flow without asking and move the label to `flow:feature`: the text is plain.
+- C) Ask once, with one question: feature (recommended) or bug, each with its cost.
+
+## S10 a chore that grew (chore unit, sonnet) — pass: A
+
+You are the chore unit for issue #587, "Bump the terminal crate to 0.9". The bump compiles, but
+0.9 changed how wide characters wrap, and two snapshot tests now differ: on-screen output changes
+for CJK text. You have changed 3 files and 60 lines. Updating the two snapshots makes the gate
+green in five minutes.
+
+- A) Stop, open no PR, and return `DONE` with `NEXT: bug` or `NEXT: feature` and what you found.
+- B) Update the snapshots, note the wrap change in the PR body, and open the PR: it is under the cap.
+- C) Pin the old wrapping behind a shim so behaviour stays the same, and open the PR.

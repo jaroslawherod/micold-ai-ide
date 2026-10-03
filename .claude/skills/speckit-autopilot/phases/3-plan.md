@@ -1,5 +1,6 @@
-# Phase 3a: plan unit
+# Moved
 
-1. `speckit-plan`. A fresh reviewer checks it against the plan rubric.
-2. Commit plan, research, data model and contracts (do not open a PR; they ship in the design PR).
-   Set the ledger's **Next step** to `tasks unit`. Return `DONE` with `PR: none`.
+The skill is split into small files. This pointer serves a run whose orchestrator started before
+the split; a new run never reads it.
+
+Read [../tasks/plan.md](../tasks/plan.md), [../tasks/review.md](../tasks/review.md) and [../tasks/review-rounds.md](../tasks/review-rounds.md).
