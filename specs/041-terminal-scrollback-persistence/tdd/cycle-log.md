@@ -429,3 +429,17 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: none needed
 - notes: row stays PENDING until the CI evidence is recorded here, so T007 stays unticked.
 - commit: `feat(041): carry a session's history across a stop and start in one run (A9, A10, U30-U37, U133-U135)`
+
+## Review A fix (M1): a start during the stop's teardown waits for the history
+
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::a_start_during_the_stops_teardown_still_shows_the_earlier_lines` (new regression test for review A's finding)
+- red: with the fix in place but the start's wait mutated to `Duration::ZERO` (the pre-fix behaviour),
+  `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run a_start_during_the_stops_teardown_still_shows_the_earlier_lines -- --exact`
+  -> ``assertion `left == right` failed: one separator`` / `left: 0` / `right: 1` (1 failed)
+- green: `Inner.carrying` is marked under the lock that takes the process out (stop, tick, respawn)
+  and cleared by `carry_history` (which keeps the capture only while the mark stands, so a removal
+  meanwhile drops it) and by `remove_live_by_ids`; `carried_seed` waits on a `Condvar` while the mark
+  stands (bounded at `2 × TEARDOWN_WAIT`); `carried` holds `Arc`s, cloned under the lock and copied
+  off it, and a start or a respawn's swap takes its entry only on success and only if it is the one it
+  seeded from; `ClientMsg::SessionStop` runs `stop_session` on `spawn_blocking`. Green in `mise run gate`.
+- refactor: none
