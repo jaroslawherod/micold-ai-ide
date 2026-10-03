@@ -52,8 +52,14 @@ pub(super) fn on_activated(
     session: SessionId,
 ) -> impl Fn(Option<String>) -> tauri_winrt_notification::Result<()> + Send + 'static {
     move |argument| {
-        let _ = (&events, &project, session, argument, None::<NotifierEvent>);
-        todo!("T087")
+        if argument.is_none() {
+            // The window is gone when nobody receives.
+            let _ = events.unbounded_send(NotifierEvent::Activated {
+                project: project.clone(),
+                session,
+            });
+        }
+        Ok(())
     }
 }
 

@@ -94,8 +94,7 @@ pub(super) fn outcome(delivered: Option<Result<(), NotifyError>>) -> Result<(), 
 /// the system, so that the user's answer does not release a burst of banners, some of them for
 /// sessions that no longer wait.
 pub(super) fn prompt_is_open(unanswered_for: Option<Duration>) -> bool {
-    let _ = unanswered_for;
-    todo!("T086")
+    unanswered_for.is_some_and(|waited| waited >= ANSWER_WAIT)
 }
 
 /// The notifications this window raised that can still be clicked: the request identifier of
@@ -116,8 +115,9 @@ impl Shown {
     /// session; a dismissal, a timeout, another action, or a notification it does not hold is
     /// nothing (N9). Either way the notification is over, and is forgotten.
     pub(super) fn on_response(&mut self, response: &NotificationResponse) -> Option<NotifierEvent> {
-        let _ = response;
-        todo!("T086")
+        let (project, session) = self.by_id.remove(&response.notification_id)?;
+        (response.close_reason.is_none() && response.is_default_action())
+            .then_some(NotifierEvent::Activated { project, session })
     }
 }
 
