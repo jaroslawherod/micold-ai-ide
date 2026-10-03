@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M7)
-- **Next step**: M7: the full gate was green at `3c368dda` and PR #561 is open; wait on CI and merge. Then M8 (wire number 27).
+- **Phase**: 4-milestone (M8)
+- **Next step**: M8: the prep series is on the branch (wire number 27, tasks ticked, cycles 38–45). Next: scoped gate with review A, then review B and quickstart §B12 as the visual pass, the full gate, the PR.
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
 | #559 | M5 | merged | 57f14c7278e2bdd95edcb1855a050d2f3abc5164 |
 | #560 | M6 | merged | 9bab6e4afd57dbcf1f0873268edb7ede700bb07a |
-| #561 | M7 | open | |
+| #561 | M7 | merged | 7cbb6c7625d8bd870d57acad0b63b2ccbd972282 |
 
 ## Milestones
 
@@ -35,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | merged |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | merged |
-| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | #561 | in progress |
-| M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
+| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | #561 | merged |
+| M8 | T101–T112, T121 | full | The Desktop notifications switch | | in progress |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
 
 ## Decisions
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D26 | M6 | How does the macOS backend learn of a click (T086), given that `mac-usernotifications` 0.3.1 polls the notification centre every 500 ms for each buttonless notification whose response is awaited? | The thread that delivers a notification sends it with the async `Notification::send()` under the crate's `block_on` (not `send_blocking`, which fails with `MainThreadNotRunning` whenever the main run loop is busy) and then awaits `handle.response()`. Each notification carries `.timeout(1 hour)`: with a timeout the crate races the delegate against one timer and does not poll. The cost: after one hour the crate removes the notification from the notification centre, and a click is possible only until then; one parked thread per notification not yet answered. Rejected: no timeout (two XPC calls a second per notification, for as long as it stays in the centre); a button (changes the banner and registers a dismiss category that the crate says relaunches the bundle); `block_on_main` (the main thread is winit's; the crate's docs say a GUI app's run loop delivers the delegate's callbacks without it). `Shown::on_response` is the pure rule (default action of a held id, no close reason). Also here: `prompt_is_open` — while a request for authorisation has been unanswered for 2 s, `show` starts no thread and hands over no banner (the M3 review A follow-up). Unverified without a Mac: that the response arrives while winit runs the main loop, and the one-hour removal; check in quickstart §C1 (M9). | agent-resolved | `mac-usernotifications` 0.3.1 `src/send.rs:91-128`, `src/delegate.rs`, `src/lib.rs:56-90` |
 | D27 | M6 | How does the Windows backend report a click (T087)? | Each toast gets its own `on_activated` handler, built by the function `on_activated(events, project, session)`: called with `None` (the toast itself, no button argument) it sends `NotifierEvent::Activated` for its session and returns `Ok`; with an argument it sends nothing. The handler is the id table of T080 ("keyed per toast"), so there is no map. Unverified on a machine: whether the handler still fires after `Toast::show` has dropped the toast object, and for a toast in the notification centre (research R4); check in quickstart §C2 (M9). | agent-resolved | `tauri-winrt-notification` 0.8.1 `src/lib.rs:485`, `:751` |
 | D28 | M6 | Review A round 1 F2 and F3: how does a click open a session of a background project without starting another session, and what happens when the folder has gone since the last scan? | `State::reveal_session` makes the revealed session the project's remembered foreground (`foreground_by_project`) before it returns `Reopened`, so the ordinary switch restores and starts that session and no other (FR-014); `Selected` still follows, as N5 says, and is then a repeat. The `RevealSession` arm scans the folders before `resolve_reveal`, as the switch does, so a folder that has gone gives the notice (FR-013). Left: a folder that goes between the scan and the switch (two tasks apart) still gets `Selected` in the project that stayed active. Rejected: dropping `Selected` after `Reopened` (changes N5, T077 and U132 for no gain in the ordinary case); a new message that selects only after an accepted switch (a new root message for a window of microseconds). Contract N5 amended. | agent-resolved | `shell/workspace.rs` `on_known_project_reopened`; `features/session.rs` `explain_foreground`; cycle 32 |
+| D29 | M8 | `Views::granted` is memory-only: is an event made while the switch was off notified after a service restart and the switch turned on? | It was, at the service: a restarted service granted the claim. Fixed test-first: a change of the switch from off to on uses up every session's current `attention_seq`. `granted` stays memory-only, as the data model says; saving on while on uses up nothing | autopilot | cycle 45; `settings_desktop_notifications.rs::an_event_made_while_off_is_not_granted_after_a_restart_and_the_switch_turned_on` red `left: [(…0b, 1)] right: []`, then 10 passed |
+| D30 | M8 | The prep's deviations from tasks.md | Kept: T105's tests are in `crates/micold-client/tests/features_settings.rs` and `src/main_tests.rs`, beside the `tool_server_enabled` tests the task points at (`src/features/settings.rs` holds no tests); the two wire round-trip tests had no assertion red, the `schema_hash` anchor test carries U17's red; T112 also corrects `docs/user-guide/worktrees-and-sessions.md`, which said the app has no switch. No `cfg` arm of shipped code changed (only the test's `idle_process`, copied from `unread_state.rs`), so no macOS cross-check | autopilot | cycles 38–44; `git diff origin/main...HEAD` |
 
 ## Review rounds
 
@@ -166,3 +168,5 @@ None.
 - M7 C4 pass: the client logs nothing for a click on a notification, a raise or an attention request; the pass had to read `WAYLAND_DEBUG`. A line at `info` for each would make the next pass and a user's report readable.
 - M7 C4 pass, not observed: B11 through the banner (it had expired; the list was clicked); a project switch on reveal; whether the mark cleared before the popup closed; a release build. Raise and focus were observed for a window behind another application's window (M6's open point, on Wayland only); un-minimise was not, and neither was X11 with a window manager.
 - M7, to tell the user: M7 took wire number 26 (`PROTOCOL_VERSION` 26). The M8 prep branch `feat/notify-session-needs-attention-m8-prep` must move its number to 27.
+- M7 CI, a flaky test outside this flow: PR #561's first CI run failed on `micold-daemon --test frame_coalescing`, `a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval` (`frame_coalescing.rs:146: only 1 frame(s) — nothing was streamed`); a rerun passed. Spec 037's ledger records the same test as flaky.
+- M8: the prep branch `feat/notify-session-needs-attention-m8-prep` (`d31bcd1e`) and its worktree `agent-a6dc2c475e86cc149` are taken over by cherry-pick into M8; they can be removed once M8 merges. This unit did not touch them.

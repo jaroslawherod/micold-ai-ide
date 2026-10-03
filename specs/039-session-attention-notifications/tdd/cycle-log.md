@@ -1250,3 +1250,17 @@ after the gate.
 
 No `cfg(target_os)` arm was changed, so no macOS or Windows cross-check was run. The new
 integration test carries the `cfg(windows)` arm of `idle_process` that `unread_state.rs` has.
+
+## Cycle 45 — M8: a restart between the event and switching on (FR-027; no new behavior id)
+
+- tests: `crates/micold-daemon/tests/settings_desktop_notifications.rs::an_event_made_while_off_is_not_granted_after_a_restart_and_the_switch_turned_on`,
+  `::saving_the_switch_as_on_while_it_is_on_leaves_a_waiting_event_to_be_granted` (the guard: only
+  a change from off to on uses events up)
+- red (`scripts/build-lock.sh cargo test -p micold-daemon --test settings_desktop_notifications`,
+  working tree on `09bf76f4`): `9 passed; 1 failed`; the restart test panicked at its claim with
+  `left: [(SessionId(…0b), 1)]`, `right: []`: `Views::granted` is memory-only, so the restarted
+  service granted the event made while the switch was off. The guard test passed, as written.
+- green: `DaemonState::set_desktop_notifications` on a change from off to on notes every session's
+  current `attention_seq` as granted (`Catalog::attention_seqs`, `Views::note_event(.., false)`);
+  same command, `10 passed; 0 failed`.
+- refactor: none.

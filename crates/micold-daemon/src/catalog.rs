@@ -671,6 +671,16 @@ impl Catalog {
             .map(|(_project, session)| session.attention_seq)
     }
 
+    /// Every session's attention sequence now (feature 039, W4.2).
+    pub fn attention_seqs(&self) -> Vec<(SessionId, u64)> {
+        self.workspace
+            .sessions
+            .values()
+            .flatten()
+            .map(|session| (session.id, session.attention_seq))
+            .collect()
+    }
+
     /// Count one attention event for session `id` (feature 039, FR-001), in memory only. Returns
     /// whether a session was found.
     ///

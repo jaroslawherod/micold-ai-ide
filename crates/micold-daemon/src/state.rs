@@ -1489,7 +1489,16 @@ impl DaemonState {
     pub fn set_desktop_notifications(&self, on: bool) -> std::io::Result<()> {
         let settings = {
             let mut inner = self.lock();
+            let was_on = inner.catalog.desktop_notifications();
             inner.catalog.set_desktop_notifications(on)?;
+            if on && !was_on {
+                // What was granted is kept in memory only, so a service restarted while the
+                // switch was off no longer knows which events were made while off. Turning it on
+                // uses up every event made so far: none is notified after the fact (FR-027).
+                for (session, seq) in inner.catalog.attention_seqs() {
+                    inner.views.note_event(session, seq, false);
+                }
+            }
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
