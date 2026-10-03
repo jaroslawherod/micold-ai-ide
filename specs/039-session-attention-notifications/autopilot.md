@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M4)
-- **Next step**: the orchestrator waits for CI on #558 and merges it; then M5 (T062–T072, T119). M5 reads D23 first.
+- **Phase**: 4-milestone (M5)
+- **Next step**: M5 in progress: implement T062–T072, T119, then gate, reviews, PR.
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #544 | M1 | merged | a8d628b8a9b089033a05b1194c8fc5f5fe5b3c7c |
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
 | #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
-| #558 | M4 | open, ready; `mise run gate` green locally | |
+| #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | #544 | merged |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
-| M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | PR open, all tasks done |
-| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
+| M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
+| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | in progress |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
