@@ -87,7 +87,9 @@
 /// And 22 → 23 for feature 039's `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted`: a
 /// window claims an attention event and the service grants each one once. An older peer would
 /// fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 23;
+/// And 23 → 24 for feature 039's `SessionSummary::unread` (contract W2): every session carries
+/// whether it is unread. An older peer would fail to decode it.
+pub const PROTOCOL_VERSION: u32 = 24;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
