@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3: gate, reviews A and B, visual pass §B4, then open the M3 PR.
+- **Next step**: M3 PR open: wait for CI and merge.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
-| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | in progress |
+| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | PR open |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
@@ -65,6 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 code A | 2 (scoped, counted) | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN. `mise run gate` green on this tree (GATE_EXIT=0; `picker_highlight_into_view` 5 passed) |
 | M2 code B | 1 | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN, 1 MINOR (F1 cycle-log SHAs from before the rebase: fixed, 069165fa and f824aa41). Verify: `picker_highlight_into_view` 5 passed. Visual pass §B3: PASS, light and dark, 18 `evidence/b3-*.png`, `evidence/README.md` |
 | M3 code A | 1 | c0cc58c7860cc3f164084cb953097f5f204934eb:(working tree, uncommitted) | CLEAN of BLOCKER/MAJOR; 9 MINOR. Fixed: F6 stale `Debug` comment, F8 U38 source scan now whitespace-free, F9 guide line rewrapped. Declined: F1, F2, F3, F4, F5 (below). F7 (U45 `contains`) kept: deliberate, see cycle 13 |
+| M3 code B | 1 | 1dafffb1c39def022c573ad13c2671938e12a09f:615b5092fbf31d47c587d2ba3769867c431f51ee | CLEAN, 1 MINOR (F1 spec.md US2 scenario 3 did not state D11: amended in 0f2ef310). Verify: `github_issue_lines` 12 passed, `issue_picker_rows` 5 passed, `issue_source_state` 43 passed. `mise run gate` GATE_EXIT=0 at 615b5092 |
+| M3 visual pass | 1 | 615b5092 | PASS §B4, light and dark: hint, `bagtoad` narrows with the login emphasised, `BAGTOAD` alike, `JomeFavourite` finds #6413 beyond the 1,000 with the login emphasised; 8 `evidence/b4-*.png`, `evidence/README.md`. Noted: GitHub's text search does not return #3065 for its author's bare login (FR-013, as designed) |
 
 ## Declined review findings
 

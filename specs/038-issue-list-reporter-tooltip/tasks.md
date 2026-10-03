@@ -152,7 +152,7 @@ the reporter; the hint says so. No request is added or changed.
 - [X] T028 [US2] [U13] [U16] [U17] [U18] [U19] [U20] [U21] [U37] [U45] [U46] [U47] [U48] In `crates/micold-core/src/github.rs`: add the reporter to the match text built for `row_text()` and map the reporter part to the start of the details line in `Issue::emphasis` (T024, T025, T027).
 - [X] T029 [US2] [U38] In `crates/micold-client/src/ui/worktree_form.rs`: change the issue picker's placeholder to `"Search by number, title, label or reporter"` (T026).
 - [X] T030 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue" and § "Searching beyond the 1,000 loaded issues": the search also matches the reporter's login; beyond the loaded issues a reporter is found only when GitHub's search for the typed text returns the issue, as for a label (FR-031, FR-013).
-- [ ] T031 [US2] [A10] [A11] [A12] [A13] [A14] [A15] Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; run quickstart §B4 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [X] T031 [US2] [A10] [A11] [A12] [A13] [A14] [A15] Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; run quickstart §B4 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: US1 and US2 work; `mise run gate` passes.
 
