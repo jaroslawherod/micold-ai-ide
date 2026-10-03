@@ -1,0 +1,4 @@
+NOTIFY id=1 app='Micold AI IDE' summary='B is waiting for input' body='P — Default' actions=[] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+NOTIFY id=2 app='Micold AI IDE' summary='A is waiting for input' body='P — Default' actions=[] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+NOTIFY id=3 app='Micold AI IDE' summary='A is waiting for input' body='P — Default' actions=[] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+NOTIFY id=4 app='Micold AI IDE' summary='C is waiting for input' body='Q — Default' actions=[] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1

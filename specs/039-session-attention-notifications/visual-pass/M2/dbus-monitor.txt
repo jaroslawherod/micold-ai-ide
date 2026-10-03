@@ -1,0 +1,110 @@
+signal time=1791039274.881153 sender=org.freedesktop.DBus -> destination=:1.0 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.0"
+signal time=1791039274.881187 sender=org.freedesktop.DBus -> destination=:1.0 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.0"
+method call time=1791039418.233309 sender=:1.268 -> destination=org.freedesktop.Notifications serial=512 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "B is waiting for input"
+   string "P — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039441.515603 sender=:1.268 -> destination=org.freedesktop.Notifications serial=603 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "A is waiting for input"
+   string "P — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039464.488396 sender=:1.268 -> destination=org.freedesktop.Notifications serial=676 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "A is waiting for input"
+   string "P — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039478.341440 sender=:1.268 -> destination=org.freedesktop.Notifications serial=733 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "C is waiting for input"
+   string "Q — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039497.433458 sender=:1.268 -> destination=org.freedesktop.Notifications serial=810 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "B is waiting for input"
+   string "P — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039517.835592 sender=:1.268 -> destination=org.freedesktop.Notifications serial=893 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "C is waiting for input"
+   string "Q — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791039521.869929 sender=:1.268 -> destination=org.freedesktop.Notifications serial=910 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "B is waiting for input"
+   string "P — Default"
+   array [
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+signal time=1791039531.718469 sender=(null sender) -> destination=(null destination) serial=0 path=/org/freedesktop/DBus/Local; interface=org.freedesktop.DBus.Local; member=Disconnected

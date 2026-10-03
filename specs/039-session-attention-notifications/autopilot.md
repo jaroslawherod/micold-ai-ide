@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M2)
-- **Next step**: M2 implementation (T017–T034).
+- **Next step**: M2 PR open; orchestrator waits on CI and merges.
 
 ## Pull requests
 
@@ -73,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 1 | 30250d1fa843ee6a0f1a5ec2a9e9db134f181889:dd87f613dd0b54de6d7f8c0ffbcfefeb47e8f433 | CLEAN (Verify: attention_events 12 passed, attention_view_report 5, features_attention 5, test-core exit 0; 3 MINOR: docs/daemon.md version clause fixed; untested tick write and lock held across the write: follow-ups) |
 | M2 A | 1 | ce1de609a41f19b0cd16bd454170c54169714416:c0366f52d42b99fc05804fbf4476d12c07623760 | CHANGES: 2 MAJOR (F1 `Notifier::show` blocks the window's update thread on D-Bus with no timeout; F2 the body is sent unescaped to servers that read it as markup), 3 MINOR (F3 a dead bus connection is kept; F4 `Views::granted` is never pruned; F5 the notification re-implements the sidebar's worktree naming) |
 | M2 A | 2 | b335b552c718e80437c9096936e32a92acbc77ca:8f5886349019ae746877ee10aef897c156812511 | CLEAN (1 MINOR: `Notifier::connection` holds its mutex across the connect and handshake, which `method_timeout` does not cover: follow-up) |
+| M2 B | 1 | f2083e379371594a8e7ba931a1e28f92f7331c6b:267c3ab777d9ca024030b57b56b0fa65e7348d53 | CLEAN (Verify: attention_claims 5 passed, attention_notify 11 passed; the first reviewer ran only Verify, so a second read the diff file by file on the same snapshot; 1 MINOR: US1.8 (container) and US1.13 (no window open) have no M2 test of their own — 13 rests on U18 and M1's count, 8 on the visual pass and §C: follow-up) |
+| M2 visual | 1 | same tree | PASS: quickstart §B1–B5 and B13, notification part, on a private bus with a stand-in `org.freedesktop.Notifications` service (no dunst or mako installed); evidence in `visual-pass/M2/` |
 
 ## Declined review findings
 
@@ -81,7 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Cycle 10 committed, branch rebased onto origin/main (claim/grant now protocol 23, since feature 040 took 22), macOS check green. Review A round 1 fixes committed (6b216c52: F1–F4; F5 left as a follow-up). Review A round 2 clean; gate green on 267c3ab7's tree (code unchanged since 6b216c52). Review B round 1 (snapshot f2083e379371594a8e7ba931a1e28f92f7331c6b:267c3ab777d9ca024030b57b56b0fa65e7348d53) and the visual pass were dispatched together; if this unit died before recording them, dispatch both again. Next: review B and the visual pass (quickstart §B1–B5, B13 notification part), then the PR (`Refs #481`).
+None.
 
 ## Open escalation
 
@@ -100,3 +102,6 @@ None.
 - `crates/micold-daemon/tests/mcp_create_session.rs::a_pi_session_start_event_makes_pi_ready` failed once in a full-suite run on a docs-only branch (`left: ""`, line 600) and passed when rerun alone: a timing flake in code this flow does not own. Not fixed here.
 - M2 review A F5 (MINOR): `State::attention_notification` (`app.rs`) re-implements the sidebar's worktree naming (the literal `Default`, `worktree_names` then `naming::display_name`) instead of sharing a helper with `worktree_display_name` and the sidebar; a change to either will not reach the notification.
 - M2 review A round 2 (MINOR): `Notifier::connection` (`shell/desktop_notify/linux.rs`) holds its mutex across `Builder::build`, and `method_timeout` does not cover the connect or handshake; a session bus that accepts the socket and never answers stalls every queued notification on a blocking-pool thread. Build outside the lock, or bound the connect.
+- M2 review B (MINOR): US1 scenario 13 (no window open: nothing then, nothing on the next open) has no single test; it rests on U18 (first snapshot adopted) and M1's `a_change_with_no_connection_still_adds_one`. Scenario 8 (service in a container) rests on the protocol being the same; quickstart §C or a sandbox test should show it (SC-007).
+- M2 visual pass: its screenshots showed marks on A and B's rows although the unread mark ships in M4; not examined. Look at `visual-pass/M2/B3.png` when M4 starts.
+- M2 cycle 10 (linux.rs U159, U160): red was not recorded (the worker died); `speckit-tdd-verify` at close should mutation-test `notify_request` and `notify_error`.
