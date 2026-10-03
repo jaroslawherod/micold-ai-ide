@@ -67,18 +67,18 @@ fn row_text_shows_labels_only_when_present() {
     let page = parse_list_page(&fixture("list_page.json")).unwrap();
     assert_eq!(
         page.issues[0].row_text(),
-        "#42 Crash when opening empty project  ·  bug, good first issue",
-        "number, title, then the labels after a separator"
+        "#42 Crash when opening empty project  ·  ghost  ·  bug, good first issue",
+        "number, title, the reporter (ghost without an author), then the labels (038 FR-009)"
     );
     assert_eq!(
         page.issues[1].row_text(),
-        "#7 Document the settings file",
-        "no separator when the issue has no labels"
+        "#7 Document the settings file  ·  ghost",
+        "no labels separator when the issue has no labels"
     );
     let built = Issue::new(5, "Title".into(), vec!["docs".into()], "t".into());
     assert_eq!(
         built.row_text(),
-        "#5 Title  ·  docs",
+        "#5 Title  ·  ghost  ·  docs",
         "an issue built in code writes the same row"
     );
 }

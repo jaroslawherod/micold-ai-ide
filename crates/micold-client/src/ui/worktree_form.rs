@@ -311,6 +311,9 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
     col.into()
 }
 
+/// The issue search field's hint: what the search covers (034 FR-005, 038 FR-011).
+pub const ISSUE_SEARCH_PLACEHOLDER: &str = "Search by number, title, label or reporter";
+
 /// The issue picker's rows and the position of the picked one (feature 038, FR-006).
 ///
 /// The one place a row is built, for every issue the form holds: the listing's, then the ones a
@@ -377,7 +380,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
                     |a0| Message::WorktreeForm(FormMsg::IssueQueryChanged(a0)),
                     r,
                 )
-                .placeholder("Search by number, title or label")
+                .placeholder(ISSUE_SEARCH_PLACEHOLDER)
                 .label("Issue")
                 .open(form.issue_list_open)
                 .highlighted(form.issue_highlight)

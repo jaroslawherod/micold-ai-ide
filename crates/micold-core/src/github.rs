@@ -372,25 +372,32 @@ impl Issue {
     /// An issue reported by [`GHOST_LOGIN`], with its match text derived once, here. The reporter
     /// is set with [`Issue::reported_by`].
     pub fn new(number: u64, title: String, labels: Vec<String>, updated_at: String) -> Issue {
-        let mut row_text = format!("#{number} {title}");
-        if !labels.is_empty() {
-            row_text.push_str(PART_SEPARATOR);
-            row_text.push_str(&labels.join(", "));
-        }
-        Issue {
+        let mut issue = Issue {
             number,
             title,
             labels,
             updated_at,
             reporter: GHOST_LOGIN.to_string(),
-            row_text,
-        }
+            row_text: String::new(),
+        };
+        issue.row_text = issue.match_text();
+        issue
     }
 
     /// The same issue, reported by `login`. An empty login is no author: [`GHOST_LOGIN`].
     pub fn reported_by(mut self, login: &str) -> Issue {
         self.reporter = if login.is_empty() { GHOST_LOGIN } else { login }.to_string();
+        self.row_text = self.match_text();
         self
+    }
+
+    /// The match text from the fields: the title line, then the details line after the separator.
+    fn match_text(&self) -> String {
+        format!(
+            "{}{PART_SEPARATOR}{}",
+            self.title_line(),
+            self.details_line()
+        )
     }
 
     /// The issue number; the ticket is its decimal text (FR-009).
@@ -418,9 +425,10 @@ impl Issue {
         &self.reporter
     }
 
-    /// The match text, what the picker ranks: `#<number> <title>`, plus `  ·  <l1>, <l2>` when
-    /// labelled (034 research R12). A row shows [`Issue::title_line`] and [`Issue::details_line`]
-    /// instead (038 data-model §4).
+    /// The match text, what the picker ranks: `#<number> <title>  ·  <reporter>`, plus
+    /// `  ·  <l1>, <l2>` when labelled (034 research R12, 038 FR-009). A row shows
+    /// [`Issue::title_line`] and [`Issue::details_line`] instead (038 data-model §4). The
+    /// description is never in it (038 FR-014).
     pub fn row_text(&self) -> &str {
         &self.row_text
     }
@@ -441,21 +449,32 @@ impl Issue {
         line
     }
 
-    /// The parts of the match text, in its order. The separators between them belong to no part.
+    /// The parts of the match text, in its order: the title line, then the details line. The
+    /// separators between them belong to no part, nor does the one inside the details line.
     fn parts(&self) -> Vec<Part> {
         let title_len = self.title_line().len();
-        let mut parts = vec![Part {
-            line: Line::Title,
-            in_row: 0,
-            in_line: 0,
-            len: title_len,
-        }];
+        let details_at = title_len + PART_SEPARATOR.len();
+        let mut parts = vec![
+            Part {
+                line: Line::Title,
+                in_row: 0,
+                in_line: 0,
+                len: title_len,
+            },
+            Part {
+                line: Line::Details,
+                in_row: details_at,
+                in_line: 0,
+                len: self.reporter.len(),
+            },
+        ];
         if !self.labels.is_empty() {
+            let labels_in_line = self.reporter.len() + PART_SEPARATOR.len();
             parts.push(Part {
                 line: Line::Details,
-                in_row: title_len + PART_SEPARATOR.len(),
-                in_line: self.reporter.len() + PART_SEPARATOR.len(),
-                len: self.row_text.len() - title_len - PART_SEPARATOR.len(),
+                in_row: details_at + labels_in_line,
+                in_line: labels_in_line,
+                len: self.row_text.len() - details_at - labels_in_line,
             });
         }
         parts
@@ -528,7 +547,7 @@ const REDACTED: &str = "<redacted>";
 
 /// Hand-written, so that the reporter is never printed: a `{:?}` in a log line or a panic message
 /// shows which issue, not who reported it (038 FR-025). The match text is left out for the same
-/// reason; it repeats the number, the title and the labels.
+/// reason: from 038 M3 it holds the reporter too.
 impl fmt::Debug for Issue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Issue")
