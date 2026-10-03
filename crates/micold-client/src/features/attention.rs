@@ -13,7 +13,7 @@
 //!
 //! A click on a notification comes back from the backend as a [`NotifierEvent`]. The window sends
 //! it to the service ([`notifier_event`]), which picks the window that shows the session (research
-//! R6); that window is raised ([`raise_plan`], then [`after_send`] and [`after_activation`] for a
+//! R6); that window is raised ([`raise_plan`], then [`after_send`] and [`ActivationWatch`] for a
 //! Wayland activation) and does what [`reveal_steps`] says (N5, N6).
 //!
 //! # No vocabulary
@@ -139,42 +139,62 @@ pub fn raise_plan(wayland: bool, activation: Option<String>) -> Vec<RaiseStep> {
 /// falls back to asking for the user's attention (FR-015).
 ///
 /// A compositor tells the window nothing about a token it declines (research R7). So an
-/// activation is done only when the request went out ([`after_send`]) **and** the window has
-/// keyboard focus [`ACTIVATION_SETTLE`] later.
+/// activation is done only when the request went out ([`after_send`]) **and**, [`ACTIVATION_SETTLE`]
+/// later, [`activation_done`] says so of the window's keyboard focus.
 pub fn after_activation(done: bool) -> Option<RaiseStep> {
     (!done).then_some(RaiseStep::RequestAttention)
 }
 
-/// Whether an activation request that went out was honoured (research R7).
+/// Whether an activation request that went out was honoured (research R7): the window gained
+/// keyboard focus since the request was sent, or the last focus event it has seen since launch
+/// (`last_focus`, `None` when there was none) is a gain — it had the focus when the click came, and
+/// then no event follows. A window that has seen no focus event is not known to be focused.
 pub fn activation_done(gained_since_send: bool, last_focus: Option<bool>) -> bool {
-    gained_since_send || last_focus != Some(false)
+    gained_since_send || last_focus == Some(true)
 }
 
 /// What the window has seen of its keyboard focus, and the one activation request it is waiting
-/// to judge.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// to judge. The shell records the facts here and takes the step [`settled`](Self::settled) gives.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ActivationWatch {
-    focused: bool,
+    /// The last focus event seen since launch: `None` until the first one.
+    last_focus: Option<bool>,
+    /// The request whose wait is running, if any.
+    pending: Option<PendingCheck>,
 }
 
-impl Default for ActivationWatch {
-    fn default() -> Self {
-        Self { focused: true }
-    }
+/// An activation request that went out and is not judged yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingCheck {
+    /// The number the shell gave the request.
+    check: u64,
+    /// Whether the window gained keyboard focus since the request was sent.
+    gained: bool,
 }
 
 impl ActivationWatch {
     /// The window gained or lost keyboard focus.
     pub fn focus_changed(&mut self, focused: bool) {
-        self.focused = focused;
+        self.last_focus = Some(focused);
+        if let (true, Some(pending)) = (focused, self.pending.as_mut()) {
+            pending.gained = true;
+        }
     }
 
-    /// The activation request numbered `check` went out.
-    pub fn sent(&mut self, _check: u64) {}
+    /// The activation request numbered `check` went out. It replaces a request that is still
+    /// waiting: there is one pending check, the latest.
+    pub fn sent(&mut self, check: u64) {
+        self.pending = Some(PendingCheck {
+            check,
+            gained: false,
+        });
+    }
 
-    /// The wait for the request numbered `check` is over: the step to take, if any.
-    pub fn settled(&mut self, _check: u64) -> Option<RaiseStep> {
-        after_activation(self.focused)
+    /// The wait for the request numbered `check` is over: the step [`after_activation`] gives
+    /// for it, if any. A request that was replaced, or judged already, gives none.
+    pub fn settled(&mut self, check: u64) -> Option<RaiseStep> {
+        let pending = self.pending.take_if(|pending| pending.check == check)?;
+        after_activation(activation_done(pending.gained, self.last_focus))
     }
 }
 
@@ -185,11 +205,11 @@ pub const ACTIVATION_SETTLE: Duration = Duration::from_millis(400);
 /// What the window does once it has tried to send an activation request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AfterSend {
-    /// The request went out: look at the window's keyboard focus after this long, and take the
-    /// step [`after_activation`] gives for it.
+    /// The request went out: after this long, take the step [`ActivationWatch::settled`] gives
+    /// for it. The wait holds up nothing else the window does.
     CheckFocusAfter(Duration),
-    /// The request did not go out: take this step, if any, at once.
-    Now(Option<RaiseStep>),
+    /// The request did not go out: take this step at once.
+    Now(RaiseStep),
 }
 
 /// What follows the attempt to send an activation request, given whether it was `sent`. One that
@@ -198,7 +218,7 @@ pub fn after_send(sent: bool) -> AfterSend {
     if sent {
         AfterSend::CheckFocusAfter(ACTIVATION_SETTLE)
     } else {
-        AfterSend::Now(after_activation(false))
+        AfterSend::Now(RaiseStep::RequestAttention)
     }
 }
 

@@ -348,6 +348,7 @@ fn boot() -> (App, Task<Message>) {
             scrollback_lines,
             dismissing: None,
             window_focused: true,
+            activation: Default::default(),
             last_grid: None,
             env_include_enabled,
             env_include_script_path,

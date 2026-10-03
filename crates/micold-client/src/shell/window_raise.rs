@@ -2,58 +2,121 @@
 //!
 //! Which steps are taken is decided by `features::attention`: `raise_plan` for the plan,
 //! `after_send` for what follows the attempt to send a Wayland activation request, and
-//! `after_activation` for what follows once the window's focus is known. This module asks the
+//! `ActivationWatch` for what follows once the window's focus is known. This module asks the
 //! facts those need — whether the window is a Wayland surface, whether the request went out — and
 //! turns each step into its one `iced::window` task. It decides nothing.
 //!
 //! A compositor says nothing about an activation token it declines (research R7). So a request
-//! that went out is followed, `ACTIVATION_SETTLE` later, by `ConnectionMsg::ActivationSettled`;
-//! the shell answers it with [`settled`] and the window's keyboard focus at that moment.
+//! that went out ends the raise with `ConnectionMsg::ActivationSent`, and what the caller chained
+//! after the raise follows at once. The shell answers that message with [`settle_after`], a wait
+//! of `ACTIVATION_SETTLE` that runs beside everything else and ends in
+//! `ConnectionMsg::ActivationSettled`, which the shell answers with [`settled`].
+//!
+//! The messages are a feature's and cannot name a window, so a request is known by a number, and
+//! [`Activation`] keeps the window each number was sent for.
+//!
+//! Each activation request makes a `wl_registry` on the application's display, and `wl_registry`
+//! has no destructor request: one registry object per click on a notification stays on the
+//! compositor until the application exits.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use iced::window::{self, Id, UserAttention};
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::attention::{
-    after_activation, after_send, raise_plan, AfterSend, RaiseStep,
+    after_send, raise_plan, ActivationWatch, AfterSend, RaiseStep,
 };
 use micold_client::features::connection::Msg as ConnectionMsg;
 
+/// The window's activation requests: what the feature judges them by, and the window each was
+/// sent for.
+#[derive(Debug, Default)]
+pub struct Activation {
+    /// The focus events seen and the one pending check (`features::attention`).
+    pub watch: ActivationWatch,
+    /// Written by the raise's task when a request goes out, read when its wait is over.
+    sent: Arc<Mutex<Sent>>,
+}
+
+/// The requests that went out and whose wait is not over.
+#[derive(Debug, Default)]
+struct Sent {
+    /// The number of the last request.
+    last: u64,
+    /// The window each request was sent for.
+    windows: HashMap<u64, Id>,
+}
+
+impl Sent {
+    /// A request went out for `window`: its number.
+    fn record(&mut self, window: Id) -> u64 {
+        self.last += 1;
+        self.windows.insert(self.last, window);
+        self.last
+    }
+}
+
 /// Bring the window to the front, by the steps of [`raise_plan`], in order. `activation` is the
-/// Wayland activation token of the click that asked for it, when there was one.
-pub fn raise(activation: Option<String>) -> Task<Message> {
+/// Wayland activation token of the click that asked for it, when there was one. The task ends
+/// when the last request is sent: it does not wait for the compositor.
+pub fn raise(activation: Option<String>, requests: &Activation) -> Task<Message> {
+    let sent = Arc::clone(&requests.sent);
     window::latest().and_then(move |id| {
         let activation = activation.clone();
+        let sent = Arc::clone(&sent);
         on_wayland(id).then(move |wayland| {
             raise_plan(wayland, activation.clone())
                 .into_iter()
-                .fold(Task::none(), |done, next| done.chain(step(id, next)))
+                .fold(Task::none(), |done, next| {
+                    done.chain(step(id, next, Arc::clone(&sent)))
+                })
         })
     })
 }
 
-/// The wait after an activation request is over: `focused` is whether the window has keyboard
-/// focus now. Takes the step [`after_activation`] gives for it, if any.
-pub fn settled(focused: bool) -> Task<Message> {
-    match after_activation(focused) {
-        Some(next) => window::latest().and_then(move |id| step(id, next.clone())),
-        None => Task::none(),
+/// The wait that follows the activation request numbered `check`.
+pub fn settle_after(check: u64, wait: Duration) -> Task<Message> {
+    Task::perform(async move { tokio::time::sleep(wait).await }, move |()| {
+        Message::Connection(ConnectionMsg::ActivationSettled { check })
+    })
+}
+
+/// The wait after the activation request numbered `check` is over. Takes the step
+/// [`ActivationWatch::settled`] gives for it, if any, on the window the request was sent for.
+pub fn settled(requests: &mut Activation, check: u64) -> Task<Message> {
+    let window = requests
+        .sent
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .windows
+        .remove(&check);
+    match (requests.watch.settled(check), window) {
+        (Some(next), Some(id)) => step(id, next, Arc::clone(&requests.sent)),
+        _ => Task::none(),
     }
 }
 
 /// The task of `step`.
-fn step(id: Id, step: RaiseStep) -> Task<Message> {
+fn step(id: Id, step: RaiseStep, sent: Arc<Mutex<Sent>>) -> Task<Message> {
     match step {
         RaiseStep::Unminimize => window::minimize(id, false),
         RaiseStep::Focus => window::gain_focus(id),
         RaiseStep::Activate(token) => {
-            send_activation(id, token).then(move |sent| match after_send(sent) {
+            send_activation(id, token).then(move |went_out| match after_send(went_out) {
                 AfterSend::CheckFocusAfter(wait) => {
-                    Task::perform(async move { tokio::time::sleep(wait).await }, |()| {
-                        Message::Connection(ConnectionMsg::ActivationSettled)
-                    })
+                    let check = sent
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .record(id);
+                    Task::done(Message::Connection(ConnectionMsg::ActivationSent {
+                        check,
+                        wait,
+                    }))
                 }
-                AfterSend::Now(Some(next)) => self::step(id, next),
-                AfterSend::Now(None) => Task::none(),
+                AfterSend::Now(next) => self::step(id, next, Arc::clone(&sent)),
             })
         }
         RaiseStep::RequestAttention => {

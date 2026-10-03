@@ -133,7 +133,8 @@ struct Entry {
 /// window's notification, or one raised before this window started.
 ///
 /// A token lives in its notification's entry and nowhere else, so it goes when the entry goes — at
-/// the click or at the close — and a token for an id this window does not hold is not kept.
+/// the click or at the close — or when another action of the notification is invoked, and a token
+/// for an id this window does not hold is not kept.
 #[derive(Debug, Default)]
 pub(super) struct Shown {
     by_id: HashMap<u32, Entry>,
@@ -167,7 +168,8 @@ impl Shown {
     /// What `signal` means for this window: the `default` action of a notification it holds is
     /// a click on that notification's session, reported once, with the activation token that
     /// preceded it when one did; a closed notification is forgotten, and its token with it;
-    /// anything else is nothing (N9).
+    /// another action is no click, and takes the token that preceded it; anything else is nothing
+    /// (N9).
     ///
     /// GNOME Shell sends every signal twice, from two bus names (research R7). The click removes
     /// the entry, so the second `ActionInvoked` finds nothing, and so does a second token that
@@ -186,7 +188,14 @@ impl Shown {
                     activation,
                 })
             }
-            Signal::ActionInvoked { .. } => None,
+            // Another action of the notification: the token was that click's, and is not the
+            // token of a later click on the body.
+            Signal::ActionInvoked { id, .. } => {
+                if let Some(entry) = self.by_id.get_mut(&id) {
+                    entry.activation = None;
+                }
+                None
+            }
             Signal::ActivationToken { id, token } => {
                 if let Some(entry) = self.by_id.get_mut(&id) {
                     entry.activation = Some(token);

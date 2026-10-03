@@ -306,7 +306,7 @@ fn the_token_of_a_reveal_is_the_one_the_window_is_activated_with() {
 fn an_activation_request_that_was_not_sent_falls_back_at_once() {
     assert_eq!(
         after_send(false),
-        AfterSend::Now(Some(RaiseStep::RequestAttention))
+        AfterSend::Now(RaiseStep::RequestAttention)
     );
 }
 

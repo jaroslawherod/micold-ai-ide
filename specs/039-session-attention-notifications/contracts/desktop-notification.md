@@ -53,6 +53,8 @@ pub enum RaiseStep { Unminimize, Focus, Activate(String), RequestAttention }
 
 pub fn raise_plan(wayland: bool, activation: Option<String>) -> Vec<RaiseStep>;
 pub fn after_activation(done: bool) -> Option<RaiseStep>;
+pub fn activation_done(gained_since_send: bool, last_focus: Option<bool>) -> bool;
+pub struct ActivationWatch; // focus_changed(bool), sent(check), settled(check) -> Option<RaiseStep>
 ```
 
 | Input | Steps |
@@ -61,9 +63,14 @@ pub fn after_activation(done: bool) -> Option<RaiseStep>;
 | Wayland, a token | `Unminimize`, `Activate(token)` |
 | Wayland, no token | `Unminimize`, `RequestAttention` |
 | `after_activation(false)`: no `xdg_activation_v1`, or the binding failed | `RequestAttention` |
+| `activation_done`: a focus gain since the request was sent, or the last focus event seen since launch is a gain (`None`, no event yet, is not) | nothing more; otherwise `RequestAttention` |
+| `ActivationWatch`: a second `sent` while a check is pending replaces it | one `settled` gives a step, the other `None` |
 
 `shell/window_raise.rs` turns each step into its one `iced::window` task or its one Wayland
-request. It decides nothing.
+request. It decides nothing. A request that went out ends the raise with
+`ConnectionMsg::ActivationSent { check, wait }`, so `Reopened` and `Selected` follow at once; the
+shell records the send, waits beside them, and answers `ConnectionMsg::ActivationSettled { check }`
+with the step `ActivationWatch::settled(check)` gives, on the window that request was sent for.
 
 ## Backends
 
