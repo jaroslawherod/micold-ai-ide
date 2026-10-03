@@ -155,6 +155,21 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0"];
 /// than from the shape.
 const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/2/0/0/0/0"];
 
+/// A **Settings page** taller than the viewport it scrolls in (feature 039, T111).
+///
+/// A fourth site of the same mechanism, kept apart from the three above for the reason they are
+/// kept apart from each other. `settings_view.rs` has put every page in a `Scrollable` since
+/// feature 027, "what makes a long section usable"; until feature 039 no covered state held a page
+/// that outgrew it at the recorded window size, so nothing fired.
+///
+/// It arrived with the **Desktop notifications** row of `settings-view-environment`: the
+/// Environment page fitted at 1280x800 without the row, and with it overhangs its viewport by
+/// 20.2dp, so its last control is reached by scrolling.
+///
+/// `the_recorded_settings_overflow_is_the_environment_page` proves the attribution by showing
+/// another page at the same path, which comes clean.
+const SETTINGS_PAGE_CONTENT: &[&str] = &["0/0/0/1/0/1/0/0"];
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(child_path: &str) -> Option<&'static str> {
     if CLIP_REVEALED.contains(&child_path) {
@@ -165,6 +180,8 @@ fn clips_deliberately(child_path: &str) -> Option<&'static str> {
         Some("PICKER_LIST_CONTENT")
     } else if TAB_STRIP_CONTENT.contains(&child_path) {
         Some("TAB_STRIP_CONTENT")
+    } else if SETTINGS_PAGE_CONTENT.contains(&child_path) {
+        Some("SETTINGS_PAGE_CONTENT")
     } else {
         None
     }
@@ -202,6 +219,7 @@ fn no_layout_node_escapes_its_parent() {
         .iter()
         .chain(SCROLL_CONTENT)
         .chain(PICKER_LIST_CONTENT)
+        .chain(SETTINGS_PAGE_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -444,6 +462,65 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
             !few.contains(&path.to_string()),
             "{path} escapes its parent with only three worktrees, so the overhang is not the list \
              outgrowing its viewport and the attribution recorded in SCROLL_CONTENT is wrong"
+        );
+    }
+}
+
+/// The recorded Settings overflow is the Environment page outgrowing its scroll viewport.
+///
+/// The sidebar's argument, with the input a Settings page has: which page is shown. The Appearance
+/// page is one control and fits; the Environment page, with the Desktop notifications row, does
+/// not. Nothing else differs between the two resolutions, so the node at the exempted path is the
+/// page, and its overhang is the page's height.
+#[test]
+fn the_recorded_settings_overflow_is_the_environment_page() {
+    use micold_client::features::settings::{SettingsDraft, SettingsSection};
+
+    let escaping_nodes = |section: SettingsSection| -> Vec<String> {
+        let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
+        workspace.active = workspace.projects.first().map(|p| p.path.clone());
+        let mut state = micold_client::app::State {
+            workspace,
+            ..micold_client::app::State::default()
+        };
+        state.settings.settings_draft = Some(SettingsDraft {
+            section,
+            ..SettingsDraft::default()
+        });
+
+        let element = micold_client::ui::view(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
+        );
+
+        let renderer = lay::renderer();
+        lay::escapes(&lay::resolve(element, &renderer), TOLERANCE)
+            .into_iter()
+            .map(|e| e.child_path)
+            .collect()
+    };
+
+    let short = escaping_nodes(SettingsSection::Appearance);
+    let long = escaping_nodes(SettingsSection::Environment);
+
+    for path in SETTINGS_PAGE_CONTENT {
+        assert!(
+            long.contains(&path.to_string()),
+            "{path} is exempted as a Settings page's scroll content, and the Environment page does \
+             not lay it outside its viewport. Either it is not the page's node, or the page fits \
+             again: then delete the exemption"
+        );
+        assert!(
+            !short.contains(&path.to_string()),
+            "{path} escapes its parent with the Appearance page shown, which fits, so the overhang \
+             is not a page outgrowing its viewport and the attribution in SETTINGS_PAGE_CONTENT is \
+             wrong"
         );
     }
 }
