@@ -308,7 +308,8 @@ fn sample_summary() -> SessionSummary {
         live_shells: vec![ShellInstanceId(1), ShellInstanceId(7)],
         // Non-zero, as above: a field that never encoded would read back as `0` (feature 039).
         attention_seq: 5,
-        unread: false,
+        // `true`, for the same reason: a field that never encoded would read back as `false`.
+        unread: true,
     }
 }
 

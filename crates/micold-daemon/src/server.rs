@@ -443,6 +443,9 @@ async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
 
     let worker = Arc::clone(state);
     let (marked, dropped) = tokio::task::spawn_blocking(move || {
+        // Feature 039, FR-008a: an `unread` set or cleared since the last supervisor tick is written
+        // before the stop, so a session read just before it is not unread again after a restart.
+        worker.persist_attention();
         let marked = worker.mark_live_sessions_interrupted(); // step 3
         let dropped = worker.take_live_sessions(); // step 4
         (marked, dropped)
