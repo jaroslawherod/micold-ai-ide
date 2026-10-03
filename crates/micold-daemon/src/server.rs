@@ -1000,6 +1000,7 @@ where
                 tool_server_enabled,
                 cross_session_access,
                 pr_status_enabled,
+                desktop_notifications,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -1037,6 +1038,10 @@ where
                 })
                 .and_then(|()| match pr_status_enabled {
                     Some(on) => state.set_pr_status_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match desktop_notifications {
+                    Some(on) => state.set_desktop_notifications(on),
                     None => Ok(()),
                 });
                 match result {

@@ -1187,14 +1187,16 @@ impl DaemonState {
 
     /// Answer window `id`'s claim of attention event `seq` of `session` (feature 039, W1.4): send
     /// it `AttentionGranted` when no window has claimed that event before, and nothing otherwise.
-    /// An unknown session, or a sequence the session has not reached, is not answered.
+    /// An unknown session, or a sequence the session has not reached, is not answered. Nor is any
+    /// claim while the **Desktop notifications** setting is off (W4.2, FR-027).
     pub fn claim_attention(&self, id: ClientId, session: SessionId, seq: u64) {
         let granted = {
             let mut inner = self.lock();
             let Some(current) = inner.catalog.attention_seq(session) else {
                 return;
             };
-            inner.views.grant(session, seq, current)
+            let enabled = inner.catalog.desktop_notifications();
+            inner.views.grant(session, seq, current, enabled)
         };
         if granted {
             self.send(id, DaemonMsg::AttentionGranted { session, seq });
@@ -1475,6 +1477,19 @@ impl DaemonState {
         let settings = {
             let mut inner = self.lock();
             inner.catalog.set_pr_status_enabled(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Turn desktop notifications on or off (feature 039, FR-026, W4.1). Pushes `SettingsChanged`
+    /// to every client. It applies to the next claim, from any window, with nothing restarted
+    /// (FR-027); unread state is not touched (FR-017).
+    pub fn set_desktop_notifications(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_desktop_notifications(on)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
@@ -2927,6 +2942,13 @@ impl DaemonState {
             && inner.catalog.mark_attention(session)
         {
             inner.attention_unsaved = true;
+            // While desktop notifications are off the event is used up here, so that no window
+            // is granted it after they are turned on (W4.2, FR-027). `unread` was set above
+            // either way (FR-017).
+            if let Some(seq) = inner.catalog.attention_seq(session) {
+                let enabled = inner.catalog.desktop_notifications();
+                inner.views.note_event(session, seq, enabled);
+            }
         }
         changed
     }

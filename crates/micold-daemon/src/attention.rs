@@ -85,12 +85,28 @@ impl Views {
 
     /// Whether the claim of `seq` for `session` is granted (W1.4, FR-006a): only when `seq` is
     /// above every sequence already granted for the session and not above `current_seq`.
-    pub fn grant(&mut self, session: SessionId, seq: u64, current_seq: u64) -> bool {
-        if seq > current_seq || seq <= self.granted.get(&session).copied().unwrap_or(0) {
+    ///
+    /// `enabled` is the **Desktop notifications** setting (W4.2, FR-027): while it is off nothing
+    /// is granted, and the refusal records nothing.
+    pub fn grant(&mut self, session: SessionId, seq: u64, current_seq: u64, enabled: bool) -> bool {
+        if !enabled || seq > current_seq || seq <= self.granted.get(&session).copied().unwrap_or(0)
+        {
             return false;
         }
         self.granted.insert(session, seq);
         true
+    }
+
+    /// Note attention event `seq` of `session` (W4.2, FR-027). While the **Desktop notifications**
+    /// setting is off (`enabled: false`) the event is recorded as granted, so that no window can
+    /// claim it after the setting is turned on, also not one that reconnects. While it is on,
+    /// nothing is recorded: the event waits for its claim.
+    pub fn note_event(&mut self, session: SessionId, seq: u64, enabled: bool) {
+        if enabled {
+            return;
+        }
+        let granted = self.granted.entry(session).or_insert(0);
+        *granted = (*granted).max(seq);
     }
 }
 
@@ -256,15 +272,18 @@ mod tests {
     #[test]
     fn the_first_claim_of_a_sequence_is_granted() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1));
+        assert!(views.grant(session(1), 1, 1, true));
     }
 
     /// U55 (FR-006a): the same sequence is not granted twice.
     #[test]
     fn the_same_sequence_is_not_granted_again() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1));
-        assert!(!views.grant(session(1), 1, 1), "a second claim of 1 loses");
+        assert!(views.grant(session(1), 1, 1, true));
+        assert!(
+            !views.grant(session(1), 1, 1, true),
+            "a second claim of 1 loses"
+        );
     }
 
     /// U56 (FR-001): a sequence above the session's current one is not granted, and does not
@@ -272,9 +291,9 @@ mod tests {
     #[test]
     fn a_sequence_above_the_current_one_is_not_granted() {
         let mut views = Views::default();
-        assert!(!views.grant(session(1), 2, 1));
+        assert!(!views.grant(session(1), 2, 1, true));
         assert!(
-            views.grant(session(1), 1, 1),
+            views.grant(session(1), 1, 1, true),
             "the refused claim left the session's sequence 1 ungranted"
         );
     }
@@ -283,10 +302,10 @@ mod tests {
     #[test]
     fn a_later_sequence_of_the_same_session_is_granted() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 2));
-        assert!(views.grant(session(1), 2, 2));
+        assert!(views.grant(session(1), 1, 2, true));
+        assert!(views.grant(session(1), 2, 2, true));
         assert!(
-            !views.grant(session(1), 1, 2),
+            !views.grant(session(1), 1, 2, true),
             "an earlier sequence stays used"
         );
     }
@@ -295,8 +314,8 @@ mod tests {
     #[test]
     fn a_grant_for_one_session_does_not_use_up_another_s() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1));
-        assert!(views.grant(session(2), 1, 1));
+        assert!(views.grant(session(1), 1, 1, true));
+        assert!(views.grant(session(2), 1, 1, true));
     }
 
     /// Review A F4: a removed session's grant is forgotten, so nothing is kept for a session
@@ -304,18 +323,74 @@ mod tests {
     #[test]
     fn after_a_session_is_forgotten_the_same_sequence_is_granted_again() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1));
-        assert!(views.grant(session(2), 1, 1));
+        assert!(views.grant(session(1), 1, 1, true));
+        assert!(views.grant(session(2), 1, 1, true));
 
         views.forget_session(session(1));
 
         assert!(
-            views.grant(session(1), 1, 1),
+            views.grant(session(1), 1, 1, true),
             "nothing is remembered of the forgotten session"
         );
         assert!(
-            !views.grant(session(2), 1, 1),
+            !views.grant(session(2), 1, 1, true),
             "another session's grant stands"
+        );
+    }
+
+    /// U66 (FR-027): with the setting off a claim is refused, and the refusal records nothing.
+    #[test]
+    fn with_the_setting_off_a_claim_is_refused_and_records_nothing() {
+        let mut views = Views::default();
+        assert!(
+            !views.grant(session(1), 1, 1, false),
+            "nothing is granted while desktop notifications are off"
+        );
+        assert!(
+            views.grant(session(1), 1, 1, true),
+            "the refused claim did not use the sequence up"
+        );
+    }
+
+    /// U67 (FR-027, US4-5): an event noted while the setting is off is never granted afterwards.
+    #[test]
+    fn an_event_noted_with_the_setting_off_is_not_granted_later() {
+        let mut views = Views::default();
+        views.note_event(session(1), 1, false);
+        assert!(
+            !views.grant(session(1), 1, 1, true),
+            "the event happened while desktop notifications were off"
+        );
+        assert!(
+            views.grant(session(1), 2, 2, true),
+            "the next event of the same session is granted"
+        );
+        assert!(
+            views.grant(session(2), 1, 1, true),
+            "another session's event is not used up"
+        );
+    }
+
+    /// U67: noting an earlier sequence does not bring a later one, already granted, back.
+    #[test]
+    fn noting_an_earlier_event_does_not_lower_what_was_granted() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 2, 2, true));
+        views.note_event(session(1), 1, false);
+        assert!(
+            !views.grant(session(1), 2, 2, true),
+            "sequence 2 stays granted"
+        );
+    }
+
+    /// U68 (FR-027): with the setting on, noting an event records nothing.
+    #[test]
+    fn an_event_noted_with_the_setting_on_is_still_granted() {
+        let mut views = Views::default();
+        views.note_event(session(1), 1, true);
+        assert!(
+            views.grant(session(1), 1, 1, true),
+            "the event waits for its claim"
         );
     }
 
