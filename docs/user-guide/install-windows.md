@@ -81,6 +81,11 @@ Windows know the application. An exe run from an unpacked folder shows none. All
 **Settings → System → Notifications → Micold AI IDE**. Do Not Disturb or Focus hides them while it is
 on.
 
+Clicking a notification opens its session
+([Clicking a notification](worktrees-and-sessions.md#clicking-a-notification)). A click on a
+notification that has already moved to the notification centre may not open the session; this has
+not been verified yet. The session's unread mark is there to find it by.
+
 ## Limits
 
 - **Smart App Control.** If Smart App Control is on (Windows 11 → **Windows Security → App & browser
