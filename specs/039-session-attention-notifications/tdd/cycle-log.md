@@ -397,6 +397,18 @@ was held by them for 10 minutes and more at a time during this milestone.
   - Authorisation is requested on every `show`: after the first answer the system returns the
     stored one at once, and a permission changed in System Settings takes effect without a restart.
 - refactor: none beyond `cargo fmt`.
+- green on CI (T118), pull request #557 at `cc0d815e` (run
+  <https://github.com/jaroslawherod/micold-ai-ide/actions/runs/37137101271>), all three
+  `build + test` legs and `ci complete` passed:
+  - macOS (job 111243764629): step "Test (desktop notification backends)" `test result: ok. 10
+    passed; 0 failed`; `attention_events` and `attention_claims` in "Test (daemon)";
+    `attention_view_report` and `attention_notify` in the enumerated client list.
+  - Windows (job 111243764632): the same step `test result: ok. 5 passed; 0 failed`;
+    `attention_events` and `attention_claims` in "Test (daemon, Windows)"; the two client tests in
+    the enumerated list.
+  - Linux (job 111243764658): "Test (full workspace)" ran `attention_events`, `attention_claims`,
+    `attention_view_report` and `attention_notify`; the `linux.rs` backend tests run there too.
+  Story 1's outer tests (A1 to A13) are green on the three systems.
 
 ## Notes and deviations
 
