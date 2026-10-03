@@ -1059,10 +1059,25 @@ a worktree). Nothing from the conversation itself is shown.
   nothing either; after a lost connection to the session service, a session that changed to
   waiting while it was away notifies you once.
 
-This release shows the notification on **Linux**, where it needs a desktop notification service
-(every major desktop has one). If none is running, or the desktop refuses it, nothing else changes:
-sessions and their activity dots work as before, no error appears in the application, and the
-failure is written to its log once.
+The notification is shown through each system's own facility, on **Linux**, **macOS** and
+**Windows**:
+
+- **Linux** needs a desktop notification service (every major desktop has one).
+- **macOS** asks for permission the first time the application shows a notification. Only the
+  installed application bundle can show them, not a bare binary
+  ([Installing on macOS](install-macos.md#notifications)).
+- **Windows** shows them only for an installed build, one set up with the installer, not for an exe
+  run from a folder ([Installing on Windows](install-windows.md#notifications)).
+
+The system may ask you for permission, or withhold it: you may have refused, turned notifications off
+for the application, or have Do Not Disturb on. The two install pages say where to allow or turn them
+off. When nothing can be shown, because the permission is withheld, no service is running, or the
+system refuses it, nothing else changes: sessions and their activity dots work as before, so the dot
+still shows the state, no error appears in the application's window, and the failure is written to
+its log once.
+
+Clicking the notification does not open the session yet. There is also no switch inside the
+application to turn notifications off; use the system's own settings.
 
 ## Colored, real-terminal output
 

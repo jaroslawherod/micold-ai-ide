@@ -7,6 +7,10 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use micold_client::features::attention::DesktopNotifier;
 #[cfg(not(target_os = "linux"))]

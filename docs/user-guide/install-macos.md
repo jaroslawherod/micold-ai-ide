@@ -316,3 +316,10 @@ It gives the application access to every file your user account can reach, inclu
 Messages, Safari and Time Machine data, which this application has no use for. Granting the
 individual folders you actually keep projects in is the narrower choice, and the one we would
 suggest.
+
+## Notifications
+
+The first time a session needs you, macOS asks whether Micold AI IDE may send notifications. Allow
+or turn them off later in **System Settings › Notifications › Micold AI IDE**. If they are off
+there, the application shows none and reports no error. Only the installed application bundle can
+show them, not a bare binary.

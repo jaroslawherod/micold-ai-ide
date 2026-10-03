@@ -74,6 +74,13 @@ Your settings and session data stay, so reinstalling picks up where you left off
 For a full reset, delete both folders by hand after uninstalling. Your projects are never touched —
 they live wherever you cloned them.
 
+## Notifications
+
+Notifications are shown only for an installed build: the installer's Start menu shortcut is what lets
+Windows know the application. An exe run from an unpacked folder shows none. Allow or turn them off in
+**Settings → System → Notifications → Micold AI IDE**. Do Not Disturb or Focus hides them while it is
+on.
+
 ## Limits
 
 - **Smart App Control.** If Smart App Control is on (Windows 11 → **Windows Security → App & browser
