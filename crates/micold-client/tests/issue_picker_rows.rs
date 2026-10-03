@@ -5,12 +5,16 @@
 //! issue's title line as the label and its details line under it, each with the emphasis the issue
 //! maps the match's spans to.
 
+// An emphasis is a list of byte ranges, and here it usually holds exactly one: `vec![0..4]` is the
+// value under test, not a mistyped `(0..4).collect()`.
+#![allow(clippy::single_range_in_vec_init)]
+
 use std::path::PathBuf;
 
 use micold_client::features::worktree_form::{
     BranchSource, GithubAvailability, IssueList, SearchState, WorktreeForm,
 };
-use micold_client::ui::issue_rows;
+use micold_client::ui::{issue_rows, ISSUE_SEARCH_PLACEHOLDER};
 use micold_core::github::{GithubRepo, Issue, IssueListing};
 use micold_core::typeahead::{rank, Query};
 
@@ -155,4 +159,76 @@ fn the_picked_issues_row_is_the_selected_one() {
     let (rows, selected) = issue_rows(&form);
     let at = selected.expect("the picked issue is offered");
     assert_eq!(rows[at].label, "#1100 Titles are cut off");
+}
+
+/// U38, A14 (FR-011): the issue search field's hint names the reporter beside number, title and
+/// label, and the view uses that hint.
+#[test]
+fn the_issue_search_hint_names_the_reporter() {
+    assert_eq!(
+        ISSUE_SEARCH_PLACEHOLDER,
+        "Search by number, title, label or reporter"
+    );
+    // Compared without whitespace, so a rustfmt wrap of the call does not hide it.
+    let view: String = include_str!("../src/ui/worktree_form.rs")
+        .split_whitespace()
+        .collect();
+    assert!(
+        view.contains(".placeholder(ISSUE_SEARCH_PLACEHOLDER)"),
+        "the issue picker's field shows the hint"
+    );
+}
+
+/// U37, A11, A12 (FR-010): a row matched by its reporter emphasises the login at the start of its
+/// details; a row matched by title and reporter emphasises both.
+#[test]
+fn a_row_matched_by_its_reporter_emphasises_the_login() {
+    let form = form(
+        vec![
+            issue(42, "Crash when opening empty project", "octocat", &["bug"]),
+            issue(7, "Sidebar flickers on resize", "hubot", &[]),
+            issue(9, "Octopus merge loses commits", "octavia", &[]),
+        ],
+        Vec::new(),
+        "OCTO",
+    );
+    let (rows, _) = issue_rows(&form);
+    let issues = issues_in_row_order(&form);
+    let mut numbers: Vec<u64> = issues.iter().map(Issue::number).collect();
+    numbers.sort_unstable();
+    assert_eq!(
+        numbers,
+        vec![9, 42],
+        "octocat's issue and the title match, not hubot's"
+    );
+
+    let by_reporter = rows
+        .iter()
+        .zip(&issues)
+        .find(|(_, issue)| issue.number() == 42)
+        .map(|(row, _)| row)
+        .expect("#42 is offered");
+    assert!(by_reporter.spans.is_empty(), "nothing in the title matches");
+    assert_eq!(
+        by_reporter.details,
+        Some(("octocat  ·  bug".to_string(), vec![0..4])),
+        "the matched part of the login is emphasised"
+    );
+
+    // One match whose characters fall in the title and in the login (D11).
+    let both = form_with_one(
+        issue(5, "Octocat icon blurry", "octocat", &[]),
+        "blurryocto",
+    );
+    let (rows, _) = issue_rows(&both);
+    assert_eq!(rows[0].spans, vec![16..22], "the title's `blurry`");
+    assert_eq!(
+        rows[0].details,
+        Some(("octocat".to_string(), vec![0..4])),
+        "and the reporter's `octo`"
+    );
+}
+
+fn form_with_one(issue: Issue, query: &str) -> WorktreeForm {
+    form(vec![issue], Vec::new(), query)
 }
