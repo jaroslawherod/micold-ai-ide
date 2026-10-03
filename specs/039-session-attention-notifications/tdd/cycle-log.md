@@ -925,3 +925,40 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
 - no test: the client sites (`activation: None` when it builds `SessionReveal`, `activation: _` when
   it matches `RevealSession`) only keep it compiling; the next worker gives them behavior. The
   version sentence of `docs/daemon.md` moved to 26.
+
+## Cycle 34 — U138, U139, U140, U141 — T094, T098 (M7-2)
+
+- tests: `crates/micold-client/tests/attention_reveal.rs::{
+  on_wayland_with_a_token_the_window_is_unminimised_then_activated_with_it (U138),
+  on_wayland_with_no_token_the_window_is_unminimised_then_asks_for_attention (U137, U139),
+  off_wayland_a_token_changes_nothing (U139),
+  an_activation_that_was_not_done_asks_for_attention_and_one_that_was_asks_for_nothing (U140),
+  the_token_of_an_activated_notification_is_put_into_the_session_reveal (U141, the clicked end),
+  the_token_of_a_reveal_is_the_one_the_window_is_activated_with (U141, the raised end),
+  an_activation_request_that_was_not_sent_falls_back_at_once (T100, no behavior id),
+  an_activation_request_that_was_sent_is_judged_by_the_focus_a_moment_later (T100, no behavior id)}`
+- red: `cargo test -p micold-client --test attention_reveal` at `e89c9adf`, against stubs:
+  `raise_plan` ignoring the token, `after_activation` and `after_send` answering nothing,
+  `notifier_event` sending `activation: None`.
+  ```
+  test an_activation_request_that_was_sent_is_judged_by_the_focus_a_moment_later ... FAILED
+  test an_activation_that_was_not_done_asks_for_attention_and_one_that_was_asks_for_nothing ... FAILED
+  test an_activation_request_that_was_not_sent_falls_back_at_once ... FAILED
+  test on_wayland_with_a_token_the_window_is_unminimised_then_activated_with_it ... FAILED
+  test the_token_of_a_reveal_is_the_one_the_window_is_activated_with ... FAILED
+  test the_token_of_an_activated_notification_is_put_into_the_session_reveal ... FAILED
+    left: [Unminimize, RequestAttention]
+   right: [Unminimize, Activate("gnome-shell/Micold AI IDE/2596-1-host_TIME1300")]
+  test result: FAILED. 10 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+  The two tests of U139 passed against the stubs, which keep the plan of M6: they pin what must
+  not change and have no red of their own.
+- green: the same command -> `test result: ok. 16 passed; 0 failed`.
+  `raise_plan(wayland, activation)`, `RaiseStep::Activate(String)` (the enum is no longer `Copy`),
+  `after_activation(done)`, `after_send(sent)` with `ACTIVATION_SETTLE` (400 ms), and
+  `notifier_event` passing the token on.
+- commit: tests `e89c9adf`; green the `feat(039)` commit that carries this record.
+- U141's raised end is tested through `raise_plan`, the function `window_raise::raise` gives the
+  token of `RevealSession` to; that the shell passes it there is cycle 36's glue.
+- **No test**: the macOS and Windows backends build `Activated` with `activation: None`; they
+  compile on their own systems only, and the clippy cross-check of cycle 36 covers them.
