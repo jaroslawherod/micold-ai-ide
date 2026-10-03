@@ -238,3 +238,33 @@ pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     ));
     arrange(instances, Layout::Inline)
 }
+
+/// `UnreadMark` — on a session row, beside the same row without it (feature 039, FR-030).
+///
+/// Posed in its host and not alone: what has to be checked by eye is that the mark is told from the
+/// activity badge, which both rows carry, by its place at the trailing edge and by the weight of
+/// the name (FR-018), and that the two rows are the same height (FR-032).
+pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let session_row = |unread: bool| -> Element<'a, Message> {
+        let row = material::TreeItem::new(1, samples::LABEL, roles.on_surface)
+            .badge(material::ActivityBadge::<Message>::new(
+                ActivitySignal::AwaitingInput,
+                roles,
+            ))
+            .annotation("claude", roles.on_surface_variant)
+            .unread(unread)
+            .on_press(Message::NoOp);
+        material::TreeView::new(vec![row], roles)
+            .density(micold_core::tokens::density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into()
+    };
+    arrange(
+        vec![
+            posed("an unread session row", session_row(true), roles),
+            posed("a read session row", session_row(false), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
