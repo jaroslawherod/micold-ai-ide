@@ -1,0 +1,43 @@
+MapNotify event, serial 18, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0x20000c, override NO
+CreateNotify event, serial 18, synthetic NO, window 0x2cf,
+    parent 0x2cf, window 0x800001, (10,10), width 10, height 10
+border_width 0, override NO
+CreateNotify event, serial 18, synthetic NO, window 0x2cf,
+    parent 0x2cf, window 0x600002, (0,0), width 1024, height 768
+border_width 0, override NO
+ClientMessage event, serial 18, synthetic YES, window 0x600002,
+    message_type 0xf9 (_NET_WM_STATE), format 32
+ClientMessage event, serial 18, synthetic YES, window 0x600002,
+    message_type 0xf9 (_NET_WM_STATE), format 32
+MapNotify event, serial 19, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0x600002, override NO
+CreateNotify event, serial 19, synthetic NO, window 0x2cf,
+    parent 0x2cf, window 0xc00000, (0,0), width 1, height 1
+border_width 0, override NO
+CreateNotify event, serial 19, synthetic NO, window 0x2cf,
+    parent 0x2cf, window 0xe00000, (0,0), width 1, height 1
+border_width 0, override NO
+ConfigureNotify event, serial 19, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0x600002, (0,0), width 1200, height 900,
+    border_width 0, above 0x800001, override NO
+ClientMessage event, serial 19, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+ClientMessage event, serial 19, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+ClientMessage event, serial 20, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+ClientMessage event, serial 20, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+ClientMessage event, serial 20, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+ClientMessage event, serial 20, synthetic YES, window 0x600002,
+    message_type 0xf1 (_NET_ACTIVE_WINDOW), format 32
+DestroyNotify event, serial 20, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0xe00000
+DestroyNotify event, serial 20, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0xc00000
+UnmapNotify event, serial 20, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0x600002, from_configure NO
+DestroyNotify event, serial 20, synthetic NO, window 0x2cf,
+    event 0x2cf, window 0x600002

@@ -1,0 +1,12 @@
+21:25:25 standin up
+21:26:47 NOTIFY id=1 app='Micold AI IDE' replaces=0 summary='New session is waiting for input' body='projQ — Default' actions=['default', 'Open'] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+21:26:51 EMIT ActionInvoked(1, default)
+21:27:15 EMIT ActionInvoked(1, default)
+21:27:20 NOTIFY id=2 app='Micold AI IDE' replaces=0 summary='New session is waiting for input' body='projQ — Default' actions=['default', 'Open'] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+21:27:24 EMIT NotificationClosed(2, 2)
+21:27:26 EMIT ActionInvoked(2, default)
+21:27:41 NOTIFY id=3 app='Micold AI IDE' replaces=0 summary='New session is waiting for input' body='projQ — Default' actions=['default', 'Open'] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+21:27:45 EMIT ActionInvoked(3, default)
+21:27:56 NOTIFY id=4 app='Micold AI IDE' replaces=0 summary='New session is waiting for input' body='projQ — Default' actions=['default', 'Open'] hints={'desktop-entry': 'micold-ai-ide'} timeout=-1
+21:28:12 EMIT ActionInvoked(4, default)
+21:28:15 EMIT ActionInvoked(4, default)
