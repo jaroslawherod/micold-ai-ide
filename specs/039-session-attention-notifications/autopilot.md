@@ -72,6 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 2 | 2c3a900b1a72b2cf6da590cf8e1a8266e0113d50:c91ce9217f93d0e268f150994b1143aa625b1644 | CLEAN (2 MINOR: a failed `persist_attention` write is retried only by the next event or catalog write, and its doc says the next event; an event counted within 250 ms of a daemon exit is not written. Both follow-ups) |
 | M1 B | 1 | 30250d1fa843ee6a0f1a5ec2a9e9db134f181889:dd87f613dd0b54de6d7f8c0ffbcfefeb47e8f433 | CLEAN (Verify: attention_events 12 passed, attention_view_report 5, features_attention 5, test-core exit 0; 3 MINOR: docs/daemon.md version clause fixed; untested tick write and lock held across the write: follow-ups) |
 | M2 A | 1 | ce1de609a41f19b0cd16bd454170c54169714416:c0366f52d42b99fc05804fbf4476d12c07623760 | CHANGES: 2 MAJOR (F1 `Notifier::show` blocks the window's update thread on D-Bus with no timeout; F2 the body is sent unescaped to servers that read it as markup), 3 MINOR (F3 a dead bus connection is kept; F4 `Views::granted` is never pruned; F5 the notification re-implements the sidebar's worktree naming) |
+| M2 A | 2 | b335b552c718e80437c9096936e32a92acbc77ca:8f5886349019ae746877ee10aef897c156812511 | CLEAN (1 MINOR: `Notifier::connection` holds its mutex across the connect and handshake, which `method_timeout` does not cover: follow-up) |
 
 ## Declined review findings
 
@@ -80,7 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Cycle 10 committed, branch rebased onto origin/main (claim/grant now protocol 23, since feature 040 took 22), macOS check green. Review A round 1 fixes committed (6b216c52: F1–F4; F5 left as a follow-up). Next: gate on HEAD, scoped review A round 2 on `review-snapshot.sh diff` of round 1's snapshot (full round if it exits 2: the rebase did not move since), then review B and the visual pass (quickstart §B1–B5, B13 notification part), then the PR (`Refs #481`).
+M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Cycle 10 committed, branch rebased onto origin/main (claim/grant now protocol 23, since feature 040 took 22), macOS check green. Review A round 1 fixes committed (6b216c52: F1–F4; F5 left as a follow-up). Review A round 2 clean. Next: wait for the gate on HEAD (rerun if red), then review B and the visual pass (quickstart §B1–B5, B13 notification part), then the PR (`Refs #481`).
 
 ## Open escalation
 
@@ -98,3 +99,4 @@ None.
 
 - `crates/micold-daemon/tests/mcp_create_session.rs::a_pi_session_start_event_makes_pi_ready` failed once in a full-suite run on a docs-only branch (`left: ""`, line 600) and passed when rerun alone: a timing flake in code this flow does not own. Not fixed here.
 - M2 review A F5 (MINOR): `State::attention_notification` (`app.rs`) re-implements the sidebar's worktree naming (the literal `Default`, `worktree_names` then `naming::display_name`) instead of sharing a helper with `worktree_display_name` and the sidebar; a change to either will not reach the notification.
+- M2 review A round 2 (MINOR): `Notifier::connection` (`shell/desktop_notify/linux.rs`) holds its mutex across `Builder::build`, and `method_timeout` does not cover the connect or handshake; a session bus that accepts the socket and never answers stalls every queued notification on a blocking-pool thread. Build outside the lock, or bound the connect.
