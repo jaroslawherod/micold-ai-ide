@@ -57,3 +57,90 @@ note of `cycle-log.md` says. Commands ran through `scripts/build-lock.sh`.
   U65's test passed against the stub, which returned the sender: it has no red of its own.
 - green: `cargo test -p micold-daemon --lib attention` 18 passed; `--test session_reveal` 5 passed;
   `--test attention_events` 13 passed; `--test attention_claims` 5 passed.
+- commit: `e09abf00`
+
+## Cycle P3 — U131, U132, U133, U134, U135, U136, U137 (A37–A41, window half) — T077, T084
+
+- tests: `crates/micold-client/tests/attention_reveal.rs` (new):
+  `an_activated_notification_yields_one_session_reveal` (U131),
+  `a_reveal_for_a_background_project_reopens_it_then_selects_the_session` (U132, A38),
+  `a_reveal_for_the_active_project_selects_the_session_alone` (U133, A37, A41),
+  `a_reveal_for_a_session_that_is_gone_pushes_the_notice_and_changes_no_selection` (U134, A40),
+  `a_reveal_for_a_forgotten_or_unavailable_project_pushes_the_notice` (U134),
+  `the_session_shown_by_a_reveal_is_in_view_so_its_row_is_not_unread` (U135, A39),
+  `off_wayland_the_window_is_unminimised_then_focused` (U136),
+  `on_wayland_the_window_is_unminimised_then_asks_for_attention` (U137)
+- red: `cargo test -p micold-client --test attention_reveal`, against the stubs `raise_plan`
+  returning no step, `notifier_event` returning `ClientMsg::Goodbye` and `State::reveal_session`
+  returning no message.
+  ```
+  test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `cargo test -p micold-client --test attention_reveal --test attention_notify
+  --test features_attention --test feature_registration_cost` -> 8, 11, 7 and 5 passed.
+- as built: the feature has no `Msg`, so the reducer step is `reveal_steps(Reveal, active) ->
+  Vec<RevealStep>` in `features/attention.rs`, and the root's `State::reveal_session` turns the
+  steps into `Message::Project(Reopened)` and `Message::Session(Selected)` for the shell to
+  dispatch, or pushes the notice (the shape D20 set for this feature). The function that turns
+  a click into `SessionReveal` is `notifier_event`.
+- commit: `431b5faa`
+
+## Cycle P4 — U161, U162, U163, U164, U165 — T078, T085 (with the glue of T088, T089)
+
+- tests: `crates/micold-client/src/shell/desktop_notify/linux.rs::tests::{
+  the_request_offers_the_default_action_whatever_the_service_can_do (U161),
+  notify_request_carries_the_app_name_the_text_and_the_desktop_entry_and_nothing_else (U159, now with the action),
+  the_default_action_of_a_notification_in_the_table_is_an_activation_of_its_session (U162),
+  a_click_is_reported_once_however_many_times_the_service_says_it (U162),
+  an_id_the_table_does_not_hold_is_no_event (U163),
+  another_action_key_is_no_event (U164),
+  a_closed_notification_leaves_the_table (U165),
+  the_two_signals_are_read_from_the_bus_messages_that_carry_them (U162, U165),
+  any_other_signal_and_a_signal_with_another_body_is_not_read (U164)}`
+- red: `cargo test -p micold-client --bin micold-ai-ide desktop_notify`, against the stubs
+  `signal` and `Shown::on_signal` returning `None` and `notify_request` offering no action.
+  ```
+  test shell::desktop_notify::linux::tests::a_closed_notification_leaves_the_table ... FAILED
+  test shell::desktop_notify::linux::tests::a_click_is_reported_once_however_many_times_the_service_says_it ... FAILED
+  test shell::desktop_notify::linux::tests::notify_request_carries_the_app_name_the_text_and_the_desktop_entry_and_nothing_else ... FAILED
+  test shell::desktop_notify::linux::tests::the_request_offers_the_default_action_whatever_the_service_can_do ... FAILED
+  test shell::desktop_notify::linux::tests::the_default_action_of_a_notification_in_the_table_is_an_activation_of_its_session ... FAILED
+  test shell::desktop_notify::linux::tests::the_two_signals_are_read_from_the_bus_messages_that_carry_them ... FAILED
+  test result: FAILED. 9 passed; 6 failed; 0 ignored; 0 measured; 329 filtered out
+  ```
+  The tests for U163, U164 and the unread signal passed against the stubs, which answer `None`
+  to everything: they have no red of their own.
+- green: the same command -> 15 passed.
+- glue, no test of its own (plan, *Constitution Check*): `Notifier::listen` (the thread that reads
+  the service's signals), `desktop_notify::{events, clicks}` (the process's one channel and its
+  subscription), `shell/window_raise.rs` (T088), and the wiring in `shell/subscriptions.rs`,
+  `shell/connection.rs`, `shell/daemon_sync.rs` and `features/connection.rs`
+  (`Msg::NotifierReported`) (T089). `main.rs` needed no edit.
+- commit: `75d105b2`. User guide (T090): `e05df97a`.
+
+## Cycle P-last — U15 (the number) — T074, T082
+
+- test: `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump`
+  (the constant it compares with moved to 25)
+- red: `cargo test -p micold-core --test schema_hash`
+  ```
+  test the_wire_changes_for_this_feature_cost_exactly_one_version_bump ... FAILED
+    left: 24
+   right: 25
+  test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: the same command -> 15 passed, with `PROTOCOL_VERSION` 25.
+- commit: the last commit of the branch, alone: `version.rs`, `schema_hash.rs` (the constant and
+  its comment) and the version sentence of `docs/daemon.md`. 25 is one more than `main` at
+  `ea477587`; if M5 or another feature takes 25 first, this commit is the one to move.
+
+## Not done in the prep
+
+- T079, T086 (macOS) and T080, T087 (Windows): their tests run only on those systems, and the
+  macOS click needs a decision that has to be tried on a Mac (see the return of the prep unit).
+  `desktop_notify::system(events)` takes the channel on all three systems; the macOS and Windows
+  arms drop it, so a click there does nothing yet.
+- T077's sentence about `.github/workflows/ci.yml`: `--test attention_reveal` is not in the
+  enumerated list yet.
+- T120: `session_reveal` and `attention_reveal` are green here (cycles P2, P3); the task is ticked
+  by the M6 unit.
