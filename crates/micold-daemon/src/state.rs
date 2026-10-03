@@ -1168,6 +1168,22 @@ impl DaemonState {
         self.lock().views.set_view(id, view);
     }
 
+    /// Answer window `id`'s claim of attention event `seq` of `session` (feature 039, W1.4): send
+    /// it `AttentionGranted` when no window has claimed that event before, and nothing otherwise.
+    /// An unknown session, or a sequence the session has not reached, is not answered.
+    pub fn claim_attention(&self, id: ClientId, session: SessionId, seq: u64) {
+        let granted = {
+            let mut inner = self.lock();
+            let Some(current) = inner.catalog.attention_seq(session) else {
+                return;
+            };
+            inner.views.grant(session, seq, current)
+        };
+        if granted {
+            self.send(id, DaemonMsg::AttentionGranted { session, seq });
+        }
+    }
+
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).
     ///
     /// `deregister` above is the ordinary release, and it runs when the connection's message loop

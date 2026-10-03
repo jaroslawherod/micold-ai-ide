@@ -251,6 +251,31 @@ was held by them for 10 minutes and more at a time during this milestone.
 - refactor: `observe` rebuilds `seen` from the snapshot, which is what drops absent sessions (U27);
   `docs/daemon.md` names version 22.
 
+## Cycle 8 — U54–U58, U80–U83, A1, A8, A12 — T020, T021, T027, T028
+
+- tests: `crates/micold-daemon/src/attention.rs::tests::{the_first_claim_of_a_sequence_is_granted (U54),
+  the_same_sequence_is_not_granted_again (U55), a_sequence_above_the_current_one_is_not_granted (U56),
+  a_later_sequence_of_the_same_session_is_granted (U57),
+  a_grant_for_one_session_does_not_use_up_another_s (U58)}`;
+  `crates/micold-daemon/tests/attention_claims.rs::{two_windows_claim_one_sequence_and_only_the_first_is_granted (U80, A1, A8),
+  a_claim_for_an_unknown_session_is_not_answered (U81),
+  a_claim_above_the_current_sequence_is_not_answered (W1.4),
+  ten_sessions_with_one_event_each_give_ten_grants (U82, A12),
+  a_claim_is_no_operation_and_needs_no_attachment (U83)}` (new)
+- red: `cargo test -p micold-daemon --lib attention` and `--test attention_claims` against stubs
+  (`grant` returns false; no `AttentionClaim` arm in `server.rs`)
+  ```
+  test result: FAILED. 4 passed; 5 failed (lib: U54–U58)
+  test result: FAILED. 2 passed; 3 failed (claims: U80, U82, U83)
+  ```
+- the two integration tests that pass on the stub expect silence (unknown session, sequence too high);
+  they would fail if the handler granted unconditionally, which the grant tests U56 and U81's
+  unknown-session lookup guard in the green.
+- green: lib `attention` 9 pass, `attention_claims` 5 pass, M1's `attention_events` 13 pass; clippy
+  `-D warnings` and `cargo fmt` clean.
+- refactor: `Catalog::attention_seq` reads the session's current sequence for `SharedState::claim_attention`
+  (state.rs), which `server.rs` calls for `ClientMsg::AttentionClaim`; the lock is dropped before the send.
+
 ## Cycle 9 — U117 to U124, A1, A4, A7, A11, A13 — T022, T030, T033
 
 - tests: `crates/micold-client/tests/attention_notify.rs::{a_snapshot_with_a_higher_sequence_yields_one_claim (U117),

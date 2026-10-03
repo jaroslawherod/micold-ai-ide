@@ -649,6 +649,13 @@ impl Catalog {
         Ok(true)
     }
 
+    /// Session `id`'s attention sequence now (feature 039, W1.4); `None` for an unknown session.
+    pub fn attention_seq(&self, id: SessionId) -> Option<u64> {
+        self.workspace
+            .find_session(id)
+            .map(|(_project, session)| session.attention_seq)
+    }
+
     /// Count one attention event for session `id` (feature 039, FR-001), in memory only. Returns
     /// whether a session was found.
     ///
