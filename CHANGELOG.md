@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.17.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.16.0...micold-ai-ide-v0.17.0) (2026-10-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **039:** protocol version 24 -> 25 for SessionReveal and RevealSession (T074, T082)
+
+### Features
+
+* **039:** a click becomes a reveal request, and a reveal becomes the two selection messages or the notice (T077, T084) ([e82fd5b](https://github.com/jaroslawherod/micold-ai-ide/commit/e82fd5bc4347f1df63a9b48d47f254e19d0ed07b))
+* **039:** attention tracker, notification text and the claim/grant messages, protocol 22 (T017–T019, T024–T026) ([f13cd7c](https://github.com/jaroslawherod/micold-ai-ide/commit/f13cd7c551975f707a9127edb35007f8a05f92c1))
+* **039:** count a project's unread sessions and the other projects' total (T062, T066) ([b65a3d3](https://github.com/jaroslawherod/micold-ai-ide/commit/b65a3d33252646d44d82f7c8c82d2baa6b8f069f))
+* **039:** Linux desktop notification over D-Bus (T023, T029, T031, T032) ([037fd1f](https://github.com/jaroslawherod/micold-ai-ide/commit/037fd1f4ee8cc4ca3983124a524c4374e05eef9f))
+* **039:** protocol version 24 -&gt; 25 for SessionReveal and RevealSession (T074, T082) ([3bf152a](https://github.com/jaroslawherod/micold-ai-ide/commit/3bf152a256d53f52433a4bd6b967af1926f4f0ad))
+* **039:** protocol version 24 for SessionSummary::unread (T046, T053) ([3a78e0b](https://github.com/jaroslawherod/micold-ai-ide/commit/3a78e0b55caecb9e06cc35059cf028f5f802aff1))
+* **039:** resolve_reveal and the reveal messages, without the version bump (T073, T074, T081, T082) ([a38aa16](https://github.com/jaroslawherod/micold-ai-ide/commit/a38aa161005ade2462f69944831af31e1a15e7b4))
+* **039:** row_unread and the catalog's unread reach the window (T051, T056) ([6fcc8d3](https://github.com/jaroslawherod/micold-ai-ide/commit/6fcc8d3404081a4034c082f38cdea61854728a41))
+* **039:** SessionSummary carries unread (T046, T053 without the version number) ([2b0917b](https://github.com/jaroslawherod/micold-ai-ide/commit/2b0917b8457431916122cf83612b50ae8221a1df))
+* **039:** set_view returns the session that came into view (T047, T055 part) ([2730139](https://github.com/jaroslawherod/micold-ai-ide/commit/2730139f4121384446c06669aaac99a178d90970))
+* **039:** show the session notification on macOS and Windows (T039, T040, T041, T043) ([903c0fe](https://github.com/jaroslawherod/micold-ai-ide/commit/903c0feb26704ccf1d2f5e3181a5470821313865))
+* **039:** showcase a session row with the unread mark beside one without (T060) ([b9200f7](https://github.com/jaroslawherod/micold-ai-ide/commit/b9200f7280ff780e576f15fc42df9653c37d0f47))
+* **039:** showcase and user guide for the switcher's unread counts; M5 handover (T071, T072) ([91735fa](https://github.com/jaroslawherod/micold-ai-ide/commit/91735fa1ca19975ae124677c7c8a1397d4f46775))
+* **039:** the Linux backend reports a click, the window is raised and shows the session (T078, T085, T088, T089) ([31da268](https://github.com/jaroslawherod/micold-ai-ide/commit/31da26867797bd3932a3ff42d329179d9c4ddf36))
+* **039:** the macOS and Windows backends report a click on the notification (T086, T087) ([b1bc797](https://github.com/jaroslawherod/micold-ai-ide/commit/b1bc797e7f4fd5f21434d265b3bcd065a12b7d4c))
+* **039:** the service forwards a reveal to one window (T075, T076, T083) ([e3dfa21](https://github.com/jaroslawherod/micold-ai-ide/commit/e3dfa21b69ce2d4960ee61298f2d8e0bc0614556))
+* **039:** the service grants each attention event once, to its first claimer (T020, T021, T027, T028) ([91d9438](https://github.com/jaroslawherod/micold-ai-ide/commit/91d943899e780ac1d1f839e79dc7c88841708e3a))
+* **039:** the service sets unread with an attention event and clears it on a view report (T048, T054, T055) ([e559514](https://github.com/jaroslawherod/micold-ai-ide/commit/e559514da9ff0134041969d6cb0fc59fec334e7f))
+* **039:** the session row carries the unread mark (T059) ([5db7873](https://github.com/jaroslawherod/micold-ai-ide/commit/5db7873fd40499412b5a0a83ad6659f45f53950b))
+* **039:** the window claims attention events and shows the granted one (T022, T030, T033) ([8c230de](https://github.com/jaroslawherod/micold-ai-ide/commit/8c230dea6c4cd5a25f4717b72ce66d65a7562dcd))
+* **039:** TreeItem::unread puts the mark at the row's trailing edge (T050, T058) ([f70d9b5](https://github.com/jaroslawherod/micold-ai-ide/commit/f70d9b59245d293395087e77f475475af851a0fd))
+* **039:** unread counts on the switcher's rows and button (T063–T065, T067–T070) ([28b1eca](https://github.com/jaroslawherod/micold-ai-ide/commit/28b1ecaaae9a33a20fbf24392d67440f8bd490d7))
+* **039:** unread is stored with the session (T045, T052) ([ce89a1b](https://github.com/jaroslawherod/micold-ai-ide/commit/ce89a1bc55736a775966ba6d86d471bf767d9de9))
+* **039:** UnreadMark, an 8dp mark in the primary role (T049, T057) ([1b109f2](https://github.com/jaroslawherod/micold-ai-ide/commit/1b109f2a470e8042feb49c06c871dd68be5d686d))
+* **autopilot:** choose the flow and effort from issue labels, split the skill into modules ([8d535f9](https://github.com/jaroslawherod/micold-ai-ide/commit/8d535f9ca4ce7a63c1ff0e25e49baae80c7b0b6e)), closes [#553](https://github.com/jaroslawherod/micold-ai-ide/issues/553)
+
+
+### Bug Fixes
+
+* **039:** a click on a closed session, a gone folder and a background project (M6 review A F1-F4) ([567853f](https://github.com/jaroslawherod/micold-ai-ide/commit/567853fa0e661983b0dd43d1fb1bc27e85cccafe))
+* **039:** feature 040's schema test no longer pins the version number, which moved on ([3987976](https://github.com/jaroslawherod/micold-ai-ide/commit/39879766f109944f8beab5883f38ad4afd9602f8))
+* **039:** show the notification off the update thread with a bus timeout; escape the body; reopen a dead bus connection; forget a removed session's grant (review A) ([a78703e](https://github.com/jaroslawherod/micold-ai-ide/commit/a78703ed85d308248feaacf0fff37374a74c1fed))
+* **039:** stack a switcher row's two counts so the project's name keeps its line; M5 gate fixes ([c143171](https://github.com/jaroslawherod/micold-ai-ide/commit/c1431716c4de85ff025647d90193243d095806c8))
+* **039:** the claim and grant take protocol 23; feature 040 took 22 ([c13ee3c](https://github.com/jaroslawherod/micold-ai-ide/commit/c13ee3c846eb38193f5778f74a6b008a350bc62a))
+* **039:** the id table's query is for its tests only (T085) ([84ac11a](https://github.com/jaroslawherod/micold-ai-ide/commit/84ac11ad48e0f5b87202b354bb9704ca1bf7240c))
+* **039:** write unread before the service stops; round-trip unread as true (review A, MINOR) ([d588d64](https://github.com/jaroslawherod/micold-ai-ide/commit/d588d6428e1dbf54fe36281b7df012a7a6e060ee))
+
+
+### Build & CI
+
+* **039:** run attention_notify and the notification backends' tests on macOS and Windows (T122); add the two notification crates (T038) ([6f4bb60](https://github.com/jaroslawherod/micold-ai-ide/commit/6f4bb6077a9d10a8596970cc0cd72cc42d46b869))
+* **039:** run unread_rows in the enumerated client tests (T051) ([0b18fdb](https://github.com/jaroslawherod/micold-ai-ide/commit/0b18fdbdf923782eb43a1ea1484eba1a3947a51b))
+
 ## [0.16.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.15.0...micold-ai-ide-v0.16.0) (2026-10-03)
 
 
