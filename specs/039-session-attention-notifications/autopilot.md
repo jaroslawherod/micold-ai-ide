@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3 red phase: T122, T038 and the failing T035/T036 tests, pushed so CI's macOS and Windows legs show red; then T039–T044.
+- **Next step**: M3: T122, T035–T038, T042, T044 done and committed (backends are `todo!()` stubs). Full gate, push, open the PR, record the red macOS and Windows runs in `tdd/cycle-log.md` (replace `RED_RUN_PLACEHOLDER`), then T039–T041, T043, reviews, full gate, push, T118.
 
 ## Pull requests
 
