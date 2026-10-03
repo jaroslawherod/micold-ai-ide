@@ -241,6 +241,7 @@ fn child_side() -> bool {
         Some((80, 24)),
         &[],
         &TerminalColors::default(),
+        micold_daemon::history::Seed::None,
     )
     .expect("spawn the AI CLI session");
     wait_for(&ai_dump);

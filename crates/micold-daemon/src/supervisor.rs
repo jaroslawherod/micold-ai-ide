@@ -15,6 +15,7 @@ use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use alacritty_terminal::event::WindowSize;
 use alacritty_terminal::grid::Dimensions;
@@ -26,6 +27,7 @@ use micold_core::session::SessionId;
 use micold_core::terminal::{default_shell_command, launch_args, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
+use crate::history::Seed;
 use crate::supervision::ExitOutcome;
 use crate::terminal::{DaemonListener, SharedTerm, SharedWriter, TerminalColors, VtSignals};
 
@@ -83,9 +85,17 @@ pub struct PtySession {
     /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
     /// to classify a clean exit vs a crash (US4, FR-005).
     exit: Arc<Mutex<Option<ExitOutcome>>>,
-    /// The reader thread handle, joined on drop.
-    reader: Option<JoinHandle<()>>,
+    /// The reader thread handle, joined by [`Self::teardown`]. Behind a `Mutex` so the teardown
+    /// takes `&self`: a window's stream task may hold the last `Arc` (R4).
+    reader: Mutex<Option<JoinHandle<()>>>,
+    /// Set by the first [`Self::teardown`]; a later call does nothing.
+    torn_down: AtomicBool,
 }
+
+/// How long [`PtySession::teardown`] waits for the reader's end-of-file before it gives up on it
+/// (R4). A guard against a process outside the killed tree that keeps the terminal open, not the
+/// mechanism: closing the master is what brings the end-of-file.
+pub const TEARDOWN_WAIT: Duration = Duration::from_secs(2);
 
 /// Refuse a spawn whose working directory does not exist (FR-006c, BUG-012).
 ///
@@ -222,6 +232,7 @@ impl PtySession {
         initial_size: Option<(u16, u16)>,
         activity_args: &[std::ffi::OsString],
         colors: &TerminalColors,
+        seed: Seed,
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
@@ -243,7 +254,14 @@ impl PtySession {
         for arg in activity_args {
             cmd.arg(arg);
         }
-        Self::spawn_answering(id, cmd, scrollback_lines, initial_size, colors.clone())
+        Self::spawn_answering(
+            id,
+            cmd,
+            scrollback_lines,
+            initial_size,
+            colors.clone(),
+            seed,
+        )
     }
 
     /// Spawn the platform's plain interactive shell in `cwd` as a daemon-owned session
@@ -270,7 +288,14 @@ impl PtySession {
         for (k, v) in env {
             cmd.env(k, v);
         }
-        Self::spawn_answering(id, cmd, scrollback_lines, initial_size, colors.clone())
+        Self::spawn_answering(
+            id,
+            cmd,
+            scrollback_lines,
+            initial_size,
+            colors.clone(),
+            Seed::None,
+        )
     }
 
     /// Open a PTY, spawn `cmd` as its child, start the reader thread, and build the VT emulator with
@@ -288,6 +313,7 @@ impl PtySession {
             scrollback_lines,
             initial_size,
             TerminalColors::default(),
+            Seed::None,
         )
     }
 
@@ -299,6 +325,7 @@ impl PtySession {
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
         colors: TerminalColors,
+        seed: Seed,
     ) -> io::Result<Self> {
         let (cols, rows) = initial_size.unwrap_or((INIT_COLS, INIT_ROWS));
         let pty = native_pty_system();
@@ -364,7 +391,11 @@ impl PtySession {
             scrolling_history: scrollback_lines,
             ..Config::default()
         };
-        let term: SharedTerm = Arc::new(FairMutex::new(Term::new(config, &dims, listener)));
+        let mut term = Term::new(config, &dims, listener);
+        // Before the reader thread exists, so nothing the new process writes can land among the
+        // seeded rows, and through the `Term` only: nothing is written to the PTY (FR-009, R3).
+        crate::history::seed(&mut term, seed, scrollback_lines);
+        let term: SharedTerm = Arc::new(FairMutex::new(term));
 
         // The reader thread: absorb the blocking PTY read, feeding bytes into the VT parser under
         // the shared lock. It, and only it, advances the parser (research R4).
@@ -407,7 +438,8 @@ impl PtySession {
             size,
             reader_done,
             exit: Arc::new(Mutex::new(None)),
-            reader: Some(reader),
+            reader: Mutex::new(Some(reader)),
+            torn_down: AtomicBool::new(false),
         })
     }
 
@@ -443,18 +475,24 @@ impl PtySession {
         if cols == 0 || rows == 0 {
             return Ok(());
         }
-        self.master
-            .lock()
-            .map_err(|_| io::Error::other("pty master mutex poisoned"))?
-            .as_ref()
-            .ok_or_else(|| io::Error::other("pty master already closed"))?
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(io::Error::other)?;
+        {
+            let master = self
+                .master
+                .lock()
+                .map_err(|_| io::Error::other("pty master mutex poisoned"))?;
+            // After a teardown the master is gone, and so is anything a size would apply to (R4).
+            let Some(master) = master.as_ref() else {
+                return Ok(());
+            };
+            master
+                .resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(io::Error::other)?;
+        }
         {
             let mut term = self.term.lock();
             term.resize(TermSizeShim {
@@ -543,24 +581,50 @@ impl PtySession {
             Err(_) => Ok(()),
         }
     }
+
+    /// End the session so that every byte its process wrote has reached the `Term` (R4): kill the
+    /// process tree, close the master, wait up to `wait` for the reader's end-of-file, then join
+    /// the reader. Through `&self`, because the state's `Arc` is not the last one while a window
+    /// streams the session. A second call does nothing; [`Drop`] calls it.
+    ///
+    /// The master must close *before* the join. On Unix the reader sees end-of-file as soon as the
+    /// child's side of the PTY is gone, so the order never mattered there. On ConPTY it sees it
+    /// only when the pseudoconsole is closed — `conhost` keeps the output pipe open after the child
+    /// exits — and dropping the master is what closes it (the slave was dropped at spawn). Joining
+    /// first waited forever. The reader stays running meanwhile, which matters too: before
+    /// Windows 11 24H2 `ClosePseudoConsole` blocks until pending output is drained.
+    ///
+    /// When `wait` passes without end-of-file (a process outside the killed tree holds the
+    /// terminal open), one warning is logged and the reader is left to end by itself.
+    pub fn teardown(&self, wait: Duration) {
+        if self.torn_down.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let _ = self.kill();
+        drop(self.master.lock().ok().and_then(|mut master| master.take()));
+        let deadline = std::time::Instant::now() + wait;
+        while !self.output_ended() {
+            if std::time::Instant::now() >= deadline {
+                tracing::warn!(
+                    session = %self.id.0,
+                    ?wait,
+                    "the terminal's output did not end after the stop; keeping what was read"
+                );
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        if let Some(handle) = self.reader.lock().ok().and_then(|mut reader| reader.take()) {
+            let _ = handle.join();
+        }
+    }
 }
 
 impl Drop for PtySession {
     fn drop(&mut self) {
         // Best-effort teardown: kill the child, close the master, then join the reader so no thread
-        // outlives the session.
-        //
-        // The master must close *before* the join. On Unix the reader sees end-of-file as soon as
-        // the child's side of the PTY is gone, so the order never mattered there. On ConPTY it sees
-        // it only when the pseudoconsole is closed — `conhost` keeps the output pipe open after the
-        // child exits — and dropping the master is what closes it (the slave was dropped at spawn).
-        // Joining first waited forever. The reader stays running meanwhile, which matters too:
-        // before Windows 11 24H2 `ClosePseudoConsole` blocks until pending output is drained.
-        let _ = self.kill();
-        drop(self.master.get_mut().ok().and_then(Option::take));
-        if let Some(handle) = self.reader.take() {
-            let _ = handle.join();
-        }
+        // outlives the session (bounded: see `teardown`).
+        self.teardown(TEARDOWN_WAIT);
     }
 }
 
