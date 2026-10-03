@@ -4,6 +4,9 @@
 //! to the session service, which counts an attention event only for a session that no window has
 //! in view.
 
+use std::collections::HashMap;
+
+use crate::protocol::messages::{ActivitySignal, SessionSummary};
 use crate::session::SessionId;
 
 /// What decides whether a window has a session in view.
@@ -27,6 +30,113 @@ pub fn in_view(facts: ViewFacts) -> Option<SessionId> {
         facts.selected
     } else {
         None
+    }
+}
+
+/// What the tracker last saw of one session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Seen {
+    /// The `attention_seq` last seen.
+    pub seq: u64,
+    /// Whether the activity last seen was `AwaitingInput`.
+    pub awaiting: bool,
+}
+
+/// A request to be the window that raises the notification for one attention event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Claim {
+    /// The session that changed.
+    pub session: SessionId,
+    /// The `attention_seq` being claimed.
+    pub seq: u64,
+}
+
+/// Whether the connection was unbroken since the last snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Phase {
+    /// Unbroken: every higher sequence is a change this window watched happen.
+    Live,
+    /// The first snapshot after a lost connection.
+    Reconnected,
+}
+
+/// Per process and in memory: what this window last saw of each session (research R3).
+#[derive(Debug, Default)]
+pub struct AttentionTracker {
+    seen: HashMap<SessionId, Seen>,
+}
+
+impl AttentionTracker {
+    /// A tracker that has seen nothing.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The sessions of one full catalog snapshot, and the claims they give rise to.
+    pub fn observe(
+        &mut self,
+        sessions: &[SessionSummary],
+        phase: Phase,
+        in_view: Option<SessionId>,
+    ) -> Vec<Claim> {
+        let mut claims = Vec::new();
+        let mut next = HashMap::with_capacity(sessions.len());
+        for summary in sessions {
+            let now = Seen {
+                seq: summary.attention_seq,
+                awaiting: summary.activity == ActivitySignal::AwaitingInput,
+            };
+            if let Some(before) = self.seen.get(&summary.id) {
+                let higher = now.seq > before.seq;
+                let claimed = match phase {
+                    Phase::Live => higher,
+                    Phase::Reconnected => {
+                        higher && !before.awaiting && now.awaiting && in_view != Some(summary.id)
+                    }
+                };
+                if claimed {
+                    claims.push(Claim {
+                        session: summary.id,
+                        seq: now.seq,
+                    });
+                }
+            }
+            next.insert(summary.id, now);
+        }
+        self.seen = next;
+        claims
+    }
+
+    /// What was last seen of `session`.
+    pub fn seen(&self, session: SessionId) -> Option<Seen> {
+        self.seen.get(&session).copied()
+    }
+
+    /// How many sessions are remembered.
+    pub fn len(&self) -> usize {
+        self.seen.len()
+    }
+
+    /// Whether nothing is remembered.
+    pub fn is_empty(&self) -> bool {
+        self.seen.is_empty()
+    }
+}
+
+/// The text of a desktop notification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotificationText {
+    /// The title.
+    pub title: String,
+    /// The body.
+    pub body: String,
+}
+
+/// The text for a session waiting for input: the three names and the fixed words, nothing else.
+pub fn notification_text(project: &str, worktree: &str, session: &str) -> NotificationText {
+    NotificationText {
+        title: format!("{session} is waiting for input"),
+        body: format!("{project} \u{2014} {worktree}"),
     }
 }
 
@@ -106,6 +216,247 @@ mod tests {
             }),
             Some(session),
             "the three facts decide the answer; which tab is shown is not among them"
+        );
+    }
+
+    // --- AttentionTracker (U18–U27) ---
+
+    use crate::protocol::messages::WireLifecycle;
+    use crate::session::{AiCli, SessionLabel};
+
+    fn id(n: u128) -> SessionId {
+        SessionId::from_uuid(uuid::Uuid::from_u128(n))
+    }
+
+    fn summary(session: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary {
+        SessionSummary {
+            id: session,
+            worktree_dir: None,
+            title: SessionLabel::Pending,
+            lifecycle: WireLifecycle::Running,
+            activity,
+            provider: AiCli::ClaudeCode,
+            input_serial: 0,
+            live_shells: Vec::new(),
+            attention_seq: seq,
+        }
+    }
+
+    fn claim(session: SessionId, seq: u64) -> Claim {
+        Claim { session, seq }
+    }
+
+    /// A tracker that has adopted `session` at `seq` with `activity`.
+    fn adopted(session: SessionId, seq: u64, activity: ActivitySignal) -> AttentionTracker {
+        let mut tracker = AttentionTracker::new();
+        let first = tracker.observe(&[summary(session, seq, activity)], Phase::Live, None);
+        assert!(first.is_empty(), "precondition: adopting claims nothing");
+        tracker
+    }
+
+    #[test]
+    fn u18_a_session_not_seen_before_is_adopted_with_no_claim_even_when_awaiting() {
+        let session = id(1);
+        let mut tracker = AttentionTracker::new();
+        let claims = tracker.observe(
+            &[summary(session, 3, ActivitySignal::AwaitingInput)],
+            Phase::Live,
+            None,
+        );
+        assert_eq!(
+            claims,
+            vec![],
+            "a session first seen is never claimed (FR-005)"
+        );
+        assert_eq!(
+            tracker.seen(session),
+            Some(Seen {
+                seq: 3,
+                awaiting: true
+            }),
+            "its values are adopted"
+        );
+    }
+
+    #[test]
+    fn u19_a_higher_sequence_in_live_phase_is_claimed() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::Working);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::AwaitingInput)],
+            Phase::Live,
+            None,
+        );
+        assert_eq!(
+            claims,
+            vec![claim(session, 2)],
+            "the new sequence is claimed"
+        );
+    }
+
+    #[test]
+    fn u20_the_same_sequence_again_is_not_claimed() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::Working);
+        let snapshot = [summary(session, 2, ActivitySignal::AwaitingInput)];
+        assert_eq!(
+            tracker.observe(&snapshot, Phase::Live, None).len(),
+            1,
+            "precondition: the first sight of sequence 2 is claimed"
+        );
+        assert_eq!(
+            tracker.observe(&snapshot, Phase::Live, None),
+            vec![],
+            "the same sequence is claimed once"
+        );
+    }
+
+    #[test]
+    fn u21_reconnected_claims_a_change_into_awaiting_that_is_not_in_view() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::Working);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::AwaitingInput)],
+            Phase::Reconnected,
+            None,
+        );
+        assert_eq!(
+            claims,
+            vec![claim(session, 2)],
+            "a change found after reconnecting is claimed (FR-006)"
+        );
+    }
+
+    #[test]
+    fn u22_reconnected_adopts_when_the_last_seen_activity_was_awaiting() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::AwaitingInput);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::AwaitingInput)],
+            Phase::Reconnected,
+            None,
+        );
+        assert_eq!(claims, vec![], "the user had already been told");
+        assert_eq!(
+            tracker.seen(session).map(|seen| seen.seq),
+            Some(2),
+            "the sequence is adopted"
+        );
+    }
+
+    #[test]
+    fn u23_reconnected_does_not_claim_a_session_in_view() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::Working);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::AwaitingInput)],
+            Phase::Reconnected,
+            Some(session),
+        );
+        assert_eq!(claims, vec![], "the user is looking at it (FR-002)");
+    }
+
+    #[test]
+    fn u24_reconnected_does_not_claim_a_session_no_longer_awaiting() {
+        let session = id(1);
+        let mut tracker = adopted(session, 1, ActivitySignal::Working);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::Working)],
+            Phase::Reconnected,
+            None,
+        );
+        assert_eq!(claims, vec![], "it is not waiting now");
+    }
+
+    #[test]
+    fn u25_a_lower_sequence_is_adopted_with_no_claim() {
+        let session = id(1);
+        let mut tracker = adopted(session, 5, ActivitySignal::Working);
+        let claims = tracker.observe(
+            &[summary(session, 2, ActivitySignal::AwaitingInput)],
+            Phase::Live,
+            None,
+        );
+        assert_eq!(claims, vec![], "a recovered catalog claims nothing");
+        assert_eq!(
+            tracker.seen(session).map(|seen| seen.seq),
+            Some(2),
+            "the lower sequence is adopted"
+        );
+    }
+
+    #[test]
+    fn u26_ten_sessions_with_higher_sequences_give_ten_claims() {
+        let ids: Vec<SessionId> = (1..=10).map(id).collect();
+        let at = |seq: u64| -> Vec<SessionSummary> {
+            ids.iter()
+                .map(|&s| summary(s, seq, ActivitySignal::AwaitingInput))
+                .collect()
+        };
+        let mut tracker = AttentionTracker::new();
+        tracker.observe(&at(0), Phase::Live, None);
+        let claims = tracker.observe(&at(1), Phase::Live, None);
+        let expected: Vec<Claim> = ids.iter().map(|&s| claim(s, 1)).collect();
+        assert_eq!(
+            claims, expected,
+            "each session is claimed under its own id (FR-009)"
+        );
+    }
+
+    #[test]
+    fn u27_a_session_absent_from_the_snapshot_is_dropped() {
+        let (kept, gone) = (id(1), id(2));
+        let mut tracker = AttentionTracker::new();
+        tracker.observe(
+            &[
+                summary(kept, 0, ActivitySignal::Working),
+                summary(gone, 0, ActivitySignal::Working),
+            ],
+            Phase::Live,
+            None,
+        );
+        tracker.observe(
+            &[summary(kept, 0, ActivitySignal::Working)],
+            Phase::Live,
+            None,
+        );
+        assert_eq!(tracker.seen(gone), None, "the absent session is forgotten");
+        assert_eq!(tracker.len(), 1, "only the present session remains");
+    }
+
+    // --- notification_text (U28–U31) ---
+
+    #[test]
+    fn u28_the_title_names_the_session_and_the_body_the_project_and_worktree() {
+        let text = notification_text("micold", "feat-x", "Fix the parser");
+        assert_eq!(text.title, "Fix the parser is waiting for input");
+        assert_eq!(text.body, "micold \u{2014} feat-x");
+    }
+
+    #[test]
+    fn u29_the_default_entry_name_is_passed_through_unchanged() {
+        let text = notification_text("micold", "Default", "Fix the parser");
+        assert_eq!(text.body, "micold \u{2014} Default");
+    }
+
+    #[test]
+    fn u30_a_placeholder_session_label_is_passed_through_unchanged() {
+        let text = notification_text("micold", "feat-x", "New session");
+        assert_eq!(text.title, "New session is waiting for input");
+    }
+
+    #[test]
+    fn u31_neither_string_holds_text_besides_the_three_names_and_the_fixed_words() {
+        let text = notification_text("PROJ", "TREE", "SESS");
+        assert_eq!(
+            text.title.replace("SESS", ""),
+            " is waiting for input",
+            "the title is the session name and fixed words only"
+        );
+        assert_eq!(
+            text.body.replace("PROJ", "").replace("TREE", ""),
+            " \u{2014} ",
+            "the body is the project, the worktree and a dash only"
         );
     }
 }

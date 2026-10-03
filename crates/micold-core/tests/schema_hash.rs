@@ -198,7 +198,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// `OperationResult::MergedBranchCheck` and `pr_status_enabled` on `DaemonSettings` and
 /// `SettingsSet`: one bump for both, taking 22 as
 /// feature 039 took 21. Sixteenth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 22;
+///
+/// And 22 → 23 for feature 039's `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted`: a
+/// window claims an attention event and the service grants each one once. Seventeenth time, same
+/// case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 23;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -286,10 +290,10 @@ fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
 /// hash is the hash of the message set that has all of it.
 #[test]
 fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() {
-    assert_eq!(
-        PROTOCOL_VERSION, 22,
-        "feature 040's wire change is one bump, 21 → 22; if `main` took 22 first, this feature \
-         takes the next free number and this test follows it"
+    assert!(
+        PROTOCOL_VERSION >= 22,
+        "feature 040's wire change is one bump, 21 → 22; later features take later numbers, so \
+         this test is a floor, not an equality"
     );
 
     let (messages, _grid, _envelope) = read_protocol_source();
@@ -306,6 +310,20 @@ fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() 
             hashed.contains(anchor),
             "`{anchor}` is not in messages.rs, so version 22's hash does not cover all of \
              feature 040's wire change"
+        );
+    }
+}
+
+#[test]
+fn the_claim_and_the_grant_are_in_the_hashed_source() {
+    // Feature 039, contract W1 (version 23). U13. Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in ["AttentionClaim {", "AttentionGranted {"] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 23's hash is not the hash of the \
+             message set that claims and grants attention events"
         );
     }
 }
