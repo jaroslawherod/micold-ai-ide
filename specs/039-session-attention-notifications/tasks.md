@@ -165,11 +165,11 @@ B2) on a bundle and an installed build.
 ### Implementation for User Story 1, slice C
 
 - [X] T038 [US1] Add `mac-usernotifications` 0.3.1 (macOS only) and `tauri-winrt-notification` 0.8.1 (Windows only) in `Cargo.toml` (workspace) and `crates/micold-client/Cargo.toml`; both are `MIT OR Apache-2.0`
-- [ ] T039 [US1] [U167] [U168] `crates/micold-client/src/shell/desktop_notify/macos.rs`: `show` through `mac-usernotifications`, asking for authorisation on first use; an unbundled binary returns the error of `check_bundle` (T035)
-- [ ] T040 [US1] [U46] [U172] [U173] `crates/micold-client/src/shell/desktop_notify/windows.rs`: `show` through `Toast::new(APP_USER_MODEL_ID)` (T036)
-- [ ] T041 [US1] The macOS and Windows arms of `system()` in `crates/micold-client/src/shell/desktop_notify/mod.rs` return the two backends; the `Unsupported` notifier is removed
+- [X] T039 [US1] [U167] [U168] `crates/micold-client/src/shell/desktop_notify/macos.rs`: `show` through `mac-usernotifications`, asking for authorisation on first use; an unbundled binary returns the error of `check_bundle` (T035)
+- [X] T040 [US1] [U46] [U172] [U173] `crates/micold-client/src/shell/desktop_notify/windows.rs`: `show` through `Toast::new(APP_USER_MODEL_ID)` (T036)
+- [X] T041 [US1] The macOS and Windows arms of `system()` in `crates/micold-client/src/shell/desktop_notify/mod.rs` return the two backends; the `Unsupported` notifier is removed
 - [X] T042 [US1] [U46] `AppUserModelID: "MicoldAiIde.Client"` on the Start-menu shortcut in `packaging/windows/micold-ai-ide.iss` (T037)
-- [ ] T043 [US1] Cross-check the arms from Linux: `cargo check -p micold-client --target aarch64-apple-darwin` for `crates/micold-client/src/shell/desktop_notify/macos.rs`, and the Windows target when its toolchain is installed; otherwise CI's Windows job is the check
+- [X] T043 [US1] Cross-check the arms from Linux: `cargo check -p micold-client --target aarch64-apple-darwin` for `crates/micold-client/src/shell/desktop_notify/macos.rs`, and the Windows target when its toolchain is installed; otherwise CI's Windows job is the check
 - [X] T044 [US1] User guide: `docs/user-guide/worktrees-and-sessions.md` names the three systems and says the system may ask for, or withhold, permission; `docs/user-guide/install-macos.md` and `docs/user-guide/install-windows.md` say where notifications are allowed or turned off in the system's settings, and that Windows shows them only for an installed build (FR-031)
 - [ ] T118 [US1] Story 1's outer tests (behaviors A1 to A13 of the test list) are green on CI's Linux, macOS and Windows legs: locally `scripts/build-lock.sh cargo test --test attention_events`, `--test attention_claims`, `--test attention_view_report`, `--test attention_notify`, and `mise run test-core`; on the pull request, the macOS and Windows jobs with the list and the step of T122. Record the three jobs' result in `specs/039-session-attention-notifications/tdd/cycle-log.md`. Story 1 is not complete until they pass
 

@@ -362,7 +362,41 @@ was held by them for 10 minutes and more at a time during this milestone.
   tests and with `todo!()` bodies, before T039 and T040. From Linux, `cargo check -p micold-client
   --bin micold-ai-ide --tests` passed for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on that
   tree, so the red is the tests' and not the compiler's.
-- red: RED_RUN_PLACEHOLDER
+- red, on CI, pull request #557 at `022a6b60` (run
+  <https://github.com/jaroslawherod/micold-ai-ide/actions/runs/37135332627>), step
+  "Test (desktop notification backends)":
+  - macOS (job 111238622228): `test result: FAILED. 0 passed; 10 failed`, each with
+    `not yet implemented: T039` — all ten tests of `shell::desktop_notify::macos::tests`.
+  - Windows (job 111238622255): `test result: FAILED. 1 passed; 4 failed`, each failure with
+    `not yet implemented: T040` — `the_toast_carries_the_title_and_the_body_as_its_first_line`,
+    `names_are_passed_as_written_because_the_crate_sets_them_as_inner_text`,
+    `a_failure_of_the_system_is_a_refusal_with_its_reason`,
+    `a_failure_to_read_a_file_is_a_refusal_with_its_reason`. The one that passed is
+    `the_application_identity_is_the_one_the_installer_puts_on_its_shortcut`: the constant was
+    written with the tests, because the installer's scan test (U46, cycle 11) reads it.
+  - Every other step of both legs passed, `attention_notify` in the enumerated list among them.
+- green: T039 — `banner`, `notify_error` (`NoBundleIdentifier` is `NoService`, anything else
+  `Refused`), `authorised` (`Ok(false)` is `Refused`), `outcome`; `Notifier::show` asks for
+  authorisation and sends on a thread of its own and waits 2 s for the answer. T040 —
+  `toast_text`, `notify_error` (`Refused`), `Notifier::show` through
+  `Toast::new(APP_USER_MODEL_ID)`. T041 — `system()` has one arm per system and the `Unsupported`
+  notifier is gone. The green run is recorded under T118 below.
+- T043: from Linux, `cargo clippy -p micold-client --bin micold-ai-ide --tests -- -D warnings`
+  passed for `--target aarch64-apple-darwin` and for `--target x86_64-pc-windows-msvc`.
+- **No test**: the calls into the system (`deliver` and `Notifier::show` on macOS, `Notifier::show`
+  on Windows). They need a signed bundle and an installed build; quickstart §C1 and §C2 cover them.
+- Decisions made here:
+  - macOS sends with the crate's `blocking::send`, not `Notification::send_blocking`: the second
+    waits on the main run loop for a response handle, which this slice does not use, and fails with
+    `MainThreadNotRunning` when the loop is busy.
+  - `show` does not wait for a person. The first request for authorisation returns when the user
+    answers the system's prompt; `show` runs on the runtime's blocking pool, which the runtime
+    waits for at exit. So the request and the send run on a thread of their own, `show` waits 2 s,
+    and an unanswered prompt is reported as a refusal (`outcome(None)`). The notification is shown
+    once the user allows it.
+  - Authorisation is requested on every `show`: after the first answer the system returns the
+    stored one at once, and a permission changed in System Settings takes effect without a restart.
+- refactor: none beyond `cargo fmt`.
 
 ## Notes and deviations
 

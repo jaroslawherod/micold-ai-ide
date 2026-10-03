@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3: red tree pushed as draft PR #557 (T122, T035–T038, T042, T044 done; backends are `todo!()`). Record the red macOS and Windows runs in `tdd/cycle-log.md` (replace `RED_RUN_PLACEHOLDER`), then T039–T041 (patch prepared, not committed), T043, reviews A and B, full gate, push, `gh pr ready 557`, T118.
+- **Next step**: M3: all tasks but T118 done and committed locally (red runs recorded; green not yet pushed). Scoped gate with review A, review B, full gate, push, `gh pr ready 557`, then T118 (record the three CI legs in `tdd/cycle-log.md`).
 
 ## Pull requests
 
