@@ -202,7 +202,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 22 → 23 for feature 039's `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted`: a
 /// window claims an attention event and the service grants each one once. Seventeenth time, same
 /// case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 23;
+///
+/// And 23 → 24 for feature 039's `SessionSummary::unread`: every session carries whether it is
+/// unread. Eighteenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 24;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -326,7 +329,7 @@ fn the_claim_and_the_grant_are_in_the_hashed_source() {
 
 #[test]
 fn unread_is_in_the_hashed_source() {
-    // Feature 039, contract W2. U14. Read from the text `build.rs` hashes, as above.
+    // Feature 039, contract W2 (version 24). U14. Read from the text `build.rs` hashes, as above.
     let (messages, _grid, _envelope) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("pub unread: bool,"),
