@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #528 | Spec | merged | 824e0a9bc58ad5f977ef56fa813e58217c563ea5 |
 | #539 | Design | merged | 6b4b6fa9afc27f134a5f4fc80048dc3f9a115a38 |
 | #544 | M1 | merged | a8d628b8a9b089033a05b1194c8fc5f5fe5b3c7c |
+| #554 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | #544 | merged |
-| M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | | in progress |
+| M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | PR open |
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | | pending |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
