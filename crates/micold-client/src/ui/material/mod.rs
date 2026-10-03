@@ -142,12 +142,12 @@ mod text_field_anatomy;
 mod toggle_chip;
 mod toolbar;
 mod tree_view;
-mod unread_mark;
 /// The application's typographic vocabulary, pinned. In-crate for the same reason as the style
 /// snapshots above: `TypeRole` is not reachable from `tests/`.
 #[cfg(test)]
 mod type_role_mapping;
 mod typeahead;
+mod unread_mark;
 
 pub use accordion::Accordion;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
@@ -193,8 +193,8 @@ pub use text_field::TextField;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
-pub use unread_mark::UnreadMark;
 pub use typeahead::Typeahead;
+pub use unread_mark::UnreadMark;
 
 /// The application's theme, derived from the active colour scheme.
 ///
