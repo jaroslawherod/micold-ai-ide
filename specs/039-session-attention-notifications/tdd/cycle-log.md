@@ -862,3 +862,25 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
 - **No test**: the calls into the system (`deliver` and `Notifier::show` on macOS, `Notifier::show`
   on Windows); quickstart §C1 and §C2 (M9).
 
+## Cycle 32 — M6 verify: review A round 1, F1 to F4 (U33, U132, U134, U160; no new behavior id)
+
+- tests, one per finding:
+  - F1 `crates/micold-core/src/attention.rs::tests::u33_a_session_the_user_closed_resolves_to_unavailable`
+  - F3 `crates/micold-client/tests/attention_reveal.rs::the_switch_a_reveal_asks_for_arrives_at_the_revealed_session`
+  - F2 `crates/micold-client/src/shell/daemon_sync.rs::tests::a_reveal_for_a_project_whose_folder_has_gone_says_so_and_selects_nothing`
+  - F4 `crates/micold-client/src/shell/desktop_notify/linux.rs::tests::a_call_that_timed_out_keeps_the_connection_and_a_broken_bus_loses_it`
+    (written against a `connection_is_lost` that only called `is_connection_error`, so that it compiled)
+- red, on the working tree before the fixes (`cargo test -p micold-core --lib attention::tests::u3`,
+  `-p micold-client --test attention_reveal`, `-p micold-client --bin micold-ai-ide -- a_reveal_for desktop_notify`):
+  - F1 `assertion left == right failed: a closed session has no row to select` (`7 passed; 1 failed`)
+  - F3 `assertion left == right failed: the switch restores the revealed session, so it is the one session started` (`8 passed; 1 failed`)
+  - F2 `daemon_sync.rs:2495: assertion left == right failed` (no notice was shown) and
+    F4 `assertion failed: !connection_is_lost(&io(std::io::ErrorKind::TimedOut))` (`15 passed; 2 failed`)
+- green, the same three commands: `8 passed`, `9 passed`, `17 passed`.
+  - F1: `resolve_reveal` requires `!s.archived`.
+  - F3: `State::reveal_session` makes the session the project's remembered foreground before `Reopened`.
+  - F2: the `RevealSession` arm scans the folders (`refresh_availability`) before `reveal_session`.
+  - F4: `Notifier::show` forgets the connection only for `connection_is_lost`, which a timeout is not.
+- The tests and the fixes are in one commit: the red above is from the working tree, not from a commit.
+- **No test**: that `Reopened` and `Selected` are dispatched in order by the `Task` chain; that the
+  listening thread ends with a broken connection.

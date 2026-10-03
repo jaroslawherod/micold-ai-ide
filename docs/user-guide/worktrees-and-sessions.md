@@ -1116,14 +1116,17 @@ nothing into it.
 - **Which window comes forward.** With several windows open, the one that already has the
   session's project open comes forward and shows it; the click does not move the project to
   another window. When no window has that project open, the window you used last opens it.
-- **A session that is gone.** When the session was removed in the meantime, or its project was
-  forgotten or its folder is no longer there, the window still comes forward, your selection
-  stays as it was, and a notice says `That session is no longer available.`
+- **A session that is gone.** When the session was closed or removed in the meantime, or its
+  project was forgotten or its folder is no longer there, the window still comes forward, your
+  selection stays as it was, and a notice says `That session is no longer available.`
 - **A notification older than its window.** A click is reported to the window that raised the
   notification. When you have closed that window, clicking the notification does not open the
   session, also when other windows of the application are open, and with no window open it does
   nothing or starts the application as usual. The session's unread mark is still there to find it
   by.
+- **macOS: one hour.** On macOS a notification stays in Notification Centre for one hour. After
+  that the application removes it, and it can no longer be clicked. The session's unread mark
+  stays.
 - **A text-only notification service.** Some Linux notification services only show text and report
   no click. The notification is shown all the same; clicking it does nothing.
 - **Wayland.** On a Wayland desktop an application cannot put its own window in front. The window

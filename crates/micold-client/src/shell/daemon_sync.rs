@@ -629,8 +629,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // or another, and the service chose this window to show it. The window comes to the
         // front first; then the root's messages are dispatched in order — the ordinary project
         // switch and the ordinary selection, or none for a session that is gone (the root has
-        // pushed the notice).
+        // pushed the notice). The folders are scanned first, as the switch itself scans them: a
+        // project whose folder has gone since the last scan gets the notice, not a switch that
+        // is refused followed by a selection in the project that stayed active (FR-013).
         DaemonMsg::RevealSession { project, session } => {
+            app.core.workspace.refresh_availability(app.caps.scanner());
             follow_up = app
                 .core
                 .reveal_session(&project, session)
@@ -2461,6 +2464,47 @@ pub(crate) mod tests {
                 .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id)),
             "and the restored session is started, exactly as selecting it by hand would"
         );
+    }
+
+    /// Feature 039 (FR-013, M6 review A F2): the folder of a notification's project has gone
+    /// since the last scan. The click says so and selects nothing, instead of asking for a switch
+    /// that is refused and then selecting the session in the project that stayed active.
+    #[test]
+    fn a_reveal_for_a_project_whose_folder_has_gone_says_so_and_selects_nothing() {
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{Session, SessionLocation};
+        let gone = PathBuf::from("/no/such/folder/of-feature-039");
+        let (mut app, mut rx) = connected_app();
+        // What the last scan said, before the folder went.
+        app.core
+            .workspace
+            .projects
+            .push(Project::new(gone.clone(), true, Availability::Available));
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let id = session.id;
+        app.core
+            .workspace
+            .sessions
+            .insert(gone.clone(), vec![session]);
+
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::RevealSession {
+                project: gone,
+                session: id,
+            },
+        );
+
+        assert_eq!(
+            app.core
+                .notifications
+                .queue
+                .visible()
+                .map(|n| n.message.clone()),
+            Some(micold_client::features::attention::SESSION_UNAVAILABLE.to_string())
+        );
+        assert_eq!(app.core.session.active, None, "no selection changes");
+        assert!(rx.try_recv().is_err(), "and nothing is sent");
     }
 
     /// The bound, at this seam: a switch that restores nothing starts nothing, and still tells the
