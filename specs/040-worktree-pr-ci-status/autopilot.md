@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
-| #547 | M2 | open | |
+| #547 | M2 | open (label `docs-not-needed` added after `docs check` failed in run 37104864147) | |
 
 ## Milestones
 
