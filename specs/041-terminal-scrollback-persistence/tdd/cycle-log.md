@@ -100,3 +100,43 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - notes: "round-trips" is read as set-then-read-back through `with`/`contains`; no `bits`/`from_bits`
   API was added, since no listed behaviour needs one yet.
 - commit: `feat(041): dim colours, emptiness and style flags of a snapshot (U5-U7)`
+
+## Cycle 8: U8 at 80 columns `separator_line` is `── session restarted at 2026-10-02 14:31 +02:00 ──`
+
+- test: `crates/micold-core/tests/terminal_history_text.rs::at_80_columns_the_separator_is_the_full_text` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_text` (one shared file run with U8 to U11 written together against an `unimplemented!` stub of `separator_line`, declared with `pub mod text;` so the file compiles: `test result: FAILED. 0 passed; 4 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/text.rs:8:5:` / `not implemented: separator_line("2026-10-02 14:31 +02:00", 80)`
+- green: `separator_line` formats `session restarted at {at}` and passes it to `fit`, which returns it between `── ` and ` ──` when that fits in `columns`, else the bare text cut to `columns` characters. File run -> 4 passed, 0 failed
+- refactor: none beyond the shared `fit` helper written in the green step (U12/U13's `notice_line` follows the same rule)
+- notes: the stub's deliberate "not implemented" is the red, as in cycle 1; this test was not run against a partial implementation.
+- commit: `feat(041): the session restarted separator line (U8-U11)`
+
+## Cycle 9: U9 at a width narrower than the full text the rules are dropped (49 and 44 columns)
+
+- test: `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_full_text_the_rules_are_dropped` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_text` (one shared file run with U8 to U11 written together against an `unimplemented!` stub of `separator_line`, declared with `pub mod text;` so the file compiles: `test result: FAILED. 0 passed; 4 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/text.rs:8:5:` / `not implemented: separator_line("2026-10-02 14:31 +02:00", 49)`
+- green: `separator_line` formats `session restarted at {at}` and passes it to `fit`, which returns it between `── ` and ` ──` when that fits in `columns`, else the bare text cut to `columns` characters. File run -> 4 passed, 0 failed
+- refactor: none beyond the shared `fit` helper written in the green step (U12/U13's `notice_line` follows the same rule)
+- notes: the stub's deliberate "not implemented" is the red, as in cycle 1; this test was not run against a partial implementation.
+- commit: `feat(041): the session restarted separator line (U8-U11)`
+
+## Cycle 10: U10 at a width narrower than the text without rules the text is cut to the width (43 columns)
+
+- test: `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_text_without_rules_the_text_is_cut_to_the_width` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_text` (one shared file run with U8 to U11 written together against an `unimplemented!` stub of `separator_line`, declared with `pub mod text;` so the file compiles: `test result: FAILED. 0 passed; 4 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/text.rs:8:5:` / `not implemented: separator_line("2026-10-02 14:31 +02:00", 43)`
+- green: `separator_line` formats `session restarted at {at}` and passes it to `fit`, which returns it between `── ` and ` ──` when that fits in `columns`, else the bare text cut to `columns` characters. File run -> 4 passed, 0 failed
+- refactor: none beyond the shared `fit` helper written in the green step (U12/U13's `notice_line` follows the same rule)
+- notes: the stub's deliberate "not implemented" is the red, as in cycle 1; this test was not run against a partial implementation.
+- commit: `feat(041): the session restarted separator line (U8-U11)`
+
+## Cycle 11: U11 the separator is never wider than `columns` and never holds a line break, at widths 1, 2, 50 and 49
+
+- test: `crates/micold-core/tests/terminal_history_text.rs::the_separator_is_never_wider_than_the_columns_and_never_breaks_the_line` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_text` (one shared file run with U8 to U11 written together against an `unimplemented!` stub of `separator_line`, declared with `pub mod text;` so the file compiles: `test result: FAILED. 0 passed; 4 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/text.rs:8:5:` / `not implemented: separator_line("2026-10-02 14:31 +02:00", 1)`
+- green: `separator_line` formats `session restarted at {at}` and passes it to `fit`, which returns it between `── ` and ` ──` when that fits in `columns`, else the bare text cut to `columns` characters. File run -> 4 passed, 0 failed
+- refactor: none beyond the shared `fit` helper written in the green step (U12/U13's `notice_line` follows the same rule)
+- notes: the stub's deliberate "not implemented" is the red, as in cycle 1; this test was not run against a partial implementation.
+- commit: `feat(041): the session restarted separator line (U8-U11)`
