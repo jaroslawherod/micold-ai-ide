@@ -1035,6 +1035,35 @@ Nothing about this is a setting you have to find, and nothing needs installing t
 [the session service](../daemon.md) for what it does and does not promise, including what a reboot
 costs you.
 
+### Being told when a session needs you
+
+When a session you are not looking at finishes its turn or stops to ask for a permission — its
+activity dot changes to *awaiting input* — the application shows **one desktop notification** for
+it. Its title is the session's name as its sidebar row shows it, followed by *is waiting for
+input*; its text names the project and the worktree (or the **Default** entry, for a session without
+a worktree). Nothing from the conversation itself is shown.
+
+- **Never for the session in view.** A session is in view when it is the selected session of a
+  window that has the keyboard focus, and that window shows the session (its AI conversation or one
+  of its terminal tabs). Select another session, switch to another project, put another
+  application in front, minimise the window, or open Settings, and the session is no longer in
+  view: a change then notifies you.
+- **Once per wait.** A session that is already waiting does not notify again because its CLI
+  reminds you it is idle; it notifies again only after it has worked and stopped once more.
+- **One, however many windows are open.** Several windows of the application share one
+  notification per event, and several sessions that stop together each get their own.
+- **Background projects too.** A session in a project you are not in notifies you with its own
+  project's name.
+- **Only while a window is open.** With no window open, nothing is shown — not at that moment and
+  not when you open the application again. Sessions it already finds waiting when it starts raise
+  nothing either; after a lost connection to the session service, a session that changed to
+  waiting while it was away notifies you once.
+
+This release shows the notification on **Linux**, where it needs a desktop notification service
+(every major desktop has one). If none is running, or the desktop refuses it, nothing else changes:
+sessions and their activity dots work as before, no error appears in the application, and the
+failure is written to its log once.
+
 ## Colored, real-terminal output
 
 The embedded terminal renders the AI CLI's output like a real terminal, not as flat text:
