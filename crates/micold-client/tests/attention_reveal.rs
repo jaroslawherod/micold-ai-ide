@@ -8,8 +8,8 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::attention::{
-    after_activation, after_send, in_view, notifier_event, raise_plan, row_unread, AfterSend,
-    NotifierEvent, RaiseStep, ACTIVATION_SETTLE,
+    activation_done, after_activation, after_send, in_view, notifier_event, raise_plan, row_unread,
+    ActivationWatch, AfterSend, NotifierEvent, RaiseStep, ACTIVATION_SETTLE,
 };
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -322,4 +322,79 @@ fn an_activation_request_that_was_sent_is_judged_by_the_focus_a_moment_later() {
         (300..=500).contains(&ACTIVATION_SETTLE.as_millis()),
         "long enough for the compositor (12 ms in the probe), short enough to be one gesture"
     );
+}
+
+/// U140 (research R7, "What done means"): a request that went out is done when the window gained
+/// keyboard focus since it was sent, or when the last focus event the window has seen is a gain —
+/// it had the focus already, and no event follows. A window that has seen no focus event is not
+/// known to be focused.
+#[test]
+fn a_sent_activation_is_done_by_a_gain_since_the_send_or_by_a_focus_already_held() {
+    assert!(activation_done(true, Some(true)));
+    assert!(activation_done(true, Some(false)), "gained, then lost");
+    assert!(activation_done(false, Some(true)), "focused already");
+    assert!(!activation_done(false, Some(false)));
+    assert!(!activation_done(false, None), "no focus event yet");
+}
+
+/// U140 (FR-015): a window that never had the focus, and a compositor that declined the token.
+#[test]
+fn a_window_that_never_had_focus_asks_for_attention_when_the_token_is_declined() {
+    let mut watch = ActivationWatch::default();
+    watch.sent(1);
+    assert_eq!(watch.settled(1), Some(RaiseStep::RequestAttention));
+}
+
+/// U140: the window was focused when the click came, so no focus event follows the request.
+#[test]
+fn a_window_that_was_focused_already_asks_for_nothing() {
+    let mut watch = ActivationWatch::default();
+    watch.focus_changed(true);
+    watch.sent(1);
+    assert_eq!(watch.settled(1), None);
+}
+
+/// U140 (FR-011): the compositor honoured the token.
+#[test]
+fn an_unfocused_window_that_gains_focus_after_the_send_asks_for_nothing() {
+    let mut watch = ActivationWatch::default();
+    watch.focus_changed(false);
+    watch.sent(1);
+    watch.focus_changed(true);
+    assert_eq!(watch.settled(1), None);
+}
+
+/// U140 (FR-015): the compositor declined the token.
+#[test]
+fn an_unfocused_window_that_gains_no_focus_after_the_send_asks_for_attention() {
+    let mut watch = ActivationWatch::default();
+    watch.focus_changed(true);
+    watch.focus_changed(false);
+    watch.sent(1);
+    assert_eq!(watch.settled(1), Some(RaiseStep::RequestAttention));
+}
+
+/// U140: a second request sent while the first is still waiting restarts the one check. The first
+/// wait ends on nothing, the second is judged, and attention is asked for once.
+#[test]
+fn a_second_send_while_one_is_pending_is_judged_once() {
+    let mut watch = ActivationWatch::default();
+    watch.focus_changed(false);
+    watch.sent(1);
+    watch.sent(2);
+    assert_eq!(watch.settled(1), None, "the first check was replaced");
+    assert_eq!(watch.settled(2), Some(RaiseStep::RequestAttention));
+    assert_eq!(watch.settled(2), None, "and a check is judged once");
+}
+
+/// U140: a gain seen before the second send is not a gain since it.
+#[test]
+fn a_second_send_forgets_the_gain_seen_since_the_first() {
+    let mut watch = ActivationWatch::default();
+    watch.focus_changed(false);
+    watch.sent(1);
+    watch.focus_changed(true);
+    watch.focus_changed(false);
+    watch.sent(2);
+    assert_eq!(watch.settled(2), Some(RaiseStep::RequestAttention));
 }

@@ -581,6 +581,20 @@ mod tests {
     }
 
     #[test]
+    fn a_token_does_not_outlive_another_action_on_its_notification() {
+        // U166: the token was that action's click. A later click on the body brings its own, or
+        // none.
+        let session = SessionId::new();
+        let mut shown = shown_for(session);
+        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
+        assert_eq!(shown.on_signal(invoked(SHOWN, "dismiss")), None);
+        assert_eq!(
+            shown.on_signal(invoked(SHOWN, "default")),
+            activated(session, None)
+        );
+    }
+
+    #[test]
     fn a_token_for_another_notification_is_not_this_ones() {
         // U166: the signals are matched by notification id.
         let (first, second) = (SessionId::new(), SessionId::new());
