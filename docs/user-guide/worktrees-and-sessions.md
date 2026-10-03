@@ -1052,7 +1052,9 @@ right-hand end of the row, with the session's name set in a heavier weight.
 - **Every window agrees.** Unread state belongs to the session, not to a window: a session you
   read in one window loses its mark in all of them.
 - **It does not depend on notifications.** The mark appears whether or not a desktop notification
-  was shown, and also on a desktop that has no notification service.
+  was shown: also with the **Desktop notifications** switch off
+  ([Settings](settings.md#desktop-notifications)), and on a desktop that has no notification
+  service.
 - **It is there when you come back.** Sessions that finished a turn while the application was
   closed are unread when you open it, and a session that was unread when you closed the last
   window is still unread, also after a restart of the computer. A session you had read, and that
@@ -1101,8 +1103,8 @@ system refuses it, nothing else changes: sessions and their activity dots work a
 still shows the state, no error appears in the application's window, and the failure is written to
 its log once.
 
-There is no switch inside the application to turn notifications off; use the system's own
-settings.
+To turn them off inside the application, use the **Desktop notifications** switch in **Settings →
+Environment** ([Desktop notifications](settings.md#desktop-notifications)). The unread marks stay.
 
 #### Clicking a notification
 
