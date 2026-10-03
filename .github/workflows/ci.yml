@@ -320,6 +320,7 @@ jobs:
             --test attention_notify \
             --test attention_view_report \
             --test unread_rows \
+            --test switcher_unread \
             --test features_attention \
             --test features_connection \
             --test features_help \

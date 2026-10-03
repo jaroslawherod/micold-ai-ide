@@ -409,6 +409,9 @@ pub fn view<'a>(
                 .available
                 .then(|| Message::Project(ProjectMsg::Reopened(e.path.clone()))),
             trailing_text: (e.running_count > 0).then(|| format!("{} running", e.running_count)),
+            // The unread count, on the active project's row as on the others (feature 039,
+            // FR-021; contract `unread-mark.md` U6).
+            trailing_mark: (e.unread_count > 0).then_some(e.unread_count),
             trailing_icon: (!e.available).then_some((
                 Icon::Unavailable,
                 icon_role(IconSurface::Unavailable, roles),

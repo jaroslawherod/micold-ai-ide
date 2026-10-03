@@ -124,6 +124,9 @@ pub struct SwitcherEntry {
     pub is_active: bool,
     /// Number of running background sessions this project holds (FR-007).
     pub running_count: usize,
+    /// Number of unread sessions this project holds, less the session this window has in view
+    /// (feature 039, FR-019, FR-021). Carried by the active project's entry as by the others.
+    pub unread_count: usize,
     /// Whether the folder is available; unavailable projects are shown but not selectable (FR-008).
     pub available: bool,
 }

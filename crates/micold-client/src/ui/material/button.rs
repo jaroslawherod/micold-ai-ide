@@ -101,7 +101,18 @@ pub struct Button<'a, M> {
     width: Option<Length>,
     shape: Option<f32>,
     leading: Option<(Icon, Option<Rgb>)>,
+    trailing_mark: Option<(usize, String)>,
     host: Option<style::Host>,
+}
+
+/// The tooltip of the unread count on the switcher's button (feature 039, FR-023): what the
+/// number counts, which the button itself has no room to say.
+pub fn unread_total_tooltip(unread: usize) -> String {
+    if unread == 1 {
+        "1 unread session in other projects".to_string()
+    } else {
+        format!("{unread} unread sessions in other projects")
+    }
 }
 
 impl<'a, M: Clone + 'a> Button<'a, M> {
@@ -134,6 +145,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             on_press: None,
             padding: None,
             leading: None,
+            trailing_mark: None,
             width: None,
             shape: None,
             host: None,
@@ -218,6 +230,18 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self
     }
 
+    /// The unread mark and `unread` after the label, inside the button: `● 3` (feature 039,
+    /// FR-023; contract `unread-mark.md`). `tooltip` says what the number counts and is shown on
+    /// hover of the whole button. A count of zero draws no mark and no tooltip.
+    ///
+    /// The number takes the label's role and the variant's content colour, so it reads as part of
+    /// the label; the mark before it is what tells it from the name. For the text and outlined
+    /// variants: the mark is filled in `primary`, which is the filled variant's own container.
+    pub fn trailing_mark(mut self, unread: usize, tooltip: impl Into<String>) -> Self {
+        self.trailing_mark = (unread > 0).then(|| (unread, tooltip.into()));
+        self
+    }
+
     /// A leading icon in a stated tint, for a glyph carrying its own meaning — the destructive
     /// `error` red on "Forget", which is saying something the label's accent does not.
     ///
@@ -267,17 +291,41 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         //
         // A leading icon joins the label here rather than at the call site, so §7.3's 18dp is the
         // component's business — see [`Button::leading`].
-        let inner: Element<'a, M> = match b.leading {
-            Some((glyph, tint)) => {
+        //
+        // The unread count joins it here too, for the same reason: the gap before it and the role
+        // and colour of its number are the component's, not the app bar's.
+        let (mark, tooltip) = match b.trailing_mark {
+            Some((unread, tooltip)) => (
+                Some(
+                    super::UnreadMark::new(b.roles)
+                        .count(unread)
+                        .role(TypeRole::Action)
+                        .tint(b.variant.content(b.roles, b.host)),
+                ),
+                Some(tooltip),
+            ),
+            None => (None, None),
+        };
+        let inner: Element<'a, M> = if b.leading.is_none() && mark.is_none() {
+            b.content
+        } else {
+            let mut inner = row![].spacing(spacing::XS).align_y(Alignment::Center);
+            if let Some((glyph, tint)) = b.leading {
                 // The variant's own content colour unless the call site meant something by the
                 // glyph's tone — one control, one colour, by default.
                 let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
-                row![icon(glyph, anatomy::button::LEADING_ICON, tint), b.content]
-                    .spacing(spacing::XS)
-                    .align_y(Alignment::Center)
-                    .into()
+                inner = inner.push(icon(glyph, anatomy::button::LEADING_ICON, tint));
             }
-            None => b.content,
+            inner = inner.push(b.content);
+            if let Some(mark) = mark {
+                // One more `XS` before the mark than between the glyph and the label: the glyph
+                // belongs to the name, and the count is a second thing said after it.
+                inner = inner.push(container(mark).padding(Padding {
+                    left: spacing::XS,
+                    ..Padding::ZERO
+                }));
+            }
+            inner.into()
         };
         let content = container(inner)
             .height(Length::Fill)
@@ -353,7 +401,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
                 .key(keyboard::key::Named::Enter, message.clone())
                 .key(keyboard::key::Named::Space, message);
         }
-        focusable
+        let focusable: Element<'a, M> = focusable
             .indicator(Indicator {
                 // §5's ring is `secondary` against every variant, so a focused button is the same
                 // mark whether it is filled, outlined or text. The state layer under it is the
@@ -365,6 +413,120 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
                 // control it marks.
                 radius: b.shape.unwrap_or(shape::FULL),
             })
+            .into();
+        // Outermost, so the whole button is the tooltip's trigger. It adds no layout node.
+        match tooltip {
+            Some(tooltip) => super::Tooltip::new(focusable, tooltip, b.roles).into(),
+            None => focusable,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::showcase::state::Message;
+    use iced::advanced::layout::{self, Layout};
+    use iced::advanced::widget::Tree;
+    use iced::{Rectangle, Size};
+    use micold_core::theme::ColorScheme;
+
+    const ROOM: Size = Size::new(400.0, 300.0);
+
+    fn roles() -> Roles {
+        micold_core::tokens::roles(ColorScheme::Light)
+    }
+
+    /// The switcher's button as the app bar builds it, with `unread` sessions in other projects.
+    fn switcher_button(unread: usize) -> Element<'static, Message> {
+        Button::text("micold-ai-ide", roles())
+            .leading(Icon::OpenProject)
+            .trailing_mark(unread, unread_total_tooltip(unread))
+            .on_press(Message::NoOp)
             .into()
+    }
+
+    /// The button's own box, and the boxes of what its content row holds, in order.
+    fn parts(element: Element<'_, Message>) -> (Rectangle, Vec<Rectangle>) {
+        let mut element = element;
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, ROOM),
+        );
+        let button = Layout::new(&node);
+        let row = button
+            .children()
+            .next()
+            .expect("the button holds its centring container")
+            .children()
+            .next()
+            .expect("the container holds the content row");
+        let content: Vec<Rectangle> = row.children().map(|child| child.bounds()).collect();
+        let bounds = button.bounds();
+        (bounds, content)
+    }
+
+    /// U156 (FR-023): `● n` after the label, inside the button.
+    #[test]
+    fn a_trailing_mark_renders_the_count_after_the_label_inside_the_button() {
+        let (button, content) = parts(switcher_button(3));
+
+        let [_glyph, label, mark] = content[..] else {
+            panic!(
+                "a button with a leading icon and an unread count holds three boxes, not {}",
+                content.len()
+            );
+        };
+        assert!(
+            mark.x >= label.x + label.width,
+            "the mark starts at {}dp, before the label ends at {}dp",
+            mark.x,
+            label.x + label.width
+        );
+        assert!(
+            mark.width > 8.0,
+            "the mark is {}dp wide: the dot alone, with no number after it",
+            mark.width
+        );
+        let inset = (button.x + button.width) - (mark.x + mark.width);
+        assert!(
+            (inset - anatomy::button::PADDING_TEXT).abs() < 0.5,
+            "the mark ends {inset}dp inside the button's trailing edge, not at its {}dp padding",
+            anatomy::button::PADDING_TEXT
+        );
+    }
+
+    /// U156, FR-023: no unread count when the total is zero.
+    #[test]
+    fn a_trailing_mark_of_zero_renders_the_button_without_it() {
+        let (marked, content) = parts(switcher_button(0));
+        let (plain, _) = parts(
+            Button::text("micold-ai-ide", roles())
+                .leading(Icon::OpenProject)
+                .on_press(Message::NoOp)
+                .into(),
+        );
+
+        assert_eq!(content.len(), 2, "the leading icon and the label, no mark");
+        assert_eq!(
+            marked.width, plain.width,
+            "a total of zero leaves no gap where the mark would stand"
+        );
+    }
+
+    /// U158 (FR-023).
+    #[test]
+    fn the_unread_totals_tooltip_names_the_other_projects() {
+        assert_eq!(
+            unread_total_tooltip(1),
+            "1 unread session in other projects"
+        );
+        assert_eq!(
+            unread_total_tooltip(3),
+            "3 unread sessions in other projects"
+        );
     }
 }

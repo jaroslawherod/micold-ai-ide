@@ -22,7 +22,7 @@ use crate::features::help::Msg as HelpMsg;
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
-use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
+use crate::ui::material::{unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::APP_NAME;
 use micold_core::theme::ColorScheme;
@@ -72,9 +72,16 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .active_project()
         .map(|p| p.display_name.clone())
         .unwrap_or_else(|| "Select project".to_string());
-    let switcher = Button::text(switcher_label, r)
+    let mut switcher = Button::text(switcher_label, r)
         .leading(Icon::OpenProject)
         .on_press(Message::Project(ProjectMsg::SwitcherToggled));
+    // The unread sessions of the *other* projects, shown whether the panel is closed or open: the
+    // sidebar already marks the active project's own (feature 039, FR-023; contract
+    // `unread-mark.md` U7).
+    let unread = state.other_projects_unread();
+    if unread > 0 {
+        switcher = switcher.trailing_mark(unread, unread_total_tooltip(unread));
+    }
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
     Toolbar::new(APP_NAME, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from

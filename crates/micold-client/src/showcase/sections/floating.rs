@@ -49,6 +49,7 @@ fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
             label: (*label).to_string(),
             message: available.then_some(Message::NoOp),
             trailing_text: (*running > 0).then(|| format!("{running} running")),
+            trailing_mark: None,
             trailing_icon: (!*available).then_some((
                 Icon::Unavailable,
                 icon_role(IconSurface::Unavailable, roles),
