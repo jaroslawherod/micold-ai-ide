@@ -258,6 +258,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             // Feature 034 (FR-016): the option crosses the wire as the value chosen.
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             pr_status_enabled: Some(true),
+            desktop_notifications: Some(false),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -272,6 +273,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
+            desktop_notifications: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -399,6 +401,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 tool_server_enabled: true,
                 cross_session_access: CrossSessionAccess::Auto,
                 pr_status_enabled: true,
+                desktop_notifications: true,
             },
         },
         DaemonMsg::Refused {
@@ -459,6 +462,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 tool_server_enabled: false,
                 cross_session_access: CrossSessionAccess::Off,
                 pr_status_enabled: false,
+                desktop_notifications: true,
             },
         },
         DaemonMsg::SessionTitleChanged {
@@ -683,6 +687,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             tool_server_enabled: true,
             cross_session_access: access,
             pr_status_enabled: false,
+            desktop_notifications: true,
         };
         json_roundtrip(&DaemonMsg::SettingsChanged {
             settings: settings.clone(),
@@ -698,6 +703,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             tool_server_enabled: None,
             cross_session_access: Some(access),
             pr_status_enabled: None,
+            desktop_notifications: None,
         };
         json_roundtrip(&set);
         let bytes = serde_json::to_vec(&set).unwrap();
@@ -736,6 +742,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             tool_server_enabled: true,
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: on,
+            desktop_notifications: true,
         };
         let bytes = serde_json::to_vec(&DaemonMsg::SettingsChanged { settings }).unwrap();
         match serde_json::from_slice::<DaemonMsg>(&bytes).unwrap() {
@@ -755,6 +762,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: chosen,
+            desktop_notifications: None,
         };
         let bytes = serde_json::to_vec(&set).unwrap();
         match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {

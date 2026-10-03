@@ -580,6 +580,8 @@ pub enum ClientMsg {
         /// Read and show pull request status, or `None` to leave unchanged (feature 040,
         /// FR-029).
         pr_status_enabled: Option<bool>,
+        /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
+        desktop_notifications: Option<bool>,
     },
 
     // --- AI CLIs ---
@@ -1190,6 +1192,10 @@ pub struct DaemonSettings {
     /// Whether pull request status is read from GitHub and shown on worktree rows (feature 040,
     /// FR-029, FR-030). Service-owned so that every window follows one switch.
     pub pr_status_enabled: bool,
+    /// Whether a session that comes to await input while not in view raises a desktop
+    /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
+    /// switch, and because the service is what grants a claim.
+    pub desktop_notifications: bool,
 }
 
 /// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond
@@ -1500,5 +1506,79 @@ mod attention_wire_tests {
             through_json(&summary).unread,
             "unread state reaches the window"
         );
+    }
+}
+
+#[cfg(test)]
+mod desktop_notifications_wire_tests {
+    //! Feature 039, contract W4: the **Desktop notifications** setting travels both ways.
+
+    use super::*;
+
+    fn through_json<T: Serialize + serde::de::DeserializeOwned>(value: &T) -> T {
+        let json = serde_json::to_string(value).expect("the message encodes");
+        serde_json::from_str(&json).expect("the message decodes")
+    }
+
+    fn settings(desktop_notifications: bool) -> DaemonSettings {
+        DaemonSettings {
+            scrollback_lines: 10_000,
+            env_include_enabled: true,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: 10,
+            default_ai_cli: AiCli::ClaudeCode,
+            pi_activity_component: true,
+            tool_server_enabled: true,
+            cross_session_access: CrossSessionAccess::Auto,
+            pr_status_enabled: false,
+            desktop_notifications,
+        }
+    }
+
+    /// U17: the service's settings carry the switch, on and off.
+    #[test]
+    fn the_service_settings_carry_desktop_notifications() {
+        for on in [true, false] {
+            let pushed = DaemonMsg::SettingsChanged {
+                settings: settings(on),
+            };
+            match through_json(&pushed) {
+                DaemonMsg::SettingsChanged { settings } => assert_eq!(
+                    settings.desktop_notifications, on,
+                    "the switch reaches the window as the service holds it"
+                ),
+                other => panic!("expected SettingsChanged, got {other:?}"),
+            }
+        }
+    }
+
+    /// U17: `SettingsSet` carries the choice, and `None` for "leave it".
+    #[test]
+    fn a_settings_change_carries_desktop_notifications_or_leaves_it() {
+        for chosen in [Some(false), Some(true), None] {
+            let asked = ClientMsg::SettingsSet {
+                req: 1,
+                scrollback_lines: None,
+                env_include_enabled: None,
+                env_include_script_path: None,
+                env_include_timeout_secs: None,
+                default_ai_cli: None,
+                pi_activity_component: None,
+                tool_server_enabled: None,
+                cross_session_access: None,
+                pr_status_enabled: None,
+                desktop_notifications: chosen,
+            };
+            match through_json(&asked) {
+                ClientMsg::SettingsSet {
+                    desktop_notifications,
+                    ..
+                } => assert_eq!(
+                    desktop_notifications, chosen,
+                    "the service reads the choice as the window sent it"
+                ),
+                other => panic!("expected SettingsSet, got {other:?}"),
+            }
+        }
     }
 }
