@@ -324,6 +324,38 @@ impl Workspace {
             .unwrap_or(0)
     }
 
+    /// The number of unread sessions a project holds (feature 039, FR-021, FR-022), less the
+    /// session `in_view`. `0` for a project with none, or an unknown path.
+    ///
+    /// Counted from [`Self::sessions`], which holds every session of the project: those of the
+    /// Default entry and those of worktrees the sidebar's filter hides. `in_view` is the session
+    /// the asking window has in view, which is read there before the service says so (FR-019).
+    /// Parallels [`Self::running_session_count`].
+    pub fn unread_session_count(&self, path: &Path, in_view: Option<SessionId>) -> usize {
+        let key = canonicalize_best_effort(path);
+        self.sessions
+            .get(&key)
+            .map(|list| {
+                list.iter()
+                    .filter(|s| s.unread && Some(s.id) != in_view)
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// The number of unread sessions in every known project except `active` (feature 039,
+    /// FR-023): what the switcher's button shows. With no active project every project counts.
+    ///
+    /// No session in view is left out: a session in view is always of the active project.
+    pub fn other_projects_unread(&self, active: Option<&Path>) -> usize {
+        let active = active.map(canonicalize_best_effort);
+        self.projects
+            .iter()
+            .filter(|p| Some(&p.path) != active.as_ref())
+            .map(|p| self.unread_session_count(&p.path, None))
+            .sum()
+    }
+
     /// Clear the active project if its folder is unavailable, returning its path (FR-023, 002
     /// BUG-004).
     ///
@@ -376,5 +408,145 @@ impl Workspace {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::{AiCli, SessionLocation};
+
+    const P: &str = "/p";
+    const Q: &str = "/q";
+    const R: &str = "/r";
+
+    fn session(location: SessionLocation, unread: bool) -> Session {
+        let mut session = Session::start_new(location, AiCli::ClaudeCode);
+        session.unread = unread;
+        session
+    }
+
+    fn unread_in(worktree: &str) -> Session {
+        session(SessionLocation::Worktree(worktree.to_string()), true)
+    }
+
+    /// A workspace of the known projects `projects`, each with its sessions, and none active.
+    fn workspace_of(projects: Vec<(&str, Vec<Session>)>) -> Workspace {
+        let mut workspace = Workspace::empty();
+        for (path, sessions) in projects {
+            workspace.projects.push(Project {
+                path: PathBuf::from(path),
+                display_name: path.trim_start_matches('/').to_string(),
+                is_git_repo: true,
+                availability: Availability::Available,
+            });
+            workspace.sessions.insert(PathBuf::from(path), sessions);
+        }
+        workspace
+    }
+
+    /// U36 (FR-022, US2 scenario 14): the count is of the project's sessions, not of the rows the
+    /// sidebar draws, so a worktree its tag filter hides is counted like any other.
+    #[test]
+    fn the_unread_count_covers_the_default_entry_and_every_worktree() {
+        let workspace = workspace_of(vec![(
+            P,
+            vec![
+                session(SessionLocation::Default, true),
+                unread_in("shown"),
+                unread_in("hidden-by-the-filter"),
+                session(SessionLocation::Worktree("shown".to_string()), false),
+            ],
+        )]);
+
+        assert_eq!(
+            workspace.unread_session_count(Path::new(P), None),
+            3,
+            "one unread session of the Default entry and one of each of two worktrees"
+        );
+    }
+
+    /// U37 (FR-019): the session the window has in view is read at once.
+    #[test]
+    fn the_unread_count_leaves_out_the_session_in_view() {
+        let workspace = workspace_of(vec![(P, vec![unread_in("a"), unread_in("b")])]);
+        let in_view = workspace.sessions[Path::new(P)][0].id;
+
+        assert_eq!(
+            workspace.unread_session_count(Path::new(P), Some(in_view)),
+            1,
+            "of two unread sessions, the one in view is not counted"
+        );
+        assert_eq!(
+            workspace.unread_session_count(Path::new(P), Some(SessionId::new())),
+            2,
+            "a session in view that is not of this project takes nothing from its count"
+        );
+    }
+
+    /// U38 (FR-021).
+    #[test]
+    fn the_unread_count_is_zero_for_a_project_with_no_unread_session() {
+        let workspace = workspace_of(vec![
+            (P, vec![session(SessionLocation::Default, false)]),
+            (Q, Vec::new()),
+        ]);
+
+        assert_eq!(workspace.unread_session_count(Path::new(P), None), 0);
+        assert_eq!(workspace.unread_session_count(Path::new(Q), None), 0);
+        assert_eq!(
+            workspace.unread_session_count(Path::new("/unknown"), None),
+            0,
+            "a path that is no known project has no unread session"
+        );
+    }
+
+    /// U39 (FR-023, US2 scenario 15).
+    #[test]
+    fn the_other_projects_total_sums_every_project_but_the_active_one() {
+        let workspace = workspace_of(vec![
+            (P, Vec::new()),
+            (Q, vec![unread_in("a"), unread_in("b")]),
+            (R, vec![unread_in("c")]),
+        ]);
+
+        assert_eq!(
+            workspace.other_projects_unread(Some(Path::new(P))),
+            3,
+            "two unread sessions in Q and one in R, with P active"
+        );
+        assert_eq!(
+            workspace.other_projects_unread(None),
+            3,
+            "with no project active every project is another one"
+        );
+    }
+
+    /// U40 (FR-023, US2 scenario 16).
+    #[test]
+    fn the_other_projects_total_leaves_out_the_active_project() {
+        let workspace = workspace_of(vec![(P, vec![unread_in("a")]), (Q, Vec::new())]);
+
+        assert_eq!(
+            workspace.other_projects_unread(Some(Path::new(P))),
+            0,
+            "the only unread session is in the active project"
+        );
+    }
+
+    /// U41 (FR-023, US2 scenario 17): whether or not Q's sessions were read.
+    #[test]
+    fn after_a_switch_the_other_projects_total_counts_the_remaining_projects_only() {
+        let workspace = workspace_of(vec![
+            (P, Vec::new()),
+            (Q, vec![unread_in("a"), unread_in("b")]),
+            (R, vec![unread_in("c")]),
+        ]);
+
+        assert_eq!(
+            workspace.other_projects_unread(Some(Path::new(Q))),
+            1,
+            "with Q active its two unread sessions leave the total, and R's one stays"
+        );
     }
 }
