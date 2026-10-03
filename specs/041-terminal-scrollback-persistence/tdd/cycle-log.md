@@ -64,3 +64,39 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   `BASIC_COLORS` = 16). File run -> 4 passed, 0 failed
 - refactor: none needed
 - commit: `feat(041): a basic colour past 15 is invalid (U4)`
+
+## Cycle 5: U5 `HistoryColor::Dim` accepts 0 and 7 and rejects 8
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::dim_color_accepts_0_and_7_and_rejects_8` (new; foreground and background)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot` (one shared file run with U5, U6 and U7 written together: `test result: FAILED. 4 passed; 3 failed`)
+  -> ``assertion `left == right` failed: Dim(8) is past the 8 colours that have a dim variant`` /
+  `left: Ok(())` / `right: Err(ColorOutOfRange { line: 0 })`. No stub needed: `is_in_palette` accepted
+  every `Dim` index.
+- green: `is_in_palette` also checks `Dim` below `DIM_COLORS` = 8. File run -> 7 passed, 0 failed
+- refactor: none needed
+- commit: `feat(041): dim colours, emptiness and style flags of a snapshot (U5-U7)`
+
+## Cycle 6: U6 an empty snapshot is `is_empty()`; one with a line is not
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::an_empty_snapshot_is_empty_and_one_with_a_line_is_not` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot` (one shared file run with U5, U6 and U7 written together: `test result: FAILED. 4 passed; 3 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/mod.rs:124:9:` / `not implemented: HistorySnapshot::is_empty`.
+  The `is_empty` stub was declared first so the test compiles; its deliberate "not implemented" is the red.
+- green: `is_empty` returns `self.lines.is_empty()` (a blank line still counts as something to
+  show). File run -> 7 passed, 0 failed
+- refactor: none needed
+- commit: `feat(041): dim colours, emptiness and style flags of a snapshot (U5-U7)`
+
+## Cycle 7: U7 `StyleFlags` round-trips each of bold, dim, italic, underline, inverse, strikethrough, hidden
+
+- test: `crates/micold-core/tests/terminal_history_snapshot.rs::style_flags_round_trip_each_attribute` (new; each flag set is read back and sets no other)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_snapshot` (one shared file run with U5, U6 and U7 written together: `test result: FAILED. 4 passed; 3 failed`)
+  -> `panicked at crates/micold-core/src/terminal_history/mod.rs:82:9:` / `not implemented: StyleFlags::with`.
+  The seven flag constants (distinct bits) and `with`/`contains` stubs were declared first so the test
+  compiles.
+- green: `with` ORs the bits, `contains` checks every bit of the argument is set. File run -> 7 passed,
+  0 failed
+- refactor: none needed
+- notes: "round-trips" is read as set-then-read-back through `with`/`contains`; no `bits`/`from_bits`
+  API was added, since no listed behaviour needs one yet.
+- commit: `feat(041): dim colours, emptiness and style flags of a snapshot (U5-U7)`

@@ -55,8 +55,8 @@ as `crates/micold-daemon/tests/daemon_lifecycle.rs` does.
 
 **Purpose**: the snapshot types every later phase uses (DM §1).
 
-- [ ] T002 [U1] [U2] [U3] [U4] [U5] [U6] [U7] Write `crates/micold-core/tests/terminal_history_snapshot.rs`: `HistorySnapshot::validate` accepts a line whose runs' `chars` sum to its number of characters and rejects one whose sum differs; rejects a `text` holding a C0 character (`\u{7}`), a C1 character (`\u{9b}`) and `ESC`; `HistoryColor::Basic` accepts 0 to 15 and `Dim` 0 to 7 only; an empty snapshot `is_empty()`; `StyleFlags` round-trips each of bold, dim, italic, underline, inverse, strikethrough, hidden.
-- [ ] T003 Implement DM §1 in `crates/micold-core/src/terminal_history/mod.rs`: `HistorySnapshot { lines }`, `LogicalLine { text, runs }`, `StyleRun { chars: u32, style }`, `HistoryStyle { fg, bg, flags }`, `HistoryColor` (`Default`, `Basic(u8)`, `Dim(u8)`, `Indexed(u8)`, `Rgb(u8, u8, u8)`), `StyleFlags`, `validate`, `is_empty`. No dependency on `alacritty_terminal`.
+- [X] T002 [U1] [U2] [U3] [U4] [U5] [U6] [U7] Write `crates/micold-core/tests/terminal_history_snapshot.rs`: `HistorySnapshot::validate` accepts a line whose runs' `chars` sum to its number of characters and rejects one whose sum differs; rejects a `text` holding a C0 character (`\u{7}`), a C1 character (`\u{9b}`) and `ESC`; `HistoryColor::Basic` accepts 0 to 15 and `Dim` 0 to 7 only; an empty snapshot `is_empty()`; `StyleFlags` round-trips each of bold, dim, italic, underline, inverse, strikethrough, hidden.
+- [X] T003 Implement DM §1 in `crates/micold-core/src/terminal_history/mod.rs`: `HistorySnapshot { lines }`, `LogicalLine { text, runs }`, `StyleRun { chars: u32, style }`, `HistoryStyle { fg, bg, flags }`, `HistoryColor` (`Default`, `Basic(u8)`, `Dim(u8)`, `Indexed(u8)`, `Rgb(u8, u8, u8)`), `StyleFlags`, `validate`, `is_empty`. No dependency on `alacritty_terminal`.
 
 **Checkpoint**: T002 passes under `mise run test-core`.
 
