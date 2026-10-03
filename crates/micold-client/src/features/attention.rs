@@ -11,6 +11,10 @@
 //! (research R3). Which changes are claims is the core's [`AttentionTracker`]; this feature owns
 //! the tracker, and shows the granted one through a [`DesktopNotifier`] (contract N1–N4).
 //!
+//! A click on a notification comes back from the backend as a [`NotifierEvent`]. The window sends
+//! it to the service ([`notifier_event`]), which picks the window that shows the session (research
+//! R6); that window is raised ([`raise_plan`]) and does what [`reveal_steps`] says (N5, N6).
+//!
 //! # No vocabulary
 //!
 //! There is no `Msg` here and no `update`. Nothing the user does is addressed to this feature: the
@@ -27,10 +31,10 @@
 //! process last saw of each session, kept across connections; and `failure_logged`, whether a
 //! failure to show has been logged in this run (FR-010).
 
-use micold_core::attention::{AttentionTracker, Phase, ViewFacts};
+use micold_core::attention::{AttentionTracker, Phase, Reveal, ViewFacts};
 use micold_core::protocol::messages::{ClientMsg, SessionSummary, WindowView};
 use micold_core::session::{Session, SessionId};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// What this feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -87,6 +91,81 @@ impl std::error::Error for NotifyError {}
 pub trait DesktopNotifier: Send + Sync {
     /// Show one notification. An error means the system did not accept it.
     fn show(&self, notification: DesktopNotification) -> Result<(), NotifyError>;
+}
+
+/// What a backend reports back, over the channel it was built with (contract, "The seam").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotifierEvent {
+    /// The notification for this session was clicked.
+    Activated {
+        /// The project the notification named.
+        project: PathBuf,
+        /// The session the notification named.
+        session: SessionId,
+    },
+}
+
+/// One step of bringing the window to the front (contract, "Raising the window").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RaiseStep {
+    /// Restore the window when it is minimised.
+    Unminimize,
+    /// Take keyboard focus.
+    Focus,
+    /// Ask for the user's attention: the window cannot take focus itself.
+    RequestAttention,
+}
+
+/// The steps that bring the window to the front (N6): restore it, then take keyboard focus. On
+/// Wayland a window cannot take focus itself, so it asks for the user's attention instead.
+pub fn raise_plan(wayland: bool) -> Vec<RaiseStep> {
+    let front = if wayland {
+        RaiseStep::RequestAttention
+    } else {
+        RaiseStep::Focus
+    };
+    vec![RaiseStep::Unminimize, front]
+}
+
+/// What this window sends the service for `event` (research R6): the click is not handled here,
+/// because the window that holds the session's project may be another one (FR-012).
+pub fn notifier_event(event: NotifierEvent) -> ClientMsg {
+    match event {
+        NotifierEvent::Activated { project, session } => {
+            ClientMsg::SessionReveal { project, session }
+        }
+    }
+}
+
+/// The notice for a click on a notification whose session cannot be shown (FR-013).
+pub const SESSION_UNAVAILABLE: &str = "That session is no longer available.";
+
+/// One thing a window does to show a session it was asked to reveal (N5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RevealStep {
+    /// Make this project the active one, by the ordinary switch.
+    Reopen(PathBuf),
+    /// Select this session, as a press on its row does.
+    Select(SessionId),
+    /// Say this at `Level::Info`, and change no selection.
+    Notice(&'static str),
+}
+
+/// What a window whose active project is `active` does for `reveal` (N5, FR-011, FR-013, FR-014):
+/// the project is reopened only when it is not the active one, then the session is selected; a
+/// session that cannot be shown yields the notice alone.
+pub fn reveal_steps(reveal: Reveal, active: Option<&Path>) -> Vec<RevealStep> {
+    match reveal {
+        Reveal::Show { project, session } => {
+            let mut steps = Vec::with_capacity(2);
+            if active != Some(project.as_path()) {
+                steps.push(RevealStep::Reopen(project));
+            }
+            steps.push(RevealStep::Select(session));
+            steps
+        }
+        Reveal::Unavailable => vec![RevealStep::Notice(SESSION_UNAVAILABLE)],
+    }
 }
 
 /// The report to send for `facts`, when the service has not been told it yet (FR-019).
