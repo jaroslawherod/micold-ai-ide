@@ -542,6 +542,7 @@ fn build_items(
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
+    let in_view = crate::features::attention::in_view(&state.attention);
     let hovered = state.worktree.hovered.as_deref();
     let project_root = state.workspace.active.as_deref();
 
@@ -632,7 +633,7 @@ fn build_items(
 
         if node.expanded {
             for session in &node.sessions {
-                items.push(session_tree_item(session, state.session.active, r));
+                items.push(session_tree_item(session, state.session.active, in_view, r));
             }
         }
     }
@@ -645,6 +646,7 @@ fn build_items(
 fn session_tree_item(
     session: &micold_core::session::Session,
     active_session: Option<micold_core::session::SessionId>,
+    in_view: Option<micold_core::session::SessionId>,
     r: Roles,
 ) -> TreeItem<'static, Message> {
     let tint = match session.lifecycle {
@@ -680,6 +682,9 @@ fn session_tree_item(
         // An annotation, not a tag chip: tags open a second line, and `row_heights` hardcodes that
         // a session row is one line. The label changes the row's content, never its height.
         .annotation(session.provider.provider().command(), r.on_surface_variant)
+        // The unread mark (feature 039, FR-018, contract `unread-mark.md` U5): on the row of an
+        // unread session this window does not have in view.
+        .unread(crate::features::attention::row_unread(session, in_view))
         .selected(selected)
         .on_press(Message::Session(SessionMsg::Selected(session.id)))
         .on_right_press({
@@ -737,8 +742,9 @@ fn build_default_item(
     items.push(item);
 
     if node.expanded {
+        let in_view = crate::features::attention::in_view(&state.attention);
         for session in &node.sessions {
-            items.push(session_tree_item(session, state.session.active, r));
+            items.push(session_tree_item(session, state.session.active, in_view, r));
         }
     }
 
@@ -787,7 +793,7 @@ mod tests {
             SessionLifecycle::InterruptedResumable,
         ] {
             let s = session(ActivitySignal::Unknown, lifecycle.clone());
-            let item: TreeItem<'_, Message> = session_tree_item(&s, None, r);
+            let item: TreeItem<'_, Message> = session_tree_item(&s, None, None, r);
             assert!(
                 item.icon.is_none(),
                 "session row for {lifecycle:?} still carries a leading icon"
@@ -804,7 +810,7 @@ mod tests {
     #[test]
     fn lifecycle_still_reaches_the_row_through_the_tint() {
         let r = tokens::roles(ColorScheme::Dark);
-        let tint = |l| session_tree_item(&session(ActivitySignal::Unknown, l), None, r).tint;
+        let tint = |l| session_tree_item(&session(ActivitySignal::Unknown, l), None, None, r).tint;
 
         assert_eq!(tint(failed()), r.error);
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);
