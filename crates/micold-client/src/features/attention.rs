@@ -29,7 +29,7 @@
 
 use micold_core::attention::{AttentionTracker, Phase, ViewFacts};
 use micold_core::protocol::messages::{ClientMsg, SessionSummary, WindowView};
-use micold_core::session::SessionId;
+use micold_core::session::{Session, SessionId};
 use std::path::PathBuf;
 
 /// What this feature remembers.
@@ -104,6 +104,20 @@ pub fn view_report(state: &mut State, facts: ViewFacts) -> Option<WindowView> {
     }
     state.sent_view = Some(view);
     Some(view)
+}
+
+/// The session this window last reported in view, if any (FR-019).
+pub fn in_view(state: &State) -> Option<SessionId> {
+    state.sent_view.and_then(|view| view.in_view)
+}
+
+/// Whether `session`'s row carries the unread mark in a window that has `in_view` in view
+/// (contract `unread-mark.md` U5).
+///
+/// The session in view is read at once: the window does not wait for the catalog in which the
+/// service has cleared `unread` (FR-019, SC-006).
+pub fn row_unread(session: &Session, in_view: Option<SessionId>) -> bool {
+    session.unread && in_view != Some(session.id)
 }
 
 /// A new connection has been told nothing: forget what the previous one was sent (FR-006).
