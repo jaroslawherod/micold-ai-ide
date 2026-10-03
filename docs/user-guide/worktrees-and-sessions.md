@@ -1035,6 +1035,31 @@ Nothing about this is a setting you have to find, and nothing needs installing t
 [the session service](../daemon.md) for what it does and does not promise, including what a reboot
 costs you.
 
+### Unread sessions
+
+A session that finishes its turn, or stops to ask for a permission, while you are not looking at it
+becomes **unread**. Its sidebar row then carries the **unread mark**: a small filled dot at the
+right-hand end of the row, with the session's name set in a heavier weight.
+
+- **It is not the activity dot.** The activity dot at the left of the name says what the session is
+  doing *now* — working, awaiting input, ended — and changes as the session does. The unread mark
+  says that the session finished a turn *since you last looked at it*, and it stays when the
+  session starts working again. A row can carry both, either, or neither.
+- **Looking at the session clears it.** The mark goes, within a second, when the session comes
+  into view: you select it in a window that has the keyboard focus, you switch to its project and
+  it is the session shown, its window regains the focus, or you close Settings and the session is
+  shown again. Nothing else clears it, and there is no command to mark a session read or unread.
+- **Every window agrees.** Unread state belongs to the session, not to a window: a session you
+  read in one window loses its mark in all of them.
+- **It does not depend on notifications.** The mark appears whether or not a desktop notification
+  was shown, and also on a desktop that has no notification service.
+- **It is there when you come back.** Sessions that finished a turn while the application was
+  closed are unread when you open it, and a session that was unread when you closed the last
+  window is still unread, also after a restart of the computer. A session you had read, and that
+  has done nothing since, stays read.
+
+Unread state is kept on your computer with the rest of the session list and is sent nowhere.
+
 ### Being told when a session needs you
 
 When a session you are not looking at finishes its turn or stops to ask for a permission — its
