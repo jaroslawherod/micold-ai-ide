@@ -95,15 +95,15 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U14 | `capture` returns the text and order of history rows then screen rows | DM §1, FR-001, SC-001 | example | PENDING | T005 |
-| U15 | Each of the 16 basic colours is captured as foreground and as background | DM §1, FR-001 | example | PENDING | T005 |
-| U16 | An indexed colour and an RGB colour are captured as foreground and as background | DM §1, FR-001 | example | PENDING | T005 |
-| U17 | Each of bold, dim, italic, underline, inverse, strikethrough is captured | DM §1, FR-001 | example | PENDING | T005 |
-| U18 | Two rows joined by the wrap flag are one `LogicalLine` | DM §1, FR-001 | example | PENDING | T005 |
-| U19 | A wide character counts as one character and its spacer is skipped | DM §1, FR-001 | example | PENDING | T005 |
-| U20 | A zero-width character follows its base character | DM §1, FR-001 | example | PENDING | T005 |
-| U21 | Trailing empty screen rows are not captured | DM §1, R2 | example | PENDING | T005 |
-| U22 | A `Term` that printed nothing gives an empty snapshot | DM §1, FR-010 | example | PENDING | T005 |
+| U14 | `capture` returns the text and order of history rows then screen rows | DM §1, FR-001, SC-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::capture_returns_the_history_rows_then_the_screen_rows_in_order` |
+| U15 | Each of the 16 basic colours is captured as foreground and as background | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::each_of_the_16_basic_colours_is_captured_as_foreground_and_as_background` |
+| U16 | An indexed colour and an RGB colour are captured as foreground and as background | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::an_indexed_and_an_rgb_colour_are_captured_as_foreground_and_as_background` |
+| U17 | Each of bold, dim, italic, underline, inverse, strikethrough is captured | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::each_style_flag_is_captured_and_every_underline_kind_is_underline` |
+| U18 | Two rows joined by the wrap flag are one `LogicalLine` | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::two_rows_joined_by_the_wrap_flag_are_one_logical_line` |
+| U19 | A wide character counts as one character and its spacer is skipped | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_wide_character_counts_as_one_character_and_its_spacer_is_skipped` |
+| U20 | A zero-width character follows its base character | DM §1, FR-001 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_zero_width_character_follows_its_base_character` |
+| U21 | Trailing empty screen rows are not captured | DM §1, R2 | example | DONE | `crates/micold-daemon/src/history.rs::tests::trailing_empty_screen_rows_are_not_captured` |
+| U22 | A `Term` that printed nothing gives an empty snapshot | DM §1, FR-010 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_term_that_printed_nothing_gives_an_empty_snapshot` |
 
 ### `crates/micold-daemon/src/history.rs`: seed (T006, T010, T050, T053)
 
