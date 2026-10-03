@@ -901,3 +901,27 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
   - U164, `signal` reading `ActivationToken` as `ActionInvoked`:
     `any_other_signal_and_a_signal_with_another_body_is_not_read ... FAILED`.
   - Cycle 26's red is a compile error, recorded there as it is.
+
+## Cycle 33 — U16, U102 — T092, T093, T097 (M7-1)
+
+- tests: `crates/micold-core/src/protocol/messages.rs::attention_tests::{a_reveal_and_its_forward_encode_and_decode`
+  (now with `activation: None`), `the_activation_token_of_a_reveal_encodes_and_decodes_on_both_messages}`;
+  `crates/micold-core/tests/schema_hash.rs::{the_wire_changes_for_this_feature_cost_exactly_one_version_bump`
+  (the constant moved to 26), `the_activation_token_is_in_the_hashed_source_of_both_reveal_messages}`;
+  `crates/micold-daemon/tests/session_reveal.rs::the_activation_token_reaches_the_target_unchanged_also_when_it_is_not_the_sender`
+- red: `cargo test -p micold-core --all-targets`, exit 101. No stub: the red is the compiler naming
+  the missing field, so no test ran.
+  ```
+  error[E0559]: variant `messages::ClientMsg::SessionReveal` has no field named `activation`
+  error[E0559]: variant `messages::DaemonMsg::RevealSession` has no field named `activation`
+  error: could not compile `micold-core` (lib test) due to 4 previous errors
+  ```
+- green: `cargo test -p micold-core --all-targets` every binary `ok` (lib 304 passed);
+  `cargo test -p micold-daemon --test session_reveal` -> 6 passed; `cargo check -p micold-client
+  --all-targets` clean. `activation: Option<String>` on both messages, forwarded unread by
+  `State::reveal_session`; `PROTOCOL_VERSION` 26.
+- commit: the one `feat(039)` commit that carries this record: the tests cannot be committed red
+  without breaking the build of three crates.
+- no test: the client sites (`activation: None` when it builds `SessionReveal`, `activation: _` when
+  it matches `RevealSession`) only keep it compiling; the next worker gives them behavior. The
+  version sentence of `docs/daemon.md` moved to 26.

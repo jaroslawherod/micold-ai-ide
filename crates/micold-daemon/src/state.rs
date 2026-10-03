@@ -1204,14 +1204,28 @@ impl DaemonState {
     /// Forward window `sender`'s request to show `session` of `project` to exactly one window
     /// (feature 039, W3.1, FR-012): the one attached to `project`; else the one that last reported
     /// keyboard focus; else `sender`. Nothing is checked and nothing changes (W3.2, W3.3): the
-    /// window that receives it decides whether the session can still be shown.
-    pub fn reveal_session(&self, sender: ClientId, project: PathBuf, session: SessionId) {
+    /// window that receives it decides whether the session can still be shown. `activation` is
+    /// forwarded unread (W3.4).
+    pub fn reveal_session(
+        &self,
+        sender: ClientId,
+        project: PathBuf,
+        session: SessionId,
+        activation: Option<String>,
+    ) {
         let target = {
             let inner = self.lock();
             let holder = inner.attachments.get(&project).map(|att| att.client);
             inner.views.reveal_target(holder, sender)
         };
-        self.send(target, DaemonMsg::RevealSession { project, session });
+        self.send(
+            target,
+            DaemonMsg::RevealSession {
+                project,
+                session,
+                activation,
+            },
+        );
     }
 
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).

@@ -131,9 +131,11 @@ pub fn raise_plan(wayland: bool) -> Vec<RaiseStep> {
 /// because the window that holds the session's project may be another one (FR-012).
 pub fn notifier_event(event: NotifierEvent) -> ClientMsg {
     match event {
-        NotifierEvent::Activated { project, session } => {
-            ClientMsg::SessionReveal { project, session }
-        }
+        NotifierEvent::Activated { project, session } => ClientMsg::SessionReveal {
+            project,
+            session,
+            activation: None,
+        },
     }
 }
 

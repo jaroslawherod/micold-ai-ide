@@ -71,6 +71,7 @@ fn an_activated_notification_yields_one_session_reveal() {
         ClientMsg::SessionReveal {
             project: PathBuf::from(OTHER),
             session,
+            activation: None,
         }
     );
 }
