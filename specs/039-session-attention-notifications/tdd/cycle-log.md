@@ -1011,6 +1011,8 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
   `Ok`) **and** `App::window_focused` is true 400 ms later. Not sent: `after_activation(false)` at
   once. Sent: `ConnectionMsg::ActivationSettled` after the wait, answered by
   `window_raise::settled(app.window_focused)`, which issues what `after_activation(focused)` gives.
+  **Superseded by cycle 37** (review A F1, F2, F4): "done" is now `ActivationWatch::settled`, and
+  the wait no longer sits in the task `raise()` returns.
 - green: `cargo test -p micold-client --test attention_reveal` -> 16 passed;
   `--bin micold-ai-ide desktop_notify` -> 23 passed; `--bin micold-ai-ide a_reveal_for` -> 1 passed;
   `--test feature_registration_cost` -> 7 passed; `cargo clippy -p micold-client --all-targets -- -D warnings`
