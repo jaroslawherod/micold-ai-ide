@@ -140,3 +140,93 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: none beyond the shared `fit` helper written in the green step (U12/U13's `notice_line` follows the same rule)
 - notes: the stub's deliberate "not implemented" is the red, as in cycle 1; this test was not run against a partial implementation.
 - commit: `feat(041): the session restarted separator line (U8-U11)`
+
+## Cycle 12: U14 `capture` returns the text and order of history rows then screen rows
+
+- test: `crates/micold-daemon/src/history.rs::tests::capture_returns_the_history_rows_then_the_screen_rows_in_order` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", ""]` / `right: ["one", "two", "three", "four", "five"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 13: U15 each of the 16 basic colours is captured as foreground and as background
+
+- test: `crates/micold-daemon/src/history.rs::tests::each_of_the_16_basic_colours_is_captured_as_foreground_and_as_background` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: 20` / `right: 16` (the line count, before the per-colour assertions)
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 14: U16 an indexed colour and an RGB colour are captured as foreground and as background
+
+- test: `crates/micold-daemon/src/history.rs::tests::an_indexed_and_an_rgb_colour_are_captured_as_foreground_and_as_background` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", ""]` / `right: ["ABCD"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 15: U17 each of bold, dim, italic, underline, inverse, strikethrough is captured
+
+- test: `crates/micold-daemon/src/history.rs::tests::each_style_flag_is_captured_and_every_underline_kind_is_underline` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", ""]` / `right: ["x-x-x-x-x-x-x-x-"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake. Hidden (SGR 8) and a curly underline (SGR 4:3 -> underline) are covered too, since T005 asks for each flag of `StyleFlags`.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 16: U18 two rows joined by the wrap flag are one `LogicalLine`
+
+- test: `crates/micold-daemon/src/history.rs::tests::two_rows_joined_by_the_wrap_flag_are_one_logical_line` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", "", ""]` / `right: ["abcdefgh", "next"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 17: U19 a wide character counts as one character and its spacer is skipped
+
+- test: `crates/micold-daemon/src/history.rs::tests::a_wide_character_counts_as_one_character_and_its_spacer_is_skipped` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", "", ""]` / `right: ["a世b", "abc世"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake. The second line puts the wide character at a wrap, so the leading spacer is skipped as well as the trailing one.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 18: U20 a zero-width character follows its base character
+
+- test: `crates/micold-daemon/src/history.rs::tests::a_zero_width_character_follows_its_base_character` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", ""]` / `right: ["e\u{301}x"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 19: U21 trailing empty screen rows are not captured
+
+- test: `crates/micold-daemon/src/history.rs::tests::trailing_empty_screen_rows_are_not_captured` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: ["", "", "", "", "", ""]` / `right: ["a", "", "b"]`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: assertion-level red from the shared fake; this test was not run against a partial implementation.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
+
+## Cycle 20: U22 a `Term` that printed nothing gives an empty snapshot
+
+- test: `crates/micold-daemon/src/history.rs::tests::a_term_that_printed_nothing_gives_an_empty_snapshot` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --lib history::` (one shared run with U14 to U22 written together against a fake `capture` that returns every screen row as an empty line, nothing trimmed: `test result: FAILED. 0 passed; 9 failed`)
+  -> `assertion `left == right` failed` / `left: HistorySnapshot { lines: [LogicalLine { text: "", runs: [] }, LogicalLine { text: "", runs: [] }, LogicalLine { text: "", runs: [] }] }` / `right: HistorySnapshot { lines: [] }`
+- green: `capture` walks the buffer from the oldest history row to the last screen row that shows anything (the `plain_tail` rule), joins rows whose last cell has `WRAPLINE`, skips spacer cells, appends zero-width marks to their base, ends a non-wrapping row at its last non-empty cell, and maps colours and flags through the explicit `BASIC_COLORS`/`DIM_COLORS`/`STYLE_FLAGS` tables (unknown named colour -> `Default`). Shared run -> 9 passed, 0 failed, no warnings
+- refactor: none needed
+- notes: the fake was chosen as "no trimming" rather than "empty snapshot" so this test, which an empty fake would pass, has its own assertion-level red.
+- commit: `feat(041): capture a terminal's history with colours and styles (U14-U22)`
