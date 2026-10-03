@@ -363,9 +363,9 @@ existing indicator (FR-018, FR-032). *A text suffix built at each call site.* Th
 ## R10 — One wire change per milestone
 
 **Decision.** Each milestone that changes the wire bumps `PROTOCOL_VERSION` once, in one edit, as
-`crates/micold-core/src/protocol/version.rs` requires: 21 for the view report and the sequence; 22
-for the claim and the grant; 23 for `unread`; 24 for the reveal pair; 25 for the activation token
-on the reveal pair; 26 for the setting. Each milestone ships only the wire it uses. No `#[serde(default)]` on wire
+`crates/micold-core/src/protocol/version.rs` requires: 21 for the view report and the sequence; 23
+for the claim and the grant (22 went to feature 040); 24 for `unread`; 25 for the reveal pair; 26 for the activation token
+on the reveal pair; 27 for the setting. Each milestone ships only the wire it uses. No `#[serde(default)]` on wire
 types: peers that differ are refused at the handshake, as today. The numbers are the planned ones:
 each bump takes the next free number when its milestone is implemented. If another feature has
 taken 21 on `main` by then (040 plans to), or M7 closes on its probe without the token (R7), every

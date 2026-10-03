@@ -4,7 +4,7 @@
 `PROTOCOL_VERSION` once, in the milestone that ships it (research R10). No `#[serde(default)]`. The version numbers
 below are the planned ones; a bump takes the next free number when its milestone is implemented.
 
-## W1 — View report and attention sequence (version 21), claim and grant (version 22)
+## W1 — View report and attention sequence (version 21), claim and grant (version 23)
 
 ```rust
 // version 21
@@ -13,7 +13,7 @@ pub attention_seq: u64,
 // ClientMsg
 WindowView { focused: bool, in_view: Option<SessionId> },
 
-// version 22
+// version 23
 // ClientMsg
 AttentionClaim { session: SessionId, seq: u64 },
 // DaemonMsg
@@ -29,7 +29,7 @@ AttentionGranted { session: SessionId, seq: u64 },
 | W1.5 | Neither message is an operation: there is no `req`, no `OperationOk`, no `OperationError`. |
 | W1.6 | `WindowView` and `AttentionClaim` need no project attachment: a window may view or claim nothing it could not already see in the catalog snapshot. |
 
-## W2 — Unread (version 23)
+## W2 — Unread (version 24)
 
 ```rust
 // SessionSummary
@@ -42,7 +42,7 @@ pub unread: bool,
 | W2.2 | When a `WindowView` names a session whose `unread` is set, the service clears it, persists, and calls `broadcast_catalog` (`CatalogChanged` to every window). |
 | W2.3 | Nothing else changes `unread`: not a change of activity, not a claim, not a grant, not the setting of W4. |
 
-## W3 — Reveal (version 24), activation token (version 25)
+## W3 — Reveal (version 25), activation token (version 26)
 
 ```rust
 // ClientMsg
@@ -51,7 +51,7 @@ SessionReveal { project: PathBuf, session: SessionId, activation: Option<String>
 // DaemonMsg
 RevealSession { project: PathBuf, session: SessionId, activation: Option<String> },
 
-// `activation` is added to both in version 25; version 24 has `project` and `session` only.
+// `activation` is added to both in version 26; version 25 has `project` and `session` only.
 ```
 
 | # | Rule |
@@ -61,7 +61,7 @@ RevealSession { project: PathBuf, session: SessionId, activation: Option<String>
 | W3.3 | The service changes no session, no attachment and no stored state for a reveal. |
 | W3.4 | `activation` is the Wayland activation token of the click, when the notification service sent one. The service forwards it unchanged and does not read it: the window that is raised may be another process than the one that was clicked. |
 
-## W4 — Setting (version 26)
+## W4 — Setting (version 27)
 
 ```rust
 // DaemonSettings
@@ -74,4 +74,4 @@ desktop_notifications: Option<bool>,
 | # | Rule |
 |---|---|
 | W4.1 | Stored as `Settings::desktop_notifications`, default `true`, written by `persist_service_settings` and pushed with `SettingsChanged`, as `tool_server_enabled` is. |
-| W4.2 | From version 26 `grant` takes the setting. While it is `false`, W1.4 grants nothing, and each attention event of W1.3 is recorded as granted, so that no window can claim it after the switch is turned on (FR-027). W1.3 and W2 are otherwise unaffected. |
+| W4.2 | From version 27 `grant` takes the setting. While it is `false`, W1.4 grants nothing, and each attention event of W1.3 is recorded as granted, so that no window can claim it after the switch is turned on (FR-027). W1.3 and W2 are otherwise unaffected. |

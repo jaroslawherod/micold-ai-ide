@@ -125,11 +125,11 @@ implementation task(s).
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
 | U12 | `ClientMsg::WindowView` and `SessionSummary::attention_seq` encode and decode at version 21 | FR-002, FR-016 | example | DONE | T003 / T009 |
-| U13 | `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted` encode and decode at version 22 | FR-001, FR-006a | example | PENDING | T019 / T026 |
-| U14 | `SessionSummary::unread` encodes and decodes at version 23 | FR-016, FR-024 | example | PENDING | T046 / T053 |
-| U15 | `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession` encode and decode at version 24 | FR-011, FR-012 | example | PENDING | T074 / T082 |
-| U16 | `activation: Option<String>` on both reveal messages encodes and decodes at version 25 | FR-011 | example | PENDING | T092 / T097 |
-| U17 | `DaemonSettings::desktop_notifications` and `SettingsSet::desktop_notifications` encode and decode at version 26 | FR-026, FR-027 | example | PENDING | T102 / T107 |
+| U13 | `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted` encode and decode at version 23 | FR-001, FR-006a | example | PENDING | T019 / T026 |
+| U14 | `SessionSummary::unread` encodes and decodes at version 24 | FR-016, FR-024 | example | PENDING | T046 / T053 |
+| U15 | `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession` encode and decode at version 25 | FR-011, FR-012 | example | PENDING | T074 / T082 |
+| U16 | `activation: Option<String>` on both reveal messages encodes and decodes at version 26 | FR-011 | example | PENDING | T092 / T097 |
+| U17 | `DaemonSettings::desktop_notifications` and `SettingsSet::desktop_notifications` encode and decode at version 27 | FR-026, FR-027 | example | PENDING | T102 / T107 |
 
 ### `crates/micold-core/src/attention.rs`: `AttentionTracker::observe`
 
