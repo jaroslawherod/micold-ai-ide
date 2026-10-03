@@ -62,6 +62,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::LogoutSurvivalOutcome(message) => {
             service_control::on_logout_survival_outcome(app, message)
         }
+        Msg::AttentionShown(result) => daemon_sync::on_attention_shown(app, result),
         Msg::DiagnosticsRequested => daemon_sync::on_diagnostics_requested(app),
     }
 }

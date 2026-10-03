@@ -291,6 +291,40 @@ fn a_failure_to_show_is_logged_once_per_run_and_pushes_no_notice() {
 }
 
 #[test]
+fn a_reported_failure_to_show_is_logged_once_per_run() {
+    // Review A F1: the shell shows off the update thread and reports the result back.
+    let mut state = repo_state();
+    let refused = || Err(NotifyError::NoService("nobody owns the name".to_string()));
+
+    let first = state.attention_shown(refused());
+    assert!(
+        first
+            .as_deref()
+            .is_some_and(|line| line.contains("nobody owns the name")),
+        "the first failure is handed back to be logged, with the system's reason: {first:?}"
+    );
+    assert_eq!(
+        state.attention_shown(refused()),
+        None,
+        "a second failure in the same run is not logged"
+    );
+    assert_eq!(
+        state.attention_shown(Ok(())),
+        None,
+        "a success logs nothing"
+    );
+}
+
+#[test]
+fn a_reported_success_logs_nothing_and_leaves_the_first_failure_to_be_logged() {
+    let mut state = repo_state();
+    assert_eq!(state.attention_shown(Ok(())), None);
+    assert!(state
+        .attention_shown(Err(NotifyError::Refused("blocked".to_string())))
+        .is_some());
+}
+
+#[test]
 fn the_first_snapshot_after_a_reconnect_is_observed_as_a_reconnect() {
     // U123, A11 (FR-006, US1 scenario 11): a session last seen working and found awaiting input
     // with a higher sequence is claimed once...

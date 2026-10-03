@@ -2684,7 +2684,12 @@ impl DaemonState {
     /// why `Drop` alone is not enough, and note that a session opened straight into Regular Terminal
     /// mode has no primary at all, so the old signature returned nothing for it.
     pub fn remove_session(&self, session: SessionId) -> Vec<Arc<PtySession>> {
-        let removed = self.lock().sessions.remove(&session);
+        let removed = {
+            let mut inner = self.lock();
+            // The grants of a session that is gone are not kept (feature 039).
+            inner.views.forget_session(session);
+            inner.sessions.remove(&session)
+        };
         removed
             .map(|s| s.procs.values().map(|p| Arc::clone(&p.pty)).collect())
             .unwrap_or_default()

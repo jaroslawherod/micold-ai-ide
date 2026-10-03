@@ -298,9 +298,10 @@ impl Capabilities {
         Arc::clone(&self.link_opener)
     }
 
-    /// Showing a desktop notification (feature 039, contract N1).
-    pub fn notifier(&self) -> &dyn DesktopNotifier {
-        &*self.notifier
+    /// Showing a desktop notification (feature 039, contract N1). Owned, because the one consumer
+    /// calls it on a blocking task.
+    pub fn notifier(&self) -> Arc<dyn DesktopNotifier> {
+        Arc::clone(&self.notifier)
     }
 
     /// Sourcing the environment-include script.

@@ -477,6 +477,15 @@ impl State {
         crate::features::attention::show_granted(&mut self.attention, notification, notifier)
     }
 
+    /// What showing a granted notification came to, when the shell showed it off the update
+    /// thread. Returns the line to log for a failure, once per run (N4).
+    pub fn attention_shown(
+        &mut self,
+        result: Result<(), crate::features::attention::NotifyError>,
+    ) -> Option<String> {
+        crate::features::attention::show_result(&mut self.attention, result)
+    }
+
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
     ///
     /// Every dialog, and every popover **except** the terminal's own right-click menu: that one is
