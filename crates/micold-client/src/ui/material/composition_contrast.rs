@@ -124,6 +124,39 @@ fn a_component_is_legible_against_the_container_it_is_drawn_in() {
     );
 }
 
+/// Feature 039, U146 (contract `unread-mark.md` U3, FR-018, FR-023): the unread mark is a non-text
+/// mark, so it needs 3:1 against every fill a host draws it on, in both schemes. The fills are read
+/// from the functions the hosts call: the sidebar's surface, the selected row's pill (a window
+/// without keyboard focus has its selected session unread), the menu's panel and the app bar.
+#[test]
+fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
+    let mut violations: Vec<String> = Vec::new();
+
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let mark = super::unread_mark::fill(r);
+        for (host, fill) in [
+            ("the sidebar", rgb(style::sidebar_fill(r))),
+            ("a selected row", r.secondary_container),
+            ("a menu panel", r.surface_container),
+            ("the app bar", r.surface),
+        ] {
+            let ratio = contrast(mark, fill);
+            if ratio < AA_NON_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / {host}: {ratio:.2}:1 (needs {AA_NON_TEXT})"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "the unread mark cannot be told from the fill it is drawn on:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// The walk has to cover **both** kinds of host. If every level were accent the neutral rule would
 /// go unexercised, and if every level were neutral the imposition would — either way the assertions
 /// above pass over a case nobody is checking, which is the failure mode a green gate cannot report
