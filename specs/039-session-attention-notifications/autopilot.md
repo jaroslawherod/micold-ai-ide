@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3 continues from *Handover*: record CI's three legs for T118, tick it, push; the orchestrator then merges #557.
+- **Next step**: the orchestrator waits for `ci complete` on #557's head and merges it; then M4 (T045–T061).
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #539 | Design | merged | 6b4b6fa9afc27f134a5f4fc80048dc3f9a115a38 |
 | #544 | M1 | merged | a8d628b8a9b089033a05b1194c8fc5f5fe5b3c7c |
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
-| #557 | M3 | open (draft until green) | |
+| #557 | M3 | open, ready; CI green at `cc0d815e` | |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | #544 | merged |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
-| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | in progress |
+| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | PR open, all tasks done |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
@@ -89,11 +89,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3, PR #557. Reviews A and B are clean (see *Review rounds*), `mise run gate` passed at `a0a23093`,
-the green tree is pushed and the PR is ready. Left: T118. When CI's three `build + test` legs are
-green on the pushed head, record them (run URL; the "Test (desktop notification backends)" step:
-macOS 10 passed, Windows 5 passed expected) in `tdd/cycle-log.md` under cycle 12, tick T118, commit
-(docs only), push, set this section to `None.` and return `DONE`.
+None.
 
 ## Open escalation
 
