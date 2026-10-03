@@ -399,6 +399,51 @@ fn turning_the_binding_toggle_off_reaches_what_save_writes() {
 }
 
 // ---------------------------------------------------------------------------------------
+// The Desktop notifications switch (feature 039, T105 — FR-026)
+// ---------------------------------------------------------------------------------------
+
+/// U142, A43 (US4 scenario 1). On default settings the draft holds the switch and it is on; a
+/// user who turned it off sees it off when the page opens.
+#[test]
+fn the_desktop_notifications_switch_is_seeded_from_the_stored_setting() {
+    assert!(
+        SettingsDraft::from_settings(&Settings::default())
+            .environment
+            .desktop_notifications,
+        "desktop notifications are on until the user turns them off (FR-026)"
+    );
+    let off = Settings {
+        desktop_notifications: false,
+        ..Settings::default()
+    };
+    assert!(
+        !SettingsDraft::from_settings(&off)
+            .environment
+            .desktop_notifications,
+        "a user who turned desktop notifications off must see the switch off"
+    );
+}
+
+/// U143 (the draft half). Off is a valid choice, and it is what Save writes; on is too.
+#[test]
+fn the_desktop_notifications_switch_reaches_what_save_writes() {
+    for chosen in [false, true] {
+        let mut draft = valid();
+        draft.show(SettingsSection::Environment);
+        draft.environment.desktop_notifications = chosen;
+
+        let saved = draft
+            .validate()
+            .expect("either position of the switch is a valid setting")
+            .into_settings();
+        assert_eq!(
+            saved.desktop_notifications, chosen,
+            "the position the user left the switch in must be what Save writes"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // "Let agents read and type into other sessions" (feature 034, T065 — FR-016)
 // ---------------------------------------------------------------------------------------
 

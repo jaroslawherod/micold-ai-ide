@@ -345,6 +345,10 @@ pub struct EnvironmentDraft {
     /// Application-wide and service-owned like the Pi switch above it; the default-on comes from
     /// `Settings`.
     pub tool_server_enabled: bool,
+    /// Whether a session that needs attention raises a desktop notification (feature 039,
+    /// FR-026). One switch for every AI CLI, service-owned like the two above it; the default-on
+    /// comes from `Settings`.
+    pub desktop_notifications: bool,
     /// Whether agents may read and type into other sessions (feature 034, FR-016). A closed choice
     /// of three values, like the default CLI above: nothing to validate on save.
     pub cross_session_access: CrossSessionAccess,
@@ -452,6 +456,8 @@ pub struct ValidSettings {
     /// Environment.
     pub tool_server_enabled: bool,
     /// Environment.
+    pub desktop_notifications: bool,
+    /// Environment.
     pub cross_session_access: CrossSessionAccess,
     /// Session service.
     pub daemon: DaemonConfig,
@@ -471,6 +477,7 @@ impl ValidSettings {
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
             tool_server_enabled: self.tool_server_enabled,
+            desktop_notifications: self.desktop_notifications,
             cross_session_access: self.cross_session_access,
             daemon: self.daemon,
             issue_label_types: self.issue_label_types,
@@ -581,6 +588,7 @@ impl SettingsDraft {
             default_ai_cli: self.environment.default_ai_cli,
             pi_activity_component: self.environment.pi_activity_component,
             tool_server_enabled: self.environment.tool_server_enabled,
+            desktop_notifications: self.environment.desktop_notifications,
             cross_session_access: self.environment.cross_session_access,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
@@ -781,6 +789,7 @@ impl SettingsDraft {
                 default_ai_cli: settings.default_ai_cli,
                 pi_activity_component: settings.pi_activity_component,
                 tool_server_enabled: settings.tool_server_enabled,
+                desktop_notifications: settings.desktop_notifications,
                 cross_session_access: settings.cross_session_access,
             },
             daemon: DaemonDraft {
@@ -905,6 +914,8 @@ pub enum Msg {
     /// The Settings **Let AI sessions manage worktrees and sessions** switch was toggled
     /// (feature 034, FR-004).
     ToolServerToggled(bool),
+    /// The Settings **Desktop notifications** switch was toggled (feature 039, FR-026).
+    DesktopNotificationsToggled(bool),
     /// The Settings **Let agents read and type into other sessions** select changed
     /// (feature 034, FR-016).
     CrossSessionAccessChanged(CrossSessionAccess),
@@ -1022,6 +1033,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
+        Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
         Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
@@ -1192,6 +1204,12 @@ pub fn pi_activity_component_toggled(state: &mut crate::app::State, on: bool) {
 /// Environment: bind new sessions to the service's tool server (feature 034, FR-004).
 pub fn tool_server_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.tool_server_enabled = on);
+}
+
+/// Environment: raise a desktop notification when a session needs attention (feature 039,
+/// FR-026).
+pub fn desktop_notifications_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.environment.desktop_notifications = on);
 }
 
 /// Environment: whether agents may read and type into other sessions (feature 034, FR-016).

@@ -137,6 +137,8 @@ pub enum FieldId {
     SettingsPiActivityComponent,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
     SettingsToolServer,
+    /// Settings: the "Desktop notifications" checkbox (feature 039, FR-026).
+    SettingsDesktopNotifications,
     /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
     SettingsCpuLimit,
     /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).

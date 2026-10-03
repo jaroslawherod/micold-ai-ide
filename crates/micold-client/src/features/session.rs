@@ -194,6 +194,10 @@ pub struct State {
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     /// Service-owned and mirrored like [`Self::pi_activity_component`].
     pub tool_server_enabled: bool,
+    /// Whether a session that needs attention raises a desktop notification (feature 039,
+    /// FR-026). Service-owned and mirrored like [`Self::tool_server_enabled`]: the service is what
+    /// refuses a claim while it is off, this copy is what the Settings page opens with.
+    pub desktop_notifications: bool,
     /// Whether agents may read and type into other sessions (feature 034, FR-016). Service-owned
     /// and mirrored like [`Self::tool_server_enabled`]; the service reads its own copy on every
     /// tool request.

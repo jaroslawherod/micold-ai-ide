@@ -284,6 +284,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         default_ai_cli: AiCli::ClaudeCode,
         pi_activity_component: true,
         tool_server_enabled: true,
+        desktop_notifications: true,
         cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         pr_status_enabled: false,
     }
@@ -1752,6 +1753,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: true,
             tool_server_enabled: true,
+            desktop_notifications: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -1836,6 +1838,138 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
             .tool_server_enabled,
         "the service said the binding is off; the page must not show it on"
     );
+}
+
+/// U142 (feature 039, FR-026, US4 scenario 1): the page opens with **Desktop notifications** on,
+/// and the switch's message changes the draft.
+#[test]
+fn the_desktop_notifications_message_changes_the_draft() {
+    let mut app = base_app();
+    // What a connected service reports on default settings (`settings_wire` of the defaults).
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let shown = |app: &App| {
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .environment
+            .desktop_notifications
+    };
+    assert!(
+        shown(&app),
+        "on default settings the switch is shown and it is on"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::DesktopNotificationsToggled(false)),
+    );
+    assert!(!shown(&app), "the switch was turned off");
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::DesktopNotificationsToggled(true)),
+    );
+    assert!(shown(&app), "and on again");
+}
+
+/// U143 (feature 039, FR-027): turning **Desktop notifications** off and saving tells the
+/// connected service, which is what refuses the claims of every window.
+#[test]
+fn turning_desktop_notifications_off_and_saving_tells_the_service() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::DesktopNotificationsToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            desktop_notifications,
+            ..
+        } => Some(*desktop_notifications),
+        _ => None,
+    });
+    assert_eq!(
+        told,
+        Some(Some(false)),
+        "the service must be told desktop notifications are off: {sent:?}"
+    );
+}
+
+/// U143: a save that leaves the switch on names it too, as `Some(true)`: the form holds the
+/// field, so every save sends its value.
+#[test]
+fn saving_with_desktop_notifications_on_tells_the_service_they_are_on() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            desktop_notifications,
+            ..
+        } => Some(*desktop_notifications),
+        _ => None,
+    });
+    assert_eq!(
+        told,
+        Some(Some(true)),
+        "the service must be told the switch's position: {sent:?}"
+    );
+}
+
+/// U144 (feature 039, FR-027, US4 scenario 3): the page shows what the service says is in force,
+/// so a switch another window turned off opens off here, and on again after it is turned on.
+#[test]
+fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() {
+    let mut app = base_app();
+    for reported in [false, true] {
+        feed(
+            &mut app,
+            DaemonMsg::SettingsChanged {
+                settings: DaemonSettings {
+                    desktop_notifications: reported,
+                    ..quiet_settings()
+                },
+            },
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+        assert_eq!(
+            app.core
+                .settings
+                .settings_draft
+                .as_ref()
+                .expect("the page is open")
+                .environment
+                .desktop_notifications,
+            reported,
+            "the page must show the switch as the service reported it"
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Cancelled));
+    }
 }
 
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
@@ -1930,6 +2064,7 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
             tool_server_enabled: true,
+            desktop_notifications: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -1969,6 +2104,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
             tool_server_enabled: true,
+            desktop_notifications: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         daemon: micold_client::features::settings::DaemonDraft {
@@ -2157,6 +2293,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 env_include_timeout_secs: 30,
                 pi_activity_component: true,
                 tool_server_enabled: true,
+                desktop_notifications: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
             },
@@ -2190,6 +2327,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 env_include_timeout_secs: 45,
                 pi_activity_component: true,
                 tool_server_enabled: true,
+                desktop_notifications: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
             },
@@ -2664,6 +2802,7 @@ fn the_service_answers_with(
                 env_include_timeout_secs: 30,
                 pi_activity_component: false,
                 tool_server_enabled: true,
+                desktop_notifications: true,
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
             },
@@ -3906,6 +4045,7 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
+            desktop_notifications: settings.desktop_notifications,
             cross_session_access: settings.cross_session_access,
         },
         ..SettingsDraft::default()
@@ -4652,6 +4792,7 @@ mod script_path_report {
             env_include_timeout_secs: 10,
             pi_activity_component: false,
             tool_server_enabled: true,
+            desktop_notifications: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
             pr_status_enabled: false,
         }
