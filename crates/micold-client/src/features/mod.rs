@@ -167,6 +167,7 @@ pub mod attention;
 pub mod connection;
 pub mod help;
 pub mod notifications;
+pub mod pr_status;
 pub mod project;
 pub mod sandbox;
 pub mod session;

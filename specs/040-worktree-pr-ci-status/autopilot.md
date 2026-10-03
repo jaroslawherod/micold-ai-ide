@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: Orchestrator: wait for CI on #547 (M2) and merge it; then milestone M3.
+- **Next step**: M3 unit: implement T023–T029, gate, reviews A and B, open the PR.
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
-| #547 | M2 | open (label `docs-not-needed` added after `docs check` failed in run 37104864147; rebased onto main 69248274 after it went CONFLICTING: feature 039 took protocol 21, so 040 is 22) | |
+| #547 | M2 | merged | 2e688bf3d01bed2c3ae63681ecd05be8e6db3648 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | merged |
-| M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | PR open (rebased; protocol 22; reviews A and B clean at 64239328) |
-| M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
+| M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | merged |
+| M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | in progress |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
 | M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | pending |
@@ -83,7 +83,22 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-None.
+M3 unit 1 handed over at 150k (no PR yet). Branch reset onto origin/main 2e688bf3; #547 recorded merged.
+
+**Done (WIP commit, not yet compiled, red not yet recorded):**
+- `crates/micold-client/src/features/pr_status.rs`: `State`, `Phase { Idle, Reading { seq, again, started } }`, `Outcome`, `Msg { Held, ListingArrived, EnabledChanged, Finished, Released, RemotesTimedOut { seq, req } }`, `Effect`; `update` is a stub returning `Effect::None`. `RemotesTimedOut` is a shell-only variant (the 10 s bound on the reading's `RemoteList`); the reducer ignores it. `Trigger`/`Cause` are M7's, left out.
+- registered in `features/mod.rs`.
+- `crates/micold-client/tests/features_pr_status.rs` (T023, U70–U84) written against that API.
+
+**Next step:** run `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status`, record the red in `tdd/cycle-log.md` (style: one compact `### M3 cycle` entry per behaviour group, as M2's), implement `update` per RW §2 table + DM "State transitions", then T026 root wiring, T027, T028, T024, T025, T029.
+
+**Design already settled (do not re-explore):**
+- Feature-registration guard (`tests/feature_registration_cost.rs`): `features/pr_status.rs` has `pub enum Msg` but `update` returns `Effect`, so it is **shape B**: `shell/pr_status.rs` must declare `pub fn update(app: &mut App, msg: Msg) -> Task<Message>` and name `features::pr_status::Msg`; add `pub mod pr_status;` to `shell/mod.rs`. Only `app.rs` may call `features::pr_status::update(` → add `State::update_pr_status(&mut self, msg) -> Effect` in `app.rs` (like `update_session_for_effects`), add `pub pr_status: crate::features::pr_status::State` to root `State`, add `Message::PrStatus(crate::features::pr_status::Msg)` and decline it in `State::update` beside `Message::Connection(_) | Message::Sandbox(_)`. `main.rs` `update_inner`: `Message::PrStatus(msg) => shell::pr_status::update(app, msg)` (near line 595). Then run `feature_registration_cost`, `feature_write_isolation`, `root_state_is_shared`, `features_are_render_free`.
+- T027: add `pull_requests: Arc<dyn Fn(PathBuf) -> Arc<dyn PullRequestSource + Send + Sync> + Send + Sync>` to `IssueTooling` (`shell/capabilities.rs`); `real()` builds `GhCli::new(gh)` (GhCli impls PullRequestSource, `micold-core/src/github.rs:1155`); `IssueTooling::none()` gets an unreachable factory; one existing literal `IssueTooling {` in `main_tests.rs:5157` needs the field. Check `no_concrete_implementations`.
+- T028 `shell/pr_status.rs`: `update` calls `app.core.update_pr_status(msg)`; `Effect::Read{seq}` → `start(app, seq)` (the single `start(` call line). `RemotesTimedOut{seq,req}` handled before the reducer: if `app.pending_ops.remove(&req)` is `Some` → `update(app, Finished{seq, Err(Passing)})`. `start`: branches = `app.core.worktree.worktrees` with `branch: Some`, dedup in order; no daemon → Finished Passing directly (never `send_op`'s notice); else `send_op(PendingOp::PrStatusRemotes { project, seq, branches, started })` sending `ClientMsg::RemoteList`, and return `Task::perform(sleep(10 s), RemotesTimedOut{seq,req})`. New `PendingOp` arm in `daemon_sync.rs`: describe(); OperationResult (~line 771) → `pr_status::on_remotes(app, ..., Ok(remotes))`; OperationError (~887) → Passing; disconnect drain (~312) → nothing. `on_remotes`: drop unless `phase == Reading{seq}` and project still active; `micold_core::github::choose_remote` → `NoGithubRemote` ⇒ Finished Unavailable; else spawn_blocking: env-include PATH as `shell/issues.rs::start_issue_load` does, `(tooling.locate_gh)` None ⇒ Unavailable, else `(tooling.pull_requests)(gh).read(&repo, &branches, now)` ⇒ Finished{Ok{statuses, removable: empty, started_at: started}} or Err. One `crate::log_line` (no tracing dep; it is silent under cfg(test)) naming outcome kind + branch count, never title/url. `now` = SystemTime UNIX_EPOCH secs helper in shell/pr_status.rs.
+- T029 wiring in `daemon_sync.rs`: `Attached` arm (~1028) → `Held` when `project == app.core.workspace.active`; `CatalogChanged` arm (~607) after `reconcile_catalog` → `follow_up = pr_status::update(app, ListingArrived{now})` (the one line); `Released` right after each of the two `app.displaced.insert` (~977, ~1007) when project is active, and in `on_disconnected` (~260); `SettingsChanged` arm (~624) and `on_connected` (~1080, after `adopt_daemon_settings`) → `EnabledChanged{settings.pr_status_enabled}` (capture the bool before `settings` moves). `workspace.rs`: `Released` before `switch_daemon_attachment` at ~216 and ~246 when `previous != Some(path)`; also on forget of the active project (`daemon_sync.rs` ~1262).
+- T025 tests in `main_tests.rs`: copy `issue_rig` (~5151), `settle` (~5188), `remote_lists_sent`, `answer_remotes` (~5228), `messages()` (~2322, 10 s cap — so never run the 10 s timer Task: drop the Task returned by the `CatalogChanged` step, answer remotes, settle that; test the timeout by sending `Message::PrStatus(Msg::RemotesTimedOut{..})` directly). Fake: `micold_core::pull_request::FakePullRequestSource` (`with_answer`, `with_failure`, `calls()`).
+- T024 gate: copy `tests/issues_are_requested_only_on_named_events.rs` (MARKERS + ALLOWED with reasons); also assert no `log_line` in `shell/pr_status.rs` formats `title`/`url`.
 
 ## Open escalation
 
