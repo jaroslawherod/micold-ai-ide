@@ -290,12 +290,8 @@ fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
 /// hash is the hash of the message set that has all of it.
 #[test]
 fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() {
-    assert!(
-        PROTOCOL_VERSION >= 22,
-        "feature 040's wire change is one bump, 21 → 22; later features take later numbers, so \
-         this test is a floor, not an equality"
-    );
-
+    // The number itself is pinned once, by `FEATURE_026_PROTOCOL_VERSION` above: later features
+    // take later numbers (039 took 23), so this test checks only what version 22 added.
     let (messages, _grid, _envelope) = read_protocol_source();
     let hashed = canonicalize(&messages);
     for anchor in [
