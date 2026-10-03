@@ -263,6 +263,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         default_ai_cli: app.core.session.default_ai_cli,
         pi_activity_component: app.core.session.pi_activity_component,
         tool_server_enabled: app.core.session.tool_server_enabled,
+        desktop_notifications: app.core.session.desktop_notifications,
         cross_session_access: app.core.session.cross_session_access,
         issue_label_types: stored.issue_label_types,
         pr_status_enabled: stored.pr_status_enabled,
@@ -383,6 +384,7 @@ pub(crate) fn save_and_prepare_check(
     app.core.session.default_ai_cli = valid.default_ai_cli;
     app.core.session.pi_activity_component = valid.pi_activity_component;
     app.core.session.tool_server_enabled = valid.tool_server_enabled;
+    app.core.session.desktop_notifications = valid.desktop_notifications;
     app.core.session.cross_session_access = valid.cross_session_access;
 
     let settings = valid.into_settings();
@@ -426,6 +428,7 @@ pub(crate) fn save_and_prepare_check(
             default_ai_cli: Some(settings.default_ai_cli),
             pi_activity_component: Some(settings.pi_activity_component),
             tool_server_enabled: Some(settings.tool_server_enabled),
+            desktop_notifications: Some(settings.desktop_notifications),
             cross_session_access: Some(settings.cross_session_access),
             pr_status_enabled: None,
         });
@@ -867,6 +870,7 @@ mod tests {
             default_ai_cli: AiCli::Copilot,
             pi_activity_component: false,
             tool_server_enabled: true,
+            desktop_notifications: true,
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::ConfirmEachSend,
             issue_label_types: vec![micold_core::issue_types::LabelTypeEntry {
                 label: "perf".to_string(),

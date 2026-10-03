@@ -35,6 +35,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("default_ai_cli", "DefaultAiCliChanged"),
     ("pi_activity_component", "PiActivityComponentToggled"),
     ("tool_server_enabled", "ToolServerToggled"),
+    ("desktop_notifications", "DesktopNotificationsToggled"),
     ("cross_session_access", "CrossSessionAccessChanged"),
 ];
 
@@ -138,6 +139,21 @@ pub fn view<'a>(
         roles,
     );
 
+    // Feature 039, FR-026: one switch for the desktop notification of every AI CLI (FR-028). The
+    // same checkbox-and-note row as the two above; the note says what it leaves alone (FR-017).
+    let desktop_notifications = Checkbox::new(
+        "Desktop notifications",
+        draft.environment.desktop_notifications,
+        roles,
+    )
+    .track_focus(FieldId::SettingsDesktopNotifications, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::DesktopNotificationsToggled(v)));
+    let desktop_notifications = field_note(
+        desktop_notifications,
+        Some("Notifies you when a session you are not looking at needs you. Off: no notification, for any AI CLI; unread marks stay."),
+        roles,
+    );
+
     // Feature 034, FR-016: whether an agent may read another session's terminal and type into it.
     // A separate option from the binding above it, with three values, so it is the shared `Select`
     // (Principle VIII) rather than a second checkbox. The values are drawn by their `Display`.
@@ -155,8 +171,13 @@ pub fn view<'a>(
         roles,
     );
 
-    let mut controls: Vec<Element<'a, Message>> =
-        vec![cli, pi_activity, tool_server, cross_session];
+    let mut controls: Vec<Element<'a, Message>> = vec![
+        cli,
+        pi_activity,
+        tool_server,
+        desktop_notifications,
+        cross_session,
+    ];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,
