@@ -89,7 +89,10 @@
 /// fail to decode either.
 /// And 23 → 24 for feature 039's `SessionSummary::unread` (contract W2): every session carries
 /// whether it is unread. An older peer would fail to decode it.
-pub const PROTOCOL_VERSION: u32 = 24;
+/// And 24 → 25 for feature 039's `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession`
+/// (contract W3): a click on a notification is sent to the service, which forwards it to one
+/// window. An older peer would fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 25;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
