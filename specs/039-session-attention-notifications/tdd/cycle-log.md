@@ -544,8 +544,9 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
 - Green: `features::attention::row_unread(&Session, Option<SessionId>)`,
   `features::attention::in_view(&State)` (the session of the last view report sent), `unread`
   copied in both arms of `reconcile_catalog`. `unread_rows` 5 passed.
-- **Not done: `--test unread_rows` in `.github/workflows/ci.yml`** (T051's last sentence). M3 owns
-  the workflow files while this branch was written; the M4 unit adds the line.
+- `--test unread_rows` in `.github/workflows/ci.yml` (T051's last sentence) was left out on the
+  prep branch, because M3 owned the workflow files then. The M4 unit added the line after the
+  cherry-pick, beside `--test attention_view_report`.
 
 ## Cycle 18 — U145 to U151 — T049, T050, T057, T058 (M4-6)
 
