@@ -443,3 +443,9 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   off it, and a start or a respawn's swap takes its entry only on success and only if it is the one it
   seeded from; `ClientMsg::SessionStop` runs `stop_session` on `spawn_blocking`. Green in `mise run gate`.
 - refactor: none
+- review A round 2 follow-up (same behaviour, refactor of the fix): one carrier per ending process
+  (`Carry::Own(token)` / `Carry::Join`), the entry taken out and the carry marked under one lock in
+  stop, the supervision tick and the respawn; `stop_session` split into `begin_stop` (on the window's
+  loop) and `finish_stop` (`spawn_blocking`); a timed-out wait cancels the mark; a drop guard clears it
+  on any exit. The regression test above stays the pin; the respawn-and-stop overlap and the timeout
+  have no deterministic test (timing-dependent) and are covered by the token check.

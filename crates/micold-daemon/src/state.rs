@@ -6,7 +6,7 @@
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -219,7 +219,9 @@ struct Inner {
     /// Marked under the same lock that takes the process out, so a start in that gap waits for the
     /// history instead of starting without it; cleared by `remove_live_by_ids`, so a capture that
     /// ends after the session was removed is dropped instead of kept for nothing.
-    carrying: HashSet<SessionId>,
+    carrying: HashMap<SessionId, u64>,
+    /// The token the next carry is marked with, so a carry knows whether its mark still stands.
+    next_carry: u64,
     /// Agents' destructive requests waiting for the user (feature 034, FR-014). Beside `clients`
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
@@ -486,6 +488,25 @@ enum Recovered {
     Label(String),
 }
 
+/// Who carries the history of a covered process that is ending (041, R4): this end, under the
+/// mark's token; another end already carrying the same process, which this end waits for; or
+/// nobody (not a covered primary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Carry {
+    Own(u64),
+    Join,
+    None,
+}
+
+/// A stop whose live entry is out of the state and whose processes [`DaemonState::finish_stop`]
+/// has yet to end.
+pub struct PendingStop {
+    session: SessionId,
+    removed: Option<LiveSession>,
+    carry: Carry,
+    known: bool,
+}
+
 impl DaemonState {
     /// Build the shared state around an adopted [`Catalog`].
     pub fn new(catalog: Catalog) -> Self {
@@ -506,7 +527,8 @@ impl DaemonState {
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
                 carried: HashMap::new(),
-                carrying: HashSet::new(),
+                carrying: HashMap::new(),
+                next_carry: 0,
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
@@ -1640,33 +1662,63 @@ impl DaemonState {
     /// invariant), so the supervisor never sees the kill as a crash. Returns whether the session is
     /// known.
     pub fn stop_session(&self, session: SessionId) -> bool {
-        let (removed, owner, covered) = {
+        let stop = self.begin_stop(session);
+        let known = stop.known;
+        self.finish_stop(stop);
+        known
+    }
+
+    /// The part of [`Self::stop_session`] that does not wait: the live entry is taken out (and its
+    /// history's carry marked) under one lock, the record is marked `Idle`, and every window is
+    /// told. [`Self::finish_stop`] then ends the processes; a window's `SessionStop` runs that part
+    /// off its connection's loop, since the carry can wait up to `TEARDOWN_WAIT` (041, R4).
+    pub fn begin_stop(&self, session: SessionId) -> PendingStop {
+        let (removed, carry, owner) = {
             let mut inner = self.lock();
             let removed = inner.sessions.remove(&session);
-            let covered = Self::covered(&inner, session);
-            if covered && removed.is_some() {
-                inner.carrying.insert(session);
-            }
+            let carry = Self::claim_carry(&mut inner, session, removed.as_ref());
             let owner = inner.catalog.mark_session_stopped(session);
-            (removed, owner, covered)
+            (removed, carry, owner)
         };
-        if let Some(live) = &removed {
-            for (key, proc) in &live.procs {
-                if covered && *key == SessionProcess::Primary {
-                    // Its history is carried to the next start, before the stop replies (R4).
-                    self.carry_history(session, &proc.pty);
-                } else {
-                    let _ = proc.pty.kill();
-                }
-            }
-        }
-        drop(removed);
         self.confirmations_caller_stopped(session);
         if owner.is_some() {
             tracing::info!(session = %session.0, reason = "stopped on request", "session stopped");
             self.broadcast_catalog();
         }
-        owner.is_some()
+        PendingStop {
+            session,
+            removed,
+            carry,
+            known: owner.is_some(),
+        }
+    }
+
+    /// End the processes [`Self::begin_stop`] took out: the covered primary is torn down and its
+    /// history carried (R4), or, when another end of the same process is already carrying it, that
+    /// carry is waited for; every other process is killed. Blocking.
+    pub fn finish_stop(&self, stop: PendingStop) {
+        let PendingStop {
+            session,
+            removed,
+            carry,
+            ..
+        } = stop;
+        if let Some(live) = &removed {
+            for (key, proc) in &live.procs {
+                match (key, carry) {
+                    (SessionProcess::Primary, Carry::Own(token)) => {
+                        self.carry_history(session, token, &proc.pty)
+                    }
+                    _ => {
+                        let _ = proc.pty.kill();
+                    }
+                }
+            }
+        }
+        if carry == Carry::Join {
+            drop(self.wait_carry(session));
+        }
+        drop(removed);
     }
 
     /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
@@ -2641,7 +2693,7 @@ impl DaemonState {
         {
             let mut inner = self.lock();
             inner.start_failures.remove(&id);
-            Self::take_carried(&mut inner, id, seeded.as_ref());
+            Self::take_carried(&mut inner.carried, id, seeded.as_ref());
         }
         self.register_session(session);
         // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
@@ -2919,14 +2971,23 @@ impl DaemonState {
         }
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
         for (id, covered) in to_drop {
-            let primary = if covered { self.primary_pty(id) } else { None };
-            if primary.is_some() {
-                self.lock().carrying.insert(id);
-            }
-            self.remove_session(id);
-            if let Some(pty) = primary {
-                self.carry_history(id, &pty);
-            }
+            // Taken out and its carry marked under one lock, as a stop does (R4).
+            let (removed, carry) = {
+                let mut inner = self.lock();
+                let removed = inner.sessions.remove(&id);
+                let carry = if covered {
+                    Self::claim_carry(&mut inner, id, removed.as_ref())
+                } else {
+                    Carry::None
+                };
+                (removed, carry)
+            };
+            self.finish_stop(PendingStop {
+                session: id,
+                removed,
+                carry,
+                known: true,
+            });
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
         for (id, cwd, mode, provider) in to_respawn {
@@ -3216,28 +3277,81 @@ impl DaemonState {
             .is_some_and(|(_, session)| session.mode == TerminalMode::AiCli)
     }
 
+    /// Mark the carry of `id`'s ending primary, under the lock that takes it out (or, for a
+    /// respawn, finds it dead). Only one end of a process carries it: when a carry of `id` is
+    /// already marked (a respawn's, and a stop came meanwhile), this end joins it instead, so the
+    /// same process is never torn down and captured twice. `None` when there is no covered primary.
+    fn claim_carry(inner: &mut Inner, id: SessionId, live: Option<&LiveSession>) -> Carry {
+        let has_primary =
+            live.is_some_and(|live| live.procs.contains_key(&SessionProcess::Primary));
+        Self::claim_carry_of(inner, id, has_primary)
+    }
+
+    /// [`Self::claim_carry`] given whether the session has a primary.
+    fn claim_carry_of(inner: &mut Inner, id: SessionId, has_primary: bool) -> Carry {
+        if !has_primary || !Self::covered(inner, id) {
+            return Carry::None;
+        }
+        if inner.carrying.contains_key(&id) {
+            return Carry::Join;
+        }
+        inner.next_carry += 1;
+        let token = inner.next_carry;
+        inner.carrying.insert(id, token);
+        Carry::Own(token)
+    }
+
     /// Data-model §6's order at the end of a covered process, once its `Arc` is out of the state:
     /// tear it down off the state lock, so every byte it wrote has reached the `Term`, then capture
     /// the history and carry it to the session's next start. The caller replies or spawns after.
     ///
-    /// The caller has marked `id` in `Inner.carrying` under the lock that took the process out. The
-    /// capture is kept only while that mark stands: a removal of the session meanwhile cleared it.
-    fn carry_history(&self, id: SessionId, pty: &PtySession) {
+    /// The capture is kept only while the mark `token` still stands: a removal of the session, or a
+    /// start that stopped waiting, cleared it meanwhile. The mark is cleared and waiters woken
+    /// however this ends, a panic included.
+    fn carry_history(&self, id: SessionId, token: u64, pty: &PtySession) {
+        struct ClearMark<'a>(&'a DaemonState, SessionId, u64);
+        impl Drop for ClearMark<'_> {
+            fn drop(&mut self) {
+                if let Ok(mut inner) = self.0.inner.lock() {
+                    if inner.carrying.get(&self.1) == Some(&self.2) {
+                        inner.carrying.remove(&self.1);
+                    }
+                }
+                self.0.carry_done.notify_all();
+            }
+        }
+        let _clear = ClearMark(self, id, token);
         pty.teardown(TEARDOWN_WAIT);
         let snapshot = Arc::new(history::capture(&pty.term().lock()));
         let mut inner = self.lock();
-        if inner.carrying.remove(&id) {
+        if inner.carrying.get(&id) == Some(&token) {
+            inner.carrying.remove(&id);
             inner.carried.insert(id, snapshot);
         }
-        drop(inner);
-        self.carry_done.notify_all();
+    }
+
+    /// Wait while a carry of `id` is marked, bounded by the teardown's own bound and a margin for
+    /// the capture. A carry still running after that is cancelled, so its late capture is dropped
+    /// instead of being kept for a session that has started again without it.
+    fn wait_carry(&self, id: SessionId) -> std::sync::MutexGuard<'_, Inner> {
+        let inner = self.lock();
+        let (mut inner, waited) = self
+            .carry_done
+            .wait_timeout_while(inner, TEARDOWN_WAIT * 2, |inner| {
+                inner.carrying.contains_key(&id)
+            })
+            .expect("daemon state mutex poisoned");
+        if waited.timed_out() && inner.carrying.remove(&id).is_some() {
+            tracing::warn!(session = %id.0, "the earlier output was still being kept; starting without it");
+        }
+        inner
     }
 
     /// The seed for `id`'s next start: the history its last process left, when it has lines, and
     /// the carried entry it came from, which the start takes only once it has succeeded.
     ///
-    /// A start that comes while that process is still being captured waits for it, bounded by the
-    /// teardown's own bound and a margin for the capture.
+    /// A start that comes while that process is still being captured waits for it
+    /// ([`Self::wait_carry`]).
     fn carried_seed(
         &self,
         id: SessionId,
@@ -3245,15 +3359,7 @@ impl DaemonState {
         Seed,
         Option<Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) {
-        let inner = self.lock();
-        let (inner, _) = self
-            .carry_done
-            .wait_timeout_while(inner, TEARDOWN_WAIT * 2, |inner| {
-                inner.carrying.contains(&id)
-            })
-            .expect("daemon state mutex poisoned");
-        let carried = inner.carried.get(&id).cloned();
-        drop(inner);
+        let carried = self.wait_carry(id).carried.get(&id).cloned();
         // The copy is made off the lock: a history can hold up to the scrollback limit of lines.
         match carried {
             Some(snapshot) if !snapshot.is_empty() => (
@@ -3270,17 +3376,16 @@ impl DaemonState {
     /// A start that succeeded with the history `seeded` takes it out of `carried`, unless a newer
     /// history replaced it meanwhile.
     fn take_carried(
-        inner: &mut Inner,
+        carried: &mut HashMap<SessionId, Arc<micold_core::terminal_history::HistorySnapshot>>,
         id: SessionId,
         seeded: Option<&Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) {
         let Some(seeded) = seeded else { return };
-        if inner
-            .carried
+        if carried
             .get(&id)
-            .is_some_and(|carried| Arc::ptr_eq(carried, seeded))
+            .is_some_and(|entry| Arc::ptr_eq(entry, seeded))
         {
-            inner.carried.remove(&id);
+            carried.remove(&id);
         }
     }
 
@@ -3312,9 +3417,18 @@ impl DaemonState {
         let spawned = match mode {
             TerminalMode::AiCli => {
                 // The dead process's history first, whole, then the seed from it (R4).
-                if let Some(old) = self.primary_pty(id) {
-                    self.lock().carrying.insert(id);
-                    self.carry_history(id, &old);
+                let claimed = {
+                    let mut inner = self.lock();
+                    let old = inner
+                        .sessions
+                        .get(&id)
+                        .and_then(|live| live.procs.get(&SessionProcess::Primary))
+                        .map(|proc| Arc::clone(&proc.pty));
+                    let carry = Self::claim_carry_of(&mut inner, id, old.is_some());
+                    old.zip(Some(carry))
+                };
+                if let Some((old, Carry::Own(token))) = claimed {
+                    self.carry_history(id, token, &old);
                 }
                 let (seed, from) = self.carried_seed(id);
                 seeded = from;
@@ -3383,16 +3497,12 @@ impl DaemonState {
             return None;
         };
         live.respawned_at = Some(respawned_at);
-        // Swapped in, so the history it was seeded with is taken; a swap that found no session
-        // leaves it for the next start (R4).
-        Self::take_carried(&mut inner, id, seeded);
-        let live = inner
-            .sessions
-            .get_mut(&id)
-            .expect("the session was found above under this lock");
         let old = live
             .procs
             .insert(SessionProcess::Primary, new_proc(pty, id));
+        // Swapped in, so the history it was seeded with is taken; a swap that found no session
+        // leaves it for the next start (R4).
+        Self::take_carried(&mut inner.carried, id, seeded);
         drop(inner);
         old
     }
