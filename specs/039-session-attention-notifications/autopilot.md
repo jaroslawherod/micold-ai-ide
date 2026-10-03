@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M7)
-- **Next step**: M7: the full gate was green at `3c368dda` and the PR is open; wait on CI and merge. Then M8 (wire number 27).
+- **Next step**: M7: the full gate was green at `3c368dda` and PR #561 is open; wait on CI and merge. Then M8 (wire number 27).
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
 | #559 | M5 | merged | 57f14c7278e2bdd95edcb1855a050d2f3abc5164 |
 | #560 | M6 | merged | 9bab6e4afd57dbcf1f0873268edb7ede700bb07a |
+| #561 | M7 | open | |
 
 ## Milestones
 
@@ -34,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | merged |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | merged |
-| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | in progress |
+| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | #561 | in progress |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
 
