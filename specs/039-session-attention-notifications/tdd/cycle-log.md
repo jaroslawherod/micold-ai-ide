@@ -1030,3 +1030,57 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
   calls on GNOME Shell 50.1; there they ran off the UI thread on pointers kept aside, here inside
   the `iced::window::run` closure on the UI thread, which is not yet seen at a display (quickstart,
   M9). Also untested: that `raise` chains the steps in order, and the 400 ms timer.
+
+## Cycle 37 — M7 verify: review A round 1, F1 to F5 (U140, U166; no new behavior id)
+
+- tests, by finding:
+  - F1 `crates/micold-client/tests/attention_reveal.rs::a_sent_activation_is_done_by_a_gain_since_the_send_or_by_a_focus_already_held`,
+    `::a_window_that_never_had_focus_asks_for_attention_when_the_token_is_declined`,
+    `::a_window_that_was_focused_already_asks_for_nothing`,
+    `::an_unfocused_window_that_gains_focus_after_the_send_asks_for_nothing`,
+    `::an_unfocused_window_that_gains_no_focus_after_the_send_asks_for_attention`
+  - F4 `::a_second_send_while_one_is_pending_is_judged_once`,
+    `::a_second_send_forgets_the_gain_seen_since_the_first`
+  - F5 `crates/micold-client/src/shell/desktop_notify/linux.rs::tests::a_token_does_not_outlive_another_action_on_its_notification`
+    (written against an `ActivationWatch` and an `activation_done` that judged as the shell did: a
+    focus flag that starts `true`, every wait judged; so that it compiled)
+- red, commit `49578c4c` (`cargo test -p micold-client --test attention_reveal`,
+  `-p micold-client --bin micold-ai-ide desktop_notify`):
+  - F1 `attention_reveal.rs:337: no focus event yet` and
+    `attention_reveal.rs:345: assertion left == right failed` (`None` for `Some(RequestAttention)`)
+  - F4 `attention_reveal.rs:385: assertion left == right failed: the first check was replaced`
+    (`20 passed; 3 failed`)
+  - F5 `linux.rs:591: assertion left == right failed` (the click carried the token of the other
+    action) (`23 passed; 1 failed`)
+  - The three F1 tests that passed on the stub, and `a_second_send_forgets_the_gain_seen_since_the_first`,
+    have no red: the stub's flag gave the same answers.
+- green, the same two commands: `23 passed`, `24 passed`.
+  - F1: `activation_done(gained_since_send, last_focus)` is a gain since the send, or
+    `last_focus == Some(true)`; `ActivationWatch` holds `last_focus: Option<bool>` (`None` until the
+    first focus event) and the pending check's `gained`. `main.rs` writes it in the
+    `WindowFocusChanged` arm, beside `window_focused`, which is unchanged.
+  - F2: `window_raise::raise` ends with `ConnectionMsg::ActivationSent { check, wait }` when the
+    request went out; its arm in `shell/connection.rs` records the send and starts the wait
+    (`settle_after`) as a task of its own, so `Reopened` and `Selected` are not behind it.
+  - F4: `ActivationWatch::sent(check)` replaces the pending check and `settled(check)` answers only
+    the pending one, once. `ActivationSettled { check }` carries the number; `window_raise::Activation`
+    keeps the `window::Id` each number was sent for and `settled` acts on that window. The number,
+    not the id, is in the message: `features_are_render_free` forbids a feature's message to name
+    an `iced` type.
+  - F5: `Shown::on_signal` clears the entry's token on an `ActionInvoked` with another key;
+    `AfterSend::Now` carries a `RaiseStep`.
+  - F3: not changed. The module's comment in `shell/window_raise.rs` now states the leak: one
+    `wl_registry` per click. Keeping the foreign connection and the bound `xdg_activation_v1` for
+    the window's life needs a proof that they are dropped before winit closes the `wl_display`,
+    and the shell has no hook at that point.
+- Also green: `--bin micold-ai-ide` -> 354 passed; `--test features_are_render_free`,
+  `--test feature_registration_cost`, `--test feature_write_isolation` pass;
+  `cargo clippy -p micold-client --all-targets -- -D warnings` clean; the same clippy for
+  `--bin micold-ai-ide --tests` on `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` clean;
+  `cargo fmt --all --check` clean.
+- commit: the `fix(039)` commit that carries this record.
+- **No test**: the order of the tasks is glue — that `raise` ends with `ActivationSent`, that the
+  reveal's messages are chained after it and are not behind the 400 ms wait, and that `settled`
+  takes the window recorded for the number. No pure function decides that order. A window that has
+  seen no focus event because iced sent none at launch (`main.rs`, the comment on `window_focused`)
+  is judged not focused, and asks for attention after an activation that changed nothing.

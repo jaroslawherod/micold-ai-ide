@@ -78,6 +78,10 @@ struct App {
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
     window_focused: bool,
+    /// What the window has seen of its keyboard focus since launch, and the Wayland activation
+    /// request waiting to be judged against it (feature 039, research R7). Beside
+    /// `window_focused`, which starts `true` and so cannot say that a focus was ever seen.
+    activation: shell::window_raise::Activation,
     /// The terminal pane's last-known `(cols, rows)`, reported by `Message::Session(SessionMsg::TerminalResized)`.
     /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
@@ -845,6 +849,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::WindowFocusChanged(focused) => {
             app.window_focused = focused;
+            app.activation.watch.focus_changed(focused);
             // **Nothing here touches terminal focus, and that is the implementation of
             // FR-013–FR-015** (feature 023). Coming back to the window must leave the keyboard
             // exactly where it was, and it does — not because anything is saved and restored, but

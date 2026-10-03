@@ -64,9 +64,17 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         }
         Msg::AttentionShown(result) => daemon_sync::on_attention_shown(app, result),
         Msg::NotifierReported(event) => daemon_sync::on_notifier_reported(app, event),
-        // The compositor has had its moment since the activation request: the window's keyboard
-        // focus says whether it honoured the token (research R7).
-        Msg::ActivationSettled => crate::shell::window_raise::settled(app.window_focused),
+        // An activation request went out: from here on a focus gain counts for it, and the wait
+        // runs beside whatever follows the raise (research R7).
+        Msg::ActivationSent { check, wait } => {
+            app.activation.watch.sent(check);
+            crate::shell::window_raise::settle_after(check, wait)
+        }
+        // The compositor has had its moment since that request: what the window has seen of its
+        // keyboard focus says whether it honoured the token.
+        Msg::ActivationSettled { check } => {
+            crate::shell::window_raise::settled(&mut app.activation, check)
+        }
         Msg::DiagnosticsRequested => daemon_sync::on_diagnostics_requested(app),
     }
 }

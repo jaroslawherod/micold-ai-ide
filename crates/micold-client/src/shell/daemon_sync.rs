@@ -628,6 +628,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Feature 039 (contract N5): a notification for this session was clicked, in this window
         // or another, and the service chose this window to show it. The window comes to the
         // front first, with the activation token of the click when the service sent one (N6);
+        // the raise ends when its requests are sent, and the wait that judges an activation runs
+        // beside what follows (`ConnectionMsg::ActivationSent`);
         // then the root's messages are dispatched in order — the ordinary project
         // switch and the ordinary selection, or none for a session that is gone (the root has
         // pushed the notice). The folders are scanned first, as the switch itself scans them: a
@@ -640,7 +642,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         } => {
             app.core.workspace.refresh_availability(app.caps.scanner());
             follow_up = app.core.reveal_session(&project, session).into_iter().fold(
-                crate::shell::window_raise::raise(activation),
+                crate::shell::window_raise::raise(activation, &app.activation),
                 |done, message| done.chain(Task::done(message)),
             );
         }

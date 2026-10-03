@@ -112,8 +112,10 @@ placeholder of its own.
 | `sent_view` | `Option<WindowView>` | The last report sent on this connection; `None` after a reconnect. |
 | `failure_logged` | `bool` | A show failure was logged in this run (FR-010). |
 
-`raise_plan` and `after_activation` (contract desktop-notification, *Raising the window*) are pure
-functions of this module. The activation token is not kept in the state: it travels in
+`raise_plan`, `after_activation` and `activation_done` (contract desktop-notification, *Raising the
+window*) are pure functions of this module. `ActivationWatch` is not part of `State`: the binary
+keeps it beside `window_focused`, with the last focus event seen since launch (`Option<bool>`) and
+the one pending activation check. The activation token is not kept in the state: it travels in
 `SessionReveal` and comes back in `RevealSession`.
 
 ## Setting
