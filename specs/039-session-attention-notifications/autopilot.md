@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M5)
-- **Next step**: M5 in progress: implement T062–T072, T119, then gate, reviews, PR.
+- **Next step**: M5, continue from *Handover*: T119, then verify.md (scoped gate with review A, review B and the visual pass, full gate) and the PR.
 
 ## Pull requests
 
@@ -96,7 +96,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5, written at the 150k context cap. No PR is open. Nothing is pushed.
+
+- **Done and committed** on `feat/notify-session-needs-attention` (on `origin/main` at
+  ea477587): T062–T072, all ticked in `tasks.md`, with cycles 22–24 in `tdd/cycle-log.md`.
+  U36–U41, U128–U130 and U152–U158 are `DONE` in `tdd/test-list.md`.
+- **Runs so far**: `cargo test -p micold-core --all-targets` green; `cargo test -p micold-client
+  --lib` (507) and `--test switcher_unread` (5), `showcase_completeness`, `showcase_captions`,
+  `material_builder_api` green. **Not run**: clippy, the rest of the client's integration tests,
+  `cargo test --workspace`, the scoped gate, the full gate.
+- **Next step**: T119. Run `scripts/build-lock.sh cargo test --test unread_state`, `--test
+  unread_rows`, `--test switcher_unread`, then tick T119 and set A14–A22 and A24–A36 to `DONE` in
+  `tdd/test-list.md` (A23 is T121's). Then `speckit-implement`'s optional `after_implement` hooks,
+  then `tasks/verify.md` from step 1: scoped gate with review A (`code-review`, `high`), review B
+  (conformance, sonnet) with the visual pass (quickstart §B5, B6 panel and button, B7; evidence
+  under `visual-pass/M5/`), the full gate, the PR (`Refs #481`).
+- **No review has run** for M5: *Review rounds* has no M5 row yet.
+- **For the reviewers and the visual pass**:
+  - The showcase's switcher row with both counts is in the project switcher panel
+    (`MenuOverlay`'s second opener), not in `sections/atoms.rs` as T071's file list says: a
+    menu's rows are built only inside its panel. The button is in the `UnreadMark` entry.
+  - On the switcher's button the mark (`primary`) and the number (the text variant's content
+    colour, also `primary`) are the same colour, and the gap before the mark is 8dp. Neither has
+    been looked at on a display.
+  - `Button::trailing_mark` on a **filled** button would draw a `primary` mark on a `primary`
+    fill. No host does that; the doc comment says so and nothing enforces it.
+  - `other_projects_unread` takes `Option<&Path>`, where data-model.md writes `&active`.
+- **Open follow-up from M4 not done here**: review A F3 (`session_tree_item`'s two positional
+  `Option<SessionId>`). M5 did not edit `ui/sidebar.rs`.
 
 ## Open escalation
 

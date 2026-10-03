@@ -77,7 +77,24 @@ listing your known projects. Each row shows:
 - the project's name, with the **active** project marked;
 - a **running** count when the project has terminal sessions running in the background
   (for example, "2 running") — so you can tell at a glance where your live work is;
+- an **unread** count when the project has sessions that finished a turn you have not looked at
+  yet: a filled dot, the number and the word, for example "● 2 unread". It stands after the
+  running count, and on the active project's row as on the others. It counts every unread session
+  of the project, including sessions of worktrees the sidebar's filter is hiding. A project with
+  no unread session shows no count;
 - an **unavailable** badge for folders that are missing on disk (these cannot be selected).
+
+The switcher's button itself shows a filled dot and a number after the project's name, for
+example "● 3", when sessions in your **other** projects are unread. You see it without opening the
+panel, and it stays while the panel is open. Unread sessions of the active project are not in that
+number: the sidebar already marks them. Hover over the button to read what the number counts
+("3 unread sessions in other projects"). When no other project has an unread session, the button
+shows its name alone.
+
+Both numbers fall as soon as you open an unread session, and after you switch projects the
+button counts the projects you are no longer in. See
+[Worktrees & Sessions → Unread sessions](worktrees-and-sessions.md#unread-sessions) for when a
+session becomes unread and what clears it.
 
 Click any available project to switch to it in a single step. The last row, **Add project…**,
 opens the folder browser so you can add a project that isn't in the list yet. A long list

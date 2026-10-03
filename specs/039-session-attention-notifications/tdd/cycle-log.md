@@ -622,3 +622,57 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
 - `other_projects_unread` takes `Option<&Path>`, not `&Path`: with no project active every project
   is another one. It sums over `Workspace::projects`, the rows the switcher lists.
 - Refactor: none needed.
+
+## Cycle 23 — U128 to U130, U152 to U158 — T063 to T065, T067 to T070 (M5-2)
+
+- Tests: `crates/micold-client/tests/switcher_unread.rs` (new, 5 tests; `--test switcher_unread`
+  added to `.github/workflows/ci.yml`); `ui/material/menu.rs` (3, the file's first test module);
+  `menu_anatomy.rs::a_switcher_row_with_an_unread_count_keeps_its_height`; `ui/material/button.rs`
+  (3, the file's first test module);
+  `button_anatomy.rs::a_button_with_an_unread_count_keeps_its_height`; `unread_mark.rs` (2, the
+  host's role and colour of contract U1).
+- All of these were written before any implementation and run in one build. Red:
+  `scripts/build-lock.sh cargo test -p micold-client --lib --test switcher_unread --no-run` did
+  not compile: `no field 'unread_count' on type '&SwitcherEntry'`, `no method named
+  'other_projects_unread' found for struct 'micold_client::app::State'`, `struct
+  'material::menu::MenuItem<_>' has no field named 'trailing_mark'`, `no method named
+  'trailing_mark' found for struct 'material::button::Button<'a, M>'`, `cannot find function
+  'unread_total_tooltip'`, `no method named 'role'` / `'muted'` / `'tint'` `found for struct
+  'unread_mark::UnreadMark<'a, M>'`. One error was the tests' own (`'node' does not live long
+  enough` in a layout helper) and was fixed in the tests.
+- **Deviation**: one red for ten behaviors, and a compile error, not an assertion. The same form
+  as cycles 17 and 18. To show the assertions hold something, the green tree was committed and
+  then mutated in one run (restored with `git checkout`): the menu's mark without `.worded(true)`,
+  `Button::trailing_mark` keeping a count of zero, the tooltip's plural without its `s`,
+  `switcher_entries` passing `None` as the session in view, and `State::other_projects_unread`
+  passing `None` as the active project. 8 tests failed: `a_trailing_mark_renders_the_worded_count_after_the_trailing_text`,
+  `with_no_running_count_the_mark_alone_trails`, `a_trailing_mark_of_zero_renders_the_button_without_it`,
+  `the_unread_totals_tooltip_names_the_other_projects`, and four of `switcher_unread`'s five (all
+  but `every_switcher_entry_carries_its_projects_unread_count`). **Not mutated**: the two height
+  tests (U155, U157) and `a_trailing_mark_renders_the_count_after_the_label_inside_the_button`.
+- Green: `scripts/build-lock.sh cargo test -p micold-client --lib --test switcher_unread`: lib 507
+  passed, `switcher_unread` 5 passed.
+  - `UnreadMark::role(TypeRole)`, `.muted()`, `.tint(Rgb)`: the host's role and colour for the
+    number and the word (decision D23, note 2). The mark itself stays `primary`.
+  - `MenuItem::trailing_mark: Option<usize>`: `● n unread`, muted like the running count, pushed
+    after `trailing_text`; `None` and `Some(0)` push nothing, so no gap is taken.
+  - `Button::trailing_mark(n, tooltip)`: `● n` in `TypeRole::Action` and the variant's content
+    colour, 8dp after the label; the whole button is wrapped in `Tooltip` (no layout node). A
+    count of zero keeps neither the mark nor the tooltip. `unread_total_tooltip(n)` is exported
+    from `ui::material`.
+  - `SwitcherEntry::unread_count`, from `Workspace::unread_session_count(path, in_view)` with
+    `features::attention::in_view`; `State::other_projects_unread()`.
+  - T070: `ui/mod.rs` passes `trailing_mark` when the count is one or more; `ui/toolbar.rs`
+    calls `.trailing_mark(total, unread_total_tooltip(total))` when the total is one or more.
+
+## Cycle 24 — T071, T072 (no behavior id)
+
+- T071: `samples::PROJECTS` gained an unread count per project, so the showcase's project
+  switcher (`MenuOverlay`'s second opener, `sections/floating.rs`) shows a row with a running and
+  an unread count and a row with the unread count alone. **Deviation from the task's file list**:
+  the row is not in `sections/atoms.rs`, because a menu's rows are built only inside its panel
+  (`menu::item_column` is `pub(super)`). `sections::atoms::unread_mark` gained the switcher's
+  button with a count of 3 and with none; the catalogue's `posed` lists name both.
+  `showcase_completeness` 10, `showcase_captions` 7 and `material_builder_api` 35 passed.
+- T072: `docs/user-guide/project-selection.md`, under *Switching projects from the top bar*: the
+  unread count on each row and the total on the button, with a link to *Unread sessions*.

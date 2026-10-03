@@ -33,8 +33,8 @@ fn menu_items() -> Vec<material::MenuItem<Message>> {
     ]
 }
 
-/// The invented project rows the switcher shows: an active one, one with running sessions, and one
-/// whose folder is gone.
+/// The invented project rows the switcher shows: an active one with running and unread sessions,
+/// one with unread sessions alone, and one whose folder is gone.
 ///
 /// `MenuItem`s, because that is what the switcher's list is made of — it stopped being a component
 /// of its own at BUG-007, and the rows here are built exactly as `ui::view` builds them.
@@ -42,20 +42,22 @@ fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
     samples::PROJECTS
         .iter()
         .enumerate()
-        .map(|(row, (label, running, available))| material::MenuItem {
-            icon: (row == 0).then_some(Icon::ActiveMarker),
-            reserve_icon: true,
-            icon_tint: Some(icon_role(IconSurface::Badge, roles)),
-            label: (*label).to_string(),
-            message: available.then_some(Message::NoOp),
-            trailing_text: (*running > 0).then(|| format!("{running} running")),
-            trailing_mark: None,
-            trailing_icon: (!*available).then_some((
-                Icon::Unavailable,
-                icon_role(IconSurface::Unavailable, roles),
-            )),
-            on_context: Some(Box::new(|_| Message::NoOp)),
-        })
+        .map(
+            |(row, (label, running, unread, available))| material::MenuItem {
+                icon: (row == 0).then_some(Icon::ActiveMarker),
+                reserve_icon: true,
+                icon_tint: Some(icon_role(IconSurface::Badge, roles)),
+                label: (*label).to_string(),
+                message: available.then_some(Message::NoOp),
+                trailing_text: (*running > 0).then(|| format!("{running} running")),
+                trailing_mark: (*unread > 0).then_some(*unread),
+                trailing_icon: (!*available).then_some((
+                    Icon::Unavailable,
+                    icon_role(IconSurface::Unavailable, roles),
+                )),
+                on_context: Some(Box::new(|_| Message::NoOp)),
+            },
+        )
         .collect()
 }
 
