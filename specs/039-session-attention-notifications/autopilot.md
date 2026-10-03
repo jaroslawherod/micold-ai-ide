@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M7)
-- **Next step**: M7: reviews A and B are clean and the C4 pass is recorded. Run the full gate (`mise run gate`), then push and open the PR (`feat(039): …`, body ends `Refs #481`). M7 took wire number 26, so M8 takes 27.
+- **Next step**: M7: the full gate was green at `3c368dda` and the PR is open; wait on CI and merge. Then M8 (wire number 27).
 
 ## Pull requests
 
