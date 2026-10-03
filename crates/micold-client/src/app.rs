@@ -387,6 +387,96 @@ impl State {
         crate::features::attention::connection_started(&mut self.attention);
     }
 
+    /// The attention claims of the catalog a `Welcome` carried (feature 039, research R3): the
+    /// first snapshot of a connection, so the one after a lost connection (FR-006). On the first
+    /// connection of the process nothing has been seen, so nothing is claimed (FR-005).
+    pub fn attention_on_welcome(
+        &mut self,
+        catalog: &micold_core::protocol::messages::CatalogSnapshot,
+        window_focused: bool,
+    ) -> Vec<micold_core::protocol::messages::ClientMsg> {
+        self.attention_snapshot(
+            catalog,
+            micold_core::attention::Phase::Reconnected,
+            window_focused,
+        )
+    }
+
+    /// The attention claims of a `CatalogChanged` (feature 039, research R3): the connection was
+    /// unbroken, so every higher sequence is a change this window watched happen (FR-001).
+    pub fn attention_on_catalog_changed(
+        &mut self,
+        catalog: &micold_core::protocol::messages::CatalogSnapshot,
+        window_focused: bool,
+    ) -> Vec<micold_core::protocol::messages::ClientMsg> {
+        self.attention_snapshot(catalog, micold_core::attention::Phase::Live, window_focused)
+    }
+
+    fn attention_snapshot(
+        &mut self,
+        catalog: &micold_core::protocol::messages::CatalogSnapshot,
+        phase: micold_core::attention::Phase,
+        window_focused: bool,
+    ) -> Vec<micold_core::protocol::messages::ClientMsg> {
+        let sessions: Vec<_> = catalog
+            .projects
+            .iter()
+            .flat_map(|p| p.sessions.iter().cloned())
+            .collect();
+        let in_view = micold_core::attention::in_view(self.view_facts(window_focused));
+        crate::features::attention::snapshot_claims(&mut self.attention, &sessions, phase, in_view)
+    }
+
+    /// The notification for `session`, named as the sidebar names it at this moment (contract N2):
+    /// the project's name, the worktree's (`Default` for the project root) and the row's label.
+    /// `None` for a session this window does not know.
+    pub fn attention_notification(
+        &self,
+        session: micold_core::session::SessionId,
+    ) -> Option<crate::features::attention::DesktopNotification> {
+        let (project_path, found) = self.workspace.find_session(session)?;
+        let project = self
+            .workspace
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)?;
+        // `worktree_display_name`, for the session's own project rather than the active one: a
+        // session of another project is named by its own (US1 scenario 4).
+        let worktree = match &found.location {
+            micold_core::session::SessionLocation::Default => "Default".to_string(),
+            micold_core::session::SessionLocation::Worktree(dir) => self
+                .workspace
+                .worktree_names
+                .get(project_path)
+                .and_then(|names| names.get(dir))
+                .cloned()
+                .unwrap_or_else(|| micold_core::naming::display_name(dir)),
+        };
+        let text = micold_core::attention::notification_text(
+            &project.display_name,
+            &worktree,
+            found.label.display(),
+        );
+        Some(crate::features::attention::DesktopNotification {
+            title: text.title,
+            body: text.body,
+            project: project_path.to_path_buf(),
+            session,
+        })
+    }
+
+    /// `DaemonMsg::AttentionGranted`: show the notification for `session` (contract N1). Returns
+    /// the line to log when the system did not accept it, once per run (N4); nothing else follows
+    /// from a failure.
+    pub fn attention_granted(
+        &mut self,
+        session: micold_core::session::SessionId,
+        notifier: &dyn crate::features::attention::DesktopNotifier,
+    ) -> Option<String> {
+        let notification = self.attention_notification(session)?;
+        crate::features::attention::show_granted(&mut self.attention, notification, notifier)
+    }
+
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
     ///
     /// Every dialog, and every popover **except** the terminal's own right-click menu: that one is

@@ -80,6 +80,7 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use std::path::PathBuf;
 
 use crate::shell::link_opener::{LinkOpener, SystemLinkOpener};
+use micold_client::features::attention::DesktopNotifier;
 
 /// Every service capability the client needs, chosen once and handed out from here.
 ///
@@ -99,6 +100,8 @@ pub struct Capabilities {
     script_path_probe: Arc<dyn ScriptPathProbe + Send + Sync>,
     link_opener: Arc<dyn LinkOpener>,
     issue_tooling: IssueTooling,
+    /// Feature 039: the system's desktop notifications (research R4).
+    notifier: Arc<dyn DesktopNotifier>,
 }
 
 /// Find `gh` on this machine: the include's `PATH`, this process's `PATH`, then the well-known
@@ -164,6 +167,7 @@ impl Capabilities {
                     Arc::new(GhCli::new(gh))
                 }),
             },
+            notifier: Arc::from(crate::shell::desktop_notify::system()),
         }
     }
 
@@ -292,6 +296,11 @@ impl Capabilities {
     /// the one consumer calls it on a blocking task.
     pub fn link_opener(&self) -> Arc<dyn LinkOpener> {
         Arc::clone(&self.link_opener)
+    }
+
+    /// Showing a desktop notification (feature 039, contract N1).
+    pub fn notifier(&self) -> &dyn DesktopNotifier {
+        &*self.notifier
     }
 
     /// Sourcing the environment-include script.

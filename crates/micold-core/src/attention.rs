@@ -61,7 +61,7 @@ pub enum Phase {
 }
 
 /// Per process and in memory: what this window last saw of each session (research R3).
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AttentionTracker {
     seen: HashMap<SessionId, Seen>,
 }
