@@ -5,7 +5,7 @@
 //! [`notify_error`], what a failure of the crate means — and are tested without showing a toast.
 //! [`Notifier::show`] is the call, with no branch of its own. The click arrives with story 3.
 
-use micold_client::features::attention::{DesktopNotification, NotifyError};
+use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
 
 /// The Application User Model ID the toast is shown under. Windows shows a toast only for an ID
 /// that a Start-menu shortcut carries: the installer puts this same string on its shortcut
@@ -23,15 +23,33 @@ pub(super) struct ToastText {
 
 /// The toast's text for `notification`: its title and its body, and nothing else (contract N2).
 pub(super) fn toast_text(notification: &DesktopNotification) -> ToastText {
-    let _ = notification;
-    todo!("T040")
+    ToastText {
+        title: notification.title.clone(),
+        line: notification.body.clone(),
+    }
 }
 
 /// What a failure of `tauri-winrt-notification` means for the user (FR-010): the system was asked
 /// and did not take the toast.
 pub(super) fn notify_error(error: &tauri_winrt_notification::Error) -> NotifyError {
-    let _ = error;
-    todo!("T040")
+    NotifyError::Refused(error.to_string())
+}
+
+/// The Windows notifier. It keeps nothing: each toast is built and handed to the system.
+pub(super) struct Notifier;
+
+impl DesktopNotifier for Notifier {
+    /// Windows shows the toast only when a Start-menu shortcut carries [`APP_USER_MODEL_ID`], which
+    /// is so for an installed build. Whether it reports an error otherwise is not documented
+    /// (research R4), so an `Ok` here does not promise a toast on screen.
+    fn show(&self, notification: DesktopNotification) -> Result<(), NotifyError> {
+        let text = toast_text(&notification);
+        tauri_winrt_notification::Toast::new(APP_USER_MODEL_ID)
+            .title(&text.title)
+            .text1(&text.line)
+            .show()
+            .map_err(|error| notify_error(&error))
+    }
 }
 
 #[cfg(test)]

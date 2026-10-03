@@ -7,7 +7,20 @@
 //! the system has not answered — and are tested without a bundle.
 //! [`Notifier::show`] is the calls, with no branch of its own. The click arrives with story 3.
 
-use micold_client::features::attention::{DesktopNotification, NotifyError};
+use std::sync::mpsc;
+use std::time::Duration;
+
+use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
+
+/// How long [`Notifier::show`] waits for the system to answer. The request for authorisation is
+/// answered at once when the user has decided before, and only when they decide while the system's
+/// prompt is open: `show` does not wait for a person.
+const ANSWER_WAIT: Duration = Duration::from_secs(2);
+/// The reason logged when the user has not allowed the application's notifications.
+const NOT_ALLOWED: &str = "notifications are not allowed for this application";
+/// The reason logged when the system has not answered within [`ANSWER_WAIT`].
+const NOT_ANSWERED: &str =
+    "the system has not answered the request to allow notifications; it is shown once allowed";
 
 /// What the system is asked to show: a title and the message under it. Both are plain text to
 /// `UNNotificationContent`, so names are passed as written.
@@ -19,14 +32,21 @@ pub(super) struct Banner {
 
 /// The banner for `notification`: its title and its body, and nothing else (contract N2).
 pub(super) fn banner(notification: &DesktopNotification) -> Banner {
-    let _ = notification;
-    todo!("T039")
+    Banner {
+        title: notification.title.clone(),
+        message: notification.body.clone(),
+    }
 }
 
-/// What a failure of `mac-usernotifications` means for the user (FR-010).
+/// What a failure of `mac-usernotifications` means for the user (FR-010): a binary outside a
+/// bundle has no notification centre to ask; anything else is the system not taking the request.
 pub(super) fn notify_error(error: &mac_usernotifications::Error) -> NotifyError {
-    let _ = error;
-    todo!("T039")
+    match error {
+        mac_usernotifications::Error::NoBundleIdentifier => {
+            NotifyError::NoService(error.to_string())
+        }
+        other => NotifyError::Refused(other.to_string()),
+    }
 }
 
 /// What the answer to the request for authorisation means: `Ok(true)` lets the notification go
@@ -34,16 +54,53 @@ pub(super) fn notify_error(error: &mac_usernotifications::Error) -> NotifyError 
 pub(super) fn authorised(
     answer: Result<bool, mac_usernotifications::Error>,
 ) -> Result<(), NotifyError> {
-    let _ = answer;
-    todo!("T039")
+    match answer {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(NotifyError::Refused(NOT_ALLOWED.to_string())),
+        Err(error) => Err(notify_error(&error)),
+    }
 }
 
 /// What `show` reports for a notification handed to the system: what the system answered, or,
 /// when it has not answered in the time `show` waits — the user has the permission prompt open —
 /// an error that says so (FR-010). The notification is still shown if the user then allows it.
 pub(super) fn outcome(delivered: Option<Result<(), NotifyError>>) -> Result<(), NotifyError> {
-    let _ = delivered;
-    todo!("T039")
+    delivered.unwrap_or_else(|| Err(NotifyError::Refused(NOT_ANSWERED.to_string())))
+}
+
+/// Ask for authorisation, then hand `banner` to the notification centre. The first request shows
+/// the system's own prompt and returns when the user answers it; later ones return at once. A
+/// binary outside a bundle is refused by the crate's `check_bundle` before the system is touched.
+fn deliver(banner: Banner) -> Result<(), NotifyError> {
+    authorised(mac_usernotifications::blocking::request_auth())?;
+    mac_usernotifications::blocking::send(
+        mac_usernotifications::Notification::new()
+            .title(banner.title)
+            .message(banner.message),
+    )
+    .map(drop)
+    .map_err(|error| notify_error(&error))
+}
+
+/// The macOS notifier. It keeps nothing: the notification centre is the system's.
+pub(super) struct Notifier;
+
+impl DesktopNotifier for Notifier {
+    /// Delivers on a thread of its own and waits [`ANSWER_WAIT`] for the result, so that an open
+    /// permission prompt holds neither the caller nor, at exit, the runtime's blocking pool. The
+    /// thread ends when the system answers; the notification is shown then, if it was allowed.
+    fn show(&self, notification: DesktopNotification) -> Result<(), NotifyError> {
+        let banner = banner(&notification);
+        let (answer, answered) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("desktop-notify".to_string())
+            .spawn(move || {
+                // Nobody listens once `show` has stopped waiting.
+                let _ = answer.send(deliver(banner));
+            })
+            .map_err(|error| NotifyError::Refused(error.to_string()))?;
+        outcome(answered.recv_timeout(ANSWER_WAIT).ok())
+    }
 }
 
 #[cfg(test)]

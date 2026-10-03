@@ -13,29 +13,21 @@ mod macos;
 mod windows;
 
 use micold_client::features::attention::DesktopNotifier;
-#[cfg(not(target_os = "linux"))]
-use micold_client::features::attention::{DesktopNotification, NotifyError};
 
-/// The notifier of the system this client was built for.
+/// The notifier of the system this client was built for: the session bus's notification service.
 #[cfg(target_os = "linux")]
 pub fn system() -> Box<dyn DesktopNotifier> {
     Box::new(linux::Notifier::new())
 }
 
-/// The notifier of the system this client was built for. macOS and Windows have none yet (T041).
-#[cfg(not(target_os = "linux"))]
+/// The notifier of the system this client was built for: the notification centre.
+#[cfg(target_os = "macos")]
 pub fn system() -> Box<dyn DesktopNotifier> {
-    Box::new(Unsupported)
+    Box::new(macos::Notifier)
 }
 
-/// A system with no backend yet: every notification is refused with
-/// [`NotifyError::Unsupported`], which the feature logs once (FR-010).
-#[cfg(not(target_os = "linux"))]
-struct Unsupported;
-
-#[cfg(not(target_os = "linux"))]
-impl DesktopNotifier for Unsupported {
-    fn show(&self, _notification: DesktopNotification) -> Result<(), NotifyError> {
-        Err(NotifyError::Unsupported)
-    }
+/// The notifier of the system this client was built for: a toast.
+#[cfg(target_os = "windows")]
+pub fn system() -> Box<dyn DesktopNotifier> {
+    Box::new(windows::Notifier)
 }
