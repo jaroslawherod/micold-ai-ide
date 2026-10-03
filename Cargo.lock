@@ -2060,6 +2060,9 @@ dependencies = [
  "tokio",
  "ttf-parser",
  "uuid",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "windows-sys 0.61.2",
  "zbus",
 ]

@@ -300,11 +300,11 @@ as before.
 
 ### Implementation for User Story 3, slice B
 
-- [ ] T096 [US3] Add `wayland-client` 0.31, `wayland-backend` 0.3 with `client_system` and `wayland-protocols` 0.32 with `client` and `staging` as Linux-only dependencies in `Cargo.toml` (workspace) and `crates/micold-client/Cargo.toml`; all three are in `Cargo.lock` already
+- [x] T096 [US3] Add `wayland-client` 0.31, `wayland-backend` 0.3 with `client_system` and `wayland-protocols` 0.32 with `client` and `staging` as Linux-only dependencies in `Cargo.toml` (workspace) and `crates/micold-client/Cargo.toml`; all three are in `Cargo.lock` already
 - [x] T097 [US3] [U16] [U102] `activation: Option<String>` on both reveal messages in `crates/micold-core/src/protocol/messages.rs`, forwarded unread in `crates/micold-daemon/src/state.rs`; `PROTOCOL_VERSION` 25 → 26 in `crates/micold-core/src/protocol/version.rs` (T092, T093)
 - [x] T098 [US3] [U138] [U139] [U140] [U141] In `crates/micold-client/src/features/attention.rs`: `NotifierEvent::Activated::activation`, `RaiseStep::Activate(String)`, `raise_plan(wayland, activation)`, `after_activation(done)` (T094)
 - [x] T099 [US3] [U166] The `ActivationToken` signal in `crates/micold-client/src/shell/desktop_notify/linux.rs` (T095)
-- [ ] T100 [US3] The Linux arm of `crates/micold-client/src/shell/window_raise.rs`: carry out `Activate` through `iced::window::run` and the binding T091 proved, report whether it was done, and issue the step `after_activation` returns; the `unsafe` block is confined to the foreign-display call; update the Wayland sentence in `docs/user-guide/worktrees-and-sessions.md` to what T091 recorded (FR-031)
+- [x] T100 [US3] The Linux arm of `crates/micold-client/src/shell/window_raise.rs`: carry out `Activate` through `iced::window::run` and the binding T091 proved, report whether it was done, and issue the step `after_activation` returns; the `unsafe` block is confined to the foreign-display call; update the Wayland sentence in `docs/user-guide/worktrees-and-sessions.md` to what T091 recorded (FR-031)
 
 **Checkpoint**: `mise run gate` green; quickstart §C4 recorded. Story 3 is complete (its six scenarios were closed by T120; this slice adds keyboard focus on Wayland, or records why not).
 

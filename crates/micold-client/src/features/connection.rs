@@ -272,4 +272,8 @@ pub enum Msg {
     /// (feature 039, contract N5, N9). The binary sends the service the request to show the
     /// session.
     NotifierReported(crate::features::attention::NotifierEvent),
+    /// The wait after a Wayland activation request is over (feature 039, research R7): the binary
+    /// looks at the window's keyboard focus, and asks for the user's attention when the compositor
+    /// did not give it (`attention::after_activation`).
+    ActivationSettled,
 }

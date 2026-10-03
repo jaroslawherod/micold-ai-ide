@@ -1129,9 +1129,12 @@ nothing into it.
   stays.
 - **A text-only notification service.** Some Linux notification services only show text and report
   no click. The notification is shown all the same; clicking it does nothing.
-- **Wayland.** On a Wayland desktop an application cannot put its own window in front. The window
-  switches to the session and **asks for your attention** instead — most desktops highlight it in
-  the taskbar or the overview — and takes the keyboard when you go to it. On X11, macOS and
+- **Wayland.** On a Wayland desktop an application cannot put its own window in front; the
+  desktop decides. When the notification service passes an activation token with the click and
+  the desktop accepts it — GNOME does — the window comes forward and takes the keyboard.
+  Otherwise the window switches to the session and **asks for your attention** instead — most
+  desktops highlight it in the taskbar or the overview — and takes the keyboard when you go to it.
+  This was seen on GNOME Shell 50; other Wayland desktops may do either. On X11, macOS and
   Windows the window takes the keyboard focus itself.
 
 ## Colored, real-terminal output
