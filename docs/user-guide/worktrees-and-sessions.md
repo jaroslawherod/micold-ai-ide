@@ -1101,8 +1101,35 @@ system refuses it, nothing else changes: sessions and their activity dots work a
 still shows the state, no error appears in the application's window, and the failure is written to
 its log once.
 
-Clicking the notification does not open the session yet. There is also no switch inside the
-application to turn notifications off; use the system's own settings.
+There is no switch inside the application to turn notifications off; use the system's own
+settings.
+
+#### Clicking a notification
+
+**Clicking the notification opens the session.** The application's window comes to the front —
+restored first when it is minimised — and shows the session: when the session belongs to a project
+other than the one the window is in, the window switches to that project, exactly as the project
+switcher does, and then selects the session. The session is then in view, so its unread mark goes.
+Nothing else happens to it: a click does not stop, interrupt or restart the session, and types
+nothing into it.
+
+- **Which window comes forward.** With several windows open, the one that already has the
+  session's project open comes forward and shows it; the click does not move the project to
+  another window. When no window has that project open, the window you used last opens it.
+- **A session that is gone.** When the session was removed in the meantime, or its project was
+  forgotten or its folder is no longer there, the window still comes forward, your selection
+  stays as it was, and a notice says `That session is no longer available.`
+- **A notification older than its window.** A click is reported to the window that raised the
+  notification. When you have closed that window, clicking the notification does not open the
+  session, also when other windows of the application are open, and with no window open it does
+  nothing or starts the application as usual. The session's unread mark is still there to find it
+  by.
+- **A text-only notification service.** Some Linux notification services only show text and report
+  no click. The notification is shown all the same; clicking it does nothing.
+- **Wayland.** On a Wayland desktop an application cannot put its own window in front. The window
+  switches to the session and **asks for your attention** instead — most desktops highlight it in
+  the taskbar or the overview — and takes the keyboard when you go to it. On X11, macOS and
+  Windows the window takes the keyboard focus itself.
 
 ## Colored, real-terminal output
 
