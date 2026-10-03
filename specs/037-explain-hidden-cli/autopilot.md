@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #434
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-10-01
-- **Phase**: 5-close
+- **Phase**: done
 - **Next step**: close PR #542 open; the orchestrator waits for `ci complete` and merges, then the record PR.
 
 ## Pull requests
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #530 | M2 | merged | f169414780363e6e06fa837586ee93c215d9a2b2 |
 | #535 | M3 | merged | bc5699922fd78fa9cc40346c7993827c54058839 |
 | #537 | M4 | merged | c331d0f8c0556b5fb30f605a6ebc1bc966c519ab |
-| #542 | Close | open | |
+| #542 | Close | merged | b1f89fc20a7ff5514f97826be5bc6c306cf65ce1 |
 
 ## Milestones
 
@@ -103,6 +103,20 @@ None.
 None.
 
 ## Token usage
+
+### 659828b4-b09c-49db-b5df-3c7aead1907e
+
+| Unit | Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq | rebuild_eq | share |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| orchestrator (main session) | opus-5-5 | 261 | 522 | 1.6M | 24.8M | 15 | 2 | 95k | 166k | 6.1M | 2.6M | 17% |
+| **Total** | | **2k** | **6k** | **14.1M** | **166.7M** | **82** | **251** | **152k** | **193k** | **36.2M** | **9.4M** | 100% |
+
+| Model | calls | input | cache_w | cache_r | rebuilds | unbatched | output | peak_ctx | cost_eq | rebuild_eq |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| opus-5-5 | 2k | 4k | 11.1M | 139.7M | 61 | 172 | 130k | 193k | 29.7M | 7.9M |
+| sonnet-5-5 | 464 | 934 | 2.7M | 20.8M | 21 | 51 | 21k | 177k | 5.5M | 1.5M |
+| haiku-4-5 | 140 | 1k | 212k | 5.9M | 0 | 25 | 257 | 75k | 853k | 0 |
+| sonnet-5 | 11 | 22 | 78k | 395k | 0 | 3 | 1k | 53k | 143k | 0 |
 
 ## Follow-ups not done
 
