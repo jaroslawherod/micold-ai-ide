@@ -2,7 +2,7 @@
 """PostToolUse hook: tell an autopilot unit when its context passed the cap, so it hands over, and
 when it probes one read-only call at a time, so it batches.
 
-Units are told to check their context at each checkpoint (unit.md, *Hand over at 150k*), but
+Units are told to check their context at each checkpoint (rules/context.md, *Hand over at 150k*), but
 measured runs showed units that never checked and grew to 266k. This hook does the check for them.
 
 It reads the hook input on stdin, finds the transcript of the caller (the subagent's when the call
@@ -161,7 +161,7 @@ def over_cap(ctx, cap, step, agent, who):
 
     if agent:
         return (f"autopilot context: {ctx} tokens, over the {cap} cap. Every further call re-reads all of it. "
-                "If you are an autopilot unit: finish the step in hand, then follow unit.md *Hand over at 150k* now "
+                "If you are an autopilot unit: finish the step in hand, then follow rules/context.md *Hand over at 150k* now "
                 "(run checkpoint.sh, write *Handover* in the ledger, commit, return `STATUS: HANDOVER`). "
                 "Any other subagent: stop exploring and return your answer.")
     return (f"autopilot context: {ctx} tokens, over the {cap} cap. Tell the user in one line that `/clear` then "

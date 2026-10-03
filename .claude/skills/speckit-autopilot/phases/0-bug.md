@@ -1,29 +1,6 @@
-# Phase 0: bug unit
+# Moved
 
-Scope: reproduce, report, patch, verify, review. Do not fix code; a milestone unit does that.
+The skill is split into small files. This pointer serves a run whose orchestrator started before
+the split; a new run never reads it.
 
-1. **Reproduce on `origin/main`** with `systematic-debugging`. Try the report's steps and obvious
-   variations: other OS arm, fresh profile, several sessions. No repro: escalate (category 5) and ask
-   for the missing detail. Never guess-fix.
-2. **Find the owning spec**: the `specs/<NNN>-*` whose requirements cover the broken behaviour.
-   - **None** (code predates specs, or behaviour never specified): return `DONE` with the line
-     `SWITCH: feature`, the repro, and the correct behaviour. The orchestrator starts Phase 1.
-   - **Owning feature still in flight** (`**Status**` not Closed, or its ledger not `done`): it
-     belongs to another flow. Escalate as *blocked by work outside my flow*, with the repro.
-3. **`speckit-bugfix-report`** writes `bugs/BUG-<k>.md` in the owning spec, with root cause and any
-   false completions. Create the ledger beside it as `bugs/BUG-<k>.autopilot.md` from
-   [../templates/autopilot-ledger.md](../templates/autopilot-ledger.md). Set **Worktree branch** to the exact output of
-   `git branch --show-current`.
-4. **`speckit-bugfix-patch`**, then **`speckit-bugfix-verify`**. A fresh reviewer checks the patch
-   against the bug rubric.
-5. **Size it.** If the fix adds behaviour the spec never intended, or the patch adds more than 10
-   tasks: set the bug ledger's **Phase** to `done` with the note `promoted to a feature`, commit the
-   BUG record and ledger, and return `DONE` with `SWITCH: feature`. The new spec cites `BUG-<k>` as
-   input. Otherwise set the fix's **Tier** in the ledger's milestone row (step 6), commit the BUG
-   record, patch and ledger (do not push), and return `DONE` with the fix's task IDs and
-   `TIER: light` or `TIER: full`. The fix's milestone unit finishes the ledger in its PR, as
-   [5-close.md](5-close.md) step 5 does: that PR is the run's last.
-6. **Tier of the fix.** `light` (Sonnet ships it) when the solution is already known: the BUG record
-   names a confirmed root cause and the exact code to change, the fix is a few tasks besides the
-   regression test, and it meets `light` in [../references/milestones.md](../references/milestones.md)
-   *Tier*. Otherwise, or when unsure, `full`.
+Read [../tasks/bugfix.md](../tasks/bugfix.md), [../tasks/review.md](../tasks/review.md) and [../tasks/review-rounds.md](../tasks/review-rounds.md). Where it says `NEXT: feature`, also return the line `SWITCH: feature`.

@@ -1,10 +1,6 @@
-# GitHub issue
+# Moved
 
-Read when the run starts from an issue, and again at the handoff.
+The skill is split into small files. This pointer serves a run whose orchestrator started before
+the split; a new run never reads it.
 
-- **Start**: the first unit runs `scripts/autopilot/issue.sh start <n> <branch>` and records
-  **Issue** `#<n>` in the ledger. `ISSUE_TAKEN`: another flow's work; escalate as *blocked by work
-  outside my flow*.
-- **Every PR body** ends with `Refs #<n>`, never `Closes #<n>`: the first merge would close it.
-- **Done**: `scripts/autopilot/issue.sh done <n> <pr>...` with every PR in the ledger, only after `handoff-check.sh` passes. A run that stops unfinished leaves the issue open and
-  labelled.
+Read [../tasks/issue.md](../tasks/issue.md).

@@ -1,32 +1,72 @@
 # Spec Kit autopilot
 
-`/speckit-autopilot <feature idea>`, `/speckit-autopilot bug: <report>` or
-`/speckit-autopilot resume`.
+```
+/speckit-autopilot #553                  flow and effort from the issue's labels
+/speckit-autopilot bugfix #702           you name the flow
+/speckit-autopilot chore low #587        you name the flow and the effort
+/speckit-autopilot <feature idea>        no issue yet: the agent opens one
+/speckit-autopilot bug: <report>
+/speckit-autopilot resume
+```
 
-You give one prompt.
+You give one prompt or one GitHub issue. The agent picks the lightest flow that fits, does the
+work, reviews every artifact and diff itself, and merges to `main`. It asks you only for decisions
+that are yours (see [When you are asked](#when-you-are-asked)). When all PRs have merged, it closes
+the issue and tells you the worktree can be removed.
 
-- **Feature:** the agent writes and merges the spec, clarifies it with you, plans, cuts milestones,
-  then ships each milestone to `main` as its own reviewed PR.
-- **Bug:** the agent reproduces it, records it against the owning spec, and ships the regression
-  test and fix as one PR.
+## Flows
 
-The agent reviews every artifact and diff itself. It asks you only for decisions that are yours
-(see [When you are asked](#when-you-are-asked)). When all PRs have merged, it tells you the worktree
-can be removed.
+| Flow | For | What runs | What it skips |
+|---|---|---|---|
+| **bug** | broken behaviour no spec covers, or whose spec stays as it is | one unit: reproduce, failing test, fix, review A at `medium`, full gate, one PR | spec, clarify, plan, tasks, BUG record, review B, close |
+| **bugfix** | broken behaviour a spec describes wrongly or misses | BUG record and spec patch with a reviewer, then one milestone: regression test, fix, review A at `medium`, gates, one PR | spec, clarify, plan and tasks units, review B, close |
+| **feature** | new behaviour | spec, clarify, plan, tasks (design PR), one reviewed PR per milestone with reviews A and B, close | nothing |
+| **chore** | CI, build, tooling, tests, docs, dependency or config bumps; nothing a user sees | one unit: failing test for a code change, the change, review A at `low`, the gate that fits the diff, one PR | every Spec Kit skill, review B, visual pass, close |
 
-The session you start only orchestrates: ledger, questions, CI and merges, per [SKILL.md](SKILL.md).
-The bug triage, spec, each clarify round, design, each milestone and the close each run in a fresh
-subagent that reads only [unit.md](unit.md) and its file in [phases/](phases/).
+Every flow keeps a GitHub issue, a failing test first for a code change, the local gate, a fresh
+reviewer and green CI. A unit that finds its flow wrong stops and names the right one; the agent
+switches, and asks you first when you had named the flow yourself.
 
-## The flow
+## Labels
+
+The agent reads the issue's labels to choose, and writes its choice back, so the issue always says
+what the run does.
+
+| Label | Means |
+|---|---|
+| `flow:bug`, `flow:bugfix`, `flow:feature`, `flow:chore` | run that flow |
+| `effort:low` | the cheaper model (Sonnet) for a bug, bugfix or chore unit; with `bug` alone, the bug flow |
+| `effort:high` | the session model; with `bug` alone, the bugfix flow; lets a chore pass the size cap |
+| `bug` | without a `flow:*` label, broken behaviour: bug or bugfix flow |
+| `enhancement` | new behaviour: feature flow |
+| `documentation` | chore flow |
+| `in-progress` | a run has claimed the issue; set at the start, removed when the issue is closed |
+
+What you type in the command wins over labels, and labels win over the agent's reading of the
+text. When labels and text agree, the agent does not ask. When labels conflict with each other
+(two `flow:*` labels) or with the text (`bug` on new behaviour), it asks exactly one question.
+An unlabelled issue is read by its text. A run started from text opens its own issue, labelled.
+
+The issue number is the run's ID: a feature's spec lives in `specs/<issue>-<slug>`, so two runs
+never take the same number.
+
+## How it is built
+
+The session you start only orchestrates: it chooses the flow, keeps the issue, asks you, waits on
+CI and merges, routed by [SKILL.md](SKILL.md). Each unit of work runs in a fresh subagent that
+reads [rules/unit.md](rules/unit.md) and only the task files its flow lists. Every step is one
+small file, at most 60 lines (checked by `scripts/tests/autopilot.test.sh`), so nobody loads
+rules for steps it does not run.
+
+## The feature flow
 
 ```mermaid
 flowchart TD
-    START(["Your prompt: feature idea or bug report"]) --> TRIAGE{"Feature or bug?"}
+    START(["Issue or prompt"]) --> TRIAGE{"Which flow? Command, then labels, then text"}
 
-    TRIAGE -->|bug| BUGPATH[["Bug path, see A bug report below"]]
-    BUGPATH -->|"no owning spec, or new behaviour"| SPEC
-    BUGPATH -->|"fixed and merged"| DONE
+    TRIAGE -->|"bug, bugfix, chore"| LIGHT[["One or two units, one PR"]]
+    LIGHT -->|"new behaviour"| SPEC
+    LIGHT -->|"merged"| DONE
 
     TRIAGE -->|feature| SPEC["speckit-specify"]
     SPEC --> SREV["Reviewer: spec rubric"]
@@ -95,16 +135,17 @@ flowchart TD
     class ESC human
 ```
 
-### A bug report
+### The bugfix flow
 
 ```mermaid
 flowchart TD
-    B0(["bug: your report"]) --> REPRO["systematic-debugging: reproduce on origin/main"]
+    B0(["bugfix: your report"]) --> REPRO["systematic-debugging: reproduce on origin/main"]
     REPRO --> RQ{"Reproduces?"}
     RQ -.->|no| ESCR["ACTION REQUIRED: missing detail"]
     ESCR -.->|"your answer"| REPRO
     RQ -->|yes| OWN{"Which spec owns it?"}
-    OWN -->|none| FEAT["Feature path from speckit-specify"]
+    OWN -->|"none, or the spec is right"| LIGHT["Bug flow: fix without a spec change"]
+    OWN -->|"behaviour never specified"| FEAT["Feature flow from speckit-specify"]
     OWN -.->|"a feature still in flight"| ESCO["ACTION REQUIRED: blocked by outside work"]
     OWN -->|"a Closed spec"| REP["bugfix-report: BUG-k.md and ledger"]
     REP --> PATCH["bugfix-patch: requirement, reopened and fix tasks"]
@@ -113,7 +154,7 @@ flowchart TD
     VER -->|clean| SIZE{"New behaviour, or more than 10 tasks?"}
     SIZE -->|yes| FEAT
     SIZE -->|no| RED["Regression test fails on origin/main"]
-    RED --> MS[["One milestone: fix, gate, reviews, PR, CI, merge"]]
+    RED --> MS[["One milestone: fix, gates, review A, PR, CI, merge"]]
     MS --> BDONE(["WORK COMPLETE: BUG-k fixed"])
 
     classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000
@@ -122,7 +163,7 @@ flowchart TD
     class MS pr
 ```
 
-A bug gets no design PR or close phase. The BUG record, spec patch, regression test and fix
+A bugfix gets no design PR or close unit. The BUG record, spec patch, regression test and fix
 ship in one PR. If the fix is new behaviour, the bug becomes input to the feature flow.
 
 ## When you are asked
@@ -130,7 +171,7 @@ ship in one PR. If the fix is new behaviour, the bug becomes input to the featur
 The agent asks you only for product decisions, constitution conflicts, irreversible actions,
 missing access, things that will not converge, or a plan that proved false. Every question arrives as
 a `🛑 ACTION REQUIRED FROM YOU` banner and a push notification. The agent handles everything else
-itself. See [SKILL.md](SKILL.md#asking-the-human) and [references/escalation.md](references/escalation.md).
+itself. See [rules/escalation.md](rules/escalation.md) and [tasks/ask.md](tasks/ask.md).
 
 ## Ownership
 
@@ -140,20 +181,24 @@ micold IDE to clean up.
 
 ## Resuming
 
-The ledger is `specs/<NNN>-<slug>/autopilot.md`, or for a bug `bugs/BUG-<k>.autopilot.md` beside the
-BUG record. It is committed with every PR. It holds the phase, PRs, milestones, every decision (and
-who made it), declined review findings, and follow-ups. After a crash or `/clear`, run
+The ledger is `specs/<issue>-<slug>/autopilot.md` for a feature, `bugs/BUG-<k>.autopilot.md` beside
+the BUG record for a bugfix, and `specs/quick/<date>-<issue>-<slug>.autopilot.md` (not committed)
+for a bug or chore. It holds the flow, the unit at work, PRs, milestones, every decision (and who
+made it), declined review findings, and follow-ups. After a crash or `/clear`, run
 `/speckit-autopilot resume` in the same worktree. It finds the unfinished ledger that records this
 worktree's branch.
 
 ## Files
 
-- [SKILL.md](SKILL.md): the orchestrator: entry, resume, dispatch, CI and merge, ownership, handoff
-- [unit.md](unit.md): rules every unit follows: ledger, reviews, escalating, return format
-- [phases/](phases/): one file per phase unit (bug, spec, clarify, plan, tasks, milestone, close)
-- [references/escalation.md](references/escalation.md): when the human is asked
-- [references/milestones.md](references/milestones.md): cutting milestones
-- [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
-- [references/pr-and-merge.md](references/pr-and-merge.md): gate, PR, CI, merge
+- [SKILL.md](SKILL.md): the router: which file to read when
+- [flows/](flows/): choosing the flow and effort, one file per flow with the task files each unit
+  reads, and switching
+- [tasks/](tasks/): one file per step, for a unit (spec, clarify, plan, tasks, implement, verify,
+  gate, pr, close, bug, bugfix, chore, review) or the orchestrator (issue, dispatch, merge, ci,
+  ask, handoff, resume)
+- [rules/](rules/): rules shared by several tasks, each written once: unit, context, waiting,
+  delegating, ownership, escalation
+- [rubrics/](rubrics/): one file per review rubric
+- `phases/`, `references/`, `unit.md`: pointers for runs that started before the split
 - [templates/autopilot-ledger.md](templates/autopilot-ledger.md): the ledger
-- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one; `checkpoint.sh` is a unit's one probe at each checkpoint; `scoped-gate.sh` checks the changed crates between review rounds; `gate-hook.sh` is the PreToolUse hook that blocks another flow's PRs, `--delete-branch`, `--admin` and pushing code no green gate saw; `tests/` holds pressure scenarios that check the rules still hold after a skill change; `read-hook.sh` is the PreToolUse hook that blocks a whole `Read` of a long file or of the ledger; `hold.sh` waits for a gate, a subagent or a unit and comes back before the prompt cache expires; `context-hook.py` is the PostToolUse hook that tells a unit when its context passed 150k, and when it makes one read-only call after another; `measure-skill.sh` estimates the tokens each role loads; `issue.sh` claims the GitHub issue a run starts from and closes it at the handoff
+- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one; `checkpoint.sh` is a unit's one probe at each checkpoint; `scoped-gate.sh` checks the changed crates between review rounds; `gate-hook.sh` is the PreToolUse hook that blocks another flow's PRs, `--delete-branch`, `--admin` and pushing code no green gate saw; `tests/` holds pressure scenarios that check the rules still hold after a skill change; `read-hook.sh` is the PreToolUse hook that blocks a whole `Read` of a long file or of the ledger; `hold.sh` waits for a gate, a subagent or a unit and comes back before the prompt cache expires; `context-hook.py` is the PostToolUse hook that tells a unit when its context passed 150k, and when it makes one read-only call after another; `measure-skill.sh` estimates the tokens each role loads; `issue.sh` opens or claims the run's GitHub issue, writes its flow and effort labels, and closes it at the handoff

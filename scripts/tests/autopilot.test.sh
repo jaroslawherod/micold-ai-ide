@@ -39,6 +39,7 @@ case "$1 $2" in
   "run view") echo "error[E0308]: mismatched types" ;;
   "api user") echo me ;;
   "issue view") jq -r "$(q "$@")" "$F/issue-$3.json" ;;
+  "issue create") echo "$*" >> "$F/gh.log"; echo "https://github.com/o/r/issues/42" ;;
   "issue "*|"label create") echo "$*" >> "$F/gh.log" ;;
   *) echo "gh stub: unhandled: $*" >&2; exit 2 ;;
 esac
@@ -464,7 +465,7 @@ check "checkpoint reports an open escalation" 3 '^OPEN_ESCALATION Which locale w
 check "checkpoint reports the next step" 3 '^NEXT open PR 2$' env HOME="$d/home" "$K" "Milestone M1 042" specs/042-x/autopilot.md
 cd "$ROOT"
 
-# measure-skill.sh: tokens per role, and the delta against a ref.
+# measure-skill.sh: tokens per role, and the delta against a ref (also one from before the split).
 d="$(new_repo)"; cd "$d/wt"; M="$S/measure-skill.sh"; k=.claude/skills/speckit-autopilot
 mkdir -p $k/phases $k/references $k/tests
 printf -- '---\ndescription: %s\n---\n%s\n' "$(printf 'd%.0s' $(seq 1 39))" "$(printf 'o%.0s' $(seq 1 391))" > $k/SKILL.md
@@ -473,10 +474,18 @@ printf '%0400d' 0 > $k/references/r.md; printf '%09000d' 0 > $k/README.md; print
 git add -A; git commit -qm skill
 check "measure-skill counts the description" 0 '^description +10$' "$M"
 check "measure-skill counts SKILL.md for the orchestrator" 0 '^orchestrator +113$' "$M"
-check "measure-skill adds unit.md to each phase file" 0 '^unit:1-spec +300$' "$M"
+check "measure-skill adds unit.md to each phase file of an old layout" 0 '^unit:1-spec +300$' "$M"
 check "measure-skill leaves README and tests out of on-demand" 0 '^on-demand +100$' "$M"
-printf '%0400d' 0 >> $k/phases/1-spec.md
-check "measure-skill shows the delta against a ref" 0 '^unit:1-spec +300 +400 +\+100$' "$M" HEAD
+mkdir -p $k/rules $k/flows $k/tasks $k/rubrics
+printf '%0400d' 0 > $k/rules/unit.md; printf '%0400d' 0 > $k/rules/context.md; printf '%0200d' 0 > $k/rules/waiting.md
+printf '%0400d' 0 > $k/flows/choose.md; printf '%0400d' 0 > $k/flows/bug.md; printf '%0200d' 0 > $k/flows/switch.md
+printf '%0800d' 0 > $k/tasks/bug.md; printf '%0400d' 0 > $k/rubrics/spec.md
+check "measure-skill counts the two rule files every unit reads" 0 '^unit +200$' "$M"
+check "measure-skill adds choose.md to each flow file" 0 '^flow:bug +200$' "$M"
+check "measure-skill counts each task file alone" 0 '^task:bug +200$' "$M"
+check "measure-skill puts other rules, the switch file and rubrics on demand" 0 '^on-demand +200$' "$M"
+check "measure-skill shows the delta against a ref" 0 '^task:bug +0 +200 +\+200$' "$M" HEAD
+check "measure-skill shows an old ref's rows as gone" 0 '^unit:1-spec +300 +0 +-300$' "$M" HEAD
 check "measure-skill refuses an unknown ref" 2 'unknown ref' "$M" no-such-ref
 cd "$ROOT"
 
@@ -663,7 +672,55 @@ check "issue start refuses an issue assigned to someone else" 1 '^ISSUE_TAKEN #9
 check "issue start leaves a taken issue untouched" 0 '^ok$' bash -c "! grep -qE ' (8|9) ' '$d/fx/gh.log' && echo ok"
 check "issue done closes it citing every PR" 0 '^ISSUE_CLOSED #7$' "$I" done 7 11 12
 check "issue done lists the PRs" 0 'issue close 7 --reason completed --comment .*#11, #12\.' cat "$d/fx/gh.log"
-check "issue done needs a PR" 2 'usage' "$I" done 7
+check "issue done needs a PR" 2 'Usage: issue.sh' "$I" done 7
+# Flow and effort labels: written on start, on a new issue and on a switch; older ones removed.
+echo '{"labels":[{"name":"bug"},{"name":"flow:chore"},{"name":"effort:high"}],"assignees":[]}' > "$d/fx/issue-10.json"
+: > "$d/fx/gh.log"
+check "issue labels prints the issue's labels" 0 '^LABELS #10: bug, flow:chore, effort:high$' "$I" labels 10
+check "issue labels says none on a bare issue" 0 '^LABELS #9: none$' "$I" labels 9
+check "issue start writes the chosen flow and level" 0 '^ISSUE_STARTED #10$' "$I" start 10 feat/x bugfix low
+check "issue start replaces the older flow and effort labels" 0 'issue edit 10 --add-label in-progress,flow:bugfix,effort:low --remove-label flow:chore,effort:high' cat "$d/fx/gh.log"
+check "issue start creates the labels the repo lacks" 0 'label create flow:bugfix' cat "$d/fx/gh.log"
+: > "$d/fx/gh.log"
+check "issue flow moves the flow label" 0 '^ISSUE_FLOW #10 feature$' "$I" flow 10 feature
+check "issue flow without a level keeps the effort label" 0 'issue edit 10 --add-label flow:feature --remove-label flow:chore$' cat "$d/fx/gh.log"
+check "issue start refuses an unknown flow" 2 "unknown flow 'quick'" "$I" start 7 feat/x quick
+check "issue start refuses an unknown effort" 2 "unknown effort 'medium'" "$I" start 7 feat/x bug medium
+echo body > "$d/body.md"; : > "$d/fx/gh.log"
+check "issue new opens the run's issue" 0 '^ISSUE_NEW #42$' "$I" new feat/x "Fix the flaky test" "$d/body.md" chore low
+check "issue new labels and claims it" 0 'issue create --title Fix the flaky test .*--assignee @me --label in-progress,flow:chore,effort:low' cat "$d/fx/gh.log"
+check "issue new names the branch" 0 'issue comment 42 --body .*`feat/x`' cat "$d/fx/gh.log"
+check "issue flow stops when the issue cannot be read" 2 '^$' bash -c "'$I' flow 99 bug 2>/dev/null"
+check "issue new needs the body file" 2 'issue.sh new' "$I" new feat/x "t" "$d/none.md" chore
+
+# The skill's own shape: SKILL.md routes, every step is a small file, each flow lists what it reads.
+cd "$ROOT"; k=.claude/skills/speckit-autopilot; MAX_LINES=60
+modules() { ls $k/SKILL.md $k/flows/*.md $k/tasks/*.md $k/rules/*.md $k/rubrics/*.md; }
+too_long() { for f in $(modules); do n=$(wc -l < "$f"); [ "$n" -le "$MAX_LINES" ] || echo "$f $n"; done; }
+none() { local out; out="$("$@")"; [ -z "$out" ] && echo none || echo "$out"; }
+check "no skill module is over the line ceiling" 0 '^none$' none too_long
+broken_links() {
+  for f in $(modules) $k/phases/*.md $k/references/*.md $k/unit.md $k/README.md; do
+    grep -o '](\([^)#]*\)' "$f" | sed 's/^](//' | grep -v '^http' | sort -u | while read -r l; do
+      [ -e "$(dirname "$f")/$l" ] || echo "$f -> $l"
+    done
+  done
+}
+check "every link between skill files resolves" 0 '^none$' none broken_links
+unlisted() {
+  for f in $k/tasks/*.md $k/rules/*.md $k/rubrics/*.md $k/flows/*.md; do
+    grep -qs "$(basename "$(dirname "$f")")/$(basename "$f")\|($(basename "$f"))" $(modules | grep -vx "$f") || echo "$f"
+  done
+}
+check "every module is reachable from another" 0 '^none$' none unlisted
+tasks_of() { grep -o '(\.\./tasks/[a-z-]*\.md)' "$k/flows/$1.md" | sed 's|.*/||; s|\.md)||' | sort -u | paste -sd' ' -; }
+check "the bug flow reads only its own tasks" 0 '^bug gate pr red-ci$' tasks_of bug
+check "the chore flow reads only its own tasks" 0 '^chore gate pr red-ci$' tasks_of chore
+check "the bugfix flow skips spec, plan, tasks and close" 0 '^bugfix gate implement pr red-ci review review-rounds verify$' tasks_of bugfix
+check "the feature flow reads every Spec Kit task" 0 '^clarify close gate implement milestone-format milestones plan pr red-ci review review-rounds spec tasks verify$' tasks_of feature
+check "SKILL.md routes to every flow" 0 '^4$' bash -c "grep -o 'flows/\(bug\|bugfix\|feature\|chore\)\.md' $k/SKILL.md | sort -u | wc -l"
+check "SKILL.md holds no rubric and no gate command" 0 '^ok$' bash -c "! grep -q 'mise run gate\|rubrics/\|BLOCKER' $k/SKILL.md && echo ok"
+check "the labels table names every flow and effort label" 0 '^6$' bash -c "grep -o 'flow:bug\b\|flow:bugfix\|flow:feature\|flow:chore\|effort:high\|effort:low' $k/flows/choose.md | sort -u | wc -l"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

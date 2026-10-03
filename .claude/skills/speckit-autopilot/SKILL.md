@@ -1,189 +1,57 @@
 ---
 name: speckit-autopilot
-description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
-argument-hint: "<feature description> | bug: <report> | quick: <task> | #<issue> | resume"
+description: Use when the user hands over a feature idea, a bug report, a chore or a GitHub issue and wants it run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
+argument-hint: "#<issue> | <flow> [high|low] #<issue> | <feature description> | bug: <report> | chore: <task> | resume"
 user-invocable: true
 ---
 
 # Spec Kit autopilot
 
-One prompt in. The flow writes the spec, clarifies it, plans, cuts tasks, and ships reviewed
-milestones to `main`. Ask the human **only** for decisions that are theirs. Batch every ask and make
-it loud and specific.
+One prompt or one issue in; reviewed work merged to `main` out. Ask the human **only** for
+decisions that are theirs. **No human reviews anything here:** every artifact and diff is reviewed
+by a fresh-context subagent, never the context that wrote it. Green CI is not a review.
 
-**No human reviews anything here.** Every artifact and every diff gets a review by a
-**fresh-context subagent**, never the context that wrote it. Green CI is not a review.
-
-Follow the rules to the letter. A rule that looks slow is what stops an unattended flow shipping the
-wrong thing.
+This file only routes. Each step is a small file: read the one the table names when its moment
+comes, and no other. Follow each to the letter; a rule that looks slow is what stops an
+unattended flow shipping the wrong thing.
 
 ## You are the orchestrator
 
-This session keeps the ledger, dispatches units, asks the human, waits on CI and merges. It never
-runs a phase skill, and never reads a phase file or a unit's transcript. Everything it reads is
-re-read on every later call of the run, and every call re-reads all of it: batch independent
-probes into one message or one command.
+This session chooses the flow, keeps the issue, dispatches units, asks the human, waits on CI and
+merges. It never runs a Spec Kit skill and never reads a unit's task files or transcript.
+Everything it reads is re-read on every later call: batch independent probes into one message.
 
-Each phase's work runs in a **unit**: a fresh subagent that reads only [unit.md](unit.md) and its own
-phase file. Overview and diagrams for humans: [README.md](README.md).
+Each unit is a fresh subagent that reads [rules/unit.md](rules/unit.md) and the task files its
+flow lists. Overview for humans: [README.md](README.md).
 
-## Entry
+## Route
 
-| Argument | Start at |
+First `git fetch origin`, and check the worktree is clean.
+
+| When | Read |
 |---|---|
-| `resume` | Follow [references/resume.md](references/resume.md) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
-| `#<n>` or an issue URL | `gh issue view <n> --json title,body,labels`, then a quick, bug or spec unit by its content, with the issue number and text as its scope, per [references/issue.md](references/issue.md) |
-| `quick: …`, or small work that meets [phases/Q-quick.md](phases/Q-quick.md)'s criteria | Quick unit |
-| `bug: …`, or text describing broken behaviour | Bug unit |
-| anything else | Spec unit |
+| The argument is `resume` | [tasks/resume.md](tasks/resume.md) |
+| Any other argument: `#<n>` or an issue URL (`gh issue view <n> --json title,body,labels`), `<flow> [high\|low] #<n>`, or text. Choose the flow and the effort from the command, the labels and the text | [flows/choose.md](flows/choose.md), then only the chosen one of [flows/bug.md](flows/bug.md), [flows/bugfix.md](flows/bugfix.md), [flows/feature.md](flows/feature.md), [flows/chore.md](flows/chore.md) |
+| The flow is chosen: claim or open the issue, write the labels back | [tasks/issue.md](tasks/issue.md) |
+| Starting a unit, and when it returns | [tasks/dispatch.md](tasks/dispatch.md) |
+| A unit returned a PR | [tasks/merge.md](tasks/merge.md) |
+| CI red outside this flow, a PR with no checks, a refused merge | [tasks/ci.md](tasks/ci.md) |
+| A unit returned `NEXT:`, or passed its flow's cap | [flows/switch.md](flows/switch.md) |
+| A unit returned `ESCALATE`, or the flow is not plain | [tasks/ask.md](tasks/ask.md) |
+| The run's last PR merged | [tasks/handoff.md](tasks/handoff.md) |
+| Unsure whether something is this flow's to touch | [rules/ownership.md](rules/ownership.md) |
 
-First run `git fetch origin` and check the worktree is clean. The first unit creates the ledger from
-[templates/autopilot-ledger.md](templates/autopilot-ledger.md): `autopilot.md` in the feature
-directory, or `bugs/BUG-<k>.autopilot.md` beside the BUG record. Its **Worktree branch** is the exact
-output of `git branch --show-current`; `resume` finds the ledger by it.
-
-## Phases and units
-
-| # | Phase | Unit and file | Ends with |
-|---|---|---|---|
-| Q | **Quick** | Quick: [phases/Q-quick.md](phases/Q-quick.md) | One PR, then the **handoff**. Or `NEXT: bug` (Phase 0) or `NEXT: feature` (Phase 1), with what it found as the scope. |
-| 0 | **Bug** | Bug: [phases/0-bug.md](phases/0-bug.md) | Patched BUG record, reviewed. Then one milestone unit ships record, patch, regression test and fix in **one PR**, then the **handoff**. Or the unit returns `SWITCH: feature` and the flow goes to Phase 1. |
-| 1 | **Spec** | Spec: [phases/1-spec.md](phases/1-spec.md) | Reviewed spec, committed; no PR |
-| 2 | **Clarify** | Clarify: [phases/2-clarify.md](phases/2-clarify.md) | The unit runs rounds until one is clean, then returns `CLEAN`. A unit that returns without it (a handover): dispatch another. |
-| 3 | **Design**, two units | Plan: [phases/3-plan.md](phases/3-plan.md), then Tasks: [phases/3-tasks.md](phases/3-tasks.md) | The **design PR**: spec, clarifications, plan, research, contracts, tasks with `## Milestones` |
-| 4 | **Milestones**, one at a time | Milestone K: [phases/4-milestone.md](phases/4-milestone.md) | One PR per milestone |
-| 5 | **Close** | Close: [phases/5-close.md](phases/5-close.md) | New milestones (back to 4, then close again), or the close PR with the ledger finished, then the **handoff** |
-
-Every PR merges on green before the next unit starts. A unit that returns `DONE` with `PR: none`
-(spec, plan) leaves its commits on the branch: dispatch the next unit at once, with the previous
-PR `none`.
-
-### Dispatching a unit
-
-Run each unit in its own `autopilot-unit` subagent (`general-purpose` when your agent types lack
-it: the type drops tool schemas a unit never uses, about 10k tokens on each of its calls). Pick the
-model by the work, not the phase name. A unit keeps its model when continued with `SendMessage`.
-
-| Unit | `model` |
-|---|---|
-| Spec, clarify, plan, tasks, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
-| A clarify unit continuing another's handover, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
-| Bug unit when the report already names the root cause and the fix (which code, what change) | `"sonnet"` |
-| Quick | `"sonnet"` |
-| Helper: read a long CI log, gate log or report and return only its failures | `"haiku"` |
-
-A ledger from an older run has **Docs-only** instead of **Tier**: `yes` is `docs`, `no` is `full`.
-A cheaper unit that returns `FAILED` is retried on the session model, with the ledger's *Handover*
-as its starting point.
-
-- **Description:** name the unit (`Milestone M2 042`, `Plan 042`). Token reports group by
-  it.
-- **Prompt:** keep this opening fixed for every unit, so the prompt cache reuses it:
-  `You are a speckit-autopilot unit. Read .claude/skills/speckit-autopilot/unit.md and follow it.`
-  Then the unit's description (the unit passes it to `context.py`), the phase file, ledger path
-  (`none yet` for the first unit), worktree path and branch, the previous PR and its merge SHA
-  (none for the first unit), and the scope: for the first unit, the user's prompt verbatim; for a spec unit after a bug switch, the
-  repro and correct behaviour the bug unit returned; for a milestone, its ID and task IDs (and
-  `BUG-<k>` for a bug).
-- **Return:** the unit ends with `STATUS: DONE | ESCALATE | FAILED | HANDOVER`, a PR number if it
-  opened one, and at most five lines. Read the ledger (`scripts/autopilot/brief.py ledger <ledger>`),
-  not the transcript.
-- **`ESCALATE`:** subagents have no `AskUserQuestion`. Ask the returned questions yourself (see
-  *Asking the human*), then continue **the same** subagent with `SendMessage` and the answers.
-- **`FAILED`:** read the ledger and the five lines. Retry once with a fresh unit, or escalate.
-- **`HANDOVER`:** its context passed 150k. Dispatch a fresh unit of the same phase, model and scope,
-  with `part <n>` added to the description and `Continue from the ledger's Handover.` in the
-  prompt. A fourth part for one unit is an escalation (category 5). If it had opened its PR, the
-  new part finishes the work on that PR; wait on and merge it as usual, and send any `RED` log to
-  the latest part.
-
-### While a unit runs
-
-Your prompt cache expires after 60 idle minutes; the next call then re-writes your whole context,
-which costs as much as 20 calls. After you dispatch a unit, run
-`scripts/autopilot/hold.sh --long "$SCRATCHPAD/unit-<description>"` with `run_in_background` and
-`timeout: 3300000`. When it reports `HOLD` and the unit has not returned, run it again. Stop on
-`STOP`, when the unit returns, and while you wait on the human.
-
-### Waiting and merging
-
-After a unit returns `DONE` with a PR, run `scripts/autopilot/wait-merge.sh <n>` detached, and wait
-on its last line (it runs as long as CI does):
-
-```bash
-log="$SCRATCHPAD/pr-<n>.log"
-# The wrapper writes its own pid: `setsid` may fork, so `$!` is not the process to watch.
-AUTOPILOT_LOG_DIR="$SCRATCHPAD" setsid nohup \
-  bash -c 'echo $$ >"$0.pid"; scripts/autopilot/wait-merge.sh <n>; echo "WAIT_EXIT=$?"' "$log" \
-  >"$log" 2>&1 &
-# then, with run_in_background (stops too if the script was killed without a result):
-until grep -q '^WAIT_EXIT=' "$log" || ! kill -0 "$(cat "$log.pid")" 2>/dev/null; do sleep 30; done
-tail -6 "$log"
-```
-
-| Last line | Do |
-|---|---|
-| `MERGED <n> <sha>` | Run `scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. |
-| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR (its latest part) with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
-| `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
-| `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
-| `CLOSED <n>` | Someone closed the PR. Escalate (category 1); never reopen it unasked. |
-| `TIMEOUT <n> <what>` or no result line | Check `gh auth status` and the PR by hand, then run the script again. |
-
-## Ownership: only this flow's work
-
-Other sessions work in this repo at the same time. A PreToolUse hook
-([scripts/autopilot/gate-hook.sh](../../../scripts/autopilot/gate-hook.sh)) blocks the worst breaches:
-another flow's PR, `--delete-branch`, `--admin`, removing the worktree, and pushing code no green
-gate saw. A block is a rule you broke, not an obstacle: never work around it. You own:
-
-- this worktree and its branch
-- the feature directory (or BUG record) this flow created
-- the PRs in the ledger, and its **Issue**
-- the subagents you spawned
-
-Everything else is outside the flow:
-
-- **Other PRs.** Never list, review, merge, rebase, approve runs on, comment on or close them, even
-  when green.
-- **Other specs.** Never edit another feature's `tasks.md` or spec. Only exception: the bug path's
-  patch to a **Closed** owning spec, via `speckit-bugfix-patch`.
-- **Other worktrees and branches.** Never touch them.
-- **Red `main`, or a failure from code this flow did not write.** Do not fix it. Escalate as
-  *blocked by work outside my flow*, and say what you checked.
-- **A defect in someone else's code.** List it under *Follow-ups not done* in the handoff.
-- **This worktree and its branch.** Never pass `--delete-branch`, never delete either. The user
-  removes the worktree in micold IDE, which also cleans up the branch.
-
-## Asking the human
-
-Every ask uses the banner and categories in [references/escalation.md](references/escalation.md),
-plus a `PushNotification`. **Escalate only for:**
-
-- a product or scope decision the repo does not settle
-- a constitution conflict
-- an irreversible or outward action beyond merging this flow's own PRs
-- missing access
-- non-convergence
-- the plan proving false in a way that changes requirements
-
-**Never escalate** review findings, fmt or clippy results, merge conflicts, flaky reruns, checkless
-PRs, visual checks, or a choice between equivalent implementations. Handle those yourself.
-
-## Handoff: the last message
-
-When the last PR has merged, read [references/handoff.md](references/handoff.md) and follow it.
-
-## Red flags: stop and re-read this skill
+## Red flags: stop and re-read the file the table names
 
 | Thought | Reality |
 |---|---|
 | "This step is small, I'll do it here" | Everything the orchestrator reads is re-read on every later call. Dispatch the unit. |
+| "It's labelled `bug`, but I'd call it a feature" | Labels win over your reading. They disagree with the text: ask once. |
+| "I'll run the full flow to be safe" | The lighter flows exist because the heavy steps found nothing on small work. Follow the flow chosen. |
 | "I'll check the unit's work in its transcript" | Read the ledger and the five-line return. |
-| "CI is green, so it's reviewed" | Units run reviews A and B. CI checks only that the code works. |
-| "I'll delete the merged branch to tidy up" | The IDE owns cleanup. No `--delete-branch`. |
-| "That green PR from another session is ready, I'll merge it" | Not in the ledger, not yours. |
+| "CI is green, so it's reviewed" | Units run the reviews. CI checks only that the code works. |
+| "That green PR from another session is ready, I'll merge it" | Not in the ledger, not yours. No `--delete-branch` either. |
 | "main is red, I'll wait for it to recover" | Silent waiting stalls the flow. Escalate as *blocked by work outside my flow*. |
 | "Quick question for the user…" | Batch it with a recommendation under the banner, or resolve it from evidence. |
 | "I remember where I was" | The ledger and `gh pr view` say where you are. Memory does not. |
-| "Everything merged. Done!" | Run `handoff-check.sh`, post the token report, then send the WORK COMPLETE handoff. |
+| "Everything merged. Done!" | Run the handoff task: check, token report, close the issue, WORK COMPLETE. |

@@ -3,7 +3,7 @@
 #
 # Everything a unit reads is re-read on each of its later calls. In measured runs, Read results
 # were over half of the tool output the milestone units carried, and the largest were whole files
-# of 10-16k tokens. unit.md tells units to grep first and to use brief.py; this hook holds them
+# of 10-16k tokens. rules/context.md tells units to grep first and to use brief.py; this hook holds them
 # to it.
 #
 # A no-op unless the session's directory is on a branch an autopilot ledger names (as

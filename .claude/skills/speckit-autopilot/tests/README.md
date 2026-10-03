@@ -12,7 +12,7 @@ absolute path: a subagent's shell may start in another worktree.
 | Arm | Preamble |
 |---|---|
 | control | "You work in the micold-ai-ide repo at `<worktree>`. Do not read anything under `.claude/skills/`." |
-| skill | "You work in the micold-ai-ide repo at `<worktree>`. You are running the `speckit-autopilot` skill as `<role>`: follow `<worktree>/.claude/skills/speckit-autopilot/SKILL.md` (orchestrator) or its `unit.md` and `phases/<phase>.md` (unit), and whatever they link that you need. Do not read anything under `.claude/skills/speckit-autopilot/tests/`." |
+| skill | "You work in the micold-ai-ide repo at `<worktree>`. You are running the `speckit-autopilot` skill as `<role>`: follow `<worktree>/.claude/skills/speckit-autopilot/SKILL.md` (orchestrator) or its `rules/unit.md` and the task files its flow lists for the unit (unit), and whatever they link that you need. Do not read anything under `.claude/skills/speckit-autopilot/tests/`." |
 | old | as *skill*, pointing at an extracted copy of an older version (`git archive <ref> .claude/skills/speckit-autopilot`) |
 
 - The control arm must fail a scenario at least sometimes, or the scenario tempts nothing. Harden

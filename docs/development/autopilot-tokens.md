@@ -325,8 +325,9 @@ number on their own; the skill does not require it yet.
 
 ## Skill size
 
-What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every
-unit call re-reads `unit.md` plus its phase file. `mise run autopilot-skill-size` estimates each
+What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md and the
+files it routed to, and every unit call re-reads `rules/unit.md`, `rules/context.md` and its task
+files. `mise run autopilot-skill-size` estimates each
 role's share in tokens (bytes / 4), and `scripts/autopilot/measure-skill.sh <git-ref>` shows the
 delta against a ref, so a change to the skill states what it adds to every call.
 
@@ -342,3 +343,31 @@ Against 65c6906c (all nine steps merged), after moving *Resuming* and *Handoff* 
 
 The unit's +357 is the delegation table in `unit.md`. It pays off when a unit delegates one
 multi-call job instead of running it in its own context.
+
+### Split into modules, 2026-10-03 (issue 553)
+
+Before the split a unit read `unit.md` and its phase file at spawn, then whole reference files the
+phase linked: all five rubrics for one review, the gate, PR, CI and merge rules for one push. Now
+SKILL.md only routes, every step is one file of at most 60 lines, and a flow's file lists exactly
+the task files each unit reads. What each role loads, linked files included, in tokens (bytes / 4):
+
+| Role | Before | After | Delta |
+|---|---:|---:|---:|
+| orchestrator, feature flow | 3,157 | 3,744 | +587 |
+| orchestrator, bug flow | 3,157 | 3,502 | +345 |
+| spec unit | 4,521 | 3,039 | −1,482 |
+| clarify unit | 2,416 | 1,607 | −809 |
+| tasks unit | 7,250 | 5,038 | −2,212 |
+| milestone unit, feature | 6,926 | 4,812 | −2,114 |
+| close unit | 6,352 | 4,050 | −2,302 |
+| bugfix unit (was the bug phase) | 5,886 | 3,339 | −2,547 |
+| milestone unit, bugfix | 6,926 | 3,290 | −3,636 |
+| chore unit (was quick) | 4,350 | 2,902 | −1,448 |
+| bug unit (new) | n/a | 2,917 | |
+
+The orchestrator grew: choosing the flow from labels and keeping the issue are new work, and it
+reads them at entry. `ask`, `ci`, `handoff`, `resume` and `switch` stay unread until their moment.
+These are sizes, not a measured run: no run has used the split skill yet.
+
+The larger saving is in what a light flow does not run at all. A bug or chore is one unit and one
+PR, with no spec, plan, tasks, review B or close unit; a bugfix drops review B and the close unit.
