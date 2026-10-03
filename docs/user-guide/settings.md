@@ -143,6 +143,34 @@ with until they stop; restart one to drop it. Turning it back on connects the ne
 It is one setting for the whole app, kept by the session service beside the default AI CLI, so
 every open window shows the same value.
 
+### Desktop notifications
+
+On by default. When a session you are not looking at finishes its turn or stops to ask for a
+permission, the app shows one desktop notification for it
+([Being told when a session needs you](worktrees-and-sessions.md#being-told-when-a-session-needs-you)).
+Turn **Desktop notifications** off and save, and the app shows none.
+
+- **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot and Pi sessions.
+  There is no switch per CLI.
+- **Every window at once.** The session service keeps the setting, so it holds for every open
+  window from the moment you save, and every window's Settings shows the same value.
+- **Nothing to restart.** It applies to the next time a session stops, also for sessions that are
+  already running.
+- **Nothing after the fact.** When you turn it on again, the next session that stops while you are
+  not looking at it notifies you. Sessions that stopped while it was off do not.
+- **Unread marks do not depend on it.** With the switch off a session that needs you is still
+  marked unread in the sidebar and counted in the project switcher
+  ([Unread sessions](worktrees-and-sessions.md#unread-sessions)).
+- **It survives a restart.** In the settings file it is `desktop_notifications`, `true` or `false`.
+  A file written before the switch existed, or one that cannot be read, counts as on.
+
+The operating system's own permission is separate. With the switch on, the system can still
+withhold notifications: you refused the permission, turned notifications off for the app in the
+system's settings, or have Do Not Disturb on. With the switch off, the app asks the system for
+nothing, whatever the system would allow. Where each system keeps its setting is on
+[Installing on macOS](install-macos.md#notifications) and
+[Installing on Windows](install-windows.md#notifications).
+
 ### Let agents read and type into other sessions
 
 Whether the assistant in one session may read another session's terminal and type into it, with the
