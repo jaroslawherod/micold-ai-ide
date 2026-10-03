@@ -18,6 +18,11 @@ rust-version = "1.97"
 # Shared dependency versions. Crates opt in with `dep = { workspace = true }`, so a version
 # is declared in exactly one place.
 [workspace.dependencies]
+# Feature 039 (research R4): the Linux desktop notification, `org.freedesktop.Notifications.Notify`
+# over the session bus. Already in `Cargo.lock` (through `mundy`), whose default features are these two,
+# so it adds no crate; the client's blocking call needs `blocking-api`.
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+
 # --- render-free core deps (never iced / never PTY) ---
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

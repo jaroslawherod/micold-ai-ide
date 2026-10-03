@@ -306,6 +306,28 @@ was held by them for 10 minutes and more at a time during this milestone.
   returned line with `log_line`.
 - refactor: none beyond `cargo fmt`.
 
+## Cycle 10 — U159, U160 — T023, T029, T031, T032
+
+- tests: `crates/micold-client/src/shell/desktop_notify/linux.rs::tests::{notify_request_carries_the_app_name_the_text_and_the_desktop_entry_and_nothing_else (U159),
+  no_session_bus_is_no_notification_service (U160),
+  nobody_serving_the_interface_is_no_notification_service (U160),
+  any_other_bus_failure_is_a_refusal_with_the_buses_reason (U160)}` (new), on the pure `notify_request`
+  and `notify_error`; no bus is needed
+- red: **not recorded.** The worker that ran this cycle was cut off by an API error before it wrote
+  this entry, and its logs went with its scratch directory. The tests and the implementation were
+  both in the tree, uncommitted, when the unit resumed; whether the tests were seen failing against a
+  stub is not known.
+- green: `mise run gate` on the committed tree (the four tests run in the `micold-ai-ide` binary's
+  unit tests).
+- T029: `zbus` 5.19 with `async-io` and `blocking-api` (the call in `Notifier::show` is the blocking
+  one), Linux-only in `crates/micold-client/Cargo.toml`; `Cargo.lock` gains the one dependency edge and
+  no crate.
+- T031: `desktop_notify::system()` has two `cfg` arms, Linux and not-Linux (`Unsupported`), which
+  covers macOS and Windows until T041.
+- the `Notify` call itself (`Notifier::show`) is not covered by a test: it needs a session bus.
+  Quickstart §B covers it.
+- refactor: none beyond `cargo fmt`.
+
 ## Notes and deviations
 
 - Cycle 1's test file was written while the baseline run was building, so that run is both the
