@@ -33,4 +33,5 @@ pub mod service_control;
 pub mod settings;
 pub mod startup;
 pub mod subscriptions;
+pub mod window_raise;
 pub mod workspace;

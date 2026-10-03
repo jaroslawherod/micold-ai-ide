@@ -625,6 +625,20 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 follow_up = show_attention_notification(app, notification);
             }
         }
+        // Feature 039 (contract N5): a notification for this session was clicked, in this window
+        // or another, and the service chose this window to show it. The window comes to the
+        // front first; then the root's messages are dispatched in order — the ordinary project
+        // switch and the ordinary selection, or none for a session that is gone (the root has
+        // pushed the notice).
+        DaemonMsg::RevealSession { project, session } => {
+            follow_up = app
+                .core
+                .reveal_session(&project, session)
+                .into_iter()
+                .fold(crate::shell::window_raise::raise(), |done, message| {
+                    done.chain(Task::done(message))
+                });
+        }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
         // back, or another window's (FR-011). Sync every service-owned field and re-source
         // env-include, exactly like the local-save path below does for its own change
@@ -1249,6 +1263,19 @@ pub fn on_attention_shown(
 ) -> Task<Message> {
     if let Some(line) = app.core.attention_shown(result) {
         crate::log_line(&line);
+    }
+    Task::none()
+}
+
+/// A backend reported a click on a notification this window raised (feature 039, research R6):
+/// ask the service for the session to be shown. The service picks the window, which may be
+/// another one (FR-012). Without a connection there is nobody to ask, and nothing changes.
+pub fn on_notifier_reported(
+    app: &mut App,
+    event: micold_client::features::attention::NotifierEvent,
+) -> Task<Message> {
+    if let Some(daemon) = &app.daemon {
+        daemon.send(micold_client::features::attention::notifier_event(event));
     }
     Task::none()
 }
