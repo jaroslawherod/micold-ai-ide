@@ -152,7 +152,7 @@ mod unread_mark;
 pub use accordion::Accordion;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
-pub use button::{Button, Variant as ButtonVariant};
+pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use divider::Divider;

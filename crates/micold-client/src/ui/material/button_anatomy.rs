@@ -232,3 +232,27 @@ fn a_buttons_leading_icon_is_the_18dp_its_row_states() {
         anatomy::button::LEADING_ICON,
     );
 }
+
+/// 039 U157 (FR-032): the unread count on the switcher's button does not make it taller.
+#[test]
+fn a_button_with_an_unread_count_keeps_its_height() {
+    let r = roles();
+    let height = |unread: usize| {
+        let button: Element<'static, Message> = Button::text("micold-ai-ide", r)
+            .leading(Icon::OpenProject)
+            .trailing_mark(unread, super::unread_total_tooltip(unread))
+            .on_press(Message::NoOp)
+            .into();
+        bounds_at(button, &[]).height
+    };
+
+    let (without, with) = (height(0), height(3));
+
+    assert!(
+        (with - without).abs() < TOLERANCE
+            && (with - micold_core::tokens::density::BUTTON_BASE).abs() < TOLERANCE,
+        "a button measured {without}dp without an unread count and {with}dp with one; §7.3 states \
+         {}dp for both",
+        micold_core::tokens::density::BUTTON_BASE,
+    );
+}

@@ -84,6 +84,7 @@ fn switcher_row(label: &str, active: bool) -> MenuItem<Message> {
         label: label.to_string(),
         message: Some(Message::NoOp),
         trailing_text: None,
+        trailing_mark: None,
         trailing_icon: None,
         on_context: Some(Box::new(|_| Message::NoOp)),
     }
@@ -391,6 +392,31 @@ fn a_switcher_row_is_the_same_row_as_a_menu_item() {
          off the same app bar and are built from the same table; a row that is its own component is \
          a row that gets fixed once and stays broken elsewhere (FR-029b)",
         row.height,
+        density::MENU_ITEM_BASE,
+    );
+}
+
+/// 039 U155 (FR-032, contract `unread-mark.md` U8): the unread count does not make a row taller.
+///
+/// The mark's caption is a line of `Label` text beside a `Label` running count, in a row whose
+/// height §7.5 fixes; a mark that brought its own padding or a taller role would show here.
+#[test]
+fn a_switcher_row_with_an_unread_count_keeps_its_height() {
+    let height = |unread: Option<usize>| {
+        let row = MenuItem {
+            trailing_text: Some("3 running".to_string()),
+            trailing_mark: unread,
+            ..switcher_row("micold-ai-ide", true)
+        };
+        bounds_at(menu::item_column(vec![row], roles()), &[0]).height
+    };
+
+    let (without, with) = (height(None), height(Some(2)));
+
+    assert!(
+        (with - without).abs() < TOLERANCE && (with - density::MENU_ITEM_BASE).abs() < TOLERANCE,
+        "a row measured {without}dp without an unread count and {with}dp with one; §7.5 states \
+         {}dp for both",
         density::MENU_ITEM_BASE,
     );
 }

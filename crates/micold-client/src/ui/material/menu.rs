@@ -67,6 +67,9 @@ pub struct MenuItem<M> {
     pub message: Option<M>,
     /// Trailing supporting text, muted (the switcher's running-session count).
     pub trailing_text: Option<String>,
+    /// The number of unread sessions, drawn `● n unread` after [`Self::trailing_text`] (the
+    /// switcher's unread count; feature 039, FR-021). `None` and `Some(0)` draw nothing.
+    pub trailing_mark: Option<usize>,
     /// Trailing badge glyph and its tint (the switcher's unavailable marker).
     pub trailing_icon: Option<(Icon, Rgb)>,
     /// What a right-press on the item becomes, built from the **press point** in window pixels —
@@ -92,6 +95,7 @@ impl<M> MenuItem<M> {
             label: label.into(),
             message: Some(message),
             trailing_text: None,
+            trailing_mark: None,
             trailing_icon: None,
             on_context: None,
         }
@@ -298,6 +302,12 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
         content = content.push(Text::new(item.label, TypeRole::Action, r).width(Length::Fill));
         if let Some(text) = item.trailing_text {
             content = content.push(Text::new(text, TypeRole::Label, r).muted());
+        }
+        // The shared mark, worded so that it is told from the running count beside it by more than
+        // its place (FR-021), and muted as that count is. A count of zero is not pushed at all: the
+        // mark would draw nothing and still take one of the row's gaps.
+        if let Some(unread) = item.trailing_mark.filter(|&unread| unread > 0) {
+            content = content.push(super::UnreadMark::new(r).count(unread).worded(true).muted());
         }
         if let Some((glyph, tint)) = item.trailing_icon {
             content = content.push(icon(glyph, TypeRole::Label.size(), tint));
@@ -583,5 +593,139 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
             None => Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
         };
         Surface::new(Layer::ContextMenu, panel, anchor).on_dismiss(on_dismiss)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::showcase::state::Message;
+    use crate::ui::material::UnreadMark;
+    use iced::advanced::layout::{self, Layout};
+    use iced::advanced::widget::Tree;
+    use iced::{Rectangle, Size};
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens;
+
+    const ROOM: Size = Size::new(PANEL_WIDTH, 600.0);
+    const TOLERANCE: f32 = 0.5;
+
+    fn roles() -> Roles {
+        tokens::roles(ColorScheme::Light)
+    }
+
+    /// A switcher row for a project with `running` and `unread` in its trailing slots.
+    fn project_row(running: Option<&str>, unread: Option<usize>) -> MenuItem<Message> {
+        MenuItem {
+            reserve_icon: true,
+            trailing_text: running.map(str::to_string),
+            trailing_mark: unread,
+            ..MenuItem::labeled("micold-ai-ide", Message::NoOp)
+        }
+    }
+
+    /// The boxes of what one item's content row holds, in order: the leading slot, the label, then
+    /// whatever trails.
+    fn content_of(item: MenuItem<Message>) -> Vec<Rectangle> {
+        let mut element = item_column(vec![item], roles());
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, ROOM),
+        );
+        let content: Vec<Rectangle> = Layout::new(&node)
+            .children()
+            .next()
+            .expect("the column holds the item")
+            .children()
+            .next()
+            .expect("the item holds its content row")
+            .children()
+            .map(|child| child.bounds())
+            .collect();
+        content
+    }
+
+    /// The size `● n unread` is drawn at.
+    fn worded_mark(count: usize) -> Size {
+        let mut element: Element<'_, Message> =
+            UnreadMark::new(roles()).count(count).worded(true).into();
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &layout::Limits::new(Size::ZERO, ROOM))
+            .bounds()
+            .size()
+    }
+
+    /// U152 (FR-021): the unread count is told from the running count by its mark and its word,
+    /// and stands after it.
+    #[test]
+    fn a_trailing_mark_renders_the_worded_count_after_the_trailing_text() {
+        let content = content_of(project_row(Some("3 running"), Some(2)));
+
+        let [_slot, _label, running, mark] = content[..] else {
+            panic!(
+                "a row with a running count and an unread count holds four boxes, not {}",
+                content.len()
+            );
+        };
+        assert!(
+            (mark.width - worded_mark(2).width).abs() < TOLERANCE,
+            "the mark is `● 2 unread` ({}dp), but the row drew {}dp",
+            worded_mark(2).width,
+            mark.width
+        );
+        let gap = mark.x - (running.x + running.width);
+        assert!(
+            (gap - spacing::SM).abs() < TOLERANCE,
+            "the mark stands {gap}dp after the running count; the menu's trailing gap is {}dp",
+            spacing::SM
+        );
+    }
+
+    /// U153 (FR-032): a row with no unread count is the row it was before the field existed.
+    #[test]
+    fn without_a_trailing_mark_the_row_renders_what_it_did() {
+        for unread in [None, Some(0)] {
+            let content = content_of(project_row(Some("3 running"), unread));
+
+            let [_slot, _label, running] = content[..] else {
+                panic!(
+                    "a row with a running count and {unread:?} unread holds three boxes, not {}",
+                    content.len()
+                );
+            };
+            let end = running.x + running.width;
+            assert!(
+                (end - (ROOM.width - anatomy::menu::ITEM_PADDING)).abs() < TOLERANCE,
+                "the running count ends at {end}dp, not at the item's trailing inset ({unread:?})"
+            );
+        }
+    }
+
+    /// U154 (FR-021): with no session running, the unread count alone trails.
+    #[test]
+    fn with_no_running_count_the_mark_alone_trails() {
+        let content = content_of(project_row(None, Some(1)));
+
+        let [_slot, _label, mark] = content[..] else {
+            panic!(
+                "a row with an unread count alone holds three boxes, not {}",
+                content.len()
+            );
+        };
+        assert!(
+            (mark.width - worded_mark(1).width).abs() < TOLERANCE,
+            "the trailing box is `● 1 unread`"
+        );
+        let end = mark.x + mark.width;
+        assert!(
+            (end - (ROOM.width - anatomy::menu::ITEM_PADDING)).abs() < TOLERANCE,
+            "the mark ends at {end}dp, not at the item's trailing inset"
+        );
     }
 }

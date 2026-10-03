@@ -43,7 +43,20 @@ pub struct UnreadMark<'a, M> {
     roles: Roles,
     count: Option<usize>,
     worded: bool,
+    role: TypeRole,
+    tint: CaptionTint,
     _marker: PhantomData<&'a M>,
+}
+
+/// The colour the number and the word are drawn in (U1: the host's).
+#[derive(Clone, Copy)]
+enum CaptionTint {
+    /// The theme's text colour.
+    Text,
+    /// The muted colour of supporting text.
+    Muted,
+    /// A colour the host states.
+    Stated(Rgb),
 }
 
 impl<'a, M: 'a> UnreadMark<'a, M> {
@@ -53,6 +66,8 @@ impl<'a, M: 'a> UnreadMark<'a, M> {
             roles,
             count: None,
             worded: false,
+            role: TypeRole::Label,
+            tint: CaptionTint::Text,
             _marker: PhantomData,
         }
     }
@@ -68,6 +83,27 @@ impl<'a, M: 'a> UnreadMark<'a, M> {
     /// number beside this one (FR-021).
     pub fn worded(mut self, worded: bool) -> Self {
         self.worded = worded;
+        self
+    }
+
+    /// Draw the number and the word in `role`: the role of the host's own label (U1). `Label`
+    /// unless stated.
+    pub fn role(mut self, role: TypeRole) -> Self {
+        self.role = role;
+        self
+    }
+
+    /// Draw the number and the word muted, for a host whose trailing text is muted (a menu item's
+    /// running count).
+    pub fn muted(mut self) -> Self {
+        self.tint = CaptionTint::Muted;
+        self
+    }
+
+    /// Draw the number and the word in `color`, for a host that draws its label in a colour of
+    /// its own (a button's content colour). The mark itself stays in the `primary` role.
+    pub fn tint(mut self, color: Rgb) -> Self {
+        self.tint = CaptionTint::Stated(color);
         self
     }
 
@@ -94,10 +130,18 @@ impl<'a, M: 'a> From<UnreadMark<'a, M>> for Element<'a, M> {
             .style(move |_theme: &iced::Theme| dot_style(r))
             .into();
         match mark.caption() {
-            Some(caption) => row![dot, super::Text::new(caption, TypeRole::Label, r)]
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center)
-                .into(),
+            Some(caption) => {
+                let text = super::Text::new(caption, mark.role, r);
+                let text = match mark.tint {
+                    CaptionTint::Text => text,
+                    CaptionTint::Muted => text.muted(),
+                    CaptionTint::Stated(color) => text.tint(color),
+                };
+                row![dot, text]
+                    .spacing(spacing::XS)
+                    .align_y(Alignment::Center)
+                    .into()
+            }
             None => dot,
         }
     }
@@ -194,6 +238,62 @@ mod tests {
         assert!(
             alone < counted && counted < worded,
             "the text is drawn beside the mark: {alone} < {counted} < {worded}"
+        );
+    }
+
+    /// Contract U1: the number and the word are in the host's label role.
+    #[test]
+    fn the_caption_is_drawn_in_the_role_its_host_states() {
+        let label = size_of(UnreadMark::new(roles()).count(2).into());
+        let stated = size_of(
+            UnreadMark::new(roles())
+                .count(2)
+                .role(TypeRole::Label)
+                .into(),
+        );
+        let action = size_of(
+            UnreadMark::new(roles())
+                .count(2)
+                .role(TypeRole::Action)
+                .into(),
+        );
+
+        assert_eq!(
+            label, stated,
+            "`Label` is the role a host that states none gets"
+        );
+        assert!(
+            action.width > label.width,
+            "`Action` is the larger role, so the same number is wider in it: {} against {}",
+            action.width,
+            label.width
+        );
+    }
+
+    /// Contract U1: a host's colour for the number changes no size.
+    #[test]
+    fn a_muted_or_tinted_caption_keeps_its_size() {
+        let plain = size_of(UnreadMark::new(roles()).count(2).worded(true).into());
+
+        assert_eq!(
+            size_of(
+                UnreadMark::new(roles())
+                    .count(2)
+                    .worded(true)
+                    .muted()
+                    .into()
+            ),
+            plain
+        );
+        assert_eq!(
+            size_of(
+                UnreadMark::new(roles())
+                    .count(2)
+                    .worded(true)
+                    .tint(roles().primary)
+                    .into()
+            ),
+            plain
         );
     }
 }

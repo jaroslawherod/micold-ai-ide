@@ -636,10 +636,11 @@ impl State {
     }
 
     /// The project-switcher rows for the current workspace. Pure: one entry per known project,
-    /// in catalog order, each carrying its active marker, running background-session count, and
-    /// availability. The GUI maps these to rendered rows and the "Add project…" affordance is
+    /// in catalog order, each carrying its active marker, running background-session count, unread
+    /// count and availability. The GUI maps these to rendered rows and the "Add project…" affordance is
     /// added by the view.
     pub fn switcher_entries(&self) -> Vec<SwitcherEntry> {
+        let in_view = crate::features::attention::in_view(&self.attention);
         self.workspace
             .projects
             .iter()
@@ -648,9 +649,17 @@ impl State {
                 label: p.display_name.clone(),
                 is_active: self.workspace.active.as_ref() == Some(&p.path),
                 running_count: self.workspace.running_session_count(&p.path),
+                unread_count: self.workspace.unread_session_count(&p.path, in_view),
                 available: p.availability == Availability::Available,
             })
             .collect()
+    }
+
+    /// The number of unread sessions in the projects other than the active one: what the
+    /// switcher's button shows, with its panel closed or open (feature 039, FR-023). Pure.
+    pub fn other_projects_unread(&self) -> usize {
+        self.workspace
+            .other_projects_unread(self.workspace.active.as_deref())
     }
 
     /// Replace the discovered worktrees and reconcile every piece of state that references a
