@@ -100,6 +100,15 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          accessor; settings deriving the set itself would be a second answer to the question \
          FR-023c exists to give exactly one of (feature 027, T145)",
     ),
+    (
+        "connection",
+        "attention",
+        "NotifyError — the desktop notification is shown on a blocking task, and its result comes \
+         back as `Msg::AttentionShown`, an effect's report like every other variant of the \
+         connection's vocabulary. The read is of a pure error type; what a failure to show means \
+         is the attention feature's to say, and a second error type here would say it twice \
+         (feature 039, review A F1)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

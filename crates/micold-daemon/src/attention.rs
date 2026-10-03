@@ -40,6 +40,12 @@ impl Views {
         self.views.remove(&client);
     }
 
+    /// Forget what was granted for `session`: the session was removed, and its id is not used
+    /// again.
+    pub fn forget_session(&mut self, session: SessionId) {
+        self.granted.remove(&session);
+    }
+
     /// Whether any connection reports `session` in view.
     pub fn is_in_view(&self, session: SessionId) -> bool {
         self.views
@@ -207,5 +213,25 @@ mod tests {
         let mut views = Views::default();
         assert!(views.grant(session(1), 1, 1));
         assert!(views.grant(session(2), 1, 1));
+    }
+
+    /// Review A F4: a removed session's grant is forgotten, so nothing is kept for a session
+    /// that no longer exists.
+    #[test]
+    fn after_a_session_is_forgotten_the_same_sequence_is_granted_again() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 1, 1));
+        assert!(views.grant(session(2), 1, 1));
+
+        views.forget_session(session(1));
+
+        assert!(
+            views.grant(session(1), 1, 1),
+            "nothing is remembered of the forgotten session"
+        );
+        assert!(
+            !views.grant(session(2), 1, 1),
+            "another session's grant stands"
+        );
     }
 }

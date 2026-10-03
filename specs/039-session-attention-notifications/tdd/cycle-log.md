@@ -358,3 +358,40 @@ was held by them for 10 minutes and more at a time during this milestone.
 - Mutant `server.rs` tick does not call `persist_attention`: SURVIVED. The tick is glue with no
   test harness in this crate (the names write beside it has none either). A known gap: no test
   observes the tick's write; U77 observes `persist_attention` itself.
+
+## Review A round 1 fixes (M2)
+
+- F1 (MAJOR): the notification is shown off the update thread. The `AttentionGranted` arm builds
+  the notification (`State::attention_notification`) and returns a `Task` that calls
+  `notifier.show` in `spawn_blocking` (`daemon_sync::show_attention_notification`); the result
+  comes back as `ConnectionMsg::AttentionShown`, whose handler (`daemon_sync::on_attention_shown`)
+  calls `State::attention_shown` and logs the line. The log-once rule moved into
+  `features::attention::show_result`; `show_granted` is `show_result` over a call on this thread.
+  The variant is in the connection's vocabulary and not at the root, which
+  `root_vocabulary_is_cross_cutting` holds at 12 wrappers and 5 variants; `connection` naming
+  `attention::NotifyError` is one new entry in `ALLOWED_CROSS_FEATURE_NAMES`
+  (`tests/feature_registration_cost.rs`), without which that gate fails.
+  - Tests (`tests/attention_notify.rs`): `a_reported_failure_to_show_is_logged_once_per_run`,
+    `a_reported_success_logs_nothing_and_leaves_the_first_failure_to_be_logged`.
+  - Red: `error[E0599]: no method named 'attention_shown' found for struct
+    'micold_client::app::State'`. Green: `attention_notify` 11 passed.
+  - The bus connection is built with `method_timeout` of 2 s. `zbus` reports a call past it as
+    `Error::InputOutput` of kind `TimedOut`, which `notify_error` already mapped to `NoService`;
+    `a_call_that_timed_out_is_no_notification_service` characterizes that and was green when
+    written.
+  - **No test**: the off-thread `Task` wiring (`show_attention_notification`, the `AttentionShown`
+    arm) and the timeout itself (that a hung service ends the call after 2 s). Both need a running
+    iced runtime or a session bus with a silent service.
+- F2 (MAJOR): the body is escaped as markup (`&`, `<`, `>`); the summary is left as plain text.
+  - Test: `the_body_is_escaped_as_markup_and_the_summary_is_left_as_plain_text`.
+  - Red: `left: "R&D — <x>"`, `right: "R&amp;D — &lt;x&gt;"`. Green: `desktop_notify` 7 passed.
+- F3 (MINOR): a call that fails with a connection error (`is_connection_error`: `Address`,
+  `InputOutput`, `Handshake`, `Connection`) drops the kept connection, so the next `show` opens a
+  new one. A timeout is one of them. Test
+  `a_broken_bus_is_a_connection_error_and_a_services_answer_is_not`, written with the fix, covers
+  the predicate. **No test** observes the drop and reopen: it needs a session bus.
+- F4 (MINOR): `Views::forget_session`, called by `DaemonState::remove_session` under the lock.
+  - Test: `after_a_session_is_forgotten_the_same_sequence_is_granted_again`.
+  - Red: `error[E0599]: no method named 'forget_session' found for struct 'attention::Views'`.
+    Green: `micold-daemon --lib attention` 10 passed.
+  - **No test** observes that `remove_session` makes the call.

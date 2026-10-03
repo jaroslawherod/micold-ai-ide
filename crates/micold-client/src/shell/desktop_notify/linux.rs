@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
 
@@ -14,6 +15,9 @@ use micold_client::features::attention::{DesktopNotification, DesktopNotifier, N
 const APP_NAME: &str = "Micold AI IDE";
 /// The desktop entry the service takes the icon and the name from (`packaging/micold-ai-ide.desktop`).
 const DESKTOP_ENTRY: &str = "micold-ai-ide";
+/// How long the notification service has to answer a call. A service that does not answer in
+/// that time is treated as one that is not there.
+const METHOD_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The arguments of one `Notify` call, in the order of the specification.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,15 +32,31 @@ pub(super) struct NotifyRequest {
     pub expire_timeout: i32,
 }
 
+/// `text` as notification body markup: a server with the `body-markup` capability reads `&`, `<`
+/// and `>` as markup, so a name that holds one is escaped to be shown as written (FR-004).
+fn escape_markup(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
+}
+
 /// The `Notify` call for `notification`: the title as the summary, the body, and the
-/// `desktop-entry` hint; nothing else (contract N2). Never replaces an earlier one (N3).
+/// `desktop-entry` hint; nothing else (contract N2). Never replaces an earlier one (N3). The
+/// summary is plain text by the specification; the body is markup, so it is escaped.
 pub(super) fn notify_request(notification: &DesktopNotification) -> NotifyRequest {
     NotifyRequest {
         app_name: APP_NAME,
         replaces_id: 0,
         app_icon: "",
         summary: notification.title.clone(),
-        body: notification.body.clone(),
+        body: escape_markup(&notification.body),
         actions: Vec::new(),
         hints: vec![("desktop-entry", DESKTOP_ENTRY.to_string())],
         // The server's own default.
@@ -44,19 +64,30 @@ pub(super) fn notify_request(notification: &DesktopNotification) -> NotifyReques
     }
 }
 
+/// Whether `error` says the connection to the bus is no good — it could not be opened, it broke,
+/// or a call on it was not answered in time — so that a kept one is dropped and the next
+/// notification opens a new one.
+pub(super) fn is_connection_error(error: &zbus::Error) -> bool {
+    matches!(
+        error,
+        zbus::Error::Address(_)
+            | zbus::Error::InputOutput(_)
+            | zbus::Error::Handshake(_)
+            | zbus::Error::Connection(..)
+    )
+}
+
 /// What a bus failure means for the user (FR-010): no notification service to ask, or one that
-/// did not accept the notification.
+/// did not accept the notification. A call that was not answered within [`METHOD_TIMEOUT`]
+/// arrives as an I/O error of kind `TimedOut`, and is no service.
 pub(super) fn notify_error(error: &zbus::Error) -> NotifyError {
     const NOBODY_THERE: [&str; 2] = [
         "org.freedesktop.DBus.Error.ServiceUnknown",
         "org.freedesktop.DBus.Error.NameHasNoOwner",
     ];
     match error {
-        // No session bus to reach.
-        zbus::Error::Address(_)
-        | zbus::Error::InputOutput(_)
-        | zbus::Error::Handshake(_)
-        | zbus::Error::Connection(..) => NotifyError::NoService(error.to_string()),
+        // No session bus to reach, or no answer in time.
+        error if is_connection_error(error) => NotifyError::NoService(error.to_string()),
         // A bus with nobody serving the notification interface on it.
         zbus::Error::FDO(fdo) => match fdo.as_ref() {
             zbus::fdo::Error::ServiceUnknown(why) | zbus::fdo::Error::NameHasNoOwner(why) => {
@@ -71,8 +102,8 @@ pub(super) fn notify_error(error: &zbus::Error) -> NotifyError {
     }
 }
 
-/// The Linux notifier. The session-bus connection is opened on the first notification and kept;
-/// a failed open is tried again on the next one.
+/// The Linux notifier. The session-bus connection is opened on the first notification and kept
+/// until a call on it fails with a connection error; a failed open is tried again on the next one.
 pub(super) struct Notifier {
     connection: Mutex<Option<zbus::blocking::Connection>>,
 }
@@ -92,10 +123,20 @@ impl Notifier {
         if let Some(connection) = held.as_ref() {
             return Ok(connection.clone());
         }
-        let connection =
-            zbus::blocking::Connection::session().map_err(|error| notify_error(&error))?;
+        let connection = zbus::blocking::connection::Builder::session()
+            .map(|builder| builder.method_timeout(METHOD_TIMEOUT))
+            .and_then(zbus::blocking::connection::Builder::build)
+            .map_err(|error| notify_error(&error))?;
         *held = Some(connection.clone());
         Ok(connection)
+    }
+
+    /// Drop the kept connection, so the next notification opens a new one.
+    fn forget_connection(&self) {
+        *self
+            .connection
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 }
 
@@ -124,7 +165,12 @@ impl DesktopNotifier for Notifier {
                     request.expire_timeout,
                 ),
             )
-            .map_err(|error| notify_error(&error))?;
+            .map_err(|error| {
+                if is_connection_error(&error) {
+                    self.forget_connection();
+                }
+                notify_error(&error)
+            })?;
         Ok(())
     }
 }
@@ -160,6 +206,51 @@ mod tests {
                 expire_timeout: -1,
             }
         );
+    }
+
+    #[test]
+    fn the_body_is_escaped_as_markup_and_the_summary_is_left_as_plain_text() {
+        // Review A F2 (FR-004): the body is markup on a server with `body-markup`; the summary
+        // is plain text by the specification.
+        let request = notify_request(&DesktopNotification {
+            title: "R&D <x> is waiting for input".to_string(),
+            body: "R&D \u{2014} <x>".to_string(),
+            project: PathBuf::from("/repo"),
+            session: SessionId::new(),
+        });
+        assert_eq!(request.body, "R&amp;D \u{2014} &lt;x&gt;");
+        assert_eq!(request.summary, "R&D <x> is waiting for input");
+    }
+
+    #[test]
+    fn a_call_that_timed_out_is_no_notification_service() {
+        // Review A F1c: `zbus` reports a method call past its timeout as an I/O error of kind
+        // `TimedOut`.
+        let error = zbus::Error::InputOutput(std::sync::Arc::new(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timed out",
+        )));
+        match notify_error(&error) {
+            NotifyError::NoService(why) => assert!(why.contains("timed out"), "{why}"),
+            other => panic!("expected no service, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_broken_bus_is_a_connection_error_and_a_services_answer_is_not() {
+        // Review A F3: the kept connection is dropped after the first kind, not after the second.
+        assert!(is_connection_error(&zbus::Error::InputOutput(
+            std::sync::Arc::new(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+        )));
+        assert!(is_connection_error(&zbus::Error::InputOutput(
+            std::sync::Arc::new(std::io::Error::from(std::io::ErrorKind::TimedOut))
+        )));
+        assert!(!is_connection_error(&zbus::Error::FDO(Box::new(
+            zbus::fdo::Error::ServiceUnknown("nobody".to_string())
+        ))));
+        assert!(!is_connection_error(&zbus::Error::FDO(Box::new(
+            zbus::fdo::Error::AccessDenied("blocked".to_string())
+        ))));
     }
 
     #[test]

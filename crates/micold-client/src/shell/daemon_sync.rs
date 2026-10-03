@@ -618,10 +618,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.daemon_catalog = Some(catalog);
         }
         // Feature 039 (contract N1): this window's claim was the one granted, so it raises the
-        // notification. A failure is logged once per run and changes nothing else (N4).
+        // notification. Showing it waits on the system, so it leaves the update thread; the
+        // result comes back as `ConnectionMsg::AttentionShown`.
         DaemonMsg::AttentionGranted { session, .. } => {
-            if let Some(line) = app.core.attention_granted(session, app.caps.notifier()) {
-                crate::log_line(&line);
+            if let Some(notification) = app.core.attention_notification(session) {
+                follow_up = show_attention_notification(app, notification);
             }
         }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
@@ -1219,6 +1220,37 @@ pub fn report_window_view(app: &mut App) {
             in_view: view.in_view,
         });
     }
+}
+
+/// Show `notification` on a blocking task (feature 039, contract N1): the system's notification
+/// service is asked over a bus and may be slow to answer, and the update thread must not wait.
+fn show_attention_notification(
+    app: &App,
+    notification: micold_client::features::attention::DesktopNotification,
+) -> Task<Message> {
+    use micold_client::features::attention::NotifyError;
+    use micold_client::features::connection::Msg as ConnectionMsg;
+    let notifier = app.caps.notifier();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || notifier.show(notification))
+                .await
+                .unwrap_or_else(|e| Err(NotifyError::Refused(e.to_string())))
+        },
+        |result| Message::Connection(ConnectionMsg::AttentionShown(result)),
+    )
+}
+
+/// The notification was shown, or was not: a failure is logged once per run and changes nothing
+/// else (feature 039, contract N4).
+pub fn on_attention_shown(
+    app: &mut App,
+    result: Result<(), micold_client::features::attention::NotifyError>,
+) -> Task<Message> {
+    if let Some(line) = app.core.attention_shown(result) {
+        crate::log_line(&line);
+    }
+    Task::none()
 }
 
 /// Send the attention claims a catalog snapshot gives rise to (feature 039, research R3): every

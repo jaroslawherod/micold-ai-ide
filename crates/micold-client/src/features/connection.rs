@@ -265,4 +265,7 @@ pub enum Msg {
     /// The logout-survival opt-in finished being applied; carries a ready-to-show message (info or
     /// error).
     LogoutSurvivalOutcome(String),
+    /// The desktop notification for a granted attention event was shown, or was not (feature 039,
+    /// contract N4). Showing waits on the system, so it runs on a blocking task and reports here.
+    AttentionShown(Result<(), crate::features::attention::NotifyError>),
 }

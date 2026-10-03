@@ -129,15 +129,21 @@ pub fn snapshot_claims(
         .collect()
 }
 
-/// Show the notification for a granted attention event (N1). Returns the line to log when the
-/// system did not accept it and nothing has been logged yet in this run (N4); the caller logs it,
-/// and nothing else happens.
+/// Show the notification for a granted attention event (N1), on the calling thread, and take the
+/// result as [`show_result`] does. The shell does not call this: showing can wait on the system,
+/// so it shows on a blocking task and reports the result to [`show_result`].
 pub fn show_granted(
     state: &mut State,
     notification: DesktopNotification,
     notifier: &dyn DesktopNotifier,
 ) -> Option<String> {
-    let error = notifier.show(notification).err()?;
+    show_result(state, notifier.show(notification))
+}
+
+/// What showing a notification came to. Returns the line to log when the system did not accept it
+/// and nothing has been logged yet in this run (N4); the caller logs it, and nothing else happens.
+pub fn show_result(state: &mut State, result: Result<(), NotifyError>) -> Option<String> {
+    let error = result.err()?;
     if state.failure_logged {
         return None;
     }
