@@ -69,16 +69,15 @@ pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
     Box::new(linux::Notifier::new(events))
 }
 
-/// The notifier of the system this client was built for: the notification centre. It does not
-/// report a click yet (T086): `events` is dropped.
+/// The notifier of the system this client was built for: the notification centre. It reports a
+/// click on `events`.
 #[cfg(target_os = "macos")]
-pub fn system(_events: Events) -> Box<dyn DesktopNotifier> {
-    Box::new(macos::Notifier)
+pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
+    Box::new(macos::Notifier::new(events))
 }
 
-/// The notifier of the system this client was built for: a toast. It does not report a click yet
-/// (T087): `events` is dropped.
+/// The notifier of the system this client was built for: a toast. It reports a click on `events`.
 #[cfg(target_os = "windows")]
-pub fn system(_events: Events) -> Box<dyn DesktopNotifier> {
-    Box::new(windows::Notifier)
+pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
+    Box::new(windows::Notifier::new(events))
 }

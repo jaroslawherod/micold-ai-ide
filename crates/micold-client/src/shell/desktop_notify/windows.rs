@@ -1,11 +1,17 @@
 //! The Windows desktop notification: a WinRT toast, through `tauri-winrt-notification`
 //! (feature 039, research R4, contract "Backends").
 //!
-//! Two pure functions decide everything — [`toast_text`], the text handed to the system, and
-//! [`notify_error`], what a failure of the crate means — and are tested without showing a toast.
-//! [`Notifier::show`] is the call, with no branch of its own. The click arrives with story 3.
+//! Three functions decide everything — [`toast_text`], the text handed to the system,
+//! [`notify_error`], what a failure of the crate means, and [`on_activated`], what a toast does
+//! when it is clicked — and are tested without showing a toast. [`Notifier::show`] is the call,
+//! with no branch of its own.
 
-use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
+use std::path::PathBuf;
+
+use micold_client::features::attention::{
+    DesktopNotification, DesktopNotifier, NotifierEvent, NotifyError,
+};
+use micold_core::session::SessionId;
 
 /// The Application User Model ID the toast is shown under. Windows shows a toast only for an ID
 /// that a Start-menu shortcut carries: the installer puts this same string on its shortcut
@@ -35,8 +41,33 @@ pub(super) fn notify_error(error: &tauri_winrt_notification::Error) -> NotifyErr
     NotifyError::Refused(error.to_string())
 }
 
-/// The Windows notifier. It keeps nothing: each toast is built and handed to the system.
-pub(super) struct Notifier;
+/// What one toast does when the system says it was activated. Each toast carries its own
+/// handler, so the handler is the table: it names the one session its toast was raised for
+/// (contract N9). The system calls it on a thread of its own, so it only sends: `None` — the toast
+/// itself was clicked, there being no button to carry an argument — is a click on that session;
+/// an argument is some button's, and this window offers none.
+pub(super) fn on_activated(
+    events: super::Events,
+    project: PathBuf,
+    session: SessionId,
+) -> impl Fn(Option<String>) -> tauri_winrt_notification::Result<()> + Send + 'static {
+    move |argument| {
+        let _ = (&events, &project, session, argument, None::<NotifierEvent>);
+        todo!("T087")
+    }
+}
+
+/// The Windows notifier: the channel a click is reported on. Each toast is built and handed to
+/// the system.
+pub(super) struct Notifier {
+    events: super::Events,
+}
+
+impl Notifier {
+    pub(super) fn new(events: super::Events) -> Self {
+        Self { events }
+    }
+}
 
 impl DesktopNotifier for Notifier {
     /// Windows shows the toast only when a Start-menu shortcut carries [`APP_USER_MODEL_ID`], which
@@ -47,6 +78,11 @@ impl DesktopNotifier for Notifier {
         tauri_winrt_notification::Toast::new(APP_USER_MODEL_ID)
             .title(&text.title)
             .text1(&text.line)
+            .on_activated(on_activated(
+                self.events.clone(),
+                notification.project,
+                notification.session,
+            ))
             .show()
             .map_err(|error| notify_error(&error))
     }
@@ -55,8 +91,7 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::session::SessionId;
-    use std::path::PathBuf;
+    use iced::futures::channel::mpsc;
     use tauri_winrt_notification::Error;
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
@@ -117,5 +152,65 @@ mod tests {
             NotifyError::Refused(why) => assert!(why.contains("no such image"), "{why}"),
             other => panic!("expected a refusal, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_click_on_the_toast_is_an_activation_of_its_session() {
+        // U174 (FR-011, N5): the system calls the handler with no argument.
+        let (events, mut received) = mpsc::unbounded();
+        let session = SessionId::new();
+        let handler = on_activated(events, PathBuf::from("/repo"), session);
+        assert!(handler(None).is_ok());
+        assert_eq!(
+            received.try_recv().ok(),
+            Some(NotifierEvent::Activated {
+                project: PathBuf::from("/repo"),
+                session,
+            })
+        );
+        assert!(received.try_recv().is_err(), "one click, one event");
+    }
+
+    #[test]
+    fn each_toast_reports_its_own_session() {
+        // U174 (N9): the table is keyed per toast.
+        let (events, mut received) = mpsc::unbounded();
+        let (first, second) = (SessionId::new(), SessionId::new());
+        let on_first = on_activated(events.clone(), PathBuf::from("/repo"), first);
+        let on_second = on_activated(events, PathBuf::from("/other"), second);
+        assert!(on_second(None).is_ok());
+        assert!(on_first(None).is_ok());
+        assert_eq!(
+            received.try_recv().ok(),
+            Some(NotifierEvent::Activated {
+                project: PathBuf::from("/other"),
+                session: second,
+            })
+        );
+        assert_eq!(
+            received.try_recv().ok(),
+            Some(NotifierEvent::Activated {
+                project: PathBuf::from("/repo"),
+                session: first,
+            })
+        );
+    }
+
+    #[test]
+    fn an_activation_with_an_argument_is_no_event() {
+        // U174: an argument is a button's, and the toast offers none.
+        let (events, mut received) = mpsc::unbounded();
+        let handler = on_activated(events, PathBuf::from("/repo"), SessionId::new());
+        assert!(handler(Some("open".to_string())).is_ok());
+        assert!(received.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_click_after_the_window_stopped_listening_is_not_an_error() {
+        // N9: the click is reported to nobody.
+        let (events, received) = mpsc::unbounded();
+        drop(received);
+        let handler = on_activated(events, PathBuf::from("/repo"), SessionId::new());
+        assert!(handler(None).is_ok());
     }
 }
