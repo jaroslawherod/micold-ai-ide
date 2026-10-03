@@ -835,3 +835,30 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
     enumerated list yet.
   - T120: `session_reveal` and `attention_reveal` are green here (cycles 27, 28); the task is ticked
     by the M6 unit.
+
+## Cycle 31 — U169, U170, U171, U174 — T079, T080, T086, T087 (M6-6)
+
+- tests: `crates/micold-client/src/shell/desktop_notify/macos.rs::tests` — six on the pure
+  `Shown::on_response` (U169: the default action of a held id is `Activated`, reported once; U170: a
+  dismissal, a timeout and another action are nothing; U171: an id the table does not hold is
+  nothing) and one on `prompt_is_open` (the M3 review A follow-up, no behavior id);
+  `windows.rs::tests` — four on `on_activated` (U174: `None` is `Activated` for the toast's own
+  session; each toast reports its own; an argument is nothing; a closed channel is not an error).
+- The modules compile on their own system only. The tests were pushed with `todo!()` bodies
+  (`e18b5ebb`). From Linux, `cargo clippy -p micold-client --bin micold-ai-ide --tests -- -D warnings`
+  passed for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on that tree, so the red is the
+  tests' and not the compiler's.
+- red, on CI, pull request #560 at `e18b5ebb` (run
+  <https://github.com/jaroslawherod/micold-ai-ide/actions/runs/37147017754>), step
+  "Test (desktop notification backends)", the only failed step of both legs:
+  - macOS (job 111272988044): `test result: FAILED. 10 passed; 7 failed`, the seven new tests, each
+    with `not yet implemented: T086`.
+  - Windows (job 111272988013): `test result: FAILED. 5 passed; 4 failed`, the four new tests, each
+    with `not yet implemented: T087`.
+  - Linux passed, `attention_reveal` in the workspace step.
+- green: `47bb094f` (T086, T087; ledger D26, D27). The same clippy cross-check passed for both
+  targets on it. **The green run on CI is not recorded yet**: `47bb094f` is not pushed (ledger
+  *Handover*).
+- **No test**: the calls into the system (`deliver` and `Notifier::show` on macOS, `Notifier::show`
+  on Windows); quickstart §C1 and §C2 (M9).
+
