@@ -337,3 +337,17 @@ fn unread_is_in_the_hashed_source() {
          set that carries unread state"
     );
 }
+
+#[test]
+fn the_reveal_and_its_forward_are_in_the_hashed_source() {
+    // Feature 039, contract W3 (version 25). U15. Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in ["SessionReveal {", "RevealSession {"] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so the hash is not the hash of the message set \
+             that asks for a session to be revealed and forwards the request"
+        );
+    }
+}

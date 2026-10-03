@@ -232,6 +232,16 @@ pub enum ClientMsg {
         /// The `attention_seq` being claimed.
         seq: u64,
     },
+    /// A notification for `session` was clicked in this window: ask for the session to be shown
+    /// (feature 039, W3). The service forwards it as [`DaemonMsg::RevealSession`] to exactly one
+    /// window (W3.1) without checking that the project or session exists (W3.2), and changes
+    /// nothing (W3.3). Not an operation: no `req`, no reply, no attachment needed.
+    SessionReveal {
+        /// The project the session belongs to.
+        project: PathBuf,
+        /// The session to show.
+        session: SessionId,
+    },
 
     // --- Session commands (fire-and-forget) ---
     /// Append input bytes to a session's PTY. `serial` is monotonic per session and exists to
@@ -654,6 +664,15 @@ pub enum DaemonMsg {
         session: SessionId,
         /// The granted `attention_seq`.
         seq: u64,
+    },
+    /// Show this session: a notification for it was clicked, in this window or another
+    /// (feature 039, W3). Sent to one window only; that window decides whether the session can
+    /// still be shown (W3.2).
+    RevealSession {
+        /// The project the session belongs to.
+        project: PathBuf,
+        /// The session to show.
+        session: SessionId,
     },
     /// Handshake or attach refused.
     Refused {
@@ -1379,6 +1398,29 @@ mod attention_wire_tests {
             through_json(&grant),
             grant,
             "a grant is read as it was written"
+        );
+    }
+
+    #[test]
+    fn a_reveal_and_its_forward_encode_and_decode() {
+        // U15 (W3). A path and a session no default produces.
+        let asked = ClientMsg::SessionReveal {
+            project: PathBuf::from("/repo"),
+            session: session(),
+        };
+        let forwarded = DaemonMsg::RevealSession {
+            project: PathBuf::from("/repo"),
+            session: session(),
+        };
+        assert_eq!(
+            through_json(&asked),
+            asked,
+            "a reveal is read as it was written"
+        );
+        assert_eq!(
+            through_json(&forwarded),
+            forwarded,
+            "a forwarded reveal is read as it was written"
         );
     }
 
