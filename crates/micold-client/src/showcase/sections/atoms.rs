@@ -239,7 +239,9 @@ pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     arrange(instances, Layout::Inline)
 }
 
-/// `UnreadMark` — on a session row, beside the same row without it (feature 039, FR-030).
+/// `UnreadMark` — on a session row, beside the same row without it, and on the switcher's button
+/// (feature 039, FR-030). The switcher's rows with their unread counts are `MenuOverlay`'s second
+/// opener, because a menu's rows exist only inside its panel.
 ///
 /// Posed in its host and not alone: what has to be checked by eye is that the mark is told from the
 /// activity badge, which both rows carry, by its place at the trailing edge and by the weight of
@@ -260,10 +262,24 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             .selected_label_role(TypeRole::SidebarSessionCurrent)
             .into()
     };
+    // The switcher's button as the app bar builds it. A count of zero is the button as it was.
+    let switcher_button = |unread: usize| -> Element<'a, Message> {
+        material::Button::text(samples::LABEL, roles)
+            .leading(Icon::OpenProject)
+            .trailing_mark(unread, material::unread_total_tooltip(unread))
+            .on_press(Message::NoOp)
+            .into()
+    };
     arrange(
         vec![
             posed("an unread session row", session_row(true), roles),
             posed("a read session row", session_row(false), roles),
+            posed(
+                "the switcher's button with an unread count",
+                switcher_button(3),
+                roles,
+            ),
+            posed("the switcher's button with none", switcher_button(0), roles),
         ],
         Layout::FullWidth,
     )

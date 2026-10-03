@@ -233,7 +233,12 @@ pub const COMPONENTS: &[Entry] = &[
         component: "UnreadMark",
         variants: &[],
         density: &[],
-        posed: &["an unread session row", "a read session row"],
+        posed: &[
+            "an unread session row",
+            "a read session row",
+            "the switcher's button with an unread count",
+            "the switcher's button with none",
+        ],
         live: &[],
         interactive: false,
         section: Section::Components,
@@ -655,8 +660,8 @@ pub const COMPONENTS: &[Entry] = &[
         posed: &[
             "open, anchored to the window's top-right — it hangs below the app bar in the \
 application, so in this page it opens away from the trigger",
-            "the project switcher's list: the same panel, with an active row, a running count and \
-an unavailable row",
+            "the project switcher's list: the same panel, with an active row, a running count, \
+unread counts and an unavailable row",
         ],
         live: &["hover and press its items", "Escape dismisses it"],
         interactive: true,

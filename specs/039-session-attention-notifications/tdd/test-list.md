@@ -322,9 +322,9 @@ the same kind.
 | U125 | `row_unread` is true for an unread session that is not the one in view | FR-018, US2-1 | example | PENDING | T051 / T056 |
 | U126 | `row_unread` is false for the session in view, before the service's answer arrives | FR-019, SC-006 | example | PENDING | T051 / T056 |
 | U127 | `reconcile_catalog` copies `unread` | FR-024 | example | PENDING | T051 / T056 |
-| U128 | Every `SwitcherEntry` carries `unread_count`, the active project's too | FR-021, US2-4, US2-5 | example | PENDING | T063 / T067 |
-| U129 | The count falls at once for the session in view | FR-019, US2-3 | example | PENDING | T063 / T067 |
-| U130 | The button's total equals `other_projects_unread` | FR-023 | example | PENDING | T063 / T067 |
+| U128 | Every `SwitcherEntry` carries `unread_count`, the active project's too | FR-021, US2-4, US2-5 | example | DONE | T063 / T067 |
+| U129 | The count falls at once for the session in view | FR-019, US2-3 | example | DONE | T063 / T067 |
+| U130 | The button's total equals `other_projects_unread` | FR-023 | example | DONE | T063 / T067 |
 
 ### `crates/micold-client/src/features/attention.rs`: reveal and raise
 
@@ -361,13 +361,13 @@ the same kind.
 | U149 | A `TreeItem` with `.unread(true)` has the height of one without | FR-032 | example | PENDING | T050 / T058 |
 | U150 | The row's label truncates before the mark is pushed out | FR-018 | example | PENDING | T050 / T058 |
 | U151 | The badge slot and its `ActivityBadge` are the same node as before | FR-018, FR-032 | example | PENDING | T050 / T058 |
-| U152 | `MenuItem` with `trailing_mark: Some(n)` renders `● n unread` after `trailing_text` | FR-021 | example | PENDING | T064 / T068 |
-| U153 | With `trailing_mark: None` the row renders what it renders today | FR-032 | example | PENDING | T064 / T068 |
-| U154 | With no running count the mark alone trails | FR-021 | example | PENDING | T064 / T068 |
-| U155 | The menu row's height is unchanged by the mark | FR-032 | example | PENDING | T064 / T068 |
-| U156 | `Button::trailing_mark(n, tooltip)` renders `● n` after the label, inside the button | FR-023 | example | PENDING | T065 / T069 |
-| U157 | The button's height is unchanged by the mark | FR-032 | example | PENDING | T065 / T069 |
-| U158 | `unread_total_tooltip(1)` is `1 unread session in other projects`, and for `n` above one `{n} unread sessions in other projects` | FR-023 | example | PENDING | T065 / T069 |
+| U152 | `MenuItem` with `trailing_mark: Some(n)` renders `● n unread` after `trailing_text` | FR-021 | example | DONE | T064 / T068 |
+| U153 | With `trailing_mark: None` the row renders what it renders today | FR-032 | example | DONE | T064 / T068 |
+| U154 | With no running count the mark alone trails | FR-021 | example | DONE | T064 / T068 |
+| U155 | The menu row's height is unchanged by the mark | FR-032 | example | DONE | T064 / T068 |
+| U156 | `Button::trailing_mark(n, tooltip)` renders `● n` after the label, inside the button | FR-023 | example | DONE | T065 / T069 |
+| U157 | The button's height is unchanged by the mark | FR-032 | example | DONE | T065 / T069 |
+| U158 | `unread_total_tooltip(1)` is `1 unread session in other projects`, and for `n` above one `{n} unread sessions in other projects` | FR-023 | example | DONE | T065 / T069 |
 
 ### `crates/micold-client/src/shell/desktop_notify/`: backend mappings
 

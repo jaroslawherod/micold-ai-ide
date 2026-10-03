@@ -63,11 +63,13 @@ pub const WORKTREES: &[(&str, u16)] = &[
     ("fix/scrollback-clamp", 1),
 ];
 
-/// Invented known projects: `(display name, running session count, available)`.
-pub const PROJECTS: &[(&str, usize, bool)] = &[
-    ("micold-ai-ide", 2, true),
-    ("session-daemon-notes", 0, true),
-    ("archived-experiment", 0, false),
+/// Invented known projects: `(display name, running session count, unread session count,
+/// available)`. One row with both counts and one with the unread count alone, so both of a
+/// switcher row's trailing arrangements are on the page (feature 039, FR-030).
+pub const PROJECTS: &[(&str, usize, usize, bool)] = &[
+    ("micold-ai-ide", 2, 1, true),
+    ("session-daemon-notes", 0, 2, true),
+    ("archived-experiment", 0, 0, false),
 ];
 
 /// The options a dropdown offers.
