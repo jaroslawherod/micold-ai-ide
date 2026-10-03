@@ -1,0 +1,17 @@
+--- private env ---
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/m7-c4/bus
+DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/user/1000/m7-c4/sysbus
+GSETTINGS_BACKEND=memory
+HOME=/tmp/claude-1000/m7c4/home
+LANG=C.UTF-8
+MICOLD_LOG=info
+PATH=/tmp/claude-1000/m7c4/fakebin:/usr/bin:/bin
+WAYLAND_DISPLAY=m7c4-wl
+XDG_CACHE_HOME=/tmp/claude-1000/m7c4/home/.cache
+XDG_CONFIG_HOME=/tmp/claude-1000/m7c4/home/.config
+XDG_DATA_HOME=/tmp/claude-1000/m7c4/home/.local/share
+XDG_RUNTIME_DIR=/run/user/1000/m7-c4
+XDG_SESSION_TYPE=wayland
+XDG_STATE_HOME=/tmp/claude-1000/m7c4/home/.local/state
+--- env OK ---
+daemon socket will be: /run/user/1000/m7-c4/micold/daemon.sock ; data dir: /tmp/claude-1000/m7c4/home/.local/share/micold-ai-ide

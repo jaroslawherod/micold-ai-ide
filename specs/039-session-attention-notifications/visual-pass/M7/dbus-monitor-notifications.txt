@@ -1,0 +1,298 @@
+signal time=1791061301.627312 sender=org.freedesktop.DBus -> destination=:1.127 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.127"
+signal time=1791061301.627331 sender=org.freedesktop.DBus -> destination=:1.127 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.127"
+method call time=1791061309.438222 sender=:1.148 -> destination=org.freedesktop.Notifications serial=258 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791061309.440087 sender=:1.12 -> destination=:1.0 serial=13 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 3076746
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.148"
+      )
+   ]
+   int32 -1
+signal time=1791061312.919317 sender=:1.0 -> destination=(null destination) serial=496 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "d77ce8ae-19f1-445e-b9bf-be9a5e967f0b"
+signal time=1791061312.919341 sender=:1.0 -> destination=(null destination) serial=497 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1791061312.919427 sender=:1.0 -> destination=(null destination) serial=498 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+signal time=1791061312.920304 sender=:1.12 -> destination=:1.148 serial=17 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "d77ce8ae-19f1-445e-b9bf-be9a5e967f0b"
+signal time=1791061312.920322 sender=:1.12 -> destination=:1.148 serial=18 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1791061312.920489 sender=:1.12 -> destination=:1.148 serial=19 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+method call time=1791061398.615191 sender=:1.148 -> destination=org.freedesktop.Notifications serial=604 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791061398.617503 sender=:1.12 -> destination=:1.0 serial=21 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 3076746
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.148"
+      )
+   ]
+   int32 -1
+signal time=1791061401.463201 sender=:1.0 -> destination=(null destination) serial=685 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 2
+   string "72a1ca06-904b-4341-b471-a89d456d8f94"
+signal time=1791061401.463224 sender=:1.0 -> destination=(null destination) serial=686 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 2
+   string "default"
+signal time=1791061401.463234 sender=:1.0 -> destination=(null destination) serial=687 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+signal time=1791061401.463776 sender=:1.12 -> destination=:1.148 serial=23 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 2
+   string "72a1ca06-904b-4341-b471-a89d456d8f94"
+signal time=1791061401.463942 sender=:1.12 -> destination=:1.148 serial=24 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 2
+   string "default"
+signal time=1791061401.464176 sender=:1.12 -> destination=:1.148 serial=25 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+signal time=1791061491.322779 sender=org.freedesktop.DBus -> destination=:1.428 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.428"
+signal time=1791061491.322794 sender=org.freedesktop.DBus -> destination=:1.428 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.428"
+method call time=1791061522.556337 sender=:1.148 -> destination=org.freedesktop.Notifications serial=913 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791061522.558702 sender=:1.12 -> destination=:1.0 serial=27 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 3076746
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.148"
+      )
+   ]
+   int32 -1
+signal time=1791061525.492956 sender=:1.0 -> destination=(null destination) serial=914 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 3
+   string "aed02952-82d9-45d0-9a6b-7826d7886f20"
+signal time=1791061525.492975 sender=:1.0 -> destination=(null destination) serial=915 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 3
+   string "default"
+signal time=1791061525.492983 sender=:1.0 -> destination=(null destination) serial=916 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 3
+   uint32 2
+signal time=1791061525.493570 sender=:1.12 -> destination=:1.148 serial=29 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 3
+   string "aed02952-82d9-45d0-9a6b-7826d7886f20"
+signal time=1791061525.493767 sender=:1.12 -> destination=:1.148 serial=30 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 3
+   string "default"
+signal time=1791061525.493972 sender=:1.12 -> destination=:1.148 serial=31 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 3
+   uint32 2
+method call time=1791061619.416414 sender=:1.148 -> destination=org.freedesktop.Notifications serial=1292 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791061619.418355 sender=:1.12 -> destination=:1.0 serial=33 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 3076746
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.148"
+      )
+   ]
+   int32 -1
+signal time=1791061679.256503 sender=:1.0 -> destination=(null destination) serial=1303 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 4
+   string "17d7458d-f47a-47cf-b072-09aa4300066f"
+signal time=1791061679.256536 sender=:1.0 -> destination=(null destination) serial=1304 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 4
+   string "default"
+signal time=1791061679.256637 sender=:1.0 -> destination=(null destination) serial=1305 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 4
+   uint32 2
+signal time=1791061679.257794 sender=:1.12 -> destination=:1.148 serial=35 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 4
+   string "17d7458d-f47a-47cf-b072-09aa4300066f"
+signal time=1791061679.258064 sender=:1.12 -> destination=:1.148 serial=36 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 4
+   string "default"
+signal time=1791061679.258264 sender=:1.12 -> destination=:1.148 serial=37 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 4
+   uint32 2
+method call time=1791061728.185730 sender=:1.971 -> destination=org.freedesktop.Notifications serial=330 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791061728.188538 sender=:1.12 -> destination=:1.0 serial=39 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 3090879
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.971"
+      )
+   ]
+   int32 -1
+signal time=1791061731.644774 sender=:1.0 -> destination=(null destination) serial=1522 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 5
+   string "8d0b7838-63e0-4d0f-8ac5-c74f15ce4cb8"
+signal time=1791061731.644799 sender=:1.0 -> destination=(null destination) serial=1523 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 5
+   string "default"
+signal time=1791061731.644825 sender=:1.0 -> destination=(null destination) serial=1524 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 5
+   uint32 2
+signal time=1791061731.645533 sender=:1.12 -> destination=:1.971 serial=43 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 5
+   string "8d0b7838-63e0-4d0f-8ac5-c74f15ce4cb8"
+signal time=1791061731.645611 sender=:1.12 -> destination=:1.971 serial=44 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 5
+   string "default"
+signal time=1791061731.645777 sender=:1.12 -> destination=:1.971 serial=45 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 5
+   uint32 2

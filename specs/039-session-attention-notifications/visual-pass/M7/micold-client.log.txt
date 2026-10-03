@@ -1,0 +1,2 @@
+attach: connected projects=2 sessions=0 active=/tmp/claude-1000/m7c4/projQ active_sessions=0
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m7c4/projQ active_sessions=2

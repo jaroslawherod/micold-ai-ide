@@ -336,9 +336,16 @@ handles (`iced_runtime` 0.14.0, `src/window.rs:463`). The client must name `wayl
   change. With no `activate` call: no focus change. So the focus is the token's doing.
 - *Not observed.* Any other compositor (KWin, sway and others decide for themselves; the fallback
   covers a refusal). A physical seat. A minimised window, a window on another workspace, the
-  overview. A token handed to another process: the probe raised the window that showed the
-  notification; `xdg_activation_v1` does not tie a token to the client that uses it, but that a
-  second window's process is focused with it is not yet seen.
+  overview.
+- *The client itself (quickstart §C4, 2026-10-03, `visual-pass/M7/`).* The same private GNOME Shell
+  50.1, the real client and session service, a real click. B9: with another application focused,
+  the client sent `activate` and received `wl_keyboard.enter` 1 ms later; it had focus, showed the
+  session, and asked for no attention. B11: the token went to the first client's process and the
+  second client's process sent `activate` with it; the second window had focus and showed the
+  session. So a token is good in another process. In B11 the client also asked for attention
+  410 ms later although the window was activated: the click was made in the shell's notification
+  list, whose popup kept the keyboard, so no focus event reached the window in time. Nothing
+  visible came of that request.
 - *What "done" means.* A compositor tells the client nothing about a token it declines (the made-up
   token gave no error). So the activation counts as done only when the request was sent without
   error **and** the window has keyboard focus a moment later; the window's own focus events say so.

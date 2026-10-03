@@ -1,0 +1,217 @@
+=== env.sh
+# sourced: defines the private environment and checks it. Aborts on any leak.
+P=/tmp/claude-1000/m7c4
+RT=/run/user/1000/m7-c4
+PHOME=$P/home
+PWL=m7c4-wl
+PENV=(env -i PATH=$P/fakebin:/usr/bin:/bin LANG=C.UTF-8 HOME=$PHOME XDG_RUNTIME_DIR=$RT
+  XDG_CONFIG_HOME=$PHOME/.config XDG_DATA_HOME=$PHOME/.local/share XDG_CACHE_HOME=$PHOME/.cache
+  XDG_STATE_HOME=$PHOME/.local/state
+  DBUS_SESSION_BUS_ADDRESS=unix:path=$RT/bus DBUS_SYSTEM_BUS_ADDRESS=unix:path=$RT/sysbus
+  GSETTINGS_BACKEND=memory XDG_SESSION_TYPE=wayland MICOLD_LOG=info)
+CENV=("${PENV[@]}" WAYLAND_DISPLAY=$PWL)
+check_env() {
+  local out; out=$("${PENV[@]}" "$@" env) || { echo "ABORT env"; return 1; }
+  echo "--- private env ---"; echo "$out" | sort
+  echo "$out" | grep -qx "DBUS_SESSION_BUS_ADDRESS=unix:path=$RT/bus" || { echo ABORT session bus; return 1; }
+  echo "$out" | grep -qx "DBUS_SYSTEM_BUS_ADDRESS=unix:path=$RT/sysbus" || { echo ABORT system bus; return 1; }
+  echo "$out" | grep -q "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus$" && { echo ABORT user bus; return 1; }
+  echo "$out" | grep -q "^DISPLAY=" && { echo ABORT DISPLAY set; return 1; }
+  echo "$out" | grep -qx "WAYLAND_DISPLAY=wayland-0" && { echo ABORT wayland-0; return 1; }
+  echo "$out" | grep -qx "XDG_RUNTIME_DIR=$RT" || { echo ABORT runtime dir; return 1; }
+  echo "$out" | grep -qx "HOME=$PHOME" || { echo ABORT home; return 1; }
+  for v in XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; do
+    echo "$out" | grep -q "^$v=$PHOME/" || { echo ABORT $v; return 1; }
+  done
+  echo "$out" | grep -qx "GSETTINGS_BACKEND=memory" || { echo ABORT gsettings; return 1; }
+  [ "$(stat -c %a "$RT")" = 700 ] || { echo ABORT rt mode; return 1; }
+  echo "--- env OK ---"
+}
+# full check for a client launch: wayland display private and its socket inside $RT
+check_client_env() {
+  check_env WAYLAND_DISPLAY=$PWL || return 1
+  [ "$PWL" != wayland-0 ] && [ -S "$RT/$PWL" ] || { echo ABORT wayland socket not in private dir; return 1; }
+  [ -S "$RT/bus" ] && [ -S "$RT/sysbus" ] || { echo ABORT buses; return 1; }
+  [ ! -e "$RT/micold/daemon.sock" ] || echo "note: private daemon socket already present (second client)"
+  echo "daemon socket will be: $RT/micold/daemon.sock ; data dir: $PHOME/.local/share/micold-ai-ide"
+}
+
+=== start.sh
+#!/bin/bash
+# starts private buses + headless gnome-shell + GNOME's notification helper; records pids in $P/pids
+set -u
+. "$(dirname "$0")/env.sh"
+[ -e $RT ] && { echo "ABORT: $RT exists (previous run not cleaned)"; exit 1; }
+mkdir -m 700 $RT; mkdir -p $PHOME/.config $PHOME/.local/share $PHOME/.cache $PHOME/.local/state $P/logs
+: > $P/pids
+for b in bus sysbus; do
+cat > $P/$b.conf <<XML
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig><type>session</type><listen>unix:path=$RT/$b</listen><auth>EXTERNAL</auth>
+<policy context="default"><allow send_destination="*" eavesdrop="true"/><allow eavesdrop="true"/><allow own="*"/></policy></busconfig>
+XML
+  "${PENV[@]}" setsid dbus-daemon --config-file=$P/$b.conf --nofork --nopidfile >$P/logs/$b.log 2>&1 &
+  echo $! >> $P/pids
+done
+sleep 1
+[ -S $RT/bus ] && [ -S $RT/sysbus ] || { echo ABORT buses not up; exit 1; }
+check_env || exit 1
+"${PENV[@]}" setsid gnome-shell --headless --no-x11 --wayland-display=$PWL --virtual-monitor 1280x800 --unsafe-mode >$P/logs/shell.log 2>&1 &
+echo $! >> $P/pids
+for i in $(seq 30); do [ -S $RT/$PWL ] && break; sleep 1; done
+[ -S $RT/$PWL ] && echo "shell up: $RT/$PWL" || { echo "shell socket missing"; tail -30 $P/logs/shell.log; exit 1; }
+"${PENV[@]}" setsid gjs -m /usr/share/gnome-shell/org.gnome.Shell.Notifications > $P/logs/notif-helper.log 2>&1 &
+echo $! >> $P/pids
+sleep 5
+# leave the overview, and press Shift once so the headless seat has a keyboard
+"${PENV[@]}" python3 $P/drive.py move:640,700 sleep:1.5 esc sleep:1.5 key:42
+cat $P/pids
+
+=== client.sh
+#!/bin/bash
+# client.sh <name>: launch one client in the private environment (after the checks)
+set -u
+. "$(dirname "$0")/env.sh"
+n=$1
+check_client_env > $P/logs/env-$n.log || { cat $P/logs/env-$n.log; exit 1; }
+"${CENV[@]}" WAYLAND_DEBUG=1 ${RENDER:-ICED_BACKEND=tiny-skia WGPU_BACKEND=gl LIBGL_ALWAYS_SOFTWARE=1} setsid $P/bin/micold-ai-ide > $P/logs/client-$n.log 2>&1 &
+echo $! >> $P/pids; echo "client $n pid $!"
+
+=== bg.sh
+#!/bin/bash
+# bg.sh <logname> <cmd...>: run a command in the private client env, detached, and record its real pid
+. "$(dirname "$0")/env.sh"
+n=$1; shift
+check_client_env > /dev/null || { echo ABORT env; exit 1; }
+"${CENV[@]}" setsid "$@" > $P/logs/$n.log 2>&1 &
+echo $! >> $P/pids; echo "$n pid $!"
+
+=== hook.sh
+#!/bin/bash
+# hook.sh <session-uuid> <event>: POST a lifecycle hook to OUR daemon's loopback receiver, as claude would
+. "$(dirname "$0")/env.sh"
+f=$PHOME/.local/share/micold-ai-ide/hooks/$(echo $1 | tr -d -).json
+url=$(python3 -c "import json,sys;d=json.load(open('$f'));h=d['hooks']['Stop'][0]['hooks'][0];print(h['url'])")
+tok=$(python3 -c "import json,sys;d=json.load(open('$f'));h=d['hooks']['Stop'][0]['hooks'][0];print(h['headers']['Authorization'])")
+port=${url#http://127.0.0.1:}; port=${port%%/*}
+ss -ltnp 2>/dev/null | grep ":$port " | grep -q micold-daemon || { echo "ABORT port $port is not a micold-daemon"; exit 1; }
+code=$(env -i PATH=/usr/bin:/bin curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: $tok" -H 'Content-Type: application/json' -d "{\"hook_event_name\":\"$2\",\"session_id\":\"$1\"}" "$url")
+echo "$(date +%s.%3N) [hook] $2 -> $1 http $code"
+
+=== b9.sh
+#!/bin/bash
+# b9.sh <tag>: D selected, a text editor takes the focus, C finishes a turn, the banner is clicked
+P=/tmp/claude-1000/m7c4; . $P/env.sh; C=60327d15-4090-4e57-98a2-c47516fb0c2d; t=$1
+"${PENV[@]}" python3 $P/drive.py click:330,300 sleep:1 > $P/logs/$t-prep.log 2>&1
+$P/bg.sh editor-$t gnome-text-editor; sleep 6
+wc -l < $P/logs/client-1.log > $P/logs/$t-wl-start
+"${PENV[@]}" python3 $P/drive.py drag:640,178,430,340 sleep:1 windows:before shot:$P/shots/$t-1-before.png "run:$P/hook.sh $C UserPromptSubmit" sleep:1.5 "run:$P/hook.sh $C Stop" sleep:2.5 shot:$P/shots/$t-2-banner.png windows:banner move:640,90 sleep:0.4 press sleep:0.6 shot:$P/shots/$t-3-after0.6.png windows:after0.6 sleep:5.4 windows:after6 shot:$P/shots/$t-4-after6.png > $P/logs/$t.log 2>&1
+grep -v "sleep\|remote desktop\|move:" $P/logs/$t.log | sed "s|$P/||g"
+n=$(cat $P/logs/$t-wl-start); tail -n +$n $P/logs/client-1.log | grep "xdg_activation\|wl_keyboard#[0-9]*\.\(enter\|leave\)\|capabilities\|xdg_toplevel#21.configure" | grep -v "global(" | cut -c1-140 > $P/logs/$t-wayland.txt; cat $P/logs/$t-wayland.txt
+for s in 1-before 2-banner 3-after0.6 4-after6; do convert $P/shots/$t-$s.png -resize 50% $P/shots/t-$s.png; done; convert $P/shots/t-1-before.png $P/shots/t-2-banner.png +append $P/shots/t-top.png; convert $P/shots/t-3-after0.6.png $P/shots/t-4-after6.png +append $P/shots/t-bot.png; convert $P/shots/t-top.png $P/shots/t-bot.png -append $P/shots/$t-grid.png
+
+=== stop.sh
+#!/bin/bash
+. "$(dirname "$0")/env.sh"
+# the daemon is spawned by the client and detaches: record any micold-daemon whose runtime dir is ours
+for p in $(pgrep -x micold-daemon); do
+  rt=$(tr '\0' '\n' < /proc/$p/environ 2>/dev/null | grep '^XDG_RUNTIME_DIR=' | cut -d= -f2)
+  [ "$rt" = "$RT" ] && { echo "own daemon $p"; kill -TERM $p; }
+done
+for p in $(tac $P/pids 2>/dev/null); do
+  if [ -d /proc/$p ]; then kill -TERM -- -$p 2>/dev/null || kill -TERM $p; fi
+done
+sleep 2
+for p in $(cat $P/pids 2>/dev/null); do [ -d /proc/$p ] && kill -KILL -- -$p 2>/dev/null; done
+sleep 1
+for p in $(cat $P/pids 2>/dev/null); do [ -d /proc/$p ] && echo "STILL ALIVE $p"; done
+rm -rf $RT; : > $P/pids
+echo "processes left with private runtime dir in env:"; grep -l "m7-c4" /proc/[0-9]*/environ 2>/dev/null | head
+
+=== mine.sh
+#!/bin/bash
+# lists pid+comm of every process whose XDG_RUNTIME_DIR is the private one (ours by construction)
+. "$(dirname "$0")/env.sh"
+for d in /proc/[0-9]*; do
+  rt=$( { tr "\0" "\n" < $d/environ; } 2>/dev/null | grep '^XDG_RUNTIME_DIR=' | cut -d= -f2)
+  [ "$rt" = "$RT" ] && echo "${d#/proc/} $(cat $d/comm)"
+done
+
+=== drive.py
+#!/usr/bin/python3
+# Real input through org.gnome.Mutter.RemoteDesktop on the PRIVATE bus, plus screenshots.
+import os, sys, time, re
+from gi.repository import Gio, GLib
+addr = os.environ.get('DBUS_SESSION_BUS_ADDRESS', '')
+assert 'm7-c4' in addr and '/run/user/1000/bus' != addr.split('=')[-1], 'private bus only'
+assert 'DISPLAY' not in os.environ
+bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+RD = 'org.gnome.Mutter.RemoteDesktop'
+def call(dest, path, iface, method, params=None):
+    return bus.call_sync(dest, path, iface, method, params, None, Gio.DBusCallFlags.NONE, 8000, None)
+def ts(): return '%.3f' % time.time()
+sess = call(RD, '/org/gnome/Mutter/RemoteDesktop', RD, 'CreateSession').unpack()[0]
+S = RD + '.Session'
+call(RD, sess, S, 'Start')
+print(ts(), '[drive] remote desktop session', sess, flush=True)
+def rel(dx, dy): call(RD, sess, S, 'NotifyPointerMotionRelative', GLib.Variant('(dd)', (float(dx), float(dy))))
+def moveto(x, y):
+    # pin to the bottom-right corner (the top-left one is the overview hot corner), then go to x,y
+    for _ in range(20): rel(200, 200); time.sleep(0.01)
+    n = 20
+    for _ in range(n): rel((x - 1279) / n, (y - 799) / n); time.sleep(0.01)
+for cmd in sys.argv[1:]:
+    op, _, arg = cmd.partition(':')
+    if op == 'esc':
+        for st in (True, False):
+            call(RD, sess, S, 'NotifyKeyboardKeycode', GLib.Variant('(ub)', (1, st))); time.sleep(0.05)
+    elif op == 'key':
+        for st in (True, False):
+            call(RD, sess, S, 'NotifyKeyboardKeycode', GLib.Variant('(ub)', (int(arg), st))); time.sleep(0.05)
+    elif op == 'sleep': time.sleep(float(arg))
+    elif op == 'wait':
+        f, pat = arg.split(',', 1); t0 = time.time()
+        while time.time() - t0 < 60:
+            try:
+                if re.search(pat, open(f).read()): break
+            except OSError: pass
+            time.sleep(0.2)
+        else: print(ts(), '[drive] TIMEOUT waiting', pat, flush=True); continue
+    elif op == 'shot':
+        r = call('org.gnome.Shell.Screenshot', '/org/gnome/Shell/Screenshot', 'org.gnome.Shell.Screenshot', 'Screenshot', GLib.Variant('(bbs)', (True, False, arg)))
+        print(ts(), '[drive] screenshot', r.unpack(), flush=True); continue
+    elif op == 'windows':
+        r = call('org.gnome.Shell', '/org/gnome/Shell/Introspect', 'org.gnome.Shell.Introspect', 'GetWindows').unpack()[0]
+        for wid, w in sorted(r.items()):
+            print(ts(), '[drive] window', arg, wid, 'app=%s pid=%s has-focus=%s hidden=%s' % (w.get('app-id'), w.get('pid'), w.get('has-focus'), w.get('is-hidden')), flush=True)
+        continue
+    elif op == 'run':
+        import subprocess
+        out = subprocess.run(arg, shell=True, capture_output=True, text=True).stdout.strip()
+        print(ts(), '[drive] run ->', out, flush=True); continue
+    elif op == 'drag':
+        x, y, dx, dy = map(float, arg.split(',')); moveto(x, y); time.sleep(0.3)
+        call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, True))); time.sleep(0.2)
+        for _ in range(25): rel(dx / 25, dy / 25); time.sleep(0.02)
+        time.sleep(0.2); call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, False)))
+    elif op == 'move':
+        x, y = map(float, arg.split(',')); moveto(x, y)
+    elif op == 'click':
+        x, y = map(float, arg.split(',')); moveto(x, y); time.sleep(0.3)
+        print(ts(), '[drive] button press at', x, y, flush=True)
+        call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, True))); time.sleep(0.08)
+        call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, False)))
+    elif op == 'press':
+        print(ts(), '[drive] button press (no move)', flush=True)
+        call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, True))); time.sleep(0.08)
+        call(RD, sess, S, 'NotifyPointerButton', GLib.Variant('(ib)', (272, False)))
+    print(ts(), '[drive]', cmd, 'done', flush=True)
+call(RD, sess, S, 'Stop')
+
+=== fakebin/claude
+#!/bin/sh
+# stand-in for the AI CLI: records its arguments, stays alive on its pty
+echo "$$ $*" >> /tmp/claude-1000/m7c4/logs/claude-args.log
+printf 'fake claude (visual-pass stand-in) args: %s\r\n' "$*"
+exec cat
+
