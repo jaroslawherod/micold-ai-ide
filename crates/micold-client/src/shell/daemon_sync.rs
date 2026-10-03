@@ -614,7 +614,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // client is already driving.
             app.stamper.seed_from_catalog(&catalog);
             adopt_mount_set(app, &catalog);
+            claim_attention_events(app, &catalog, false);
             app.daemon_catalog = Some(catalog);
+        }
+        // Feature 039 (contract N1): this window's claim was the one granted, so it raises the
+        // notification. A failure is logged once per run and changes nothing else (N4).
+        DaemonMsg::AttentionGranted { session, .. } => {
+            if let Some(line) = app.core.attention_granted(session, app.caps.notifier()) {
+                crate::log_line(&line);
+            }
         }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
         // back, or another window's (FR-011). Sync every service-owned field and re-source
@@ -1125,6 +1133,12 @@ pub fn on_connected(
     // FR-019). Here, inside the `Welcome` arm, so it follows `Welcome` and nothing precedes it.
     app.core.view_report_forgotten();
     report_window_view(app);
+    // After the view report, so the service knows what this window has in view before it is asked
+    // to grant anything (feature 039, research R3). The first snapshot of a connection is compared
+    // as one after a lost connection (FR-006); on the process's first, nothing is claimed (FR-005).
+    if let Some(catalog) = app.daemon_catalog.clone() {
+        claim_attention_events(app, &catalog, true);
+    }
     // Ask the authority whose settings were just adopted above which CLIs it can actually run
     // (feature 027, FR-023c), for the home directory and then for every row on screen (feature
     // 033, contract C1 A1). A reconnect is the one moment every answer can have changed without
@@ -1204,6 +1218,23 @@ pub fn report_window_view(app: &mut App) {
             focused: view.focused,
             in_view: view.in_view,
         });
+    }
+}
+
+/// Send the attention claims a catalog snapshot gives rise to (feature 039, research R3): every
+/// window sees the same change and claims it, and the service grants it to one. `welcome` is the
+/// snapshot a `Welcome` carried.
+fn claim_attention_events(app: &mut App, catalog: &CatalogSnapshot, welcome: bool) {
+    let claims = if welcome {
+        app.core.attention_on_welcome(catalog, app.window_focused)
+    } else {
+        app.core
+            .attention_on_catalog_changed(catalog, app.window_focused)
+    };
+    if let Some(daemon) = &app.daemon {
+        for claim in claims {
+            daemon.send(claim);
+        }
     }
 }
 

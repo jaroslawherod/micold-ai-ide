@@ -251,6 +251,36 @@ was held by them for 10 minutes and more at a time during this milestone.
 - refactor: `observe` rebuilds `seen` from the snapshot, which is what drops absent sessions (U27);
   `docs/daemon.md` names version 22.
 
+## Cycle 9 — U117 to U124, A1, A4, A7, A11, A13 — T022, T030, T033
+
+- tests: `crates/micold-client/tests/attention_notify.rs::{a_snapshot_with_a_higher_sequence_yields_one_claim (U117),
+  the_first_snapshot_yields_no_claim_and_nothing_is_shown (U118, A13),
+  without_a_grant_nothing_is_shown (U120),
+  a_grant_shows_one_notification_named_as_the_sidebar_names_the_session (U119, A1),
+  a_worktree_with_no_rename_is_named_by_its_derived_name (U119),
+  a_session_of_the_default_entry_is_named_by_the_default_entrys_name (A7),
+  a_session_of_a_project_that_is_not_the_active_one_is_named_by_its_own_project (U124, A4),
+  a_failure_to_show_is_logged_once_per_run_and_pushes_no_notice (U121, U122),
+  the_first_snapshot_after_a_reconnect_is_observed_as_a_reconnect (U123, A11)}` (new), driven through
+  the root (`State::attention_on_welcome`, `attention_on_catalog_changed`, `attention_granted`) with a
+  recording `DesktopNotifier`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test attention_notify > c9-red.log`, against
+  stubs (`snapshot_claims` returns no messages, `show_granted` calls nothing and returns `None`; the seam
+  types and the root methods existed so the tests compile)
+  ```
+  thread 'a_snapshot_with_a_higher_sequence_yields_one_claim' panicked at crates/micold-client/tests/attention_notify.rs:130:5:
+  test result: FAILED. 1 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- the one pass is U118/A13, which expects no claim and no `show`; it holds on the stub by construction,
+  and is kept because the green must keep it (the tracker adopts on the first snapshot).
+- green: the same command with `--test features_attention --test feature_registration_cost
+  --test no_concrete_implementations`: 9 + 5 + 7 + 14 pass.
+- wiring (T033), not covered by a test of its own: `daemon_sync::claim_attention_events` sends the
+  claims of the `Welcome` catalog (after the first view report) and of every `CatalogChanged`; the
+  `AttentionGranted` arm calls `attention_granted` with `Capabilities::notifier()` and writes the
+  returned line with `log_line`.
+- refactor: none beyond `cargo fmt`.
+
 ## Notes and deviations
 
 - Cycle 1's test file was written while the baseline run was building, so that run is both the
@@ -262,6 +292,12 @@ was held by them for 10 minutes and more at a time during this milestone.
   file), not in `tests/attention_view_report.rs` as T006 words it. Cycle 6's red and green ran in one
   build-lock run, the green applied by a script after the red.
 - Cycle 5: U78 is a characterization of existing behaviour, not a new one; U77 is killed by its red.
+- Cycle 9: the notifier is held in `Capabilities` (`shell/capabilities.rs`, the single assembly point
+  `no_concrete_implementations` guards), which `App` holds, rather than as a field of `App` itself.
+  The failure line is logged with the client's `log_line`, not `tracing::warn!`: the client has no
+  `tracing` dependency or subscriber. `AttentionTracker` gained `Clone, PartialEq, Eq` so that
+  `app::State` keeps its derives. `shell/desktop_notify/mod.rs` arrived here with only the
+  `Unsupported` notifier, so the wiring compiles; cycle 10 adds the Linux arm.
 
 ## Review A round 1 fixes (M1)
 
