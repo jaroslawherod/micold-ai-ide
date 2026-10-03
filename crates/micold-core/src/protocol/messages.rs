@@ -997,6 +997,9 @@ pub struct SessionSummary {
     /// Durable, unlike the three fields above: the service stores it with the session, so it
     /// never decreases while the catalog is intact.
     pub attention_seq: u64,
+    /// Whether the session has had an attention event since a window last reported it in view
+    /// (feature 039, W2). Durable, as `attention_seq` is, and the same for every window (FR-024).
+    pub unread: bool,
 }
 
 /// What a window reports having in view: the fields of [`ClientMsg::WindowView`], as the client
@@ -1393,12 +1396,36 @@ mod attention_wire_tests {
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: COUNTED,
+            unread: false,
         };
 
         assert_eq!(
             through_json(&summary).attention_seq,
             COUNTED,
             "the count of attention events reaches the window"
+        );
+    }
+
+    #[test]
+    fn a_session_summary_carries_unread() {
+        let summary = SessionSummary {
+            id: session(),
+            worktree_dir: None,
+            title: SessionLabel::Pending,
+            lifecycle: WireLifecycle::Running,
+            activity: ActivitySignal::AwaitingInput,
+            provider: AiCli::ClaudeCode,
+            input_serial: 0,
+            live_shells: Vec::new(),
+            attention_seq: 1,
+            // `true` is the value no default produces, so a field that never encoded cannot read
+            // back as it.
+            unread: true,
+        };
+
+        assert!(
+            through_json(&summary).unread,
+            "unread state reaches the window"
         );
     }
 }
