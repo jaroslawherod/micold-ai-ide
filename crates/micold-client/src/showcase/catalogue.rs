@@ -228,6 +228,18 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::Inline,
         render: sections::atoms::activity_badge,
     },
+    Entry {
+        module: "material/unread_mark.rs",
+        component: "UnreadMark",
+        variants: &[],
+        density: &[],
+        posed: &["an unread session row", "a read session row"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::atoms::unread_mark,
+    },
     // ---- controls: buttons, a checkbox, a chip, a field, a dropdown ------------------------
     Entry {
         module: "material/button.rs",
