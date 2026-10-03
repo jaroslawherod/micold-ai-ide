@@ -857,8 +857,14 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
     with `not yet implemented: T087`.
   - Linux passed, `attention_reveal` in the workspace step.
 - green: `47bb094f` (T086, T087; ledger D26, D27). The same clippy cross-check passed for both
-  targets on it. **The green run on CI is not recorded yet**: `47bb094f` is not pushed (ledger
-  *Handover*).
+  targets on it.
+- green, on CI, pull request #560 at `5ea63915` (run
+  <https://github.com/jaroslawherod/micold-ai-ide/actions/runs/37149131900>, every leg passed), step
+  "Test (desktop notification backends)", `cargo test -p micold-client --bin micold-ai-ide desktop_notify`:
+  - macOS (job 111279111541): `test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 330
+    filtered out`: the ten that passed in the red run and the seven new ones.
+  - Windows (job 111279111557): `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 322
+    filtered out`: the five and the four new ones.
 - **No test**: the calls into the system (`deliver` and `Notifier::show` on macOS, `Notifier::show`
   on Windows); quickstart §C1 and §C2 (M9).
 

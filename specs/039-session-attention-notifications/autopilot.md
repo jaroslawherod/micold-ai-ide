@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M6)
-- **Next step**: M6: PR #560 is ready; wait on CI and merge. Before or after the merge, record the green CI run of the macOS and Windows legs ("Test (desktop notification backends)") in cycle 31 of `tdd/cycle-log.md` (a docs-only commit; the next unit can carry it). Then M7.
+- **Phase**: 4-milestone (M7)
+- **Next step**: M7: the T091 probe runs (a fork, on a private bus and a private headless compositor). Then write its result into research R7 and take the path T091 gives for it.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
 | #559 | M5 | merged | 57f14c7278e2bdd95edcb1855a050d2f3abc5164 |
-| #560 | M6 | open | |
+| #560 | M6 | merged | 9bab6e4afd57dbcf1f0873268edb7ede700bb07a |
 
 ## Milestones
 
@@ -33,8 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | merged |
-| M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | in progress |
-| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
+| M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | merged |
+| M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | in progress |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
 
@@ -150,4 +150,3 @@ None.
 - M6, not verified on a machine: D26 (macOS: the response arrives while winit runs the main loop; the removal after one hour) and D27 (Windows: the handler fires after `Toast::show` dropped the toast, and for a toast in the notification centre). Check in quickstart §C1 and §C2 (M9).
 - M6 visual pass, not observed: no window manager is installed on the machine that ran it, so raise, keyboard focus and un-minimise were seen only as `_NET_ACTIVE_WINDOW` requests; whether winit's X11 `focus_window` is skipped for a window still minimised when `gain_focus` follows `minimize(id, false)` at once (`shell/window_raise.rs`) is open. The notification service and the click were a python stand-in, not a pointer click on a real banner. Check in quickstart §B9 and §C on a real desktop (M9).
 - M6, to tell the user: two rule breaks by the forked `visual-pass` skill in the M6 pass. (1) In its first run the stand-in notification service and the client ran on the user's real session bus for under a minute before it restarted on a private bus; it saw no notification logged but did not check whether the desktop's own service received one. (2) It committed its evidence itself (`77ae41b7`). Its leftovers (`~/vp/m6bin`, `~/.cache/vp161`, `~/.cache/vp163`) are deleted. The pass was not run again after the review A fixes.
-- M6: the green CI run of the macOS and Windows legs for T086 and T087 is not yet in cycle 31 of `tdd/cycle-log.md`.
