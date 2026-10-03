@@ -22,6 +22,10 @@ rust-version = "1.97"
 # over the session bus. Already in `Cargo.lock` (through `mundy`), whose default features are these two,
 # so it adds no crate; the client's blocking call needs `blocking-api`.
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+# Feature 039 (research R4): the desktop notification on macOS (`UNUserNotificationCenter`) and on
+# Windows (a WinRT toast). Each is a dependency of the client on its own system only.
+mac-usernotifications = "0.3.1"
+tauri-winrt-notification = "0.8.1"
 
 # --- render-free core deps (never iced / never PTY) ---
 serde = { version = "1.0.229", features = ["derive"] }

@@ -51,6 +51,12 @@ tokio = { workspace = true }
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
+# Feature 039: the desktop notification on Windows (`shell/desktop_notify/windows.rs`, research R4).
+tauri-winrt-notification = { workspace = true }
+
+# Feature 039: the desktop notification on macOS (`shell/desktop_notify/macos.rs`, research R4).
+[target.'cfg(target_os = "macos")'.dependencies]
+mac-usernotifications = { workspace = true }
 
 # Feature 039: the desktop notification on Linux (`shell/desktop_notify/linux.rs`, research R4).
 [target.'cfg(target_os = "linux")'.dependencies]
