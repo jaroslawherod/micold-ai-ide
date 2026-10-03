@@ -64,7 +64,8 @@ Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\Micold AI IDE"; Filename: "{app}\micold-ai-ide.exe"
+; feature 039 — Windows shows a toast only for an Application User Model ID that a Start-menu shortcut carries; the client passes the same string to the toast (`shell/desktop_notify/windows.rs`), and `crates/micold-core/tests/notification_registers_nothing.rs` holds the two together.
+Name: "{autoprograms}\Micold AI IDE"; Filename: "{app}\micold-ai-ide.exe"; AppUserModelID: "MicoldAiIde.Client"
 Name: "{autodesktop}\Micold AI IDE"; Filename: "{app}\micold-ai-ide.exe"; Tasks: desktopicon
 
 [Run]

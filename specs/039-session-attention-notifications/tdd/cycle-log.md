@@ -328,6 +328,42 @@ was held by them for 10 minutes and more at a time during this milestone.
   Quickstart §B covers it.
 - refactor: none beyond `cargo fmt`.
 
+## Cycle 11 — U46, U47, U48, U49 — T037, T042
+
+- tests: `crates/micold-core/tests/notification_registers_nothing.rs` (new):
+  `the_start_menu_shortcut_carries_the_id_the_client_uses` (U46),
+  `the_packaging_registers_no_activator_and_no_protocol_handler` (U47),
+  `the_client_reads_no_command_line_argument` (U48),
+  `the_daemon_depends_on_no_notification_crate` (U49), `the_scan_reads_what_it_claims_to` (guard)
+- red (U46), before the installer's line was added:
+  `packaging/windows/micold-ai-ide.iss:67: the Start-menu shortcut does not carry
+  'AppUserModelID: "MicoldAiIde.Client"'`
+- green: `AppUserModelID: "MicoldAiIde.Client"` on the `{autoprograms}` shortcut (T042), not on the
+  desktop one. `notification_registers_nothing`: 5 passed.
+- U47 to U49 hold against today's sources and were green when written. Each rule was broken once on
+  purpose and the break edited back out:
+  - U47: `<key>CFBundleURLTypes</key>` added to `packaging/macos/Info.plist.in` —
+    `packaging/macos/Info.plist.in:29: names 'CFBundleURLTypes'`
+  - U48: `let _ = std::env::args();` added to `crates/micold-client/src/main.rs` —
+    `crates/micold-client/src/main.rs:382: names 'env::args'`
+  - U49: `zbus = "5"` added to `crates/micold-daemon/Cargo.toml` —
+    `crates/micold-daemon/Cargo.toml:27: names 'zbus'`
+- refactor: none beyond `cargo fmt`.
+
+## Cycle 12 — U167, U168, U172, U173 — T122, T035, T036, T038, T039, T040, T041
+
+- tests: `crates/micold-client/src/shell/desktop_notify/macos.rs::tests` (8, U167 and U168) on the
+  pure `banner`, `notify_error` and `authorised`; `windows.rs::tests` (5, U172, U173, and the
+  client's half of U46) on the pure `toast_text` and `notify_error`. Neither needs a bundle or shows
+  a toast.
+- The two modules compile on their own system only, so the red phase cannot be seen on the
+  development host. T122 (the CI step `cargo test -p micold-client --bin micold-ai-ide
+  desktop_notify` on the macOS and Windows legs) and T038 (the two crates) were pushed with the
+  tests and with `todo!()` bodies, before T039 and T040. From Linux, `cargo check -p micold-client
+  --bin micold-ai-ide --tests` passed for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on that
+  tree, so the red is the tests' and not the compiler's.
+- red: RED_RUN_PLACEHOLDER
+
 ## Notes and deviations
 
 - Cycle 1's test file was written while the baseline run was building, so that run is both the
