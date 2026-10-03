@@ -512,9 +512,9 @@ impl State {
                         micold_core::project::canonicalize_best_effort(&project),
                         session,
                     );
-                    messages.push(Message::Project(
-                        crate::features::project::Msg::Reopened(project),
-                    ));
+                    messages.push(Message::Project(crate::features::project::Msg::Reopened(
+                        project,
+                    )));
                 }
                 RevealStep::Select(session) => messages.push(Message::Session(
                     crate::features::session::Msg::Selected(session),
