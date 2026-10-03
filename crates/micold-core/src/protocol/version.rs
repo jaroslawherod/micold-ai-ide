@@ -84,7 +84,10 @@
 /// request, and `pr_status_enabled` on `DaemonSettings` and `ClientMsg::SettingsSet`, the switch
 /// for pull request status. An older peer would fail to decode any of them. It developed against
 /// 20 while feature 039 took 21, so it is 22.
-pub const PROTOCOL_VERSION: u32 = 22;
+/// And 22 → 23 for feature 039's `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted`: a
+/// window claims an attention event and the service grants each one once. An older peer would
+/// fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 23;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

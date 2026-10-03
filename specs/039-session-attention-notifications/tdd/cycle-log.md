@@ -221,6 +221,36 @@ was held by them for 10 minutes and more at a time during this milestone.
 - mutants (all KILLED): `view_report` sends without comparing (`features_attention`), `connection_started` keeps what was sent (`features_attention`), `view_facts` with `main_area_taken: false` and with `selected: None` (`attention_view_report`), `reconcile_catalog` without the copy on the existing and on the restored branch (`catalog_sync`).
 - refactor: none.
 
+## Cycle 7 — U13, U18–U31 — T017, T018, T019, T024, T025, T026
+
+- tests: `crates/micold-core/src/attention.rs::tests::{u18_a_session_not_seen_before_is_adopted_with_no_claim_even_when_awaiting (U18),
+  u19_a_higher_sequence_in_live_phase_is_claimed (U19), u20_the_same_sequence_again_is_not_claimed (U20),
+  u21_reconnected_claims_a_change_into_awaiting_that_is_not_in_view (U21),
+  u22_reconnected_adopts_when_the_last_seen_activity_was_awaiting (U22),
+  u23_reconnected_does_not_claim_a_session_in_view (U23),
+  u24_reconnected_does_not_claim_a_session_no_longer_awaiting (U24),
+  u25_a_lower_sequence_is_adopted_with_no_claim (U25),
+  u26_ten_sessions_with_higher_sequences_give_ten_claims (U26),
+  u27_a_session_absent_from_the_snapshot_is_dropped (U27), u28_… to u31_… (U28–U31)}`,
+  `protocol::messages::attention_wire_tests::a_claim_and_its_grant_encode_and_decode (U13)`,
+  `tests/schema_hash.rs::{the_claim_and_the_grant_are_in_the_hashed_source,
+  the_wire_changes_for_this_feature_cost_exactly_one_version_bump (22)}` (new / constant moved)
+- red: `mise run test-core > red.log`, against stubs (`observe` returns no claims, `notification_text`
+  returns empty strings; the two message variants existed so the tests compile)
+  ```
+  thread 'attention::tests::u19_a_higher_sequence_in_live_phase_is_claimed' panicked at crates/micold-core/src/attention.rs:263:9:
+  test result: FAILED. 274 passed; 12 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- the 12 failures are U18–U22, U25–U31. U23 and U24 pass on the stub (they expect no claim), so each
+  was checked against the green by reading the rule: dropping `in_view != Some(id)` or `now.awaiting`
+  from the Reconnected arm fails them. U13 passed on the stub and `PROTOCOL_VERSION` was still 21:
+  the lib failures stopped cargo before the `schema_hash` binary ran, so the version-22 and hashed-source
+  assertions were not seen red.
+- green: `mise run test-core` — 286 lib tests pass, all other binaries pass; clippy `-D warnings` and
+  `cargo check --workspace --all-targets` clean (no exhaustive match needed an arm).
+- refactor: `observe` rebuilds `seen` from the snapshot, which is what drops absent sessions (U27);
+  `docs/daemon.md` names version 22.
+
 ## Notes and deviations
 
 - Cycle 1's test file was written while the baseline run was building, so that run is both the

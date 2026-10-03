@@ -223,6 +223,15 @@ pub enum ClientMsg {
         /// The session the window has in view. `Some` only with `focused: true`.
         in_view: Option<SessionId>,
     },
+    /// This window asks to be the one that raises the notification for a session's attention event
+    /// (feature 039, W1.3). Answered with [`DaemonMsg::AttentionGranted`] to this connection only,
+    /// or not at all when the event was granted already.
+    AttentionClaim {
+        /// The session that changed.
+        session: SessionId,
+        /// The `attention_seq` being claimed.
+        seq: u64,
+    },
 
     // --- Session commands (fire-and-forget) ---
     /// Append input bytes to a session's PTY. `serial` is monotonic per session and exists to
@@ -637,6 +646,14 @@ pub enum DaemonMsg {
         catalog: CatalogSnapshot,
         /// Current service settings.
         settings: DaemonSettings,
+    },
+    /// The claim for this session's event `seq` is granted to this window: it raises the
+    /// notification (feature 039, W1.3). Sent to the claimer only.
+    AttentionGranted {
+        /// The session that changed.
+        session: SessionId,
+        /// The granted `attention_seq`.
+        seq: u64,
     },
     /// Handshake or attach refused.
     Refused {
@@ -1300,7 +1317,8 @@ pub struct ExitStatus {
 
 #[cfg(test)]
 mod attention_wire_tests {
-    //! Feature 039, contract W1 (version 21): the view report and the attention sequence travel.
+    //! Feature 039, contract W1 (versions 21 and 22): the view report, the attention sequence, the
+    //! claim and the grant travel.
 
     use super::*;
 
@@ -1335,6 +1353,30 @@ mod attention_wire_tests {
                 "a view report is read as it was written"
             );
         }
+    }
+
+    #[test]
+    fn a_claim_and_its_grant_encode_and_decode() {
+        // U13. A sequence no default produces, so a field that never encoded cannot read back as it.
+        const SEQ: u64 = 5;
+        let claim = ClientMsg::AttentionClaim {
+            session: session(),
+            seq: SEQ,
+        };
+        let grant = DaemonMsg::AttentionGranted {
+            session: session(),
+            seq: SEQ,
+        };
+        assert_eq!(
+            through_json(&claim),
+            claim,
+            "a claim is read as it was written"
+        );
+        assert_eq!(
+            through_json(&grant),
+            grant,
+            "a grant is read as it was written"
+        );
     }
 
     #[test]
