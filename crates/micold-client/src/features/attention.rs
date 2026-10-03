@@ -145,6 +145,39 @@ pub fn after_activation(done: bool) -> Option<RaiseStep> {
     (!done).then_some(RaiseStep::RequestAttention)
 }
 
+/// Whether an activation request that went out was honoured (research R7).
+pub fn activation_done(gained_since_send: bool, last_focus: Option<bool>) -> bool {
+    gained_since_send || last_focus != Some(false)
+}
+
+/// What the window has seen of its keyboard focus, and the one activation request it is waiting
+/// to judge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivationWatch {
+    focused: bool,
+}
+
+impl Default for ActivationWatch {
+    fn default() -> Self {
+        Self { focused: true }
+    }
+}
+
+impl ActivationWatch {
+    /// The window gained or lost keyboard focus.
+    pub fn focus_changed(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
+    /// The activation request numbered `check` went out.
+    pub fn sent(&mut self, _check: u64) {}
+
+    /// The wait for the request numbered `check` is over: the step to take, if any.
+    pub fn settled(&mut self, _check: u64) -> Option<RaiseStep> {
+        after_activation(self.focused)
+    }
+}
+
 /// How long the compositor is given to move the keyboard focus after an activation request. It
 /// took 12 ms in the probe (research R7).
 pub const ACTIVATION_SETTLE: Duration = Duration::from_millis(400);
