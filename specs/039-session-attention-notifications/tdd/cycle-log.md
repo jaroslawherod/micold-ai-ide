@@ -884,3 +884,14 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
 - The tests and the fixes are in one commit: the red above is from the working tree, not from a commit.
 - **No test**: that `Reopened` and `Selected` are dispatched in order by the `Task` chain; that the
   listening thread ends with a broken connection.
+- **Mutants for the tests of cycles 27 and 29 that had no red** (run on `577992f0`, each restored
+  with `git checkout`); all four are killed:
+  - U65, `Views::reveal_target` with `.unwrap_or(sender + 1)`:
+    `with_no_holder_and_an_empty_focus_order_reveal_target_is_the_sender ... FAILED`.
+  - U163, `Shown::on_signal` taking any held entry for an id it does not hold:
+    `an_id_the_table_does_not_hold_is_no_event ... FAILED`.
+  - U164, `Shown::on_signal` without its `key == DEFAULT_ACTION` guard:
+    `another_action_key_is_no_event ... FAILED`.
+  - U164, `signal` reading `ActivationToken` as `ActionInvoked`:
+    `any_other_signal_and_a_signal_with_another_body_is_not_read ... FAILED`.
+  - Cycle 26's red is a compile error, recorded there as it is.
