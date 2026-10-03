@@ -5,9 +5,12 @@
 //! in view.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
+use crate::project::Availability;
 use crate::protocol::messages::{ActivitySignal, SessionSummary};
 use crate::session::SessionId;
+use crate::workspace::Workspace;
 
 /// What decides whether a window has a session in view.
 ///
@@ -137,6 +140,43 @@ pub fn notification_text(project: &str, worktree: &str, session: &str) -> Notifi
     NotificationText {
         title: format!("{session} is waiting for input"),
         body: format!("{project} \u{2014} {worktree}"),
+    }
+}
+
+/// What a window does with a request to show a session (research R6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reveal {
+    /// Make `project` the active one, when it is not, and select `session`.
+    Show {
+        /// The project that holds the session.
+        project: PathBuf,
+        /// The session to select.
+        session: SessionId,
+    },
+    /// The session cannot be shown: change no selection and say so (FR-013).
+    Unavailable,
+}
+
+/// What to do with a request to show `session` of `project` (FR-011, FR-013): [`Reveal::Show`]
+/// when the project is known, its folder is available and it holds the session; otherwise
+/// [`Reveal::Unavailable`] — the session was removed, or the project was forgotten or its folder
+/// is gone.
+pub fn resolve_reveal(workspace: &Workspace, project: &Path, session: SessionId) -> Reveal {
+    let known_and_available = workspace
+        .projects
+        .iter()
+        .any(|p| p.path == project && p.availability == Availability::Available);
+    let holds_the_session = workspace
+        .sessions
+        .get(project)
+        .is_some_and(|sessions| sessions.iter().any(|s| s.id == session));
+    if known_and_available && holds_the_session {
+        Reveal::Show {
+            project: project.to_path_buf(),
+            session,
+        }
+    } else {
+        Reveal::Unavailable
     }
 }
 
@@ -458,6 +498,89 @@ mod tests {
             text.body.replace("PROJ", "").replace("TREE", ""),
             " \u{2014} ",
             "the body is the project, the worktree and a dash only"
+        );
+    }
+
+    // --- resolve_reveal (U32–U35) ---
+
+    use crate::project::Project;
+    use crate::session::{Session, SessionLocation, TerminalMode};
+
+    const REPO: &str = "/repo";
+
+    /// A workspace holding `REPO` with `availability` and one session, `held`.
+    fn workspace_with(availability: Availability, held: SessionId) -> Workspace {
+        let mut workspace = Workspace::default();
+        workspace
+            .projects
+            .push(Project::new(PathBuf::from(REPO), true, availability));
+        workspace.sessions.insert(
+            PathBuf::from(REPO),
+            vec![Session::restored(
+                held,
+                SessionLocation::Default,
+                SessionLabel::Pending,
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            )],
+        );
+        workspace
+    }
+
+    #[test]
+    fn u32_a_known_available_project_holding_the_session_resolves_to_show() {
+        let workspace = workspace_with(Availability::Available, id(1));
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new(REPO), id(1)),
+            Reveal::Show {
+                project: PathBuf::from(REPO),
+                session: id(1),
+            }
+        );
+    }
+
+    #[test]
+    fn u33_a_session_that_was_removed_resolves_to_unavailable() {
+        let workspace = workspace_with(Availability::Available, id(1));
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new(REPO), id(2)),
+            Reveal::Unavailable,
+            "the project holds no session with that id"
+        );
+    }
+
+    #[test]
+    fn u33_a_session_held_by_another_project_resolves_to_unavailable() {
+        let mut workspace = workspace_with(Availability::Available, id(1));
+        workspace.projects.push(Project::new(
+            PathBuf::from("/other"),
+            true,
+            Availability::Available,
+        ));
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new("/other"), id(1)),
+            Reveal::Unavailable,
+            "the session is not one of the project the click names"
+        );
+    }
+
+    #[test]
+    fn u34_a_forgotten_project_resolves_to_unavailable() {
+        let mut workspace = workspace_with(Availability::Available, id(1));
+        // Forgotten, with its sessions still listed: the project list decides.
+        workspace.projects.clear();
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new(REPO), id(1)),
+            Reveal::Unavailable
+        );
+    }
+
+    #[test]
+    fn u35_a_project_whose_folder_is_unavailable_resolves_to_unavailable() {
+        let workspace = workspace_with(Availability::Unavailable, id(1));
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new(REPO), id(1)),
+            Reveal::Unavailable
         );
     }
 }
