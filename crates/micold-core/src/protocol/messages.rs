@@ -1317,7 +1317,7 @@ pub struct ExitStatus {
 
 #[cfg(test)]
 mod attention_wire_tests {
-    //! Feature 039, contract W1 (versions 21 and 22): the view report, the attention sequence, the
+    //! Feature 039, contract W1 (versions 21 and 23): the view report, the attention sequence, the
     //! claim and the grant travel.
 
     use super::*;

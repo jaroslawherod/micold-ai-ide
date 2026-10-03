@@ -182,7 +182,7 @@ crates/micold-core/src/
 ├── settings.rs                     # desktop_notifications
 └── protocol/
     ├── messages.rs                 # W1–W4
-    └── version.rs                  # 21 to 26, one per milestone that changes the wire
+    └── version.rs                  # 21 and 23 to 27, one per milestone that changes the wire
 
 crates/micold-daemon/src/
 ├── attention.rs                    # new: Views
@@ -221,13 +221,13 @@ the daemon; the client adds one feature module, one platform directory and one c
 | Milestone | Ships | Wire (planned) |
 |---|---|---|
 | M1 — story 1, slice A | View report and attention sequence in the service; nothing new on screen | 21 |
-| M2 — story 1, slice B | Claim and grant, the tracker with the reconnect rule, the notification text, the seam and the Linux backend; user guide: the notification | 22 |
+| M2 — story 1, slice B | Claim and grant, the tracker with the reconnect rule, the notification text, the seam and the Linux backend; user guide: the notification | 23 |
 | M3 — story 1, slice C | The macOS and Windows backends, the installer's application identity; user guide: the three systems and the system's permission | — |
-| M4 — story 2, slice A | `unread` in the service, `UnreadMark`, the row mark, its showcase entry; user guide: the mark, unread after reopening | 23 |
+| M4 — story 2, slice A | `unread` in the service, `UnreadMark`, the row mark, its showcase entry; user guide: the mark, unread after reopening | 24 |
 | M5 — story 2, slice B | The switcher counts and the button total, their showcase entries; user guide: the counts | — |
-| M6 — story 3, slice A | Click reporting in the three backends, reveal routing, raising the window, the unavailable notice; user guide: clicking, and that a notification of a closed window does not open the session | 24 |
-| M7 — story 3, slice B | Wayland: the probe first, then the token on the reveal pair and surface activation; user guide: the result | 25 |
-| M8 — story 4 | The setting and the switch; user guide: Settings | 26 |
+| M6 — story 3, slice A | Click reporting in the three backends, reveal routing, raising the window, the unavailable notice; user guide: clicking, and that a notification of a closed window does not open the session | 25 |
+| M7 — story 3, slice B | Wayland: the probe first, then the token on the reveal pair and surface activation; user guide: the result | 26 |
+| M8 — story 4 | The setting and the switch; user guide: Settings | 27 |
 | M9 — polish | Architecture and component-library docs, quickstart §B and §C recorded | — |
 
 The wire numbers are the planned ones. Each bump takes the next free number when its milestone is
