@@ -61,6 +61,11 @@ mac-usernotifications = { workspace = true }
 # Feature 039: the desktop notification on Linux (`shell/desktop_notify/linux.rs`, research R4).
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { workspace = true }
+# Feature 039: keyboard focus from a notification click on Wayland (`shell/window_raise.rs`,
+# research R7).
+wayland-client = { workspace = true }
+wayland-backend = { workspace = true }
+wayland-protocols = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

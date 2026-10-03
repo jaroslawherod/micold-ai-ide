@@ -627,7 +627,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         }
         // Feature 039 (contract N5): a notification for this session was clicked, in this window
         // or another, and the service chose this window to show it. The window comes to the
-        // front first; then the root's messages are dispatched in order — the ordinary project
+        // front first, with the activation token of the click when the service sent one (N6);
+        // then the root's messages are dispatched in order — the ordinary project
         // switch and the ordinary selection, or none for a session that is gone (the root has
         // pushed the notice). The folders are scanned first, as the switch itself scans them: a
         // project whose folder has gone since the last scan gets the notice, not a switch that
@@ -635,16 +636,13 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::RevealSession {
             project,
             session,
-            activation: _,
+            activation,
         } => {
             app.core.workspace.refresh_availability(app.caps.scanner());
-            follow_up = app
-                .core
-                .reveal_session(&project, session)
-                .into_iter()
-                .fold(crate::shell::window_raise::raise(), |done, message| {
-                    done.chain(Task::done(message))
-                });
+            follow_up = app.core.reveal_session(&project, session).into_iter().fold(
+                crate::shell::window_raise::raise(activation),
+                |done, message| done.chain(Task::done(message)),
+            );
         }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
         // back, or another window's (FR-011). Sync every service-owned field and re-source

@@ -999,3 +999,34 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
 - commit: tests `bbc46ffe`; green the `feat(039)` commit that carries this record.
 - **No test**: `Notifier::listen`, the thread that reads the bus, is unchanged: the match rule
   already took every signal of the interface.
+
+## Cycle 36 — T096, T100 (no behavior id)
+
+- tests: the decisions of T100 are the pure functions of `features/attention.rs`, tested in cycle 34
+  (`e89c9adf`, red there): `after_send(false)` is `Now(Some(RequestAttention))`
+  (`an_activation_request_that_was_not_sent_falls_back_at_once`), `after_send(true)` is
+  `CheckFocusAfter(ACTIVATION_SETTLE)` (`an_activation_request_that_was_sent_is_judged_by_the_focus_a_moment_later`),
+  and `after_activation` (U140). This cycle adds no test.
+- What "done" is (research R7): the request went out without error (`wayland::activate` answered
+  `Ok`) **and** `App::window_focused` is true 400 ms later. Not sent: `after_activation(false)` at
+  once. Sent: `ConnectionMsg::ActivationSettled` after the wait, answered by
+  `window_raise::settled(app.window_focused)`, which issues what `after_activation(focused)` gives.
+- green: `cargo test -p micold-client --test attention_reveal` -> 16 passed;
+  `--bin micold-ai-ide desktop_notify` -> 23 passed; `--bin micold-ai-ide a_reveal_for` -> 1 passed;
+  `--test feature_registration_cost` -> 7 passed; `cargo clippy -p micold-client --all-targets -- -D warnings`
+  clean; the same clippy for `--bin micold-ai-ide --tests` on `aarch64-apple-darwin` and
+  `x86_64-pc-windows-msvc` clean; `cargo fmt --all --check` clean.
+- T096: `wayland-client` 0.31, `wayland-backend` 0.3 (`client_system`), `wayland-protocols` 0.32
+  (`client`, `staging`), Linux only. `Cargo.lock` gains three lines in the client's dependency
+  list and no package.
+- glue: `shell/window_raise.rs` (`raise(activation)`, `settled(focused)`, `send_activation`, the
+  `wayland` module with the one `unsafe` block), the `RevealSession` arm of `shell/daemon_sync.rs`,
+  `ConnectionMsg::ActivationSettled` and its arm in `shell/connection.rs`. User guide: the Wayland
+  bullet of `docs/user-guide/worktrees-and-sessions.md`.
+- commit: the `feat(039)` commit that carries this record.
+- **No test**: the Wayland calls themselves — `Backend::from_foreign_display`, the registry, the
+  bind of `xdg_activation_v1`, `ObjectId::from_ptr`, `activate`, the roundtrip — and that the
+  compositor then gives the focus: only a display can show them. T091's probe showed the same
+  calls on GNOME Shell 50.1; there they ran off the UI thread on pointers kept aside, here inside
+  the `iced::window::run` closure on the UI thread, which is not yet seen at a display (quickstart,
+  M9). Also untested: that `raise` chains the steps in order, and the 400 ms timer.
