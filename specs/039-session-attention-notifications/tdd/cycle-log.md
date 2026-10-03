@@ -352,7 +352,7 @@ was held by them for 10 minutes and more at a time during this milestone.
 
 ## Cycle 12 — U167, U168, U172, U173 — T122, T035, T036, T038, T039, T040, T041
 
-- tests: `crates/micold-client/src/shell/desktop_notify/macos.rs::tests` (8, U167 and U168) on the
+- tests: `crates/micold-client/src/shell/desktop_notify/macos.rs::tests` (10, U167 and U168) on the
   pure `banner`, `notify_error`, `authorised` and `outcome`; `windows.rs::tests` (5, U172, U173, and the
   client's half of U46) on the pure `toast_text` and `notify_error`. Neither needs a bundle or shows
   a toast.
