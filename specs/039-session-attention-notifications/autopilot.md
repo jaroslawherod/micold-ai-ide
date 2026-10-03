@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M7)
-- **Next step**: M7: the T091 probe runs (a fork, on a private bus and a private headless compositor). Then write its result into research R7 and take the path T091 gives for it.
+- **Next step**: M7: the T091 probe succeeded (research R7; GNOME Shell 50.1 gives focus for the token), so the milestone takes wire number 26. T091, T092, T093, T097 are done (`3dd5f181`). Next: T094 to T096 and T098 to T100 in the client (a worker), then verify (scoped gate with review A, review B, full gate) and the PR.
 
 ## Pull requests
 

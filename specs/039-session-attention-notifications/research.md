@@ -338,13 +338,14 @@ handles (`iced_runtime` 0.14.0, `src/window.rs:463`). The client must name `wayl
   covers a refusal). A physical seat. A minimised window, a window on another workspace, the
   overview. A token handed to another process: the probe raised the window that showed the
   notification; `xdg_activation_v1` does not tie a token to the client that uses it, but that a
-  second window's process is focused with it is not yet seen. A compositor tells the client nothing
-  about a declined token, so `after_activation(done)` can only report that the request was sent
-  without error; whether to ask for attention as well is decided where `done` is computed (T100).
+  second window's process is focused with it is not yet seen.
+- *What "done" means.* A compositor tells the client nothing about a token it declines (the made-up
+  token gave no error). So the activation counts as done only when the request was sent without
+  error **and** the window has keyboard focus a moment later; the window's own focus events say so.
+  Otherwise `after_activation(false)` asks for attention (T100).
 
-**Risk.** Compositors other than GNOME Shell may decline the token. Then the window does not come
-forward, and it asks for attention only when the request could not be sent at all. X11, macOS and
-Windows do not depend on any of this.
+**Risk.** Compositors other than GNOME Shell may decline the token. The window then asks for
+attention, as it does with no token. X11, macOS and Windows do not depend on any of this.
 
 **Alternatives rejected.** *A second window, or restarting the window with a token.* Destroys the
 user's state. *Only `request_user_attention` everywhere.* Does not meet FR-011 where focus is
