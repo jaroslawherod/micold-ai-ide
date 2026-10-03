@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M5)
-- **Next step**: M5: the orchestrator waits on CI for the M5 PR and merges it; then M6.
+- **Phase**: 4-milestone (M6)
+- **Next step**: M6: red for T079/T080 on CI's macOS and Windows legs, then green (T086, T087), reviews A and B, quickstart §B9–B11a, full gate, PR.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
 | #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
-| #559 | M5 | open | |
+| #559 | M5 | merged | 57f14c7278e2bdd95edcb1855a050d2f3abc5164 |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
-| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | PR open |
-| M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
+| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | merged |
+| M6 | T073–T090, T120 | full | A click on the notification opens the session | | in progress |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
