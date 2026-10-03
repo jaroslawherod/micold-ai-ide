@@ -52,6 +52,10 @@ tokio = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
+# Feature 039: the desktop notification on Linux (`shell/desktop_notify/linux.rs`, research R4).
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 ttf-parser = { workspace = true }
