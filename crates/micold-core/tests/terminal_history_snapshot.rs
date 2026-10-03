@@ -3,7 +3,7 @@
 //! colour index stays inside its palette.
 
 use micold_core::terminal_history::{
-    HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, SnapshotError, StyleRun,
+    HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, SnapshotError, StyleFlags, StyleRun,
 };
 
 /// A line of `text` covered by default-style runs of the given lengths.
@@ -117,5 +117,71 @@ fn basic_color_accepts_0_and_15_and_rejects_16() {
             "Basic({}) is past the 16 basic colours",
             LAST + 1
         );
+    }
+}
+
+// U5: the dim variants exist for the first 8 basic colours only, numbered 0 to 7.
+#[test]
+fn dim_color_accepts_0_and_7_and_rejects_8() {
+    const FIRST: u8 = 0;
+    const LAST: u8 = 7;
+
+    for index in [FIRST, LAST] {
+        for style in as_fg_and_bg(HistoryColor::Dim(index)) {
+            assert_eq!(
+                styled(style).validate(),
+                Ok(()),
+                "Dim({index}) is the dim variant of one of the first 8 basic colours"
+            );
+        }
+    }
+    for style in as_fg_and_bg(HistoryColor::Dim(LAST + 1)) {
+        assert_eq!(
+            styled(style).validate(),
+            Err(SnapshotError::ColorOutOfRange { line: 0 }),
+            "Dim({}) is past the 8 colours that have a dim variant",
+            LAST + 1
+        );
+    }
+}
+
+// U6: an empty snapshot means there is nothing to show, so nothing is seeded (FR-010).
+#[test]
+fn an_empty_snapshot_is_empty_and_one_with_a_line_is_not() {
+    assert!(
+        HistorySnapshot::default().is_empty(),
+        "a snapshot without lines has nothing to show"
+    );
+    assert!(
+        !snapshot_of(line("", &[])).is_empty(),
+        "a snapshot with a line, even a blank one, has something to show"
+    );
+}
+
+// U7: each attribute set on a style is read back, and it sets no other attribute.
+#[test]
+fn style_flags_round_trip_each_attribute() {
+    let attributes = [
+        ("bold", StyleFlags::BOLD),
+        ("dim", StyleFlags::DIM),
+        ("italic", StyleFlags::ITALIC),
+        ("underline", StyleFlags::UNDERLINE),
+        ("inverse", StyleFlags::INVERSE),
+        ("strikethrough", StyleFlags::STRIKETHROUGH),
+        ("hidden", StyleFlags::HIDDEN),
+    ];
+
+    for (name, attribute) in attributes {
+        let flags = StyleFlags::default().with(attribute);
+
+        assert!(flags.contains(attribute), "{name} set is read back");
+        for (other_name, other) in attributes {
+            if other_name != name {
+                assert!(
+                    !flags.contains(other),
+                    "setting {name} does not set {other_name}"
+                );
+            }
+        }
     }
 }

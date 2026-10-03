@@ -53,11 +53,15 @@ pub enum HistoryColor {
 /// How many basic colours there are: `Basic` takes 0 to 15.
 pub const BASIC_COLORS: u8 = 16;
 
+/// How many basic colours have a dim variant: `Dim` takes 0 to 7.
+pub const DIM_COLORS: u8 = 8;
+
 impl HistoryColor {
-    /// Whether a `Basic` index names one of the 16 basic colours.
+    /// Whether a `Basic` or `Dim` index names a colour of its palette.
     fn is_in_palette(self) -> bool {
         match self {
             HistoryColor::Basic(index) => index < BASIC_COLORS,
+            HistoryColor::Dim(index) => index < DIM_COLORS,
             _ => true,
         }
     }
@@ -66,6 +70,27 @@ impl HistoryColor {
 /// The text attributes of a run, as a bit set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StyleFlags(u8);
+
+impl StyleFlags {
+    pub const BOLD: StyleFlags = StyleFlags(1 << 0);
+    pub const DIM: StyleFlags = StyleFlags(1 << 1);
+    pub const ITALIC: StyleFlags = StyleFlags(1 << 2);
+    pub const UNDERLINE: StyleFlags = StyleFlags(1 << 3);
+    pub const INVERSE: StyleFlags = StyleFlags(1 << 4);
+    pub const STRIKETHROUGH: StyleFlags = StyleFlags(1 << 5);
+    pub const HIDDEN: StyleFlags = StyleFlags(1 << 6);
+
+    /// These flags with `flag` set as well.
+    #[must_use]
+    pub fn with(self, flag: StyleFlags) -> StyleFlags {
+        StyleFlags(self.0 | flag.0)
+    }
+
+    /// Whether every flag of `flag` is set.
+    pub fn contains(self, flag: StyleFlags) -> bool {
+        self.0 & flag.0 == flag.0
+    }
+}
 
 /// Why a snapshot breaks the rules of data-model §1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,7 +111,10 @@ impl HistorySnapshot {
             if line.text.chars().any(char::is_control) {
                 return Err(SnapshotError::ControlCharacter { line: index });
             }
-            let mut colors = line.runs.iter().flat_map(|run| [run.style.fg, run.style.bg]);
+            let mut colors = line
+                .runs
+                .iter()
+                .flat_map(|run| [run.style.fg, run.style.bg]);
             if !colors.all(HistoryColor::is_in_palette) {
                 return Err(SnapshotError::ColorOutOfRange { line: index });
             }
@@ -96,5 +124,10 @@ impl HistorySnapshot {
             }
         }
         Ok(())
+    }
+
+    /// Whether there is nothing to show.
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
     }
 }
