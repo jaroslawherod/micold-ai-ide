@@ -64,10 +64,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 35953804ee7a306e42b54015fbe569f565edd41d:0968d0249d5a1695ed9b90604828c4a9a0d50822 | CLEAN: 2 MINOR (quickstart lacked the Windows check for R17; stop-request §4 did not say its capture differs from R4), both fixed |
 | Tasks and milestones | 1 | 9a648a7eb410053e3d47ff4a26fb18bd78ef628b:39df441005479f9a8f2f56a7f002863b8ab048a8 | CHANGES: 3 MAJOR (dropping the `Arc<PtySession>` is not the teardown while a window is attached; T062 not workable in `micold-core`; SC-005 measured in Polish), 3 MINOR; all 6 fixed (R4, DM §6, T007, T012, T061, T062, T065, T069, T074 to M5, T076, quickstart Part A) |
 | Tasks and milestones | 2 | 79ba8ae198dcd54098c8a807331f340d644a39d7:6f7cd710a25a78d730479ca0701bb5a566690468 | CLEAN: 2 MINOR (T061 named no exit code; T062 silent on an event that already exists), both fixed |
+| A M1 | 1 | origin/main...f08931d9 | CHANGES: 4 real (stop blocking the route loop; start during teardown misses history; respawn dropped carried before a failed swap; late insert after removal), 2 related cleanups (clone under lock, duplicated take); fixed with a `carrying` mark + condvar, `Arc` entries taken on success, stop via `spawn_blocking`; regression test added. 3 declined |
 
 ## Declined review findings
 
 - `speckit-analyze` F1 (MEDIUM): a stopped session's `carried` snapshot that is not on disk is not saved by the saver, the unwind or a turn-on. Declined: that is the design. Saving it later would bring back a history the setting deleted (story 2 scenario 7; contracts/setting.md, the off → on rows). data-model §6 now says so.
+
+- Review A M1 round 1, `teardown` polls `output_ended()` every 5 ms (cleanup): declined for now; it is bounded at 2 s, runs only at a process end, and a channel from the reader is a refactor of the reader's exit path outside M1's scope.
+- Review A M1 round 1, `history.rs` re-implements `framer::plain_row` (cleanup): declined; capture needs the cells with their styles, not only the text, so sharing the text helper would still leave the style walk separate. Not a correctness issue.
+- Review A M1 round 1, `HistorySnapshot::validate` has no production caller: declined; per data-model §1 it is the check of a loaded file (M2 load path, M6 damaged file), which is where it gets its caller.
 
 Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5, where its baseline exists) and F4 (the join is now an explicit teardown bounded at 2 s, R4).
 

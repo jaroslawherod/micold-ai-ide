@@ -856,3 +856,46 @@ fn u135_a_detached_grandchild_does_not_hold_the_stop_and_the_output_is_carried()
     assert!(at(&lines, "grand") < seps[0], "{lines:#?}");
     state.stop_session(id);
 }
+
+/// R4 (review A of M1): a start that comes while the stop is still tearing the process down waits
+/// for its history instead of starting without it. The detached grandchild holds the terminal
+/// open, so the stop's teardown runs to its bound and the start lands inside it.
+#[cfg(unix)]
+#[test]
+fn a_start_during_the_stops_teardown_still_shows_the_earlier_lines() {
+    fake_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = ai_session();
+    let id = session.id;
+    let state = service(project.path(), vec![session]);
+
+    script(project.path(), "print early\ndetach\nwait\n");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    history_showing(&state, id, "early");
+    let pid_file = project.path().join("grandchild.pid");
+    wait_file(&pid_file);
+
+    let stopping = Arc::clone(&state);
+    let stop = std::thread::spawn(move || stopping.stop_session(id));
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while state.primary_pty(id).is_some() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    script(project.path(), "print next\nwait\n");
+    let started = state.start_session(id, LaunchMode::Fresh);
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    let _ = std::process::Command::new("kill")
+        .args(["-9", pid.trim()])
+        .status();
+    assert!(stop.join().unwrap(), "the stop knew the session");
+    started.expect("starts again");
+
+    let lines = history_showing(&state, id, "next");
+    let seps = separators(&lines);
+    assert_eq!(seps.len(), 1, "one separator: {lines:#?}");
+    assert!(
+        at(&lines, "early") < seps[0],
+        "the earlier line above it: {lines:#?}"
+    );
+    state.stop_session(id);
+}

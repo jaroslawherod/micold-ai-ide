@@ -976,8 +976,11 @@ where
             } => state.resize_session(session, cols, rows),
             // Feature 034 (FR-009): the stop an agent's `stop_session` performs, so the two agree:
             // processes end, the record is `Idle`, and every window is told.
+            // Off the loop: the stop tears the process down and captures its history, which can
+            // wait up to `TEARDOWN_WAIT` for a process that holds its terminal open (041, R4).
             ClientMsg::SessionStop { session } => {
-                state.stop_session(session);
+                let st = Arc::clone(state);
+                let _ = tokio::task::spawn_blocking(move || st.stop_session(session)).await;
             }
             ClientMsg::SessionKill { session } => {
                 // Stop the session's processes and drop it from the live registry (kill happens

@@ -6,12 +6,12 @@
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 
 use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
@@ -71,6 +71,9 @@ pub struct DrainedSignals {
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
+    /// Signalled whenever a carry in `Inner.carrying` ends, so a start waiting for the history of
+    /// the process that just ended wakes (feature 041, R4).
+    carry_done: Condvar,
     next_id: AtomicU64,
     /// The connection count the idle rule reads (feature 028, data-model G1).
     ///
@@ -211,7 +214,12 @@ struct Inner {
     /// (feature 041, data-model §6, R4). Put at every end of such a process, by [`DaemonState::carry_history`];
     /// taken by the next start; dropped with the session in `remove_live_by_ids`. Filled whether
     /// saving is on or off (FR-015).
-    carried: HashMap<SessionId, micold_core::terminal_history::HistorySnapshot>,
+    carried: HashMap<SessionId, Arc<micold_core::terminal_history::HistorySnapshot>>,
+    /// The sessions whose ended process is being torn down and captured right now, off the lock.
+    /// Marked under the same lock that takes the process out, so a start in that gap waits for the
+    /// history instead of starting without it; cleared by `remove_live_by_ids`, so a capture that
+    /// ends after the session was removed is dropped instead of kept for nothing.
+    carrying: HashSet<SessionId>,
     /// Agents' destructive requests waiting for the user (feature 034, FR-014). Beside `clients`
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
@@ -482,6 +490,7 @@ impl DaemonState {
     /// Build the shared state around an adopted [`Catalog`].
     pub fn new(catalog: Catalog) -> Self {
         Self {
+            carry_done: Condvar::new(),
             inner: Mutex::new(Inner {
                 catalog,
                 clients: HashMap::new(),
@@ -497,6 +506,7 @@ impl DaemonState {
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
                 carried: HashMap::new(),
+                carrying: HashSet::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
@@ -1634,6 +1644,9 @@ impl DaemonState {
             let mut inner = self.lock();
             let removed = inner.sessions.remove(&session);
             let covered = Self::covered(&inner, session);
+            if covered && removed.is_some() {
+                inner.carrying.insert(session);
+            }
             let owner = inner.catalog.mark_session_stopped(session);
             (removed, owner, covered)
         };
@@ -2232,6 +2245,7 @@ impl DaemonState {
             inner.ended.remove(&id);
             // And the history its last process left (feature 041, R4).
             inner.carried.remove(&id);
+            inner.carrying.remove(&id);
         }
         removed
     }
@@ -2565,8 +2579,11 @@ impl DaemonState {
 
         let size = self.desired_size(id);
         let cwd = plan.cwd.clone();
+        let mut seeded = None;
         let spawned = match plan.mode {
             TerminalMode::AiCli => {
+                let (seed, from) = self.carried_seed(id);
+                seeded = from;
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
                     session_id: id.0,
@@ -2587,7 +2604,7 @@ impl DaemonState {
                     size,
                     &extra,
                     &self.terminal_colors,
-                    self.carried_seed(id),
+                    seed,
                 )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
@@ -2624,7 +2641,7 @@ impl DaemonState {
         {
             let mut inner = self.lock();
             inner.start_failures.remove(&id);
-            inner.carried.remove(&id);
+            Self::take_carried(&mut inner, id, seeded.as_ref());
         }
         self.register_session(session);
         // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
@@ -2903,6 +2920,9 @@ impl DaemonState {
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
         for (id, covered) in to_drop {
             let primary = if covered { self.primary_pty(id) } else { None };
+            if primary.is_some() {
+                self.lock().carrying.insert(id);
+            }
             self.remove_session(id);
             if let Some(pty) = primary {
                 self.carry_history(id, &pty);
@@ -3199,20 +3219,68 @@ impl DaemonState {
     /// Data-model §6's order at the end of a covered process, once its `Arc` is out of the state:
     /// tear it down off the state lock, so every byte it wrote has reached the `Term`, then capture
     /// the history and carry it to the session's next start. The caller replies or spawns after.
+    ///
+    /// The caller has marked `id` in `Inner.carrying` under the lock that took the process out. The
+    /// capture is kept only while that mark stands: a removal of the session meanwhile cleared it.
     fn carry_history(&self, id: SessionId, pty: &PtySession) {
         pty.teardown(TEARDOWN_WAIT);
-        let snapshot = history::capture(&pty.term().lock());
-        self.lock().carried.insert(id, snapshot);
+        let snapshot = Arc::new(history::capture(&pty.term().lock()));
+        let mut inner = self.lock();
+        if inner.carrying.remove(&id) {
+            inner.carried.insert(id, snapshot);
+        }
+        drop(inner);
+        self.carry_done.notify_all();
     }
 
-    /// The seed for `id`'s next start: the history its last process left, when it has lines.
-    fn carried_seed(&self, id: SessionId) -> Seed {
-        match self.lock().carried.get(&id) {
-            Some(snapshot) if !snapshot.is_empty() => Seed::History {
-                snapshot: snapshot.clone(),
-                at: chrono::Local::now(),
-            },
-            _ => Seed::None,
+    /// The seed for `id`'s next start: the history its last process left, when it has lines, and
+    /// the carried entry it came from, which the start takes only once it has succeeded.
+    ///
+    /// A start that comes while that process is still being captured waits for it, bounded by the
+    /// teardown's own bound and a margin for the capture.
+    fn carried_seed(
+        &self,
+        id: SessionId,
+    ) -> (
+        Seed,
+        Option<Arc<micold_core::terminal_history::HistorySnapshot>>,
+    ) {
+        let inner = self.lock();
+        let (inner, _) = self
+            .carry_done
+            .wait_timeout_while(inner, TEARDOWN_WAIT * 2, |inner| {
+                inner.carrying.contains(&id)
+            })
+            .expect("daemon state mutex poisoned");
+        let carried = inner.carried.get(&id).cloned();
+        drop(inner);
+        // The copy is made off the lock: a history can hold up to the scrollback limit of lines.
+        match carried {
+            Some(snapshot) if !snapshot.is_empty() => (
+                Seed::History {
+                    snapshot: (*snapshot).clone(),
+                    at: chrono::Local::now(),
+                },
+                Some(snapshot),
+            ),
+            _ => (Seed::None, None),
+        }
+    }
+
+    /// A start that succeeded with the history `seeded` takes it out of `carried`, unless a newer
+    /// history replaced it meanwhile.
+    fn take_carried(
+        inner: &mut Inner,
+        id: SessionId,
+        seeded: Option<&Arc<micold_core::terminal_history::HistorySnapshot>>,
+    ) {
+        let Some(seeded) = seeded else { return };
+        if inner
+            .carried
+            .get(&id)
+            .is_some_and(|carried| Arc::ptr_eq(carried, seeded))
+        {
+            inner.carried.remove(&id);
         }
     }
 
@@ -3240,12 +3308,16 @@ impl DaemonState {
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
         let size = self.desired_size(id);
+        let mut seeded = None;
         let spawned = match mode {
             TerminalMode::AiCli => {
                 // The dead process's history first, whole, then the seed from it (R4).
                 if let Some(old) = self.primary_pty(id) {
+                    self.lock().carrying.insert(id);
                     self.carry_history(id, &old);
                 }
+                let (seed, from) = self.carried_seed(id);
+                seeded = from;
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
@@ -3262,7 +3334,7 @@ impl DaemonState {
                     size,
                     &extra,
                     &self.terminal_colors,
-                    self.carried_seed(id),
+                    seed,
                 )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
@@ -3282,8 +3354,7 @@ impl DaemonState {
                 // crash-loop counter toward `Failed`. `now` is recorded as the respawn's reading:
                 // the tick resets the counter only once the process has outlived
                 // `RESTART_STABLE_AFTER` from it (`005` BUG-004).
-                self.lock().carried.remove(&id);
-                let _old = self.swap_primary(id, session, now);
+                let _old = self.swap_primary(id, session, now, seeded.as_ref());
             }
             Err(_) => {
                 // Couldn't even respawn. Leave the dead primary in the registry: the next tick sees
@@ -3302,6 +3373,7 @@ impl DaemonState {
         id: SessionId,
         session: PtySession,
         respawned_at: micold_core::clock::Uptime,
+        seeded: Option<&Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) -> Option<Proc> {
         let pty = Arc::new(session);
         let mut inner = self.lock();
@@ -3311,6 +3383,13 @@ impl DaemonState {
             return None;
         };
         live.respawned_at = Some(respawned_at);
+        // Swapped in, so the history it was seeded with is taken; a swap that found no session
+        // leaves it for the next start (R4).
+        Self::take_carried(&mut inner, id, seeded);
+        let live = inner
+            .sessions
+            .get_mut(&id)
+            .expect("the session was found above under this lock");
         let old = live
             .procs
             .insert(SessionProcess::Primary, new_proc(pty, id));
