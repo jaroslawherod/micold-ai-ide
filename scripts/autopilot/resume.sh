@@ -5,8 +5,8 @@
 # GitHub wins over the ledger: a PR the ledger calls merged that GitHub reports OPEN is a step to redo.
 #
 # Exit: 0 one unfinished ledger · 2 none · 3 several (each printed; ask the user) ·
-#       4 a finished ledger whose record PR never merged: prints its open PR or `none`
-#         (merge the PR, or dispatch the record unit to open it, then hand off).
+#       4 a ledger that reads done while the run's last PR (which sets done) never merged: prints
+#         its open PR or `none` (merge the PR, or dispatch a unit to open it, then hand off).
 set -uo pipefail
 
 b="$(git branch --show-current)"
@@ -42,10 +42,10 @@ esac
 
 git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
-  done_ledger="$(ledgers | grep -v '^specs/quick/' | head -1)"  # a quick run has no record PR
+  done_ledger="$(ledgers | grep -v '^specs/quick/' | head -1)"  # a quick run commits no ledger
   if [ -n "$done_ledger" ]; then
     pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number // empty' 2>/dev/null)"
-    echo "RECORD-PR-PENDING $done_ledger ${pr:-none}"
+    echo "FINAL-PR-PENDING $done_ledger ${pr:-none}"
     exit 4
   fi
 fi

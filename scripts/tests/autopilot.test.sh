@@ -153,12 +153,12 @@ check "resume reports several ledgers" 3 'BUG-1.autopilot.md' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/042-x/autopilot.md wt done; git add -A; git commit -qm "record the run"
-check "resume spots an unmerged record PR" 4 '^RECORD-PR-PENDING specs/042-x/autopilot.md none$' "$S/resume.sh"
+check "resume spots an unmerged final PR" 4 '^FINAL-PR-PENDING specs/042-x/autopilot.md none$' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/042-x/autopilot.md wt done; git add -A; git commit -qm "record the run"
 echo '[{"number": 470}]' > "$d/fx/pr-list.json"
-check "resume names the open record PR" 4 '^RECORD-PR-PENDING specs/042-x/autopilot.md 470$' "$S/resume.sh"
+check "resume names the open final PR" 4 '^FINAL-PR-PENDING specs/042-x/autopilot.md 470$' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 git switch -q main; ledger specs/042-x/autopilot.md wt 4-milestones; git add -A; git commit -qm ledger
@@ -176,7 +176,24 @@ check "resume finds a quick run's local ledger" 0 '^LEDGER specs/quick/2026-09-3
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/quick/2026-09-30-flaky.autopilot.md wt done; echo fix > fix.txt; git add -A; git commit -qm fix
-check "resume expects no record PR for a quick run" 2 '^NONE' "$S/resume.sh"
+check "resume expects no final PR for a quick run" 2 '^NONE' "$S/resume.sh"
+
+# --- scoped-gate.sh: picks the crates the branch changed, against the merge base -----------------
+d="$(new_repo)"; cd "$d/wt"; G="$S/scoped-gate.sh"
+check "scoped gate with nothing changed runs fmt only" 0 '^SCOPE none' "$G" --dry-run
+check "scoped gate with nothing changed builds nothing" 0 '^RUN cargo fmt --all -- --check$' "$G" --dry-run
+mkdir -p crates/micold-client/src crates/micold-daemon/src; echo x > crates/micold-client/src/a.rs; git add -A; git commit -qm client
+echo y > crates/micold-daemon/src/b.rs  # untracked counts too
+check "scoped gate names the changed crates" 0 '^SCOPE micold-client micold-daemon$' "$G" --dry-run
+check "scoped gate tests only the changed crates" 0 'cargo test -p micold-client -p micold-daemon' "$G" --dry-run
+check "scoped gate leaves the shell suites out" 0 '^ok$' bash -c "! '$G' --dry-run | grep -q test-scripts && echo ok"
+mkdir -p scripts; echo z > scripts/c.sh
+check "scoped gate runs the shell suites for scripts/" 0 '^RUN mise run test-scripts$' "$G" --dry-run
+mkdir -p crates/micold-core/src; echo w > crates/micold-core/src/c.rs
+check "scoped gate widens to the workspace for micold-core" 0 '^SCOPE workspace$' "$G" --dry-run
+check "scoped gate runs CI's clippy order for the workspace" 0 'clippy -p micold-core --all-targets.*' "$G" --dry-run
+check "scoped gate records no green gate" 0 '^ok$' bash -c "'$G' --dry-run >/dev/null; [ ! -e \"\$(git rev-parse --git-path autopilot-gate-ok)\" ] && echo ok"
+cd "$ROOT"
 
 # --- handoff-check.sh --------------------------------------------------------------------------
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"

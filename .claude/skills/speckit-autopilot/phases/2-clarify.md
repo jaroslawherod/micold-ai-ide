@@ -1,4 +1,4 @@
-# Phase 2: clarify round
+# Phase 2: clarify
 
 One round is one `speckit-clarify` run (at most 5 questions) and its triage. Triage each question:
 
@@ -8,5 +8,7 @@ One round is one `speckit-clarify` run (at most 5 questions) and its triage. Tri
   4 questions, each with a `(Recommended)` option and its evidence). When continued with the
   answers, record them as `_(decided by user)_` and apply them to spec.md.
 
-Commit the round (do not push; it ships in PR 2). Return `DONE`, with `CLEAN` as the first summary
-line when the run reported no critical ambiguities.
+After a round's answers are in spec.md, run the next round yourself, in this unit: do not return
+between rounds. Stop when a run reports no critical ambiguities, commit (do not push a PR; the
+rounds ship in the design PR), and return `DONE` with `CLEAN` as the first summary line. A fifth
+round is an escalation (category 5).

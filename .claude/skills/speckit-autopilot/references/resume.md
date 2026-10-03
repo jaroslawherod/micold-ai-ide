@@ -10,7 +10,7 @@ GitHub's state for each recorded PR.
 | 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
 | 2 | `NONE` | Say there is no run to resume here, and stop. |
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
-| 4 | `RECORD-PR-PENDING <ledger> <pr\|none>` | The run finished but its record PR never merged. Wait on and merge `<pr>`; on `none`, dispatch the record unit with the ledger's last PR and its merge SHA. Then run the handoff. |
+| 4 | `FINAL-PR-PENDING <ledger> <pr\|none>` | The ledger reads `done` but the run's last PR never merged. Wait on and merge `<pr>`, then run the handoff. On `none`, dispatch a unit of the ledger's last phase (close, or the bug's milestone) to open it. |
 
 **When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
 whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.

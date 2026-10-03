@@ -8,8 +8,8 @@ write. Give it paths, not a summary. It never edits.
 Before each round, run `scripts/autopilot/review-snapshot.sh` and record the `<tree>:<head>` it prints in the
 ledger's *Review rounds*. Nothing needs committing: the snapshot holds the working tree as is.
 Use `Agent` (`subagent_type: autopilot-reviewer`, which cannot edit; `general-purpose` when your agent
-types lack it). A full round (round 1, including review B's first
-pass): omit `model`. A scoped re-review (below): `model: "sonnet"`.
+types lack it). A full round (round 1): omit `model`. A scoped re-review (below), and review B in
+every round: `model: "sonnet"`.
 
 Prompt parts, in order. Parts 1 to 4 are the same text for every review of a kind, so the prompt
 cache reuses them across reviewers; everything that varies goes in part 5.
@@ -50,7 +50,8 @@ that part 5 gives the paths and the brief but not the full diff, and adds:
 - the fix diff: `scripts/autopilot/review-snapshot.sh diff <last round's snapshot>`.
 
 It confirms each fix holds and each declined reason stands, and applies every rubric item to the
-fix diff. It does not reopen what the last round passed. Review B always re-runs **Verify**.
+fix diff. It does not reopen what the last round passed. Review B always re-runs **Verify**. B runs again only
+after fixes to its own BLOCKER or MAJOR findings.
 
 Run a full round instead, with `model` omitted, when:
 

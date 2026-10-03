@@ -1,17 +1,17 @@
 # From a green local gate to merged on `main`
 
-Every PR (spec, design, each milestone, close, record) follows this path.
+Every PR (design, each milestone, close) follows this path.
 
 ## 1. Branch
 
 Use **this worktree's own branch** for every PR. Never create other branches.
 
 ```bash
-scripts/autopilot/branch-start.sh <previous-pr>   # refuses unless it is MERGED; omit for PR 1
+scripts/autopilot/branch-start.sh <previous-pr>   # refuses unless it is MERGED; omit before the first PR
 # prints RESET or REBASED <n>, or a refusal: DIRTY, DETACHED, PREVIOUS-PR-OPEN, CONFLICT, …
 ```
 
-Unmerged work from an earlier unit (clarify rounds, a BUG record) is rebased, not dropped. Otherwise
+Unmerged work from an earlier unit (spec, clarify rounds, plan, a BUG record) is rebased, not dropped. Otherwise
 start from `origin/main`. Rebase-merge rewrites SHAs, so stacking on old commits fails with
 `This branch can't be rebased`.
 
@@ -34,7 +34,13 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
   `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`.
 - **Changed how something looks?** Run the `visual-pass` skill. Save its evidence in the spec
   directory.
-- **Docs- and specs-only PRs** (PR 1, PR 2, a close PR that touches no code or tests, the record PR): run `mise run test-scripts` only.
+- **Specs-only PRs** (the design PR, a close PR that touches only `specs/`): run
+  `scripts/check-criteria-observables.sh specs/<NNN>-<slug>/spec.md` only. CI's docs job checks the
+  rest in about a minute. A PR that also touches `docs/`, `scripts/`, `.claude/` or `mise.toml`:
+  `mise run test-scripts`.
+- **Between review rounds of a milestone**, `scripts/autopilot/scoped-gate.sh` stands in for the
+  gate (detach it the same way). It checks only the changed crates and records nothing: the full
+  gate still runs once on the final tree.
 
 ## 3. Commit and push
 
@@ -48,11 +54,9 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 
 | PR | Title |
 |---|---|
-| Spec | `docs(NNN): specify <feature>` |
-| Design | `docs(NNN): clarify, plan and cut milestones for <feature>` |
+| Design | `docs(NNN): specify and plan <feature>` |
 | Milestone | `feat(NNN): <deliverable, imperative>`, or `fix(NNN): …` for a bug |
 | Close | `docs(NNN): close the spec` |
-| Record | `docs(NNN): record the autopilot run` (a bug appends ` (BUG-<k>)`; NNN is the owning spec) |
 
 Keep the prefix exact: release-please builds the changelog from it, and CI's user-guide gate fires
 on `feat`.
@@ -74,7 +78,7 @@ Milestone body:
 
 ## Agent review
 - Review A (code-review, high): <n findings, n fixed, n declined — one line each>
-- Review B (conformance): <verdict; Verify output excerpt>
+- Review B (conformance, sonnet): <verdict; Verify output excerpt>
 
 ## Local gate
 `mise run gate` passed at <sha>. <macOS cross-check / visual-pass lines, if run>

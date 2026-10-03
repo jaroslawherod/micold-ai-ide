@@ -31,9 +31,8 @@ flowchart TD
     TRIAGE -->|feature| SPEC["speckit-specify"]
     SPEC --> SREV["Reviewer: spec rubric"]
     SREV -->|"changes, max 3 rounds"| SPEC
-    SREV -->|clean| PR1["PR 1: spec"]
+    SREV -->|clean| CSCAN["speckit-clarify, rounds in one unit"]
 
-    PR1 --> CSCAN["speckit-clarify, one round"]
     CSCAN --> CQ{"Questions left?"}
     CQ -->|none| PLAN
     CQ -->|yes| CTRI{"Repo settles it?"}
@@ -42,20 +41,20 @@ flowchart TD
     CAUTO --> CSCAN
     H1 --> CSCAN
 
-    PLAN["speckit-plan"] --> PREV["Reviewer: plan rubric"]
+    PLAN["Plan unit: speckit-plan"] --> PREV["Reviewer: plan rubric"]
     PREV -->|changes| PLAN
-    PREV -->|clean| TASKS["speckit-tasks"]
+    PREV -->|clean| TASKS["Tasks unit: speckit-tasks"]
     TASKS --> MCUT["Cut milestones"]
     MCUT --> ANA["speckit-analyze, tasks review, checklists"]
     ANA -->|"changes, max 3 rounds"| PLAN
-    ANA -->|clean| PR2["PR 2: plan, tasks, milestones"]
+    ANA -->|clean| PR2["Design PR: spec, plan, tasks, milestones"]
 
     PR2 --> MLOOP[["Milestone loop, one PR per milestone"]]
     MLOOP --> MORE{"More milestones?"}
     MORE -->|yes| MLOOP
-    MORE -->|no| CLOSE["speckit-converge, tdd-verify, docguard-guard"]
+    MORE -->|no| CLOSE["tdd-verify; converge unless every review B was clean"]
     CLOSE -->|"unbuilt work: new milestone"| MLOOP
-    CLOSE -->|complete| FIN["Final PR: spec status Closed"]
+    CLOSE -->|complete| FIN["Close PR: spec Closed, ledger done"]
     FIN --> DONE(["WORK COMPLETE: worktree safe to remove"])
 
     ESC["ACTION REQUIRED: escalation"]
@@ -66,7 +65,7 @@ flowchart TD
     classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000
     classDef pr fill:#e0f0ff,stroke:#06c,color:#000
     class H1,ESC human
-    class PR1,PR2,FIN pr
+    class PR2,FIN pr
 ```
 
 ### One milestone
@@ -75,11 +74,13 @@ flowchart TD
 flowchart TD
     M0["Reset branch to origin/main after previous PR MERGED"] --> M1["speckit-implement: this milestone only"]
     M1 --> M2["tdd-run: red, green, refactor"]
-    M2 --> GATE["mise run gate (cfg changed: macOS check), review A: code-review high meanwhile"]
+    M2 --> GATE["scoped gate (changed crates), review A: code-review high meanwhile"]
     GATE -->|"red, or A finds a real issue: fix"| GATE
-    GATE -->|"green, A clean"| REV["Review B: conformance, and visual-pass if visuals changed"]
+    GATE -->|"green, A clean"| REV["Review B once, on Sonnet, and visual-pass if visuals changed"]
     REV -->|"real findings, max 3 rounds: fix"| GATE
-    REV -->|clean| PR["Update ledger, push, open PR"]
+    REV -->|clean| FULL["mise run gate once (cfg changed: macOS check)"]
+    FULL -->|"red: fix"| FULL
+    FULL -->|green| PR["Update ledger, push, open PR"]
     PR --> CI{"ci complete"}
     CI -->|"red in this flow's code"| FIX["systematic-debugging, fix, push"]
     FIX -->|"attempts 1 to 3"| CI
@@ -121,7 +122,7 @@ flowchart TD
     class MS pr
 ```
 
-A bug gets no spec PR, design PR or close phase. The BUG record, spec patch, regression test and fix
+A bug gets no design PR or close phase. The BUG record, spec patch, regression test and fix
 ship in one PR. If the fix is new behaviour, the bug becomes input to the feature flow.
 
 ## When you are asked
@@ -149,10 +150,10 @@ worktree's branch.
 
 - [SKILL.md](SKILL.md): the orchestrator: entry, resume, dispatch, CI and merge, ownership, handoff
 - [unit.md](unit.md): rules every unit follows: ledger, reviews, escalating, return format
-- [phases/](phases/): one file per phase unit (bug, spec, clarify, design, milestone, close, record)
+- [phases/](phases/): one file per phase unit (bug, spec, clarify, plan, tasks, milestone, close)
 - [references/escalation.md](references/escalation.md): when the human is asked
 - [references/milestones.md](references/milestones.md): cutting milestones
 - [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
 - [references/pr-and-merge.md](references/pr-and-merge.md): gate, PR, CI, merge
 - [templates/autopilot-ledger.md](templates/autopilot-ledger.md): the ledger
-- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one; `checkpoint.sh` is a unit's one probe at each checkpoint; `gate-hook.sh` is the PreToolUse hook that blocks another flow's PRs, `--delete-branch`, `--admin` and pushing code no green gate saw; `tests/` holds pressure scenarios that check the rules still hold after a skill change; `read-hook.sh` is the PreToolUse hook that blocks a whole `Read` of a long file or of the ledger; `hold.sh` waits for a gate, a subagent or a unit and comes back before the prompt cache expires; `context-hook.py` is the PostToolUse hook that tells a unit when its context passed 150k, and when it makes one read-only call after another; `measure-skill.sh` estimates the tokens each role loads; `issue.sh` claims the GitHub issue a run starts from and closes it at the handoff
+- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh` run the fixed sequences, one call each; `review-snapshot.sh` records what a review round saw, so the next round reviews only the fix diff; `brief.py` prints just the part of a spec artifact a step needs; `context.py` tells a unit when its context passed 150k, so it hands over to a fresh one; `checkpoint.sh` is a unit's one probe at each checkpoint; `scoped-gate.sh` checks the changed crates between review rounds; `gate-hook.sh` is the PreToolUse hook that blocks another flow's PRs, `--delete-branch`, `--admin` and pushing code no green gate saw; `tests/` holds pressure scenarios that check the rules still hold after a skill change; `read-hook.sh` is the PreToolUse hook that blocks a whole `Read` of a long file or of the ledger; `hold.sh` waits for a gate, a subagent or a unit and comes back before the prompt cache expires; `context-hook.py` is the PostToolUse hook that tells a unit when its context passed 150k, and when it makes one read-only call after another; `measure-skill.sh` estimates the tokens each role loads; `issue.sh` claims the GitHub issue a run starts from and closes it at the handoff
