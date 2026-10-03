@@ -84,10 +84,10 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U8 | At 80 columns `separator_line` is `── session restarted at 2026-10-02 14:31 +02:00 ──` | DM §7, FR-009, EC-Clock | example | PENDING | T004 |
-| U9 | At a width narrower than the full text the rules are dropped | DM §7, FR-009 | example | PENDING | T004 |
-| U10 | At a width narrower than the text without rules the text is cut to the width | DM §7, FR-009 | example | PENDING | T004 |
-| U11 | The separator is never wider than `columns` and never holds a line break, at widths 1, 2, the text width, and one below it | DM §7, FR-009 | example | PENDING | T004 |
+| U8 | At 80 columns `separator_line` is `── session restarted at 2026-10-02 14:31 +02:00 ──` | DM §7, FR-009, EC-Clock | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::at_80_columns_the_separator_is_the_full_text` |
+| U9 | At a width narrower than the full text the rules are dropped | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_full_text_the_rules_are_dropped` |
+| U10 | At a width narrower than the text without rules the text is cut to the width | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_text_without_rules_the_text_is_cut_to_the_width` |
+| U11 | The separator is never wider than `columns` and never holds a line break, at widths 1, 2, the text width, and one below it | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::the_separator_is_never_wider_than_the_columns_and_never_breaks_the_line` |
 | U12 | At 80 columns `notice_line` is `── earlier output could not be restored ──` | DM §7, FR-017 | example | PENDING | T049 |
 | U13 | `notice_line` drops the rules, then cuts, when narrower, and is one row | DM §7, FR-017 | example | PENDING | T049 |
 
