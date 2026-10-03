@@ -79,6 +79,11 @@ pub struct TreeItem<'a, M> {
     /// ordering is deliberate — the annotation is the identification, and it must not be what a
     /// narrow row drops.
     pub annotation: Option<(String, Rgb)>,
+    /// Whether the row is unread (feature 039, FR-018): the [`UnreadMark`](super::UnreadMark) at
+    /// the trailing edge, before any trailing action, and the label in the view's emphasised role
+    /// ([`TreeView::selected_label_role`]). The badge slot is not touched, and the row keeps its
+    /// height: the name is what a narrow row shortens (contract `unread-mark.md` U8).
+    pub unread: bool,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -105,8 +110,15 @@ impl<'a, M> TreeItem<'a, M> {
             row_tooltip: None,
             badge: None,
             annotation: None,
+            unread: false,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Mark the row unread (feature 039, FR-018). See [`TreeItem::unread`].
+    pub fn unread(mut self, unread: bool) -> Self {
+        self.unread = unread;
+        self
     }
 
     /// Set a small badge shown between the leading icon and the label (e.g. the activity dot).
@@ -245,6 +257,9 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
     /// A view-level setting rather than a per-item one on purpose: which row is selected is
     /// already `TreeItem::selected`, and a second per-row way to say the same thing is a second
     /// thing to keep in step.
+    ///
+    /// It is also the role of an **unread** row's label (feature 039, FR-018): the view's one
+    /// emphasised role. A view that does not set it draws an unread row's label as the others.
     pub fn selected_label_role(mut self, role: TypeRole) -> Self {
         self.selected_label_role = Some(role);
         self
@@ -353,8 +368,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // The selected row may carry a heavier role than its siblings (FR-003a). Only the
             // *label* takes it: the leading icon and the second line's indent stay on
             // `label_role`, so a row changing emphasis cannot shift the column its name starts in.
+            //
+            // An unread row takes the same role (feature 039, FR-018): the view has one emphasised
+            // role, and the unread mark is told from the activity badge by this weight as well as
+            // by its place in the row.
             let row_label_role = match selected_label_role {
-                Some(role) if item.selected => role,
+                Some(role) if item.selected || item.unread => role,
                 _ => label_role,
             };
             line = line.push(super::Ellipsized::at_role(
@@ -368,6 +387,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // what makes the *name* what a narrow row shortens.
             if let Some((text, tint)) = item.annotation {
                 line = line.push(super::Text::new(text, TypeRole::Caption, r).tint(tint));
+            }
+
+            // The unread mark (feature 039): at the trailing edge, before any trailing action. It
+            // has a fixed size and the name beside it is `Ellipsized`, so a narrow row shortens the
+            // name and keeps the mark.
+            if item.unread {
+                line = line.push(super::UnreadMark::new(r));
             }
 
             if let Some(custom) = item.trailing_custom {
@@ -557,5 +583,176 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         }
 
         col.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Feature 039 (contract `unread-mark.md`, hosts table and U8): a row with the unread mark.
+
+    use super::*;
+    use crate::ui::material::ActivityBadge;
+    use iced::advanced::layout;
+    use iced::advanced::widget::Tree;
+    use iced::{Rectangle, Size};
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens;
+
+    /// The sidebar's width at its narrowest, and a roomy one.
+    const NARROW: f32 = 160.0;
+    const ROOMY: f32 = 320.0;
+    /// The unread mark's diameter (U1).
+    const MARK: f32 = 8.0;
+    /// A trailing action of a size nothing else in a row has.
+    const ACTION: f32 = 21.0;
+    const TOLERANCE: f32 = 0.5;
+
+    const LONG_NAME: &str = "Refactor the session supervisor so that restarts keep their scrollback";
+
+    fn roles() -> Roles {
+        tokens::roles(ColorScheme::Light)
+    }
+
+    /// A session row as the sidebar builds it: depth 1, with the activity badge.
+    fn session_row(label: &str) -> TreeItem<'static, ()> {
+        TreeItem::new(1, label, roles().on_surface).badge(ActivityBadge::<()>::new(
+            ActivitySignal::AwaitingInput,
+            roles(),
+        ))
+    }
+
+    /// Lay one row out in a dense tree `width` wide, as the sidebar does, and return every node of
+    /// it in window coordinates, the row's own first.
+    fn laid_out(item: TreeItem<'static, ()>, width: f32) -> Vec<Rectangle> {
+        let mut element: Element<'static, ()> = TreeView::new(vec![item], roles())
+            .density(density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into();
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, Size::new(width, 600.0));
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+
+        fn walk(node: &layout::Node, origin: (f32, f32), out: &mut Vec<Rectangle>) {
+            let bounds = node.bounds();
+            let here = (origin.0 + bounds.x, origin.1 + bounds.y);
+            out.push(Rectangle {
+                x: here.0,
+                y: here.1,
+                ..bounds
+            });
+            for child in node.children() {
+                walk(child, here, out);
+            }
+        }
+        let mut nodes = Vec::new();
+        walk(&node.children()[0], (0.0, 0.0), &mut nodes);
+        nodes
+    }
+
+    fn sized(nodes: &[Rectangle], width: f32, height: f32) -> Vec<Rectangle> {
+        nodes
+            .iter()
+            .filter(|n| (n.width - width).abs() < TOLERANCE && (n.height - height).abs() < TOLERANCE)
+            .copied()
+            .collect()
+    }
+
+    /// The mark's box: the one 8dp square of the row.
+    fn mark(nodes: &[Rectangle]) -> Rectangle {
+        let marks = sized(nodes, MARK, MARK);
+        assert!(
+            !marks.is_empty(),
+            "the row has no 8dp mark; its nodes are {nodes:?}"
+        );
+        marks[0]
+    }
+
+    /// U149 (U8, FR-032).
+    #[test]
+    fn an_unread_row_has_the_height_of_a_read_one() {
+        for label in ["feat-short", LONG_NAME] {
+            let read = laid_out(session_row(label), NARROW)[0];
+            let unread = laid_out(session_row(label).unread(true), NARROW)[0];
+
+            assert!(
+                sized(&laid_out(session_row(label), NARROW), MARK, MARK).is_empty(),
+                "precondition: a read row has no mark"
+            );
+            assert_eq!(
+                unread.height, read.height,
+                "the mark and the emphasised label leave the row's height as it was ({label:?})"
+            );
+        }
+    }
+
+    /// U150 (U8, FR-018): the name gives way, the mark does not.
+    #[test]
+    fn a_long_label_is_cut_short_before_the_mark_is_pushed_out() {
+        let nodes = laid_out(session_row(LONG_NAME).unread(true), NARROW);
+        let (row, mark) = (nodes[0], mark(&nodes));
+
+        assert!(
+            mark.x + mark.width <= row.x + row.width + TOLERANCE,
+            "the mark is inside the row: it ends at {} and the row at {}",
+            mark.x + mark.width,
+            row.x + row.width
+        );
+    }
+
+    /// Hosts table: the mark is in the trailing slot, before any trailing action.
+    #[test]
+    fn the_mark_trails_the_label_and_comes_before_a_trailing_action() {
+        let action = || -> Element<'static, ()> {
+            Space::new()
+                .width(Length::Fixed(ACTION))
+                .height(Length::Fixed(ACTION))
+                .into()
+        };
+        let nodes = laid_out(
+            session_row("feat-short")
+                .unread(true)
+                .trailing_element(action()),
+            ROOMY,
+        );
+        let mark = mark(&nodes);
+        let action = sized(&nodes, ACTION, ACTION)[0];
+
+        assert!(
+            mark.x + mark.width <= action.x + TOLERANCE,
+            "the mark ends at {} and the trailing action starts at {}",
+            mark.x + mark.width,
+            action.x
+        );
+        assert!(
+            mark.x > ROOMY / 2.0,
+            "the mark is at the row's trailing edge, not beside the badge: x = {}",
+            mark.x
+        );
+    }
+
+    /// U151 (FR-018, FR-032): the activity badge is where it was, and the size it was.
+    #[test]
+    fn the_badge_slot_is_the_same_node_with_and_without_the_mark() {
+        let slot = TypeRole::SidebarTag.size();
+        let badge = |nodes: &[Rectangle]| -> Rectangle {
+            *nodes
+                .iter()
+                .find(|n| (n.width - slot).abs() < TOLERANCE)
+                .expect("the row has a badge slot")
+        };
+        for label in ["feat-short", LONG_NAME] {
+            let read = badge(&laid_out(session_row(label), NARROW));
+            let unread = badge(&laid_out(session_row(label).unread(true), NARROW));
+
+            assert_eq!(
+                unread, read,
+                "the activity badge's box is unchanged by the unread mark ({label:?})"
+            );
+        }
     }
 }

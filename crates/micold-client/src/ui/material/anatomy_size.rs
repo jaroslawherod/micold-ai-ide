@@ -465,6 +465,42 @@ fn a_one_line_tree_row_stands_at_its_densitys_height_at_every_depth() {
     }
 }
 
+/// Feature 039 (contract `unread-mark.md` U1): the unread mark is 8dp in both axes, whatever room
+/// it is given.
+#[test]
+fn an_unread_mark_is_8dp_in_both_axes() {
+    assert_anatomy_size(
+        "an unread mark",
+        || super::UnreadMark::new(roles()).into(),
+        Extent::Fixed(8.0),
+        Extent::Fixed(8.0),
+    );
+}
+
+/// Feature 039 (U8, FR-032): a row carrying the unread mark, with its label in the emphasised
+/// role, stands at the height §7.2 gives its density, as every one-line row does.
+#[test]
+fn an_unread_tree_row_stands_at_its_densitys_height() {
+    for step in [density::STANDARD, density::DENSE] {
+        assert_anatomy_size_at(
+            &format!("an unread tree row at density {step}"),
+            move || {
+                TreeView::new(
+                    vec![TreeItem::new(1, "feat-short", roles().on_surface).unread(true)],
+                    roles(),
+                )
+                .density(step)
+                .label_role(TypeRole::SidebarName)
+                .selected_label_role(TypeRole::SidebarSessionCurrent)
+                .into()
+            },
+            &[0],
+            Extent::Fill,
+            Extent::Fixed(density::height(density::LIST_ROW_BASE, step)),
+        );
+    }
+}
+
 /// A tagged row takes §7.2's **two-line** height, because it is a two-line list item (FR-026d).
 #[test]
 fn a_tagged_tree_row_stands_at_the_two_line_height() {
