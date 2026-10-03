@@ -13,3 +13,16 @@ Ran on Linux under Xvfb + lavapipe (not a real display), 2026-10-02, commit 86ea
 | B2 pick + marker | ok | b2-picked-light.png | pick `#14537` (two-line title): ticket and name filled; reopened list shows the picked marker beside its first line. Type stayed empty because its only label (`needs-triage`) maps to no type; picking `#14216` (label `bug`) filled Type `fix`, ticket and name (seen live) |
 | B2 showcase light | ok | b2-showcase-light.png | first row picked, second highlighted, dimmed `fix/logout-redirect`, `main`; at 1600 wide nothing wraps (the long title and the label list fit on one line each) |
 | B2 showcase dark | ok | b2-showcase-dark.png, b2-showcase-dark-420.png | same pose; at 420 wide the long title and the many-label row wrap, rows differ in height, nothing cut or overlapping (list opened upward) |
+
+# Feature 038, milestone M2: recorded visual pass (quickstart B3)
+
+Ran on Linux under Xvfb + lavapipe (not a real display), 2026-10-03, commit 93db16de. Client against `cli/cli` (1,038 open issues, 1,000 loaded), dark then light theme, window 1600x1400. Every press was captured (30 crops per theme) and read; the files below are a selection. Crops, not full frames.
+
+| Step | Result | Screenshot | Notes |
+|---|---|---|---|
+| Down x15 | ok | b3-{dark,light}-down-03.png, -down-08-scrolled.png, -down-15-bottom.png | each press moved the highlight to the next issue (#14563 ... #14550, 15 rows), none skipped or repeated; the highlighted row was wholly visible after every press, including the scrolled frames and the tall (two-line title) `#14550` at the bottom |
+| Up x15 | ok | b3-{dark,light}-up-03.png, -up-12.png, -up-15-top.png | back through the same rows; the highlight passes the picked row `#14526` (marker kept); the first row is reached on press 14 and press 15 stays on it (no wrap), wholly visible |
+| Enter on a tall row | ok | b3-{dark,light}-pre-pick.png, -picked.png | highlight on `#14467` (two-line title); Enter fills Type `feat`, Ticket `14467`, Name |
+| Reopen | ok | b3-{dark,light}-reopened.png | `#14467` carries the picked marker and is highlighted |
+
+Not covered: scroll smoothness. The list was already open at the start of each run; the dark run began with `#14526` picked from an earlier click.
