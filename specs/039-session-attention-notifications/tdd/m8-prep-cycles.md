@@ -119,7 +119,19 @@ Commands ran through `scripts/build-lock.sh`.
 - green, the same command: `14 passed`. `SETTINGS` in `ui/settings/environment.rs` claims
   `("desktop_notifications", "DesktopNotificationsToggled")`; the `Checkbox` with its `field_note`
   sits after the tool-server switch; `FieldId::SettingsDesktopNotifications` is new.
-- **No test**: how the row looks. Quickstart §B12 and the visual pass are the M8 unit's.
+- The row made two layout gates red in the first full gate run
+  (`cargo test -p micold-client --test layout_snapshot`: `45 passed; 2 failed`):
+  - `the_layout_matches_the_committed_fixture`: `settings-view-environment` has a new row.
+    Regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`; only that state's records changed.
+  - `containment::no_layout_node_escapes_its_parent`: `settings-view-environment: 0/0/0/1/0/1/0/0
+    escapes 0/0/0/1/0/1/0 by 20.2px past its bottom edge`. The page sits in the `Scrollable` of
+    `settings_view.rs` and is now 20.2dp taller than it at 1280x800, so the Environment page
+    scrolls at that size. `SETTINGS_PAGE_CONTENT` in `tests/gates/containment.rs` names the node,
+    and `the_recorded_settings_overflow_is_the_environment_page` proves it is the page (the
+    Appearance page at the same path fits).
+  - green, the same command: `48 passed`.
+- **No test**: how the row looks, and how the page looks now that it scrolls at 1280x800.
+  Quickstart §B12 and the visual pass are the M8 unit's.
 
 ## Cycle P7 — U17 (the number) — T102, T107
 
@@ -147,5 +159,11 @@ Green on the working tree that became the series (before the version commit):
 `-p micold-client --test features_settings desktop_notifications` `2 passed`;
 `-p micold-client --bin micold-ai-ide desktop_notifications` `4 passed`;
 `-p micold-client --test settings_sections` `14 passed`; `-p micold-core --all-targets` exit 0.
-The full gate on the series' HEAD is in the prep unit's return, not here: this file is committed
-before the version commit, which stays last.
+
+`mise run gate` on the whole series (the tree of the fixture commit with the version commit on
+top): exit 0, 406 test binaries and doctests `ok`, none failed. The series was then reordered so
+that the version commit is last; the tree did not change, and this paragraph is the only edit
+after the gate.
+
+No `cfg(target_os)` arm was changed, so no macOS or Windows cross-check was run. The new
+integration test carries the `cfg(windows)` arm of `idle_process` that `unread_state.rs` has.
