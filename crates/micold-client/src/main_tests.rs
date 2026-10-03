@@ -5626,11 +5626,11 @@ mod issue_source {
         assert_eq!(
             rows,
             vec![
-                "#7 Sidebar flickers on resize  ·  ui",
-                "#42 Crash when opening empty project  ·  bug",
-                "#108 Document the sandbox placement  ·  documentation",
+                "#7 Sidebar flickers on resize  ·  ghost  ·  ui",
+                "#42 Crash when opening empty project  ·  ghost  ·  bug",
+                "#108 Document the sandbox placement  ·  ghost  ·  documentation",
             ],
-            "each row shows number, title and labels, in the source's order"
+            "each row's match text is number, title, reporter and labels, in the source's order"
         );
         assert!(f.issue_list_open, "the list opens on arrival");
     }

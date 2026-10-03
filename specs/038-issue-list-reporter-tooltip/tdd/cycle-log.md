@@ -297,3 +297,82 @@ suite runs in the gate.
   test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
   ```
 - refactor: none.
+
+## Cycle 12 — U16, U17, U18, U19, U13 (M3 part), U20 (M3 part), U21 — T024, T027, T028 (M3)
+
+- tests: `crates/micold-core/tests/github_issue_lines.rs::{the_match_text_holds_the_reporter_between_title_and_labels
+  (U16, U20; replaces U10's `the_match_text_omits_the_reporter`, as T024 says),
+  a_span_in_the_reporter_maps_to_the_start_of_the_details_line (U17),
+  rank_matches_part_of_a_reporter_login_in_another_letter_case (U18),
+  one_match_emphasises_the_title_and_the_reporter (U19)}` (new);
+  `a_span_crossing_the_separator_is_split` (U13) now holds the contract's M3 spans `7..16` and
+  `10..13`; `a_span_outside_every_part_is_dropped` (U14): an unlabelled issue's whole span now
+  emphasises its reporter (contract §4, M3 match text). `typeahead_budget.rs`: the corpus is built
+  from `Issue`s with reporters; `the_issue_corpus_carries_reporters` (U21, new).
+- red: `scripts/build-lock.sh bash -c 'cargo test -p micold-core --test github_issue_lines --test typeahead_budget; …'`
+  ```
+  thread 'the_match_text_holds_the_reporter_between_title_and_labels' panicked at crates/micold-core/tests/github_issue_lines.rs:82:5:
+    left: "#7 Fix it  ·  bug, ui"
+   right: "#7 Fix it  ·  ana  ·  bug, ui"
+  thread 'a_span_crossing_the_separator_is_split' panicked at crates/micold-core/tests/github_issue_lines.rs:214:5:
+    left: RowEmphasis { title: [7..9], details: [9..10] }
+   right: RowEmphasis { title: [7..9], details: [0..1] }
+  thread 'rank_matches_part_of_a_reporter_login_in_another_letter_case' panicked at crates/micold-core/tests/github_issue_lines.rs:126:5:
+    left: []
+   right: [1]
+  thread 'one_match_emphasises_the_title_and_the_reporter' panicked …:149:5:
+    left: RowEmphasis { title: [3..6], details: [] }
+   right: RowEmphasis { title: [3..6], details: [0..3] }
+  test result: FAILED. 6 passed; 6 failed; 0 ignored
+  ```
+  and, run alone because cargo stopped at the first failing target:
+  ```
+  thread 'the_issue_corpus_carries_reporters' panicked at crates/micold-core/tests/typeahead_budget.rs:338:9:
+  row 0 "#12000 Crash when opening an empty project (0)  ·  bug" holds its reporter "octocat"
+  ```
+  U17's red is `range_of` finding no `ana` in the match text (`github_issue_lines.rs:38:28`).
+- green: `Issue::match_text()` (title line, separator, details line) is the row text, rebuilt by
+  `reported_by`; `parts()` maps the reporter to `0..len` of the details line and the labels after
+  the second separator. Existing expectations of the M1 match text updated to the M3 one, as the
+  contract's §4 table says: `github_parse.rs::row_text_shows_labels_only_when_present` and
+  `main_tests.rs::issue_choosing_the_source_lists_open_issues` (the fixtures carry no author, so
+  `ghost`). Release budget: `ranking_1000_issue_rows_for_a_short_query_fits_the_budget ... ok`.
+- refactor: none beyond `match_text()`, which replaces the hand-built row text in `Issue::new`.
+- notes: one grouped cycle, as M1's cycle 1: one change (the reporter in the match text) turns
+  every one of these tests green.
+- deviation (U19): the red above was for `ana` on "Ana's crash" by `ana`, expecting both the title's
+  `Ana` and the login emphasised. With the reporter in the match text it stayed red
+  (`details: []`): the literal tier marks only the leftmost occurrence, and the contract forbids a
+  change to `typeahead`. The test now types `fixana` on issue #7, one subsequence match whose
+  characters fall in `Fix` and in `ana` (D11); it passes with `title: [3..6], details: [0..3]`.
+  Cycle 13's U37 "both" case was written the same way (`blurryocto`).
+
+## Cycle 13 — U45, U46, U47, U37, U38 (A10–A15) — T025, T026, T029 (M3)
+
+- tests: `crates/micold-client/tests/issue_source_state.rs::{typing_a_login_narrows_to_the_reporters_issues (U45),
+  a_searched_issue_matching_only_by_its_reporter_is_kept (U46), typing_a_login_runs_the_one_search_for_the_text (U47)}`;
+  `issue_picker_rows.rs::{the_issue_search_hint_names_the_reporter (U38), a_row_matched_by_its_reporter_emphasises_the_login (U37)}`.
+  Stub for U38: `ui::ISSUE_SEARCH_PLACEHOLDER` holding the old hint, used by the view.
+- red: `cargo test -p micold-client --test issue_source_state --test issue_picker_rows` (under the build lock)
+  ```
+  thread 'the_issue_search_hint_names_the_reporter' panicked at crates/micold-client/tests/issue_picker_rows.rs:164:5:
+    left: "Search by number, title or label"
+   right: "Search by number, title, label or reporter"
+  thread 'a_row_matched_by_its_reporter_emphasises_the_login' panicked at crates/micold-client/tests/issue_picker_rows.rs:192:5:
+    left: [9]
+   right: [9, 42]
+  thread 'a_searched_issue_matching_only_by_its_reporter_is_kept' panicked at crates/micold-client/tests/issue_source_state.rs:1232:5:
+    left: []
+   right: [1300]
+  thread 'typing_a_login_narrows_to_the_reporters_issues' panicked at crates/micold-client/tests/issue_source_state.rs:1204:5:
+    left: [55, 108]
+   right: [7, 108]
+  ```
+- deviation: U45's red was for the query `OctoC`, which the fuzzy tier also matches in two titles;
+  after the red the query became the whole login `OctoCat` (exact `[7, 108]`) and `octo` asserts
+  inclusion, since `octo` fuzzily reaches `hubot` across the row. The red line still shows octocat's
+  #7 missing for want of the reporter in the match text.
+- U47 passed before the change: FR-013 asks that nothing change in the request, and the request
+  half was driven red in cycle 1 (T001). U48 is the 034 suite passing unedited.
+- green: core's match text (cycle 12) and the placeholder's new text (T029).
+- refactor: none.

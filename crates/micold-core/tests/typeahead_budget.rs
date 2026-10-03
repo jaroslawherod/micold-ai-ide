@@ -292,7 +292,10 @@ fn ci_runs_the_frame_budget_in_a_release_build() {
 /// it may hold 1,000 of them.
 const ISSUE_BUDGET_MS: f64 = 50.0;
 
-/// 1,000 issue rows shaped as `Issue::row_text` writes them: `#<number> <title>  ·  <labels>`.
+/// The logins the issue corpus is reported by.
+const REPORTERS: [&str; 4] = ["octocat", "hubot", "monalisa", "dependabot"];
+
+/// 1,000 issue rows as `Issue::row_text` writes them, reporters included (038 SC-002).
 fn issue_rows() -> Vec<String> {
     let titles = [
         "Crash when opening an empty project",
@@ -302,18 +305,41 @@ fn issue_rows() -> Vec<String> {
         "Settings save drops the environment-include timeout",
         "Branch picker ignores remote-only branches",
     ];
-    let labels = ["bug", "enhancement", "documentation, good first issue", ""];
+    let labels: [&[&str]; 4] = [
+        &["bug"],
+        &["enhancement"],
+        &["documentation", "good first issue"],
+        &[],
+    ];
     (0..micold_core::github::ISSUE_LOAD_CAP)
         .map(|i| {
-            let labels = labels[i % labels.len()];
-            let mut row = format!("#{} {} ({})", 12_000 - i, titles[i % titles.len()], i % 97);
-            if !labels.is_empty() {
-                row.push_str("  ·  ");
-                row.push_str(labels);
-            }
-            row
+            micold_core::github::Issue::new(
+                (12_000 - i) as u64,
+                format!("{} ({})", titles[i % titles.len()], i % 97),
+                labels[i % labels.len()]
+                    .iter()
+                    .map(|l| l.to_string())
+                    .collect(),
+                "2026-10-01T00:00:00Z".to_string(),
+            )
+            .reported_by(REPORTERS[i % REPORTERS.len()])
+            .row_text()
+            .to_string()
         })
         .collect()
+}
+
+/// U21 — the corpus the budget ranks carries each issue's reporter, as the picker's rows do.
+#[test]
+fn the_issue_corpus_carries_reporters() {
+    let rows = issue_rows();
+    for (i, row) in rows.iter().enumerate() {
+        let reporter = REPORTERS[i % REPORTERS.len()];
+        assert!(
+            row.contains(reporter),
+            "row {i} {row:?} holds its reporter {reporter:?}"
+        );
+    }
 }
 
 /// SC-003: ranking the 1,000 loaded issues for a 3-character query fits the 50 ms budget in a

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2 PR #543 open: wait for CI and merge.
+- **Next step**: M3: gate, reviews A and B, visual pass §B4, then open the M3 PR.
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #525 | Spec | merged | 96bcd68ea422d8f1e8a18dc2ea5f55808482eae1 |
 | #534 | Design: clarify, plan, tasks, milestones | merged | 3d52e83e32344ee4d09964b74b80d24499e3931b |
 | #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
-| #543 | M2: Up and Down keep the highlighted issue row wholly in view | open | |
+| #543 | M2: Up and Down keep the highlighted issue row wholly in view | merged | c0cc58c7860cc3f164084cb953097f5f204934eb |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
-| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | PR open |
-| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | drafted |
+| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
+| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | in progress |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
@@ -44,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | design | FR-007 calls scroll-into-view of the highlighted row existing behaviour. Is it? | No: no picker scrolls on a highlight move. The requirement stands; this feature builds it for the issue picker (an operation modelled on `ui/focus.rs`). | agent-resolved | research.md#R6; no scroll call in `material/picker.rs`, `material/typeahead.rs`, `cdk/picker.rs` |
 | D8 | design | The plan review found 2 MAJOR in its third counted round (all fixed in 6546cc15). Accept the plan as fixed and open PR 2, or review further? | Accept: the plan is accepted as fixed after round 3; no further plan review; open PR 2. | decided by user | Escalation (category 5), answered 2026-10-02, relayed by the orchestrator: option 1, "Accept, open PR 2 (Recommended)"; Tasks review rounds 1 and 2 read the post-fix plan, round 2 CLEAN |
 | D9 | M1 | T013 and contract §6 ask for a row highlighted and a row picked in the showcase's `Typeahead` entry, which is live and rests closed (021 BUG-001). Static open instance, or seed the live one? | Seed the live one: `Showcase::new` starts with the first sample row chosen and the second (long title) highlighted, so one press on the field shows the pose. The list still rests closed; a second, pinned-open instance would float its list over the page (the entry's own doc comment rules it out). `showcase_state.rs`'s "nothing is highlighted at rest" assertion now asserts the seeded pose. | agent-resolved | `showcase/state.rs` `Showcase::new`, `samples::SEARCH_PICKED_AT_REST`, `SEARCH_HIGHLIGHT_AT_REST`; `showcase_state` 35 passed, `showcase_determinism` 23 passed |
+| D10 | M3 | Does M2 review A F2 (re-ranking keeps the scroll offset, so the highlight can sit off screen) fit M3? | No. M3's tasks change only the match text, the hint and the guide; none touches the shell handlers for typing or loads, and FR-007/SC-007 cover Up and Down only. Chaining the scroll after a re-rank needs its own behaviour on the test list and a widened U43 (one caller today). Left in *Follow-ups not done*. | agent-resolved | tasks.md T024–T031; `rematch_issues` in `features/worktree_form.rs`; U43 `only_the_issue_highlight_move_chains_the_operation` |
+| D11 | M3 | US2 scenario 3 ("both matches are emphasised") vs the unchanged matcher, whose literal tier marks only the leftmost occurrence: is a title and a login both holding the typed text required to emphasise both? | No. FR-009 keeps the field's one matching rule and contract §4 rules out a change to `typeahead`; a title holding the text twice also gets one mark today. Both are emphasised when one match spans title and login (subsequence, e.g. `fixana`), which U19 and U37 hold. | agent-resolved | `typeahead.rs` `literal` ("at its leftmost occurrence"), contract issue-fields §4 "No change to `micold_core::typeahead`"; U19 red with `ana` stayed red after T028 |
 
 ## Review rounds
 
@@ -62,12 +64,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 code A | 1 | e97b12f17b7a00c35f77e36c60959da6da42774b:2b1bcfab678a314f083e173fe50e67ff02544528 | CHANGES: 1 BLOCKER (F1 U43's handler check missed rustfmt's trailing comma, so the test failed: fixed, `,)` folded to `)` before the match), 2 MINOR (F2 re-ranking keeps the scroll offset: follow-up; F3 guide promised a too-tall row wholly visible, `MARGIN` comment stale: both fixed) |
 | M2 code A | 2 (scoped, counted) | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN. `mise run gate` green on this tree (GATE_EXIT=0; `picker_highlight_into_view` 5 passed) |
 | M2 code B | 1 | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN, 1 MINOR (F1 cycle-log SHAs from before the rebase: fixed, 069165fa and f824aa41). Verify: `picker_highlight_into_view` 5 passed. Visual pass §B3: PASS, light and dark, 18 `evidence/b3-*.png`, `evidence/README.md` |
+| M3 code A | 1 | c0cc58c7860cc3f164084cb953097f5f204934eb:(working tree, uncommitted) | CLEAN of BLOCKER/MAJOR; 9 MINOR. Fixed: F6 stale `Debug` comment, F8 U38 source scan now whitespace-free, F9 guide line rewrapped. Declined: F1, F2, F3, F4, F5 (below). F7 (U45 `contains`) kept: deliberate, see cycle 13 |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A r1 | F1 [MAJOR] `tests/issue_picker_rows.rs:143` `vec![1..5]` trips `clippy::single_range_in_vec_init` | Not reproduced: `cargo clippy --workspace --all-targets -- -D warnings` exits 0 and `mise run gate` passed at e495fa70 with the line as it is. The reviewer had not run clippy (build lock held). |
+| M3 | A r1 | F1 the fuzzy tier now strings letters across title, separator and login (`octo` reaches `#42 … hubot`) | Contract §4 fixes the match text as the row's parts joined by the separator and rules out a change to `typeahead`; labels after the title already allowed the same cross-part subsequence before M3. |
+| M3 | A r1 | F2 `ghost` is in the match text, so `host` matches author-less issues | The row shows `ghost` as the reporter (FR-002) and the emphasis lands on it, so the match is visible; contract §3–4 build the match text from the shown lines. |
+| M3 | A r1 | F3 label matches rank by login length | Inherent in contract §4's order (reporter before labels); `rank`'s position key already depended on title length the same way. |
+| M3 | A r1 | F4 match text built twice per parsed issue; F5 `parts()` allocates the title line | Not defects: 1,000 extra short formats at load, and one allocation per shown row per view; the release budget test (U21) passes. |
 
 ## Handover
 
@@ -98,5 +105,6 @@ None.
   `rematch_issues` keeps or resets the highlight index while the list keeps its scroll offset, so
   the highlighted row can sit off screen until the next Up or Down. FR-007 and SC-007 cover moves
   with Up and Down only; chaining the operation after those handlers too (and widening U43) is a
-  small follow-up, best taken with M3, which changes how typing narrows the list.
+  small follow-up, best taken with M3, which changes how typing narrows the list. Not taken in M3
+  (D10).
 
