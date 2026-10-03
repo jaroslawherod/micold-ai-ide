@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M3)
-- **Next step**: M3: all tasks but T118 done and committed locally (red runs recorded; green not yet pushed). Scoped gate with review A, review B, full gate, push, `gh pr ready 557`, then T118 (record the three CI legs in `tdd/cycle-log.md`).
+- **Next step**: M3 continues from *Handover*: reviews A and B, full gate, push, `gh pr ready 557`, T118.
 
 ## Pull requests
 
@@ -85,7 +85,39 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3, PR #557 (draft, open). The pushed head is the red tree `022a6b60` plus a docs commit; the green
+commits (`9bc77d34` ledger, `ef1b1234` implementation) are local and NOT pushed: the push hook wants
+a full green gate on this tree first.
+
+Done and committed: T122, T035–T044 (all ticked). Red runs of the macOS and Windows legs are
+recorded in `tdd/cycle-log.md` (cycle 12); cycle 11 holds T037/T042. T043: clippy `-D warnings`
+passed from Linux for both `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on the green tree.
+
+Next steps, in order:
+1. Scoped gate: one was started detached on `ef1b1234`; its log was in the previous unit's
+   scratchpad and is not kept. Start `scripts/autopilot/scoped-gate.sh` again.
+2. Review A round 1 (`code-review` at `high` on `origin/main...HEAD`) and review B round 1
+   (conformance, sonnet). Neither has run. Snapshot taken for them:
+   `120011a8946d625842f17e8fab255a692ef76712:ef1b12340804d517ca494ddfc89d98e6431af8ec` (take a new
+   one if the tree changed). No visual pass: nothing visible changed on Linux.
+3. Full gate (`mise run gate`), plus the two cross-target checks again if `desktop_notify/` changed:
+   `scripts/build-lock.sh cargo clippy -p micold-client --bin micold-ai-ide --tests --target
+   aarch64-apple-darwin -- -D warnings`, and the same for `x86_64-pc-windows-msvc`.
+4. Push, replace the PR body with the milestone body (pr-and-merge.md §4; it must end `Refs #481`),
+   `gh pr ready 557`.
+5. T118: when CI's three `build + test` legs are green on the pushed head, record them (run URL,
+   the "Test (desktop notification backends)" step: macOS 10 passed, Windows 5 passed expected) in
+   `tdd/cycle-log.md` under cycle 12, tick T118, commit (docs only), push. Then return `DONE`.
+
+Notes for the next unit:
+- The disk filled during this unit (`No space left on device`); `SWEEP_ARGS='--maxsize 25GB' mise
+  run sweep` freed it, and another session then emptied `target-shared/`, so builds are cold.
+- `NotifyError::Unsupported` is no longer constructed by any backend after T041; the variant was
+  left in `features/attention.rs` (removing it is not a task of M3). `system()` has no arm for a
+  fourth operating system, by T041's wording.
+- Design choices a reviewer may ask about are written in cycle 12 of `tdd/cycle-log.md` (macOS
+  `blocking::send`, the 2 s wait on a thread of its own, authorisation asked on every `show`).
+- Quickstart §C1 and §C2 need a Mac and a Windows machine: not run; M9 records the passes.
 
 ## Open escalation
 
