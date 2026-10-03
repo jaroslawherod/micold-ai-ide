@@ -496,3 +496,48 @@ fn a_project_state_file_without_a_version_number_loads_its_records() {
         Some("Feature X")
     );
 }
+
+/// Feature 039, U175 (FR-008a, spec Edge Cases: stored unread state unreadable). Unread state is
+/// stored with the session, so a state file that cannot be parsed is the case this file already
+/// describes: the project loads with no sessions, so none is unread, and the load reports what it
+/// reported before.
+#[test]
+fn a_state_file_that_cannot_be_parsed_leaves_no_session_unread_and_reports_nothing_new() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    let mut unread = Session::restored(
+        SessionId::new(),
+        SessionLocation::Default,
+        SessionLabel::Named("A session".to_string()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    );
+    unread.unread = true;
+    ws.sessions.insert(PathBuf::from("/a"), vec![unread]);
+    store.save(&ws).unwrap();
+    std::fs::write(store.project_state_path(Path::new("/a")), "not json").unwrap();
+
+    let out = store.load();
+
+    assert_eq!(
+        out.status,
+        LoadStatus::Loaded,
+        "the load reports what it reports for any state file it cannot parse"
+    );
+    assert_eq!(
+        out.workspace.unreadable_projects.len(),
+        1,
+        "the project is unreadable, as it was before the feature, and nothing else is reported"
+    );
+    assert!(
+        out.workspace
+            .sessions
+            .values()
+            .flatten()
+            .all(|session| !session.unread),
+        "no session is unread when the stored unread state cannot be read"
+    );
+}

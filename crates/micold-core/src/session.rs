@@ -330,6 +330,10 @@ pub struct Session {
     /// input while no window had the session in view. Persisted, and only the session service
     /// adds to it; a session written before the feature reads `0`.
     pub attention_seq: u64,
+    /// Whether the session has had an attention event since a window last had it in view
+    /// (feature 039, FR-016). Persisted (FR-008a); only the session service sets and clears it,
+    /// and a session written before the feature reads `false`.
+    pub unread: bool,
 }
 
 impl Session {
@@ -352,6 +356,7 @@ impl Session {
             next_shell_id: 1,
             archived: false,
             attention_seq: 0,
+            unread: false,
         }
     }
 
@@ -382,6 +387,7 @@ impl Session {
             next_shell_id: 1,
             archived: false,
             attention_seq: 0,
+            unread: false,
         }
     }
 
