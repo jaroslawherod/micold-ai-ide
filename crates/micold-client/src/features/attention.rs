@@ -35,6 +35,7 @@ use micold_core::attention::{AttentionTracker, Phase, Reveal, ViewFacts};
 use micold_core::protocol::messages::{ClientMsg, SessionSummary, WindowView};
 use micold_core::session::{Session, SessionId};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// What this feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -102,23 +103,28 @@ pub enum NotifierEvent {
         project: PathBuf,
         /// The session the notification named.
         session: SessionId,
+        /// The Wayland activation token of the click, when the notification service sent one.
+        activation: Option<String>,
     },
 }
 
 /// One step of bringing the window to the front (contract, "Raising the window").
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RaiseStep {
     /// Restore the window when it is minimised.
     Unminimize,
     /// Take keyboard focus.
     Focus,
+    /// Wayland: ask the compositor for keyboard focus with this activation token.
+    Activate(String),
     /// Ask for the user's attention: the window cannot take focus itself.
     RequestAttention,
 }
 
 /// The steps that bring the window to the front (N6): restore it, then take keyboard focus. On
 /// Wayland a window cannot take focus itself, so it asks for the user's attention instead.
-pub fn raise_plan(wayland: bool) -> Vec<RaiseStep> {
+pub fn raise_plan(wayland: bool, activation: Option<String>) -> Vec<RaiseStep> {
+    let _ = activation;
     let front = if wayland {
         RaiseStep::RequestAttention
     } else {
@@ -127,11 +133,39 @@ pub fn raise_plan(wayland: bool) -> Vec<RaiseStep> {
     vec![RaiseStep::Unminimize, front]
 }
 
+/// What follows an [`RaiseStep::Activate`], given whether it was `done`.
+pub fn after_activation(done: bool) -> Option<RaiseStep> {
+    let _ = done;
+    None
+}
+
+/// How long the compositor is given to move the keyboard focus after an activation request.
+pub const ACTIVATION_SETTLE: Duration = Duration::from_millis(400);
+
+/// What the window does once it has tried to send an activation request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AfterSend {
+    /// The request went out: look at the window's keyboard focus after this long.
+    CheckFocusAfter(Duration),
+    /// The request did not go out: take this step, if any, at once.
+    Now(Option<RaiseStep>),
+}
+
+/// What follows the attempt to send an activation request, given whether it was `sent`.
+pub fn after_send(sent: bool) -> AfterSend {
+    let _ = sent;
+    AfterSend::Now(None)
+}
+
 /// What this window sends the service for `event` (research R6): the click is not handled here,
 /// because the window that holds the session's project may be another one (FR-012).
 pub fn notifier_event(event: NotifierEvent) -> ClientMsg {
     match event {
-        NotifierEvent::Activated { project, session } => ClientMsg::SessionReveal {
+        NotifierEvent::Activated {
+            project,
+            session,
+            activation: _,
+        } => ClientMsg::SessionReveal {
             project,
             session,
             activation: None,

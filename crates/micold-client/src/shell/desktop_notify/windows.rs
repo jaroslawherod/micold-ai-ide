@@ -57,6 +57,7 @@ pub(super) fn on_activated(
             let _ = events.unbounded_send(NotifierEvent::Activated {
                 project: project.clone(),
                 session,
+                activation: None,
             });
         }
         Ok(())
@@ -172,6 +173,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/repo"),
                 session,
+                activation: None,
             })
         );
         assert!(received.try_recv().is_err(), "one click, one event");
@@ -191,6 +193,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/other"),
                 session: second,
+                activation: None,
             })
         );
         assert_eq!(
@@ -198,6 +201,7 @@ mod tests {
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/repo"),
                 session: first,
+                activation: None,
             })
         );
     }
