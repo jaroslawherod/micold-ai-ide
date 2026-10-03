@@ -1164,8 +1164,25 @@ impl DaemonState {
 
     /// Record what window `id` has in view (feature 039, W1.1, W1.2). It replaces the window's
     /// last report and is forgotten when its connection ends.
+    ///
+    /// A report that brings an unread session into view reads it (W2.2, FR-019): `unread` is
+    /// cleared, every window is sent the catalog, and the supervisor tick writes the store, as it
+    /// does for an attention event ([`Self::persist_attention`]).
     pub fn set_window_view(&self, id: ClientId, view: WindowView) {
-        self.lock().views.set_view(id, view);
+        let read = {
+            let mut inner = self.lock();
+            // Reborrowed so the views and the catalog borrow apart.
+            let inner = &mut *inner;
+            let read = inner
+                .views
+                .set_view(id, view)
+                .is_some_and(|session| inner.catalog.mark_read(session));
+            inner.attention_unsaved |= read;
+            read
+        };
+        if read {
+            self.broadcast_catalog();
+        }
     }
 
     /// Answer window `id`'s claim of attention event `seq` of `session` (feature 039, W1.4): send

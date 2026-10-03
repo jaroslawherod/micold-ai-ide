@@ -667,7 +667,19 @@ impl Catalog {
             return false;
         };
         session.attention_seq += 1;
+        // W2.1, data-model A1: unread is set only here, together with the count.
+        session.unread = true;
         true
+    }
+
+    /// Session `id` came into view (feature 039, W2.2, FR-019): it is no longer unread. Returns
+    /// whether it was unread, so the caller broadcasts and writes only for a change.
+    ///
+    /// In memory only, as [`Self::mark_attention`] is, and for the same reason.
+    pub fn mark_read(&mut self, id: SessionId) -> bool {
+        self.workspace
+            .find_session_mut(id)
+            .is_some_and(|(_project, session)| std::mem::take(&mut session.unread))
     }
 
     /// Record a label derived from session `id`'s first turn, persisting — only if the session
@@ -1138,7 +1150,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: session.attention_seq,
-        unread: false,
+        unread: session.unread,
     }
 }
 
