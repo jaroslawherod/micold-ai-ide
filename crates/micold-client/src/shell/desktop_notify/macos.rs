@@ -1,16 +1,32 @@
 //! The macOS desktop notification: `UNUserNotificationCenter`, through `mac-usernotifications`
 //! (feature 039, research R4, contract "Backends").
 //!
-//! Four pure functions decide everything — [`banner`], the text handed to the system,
-//! [`authorised`], what the user's answer to the system's permission prompt means,
-//! [`notify_error`], what a failure of the crate means, and [`outcome`], what `show` reports when
-//! the system has not answered — and are tested without a bundle.
-//! [`Notifier::show`] is the calls, with no branch of its own. The click arrives with story 3.
+//! Pure functions decide everything — [`banner`], the text handed to the system, [`authorised`],
+//! what the user's answer to the system's permission prompt means, [`notify_error`], what a
+//! failure of the crate means, [`outcome`], what `show` reports when the system has not answered,
+//! [`prompt_is_open`], when a notification is not handed over at all, and [`Shown::on_response`],
+//! what the user's response to a notification means — and are tested without a bundle.
+//! [`Notifier::show`] and [`deliver`] are the calls.
+//!
+//! # The click
+//!
+//! The crate's delegate hands a response to whoever awaits the notification's handle. The thread
+//! that delivered a notification therefore stays, parked, until the user clicks or clears it or
+//! [`CLICK_WAIT`] passes; nothing wakes it in between. A notification without buttons and without
+//! a timeout would instead make the crate ask the notification centre every 500 ms whether it is
+//! still there, for as long as it is (`mac-usernotifications` 0.3.1, `src/send.rs`,
+//! `poll_until_dismissed`), so each one carries [`CLICK_WAIT`] as its timeout.
 
-use std::sync::mpsc;
-use std::time::Duration;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{mpsc, Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
-use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
+use mac_usernotifications::{NotificationHandle, NotificationResponse};
+use micold_client::features::attention::{
+    DesktopNotification, DesktopNotifier, NotifierEvent, NotifyError,
+};
+use micold_core::session::SessionId;
 
 /// How long [`Notifier::show`] waits for the system to answer. The request for authorisation is
 /// answered at once when the user has decided before, and only when they decide while the system's
@@ -21,6 +37,11 @@ const NOT_ALLOWED: &str = "notifications are not allowed for this application";
 /// The reason logged when the system has not answered within [`ANSWER_WAIT`].
 const NOT_ANSWERED: &str =
     "the system has not answered the request to allow notifications; it is shown once allowed";
+
+/// How long a notification can be clicked. When it passes, the crate takes the notification out
+/// of the notification centre and the thread that waited for the click ends; the session keeps
+/// its unread mark.
+const CLICK_WAIT: Duration = Duration::from_secs(60 * 60);
 
 /// What the system is asked to show: a title and the message under it. Both are plain text to
 /// `UNNotificationContent`, so names are passed as written.
@@ -68,35 +89,119 @@ pub(super) fn outcome(delivered: Option<Result<(), NotifyError>>) -> Result<(), 
     delivered.unwrap_or_else(|| Err(NotifyError::Refused(NOT_ANSWERED.to_string())))
 }
 
+/// Whether the system's permission prompt is taken to be open: a request for authorisation has
+/// gone unanswered for as long as `show` waits. A notification raised meanwhile is not handed to
+/// the system, so that the user's answer does not release a burst of banners, some of them for
+/// sessions that no longer wait.
+pub(super) fn prompt_is_open(unanswered_for: Option<Duration>) -> bool {
+    let _ = unanswered_for;
+    todo!("T086")
+}
+
+/// The notifications this window raised that can still be clicked: the request identifier of
+/// each, against what it named. It is this window's own (contract N9).
+#[derive(Debug, Default)]
+pub(super) struct Shown {
+    by_id: HashMap<String, (PathBuf, SessionId)>,
+}
+
+impl Shown {
+    /// The system took a notification for `session` of `project` under `id`.
+    pub(super) fn record(&mut self, id: String, project: PathBuf, session: SessionId) {
+        self.by_id.insert(id, (project, session));
+    }
+
+    /// What the user's `response` means for this window: the default action — a click on the
+    /// notification itself — of a notification it holds is a click on that notification's
+    /// session; a dismissal, a timeout, another action, or a notification it does not hold is
+    /// nothing (N9). Either way the notification is over, and is forgotten.
+    pub(super) fn on_response(&mut self, response: &NotificationResponse) -> Option<NotifierEvent> {
+        let _ = response;
+        todo!("T086")
+    }
+}
+
+/// When the request for authorisation that is still unanswered was made.
+type Asking = Arc<Mutex<Option<Instant>>>;
+
+fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Ask for authorisation, then hand `banner` to the notification centre. The first request shows
 /// the system's own prompt and returns when the user answers it; later ones return at once. A
 /// binary outside a bundle is refused by the crate's `check_bundle` before the system is touched.
-fn deliver(banner: Banner) -> Result<(), NotifyError> {
-    authorised(mac_usernotifications::blocking::request_auth())?;
-    mac_usernotifications::blocking::send(
+/// The handle is what the user's response arrives on.
+fn deliver(banner: Banner, asking: &Asking) -> Result<NotificationHandle, NotifyError> {
+    locked(asking).get_or_insert_with(Instant::now);
+    let answer = mac_usernotifications::blocking::request_auth();
+    *locked(asking) = None;
+    authorised(answer)?;
+    // Not `send_blocking`: it refuses with `MainThreadNotRunning` whenever the main run loop is
+    // busy at that instant. The request is completed on a queue of the system's, as
+    // `blocking::send` relies on too.
+    mac_usernotifications::block_on(
         mac_usernotifications::Notification::new()
             .title(banner.title)
-            .message(banner.message),
+            .message(banner.message)
+            .timeout(CLICK_WAIT)
+            .send(),
     )
-    .map(drop)
     .map_err(|error| notify_error(&error))
 }
 
-/// The macOS notifier. It keeps nothing: the notification centre is the system's.
-pub(super) struct Notifier;
+/// The macOS notifier: the channel a click is reported on, the notifications that can still be
+/// clicked, and whether the permission prompt is open. The notification centre is the system's.
+pub(super) struct Notifier {
+    events: super::Events,
+    shown: Arc<Mutex<Shown>>,
+    asking: Asking,
+}
+
+impl Notifier {
+    pub(super) fn new(events: super::Events) -> Self {
+        Self {
+            events,
+            shown: Arc::default(),
+            asking: Arc::default(),
+        }
+    }
+}
 
 impl DesktopNotifier for Notifier {
     /// Delivers on a thread of its own and waits [`ANSWER_WAIT`] for the result, so that an open
     /// permission prompt holds neither the caller nor, at exit, the runtime's blocking pool. The
-    /// thread ends when the system answers; the notification is shown then, if it was allowed.
+    /// thread then waits for the user's response and reports a click (module docs).
     fn show(&self, notification: DesktopNotification) -> Result<(), NotifyError> {
+        if prompt_is_open(locked(&self.asking).map(|since| since.elapsed())) {
+            return outcome(None);
+        }
         let banner = banner(&notification);
+        let DesktopNotification {
+            project, session, ..
+        } = notification;
+        let (events, shown, asking) = (
+            self.events.clone(),
+            Arc::clone(&self.shown),
+            Arc::clone(&self.asking),
+        );
         let (answer, answered) = mpsc::channel();
         std::thread::Builder::new()
             .name("desktop-notify".to_string())
             .spawn(move || {
+                let delivered = deliver(banner, &asking);
                 // Nobody listens once `show` has stopped waiting.
-                let _ = answer.send(deliver(banner));
+                let _ = answer.send(delivered.as_ref().map(drop).map_err(Clone::clone));
+                let Ok(handle) = delivered else { return };
+                locked(&shown).record(handle.notification_id().to_string(), project, session);
+                // An error is the crate's delegate gone: nobody can click any more.
+                let Ok(response) = mac_usernotifications::block_on(handle.response()) else {
+                    return;
+                };
+                if let Some(event) = locked(&shown).on_response(&response) {
+                    // The window is gone when nobody receives.
+                    let _ = events.unbounded_send(event);
+                }
             })
             .map_err(|error| NotifyError::Refused(error.to_string()))?;
         outcome(answered.recv_timeout(ANSWER_WAIT).ok())
@@ -106,9 +211,7 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mac_usernotifications::Error;
-    use micold_core::session::SessionId;
-    use std::path::PathBuf;
+    use mac_usernotifications::{CloseReason, Error};
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
         DesktopNotification {
@@ -217,5 +320,117 @@ mod tests {
             authorised(Err(Error::NotificationRejected)),
             Err(NotifyError::Refused(_))
         ));
+    }
+
+    /// The identifiers the system gives the two responses it makes up itself (Apple's
+    /// `UNNotificationDefaultActionIdentifier` and `UNNotificationDismissActionIdentifier`).
+    const DEFAULT_ACTION: &str = "com.apple.UNNotificationDefaultActionIdentifier";
+    const DISMISS_ACTION: &str = "com.apple.UNNotificationDismissActionIdentifier";
+
+    fn response(id: &str, action: &str, close_reason: Option<CloseReason>) -> NotificationResponse {
+        NotificationResponse {
+            notification_id: id.to_string(),
+            action_identifier: action.to_string(),
+            reply_text: None,
+            close_reason,
+        }
+    }
+
+    fn shown_for(id: &str, session: SessionId) -> Shown {
+        let mut shown = Shown::default();
+        shown.record(id.to_string(), PathBuf::from("/repo"), session);
+        shown
+    }
+
+    #[test]
+    fn the_default_action_of_a_notification_in_the_table_is_an_activation_of_its_session() {
+        // U169 (FR-011, N5): a click on the notification itself.
+        let session = SessionId::new();
+        let other = SessionId::new();
+        let mut shown = shown_for("a", session);
+        shown.record("b".to_string(), PathBuf::from("/other"), other);
+        assert_eq!(
+            shown.on_response(&response("a", DEFAULT_ACTION, None)),
+            Some(NotifierEvent::Activated {
+                project: PathBuf::from("/repo"),
+                session,
+            })
+        );
+        assert_eq!(
+            shown.on_response(&response("b", DEFAULT_ACTION, None)),
+            Some(NotifierEvent::Activated {
+                project: PathBuf::from("/other"),
+                session: other,
+            })
+        );
+    }
+
+    #[test]
+    fn a_click_is_reported_once() {
+        // U169 (N9).
+        let mut shown = shown_for("a", SessionId::new());
+        assert!(shown
+            .on_response(&response("a", DEFAULT_ACTION, None))
+            .is_some());
+        assert_eq!(
+            shown.on_response(&response("a", DEFAULT_ACTION, None)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_dismissal_is_no_event_and_ends_the_notification() {
+        // U170: cleared by the user, as the system says it and as the crate makes it up.
+        for action in [DISMISS_ACTION, ""] {
+            let mut shown = shown_for("a", SessionId::new());
+            let dismissed = response("a", action, Some(CloseReason::Dismissed));
+            assert_eq!(shown.on_response(&dismissed), None);
+            assert_eq!(
+                shown.on_response(&response("a", DEFAULT_ACTION, None)),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn a_timeout_is_no_event_and_ends_the_notification() {
+        // U170: `CLICK_WAIT` passed; the crate has taken the notification down.
+        let mut shown = shown_for("a", SessionId::new());
+        let expired = response("a", "", Some(CloseReason::Expired));
+        assert_eq!(shown.on_response(&expired), None);
+        assert_eq!(
+            shown.on_response(&response("a", DEFAULT_ACTION, None)),
+            None
+        );
+    }
+
+    #[test]
+    fn another_action_is_no_event() {
+        // U170: the notification offers no button, so no other action is this window's.
+        let mut shown = shown_for("a", SessionId::new());
+        assert_eq!(shown.on_response(&response("a", "open", None)), None);
+    }
+
+    #[test]
+    fn an_id_the_table_does_not_hold_is_no_event() {
+        // U171 (N9), and the table is left as it was.
+        let session = SessionId::new();
+        let mut shown = shown_for("a", session);
+        assert_eq!(
+            shown.on_response(&response("b", DEFAULT_ACTION, None)),
+            None
+        );
+        assert!(shown
+            .on_response(&response("a", DEFAULT_ACTION, None))
+            .is_some());
+    }
+
+    #[test]
+    fn the_prompt_is_open_once_a_request_has_gone_unanswered_for_as_long_as_show_waits() {
+        // M3 review A follow-up: no thread and no banner per notification behind an open prompt.
+        assert!(!prompt_is_open(None));
+        assert!(!prompt_is_open(Some(Duration::from_millis(50))));
+        assert!(prompt_is_open(Some(ANSWER_WAIT)));
+        assert!(prompt_is_open(Some(ANSWER_WAIT * 30)));
     }
 }
