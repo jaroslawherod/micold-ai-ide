@@ -309,14 +309,19 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         let inner: Element<'a, M> = if b.leading.is_none() && mark.is_none() {
             b.content
         } else {
-            let mut inner = row![].spacing(spacing::XS).align_y(Alignment::Center);
-            if let Some((glyph, tint)) = b.leading {
-                // The variant's own content colour unless the call site meant something by the
-                // glyph's tone — one control, one colour, by default.
-                let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
-                inner = inner.push(icon(glyph, anatomy::button::LEADING_ICON, tint));
-            }
-            inner = inner.push(b.content);
+            let slot = match b.leading {
+                Some((glyph, tint)) => {
+                    // The variant's own content colour unless the call site meant something by
+                    // the glyph's tone — one control, one colour, by default.
+                    let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
+                    row![icon(glyph, anatomy::button::LEADING_ICON, tint)]
+                }
+                None => row![],
+            };
+            let mut inner = slot
+                .spacing(spacing::XS)
+                .align_y(Alignment::Center)
+                .push(b.content);
             if let Some(mark) = mark {
                 // One more `XS` before the mark than between the glyph and the label: the glyph
                 // belongs to the name, and the count is a second thing said after it.

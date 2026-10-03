@@ -80,6 +80,7 @@ fn a_switcher_row_reports_availability_and_activity_separately() {
         label: "gone".into(),
         is_active: false,
         running_count: 2,
+        unread_count: 0,
         available: false,
     };
 

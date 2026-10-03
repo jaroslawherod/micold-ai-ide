@@ -676,3 +676,18 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
   `showcase_completeness` 10, `showcase_captions` 7 and `material_builder_api` 35 passed.
 - T072: `docs/user-guide/project-selection.md`, under *Switching projects from the top bar*: the
   unread count on each row and the total on the button, with a link to *Unread sessions*.
+
+## Cycle 25 — M5 verify: both counts on one row (review A F1), and two red gates
+
+- **Red gates, no behavior id.** The scoped gate, run for the first time in M5, failed three
+  times, each for one cause: `tests/features_project.rs` built a `SwitcherEntry` without
+  `unread_count` (E0063); `composite_call_sites` no longer found `row![icon(..), ..]` in
+  `button.rs`, whose content row had become `row![]` with pushes (the leading slot is a literal
+  row again); `ui_glyph_literals` found U+25CF in two assertion messages of `menu.rs` (reworded).
+- **Red** (review A F1): `a_row_with_both_counts_keeps_its_label_on_one_line` in `menu.rs`:
+  `the label is 40dp high in 58.32422dp of width; alone on its row it is 20dp high`. The running
+  count (50.6dp) and the worded mark (59.1dp) stood side by side.
+- **Green**: `item_column` stacks the two counts in one trailing column, ending at the same edge.
+  U152's test now asserts the mark under the running count, both ending at the trailing inset,
+  and the pair inside the item's height. `menu_anatomy`'s height gate is unchanged and green.
+- Scoped gate green on this tree.

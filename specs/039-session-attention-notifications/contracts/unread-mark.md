@@ -24,7 +24,7 @@ UnreadMark::new(roles)          // the mark alone
 | Host | API added | Rendering | Requirement |
 |---|---|---|---|
 | `TreeItem` (`tree_view.rs`) | `.unread(bool)` | The mark in the trailing slot before any trailing action, and the label in the emphasised weight. The badge slot and the `ActivityBadge` in it are untouched. | FR-018, FR-032 |
-| `MenuItem` (`menu.rs`) | field `trailing_mark: Option<usize>` | `● n unread` after `trailing_text`, separated by the menu's trailing gap. With no running count, the mark alone trails. | FR-021, FR-032 |
+| `MenuItem` (`menu.rs`) | field `trailing_mark: Option<usize>` | `● n unread` after `trailing_text`: under it, both ending at the item's trailing inset, so the label keeps its line in the 240dp panel (D24). With no running count, the mark alone trails. | FR-021, FR-032 |
 | `Button` (`button.rs`) | `.trailing_mark(n, tooltip)` | `● n` after the label, inside the button; the tooltip reads `{n} unread sessions in other projects` (`1 unread session in other projects` for one). | FR-023 |
 
 | # | Rule | Requirement |
