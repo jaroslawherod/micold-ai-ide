@@ -586,3 +586,17 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
 - `PROTOCOL_VERSION` 23 → 24 in `version.rs`, `FEATURE_026_PROTOCOL_VERSION` 24 in
   `schema_hash.rs`, `docs/daemon.md` "version 24 today". One commit, the last code commit of the
   branch. If M3 or another feature takes 24 first, this commit is the only one that moves.
+
+## Cycle 21 — M4 unit, after the cherry-pick: a read reaches the store (review A F1, review B F1)
+
+- No M3 commit conflicted with the 13 prep commits; `PROTOCOL_VERSION` 24 was still free.
+- Test `a_read_is_written_by_persist_attention` in `crates/micold-daemon/tests/unread_state.rs`: the
+  store holds `unread: true` after an attention event and `persist_attention`, and `false` after
+  the view report and a second `persist_attention`. It loads the store with `DaemonState::new`,
+  not `Service::restarted()`, which writes by itself; the helper service runs no supervisor tick.
+- The behaviour was there (cycle 16), so the red is a mutation: with `inner.attention_unsaved |= read;`
+  in `set_window_view` replaced by `let _ = read;` the test fails at its last assertion ("the store
+  holds the session as read after the write the tick makes"), and so does
+  `a_restart_of_the_service_keeps_a_read_session_read`. Restored: `unread_state` 15 passed.
+- Without a test: `unwind` in `server.rs` calls `persist_attention` before the stop (review A F1),
+  and `protocol_roundtrip.rs` round-trips `unread: true` (review A F2).

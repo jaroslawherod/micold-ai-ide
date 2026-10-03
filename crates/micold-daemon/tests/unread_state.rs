@@ -517,6 +517,40 @@ async fn a_restart_of_the_service_keeps_a_read_session_read() {
     );
 }
 
+/// A read reaches the store through `persist_attention`, the write the supervisor tick makes. The
+/// window stays open, so the connection's unwind does not write it, and the store is loaded without
+/// `restarted()`, which writes first: only the direct call can.
+#[tokio::test]
+async fn a_read_is_written_by_persist_attention() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    service.finishes_a_turn(a);
+    service.state.persist_attention();
+    assert!(
+        summary(
+            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            a
+        )
+        .unread,
+        "precondition: the store holds the session as unread"
+    );
+    let mut window = connect(&service.state, "window").await;
+    reports(&mut window, true, Some(a)).await;
+    assert!(!service.unread(a), "precondition: the session was read");
+
+    service.state.persist_attention();
+
+    assert!(
+        !summary(
+            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            a
+        )
+        .unread,
+        "the store holds the session as read after the write the tick makes"
+    );
+    closes(window).await;
+}
+
 /// U93, A34 (FR-008, US2 scenario 21): read when the last window closed, then a new turn with no
 /// window open.
 #[tokio::test]
