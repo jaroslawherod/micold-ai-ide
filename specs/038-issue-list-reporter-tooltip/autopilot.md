@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2: review B and visual pass §B3, then open the M2 PR.
+- **Next step**: M2 PR open: wait for CI and merge.
 
 ## Pull requests
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 code A | 2 (scoped, counted) | ea82f99ec92dbdccc92b20a1388cd376f70029db:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN. `mise run gate` green at 86ea073c |
 | M1 code B | 1 | 211c06a4d065aa189c04ba49e1b1f9e81c601e58:86ea073cc5f7a80698f7af91547583011bbad1e5 | CLEAN, 3 MINOR (F1 the gate's only red was a mutant: a second red recorded in `tdd/cycle-log.md`; F2 no test asserts the showcase rows carry a second line, T013 not in the cycle log: logged, test left as a follow-up; F3 contract §1 "dims both lines" vs the details line always at `on_surface_variant`: contract clarified). Verify: `issue_picker_rows` 3 passed, `layout_snapshot issue_rows_show_all_text` 4 passed, `mise run test-core` 1527 passed. Visual pass §B1, §B2: PASS, light and dark, `evidence/README.md` |
 | M2 code A | 1 | e97b12f17b7a00c35f77e36c60959da6da42774b:2b1bcfab678a314f083e173fe50e67ff02544528 | CHANGES: 1 BLOCKER (F1 U43's handler check missed rustfmt's trailing comma, so the test failed: fixed, `,)` folded to `)` before the match), 2 MINOR (F2 re-ranking keeps the scroll offset: follow-up; F3 guide promised a too-tall row wholly visible, `MARGIN` comment stale: both fixed) |
+| M2 code A | 2 (scoped, counted) | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN. `mise run gate` green on this tree (GATE_EXIT=0; `picker_highlight_into_view` 5 passed) |
+| M2 code B | 1 | f99ad6f4e9879f405f1eb11394b8ae70aed7290d:93db16de0411988cc1c5e420a5a1d0a333d49487 | CLEAN, 1 MINOR (F1 cycle-log SHAs from before the rebase: fixed, 069165fa and f824aa41). Verify: `picker_highlight_into_view` 5 passed. Visual pass §B3: PASS, light and dark, 18 `evidence/b3-*.png`, `evidence/README.md` |
 
 ## Declined review findings
 

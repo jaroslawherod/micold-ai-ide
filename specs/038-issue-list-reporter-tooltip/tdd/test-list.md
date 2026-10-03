@@ -29,7 +29,7 @@ before the story is complete.
 | A3 | A row with no labels shows the reporter alone, with no separator or empty label area | US1-3, FR-003 | example | DONE | T005 | T017 |
 | A4 | A title longer than the row wraps onto further lines, never clipped, ellipsised or outside the list | US1-4, FR-004, SC-001 | example | DONE | T006 | T017 |
 | A5 | Reporter plus labels longer than the row wrap onto further lines and every label stays readable | US1-5, FR-004, SC-001 | example | DONE | T006 | T017 |
-| A6 | With rows of differing height Up/Down move the highlight by one issue, the highlighted row is wholly visible, Enter picks it | US1-6, FR-007, SC-007 | example | PENDING | T018 | T023 |
+| A6 | With rows of differing height Up/Down move the highlight by one issue, the highlighted row is wholly visible, Enter picks it | US1-6, FR-007, SC-007 | example | DONE | T018 | T023 |
 | A7 | The picked issue's row carries the picked-row marker whatever its height | US1-7, FR-007 | example | DONE | T004 | T017 |
 | A8 | A row from the search beyond the cap or from a typed number has the same two lines as a listed row | US1-8, FR-006 | example | DONE | T005 | T017 |
 | A9 | At the default and at a narrow width each row wraps to the width and still shows all its text | US1-9, FR-004, SC-001 | example | DONE | T006 | T017 |

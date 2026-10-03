@@ -118,7 +118,7 @@ lines wrap and nothing is cut. The single-line row of the branch picker and `Sel
 - [X] T020 [US1] [U39] [U40] [U41] [U42] Add `crates/micold-client/src/ui/picker_scroll.rs` (NEW) with `picker_highlight_into_view<M>() -> Task<M>`: two passes as `focus::into_view`, reusing `focus::delta_into_view` (in `crates/micold-client/src/ui/focus.rs`: make it `pub(super)` and give it a `margin` parameter, since it pads the target by `MARGIN` (16) today; the focus caller and the unit tests in `focus.rs` pass `MARGIN` and keep their expectations, the picker passes `0.0`, so a wholly visible row does not scroll and a too-tall row lands on the viewport's top); "a row taller than the viewport is aligned to its top". Export it from `crates/micold-client/src/ui/mod.rs` (T018).
 - [X] T021 [US1] [U39] [U40] [U43] In `crates/micold-client/src/main.rs` and `crates/micold-client/src/shell/issues.rs`: chain `picker_highlight_into_view()` after `FormMsg::IssueHighlightMoved`; the reducer is not changed (T018).
 - [X] T022 [P] [US1] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue" (the list follows the highlight when moving with Up and Down) and `docs/development/component-library.md` § "Pickers" (the operation, and that only the issue picker chains it).
-- [ ] T023 [US1] [A6] Run `mise run gate`; run quickstart §B3 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [X] T023 [US1] [A6] Run `mise run gate`; run quickstart §B3 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: US1 complete (scenarios 1–9).
 

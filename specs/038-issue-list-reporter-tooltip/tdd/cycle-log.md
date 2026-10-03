@@ -223,7 +223,7 @@ suite runs in the gate.
    right: Some(0)
   ```
   restored with `git checkout`.
-- green: 1 passed. No refactor. Commit 84fb1c76 (with cycle 8: the two were not committed apart).
+- green: 1 passed. No refactor. Commit 069165fa (with cycle 8: the two were not committed apart).
 
 ## Cycle 8 — U40 — T018, T019, T020 (M2)
 
@@ -240,7 +240,7 @@ suite runs in the gate.
   ```
 - green: `menu_element` wraps the highlighted row in a container with the `Id` (T019);
   `ui/picker_scroll.rs` finds it and scrolls the innermost scrollable around it by
-  `focus::delta_into_view`, now `pub(super)` (T020). File: 2 passed. Commit 84fb1c76.
+  `focus::delta_into_view`, now `pub(super)` (T020). File: 2 passed. Commit 069165fa.
 - notes: pass two moves only the panel the row was found in, by its ordinal in the traversal. The
   focus operation's rule (every panel whose content overlaps the control) would also move a
   scrolling form under the floated list, which shares window coordinates with it.
@@ -260,7 +260,7 @@ suite runs in the gate.
   ```
 - green: `delta_into_view` takes `margin`; the focus caller and its unit tests pass `MARGIN`
   unchanged, the picker passes 0. `picker_highlight_into_view` 3 passed, `focus_scroll` 2 passed.
-  Commit 9bdf94d8.
+  Commit f824aa41.
 
 ## Cycle 10 — U42 — T018 (M2)
 
