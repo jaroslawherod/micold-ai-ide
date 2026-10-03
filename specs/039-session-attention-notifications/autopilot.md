@@ -79,7 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Next: verify and commit cycle 10, then step 2 (gate + macOS check + review A), step 3 (review B, visual pass of quickstart §B1–B5, B13 notification part), PR.
 
 ## Open escalation
 
