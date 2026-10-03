@@ -1335,3 +1335,26 @@ program at the cell you pressed. No press is spent purely on focusing.
   return to the live bottom, so no scrollbar simply means there is nothing scrolled back.
 
 > The scrollback limit is configurable — see [Settings](./settings.md).
+
+### Earlier output after a stop and start
+
+When you stop a session and start it again, or its process exits and is restarted, the terminal
+keeps what the session printed before. The earlier output stays in the scrollback, with its colours
+and styles, and one dim line marks where the new run begins:
+
+```text
+── session restarted at 2026-10-02 14:31 +02:00 ──
+```
+
+The date and time are your local time when the session started again. Everything above the line is
+from the earlier run; everything below it is new. A session that printed nothing before gets no
+line. After several restarts you see each run's output with a line between them. History beyond
+the scrollback limit is dropped, oldest lines first.
+
+- The history is kept by the background service while it runs. It is not written to disk yet, so a
+  restart of the service itself, or of the computer, still starts the terminal empty.
+- **Regular Terminal** instances are not covered: a stopped and started shell starts with an empty
+  terminal.
+- An AI CLI that draws full-screen (Claude Code and Copilot CLI do by default) repaints its whole
+  window, so only its last screen is kept above the line. The conversation itself comes back
+  through the CLI's own resume, which the restart uses.
