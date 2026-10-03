@@ -71,6 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 1 | f0755331e896218cbb4aee5d412514a99a0285a0:42e5f39236de396343a5def84b90d15f7207c92f | CHANGES: 1 MAJOR (`mark_attention` wrote the store under the state lock on the async runtime; now counted in memory and written by `persist_attention` in the supervisor tick's `spawn_blocking` hop), 2 MINOR (F2 `release_attachments` kept the view: fixed, with a test; F3 a displaced window reports its session in view: follow-up) |
 | M1 A | 2 | 2c3a900b1a72b2cf6da590cf8e1a8266e0113d50:c91ce9217f93d0e268f150994b1143aa625b1644 | CLEAN (2 MINOR: a failed `persist_attention` write is retried only by the next event or catalog write, and its doc says the next event; an event counted within 250 ms of a daemon exit is not written. Both follow-ups) |
 | M1 B | 1 | 30250d1fa843ee6a0f1a5ec2a9e9db134f181889:dd87f613dd0b54de6d7f8c0ffbcfefeb47e8f433 | CLEAN (Verify: attention_events 12 passed, attention_view_report 5, features_attention 5, test-core exit 0; 3 MINOR: docs/daemon.md version clause fixed; untested tick write and lock held across the write: follow-ups) |
+| M2 A | 1 | ce1de609a41f19b0cd16bd454170c54169714416:c0366f52d42b99fc05804fbf4476d12c07623760 | CHANGES: 2 MAJOR (F1 `Notifier::show` blocks the window's update thread on D-Bus with no timeout; F2 the body is sent unescaped to servers that read it as markup), 3 MINOR (F3 a dead bus connection is kept; F4 `Views::granted` is never pruned; F5 the notification re-implements the sidebar's worktree naming) |
 
 ## Declined review findings
 
@@ -79,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Next: verify and commit cycle 10, then step 2 (gate + macOS check + review A), step 3 (review B, visual pass of quickstart §B1–B5, B13 notification part), PR.
+M2 in progress, no PR. Committed: cycle 7 core (9fa7b66e, T017–T019, T024–T026), T034 user guide (86640a6f), cycle 9 client seam (a505e327, T022, T030, T033), cycle 8 daemon (9c8afb5d, T020, T021, T027, T028). Uncommitted in the tree: cycle 10 (T023, T029, T031, T032) — `Cargo.toml`, `Cargo.lock`, `crates/micold-client/Cargo.toml`, `shell/desktop_notify/{mod.rs,linux.rs}`; its worker died of an API error before reporting, so its tests, cycle-log entry and ticks are unverified. Cycle 10 committed, branch rebased onto origin/main (claim/grant now protocol 23, since feature 040 took 22), macOS check green. Next: fix review A round 1 (see *Review rounds*), re-run the gate and a scoped review A round 2, step 3 (review B, visual pass of quickstart §B1–B5, B13 notification part), PR.
 
 ## Open escalation
 
