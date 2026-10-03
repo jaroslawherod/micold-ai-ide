@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M1)
-- **Next step**: M1: gate with review A, then review B, then the PR.
+- **Next step**: M1 PR open; orchestrator waits on CI and merges.
 
 ## Pull requests
 
@@ -69,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | 87798c9ef7f66cc737705e1027bdd8ac800df22f:3e048fa2f8aedc3fdf5b0c9a8a0acfe60351f003 | CLEAN (1 MINOR: T016 named no dependency on T123; fixed) |
 | M1 A | 1 | f0755331e896218cbb4aee5d412514a99a0285a0:42e5f39236de396343a5def84b90d15f7207c92f | CHANGES: 1 MAJOR (`mark_attention` wrote the store under the state lock on the async runtime; now counted in memory and written by `persist_attention` in the supervisor tick's `spawn_blocking` hop), 2 MINOR (F2 `release_attachments` kept the view: fixed, with a test; F3 a displaced window reports its session in view: follow-up) |
 | M1 A | 2 | 2c3a900b1a72b2cf6da590cf8e1a8266e0113d50:c91ce9217f93d0e268f150994b1143aa625b1644 | CLEAN (2 MINOR: a failed `persist_attention` write is retried only by the next event or catalog write, and its doc says the next event; an event counted within 250 ms of a daemon exit is not written. Both follow-ups) |
+| M1 B | 1 | 30250d1fa843ee6a0f1a5ec2a9e9db134f181889:dd87f613dd0b54de6d7f8c0ffbcfefeb47e8f433 | CLEAN (Verify: attention_events 12 passed, attention_view_report 5, features_attention 5, test-core exit 0; 3 MINOR: docs/daemon.md version clause fixed; untested tick write and lock held across the write: follow-ups) |
 
 ## Declined review findings
 
@@ -86,6 +87,8 @@ None.
 ## Token usage
 
 ## Follow-ups not done
+
+- M1 review B (MINOR): no test observes the supervisor tick writing `attention_seq` (the mutant removing the call survives); and `persist_attention` holds the state lock across the blocking write, as `record_observed_names` does. Snapshot the workspace under the lock and write after releasing it, and add a test that runs one tick.
 
 - M1 review A round 2 (MINOR): `DaemonState::persist_attention` clears `attention_unsaved` before the write, so a failed write is retried only by a later event or catalog write; set the flag again on `Err` so the tick retries. And call `persist_attention` on graceful shutdown, so an event counted in the last 250 ms is written.
 
