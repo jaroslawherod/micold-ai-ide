@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2: gate on the review A round 2 tidy-ups, then review B.
+- **Next step**: M2: gate on the review B fixes, then review B round 2.
 
 ## Pull requests
 
@@ -69,6 +69,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M1) | 1 | f50cb67fdfa4082ea4415240e94f795d0dbc1d5d:e288d6cc75625160e5702584b919fe23603d8aa9 | CLEAN: no findings. Verify `mise run test-core` exit 0, 143 `test result: ok`, 0 FAILED. |
 | Code A (M2) | 1 | aeae95f9d6bc9aff627bf0e545263609cd31eabf:22338024d8f1b6ada75d7eddd74425bf9698b587 | CHANGES: 2 MAJOR, 7 MINOR. F1 (arm awaited its blocking task in the connection loop, BUG-009) fixed by spawning; F2 (no `GIT_NO_LAZY_FETCH` on `merge-base`) fixed; F3 (branch name with revision suffix resolved another commit) fixed with a test; F7 (`task_failed`) fixed; F4, F5 declined (see *Declined review findings*); F6, F8, F9 MINOR, not fixed. |
 | Code A (M2) | 2 | 45a61c0003058242a677266ac843d5a10759bc5b:2940ceb865da2b715f1304838e7348e45d57a27f | CLEAN: 9 MINOR. F2 (`branch_tip` without the lazy-fetch guard), F4 (guard belonged in `branch_tip`), F5 (duplicate of `naming::is_valid_branch`), F6, F9 fixed; F3 noted in the comment (git before 2.44 ignores `GIT_NO_LAZY_FETCH`); F7 `@{` case added; F1 (no limit on concurrent checks: one trusted local client sends one per reading) and F8 (other arms awaited, outside this flow) not fixed. |
+| Code B (M2) | 1 | e371f2bb8f7a3ad63b23b8a4f5d0873f01a88410:773e98e6d3f7f8ce13e4b78e6db0880903639f91 | CHANGES: 1 MAJOR, 2 MINOR. F1 (the Settings save's preservation of `pr_status_enabled` had no test) fixed with a test shown red; F2 (`local_only` split `run_git` from its doc) fixed; F3 (cycle-log hashes from the preparation branch) fixed. Verify: `mise run test-core` 1618 passed; `merged_branch_check` 9, `pr_status_setting` 3 passed. |
 
 ## Declined review findings
 

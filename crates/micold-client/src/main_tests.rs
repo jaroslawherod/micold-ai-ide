@@ -4506,6 +4506,29 @@ mod script_path_report {
         }
     }
 
+    /// U48 (review B). The form holds no pull request switch yet (040 M4), so a Settings save keeps
+    /// the stored `pr_status_enabled` rather than writing it off (FR-030).
+    #[test]
+    fn a_settings_save_keeps_the_stored_pr_status_switch() {
+        let path = stored_path();
+        let stored = micold_core::settings::Settings {
+            pr_status_enabled: true,
+            ..Default::default()
+        };
+        let (mut app, _probe, store) = saving_app(
+            &path,
+            micold_core::settings::FakeSettingsStore::loaded(stored),
+        );
+
+        save_and_check(&mut app);
+
+        assert_eq!(
+            store.saves().last().map(|s| s.pr_status_enabled),
+            Some(true),
+            "a save from the form leaves the switch as stored"
+        );
+    }
+
     #[test]
     fn a_save_checks_the_saved_path_even_when_the_path_did_not_change() {
         let path = stored_path();
