@@ -77,10 +77,7 @@ pub(super) fn notify_request(notification: &DesktopNotification) -> NotifyReques
         app_icon: "",
         summary: notification.title.clone(),
         body: escape_markup(&notification.body),
-        actions: vec![
-            DEFAULT_ACTION.to_string(),
-            DEFAULT_ACTION_LABEL.to_string(),
-        ],
+        actions: vec![DEFAULT_ACTION.to_string(), DEFAULT_ACTION_LABEL.to_string()],
         hints: vec![("desktop-entry", DESKTOP_ENTRY.to_string())],
         // The server's own default.
         expire_timeout: -1,

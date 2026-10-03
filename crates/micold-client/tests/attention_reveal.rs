@@ -165,7 +165,10 @@ fn the_session_shown_by_a_reveal_is_in_view_so_its_row_is_not_unread() {
         let (_, session) = state.workspace.find_session(second).expect("known");
         row_unread(session, in_view(&state.attention))
     };
-    assert!(unread(&state), "precondition: marked while another is shown");
+    assert!(
+        unread(&state),
+        "precondition: marked while another is shown"
+    );
 
     for message in state.reveal_session(Path::new(REPO), second) {
         state.update(message);
