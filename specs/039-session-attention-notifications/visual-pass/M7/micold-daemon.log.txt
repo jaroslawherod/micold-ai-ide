@@ -1,0 +1,15 @@
+2026-10-03T21:00:48.708289Z  INFO micold_daemon::server: micold-daemon starting build=micold-daemon 0.16.0 sink=File log_path=Some("/tmp/claude-1000/m7c4/home/.local/share/micold-ai-ide/micold-daemon.log")
+2026-10-03T21:00:48.708458Z  INFO micold_daemon::server: catalog adopted load_status=Loaded
+2026-10-03T21:00:48.708677Z  INFO micold_daemon::server: activity-hook receiver listening on loopback
+2026-10-03T21:00:48.708708Z  INFO micold_daemon::server: tool server listening on loopback
+2026-10-03T21:00:48.708787Z  INFO micold_daemon::server: listening endpoint=/run/user/1000/m7-c4/micold/daemon.sock
+2026-10-03T21:00:48.708811Z  INFO micold_daemon::server: idle stop armed window=1800s
+2026-10-03T21:00:48.717872Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=3076746
+2026-10-03T21:00:49.015878Z  INFO micold_daemon::server: project attached client=1 project=/tmp/claude-1000/m7c4/projQ force=false
+2026-10-03T21:00:49.015984Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/tmp/claude-1000/m7c4/home
+2026-10-03T21:00:49.016189Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/tmp/claude-1000/m7c4/projQ
+2026-10-03T21:01:13.264794Z  INFO micold_daemon::state: session started session=60327d15-4090-4e57-98a2-c47516fb0c2d mode=AiCli launch=Fresh
+2026-10-03T21:01:25.558684Z  INFO micold_daemon::state: session started session=1545889b-71d4-4225-a344-f611f4434a17 mode=AiCli launch=Fresh
+2026-10-03T21:07:01.734570Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=3090879
+2026-10-03T21:07:01.946916Z  INFO micold_daemon::server: attach refused: project busy client=2 project=/tmp/claude-1000/m7c4/projQ
+2026-10-03T21:07:32.488133Z  INFO micold_daemon::server: project attached client=2 project=/tmp/claude-1000/m7c4/projQ force=true
