@@ -13,7 +13,8 @@
 //!
 //! A click on a notification comes back from the backend as a [`NotifierEvent`]. The window sends
 //! it to the service ([`notifier_event`]), which picks the window that shows the session (research
-//! R6); that window is raised ([`raise_plan`]) and does what [`reveal_steps`] says (N5, N6).
+//! R6); that window is raised ([`raise_plan`], then [`after_send`] and [`after_activation`] for a
+//! Wayland activation) and does what [`reveal_steps`] says (N5, N6).
 //!
 //! # No vocabulary
 //!
@@ -122,53 +123,65 @@ pub enum RaiseStep {
 }
 
 /// The steps that bring the window to the front (N6): restore it, then take keyboard focus. On
-/// Wayland a window cannot take focus itself, so it asks for the user's attention instead.
+/// Wayland a window cannot take focus itself: with the `activation` token of the click it asks the
+/// compositor for the focus, and with none it asks for the user's attention. Off Wayland the token
+/// is not needed and changes nothing.
 pub fn raise_plan(wayland: bool, activation: Option<String>) -> Vec<RaiseStep> {
-    let _ = activation;
-    let front = if wayland {
-        RaiseStep::RequestAttention
-    } else {
-        RaiseStep::Focus
+    let front = match (wayland, activation) {
+        (true, Some(token)) => RaiseStep::Activate(token),
+        (true, None) => RaiseStep::RequestAttention,
+        (false, _) => RaiseStep::Focus,
     };
     vec![RaiseStep::Unminimize, front]
 }
 
-/// What follows an [`RaiseStep::Activate`], given whether it was `done`.
+/// What follows a [`RaiseStep::Activate`], given whether it was `done`: one that was not done
+/// falls back to asking for the user's attention (FR-015).
+///
+/// A compositor tells the window nothing about a token it declines (research R7). So an
+/// activation is done only when the request went out ([`after_send`]) **and** the window has
+/// keyboard focus [`ACTIVATION_SETTLE`] later.
 pub fn after_activation(done: bool) -> Option<RaiseStep> {
-    let _ = done;
-    None
+    (!done).then_some(RaiseStep::RequestAttention)
 }
 
-/// How long the compositor is given to move the keyboard focus after an activation request.
+/// How long the compositor is given to move the keyboard focus after an activation request. It
+/// took 12 ms in the probe (research R7).
 pub const ACTIVATION_SETTLE: Duration = Duration::from_millis(400);
 
 /// What the window does once it has tried to send an activation request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AfterSend {
-    /// The request went out: look at the window's keyboard focus after this long.
+    /// The request went out: look at the window's keyboard focus after this long, and take the
+    /// step [`after_activation`] gives for it.
     CheckFocusAfter(Duration),
     /// The request did not go out: take this step, if any, at once.
     Now(Option<RaiseStep>),
 }
 
-/// What follows the attempt to send an activation request, given whether it was `sent`.
+/// What follows the attempt to send an activation request, given whether it was `sent`. One that
+/// was not — no Wayland surface, no `xdg_activation_v1`, a failed call — is not done.
 pub fn after_send(sent: bool) -> AfterSend {
-    let _ = sent;
-    AfterSend::Now(None)
+    if sent {
+        AfterSend::CheckFocusAfter(ACTIVATION_SETTLE)
+    } else {
+        AfterSend::Now(after_activation(false))
+    }
 }
 
 /// What this window sends the service for `event` (research R6): the click is not handled here,
-/// because the window that holds the session's project may be another one (FR-012).
+/// because the window that holds the session's project may be another one (FR-012). The click's
+/// activation token goes with it, for the window that is raised (W3.4).
 pub fn notifier_event(event: NotifierEvent) -> ClientMsg {
     match event {
         NotifierEvent::Activated {
             project,
             session,
-            activation: _,
+            activation,
         } => ClientMsg::SessionReveal {
             project,
             session,
-            activation: None,
+            activation,
         },
     }
 }

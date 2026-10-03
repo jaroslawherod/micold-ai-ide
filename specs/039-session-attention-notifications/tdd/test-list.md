@@ -337,10 +337,10 @@ the same kind.
 | U135 | The session shown by a reveal is in view, so `row_unread` is false for it | FR-019, US3-3 | example | PENDING | T077 / T084 |
 | U136 | `raise_plan` off Wayland is `[Unminimize, Focus]` | FR-011 | example | PENDING | T077 / T084 |
 | U137 | `raise_plan` on Wayland is `[Unminimize, RequestAttention]` | FR-011, FR-015 | example | PENDING | T077 / T084 |
-| U138 | `raise_plan` on Wayland with a token is `[Unminimize, Activate(token)]` | FR-011 | example | PENDING | T094 / T098 |
-| U139 | Without a token the Wayland plan is as before, and off Wayland the token changes nothing | FR-011 | example | PENDING | T094 / T098 |
-| U140 | `after_activation(false)` is `Some(RequestAttention)` and `after_activation(true)` is `None` | FR-011, FR-015 | example | PENDING | T094 / T098 |
-| U141 | The token of `Activated` is put into `SessionReveal`, and the token of `RevealSession` is the one passed to `raise_plan` | FR-011 | example | PENDING | T094 / T098 |
+| U138 | `raise_plan` on Wayland with a token is `[Unminimize, Activate(token)]` | FR-011 | example | DONE | T094 / T098 |
+| U139 | Without a token the Wayland plan is as before, and off Wayland the token changes nothing | FR-011 | example | DONE | T094 / T098 |
+| U140 | `after_activation(false)` is `Some(RequestAttention)` and `after_activation(true)` is `None` | FR-011, FR-015 | example | DONE | T094 / T098 |
+| U141 | The token of `Activated` is put into `SessionReveal`, and the token of `RevealSession` is the one passed to `raise_plan` | FR-011 | example | DONE | T094 / T098 |
 
 ### `crates/micold-client/src/features/settings.rs`: the switch's draft
 
