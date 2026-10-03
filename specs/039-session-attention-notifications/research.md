@@ -313,11 +313,38 @@ clipboard). `iced::window::run` hands the closure a `&dyn Window` with the displ
 handles (`iced_runtime` 0.14.0, `src/window.rs:463`). The client must name `wayland-backend` with
 `client_system` and `wayland-protocols` with `client` and `staging` itself.
 
-**Risk.** **Unverified**: whether a compositor gives keyboard focus for the token a notification
-service hands out; that is the compositor's policy and differs between them. The Wayland arm's
-first task is a probe on a Wayland session (the development host runs one). If the probe fails,
-the fallback is what ships on Wayland and the limit is written into the user guide and recorded in
-the ledger as a follow-up. X11, macOS and Windows do not depend on it.
+**Probed (T091, 2026-10-03): the token gives keyboard focus on GNOME Shell.** The probe is kept in
+`probe/` beside this file (`main.rs`, the scripts that ran it, the three logs).
+
+- *Compositor and service.* GNOME Shell 50.1 (`gnome-shell 50.1-0ubuntu1`, mutter 50.1), run
+  headless with one virtual monitor on a private session bus, a private system bus, a private
+  runtime directory and a private Wayland display, apart from the developer's own session. The
+  notification service was GNOME's own (`org.gnome.Shell.Notifications`), not a stand-in. The click
+  was real input: pointer motion and a button press through `org.gnome.Mutter.RemoteDesktop`, on
+  the banner.
+- *The binding works.* From the handles of `iced::window::run`: `Backend::from_foreign_display` on
+  the `wl_display`, a second event queue, `xdg_activation_v1` bound from the registry, the surface
+  made with `ObjectId::from_ptr` and `WlSurface::from_id`, `activate(token, surface)`, one
+  roundtrip. No protocol error; under 10 ms; called off the UI thread; the iced window kept working.
+- *The signals.* `ActivationToken(id, token)` arrived before `ActionInvoked(id, "default")`, in the
+  same millisecond, in every clicked run. Each signal arrived twice, once from the shell's
+  connection and once from the helper that owns `org.freedesktop.Notifications`: a match rule
+  without a sender sees both copies, so the client reports a click once per shown id.
+- *The outcome.* Two windows in two processes, B focused. With the notification's token, A received
+  keyboard focus and B lost it 12 ms after `activate` was sent, and A was drawn on top
+  (`probe/logs/real.log`, `real-after.png`). With a made-up token: no protocol error and no focus
+  change. With no `activate` call: no focus change. So the focus is the token's doing.
+- *Not observed.* Any other compositor (KWin, sway and others decide for themselves; the fallback
+  covers a refusal). A physical seat. A minimised window, a window on another workspace, the
+  overview. A token handed to another process: the probe raised the window that showed the
+  notification; `xdg_activation_v1` does not tie a token to the client that uses it, but that a
+  second window's process is focused with it is not yet seen. A compositor tells the client nothing
+  about a declined token, so `after_activation(done)` can only report that the request was sent
+  without error; whether to ask for attention as well is decided where `done` is computed (T100).
+
+**Risk.** Compositors other than GNOME Shell may decline the token. Then the window does not come
+forward, and it asks for attention only when the request could not be sent at all. X11, macOS and
+Windows do not depend on any of this.
 
 **Alternatives rejected.** *A second window, or restarting the window with a token.* Destroys the
 user's state. *Only `request_user_attention` everywhere.* Does not meet FR-011 where focus is
