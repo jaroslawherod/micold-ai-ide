@@ -78,7 +78,7 @@ listing your known projects. Each row shows:
 - a **running** count when the project has terminal sessions running in the background
   (for example, "2 running") — so you can tell at a glance where your live work is;
 - an **unread** count when the project has sessions that finished a turn you have not looked at
-  yet: a filled dot, the number and the word, for example "● 2 unread". It stands after the
+  yet: a filled dot, the number and the word, for example "● 2 unread". It stands under the
   running count, and on the active project's row as on the others. It counts every unread session
   of the project, including sessions of worktrees the sidebar's filter is hiding. A project with
   no unread session shows no count;
@@ -91,8 +91,8 @@ number: the sidebar already marks them. Hover over the button to read what the n
 ("3 unread sessions in other projects"). When no other project has an unread session, the button
 shows its name alone.
 
-Both numbers fall as soon as you open an unread session, and after you switch projects the
-button counts the projects you are no longer in. See
+A row's count falls as soon as you open one of its unread sessions. The button's number changes
+when you switch projects: it then counts the projects you are no longer in. See
 [Worktrees & Sessions → Unread sessions](worktrees-and-sessions.md#unread-sessions) for when a
 session becomes unread and what clears it.
 

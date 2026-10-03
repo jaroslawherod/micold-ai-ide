@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M5)
-- **Next step**: M5, continue from *Handover*: T119, then verify.md (scoped gate with review A, review B and the visual pass, full gate) and the PR.
+- **Next step**: M5 verify: review A round 2 (scoped, on the fix diff from snapshot `8fc56a72…:6d386b98…`), then review B with the visual pass (quickstart §B5, B6 panel and button, B7; evidence under `visual-pass/M5/`), the full gate, tick T119, the PR (`Refs #481`).
 
 ## Pull requests
 
@@ -63,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D21 | M4 | T045 says `unread` is written "to the catalog file"; the prep code stores it in the per-project state file. Which holds? | The code: `unread` is a `#[serde(default)]` field of `StoredSession` (as T052 says) in the project's state file, beside `attention_seq`; the store test asserts that file names it and no other does. FR-025 asks only that it stays on the computer. T045's "catalog file" is loose wording, left as written. | agent-resolved | research R1; `store.rs` `unread_tests`; review B M4 (consistent with spec and plan) |
 | D22 | M4 | T054 says `mark_read` "clears it and persists"; the prep code clears in memory and lets the supervisor tick write. Accept? | Yes: `set_window_view` sets `attention_unsaved` and the tick writes, as M1 does for `mark_attention`, so a view report never does blocking I/O on the connection loop. This unit added the write at stop (`unwind` calls `persist_attention`) and the test `a_read_is_written_by_persist_attention`. | agent-resolved | `state.rs` `set_window_view`, `persist_attention`; `server.rs` `unwind`; cycle 21 |
 | D23 | M4 | Which M4 design choices do later milestones build on? | (1) An unread row's label uses the tree view's existing `selected_label_role`; there is no new setter. (2) `UnreadMark` draws its count and word in `TypeRole::Label`, with no setter for the host's type role or colour: M5's switcher hosts need one, and `count(0)` returns a zero-size `Space` that still takes a spacing slot in a host `row!`. (3) The sidebar takes the session in view from the last view report sent (`features::attention::in_view`), so a row loses its mark before the service answers (FR-019). (4) In the sidebar the mark sits in the trailing slot before the close action, as T058 says. (5) The user guide has *Unread sessions* before *Being told when a session needs you*; read again after M3, the order holds (the mark is the lasting state, the notification the momentary one) and is kept. | agent-resolved | `tree_view.rs`, `unread_mark.rs`, `features/attention.rs`; `visual-pass/M4/B6.png` |
+| D24 | M5 | How does a switcher row show a running count and an unread count in the 240dp panel? | One above the other, both ending at the item's trailing inset, inside the 48dp row (two `Label` lines are 32dp). Side by side, as `contracts/unread-mark.md` first said, they took 118dp and wrapped `micold-ai-ide` onto two lines. Both keep their words (FR-021); the contract row and the user guide say "under". With one count alone the row is as before. | agent-resolved (review A F1) | `menu.rs` `a_row_with_both_counts_keeps_its_label_on_one_line`; `tdd/cycle-log.md` cycle 25 |
+| D25 | M5 | Where does the showcase show the switcher row with both counts, and what does `other_projects_unread` take? | (1) In the project switcher panel of `sections/floating.rs` (rows from `samples.rs`), not in `sections/atoms.rs` as T071 lists: a menu's rows are built only inside its panel (`menu::item_column` is `pub(super)`). The button with a count is in the `UnreadMark` entry of `atoms.rs`. FR-030 asks that the showcase show both, not where. (2) `other_projects_unread` takes `Option<&Path>`, where `data-model.md` writes `&active`: the app can have no active project, and then every project is another one. | agent-resolved | `showcase/sections/floating.rs`, `showcase/samples.rs`; `workspace.rs` |
 
 ## Review rounds
 
@@ -86,6 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 A | 1 | 423aa47295a7aa4ef0b37929a5fe74f7bf4ee31d:37359f9dc9d0d422bb868ede6fdd739328f8d81e | CLEAN: 3 MINOR. F1 fixed in part (`unwind` writes before the stop; the retry after a failed write stays a follow-up), F2 fixed (`unread: true` in the round-trip sample), F3 under *Follow-ups not done* |
 | M4 B | 1 | 1bc33e238c5399a29f6f1a31cd4eecb6c2a73415:1b75cdf11c322ea9af4eddea55ea00153957c266 | CLEAN (Verify: `unread_state` 14 passed, `unread_rows` 5 passed; D21 and D22 judged consistent with spec and plan). 1 MINOR fixed: no test saw a read reach the store (cycle 21, `unread_state` now 15) |
 | M4 visual | 1 | same tree (binaries from `1b75cdf1`) | PASS: showcase (light and dark), quickstart §B6 (row), B7, B8, on Xvfb `:121` with a private HOME and pin directory; turns driven by posting `UserPromptSubmit` and `Stop` to the session's hook URL, notifications logged by a stand-in service on a private bus; evidence `visual-pass/M4/`. Not covered: see *Follow-ups not done* |
+| M5 A | 1 | 8fc56a72a7a997d22816ccef4f87c914338a1b2b:6d386b988afb71757c5fdd132bdac2937a394d6b | CHANGES: 1 MAJOR, 3 MINOR (`code-review` at `high`). F1 MAJOR fixed: a switcher row with both counts left the project's name 58dp and wrapped it (measured by a new test, cycle 25); the two counts now stack (D24). F4 fixed (the guide said the button's number falls when a session is opened). F2 and F3 under *Follow-ups not done*; F3 is checked in the visual pass |
 
 ## Declined review findings
 
@@ -96,34 +99,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5, written at the 150k context cap. No PR is open. Nothing is pushed.
-
-- **Done and committed** on `feat/notify-session-needs-attention` (on `origin/main` at
-  ea477587): T062–T072, all ticked in `tasks.md`, with cycles 22–24 in `tdd/cycle-log.md`.
-  U36–U41, U128–U130 and U152–U158 are `DONE` in `tdd/test-list.md`.
-- **Runs so far**: `cargo test -p micold-core --all-targets` green; `cargo test -p micold-client
-  --lib` (507) and `--test switcher_unread` (5), `showcase_completeness`, `showcase_captions`,
-  `material_builder_api` green. **Not run**: clippy, the rest of the client's integration tests,
-  `cargo test --workspace`, the scoped gate, the full gate.
-- **Next step**: T119. Run `scripts/build-lock.sh cargo test --test unread_state`, `--test
-  unread_rows`, `--test switcher_unread`, then tick T119 and set A14–A22 and A24–A36 to `DONE` in
-  `tdd/test-list.md` (A23 is T121's). Then `speckit-implement`'s optional `after_implement` hooks,
-  then `tasks/verify.md` from step 1: scoped gate with review A (`code-review`, `high`), review B
-  (conformance, sonnet) with the visual pass (quickstart §B5, B6 panel and button, B7; evidence
-  under `visual-pass/M5/`), the full gate, the PR (`Refs #481`).
-- **No review has run** for M5: *Review rounds* has no M5 row yet.
-- **For the reviewers and the visual pass**:
-  - The showcase's switcher row with both counts is in the project switcher panel
-    (`MenuOverlay`'s second opener), not in `sections/atoms.rs` as T071's file list says: a
-    menu's rows are built only inside its panel. The button is in the `UnreadMark` entry.
-  - On the switcher's button the mark (`primary`) and the number (the text variant's content
-    colour, also `primary`) are the same colour, and the gap before the mark is 8dp. Neither has
-    been looked at on a display.
-  - `Button::trailing_mark` on a **filled** button would draw a `primary` mark on a `primary`
-    fill. No host does that; the doc comment says so and nothing enforces it.
-  - `other_projects_unread` takes `Option<&Path>`, where data-model.md writes `&active`.
-- **Open follow-up from M4 not done here**: review A F3 (`session_tree_item`'s two positional
-  `Option<SessionId>`). M5 did not edit `ui/sidebar.rs`.
+None.
 
 ## Open escalation
 
@@ -150,5 +126,7 @@ None.
 - M3 review A (MINOR, Windows, not verified on a machine): only the Start-menu shortcut carries the AppUserModelID (`packaging/windows/micold-ai-ide.iss`); the desktop shortcut, the installer's launch and the process itself do not, so a pinned icon and the running window may show as two taskbar buttons. And a click on the toast has no activator, so Windows may start a second client (FR-015a allows an ordinary start; M6 adds the click). Check both in quickstart §C2 (M9) and in M6's T080.
 - M3 review A (MINOR): CI's "Test (desktop notification backends)" step selects by the substring `desktop_notify` and passes on 0 tests if the module is renamed; `notification_registers_nothing.rs::rust_comment` treats any line starting with `*` as a comment and scans only `main.rs` for argument reading; `ToastText`/`Banner` copy the title and body of `DesktopNotification` field for field, and the test `notification()` helper is pasted into three backends.
 - M4 review A F3 (MINOR): `session_tree_item` in `ui/sidebar.rs` takes two positional `Option<SessionId>` (`active_session`, `in_view`) that can be swapped without a compile error, and `build_default_item` derives `in_view` a second time. Pass `unread: bool` computed with `row_unread` at the call site. M5 edits this file.
+- M5 review A F2 (MINOR): the switcher button's root widget changes type when the unread total crosses zero (the bare focusable against `Tooltip`), so iced rebuilds its subtree and the button loses keyboard focus and hover state at that moment. Keep one tree shape for a button that can carry a mark.
+- M5 review A F3 (MINOR): the unread total's tooltip opens at `Position::Bottom`, where the switcher's panel opens. If the M5 visual pass shows it over the panel's rows, suppress the tip while the panel is open.
 - M4 visual pass, not covered: B6–B8 ran in the dark scheme only (the showcase in both); B8's branch where the session that finished with no window open is *not* the one the application opens on (it must be marked; `unread_state.rs` covers it in the service); the other tree-row entries of the showcase were not compared with `main`. The weight difference of an unread label is real but subtle at showcase size. M9's recorded passes (T113–T117) should run B6–B8 in the light scheme.
 - M1 review A F3 is still open after M4: a view report from a window displaced from its project now also reads the session it names (`set_window_view` calls `mark_read`).

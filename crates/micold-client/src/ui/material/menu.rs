@@ -300,14 +300,31 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
         // the same 14dp at medium weight. It fills, so trailing content sits at the trailing edge
         // and the item's two 12dp ends are the same 12dp.
         content = content.push(Text::new(item.label, TypeRole::Action, r).width(Length::Fill));
-        if let Some(text) = item.trailing_text {
-            content = content.push(Text::new(text, TypeRole::Label, r).muted());
-        }
+        let running = item
+            .trailing_text
+            .map(|text| Text::new(text, TypeRole::Label, r).muted());
         // The shared mark, worded so that it is told from the running count beside it by more than
-        // its place (FR-021), and muted as that count is. A count of zero is not pushed at all: the
+        // its place (FR-021), and muted as that count is. A count of zero is not built at all: the
         // mark would draw nothing and still take one of the row's gaps.
-        if let Some(unread) = item.trailing_mark.filter(|&unread| unread > 0) {
-            content = content.push(super::UnreadMark::new(r).count(unread).worded(true).muted());
+        let unread = item
+            .trailing_mark
+            .filter(|&unread| unread > 0)
+            .map(|unread| super::UnreadMark::new(r).count(unread).worded(true).muted());
+        match (running, unread) {
+            // Both counts stand one above the other, ending at the same edge. Side by side they
+            // took 118dp of the panel's 240 and left the project's name 58dp, so `micold-ai-ide`
+            // wrapped inside its row. Two `Label` lines are 32dp, inside the item's 48.
+            (Some(running), Some(unread)) => {
+                content = content.push(column![running, unread].align_x(Alignment::End));
+            }
+            (running, unread) => {
+                if let Some(running) = running {
+                    content = content.push(running);
+                }
+                if let Some(unread) = unread {
+                    content = content.push(unread);
+                }
+            }
         }
         if let Some((glyph, tint)) = item.trailing_icon {
             content = content.push(icon(glyph, TypeRole::Label.size(), tint));
@@ -661,29 +678,67 @@ mod tests {
             .size()
     }
 
+    /// The boxes inside an item's last trailing box, in order.
+    fn trailing_of(item: MenuItem<Message>) -> (Rectangle, Vec<Rectangle>) {
+        let mut element = item_column(vec![item], roles());
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, ROOM),
+        );
+        let column = Layout::new(&node);
+        let row = column
+            .children()
+            .next()
+            .expect("the column holds the item")
+            .children()
+            .next()
+            .expect("the item holds its content row");
+        let trailing = row.children().last().expect("the row holds a trailing box");
+        (
+            trailing.bounds(),
+            trailing.children().map(|child| child.bounds()).collect(),
+        )
+    }
+
     /// U152 (FR-021): the unread count is told from the running count by its mark and its word,
-    /// and stands after it.
+    /// and stands after it: under it, ending at the same edge, inside the item's height.
     #[test]
     fn a_trailing_mark_renders_the_worded_count_after_the_trailing_text() {
-        let content = content_of(project_row(Some("3 running"), Some(2)));
+        let (counts, lines) = trailing_of(project_row(Some("3 running"), Some(2)));
 
-        let [_slot, _label, running, mark] = content[..] else {
+        let [running, mark] = lines[..] else {
             panic!(
-                "a row with a running count and an unread count holds four boxes, not {}",
-                content.len()
+                "a row with a running count and an unread count stacks two lines, not {}",
+                lines.len()
             );
         };
         assert!(
             (mark.width - worded_mark(2).width).abs() < TOLERANCE,
-            "the mark is `● 2 unread` ({}dp), but the row drew {}dp",
+            "the worded mark for 2 is {}dp wide, but the row drew {}dp",
             worded_mark(2).width,
             mark.width
         );
-        let gap = mark.x - (running.x + running.width);
         assert!(
-            (gap - spacing::SM).abs() < TOLERANCE,
-            "the mark stands {gap}dp after the running count; the menu's trailing gap is {}dp",
-            spacing::SM
+            (mark.y - (running.y + running.height)).abs() < TOLERANCE,
+            "the mark starts at {}dp, not under the running count, which ends at {}dp",
+            mark.y,
+            running.y + running.height
+        );
+        for (name, line) in [("running count", running), ("mark", mark)] {
+            let end = line.x + line.width;
+            assert!(
+                (end - (ROOM.width - anatomy::menu::ITEM_PADDING)).abs() < TOLERANCE,
+                "the {name} ends at {end}dp, not at the item's trailing inset"
+            );
+        }
+        assert!(
+            counts.height <= density::MENU_ITEM_BASE,
+            "the two counts are {}dp high, more than the item's {}dp",
+            counts.height,
+            density::MENU_ITEM_BASE
         );
     }
 
@@ -707,6 +762,25 @@ mod tests {
         }
     }
 
+    /// FR-021, SC-008: a row with both counts still names its project on one line. The panel is
+    /// 240dp wide and the label is the only box that gives way, so two worded counts beside it
+    /// would leave a name the room of a few letters.
+    #[test]
+    fn a_row_with_both_counts_keeps_its_label_on_one_line() {
+        let plain = content_of(project_row(None, None))[1];
+        let content = content_of(project_row(Some("2 running"), Some(1)));
+
+        let label = content[1];
+        assert!(
+            (label.height - plain.height).abs() < TOLERANCE,
+            "the label is {}dp high in {}dp of width; alone on its row it is {}dp high: the \
+             project's name wrapped (boxes: {content:?})",
+            label.height,
+            label.width,
+            plain.height
+        );
+    }
+
     /// U154 (FR-021): with no session running, the unread count alone trails.
     #[test]
     fn with_no_running_count_the_mark_alone_trails() {
@@ -720,7 +794,7 @@ mod tests {
         };
         assert!(
             (mark.width - worded_mark(1).width).abs() < TOLERANCE,
-            "the trailing box is `● 1 unread`"
+            "the trailing box is the worded mark for 1"
         );
         let end = mark.x + mark.width;
         assert!(
