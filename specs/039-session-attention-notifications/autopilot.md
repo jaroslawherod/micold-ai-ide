@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M3)
-- **Next step**: the orchestrator waits for `ci complete` on #557's head and merges it; then M4 (T045–T061).
+- **Phase**: 4-milestone (M4)
+- **Next step**: the orchestrator waits for CI on M4's PR and merges it; then M5 (T062–T072, T119). M5 reads D23 first.
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #539 | Design | merged | 6b4b6fa9afc27f134a5f4fc80048dc3f9a115a38 |
 | #544 | M1 | merged | a8d628b8a9b089033a05b1194c8fc5f5fe5b3c7c |
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
-| #557 | M3 | open, ready; CI green at `cc0d815e` | |
+| #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
+| PRNUM | M4 | open | |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T123 | full | The service knows what is in view and counts attention events (integration test; nothing new on screen) | #544 | merged |
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
-| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | PR open, all tasks done |
-| M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | | pending |
+| M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
+| M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | PRNUM | PR open, all tasks done |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | pending |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
@@ -59,6 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D16 | design | Do the facts part 1 left unconfirmed hold? | Code: all four hold (`switch_daemon_attachment` sends `Detach` then `Attach`, `daemon_sync.rs:198`; `ProjectMsg::Reopened` `features/project.rs:531`; `SessionMsg::Selected` `features/session.rs:1554`; `Button` is a builder with a `leading` slot, `button.rs:95`; the sandboxed service's `projects.json` is the host's state directory mounted at `/var/lib/micold-ai-ide`, `sandbox/mod.rs:367`, `:659`). Wayland: the foreign-handle binding is confirmed in the sources (winit selects `client_system`; `smithay-clipboard` does the same in this application); whether a compositor honours the notification's token stays unverified and has a probe task in M7 (T091). Windows: the notification-centre click stays unverified: no primary source found; T116 in M9 checks it on an installed build. | agent-resolved | research.md "Where the code is today", R4, R7 |
 | D19 | design | A notification is clicked after the window that raised it was closed, while another window is open. Must the session open? (supersedes D15's `agent-resolved`) | Option 1: accept the limit on all three systems. FR-011 to FR-013 apply while the window that raised the notification is still open; otherwise the click need not open the session, which is found by its unread mark. FR-015, FR-015a and the Edge Case amended; no change to plan or tasks. | decided by user | Orchestrator relayed the user's answer to the escalation of tasks review round 1 F2, 2026-10-02; spec.md#Clarifications |
 | D20 | M1 | T016 has `main.rs` call `features::attention::view_report(&mut State, …)`, which the client gate `only_the_root_drives_a_feature` forbids. How is the view report wired? | The feature's functions take its own `features::attention::State`; two root helpers in `app.rs` (`State::view_report`, `State::view_report_forgotten`) call them, and `shell::daemon_sync::report_window_view` calls the root and sends `ClientMsg::WindowView` only while connected. U111–U115 live in `tests/features_attention.rs`, which the gate `every_feature_module_has_an_isolation_test` requires, not in `tests/attention_view_report.rs` as T006 words it. Behaviour unchanged. | agent-resolved | `crates/micold-client/tests/feature_registration_cost.rs`; ledger Handover of M1 part 2 |
+| D21 | M4 | T045 says `unread` is written "to the catalog file"; the prep code stores it in the per-project state file. Which holds? | The code: `unread` is a `#[serde(default)]` field of `StoredSession` (as T052 says) in the project's state file, beside `attention_seq`; the store test asserts that file names it and no other does. FR-025 asks only that it stays on the computer. T045's "catalog file" is loose wording, left as written. | agent-resolved | research R1; `store.rs` `unread_tests`; review B M4 (consistent with spec and plan) |
+| D22 | M4 | T054 says `mark_read` "clears it and persists"; the prep code clears in memory and lets the supervisor tick write. Accept? | Yes: `set_window_view` sets `attention_unsaved` and the tick writes, as M1 does for `mark_attention`, so a view report never does blocking I/O on the connection loop. This unit added the write at stop (`unwind` calls `persist_attention`) and the test `a_read_is_written_by_persist_attention`. | agent-resolved | `state.rs` `set_window_view`, `persist_attention`; `server.rs` `unwind`; cycle 21 |
+| D23 | M4 | Which M4 design choices do later milestones build on? | (1) An unread row's label uses the tree view's existing `selected_label_role`; there is no new setter. (2) `UnreadMark` draws its count and word in `TypeRole::Label`, with no setter for the host's type role or colour: M5's switcher hosts need one, and `count(0)` returns a zero-size `Space` that still takes a spacing slot in a host `row!`. (3) The sidebar takes the session in view from the last view report sent (`features::attention::in_view`), so a row loses its mark before the service answers (FR-019). (4) In the sidebar the mark sits in the trailing slot before the close action, as T058 says. (5) The user guide has *Unread sessions* before *Being told when a session needs you*; read again after M3, the order holds (the mark is the lasting state, the notification the momentary one) and is kept. | agent-resolved | `tree_view.rs`, `unread_mark.rs`, `features/attention.rs`; `visual-pass/M4/B6.png` |
 
 ## Review rounds
 
@@ -79,6 +83,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 visual | 1 | same tree | PASS: quickstart §B1–B5 and B13, notification part, on a private bus with a stand-in `org.freedesktop.Notifications` service (no dunst or mako installed); evidence in `visual-pass/M2/` |
 | M3 A | 1 | 272bc48cbee8e8b08b48852c798bfec26d9e83a0:a0a230930461a240142697d440b9d66e64073ded | CLEAN: no BLOCKER or MAJOR. Two passes on one snapshot (a reviewer by hand, which read the vendored `mac-usernotifications` 0.3.1 and `tauri-winrt-notification` 0.8.1 sources, then the `code-review` skill at `high`, 10 findings). All judged MINOR: 2 declined, 8 under *Follow-ups not done*; none fixed, as the full gate had already run on this tree |
 | M3 B | 1 | 272bc48cbee8e8b08b48852c798bfec26d9e83a0:a0a230930461a240142697d440b9d66e64073ded | CLEAN (Verify: `mise run test-core` all ok, `notification_registers_nothing` 5 passed; `attention_notify` 11 passed; `cargo check -p micold-client --target aarch64-apple-darwin` finished; 1 MINOR fixed: cycle 12 said 8 macOS tests, there are 10) |
+| M4 A | 1 | 423aa47295a7aa4ef0b37929a5fe74f7bf4ee31d:37359f9dc9d0d422bb868ede6fdd739328f8d81e | CLEAN: 3 MINOR. F1 fixed in part (`unwind` writes before the stop; the retry after a failed write stays a follow-up), F2 fixed (`unread: true` in the round-trip sample), F3 under *Follow-ups not done* |
+| M4 B | 1 | 1bc33e238c5399a29f6f1a31cd4eecb6c2a73415:1b75cdf11c322ea9af4eddea55ea00153957c266 | CLEAN (Verify: `unread_state` 14 passed, `unread_rows` 5 passed; D21 and D22 judged consistent with spec and plan). 1 MINOR fixed: no test saw a read reach the store (cycle 21, `unread_state` now 15) |
+| M4 visual | 1 | same tree (binaries from `1b75cdf1`) | PASS: showcase (light and dark), quickstart §B6 (row), B7, B8, on Xvfb `:121` with a private HOME and pin directory; turns driven by posting `UserPromptSubmit` and `Stop` to the session's hook URL, notifications logged by a stand-in service on a private bus; evidence `visual-pass/M4/`. Not covered: see *Follow-ups not done* |
 
 ## Declined review findings
 
@@ -101,7 +108,7 @@ None.
 
 - M1 review B (MINOR): no test observes the supervisor tick writing `attention_seq` (the mutant removing the call survives); and `persist_attention` holds the state lock across the blocking write, as `record_observed_names` does. Snapshot the workspace under the lock and write after releasing it, and add a test that runs one tick.
 
-- M1 review A round 2 (MINOR): `DaemonState::persist_attention` clears `attention_unsaved` before the write, so a failed write is retried only by a later event or catalog write; set the flag again on `Err` so the tick retries. And call `persist_attention` on graceful shutdown, so an event counted in the last 250 ms is written.
+- M1 review A round 2 and M4 review A F1 (MINOR): `DaemonState::persist_attention` clears `attention_unsaved` before the write, so a failed write is retried only by a later event or catalog write, and a read that failed to write is unread again after a restart. Setting the flag again on `Err` would retry and warn every 250 ms on a read-only data directory, so it needs a back-off or a log-once. (The other half is done in M4: `unwind` calls `persist_attention` before the stop.)
 
 - M1 review A F3 (MINOR): a focused window displaced from or refused its project still reports its selected session in view (`app.rs` `view_facts`), so that session's attention events are not counted. Consider in M2 or M4: treat a displaced project as `main_area_taken`, or have `set_window_view` ignore `in_view` outside the connection's attachments.
 
@@ -115,3 +122,6 @@ None.
 - M3 review A (MINOR, macOS): the 2 s timeout is reported as `Refused(NOT_ANSWERED)`, which takes the run's one failure line (FR-010 says at most once) although the notification is shown once allowed; a later real failure in that run is then not logged. And a system error on the authorisation request arrives as `Ok(false)` from the crate, so it is logged as the user's refusal (an unsigned staged bundle, for example); the U168 test comment about an unsigned bundle yielding `NoBundleIdentifier` is wrong for a bundle that has a `CFBundleIdentifier`.
 - M3 review A (MINOR, Windows, not verified on a machine): only the Start-menu shortcut carries the AppUserModelID (`packaging/windows/micold-ai-ide.iss`); the desktop shortcut, the installer's launch and the process itself do not, so a pinned icon and the running window may show as two taskbar buttons. And a click on the toast has no activator, so Windows may start a second client (FR-015a allows an ordinary start; M6 adds the click). Check both in quickstart §C2 (M9) and in M6's T080.
 - M3 review A (MINOR): CI's "Test (desktop notification backends)" step selects by the substring `desktop_notify` and passes on 0 tests if the module is renamed; `notification_registers_nothing.rs::rust_comment` treats any line starting with `*` as a comment and scans only `main.rs` for argument reading; `ToastText`/`Banner` copy the title and body of `DesktopNotification` field for field, and the test `notification()` helper is pasted into three backends.
+- M4 review A F3 (MINOR): `session_tree_item` in `ui/sidebar.rs` takes two positional `Option<SessionId>` (`active_session`, `in_view`) that can be swapped without a compile error, and `build_default_item` derives `in_view` a second time. Pass `unread: bool` computed with `row_unread` at the call site. M5 edits this file.
+- M4 visual pass, not covered: B6–B8 ran in the dark scheme only (the showcase in both); B8's branch where the session that finished with no window open is *not* the one the application opens on (it must be marked; `unread_state.rs` covers it in the service); the other tree-row entries of the showcase were not compared with `main`. The weight difference of an unread label is real but subtle at showcase size. M9's recorded passes (T113–T117) should run B6–B8 in the light scheme.
+- M1 review A F3 is still open after M4: a view report from a window displaced from its project now also reads the session it names (`set_window_view` calls `mark_read`).
