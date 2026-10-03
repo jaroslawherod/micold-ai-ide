@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M6)
-- **Next step**: M6: red for T079/T080 on CI's macOS and Windows legs, then green (T086, T087), reviews A and B, quickstart §B9–B11a, full gate, PR.
+- **Next step**: M6: continue from *Handover* (PR #560 is open; skip `branch-start.sh`).
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
 | #559 | M5 | merged | 57f14c7278e2bdd95edcb1855a050d2f3abc5164 |
+| #560 | M6 | open (draft) | |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
 | M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | merged |
-| M6 | T073–T090, T120 | full | A click on the notification opens the session | | in progress |
+| M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | in progress |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
 | M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | pending |
@@ -66,6 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D23 | M4 | Which M4 design choices do later milestones build on? | (1) An unread row's label uses the tree view's existing `selected_label_role`; there is no new setter. (2) `UnreadMark` draws its count and word in `TypeRole::Label`, with no setter for the host's type role or colour: M5's switcher hosts need one, and `count(0)` returns a zero-size `Space` that still takes a spacing slot in a host `row!`. (3) The sidebar takes the session in view from the last view report sent (`features::attention::in_view`), so a row loses its mark before the service answers (FR-019). (4) In the sidebar the mark sits in the trailing slot before the close action, as T058 says. (5) The user guide has *Unread sessions* before *Being told when a session needs you*; read again after M3, the order holds (the mark is the lasting state, the notification the momentary one) and is kept. | agent-resolved | `tree_view.rs`, `unread_mark.rs`, `features/attention.rs`; `visual-pass/M4/B6.png` |
 | D24 | M5 | How does a switcher row show a running count and an unread count in the 240dp panel? | One above the other, both ending at the item's trailing inset, inside the 48dp row (two `Label` lines are 32dp). Side by side, as `contracts/unread-mark.md` first said, they took 118dp and wrapped `micold-ai-ide` onto two lines. Both keep their words (FR-021); the contract row and the user guide say "under". With one count alone the row is as before. | agent-resolved (review A F1) | `menu.rs` `a_row_with_both_counts_keeps_its_label_on_one_line`; `tdd/cycle-log.md` cycle 25 |
 | D25 | M5 | Where does the showcase show the switcher row with both counts, and what does `other_projects_unread` take? | (1) In the project switcher panel of `sections/floating.rs` (rows from `samples.rs`), not in `sections/atoms.rs` as T071 lists: a menu's rows are built only inside its panel (`menu::item_column` is `pub(super)`). The button with a count is in the `UnreadMark` entry of `atoms.rs`. FR-030 asks that the showcase show both, not where. (2) `other_projects_unread` takes `Option<&Path>`, where `data-model.md` writes `&active`: the app can have no active project, and then every project is another one. | agent-resolved | `showcase/sections/floating.rs`, `showcase/samples.rs`; `workspace.rs` |
+| D26 | M6 | How does the macOS backend learn of a click (T086), given that `mac-usernotifications` 0.3.1 polls the notification centre every 500 ms for each buttonless notification whose response is awaited? | The thread that delivers a notification sends it with the async `Notification::send()` under the crate's `block_on` (not `send_blocking`, which fails with `MainThreadNotRunning` whenever the main run loop is busy) and then awaits `handle.response()`. Each notification carries `.timeout(1 hour)`: with a timeout the crate races the delegate against one timer and does not poll. The cost: after one hour the crate removes the notification from the notification centre, and a click is possible only until then; one parked thread per notification not yet answered. Rejected: no timeout (two XPC calls a second per notification, for as long as it stays in the centre); a button (changes the banner and registers a dismiss category that the crate says relaunches the bundle); `block_on_main` (the main thread is winit's; the crate's docs say a GUI app's run loop delivers the delegate's callbacks without it). `Shown::on_response` is the pure rule (default action of a held id, no close reason). Also here: `prompt_is_open` — while a request for authorisation has been unanswered for 2 s, `show` starts no thread and hands over no banner (the M3 review A follow-up). Unverified without a Mac: that the response arrives while winit runs the main loop, and the one-hour removal; check in quickstart §C1 (M9). | agent-resolved | `mac-usernotifications` 0.3.1 `src/send.rs:91-128`, `src/delegate.rs`, `src/lib.rs:56-90` |
+| D27 | M6 | How does the Windows backend report a click (T087)? | Each toast gets its own `on_activated` handler, built by the function `on_activated(events, project, session)`: called with `None` (the toast itself, no button argument) it sends `NotifierEvent::Activated` for its session and returns `Ok`; with an argument it sends nothing. The handler is the id table of T080 ("keyed per toast"), so there is no map. Unverified on a machine: whether the handler still fires after `Toast::show` has dropped the toast object, and for a toast in the notification centre (research R4); check in quickstart §C2 (M9). | agent-resolved | `tauri-winrt-notification` 0.8.1 `src/lib.rs:485`, `:751` |
 
 ## Review rounds
 
@@ -103,7 +106,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Milestone M6, written by the first M6 unit at 125k context. PR **#560** is open as a draft.
+
+Done:
+- `branch-start.sh 559`; the nine prep commits cherry-picked onto `57f14c72` with no conflict (`c627c807`..`0a7eba54`). Protocol version 25 stands (main was 24); `schema_hash` 15 passed.
+- The prep cycles are cycles 26 to 30 of `tdd/cycle-log.md`; `tdd/m6-prep-cycles.md` is removed. Ticked: T073–T078, T081–T085, T088–T090.
+- `e18b5ebb` (pushed): the T079 and T080 tests with `todo!()` bodies, `system(events)` hands the channel to all three backends, `--test attention_reveal` in `ci.yml`. `mise run gate` passed on this tree. From Linux, clippy `-p micold-client --bin micold-ai-ide --tests -- -D warnings` passed for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` on it, so the red is the tests' own.
+- `47bb094f` (local, NOT pushed): the green of T086 and T087 (D26, D27), and the M3 follow-up on the open permission prompt (`prompt_is_open`).
+
+Next steps, in order:
+1. Record the red in a new cycle 31 of `tdd/cycle-log.md`, in the form of cycle 12: `gh run list --commit e18b5ebb --workflow ci.yml`, then the step "Test (desktop notification backends)" of the macOS and Windows jobs. Expected: macOS fails every new test in `shell::desktop_notify::macos::tests` with `not yet implemented: T086` (7 tests: 6 on `Shown::on_response`, 1 on `prompt_is_open`), the 10 old ones pass; Windows fails 4 new tests with `not yet implemented: T087`. If the legs failed earlier than that step, find out why before going on.
+2. Cross-check the green from Linux, for both targets: `scripts/build-lock.sh cargo clippy -p micold-client --bin micold-ai-ide --tests --target <t> -- -D warnings`. On the green tree macOS passed before; Windows failed only on a deprecated `try_next` in the tests, since changed to `try_recv` and not checked again.
+3. Judge the tests without a red (cycle 27: U65 `with_no_holder_and_an_empty_focus_order_reveal_target_is_the_sender`, daemon `attention.rs`; cycle 29: U163 `an_id_the_table_does_not_hold_is_no_event`, U164 `another_action_key_is_no_event` and `any_other_signal_and_a_signal_with_another_body_is_not_read`, client `desktop_notify/linux.rs`). Read, not yet run: each can fail (U65 against `unwrap_or(<other id>)`; U164 against `on_signal` without its `key == DEFAULT_ACTION` guard). Run those mutants (commit first; restore with `git checkout -- <file>`) and record the result in the cycle log. Cycle 26's red is a compile error: record that as it is.
+4. `verify.md`: scoped gate with review A (`code-review`, `high`) on `origin/main...HEAD`; review B; quickstart §B9–B11a through an `autopilot-worker` with the `visual-pass` skill, on a private display, pin directory and session bus. `Notifier::listen`, `clicks()` and `window_raise` have never run against a real bus or display: say in this ledger what a stand-in replaced.
+5. Judge and record as decisions (or correct): the reducer step is `reveal_steps` plus the root's `State::reveal_session -> Vec<Message>` (the shape of D20); the click function is `notifier_event`; T089 needed no `main.rs` edit (wiring in `shell/subscriptions.rs`, `shell/connection.rs`, `shell/daemon_sync.rs`, new `ConnectionMsg::NotifierReported`); the Linux table drops an id on activation; Wayland is detected from the window's raw handle in `shell/window_raise.rs`. Give them to review B as questions.
+6. Tick T079, T080, T086, T087 and T120 (after `session_reveal` and `attention_reveal` pass). Full gate, push, record the green CI run of the macOS and Windows legs in cycle 31, finish the PR body (`tasks/pr.md`; it ends `Refs #481`) and mark the PR ready.
+7. The user guide says a click opens the session on macOS and Windows: true once `47bb094f` is pushed. Add to it that on macOS a notification leaves the notification centre after one hour (D26). Remove the M3 follow-up on the permission prompt from *Follow-ups not done* and add: D26 and D27 are unverified on a machine, check in quickstart §C1 and §C2 (M9).
+
+Open findings: none yet; no review has run.
 
 ## Open escalation
 
