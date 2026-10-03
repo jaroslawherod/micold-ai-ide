@@ -168,12 +168,12 @@ implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U36 | `unread_session_count` counts unread sessions of the Default entry and of every worktree, whatever the sidebar's filter hides | FR-022, US2-14 | example | PENDING | T062 / T066 |
-| U37 | The count leaves out the session passed as in view | FR-019 | example | PENDING | T062 / T066 |
-| U38 | The count is zero for a project with no unread session | FR-021 | example | PENDING | T062 / T066 |
-| U39 | `other_projects_unread` is the sum over every project but the active one | FR-023, US2-15 | example | PENDING | T062 / T066 |
-| U40 | Unread sessions of the active project are not in that sum | FR-023, US2-16 | example | PENDING | T062 / T066 |
-| U41 | With Q active the sum counts R's session only | FR-023, US2-17 | example | PENDING | T062 / T066 |
+| U36 | `unread_session_count` counts unread sessions of the Default entry and of every worktree, whatever the sidebar's filter hides | FR-022, US2-14 | example | DONE | T062 / T066 |
+| U37 | The count leaves out the session passed as in view | FR-019 | example | DONE | T062 / T066 |
+| U38 | The count is zero for a project with no unread session | FR-021 | example | DONE | T062 / T066 |
+| U39 | `other_projects_unread` is the sum over every project but the active one | FR-023, US2-15 | example | DONE | T062 / T066 |
+| U40 | Unread sessions of the active project are not in that sum | FR-023, US2-16 | example | DONE | T062 / T066 |
+| U41 | With Q active the sum counts R's session only | FR-023, US2-17 | example | DONE | T062 / T066 |
 
 ### `crates/micold-core/src/settings.rs`: the setting
 

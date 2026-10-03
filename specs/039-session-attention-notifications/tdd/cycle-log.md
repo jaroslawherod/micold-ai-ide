@@ -600,3 +600,25 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
   `a_restart_of_the_service_keeps_a_read_session_read`. Restored: `unread_state` 15 passed.
 - Without a test: `unwind` in `server.rs` calls `persist_attention` before the stop (review A F1),
   and `protocol_roundtrip.rs` round-trips `unread: true` (review A F2).
+
+## Cycle 22 — U36 to U41 — T062, T066 (M5-1)
+
+- Tests: `crates/micold-core/src/workspace.rs`, the file's first test module, 6 tests.
+- Red, first run: `scripts/build-lock.sh cargo test -p micold-core --lib workspace::tests` did not
+  compile: `no method named 'unread_session_count' found for struct 'workspace::Workspace'`, and the
+  same for `other_projects_unread`.
+- Red, with both functions stubbed to return `0`: 4 failed, 2 passed.
+  `the_unread_count_covers_the_default_entry_and_every_worktree`: `left: 0 right: 3`;
+  `the_unread_count_leaves_out_the_session_in_view`: `left: 0 right: 1`;
+  `the_other_projects_total_sums_every_project_but_the_active_one`: `left: 0 right: 3`;
+  `after_a_switch_the_other_projects_total_counts_the_remaining_projects_only`: `left: 0 right: 1`.
+- U38 and U40 assert a zero and passed against the stub, so they were checked with a mutant of the
+  real code: with the `s.unread &&` filter and the `active` filter both removed,
+  `the_unread_count_is_zero_for_a_project_with_no_unread_session` and
+  `the_other_projects_total_leaves_out_the_active_project` fail (4 failed, 2 passed). Restored.
+- Green: `Workspace::unread_session_count(&Path, Option<SessionId>)` and
+  `Workspace::other_projects_unread(Option<&Path>)` beside `running_session_count`.
+  `cargo test -p micold-core --all-targets` exit 0, 145 result lines `ok`.
+- `other_projects_unread` takes `Option<&Path>`, not `&Path`: with no project active every project
+  is another one. It sums over `Workspace::projects`, the rows the switcher lists.
+- Refactor: none needed.
