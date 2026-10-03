@@ -355,10 +355,7 @@ async fn a_report_naming_an_unread_session_clears_it_and_every_window_is_told() 
         1,
         "the other window is sent the same session, read, with its attention event still counted"
     );
-    assert!(
-        !service.unread(a),
-        "the service holds the session as read"
-    );
+    assert!(!service.unread(a), "the service holds the session as read");
 }
 
 /// A19 (US2 scenario 6): the session is selected in a window without keyboard focus, so it is in
@@ -428,7 +425,11 @@ async fn a_claim_and_its_grant_leave_unread_as_it_was() {
     reports(&mut window, true, None).await;
     service.finishes_a_turn(a);
 
-    let answers = sends(&mut window, ClientMsg::AttentionClaim { session: a, seq: 1 }).await;
+    let answers = sends(
+        &mut window,
+        ClientMsg::AttentionClaim { session: a, seq: 1 },
+    )
+    .await;
 
     assert!(
         answers

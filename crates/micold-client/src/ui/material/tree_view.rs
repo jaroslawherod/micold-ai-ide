@@ -608,7 +608,8 @@ mod tests {
     const ACTION: f32 = 21.0;
     const TOLERANCE: f32 = 0.5;
 
-    const LONG_NAME: &str = "Refactor the session supervisor so that restarts keep their scrollback";
+    const LONG_NAME: &str =
+        "Refactor the session supervisor so that restarts keep their scrollback";
 
     fn roles() -> Roles {
         tokens::roles(ColorScheme::Light)
@@ -657,7 +658,9 @@ mod tests {
     fn sized(nodes: &[Rectangle], width: f32, height: f32) -> Vec<Rectangle> {
         nodes
             .iter()
-            .filter(|n| (n.width - width).abs() < TOLERANCE && (n.height - height).abs() < TOLERANCE)
+            .filter(|n| {
+                (n.width - width).abs() < TOLERANCE && (n.height - height).abs() < TOLERANCE
+            })
             .copied()
             .collect()
     }
