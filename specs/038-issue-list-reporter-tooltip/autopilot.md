@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2 PR open: wait for CI and merge.
+- **Next step**: M2 PR #543 open: wait for CI and merge.
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #525 | Spec | merged | 96bcd68ea422d8f1e8a18dc2ea5f55808482eae1 |
 | #534 | Design: clarify, plan, tasks, milestones | merged | 3d52e83e32344ee4d09964b74b80d24499e3931b |
 | #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
+| #543 | M2: Up and Down keep the highlighted issue row wholly in view | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
-| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | | in progress |
+| M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | PR open |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | | drafted |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
