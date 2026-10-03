@@ -83,7 +83,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // Feature 039: a click on a desktop notification this window raised. Event-driven: nothing
     // arrives, and nothing wakes the window, until a notification is clicked.
     subs.push(crate::shell::desktop_notify::clicks().map(|event| {
-        Message::Connection(micold_client::features::connection::Msg::NotifierReported(event))
+        Message::Connection(micold_client::features::connection::Msg::NotifierReported(
+            event,
+        ))
     }));
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
