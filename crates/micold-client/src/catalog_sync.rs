@@ -395,6 +395,7 @@ mod tests {
                             input_serial: 0,
                             live_shells: Vec::new(),
                             attention_seq: 0,
+                            unread: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
                         })
                         .collect(),

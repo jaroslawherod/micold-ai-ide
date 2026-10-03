@@ -1138,6 +1138,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: session.attention_seq,
+        unread: false,
     }
 }
 

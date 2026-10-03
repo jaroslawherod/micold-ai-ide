@@ -2222,6 +2222,7 @@ pub(crate) mod tests {
             input_serial,
             live_shells: Vec::new(),
             attention_seq: 0,
+            unread: false,
         }
     }
 

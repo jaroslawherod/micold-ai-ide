@@ -98,6 +98,7 @@ fn summary(id: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary 
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: seq,
+        unread: false,
     }
 }
 
