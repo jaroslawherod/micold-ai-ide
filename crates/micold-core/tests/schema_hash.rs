@@ -209,7 +209,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 24 → 25 for feature 039's `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession`: a
 /// click on a notification is sent to the service, which forwards it to one window. Nineteenth
 /// time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 25;
+///
+/// And 25 → 26 for feature 039's `activation` on both reveal messages: the Wayland activation
+/// token of the click rides with the reveal. Twentieth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 26;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -352,6 +355,24 @@ fn the_reveal_and_its_forward_are_in_the_hashed_source() {
             messages.contains(anchor),
             "`{anchor}` is not in messages.rs, so the hash is not the hash of the message set \
              that asks for a session to be revealed and forwards the request"
+        );
+    }
+}
+
+#[test]
+fn the_activation_token_is_in_the_hashed_source_of_both_reveal_messages() {
+    // Feature 039, contract W3.4 (version 26). U16. Read from the text `build.rs` hashes.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for message in ["SessionReveal {", "RevealSession {"] {
+        let body = &messages[messages
+            .find(message)
+            .expect("the message is in messages.rs")..];
+        let body = &body[..body.find('}').expect("the message body closes")];
+        assert!(
+            body.contains("activation: Option<String>"),
+            "`{message}` has no `activation: Option<String>`, so the hash is not the hash of the \
+             message set that carries the activation token"
         );
     }
 }

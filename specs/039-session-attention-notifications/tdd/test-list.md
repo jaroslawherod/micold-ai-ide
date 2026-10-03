@@ -128,7 +128,7 @@ implementation task(s).
 | U13 | `ClientMsg::AttentionClaim` and `DaemonMsg::AttentionGranted` encode and decode at version 23 | FR-001, FR-006a | example | PENDING | T019 / T026 |
 | U14 | `SessionSummary::unread` encodes and decodes at version 24 | FR-016, FR-024 | example | PENDING | T046 / T053 |
 | U15 | `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession` encode and decode at version 25 | FR-011, FR-012 | example | PENDING | T074 / T082 |
-| U16 | `activation: Option<String>` on both reveal messages encodes and decodes at version 26 | FR-011 | example | PENDING | T092 / T097 |
+| U16 | `activation: Option<String>` on both reveal messages encodes and decodes at version 26 | FR-011 | example | DONE | T092 / T097 |
 | U17 | `DaemonSettings::desktop_notifications` and `SettingsSet::desktop_notifications` encode and decode at version 27 | FR-026, FR-027 | example | PENDING | T102 / T107 |
 
 ### `crates/micold-core/src/attention.rs`: `AttentionTracker::observe`
@@ -273,7 +273,7 @@ the same kind.
 | U99 | With neither, it goes back to the sender | FR-012 | example | PENDING | T076 / T083 |
 | U100 | It is forwarded for a session that does not exist | FR-013 | example | PENDING | T076 / T083 |
 | U101 | No session, attachment or stored state differs after a reveal | FR-014 | example | PENDING | T076 / T083 |
-| U102 | `activation` reaches the target connection unchanged, also when the target is not the sender | FR-011 | example | PENDING | T093 / T097 |
+| U102 | `activation` reaches the target connection unchanged, also when the target is not the sender | FR-011 | example | DONE | T093 / T097 |
 
 ### `crates/micold-daemon/tests/settings_desktop_notifications.rs`: the setting in the service
 

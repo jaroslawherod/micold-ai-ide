@@ -632,7 +632,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // pushed the notice). The folders are scanned first, as the switch itself scans them: a
         // project whose folder has gone since the last scan gets the notice, not a switch that
         // is refused followed by a selection in the project that stayed active (FR-013).
-        DaemonMsg::RevealSession { project, session } => {
+        DaemonMsg::RevealSession {
+            project,
+            session,
+            activation: _,
+        } => {
             app.core.workspace.refresh_availability(app.caps.scanner());
             follow_up = app
                 .core
@@ -2492,6 +2496,7 @@ pub(crate) mod tests {
             DaemonMsg::RevealSession {
                 project: gone,
                 session: id,
+                activation: None,
             },
         );
 

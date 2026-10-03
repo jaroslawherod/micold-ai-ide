@@ -197,6 +197,7 @@ fn reveal(project: &Path, session: SessionId) -> ClientMsg {
     ClientMsg::SessionReveal {
         project: project.to_path_buf(),
         session,
+        activation: None,
     }
 }
 
@@ -204,6 +205,7 @@ fn forwarded(project: &Path, session: SessionId) -> Vec<DaemonMsg> {
     vec![DaemonMsg::RevealSession {
         project: project.to_path_buf(),
         session,
+        activation: None,
     }]
 }
 
@@ -389,4 +391,42 @@ async fn a_reveal_changes_no_session_no_attachment_and_nothing_stored() {
         "and still by the window that held it: the sender's own attach is refused"
     );
     assert_eq!(service.stored(), stored_before, "nothing stored changed");
+}
+
+/// U102 (FR-011, W3.4): the activation token reaches the target connection unchanged, also when
+/// the target is not the sender; the service does not read it.
+#[tokio::test]
+async fn the_activation_token_reaches_the_target_unchanged_also_when_it_is_not_the_sender() {
+    let a = session_id(0xA);
+    let service = Service::with_sessions(&[a]);
+    let project = service.project();
+    let mut holder = connect(&service.state, "holder").await;
+    let mut clicked = connect(&service.state, "clicked").await;
+    attaches(&mut holder, &project).await;
+    // Not a token anything would accept: it is forwarded, not interpreted.
+    let token = " odd token \u{1F511}\n".to_string();
+    let msg = ClientMsg::SessionReveal {
+        project: project.clone(),
+        session: a,
+        activation: Some(token.clone()),
+    };
+
+    let to_the_sender = exchange(&mut clicked, Some(msg.clone())).await;
+    let to_the_holder = exchange(&mut holder, None).await;
+    let to_itself = exchange(&mut clicked, Some(msg)).await;
+
+    assert_eq!(
+        to_the_holder,
+        vec![DaemonMsg::RevealSession {
+            project: project.clone(),
+            session: a,
+            activation: Some(token),
+        }],
+        "the target, which is not the sender, is sent the token as it was"
+    );
+    assert!(to_the_sender.is_empty(), "{to_the_sender:?}");
+    assert!(
+        to_itself.is_empty(),
+        "the holder still holds the project, so the sender is again sent nothing"
+    );
 }

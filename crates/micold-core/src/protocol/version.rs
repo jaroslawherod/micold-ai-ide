@@ -92,7 +92,9 @@
 /// And 24 → 25 for feature 039's `ClientMsg::SessionReveal` and `DaemonMsg::RevealSession`
 /// (contract W3): a click on a notification is sent to the service, which forwards it to one
 /// window. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 25;
+/// And 25 → 26 for feature 039's `activation` on both reveal messages (contract W3.4): the Wayland
+/// activation token of the click rides with the reveal. An older peer would fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 26;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

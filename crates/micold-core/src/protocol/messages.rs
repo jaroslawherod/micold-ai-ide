@@ -241,6 +241,9 @@ pub enum ClientMsg {
         project: PathBuf,
         /// The session to show.
         session: SessionId,
+        /// The Wayland activation token of the click, when the notification service sent one
+        /// (W3.4). The service forwards it unread.
+        activation: Option<String>,
     },
 
     // --- Session commands (fire-and-forget) ---
@@ -673,6 +676,8 @@ pub enum DaemonMsg {
         project: PathBuf,
         /// The session to show.
         session: SessionId,
+        /// The activation token of the click, as the sender wrote it (W3.4).
+        activation: Option<String>,
     },
     /// Handshake or attach refused.
     Refused {
@@ -1407,10 +1412,12 @@ mod attention_wire_tests {
         let asked = ClientMsg::SessionReveal {
             project: PathBuf::from("/repo"),
             session: session(),
+            activation: None,
         };
         let forwarded = DaemonMsg::RevealSession {
             project: PathBuf::from("/repo"),
             session: session(),
+            activation: None,
         };
         assert_eq!(
             through_json(&asked),
@@ -1422,6 +1429,30 @@ mod attention_wire_tests {
             forwarded,
             "a forwarded reveal is read as it was written"
         );
+    }
+
+    #[test]
+    fn the_activation_token_of_a_reveal_encodes_and_decodes_on_both_messages() {
+        // U16 (W3.4, version 26). A token no default produces, with and without one.
+        const TOKEN: &str = "wayland-token-7f3a";
+        for activation in [Some(TOKEN.to_string()), None] {
+            let asked = ClientMsg::SessionReveal {
+                project: PathBuf::from("/repo"),
+                session: session(),
+                activation: activation.clone(),
+            };
+            let forwarded = DaemonMsg::RevealSession {
+                project: PathBuf::from("/repo"),
+                session: session(),
+                activation,
+            };
+            assert_eq!(through_json(&asked), asked, "a reveal keeps its token");
+            assert_eq!(
+                through_json(&forwarded),
+                forwarded,
+                "a forwarded reveal keeps its token"
+            );
+        }
     }
 
     #[test]
