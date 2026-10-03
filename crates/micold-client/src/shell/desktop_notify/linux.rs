@@ -125,6 +125,7 @@ impl Shown {
     }
 
     /// Whether `id` is a notification of this window that is still shown.
+    #[cfg(test)]
     pub(super) fn holds(&self, id: u32) -> bool {
         self.by_id.contains_key(&id)
     }
