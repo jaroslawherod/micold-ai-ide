@@ -491,6 +491,10 @@ impl State {
     /// ordinary project switch when the project is not the active one, then the ordinary selection
     /// — and nothing else is sent (FR-014). A session that cannot be shown pushes the notice here
     /// and returns nothing, so no selection changes (FR-013).
+    ///
+    /// Before a switch the session is made the one the project remembers as its foreground, so
+    /// the switch arrives at it. Otherwise the switch would first restore, and start, the session
+    /// the project remembered — a session the click did not name (FR-014).
     pub fn reveal_session(
         &mut self,
         project: &std::path::Path,
@@ -503,9 +507,15 @@ impl State {
         let mut messages = Vec::with_capacity(steps.len());
         for step in steps {
             match step {
-                RevealStep::Reopen(project) => messages.push(Message::Project(
-                    crate::features::project::Msg::Reopened(project),
-                )),
+                RevealStep::Reopen(project) => {
+                    self.workspace.foreground_by_project.insert(
+                        micold_core::project::canonicalize_best_effort(&project),
+                        session,
+                    );
+                    messages.push(Message::Project(
+                        crate::features::project::Msg::Reopened(project),
+                    ));
+                }
                 RevealStep::Select(session) => messages.push(Message::Session(
                     crate::features::session::Msg::Selected(session),
                 )),

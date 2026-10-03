@@ -158,9 +158,10 @@ pub enum Reveal {
 }
 
 /// What to do with a request to show `session` of `project` (FR-011, FR-013): [`Reveal::Show`]
-/// when the project is known, its folder is available and it holds the session; otherwise
-/// [`Reveal::Unavailable`] — the session was removed, or the project was forgotten or its folder
-/// is gone.
+/// when the project is known, its folder is available and it holds the session, not closed;
+/// otherwise [`Reveal::Unavailable`] — the session was closed or removed, or the project was
+/// forgotten or its folder is gone. A closed session keeps its record, flagged `archived`, and has
+/// no row.
 pub fn resolve_reveal(workspace: &Workspace, project: &Path, session: SessionId) -> Reveal {
     let known_and_available = workspace
         .projects
@@ -169,7 +170,7 @@ pub fn resolve_reveal(workspace: &Workspace, project: &Path, session: SessionId)
     let holds_the_session = workspace
         .sessions
         .get(project)
-        .is_some_and(|sessions| sessions.iter().any(|s| s.id == session));
+        .is_some_and(|sessions| sessions.iter().any(|s| s.id == session && !s.archived));
     if known_and_available && holds_the_session {
         Reveal::Show {
             project: project.to_path_buf(),
@@ -546,6 +547,22 @@ mod tests {
             resolve_reveal(&workspace, Path::new(REPO), id(2)),
             Reveal::Unavailable,
             "the project holds no session with that id"
+        );
+    }
+
+    #[test]
+    fn u33_a_session_the_user_closed_resolves_to_unavailable() {
+        // M6 review A F1: closing keeps the record and flags it `archived`; it has no row.
+        let mut workspace = workspace_with(Availability::Available, id(1));
+        workspace
+            .sessions
+            .get_mut(Path::new(REPO))
+            .expect("the project's sessions")[0]
+            .archive();
+        assert_eq!(
+            resolve_reveal(&workspace, Path::new(REPO), id(1)),
+            Reveal::Unavailable,
+            "a closed session has no row to select"
         );
     }
 

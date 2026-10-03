@@ -148,9 +148,9 @@ impl Shown {
     }
 }
 
-/// Whether `error` says the connection to the bus is no good — it could not be opened, it broke,
-/// or a call on it was not answered in time — so that a kept one is dropped and the next
-/// notification opens a new one.
+/// Whether `error` says the bus could not be asked — the connection could not be opened, it
+/// broke, or a call on it was not answered in time. To the user that is no notification service
+/// ([`notify_error`]); whether the kept connection is dropped is [`connection_is_lost`].
 pub(super) fn is_connection_error(error: &zbus::Error) -> bool {
     matches!(
         error,
@@ -159,6 +159,18 @@ pub(super) fn is_connection_error(error: &zbus::Error) -> bool {
             | zbus::Error::Handshake(_)
             | zbus::Error::Connection(..)
     )
+}
+
+/// Whether `error` says the kept connection is lost, so that the next notification opens a new
+/// one. A call that was not answered in time is not that: the bus is still there, and the thread
+/// that reads the signals ([`Notifier::listen`]) lives as long as its connection, so opening a new
+/// one for each slow answer would leave a connection and a thread behind each time.
+pub(super) fn connection_is_lost(error: &zbus::Error) -> bool {
+    let timed_out = matches!(
+        error,
+        zbus::Error::InputOutput(io) if io.kind() == std::io::ErrorKind::TimedOut
+    );
+    is_connection_error(error) && !timed_out
 }
 
 /// What a bus failure means for the user (FR-010): no notification service to ask, or one that
@@ -187,7 +199,8 @@ pub(super) fn notify_error(error: &zbus::Error) -> NotifyError {
 }
 
 /// The Linux notifier. The session-bus connection is opened on the first notification and kept
-/// until a call on it fails with a connection error; a failed open is tried again on the next one.
+/// until a call on it fails with a lost connection ([`connection_is_lost`]); a failed open is
+/// tried again on the next one.
 /// Each connection has a thread that reads the service's signals from it ([`Self::listen`]).
 pub(super) struct Notifier {
     connection: Mutex<Option<zbus::blocking::Connection>>,
@@ -292,7 +305,7 @@ impl DesktopNotifier for Notifier {
                 ),
             )
             .map_err(|error| {
-                if is_connection_error(&error) {
+                if connection_is_lost(&error) {
                     self.forget_connection();
                 }
                 notify_error(&error)
@@ -488,7 +501,7 @@ mod tests {
 
     #[test]
     fn a_broken_bus_is_a_connection_error_and_a_services_answer_is_not() {
-        // Review A F3: the kept connection is dropped after the first kind, not after the second.
+        // Review A F3 (M2): the first kind is "no service" to the user, the second is a refusal.
         assert!(is_connection_error(&zbus::Error::InputOutput(
             std::sync::Arc::new(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
         )));
@@ -499,6 +512,19 @@ mod tests {
             zbus::fdo::Error::ServiceUnknown("nobody".to_string())
         ))));
         assert!(!is_connection_error(&zbus::Error::FDO(Box::new(
+            zbus::fdo::Error::AccessDenied("blocked".to_string())
+        ))));
+    }
+
+    #[test]
+    fn a_call_that_timed_out_keeps_the_connection_and_a_broken_bus_loses_it() {
+        // M6 review A F4: the thread that reads the signals lives as long as its connection. A
+        // service that is slow to answer has not broken the bus, and a new connection for each
+        // timeout would leave a thread and a connection behind each time.
+        let io = |kind| zbus::Error::InputOutput(std::sync::Arc::new(std::io::Error::from(kind)));
+        assert!(!connection_is_lost(&io(std::io::ErrorKind::TimedOut)));
+        assert!(connection_is_lost(&io(std::io::ErrorKind::BrokenPipe)));
+        assert!(!connection_is_lost(&zbus::Error::FDO(Box::new(
             zbus::fdo::Error::AccessDenied("blocked".to_string())
         ))));
     }

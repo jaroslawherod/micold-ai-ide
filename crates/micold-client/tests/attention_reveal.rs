@@ -93,6 +93,36 @@ fn a_reveal_for_a_background_project_reopens_it_then_selects_the_session() {
     assert_eq!(said(&state), (None, 0), "no notice");
 }
 
+/// U132 (FR-014, M6 review A F3): the switch a reveal asks for arrives at the revealed session,
+/// not at the one the project remembered — so the switch starts no other session.
+#[test]
+fn the_switch_a_reveal_asks_for_arrives_at_the_revealed_session() {
+    let (mut state, _, in_other) = two_projects();
+    let remembered = add_session(&mut state, OTHER);
+    state
+        .workspace
+        .foreground_by_project
+        .insert(PathBuf::from(OTHER), remembered);
+
+    let messages = state.reveal_session(Path::new(OTHER), in_other);
+    assert_eq!(
+        messages.first(),
+        Some(&Message::Project(ProjectMsg::Reopened(PathBuf::from(
+            OTHER
+        ))))
+    );
+    // What the shell does with `Reopened`.
+    let _ = state
+        .switch_active(Path::new(OTHER))
+        .expect("the switch is accepted");
+
+    assert_eq!(
+        state.session.active,
+        Some(in_other),
+        "the switch restores the revealed session, so it is the one session started"
+    );
+}
+
 /// U133 (FR-011, US3-1, A37, A41): a session of the active project — selected, and nothing else.
 #[test]
 fn a_reveal_for_the_active_project_selects_the_session_alone() {
