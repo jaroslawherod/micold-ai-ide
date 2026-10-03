@@ -14,6 +14,8 @@ use crate::state::ClientId;
 #[derive(Debug, Default)]
 pub struct Views {
     views: HashMap<ClientId, WindowView>,
+    /// The highest sequence granted for each session (W1.4). Kept in memory only.
+    granted: HashMap<SessionId, u64>,
 }
 
 impl Views {
@@ -43,6 +45,16 @@ impl Views {
         self.views
             .values()
             .any(|view| view.in_view == Some(session))
+    }
+
+    /// Whether the claim of `seq` for `session` is granted (W1.4, FR-006a): only when `seq` is
+    /// above every sequence already granted for the session and not above `current_seq`.
+    pub fn grant(&mut self, session: SessionId, seq: u64, current_seq: u64) -> bool {
+        if seq > current_seq || seq <= self.granted.get(&session).copied().unwrap_or(0) {
+            return false;
+        }
+        self.granted.insert(session, seq);
+        true
     }
 }
 
@@ -148,5 +160,52 @@ mod tests {
             !views.is_in_view(a),
             "no connection is left that reported the session in view"
         );
+    }
+
+    /// U54 (FR-006a): the first claim of a sequence is granted.
+    #[test]
+    fn the_first_claim_of_a_sequence_is_granted() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 1, 1));
+    }
+
+    /// U55 (FR-006a): the same sequence is not granted twice.
+    #[test]
+    fn the_same_sequence_is_not_granted_again() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 1, 1));
+        assert!(!views.grant(session(1), 1, 1), "a second claim of 1 loses");
+    }
+
+    /// U56 (FR-001): a sequence above the session's current one is not granted, and does not
+    /// use up the grant of the real one.
+    #[test]
+    fn a_sequence_above_the_current_one_is_not_granted() {
+        let mut views = Views::default();
+        assert!(!views.grant(session(1), 2, 1));
+        assert!(
+            views.grant(session(1), 1, 1),
+            "the refused claim left the session's sequence 1 ungranted"
+        );
+    }
+
+    /// U57 (US1-6, FR-003): a later sequence of the same session is granted.
+    #[test]
+    fn a_later_sequence_of_the_same_session_is_granted() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 1, 2));
+        assert!(views.grant(session(1), 2, 2));
+        assert!(
+            !views.grant(session(1), 1, 2),
+            "an earlier sequence stays used"
+        );
+    }
+
+    /// U58 (FR-009): one session's grant does not use up another's.
+    #[test]
+    fn a_grant_for_one_session_does_not_use_up_another_s() {
+        let mut views = Views::default();
+        assert!(views.grant(session(1), 1, 1));
+        assert!(views.grant(session(2), 1, 1));
     }
 }

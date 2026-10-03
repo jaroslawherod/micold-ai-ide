@@ -649,6 +649,8 @@ where
             ClientMsg::WindowView { focused, in_view } => {
                 state.set_window_view(id, WindowView { focused, in_view })
             }
+            // Not an operation either; it needs no attachment (W1.4–W1.6).
+            ClientMsg::AttentionClaim { session, seq } => state.claim_attention(id, session, seq),
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
                     Ok(_sessions) => {
