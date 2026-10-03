@@ -376,3 +376,22 @@ fn the_activation_token_is_in_the_hashed_source_of_both_reveal_messages() {
         );
     }
 }
+
+#[test]
+fn the_desktop_notifications_setting_is_in_the_hashed_source() {
+    // Feature 039, contract W4. U17. Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in [
+        // Outbound: the value every window follows.
+        "pub desktop_notifications: bool,",
+        // Inbound: `None` leaves it unchanged.
+        "desktop_notifications: Option<bool>,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so the hash is not the hash of the message set \
+             that carries the Desktop notifications setting"
+        );
+    }
+}

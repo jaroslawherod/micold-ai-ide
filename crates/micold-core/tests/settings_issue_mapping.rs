@@ -181,6 +181,7 @@ fn other_writers_preserve_the_mapping() {
             "cross_session_access",
             "daemon",
             "default_ai_cli",
+            "desktop_notifications",
             "env_include_enabled",
             "env_include_script_path",
             "env_include_timeout_secs",

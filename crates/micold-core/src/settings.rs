@@ -163,6 +163,11 @@ pub struct Settings {
     /// feature before then. Service-owned like the binding toggle, so every window follows it.
     #[serde(default)]
     pub pr_status_enabled: bool,
+    /// Whether a session that comes to await input while not in view raises a desktop
+    /// notification (feature 039, FR-026). One switch for every AI CLI (FR-028). Service-owned,
+    /// so every window follows it at once; unread marks do not depend on it (FR-017).
+    #[serde(default = "default_desktop_notifications")]
+    pub desktop_notifications: bool,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -186,6 +191,12 @@ fn default_pi_activity_component() -> bool {
     true
 }
 
+/// Desktop notifications when a file predates the switch, or cannot be read: on (feature 039,
+/// FR-026).
+fn default_desktop_notifications() -> bool {
+    true
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -201,6 +212,7 @@ impl Default for Settings {
             cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
             pr_status_enabled: false,
+            desktop_notifications: default_desktop_notifications(),
         }
     }
 }
@@ -426,6 +438,10 @@ struct StoredSettings {
     /// defaulted, so `settings_version` does not move for it either.
     #[serde(default)]
     pr_status_enabled: bool,
+    /// Missing in files written before feature 039 → on, the requirement's default (FR-026).
+    /// Additive and defaulted, so `settings_version` does not move for it either.
+    #[serde(default = "default_desktop_notifications")]
+    desktop_notifications: bool,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -460,6 +476,7 @@ impl StoredSettings {
             cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
             pr_status_enabled: settings.pr_status_enabled,
+            desktop_notifications: settings.desktop_notifications,
         }
     }
 
@@ -492,6 +509,7 @@ impl StoredSettings {
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
+            desktop_notifications: self.desktop_notifications,
         }
     }
 }
@@ -766,5 +784,109 @@ impl SettingsStore for FakeSettingsStore {
         state.saves.push(settings.clone());
         state.settings = settings.clone();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod desktop_notifications_tests {
+    //! Feature 039, story 4: the **Desktop notifications** switch as it is stored (FR-026, FR-028).
+
+    use super::*;
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    /// U42 (FR-026, US4-1, Edge: settings file unreadable): the defaults have the switch on.
+    #[test]
+    fn desktop_notifications_are_on_by_default() {
+        assert!(
+            Settings::default().desktop_notifications,
+            "a fresh installation, and a settings file that cannot be read, notify"
+        );
+    }
+
+    /// U43 (FR-026): a file written before the switch existed reads as on.
+    #[test]
+    fn a_settings_file_without_the_field_reads_as_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark", "tool_server_enabled": false }"#,
+        )
+        .unwrap();
+
+        let outcome = store.load();
+
+        assert_eq!(outcome.status, LoadStatus::Loaded);
+        assert!(
+            outcome.settings.desktop_notifications,
+            "the user of an older file never turned notifications off"
+        );
+    }
+
+    /// U44 (FR-026, US4-4): off survives a save and a load.
+    #[test]
+    fn desktop_notifications_off_survives_a_save_and_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+
+        store
+            .save(&Settings {
+                desktop_notifications: false,
+                ..Settings::default()
+            })
+            .unwrap();
+        // Read the file too: with a stub that always loads `false`, the load alone would pass.
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap())
+                .unwrap();
+
+        assert_eq!(
+            written.get("desktop_notifications"),
+            Some(&serde_json::Value::Bool(false)),
+            "the file holds the user's choice"
+        );
+        assert!(
+            !store.load().settings.desktop_notifications,
+            "loading the file does not turn notifications back on"
+        );
+    }
+
+    /// U45 (FR-028, US4-6): one key names notifications, it is a switch, and no key holds a value
+    /// per AI CLI.
+    #[test]
+    fn the_stored_settings_hold_one_notification_key_and_none_per_ai_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        store.save(&Settings::default()).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap())
+                .unwrap();
+        let document = written.as_object().expect("settings.json is an object");
+
+        let naming_notifications: Vec<&str> = document
+            .keys()
+            .map(String::as_str)
+            .filter(|key| key.contains("notif"))
+            .collect();
+        assert_eq!(
+            naming_notifications,
+            ["desktop_notifications"],
+            "one switch, for every AI CLI"
+        );
+        assert!(
+            document["desktop_notifications"].is_boolean(),
+            "the switch is on or off, not a value per AI CLI"
+        );
+        for cli in ["claude", "copilot", "pi_coding", "pi-coding"] {
+            assert!(
+                !document
+                    .keys()
+                    .any(|key| key.contains("notif") && key.contains(cli)),
+                "no notification key names the AI CLI `{cli}`"
+            );
+        }
     }
 }
