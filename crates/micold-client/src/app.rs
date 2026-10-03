@@ -486,6 +486,35 @@ impl State {
         crate::features::attention::show_result(&mut self.attention, result)
     }
 
+    /// `DaemonMsg::RevealSession`: what this window does to show `session` of `project`
+    /// (feature 039, contract N5). Returns the messages for the shell to dispatch, in order — the
+    /// ordinary project switch when the project is not the active one, then the ordinary selection
+    /// — and nothing else is sent (FR-014). A session that cannot be shown pushes the notice here
+    /// and returns nothing, so no selection changes (FR-013).
+    pub fn reveal_session(
+        &mut self,
+        project: &std::path::Path,
+        session: micold_core::session::SessionId,
+    ) -> Vec<Message> {
+        use crate::features::attention::RevealStep;
+        let reveal = micold_core::attention::resolve_reveal(&self.workspace, project, session);
+        let steps =
+            crate::features::attention::reveal_steps(reveal, self.workspace.active.as_deref());
+        let mut messages = Vec::with_capacity(steps.len());
+        for step in steps {
+            match step {
+                RevealStep::Reopen(project) => messages.push(Message::Project(
+                    crate::features::project::Msg::Reopened(project),
+                )),
+                RevealStep::Select(session) => messages.push(Message::Session(
+                    crate::features::session::Msg::Selected(session),
+                )),
+                RevealStep::Notice(text) => self.notify_info(text),
+            }
+        }
+        messages
+    }
+
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
     ///
     /// Every dialog, and every popover **except** the terminal's own right-click menu: that one is
