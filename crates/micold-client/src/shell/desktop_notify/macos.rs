@@ -1,9 +1,10 @@
 //! The macOS desktop notification: `UNUserNotificationCenter`, through `mac-usernotifications`
 //! (feature 039, research R4, contract "Backends").
 //!
-//! Three pure functions decide everything — [`banner`], the text handed to the system,
-//! [`authorised`], what the user's answer to the system's permission prompt means, and
-//! [`notify_error`], what a failure of the crate means — and are tested without a bundle.
+//! Four pure functions decide everything — [`banner`], the text handed to the system,
+//! [`authorised`], what the user's answer to the system's permission prompt means,
+//! [`notify_error`], what a failure of the crate means, and [`outcome`], what `show` reports when
+//! the system has not answered — and are tested without a bundle.
 //! [`Notifier::show`] is the calls, with no branch of its own. The click arrives with story 3.
 
 use micold_client::features::attention::{DesktopNotification, NotifyError};
@@ -34,6 +35,14 @@ pub(super) fn authorised(
     answer: Result<bool, mac_usernotifications::Error>,
 ) -> Result<(), NotifyError> {
     let _ = answer;
+    todo!("T039")
+}
+
+/// What `show` reports for a notification handed to the system: what the system answered, or,
+/// when it has not answered in the time `show` waits — the user has the permission prompt open —
+/// an error that says so (FR-010). The notification is still shown if the user then allows it.
+pub(super) fn outcome(delivered: Option<Result<(), NotifyError>>) -> Result<(), NotifyError> {
+    let _ = delivered;
     todo!("T039")
 }
 
@@ -118,6 +127,24 @@ mod tests {
         // application's notifications off in System Settings.
         match authorised(Ok(false)) {
             Err(NotifyError::Refused(why)) => assert!(why.contains("not allowed"), "{why}"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn what_the_system_answered_in_time_is_what_show_reports() {
+        // U168.
+        assert_eq!(outcome(Some(Ok(()))), Ok(()));
+        let refused = NotifyError::Refused("blocked".to_string());
+        assert_eq!(outcome(Some(Err(refused.clone()))), Err(refused));
+    }
+
+    #[test]
+    fn a_system_that_has_not_answered_in_time_is_a_refusal_that_says_so() {
+        // U168 (FR-010): the permission prompt is open and nobody has answered it. `show` must
+        // not wait for the user.
+        match outcome(None) {
+            Err(NotifyError::Refused(why)) => assert!(why.contains("not answered"), "{why}"),
             other => panic!("expected a refusal, got {other:?}"),
         }
     }
