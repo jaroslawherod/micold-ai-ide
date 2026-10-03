@@ -384,7 +384,7 @@ the step T122 adds to `.github/workflows/ci.yml`; their red phase is that step's
 | U163 | Linux: an id the table does not hold maps to no event | FR-015, Edge: raising window closed | example | PENDING | T078 / T085 |
 | U164 | Linux: another action key maps to no event | FR-011 | example | PENDING | T078 / T085 |
 | U165 | Linux: `NotificationClosed` removes the id from the table | FR-015 | example | PENDING | T078 / T085 |
-| U166 | Linux: an `ActivationToken` signal that precedes `ActionInvoked` for the same id is carried as `activation: Some(token)`; without it `activation` is `None` | FR-011 | example | PENDING | T095 / T099 |
+| U166 | Linux: an `ActivationToken` signal that precedes `ActionInvoked` for the same id is carried as `activation: Some(token)`; without it `activation` is `None` | FR-011 | example | DONE | T095 / T099 |
 | U167 | macOS: a `DesktopNotification` maps to the title and message passed to the system | FR-004, FR-029 | example | PENDING | T035 / T039 |
 | U168 | macOS: each error of the notification crate (no bundle, authorisation refused) maps to a `NotifyError` | FR-010 | example | PENDING | T035 / T039 |
 | U169 | macOS: a response with the default action maps to `Activated` | FR-011 | example | PENDING | T079 / T086 |

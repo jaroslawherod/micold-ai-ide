@@ -962,3 +962,40 @@ Cycles 26 to 30 were run by a prep unit on the branch `feat/notify-session-needs
   token of `RevealSession` to; that the shell passes it there is cycle 36's glue.
 - **No test**: the macOS and Windows backends build `Activated` with `activation: None`; they
   compile on their own systems only, and the clippy cross-check of cycle 36 covers them.
+
+## Cycle 35 — U166 — T095, T099 (M7-3)
+
+- tests: `crates/micold-client/src/shell/desktop_notify/linux.rs::tests::{
+  the_activation_token_is_read_from_the_bus_message_that_carries_it,
+  a_token_that_precedes_the_click_on_the_same_notification_is_carried_in_the_activation,
+  a_click_with_no_token_before_it_carries_none,
+  a_token_for_another_notification_is_not_this_ones,
+  every_signal_sent_twice_is_still_one_click_with_its_token,
+  a_token_for_a_notification_the_table_does_not_hold_is_not_kept,
+  a_closed_notification_drops_its_token}` (all U166), and
+  `any_other_signal_and_a_signal_with_another_body_is_not_read` (U164), which no longer says that
+  `ActivationToken` is not read: it names an unknown signal and two wrong bodies of the token signal.
+- red: `cargo test -p micold-client --bin micold-ai-ide desktop_notify` at `bbc46ffe`, against
+  stubs: `signal` not reading `ActivationToken`, `Shown::on_signal` answering `None` to it and
+  storing nothing.
+  ```
+  test shell::desktop_notify::linux::tests::a_token_that_precedes_the_click_on_the_same_notification_is_carried_in_the_activation ... FAILED
+  test shell::desktop_notify::linux::tests::a_token_for_another_notification_is_not_this_ones ... FAILED
+  test shell::desktop_notify::linux::tests::every_signal_sent_twice_is_still_one_click_with_its_token ... FAILED
+  test shell::desktop_notify::linux::tests::the_activation_token_is_read_from_the_bus_message_that_carries_it ... FAILED
+    left: Some(Activated { project: "/repo", session: SessionId(..), activation: None })
+   right: Some(Activated { project: "/repo", session: SessionId(..), activation: Some("gnome-shell/Micold AI IDE/2596-1-host_TIME1300") })
+  test result: FAILED. 19 passed; 4 failed; 0 ignored; 0 measured; 330 filtered out
+  ```
+  `a_click_with_no_token_before_it_carries_none`, `a_token_for_a_notification_the_table_does_not_hold_is_not_kept`
+  and `a_closed_notification_drops_its_token` passed against the stubs, which keep no token at
+  all: they have no red of their own.
+- green: the same command -> `test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 330 filtered out`.
+  The token is a field of its notification's entry in `Shown` and is kept nowhere else: a token
+  for an id the table does not hold is dropped, and the click or the close takes it with the entry.
+- The duplicates of GNOME Shell (research R7): the first `ActionInvoked` removes the entry, as in
+  M6 (`a_click_is_reported_once_however_many_times_the_service_says_it`), so the second one, and a
+  second token after it, find nothing; a second token before it overwrites the first with its equal.
+- commit: tests `bbc46ffe`; green the `feat(039)` commit that carries this record.
+- **No test**: `Notifier::listen`, the thread that reads the bus, is unchanged: the match rule
+  already took every signal of the interface.
