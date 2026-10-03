@@ -53,7 +53,7 @@ mise run gate          # fmt, clippy, workspace tests, script tests — what CI 
 | Chunks of 50, empty list, fake source | `micold-core/tests/pull_request_source.rs` | FR-023, Edge "very many worktrees" |
 | Containment rule | `micold-core/tests/git_containment.rs` | FR-015, FR-017 |
 | Setting default and round trip | `micold-core/tests/settings_roundtrip.rs` (extended) | FR-030 |
-| Wire | `micold-core/tests/protocol_roundtrip.rs`, `schema_hash.rs` | protocol 21 |
+| Wire | `micold-core/tests/protocol_roundtrip.rs`, `schema_hash.rs` | protocol 22 |
 | `MergedBranchCheck` on a real temp repository | `micold-daemon/tests/merged_branch_check.rs` | FR-015, FR-017, FR-018a |
 | Setting persisted and broadcast | `micold-daemon/tests/pr_status_setting.rs` (new) | FR-029, FR-030 |
 | Schedule reducer | `micold-client/tests/features_pr_status.rs` | story 4, FR-018 to FR-022, FR-024, FR-025, FR-027, FR-029 |
