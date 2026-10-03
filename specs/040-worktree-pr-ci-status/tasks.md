@@ -52,7 +52,7 @@ No setup tasks: no new crate, dependency, binary or configuration (plan, Technic
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 No foundational phase of its own. The one prerequisite every story shares — the wire change
-(protocol 21) with the setting and the `MergedBranchCheck` RPC — is User Story 1's slice B below,
+(protocol 22, since feature 039 took 21) with the setting and the `MergedBranchCheck` RPC — is User Story 1's slice B below,
 because the switch is part of story 1 and the repository takes one protocol bump per feature
 (research R11).
 
@@ -350,7 +350,7 @@ behaviour and carry the `docs-not-needed` label; M4 to M7 each carry their user-
 ### M2 — The switch on the wire and the merged-branch question
 
 - **Tasks**: T014–T022
-- **Deliverable**: On `main`, client and daemon speak protocol 21: the daemon stores `pr_status_enabled` (off by default), reports it in `Welcome`, broadcasts a change to every window, and answers `MergedBranchCheck` for a repository without changing it. No UI sets or uses either yet; M4 and M6 do.
+- **Deliverable**: On `main`, client and daemon speak protocol 22 (feature 039 took 21): the daemon stores `pr_status_enabled` (off by default), reports it in `Welcome`, broadcasts a change to every window, and answers `MergedBranchCheck` for a repository without changing it. No UI sets or uses either yet; M4 and M6 do.
 - **Satisfies**: FR-030 (default off, kept across restarts); FR-029 (every window follows); FR-015, FR-017, FR-018a (the containment rule and its RPC)
 - **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-daemon --test merged_branch_check --test pr_status_setting`
 - **Depends on**: M1 (order only)

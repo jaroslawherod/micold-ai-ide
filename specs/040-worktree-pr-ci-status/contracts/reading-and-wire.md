@@ -190,7 +190,7 @@ starts a reading in every window that shows a project (FR-030).
 
 ## 5. Protocol version
 
-`PROTOCOL_VERSION` 20 → 21, **one** bump for §3 and §4 together, in the milestone that ships them,
+`PROTOCOL_VERSION` 21 → 22 (feature 039 took 21 first; planned as 20 → 21), **one** bump for §3 and §4 together, in the milestone that ships them,
 with `crates/micold-core/tests/schema_hash.rs` re-pinned and `protocol_roundtrip.rs` given an
 example of `MergedBranchCheck` (request and result) and of `SettingsSet` / `DaemonSettings` with
 the new field. If another feature has taken 21 on `main` by then, the next free number is used.

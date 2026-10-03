@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #529 | Spec | merged | e90a18f9969fe111c9aa6bfb666e31276f3ae38b |
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
-| #547 | M2 | open (label `docs-not-needed` added after `docs check` failed in run 37104864147) | |
+| #547 | M2 | open (label `docs-not-needed` added after `docs check` failed in run 37104864147; rebased onto main 69248274 after it went CONFLICTING: feature 039 took protocol 21, so 040 is 22) | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | merged |
-| M2 | T014–T022 | full | Protocol 21: the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | PR open (gate green at 64239328; reviews A and B clean) |
+| M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | PR open (rebased; protocol 22; reviews A and B clean at 64239328) |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | | pending |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
