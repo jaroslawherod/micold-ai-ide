@@ -654,6 +654,10 @@ where
             }
             // Not an operation either; it needs no attachment (W1.4–W1.6).
             ClientMsg::AttentionClaim { session, seq } => state.claim_attention(id, session, seq),
+            // Forwarded to one window, unchecked; no reply and no attachment needed (W3).
+            ClientMsg::SessionReveal { project, session } => {
+                state.reveal_session(id, project, session)
+            }
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
                     Ok(_sessions) => {

@@ -1,4 +1,5 @@
-//! Which sessions the connected windows have in view (feature 039, wire W1.1, W1.2).
+//! Which sessions the connected windows have in view (feature 039, wire W1.1, W1.2), and which
+//! window a click on a notification is sent to (W3.1).
 //!
 //! Pure, no I/O, and lost when the service stops: a window reports again after every `Welcome`.
 //! The service counts an attention event only for a session that [`Views::is_in_view`] denies.
@@ -16,6 +17,9 @@ pub struct Views {
     views: HashMap<ClientId, WindowView>,
     /// The highest sequence granted for each session (W1.4). Kept in memory only.
     granted: HashMap<SessionId, u64>,
+    /// The connections that reported `focused: true`, in the order they last did, most recent
+    /// last (FR-012). A connection is listed once, and leaves when it ends.
+    focus_order: Vec<ClientId>,
 }
 
 impl Views {
@@ -29,6 +33,10 @@ impl Views {
     /// this connection's last report named it already.
     pub fn set_view(&mut self, client: ClientId, view: WindowView) -> Option<SessionId> {
         let in_view = if view.focused { view.in_view } else { None };
+        if view.focused {
+            self.focus_order.retain(|listed| *listed != client);
+            self.focus_order.push(client);
+        }
         let before = self
             .views
             .insert(
@@ -45,6 +53,21 @@ impl Views {
     /// Forget `client`'s report: its connection ended.
     pub fn remove(&mut self, client: ClientId) {
         self.views.remove(&client);
+        self.focus_order.retain(|listed| *listed != client);
+    }
+
+    /// The connections that reported keyboard focus, in the order they last did, most recent last.
+    pub fn focus_order(&self) -> &[ClientId] {
+        &self.focus_order
+    }
+
+    /// The connection a reveal is forwarded to (W3.1, FR-012): `holder`, the one attached to the
+    /// session's project, when there is one; else the one that last reported keyboard focus; else
+    /// `sender`, the window that was clicked.
+    pub fn reveal_target(&self, holder: Option<ClientId>, sender: ClientId) -> ClientId {
+        holder
+            .or_else(|| self.focus_order.last().copied())
+            .unwrap_or(sender)
     }
 
     /// Forget what was granted for `session`: the session was removed, and its id is not used
@@ -294,5 +317,94 @@ mod tests {
             !views.grant(session(2), 1, 1),
             "another session's grant stands"
         );
+    }
+
+    fn focused() -> WindowView {
+        WindowView {
+            focused: true,
+            in_view: None,
+        }
+    }
+
+    /// U61 (FR-012): the connection that last reported keyboard focus is last.
+    #[test]
+    fn focus_order_puts_the_connection_that_last_reported_focus_last() {
+        let mut views = Views::default();
+
+        views.set_view(FIRST_WINDOW, focused());
+        views.set_view(SECOND_WINDOW, focused());
+        assert_eq!(views.focus_order(), [FIRST_WINDOW, SECOND_WINDOW]);
+
+        views.set_view(FIRST_WINDOW, viewing(session(1)));
+        assert_eq!(
+            views.focus_order(),
+            [SECOND_WINDOW, FIRST_WINDOW],
+            "the first window reported focus again, so it is the most recent, and listed once"
+        );
+    }
+
+    /// U61: a report without focus does not make a connection the most recent one.
+    #[test]
+    fn a_report_without_focus_does_not_move_a_connection_in_focus_order() {
+        const NEVER_FOCUSED: ClientId = 3;
+        let unfocused = WindowView {
+            focused: false,
+            in_view: None,
+        };
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, focused());
+        views.set_view(SECOND_WINDOW, focused());
+
+        views.set_view(FIRST_WINDOW, unfocused);
+        views.set_view(NEVER_FOCUSED, unfocused);
+
+        assert_eq!(
+            views.focus_order(),
+            [FIRST_WINDOW, SECOND_WINDOW],
+            "only a report of `focused: true` counts, and a window that never had focus is absent"
+        );
+    }
+
+    /// U62 (FR-012): a connection that ended is no reveal target.
+    #[test]
+    fn remove_takes_a_connection_out_of_focus_order() {
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, focused());
+        views.set_view(SECOND_WINDOW, focused());
+
+        views.remove(SECOND_WINDOW);
+
+        assert_eq!(views.focus_order(), [FIRST_WINDOW]);
+    }
+
+    /// U63 (FR-012, US3-6): the window that holds the project is the target, whoever has focus.
+    #[test]
+    fn reveal_target_is_the_connection_that_holds_the_project() {
+        const HOLDER: ClientId = 7;
+        const SENDER: ClientId = 9;
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, focused());
+
+        assert_eq!(views.reveal_target(Some(HOLDER), SENDER), HOLDER);
+    }
+
+    /// U64 (FR-012): with no holder, the window that last reported focus.
+    #[test]
+    fn with_no_holder_reveal_target_is_the_last_of_focus_order() {
+        const SENDER: ClientId = 9;
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, focused());
+        views.set_view(SECOND_WINDOW, focused());
+
+        assert_eq!(views.reveal_target(None, SENDER), SECOND_WINDOW);
+    }
+
+    /// U65 (FR-012): with no holder and no window that reported focus, the sender.
+    #[test]
+    fn with_no_holder_and_an_empty_focus_order_reveal_target_is_the_sender() {
+        const SENDER: ClientId = 9;
+        let views = Views::default();
+
+        assert_eq!(views.reveal_target(None, SENDER), SENDER);
     }
 }
