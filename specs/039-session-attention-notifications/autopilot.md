@@ -96,6 +96,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 A | 2 | bdbea09e8b478459379010c3ea30ecc3dbfbacc3:d98f1a7186c622ae8cb315e74478fa4343ea3172 | CLEAN (scoped, sonnet): the fix for F1 holds, the reasons for deferring F2 and F3 stand, nothing new in the fix diff |
 | M5 B | 1 | bdbea09e8b478459379010c3ea30ecc3dbfbacc3:d98f1a7186c622ae8cb315e74478fa4343ea3172 | CLEAN (Verify: `switcher_unread` 5 passed; `mise run test-core` all ok, 296 in the lib; D24 and D25 judged to break no requirement). 2 MINOR: F2 fixed (FR-021, the M5 goal and deliverable and quickstart B6 said "beside"; now "with" and "under"); F1 under *Follow-ups not done* |
 | M5 visual | 1 | same tree (binaries from `d98f1a71`) | PASS: showcase (light and dark; the panel row with both counts, the button with `● 3` and with none), quickstart §B5, B6 (panel and button), B7 and the button's tooltip, on Xvfb `:131` with a private HOME and pin directory; evidence `visual-pass/M5/`. Client steps in the dark theme only; no closed-panel shot of the tooltip. Seen: the tooltip stays over the open panel's top padding (review A F3), covering no row text |
+| M6 A | 1 | 9b9745417cc56b95f6c6374cc0e189d64f505595:ea6d9c1b00a5b0d3b42230d45439c48f208c2b4f | running |
 
 ## Declined review findings
 
