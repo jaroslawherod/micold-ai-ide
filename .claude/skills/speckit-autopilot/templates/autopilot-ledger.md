@@ -8,15 +8,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: <#n, or none>
 - **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
-- **Phase**: 1-spec | 2-clarify | 3-design | 4-milestones | 5-close | done
+- **Phase**: 1-spec | 2-clarify | 3-design | 4-milestones | 5-close | done (set in the run's last PR)
 - **Next step**: <the one concrete action a resumed session takes first>
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Spec | open / merged | … |
-| #… | Design | … | … |
+| #… | Design | open / merged | … |
 
 ## Milestones
 
@@ -49,10 +48,6 @@ snapshots. The next unit sets it back to None.>
 ## Open escalation
 
 None. <or: the banner as sent, and when>
-
-## Token usage
-
-<At the handoff: the Total row and model table from `mise run autopilot-tokens`.>
 
 ## Follow-ups not done
 

@@ -21,7 +21,8 @@ Scope: reproduce, report, patch, verify, review. Do not fix code; a milestone un
    BUG record and ledger, and return `DONE` with `SWITCH: feature`. The new spec cites `BUG-<k>` as
    input. Otherwise set the fix's **Tier** in the ledger's milestone row (step 6), commit the BUG
    record, patch and ledger (do not push), and return `DONE` with the fix's task IDs and
-   `TIER: light` or `TIER: full`.
+   `TIER: light` or `TIER: full`. The fix's milestone unit finishes the ledger in its PR, as
+   [5-close.md](5-close.md) step 5 does: that PR is the run's last.
 6. **Tier of the fix.** `light` (Sonnet ships it) when the solution is already known: the BUG record
    names a confirmed root cause and the exact code to change, the fix is a few tasks besides the
    regression test, and it meets `light` in [../references/milestones.md](../references/milestones.md)

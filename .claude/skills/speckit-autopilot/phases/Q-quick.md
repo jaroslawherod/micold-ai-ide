@@ -11,7 +11,7 @@ these hold, or it is not quick:
 
 1. **Ledger.** Create it from [../templates/autopilot-ledger.md](../templates/autopilot-ledger.md) as
    `specs/quick/<YYYY-MM-DD>-<slug>.autopilot.md`, **Kind** `quick`, one milestone row `Q`. The
-   directory is gitignored: the ledger is never committed, and the run has no record PR.
+   directory is gitignored: the ledger is never committed.
 2. **Check it is quick**, now and at every later step. It is not: stop and return `DONE` with
    `NEXT: bug` (behaviour a spec covers is wrong) or `NEXT: feature` (new behaviour), and what you
    found. No PR.

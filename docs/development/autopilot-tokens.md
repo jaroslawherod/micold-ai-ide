@@ -300,6 +300,29 @@ What the two 034 runs still show, and what changed for it:
   `autopilot-worker`, whose own context is under 20k when it comes back, while the unit holds.
   The sentence adds 42 tokens to every unit call.
 
+## Steps cut or merged, 2026-10-03
+
+Measured over the two 034 runs, 035, 038 and 040, before the change:
+
+| Step | What the runs showed | Now |
+|---|---|---|
+| Local `test-scripts` on specs-only PRs | Spec, design and record units ran it 3–6 times each; it tests `scripts/`, and CI's docs job takes a minute | `check-criteria-observables.sh` on the spec only |
+| `speckit-docguard-guard` in close | Failed every run on the same repo conventions, never adopted (031, 033, 034, 035) | Not run |
+| `speckit-converge` in close | 0.4–1.0M (1–2%); no finding in the github-issue run, where every review B was clean | Run only when a milestone lacks a clean review B |
+| Review B | 3–6% of a run; round 1 clean in 9 of 10 milestones, round 2 clean in 3 of 3 | Once per milestone, on Sonnet; again only after its own BLOCKER or MAJOR |
+| Record unit and PR | 0.2–0.5M, one more PR, unit and local gate | The close PR (or a bug's fix PR) sets the ledger `done`; the token report is a comment on it |
+| Last clarify round | A fresh unit that only confirmed nothing was left (034, 035, 037) | Rounds run in one unit until one is clean |
+| Spec PR | A PR, a CI run and a unit boundary between spec and clarify | The spec ships in the design PR |
+| Full gate per milestone | 4–5 runs, 100–125 minutes per run | `scoped-gate.sh` (changed crates) between review rounds, `mise run gate` once at the end |
+| Design unit | Handed over twice in 038 and in 040 | Two units: plan, then tasks |
+
+Kept, because they found real problems in every run: the spec, plan and tasks reviews, review A,
+`speckit-tdd-verify` and the visual pass.
+
+Without the spec PR, a feature number reaches `main` later, so two worktrees are more likely to
+pick the same one. The spec units of 037 and 038 checked the other worktrees' `specs/` for the
+number on their own; the skill does not require it yet.
+
 ## Skill size
 
 What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md, and every

@@ -1,15 +1,5 @@
-# Phase 3: design unit
+# Phase 3: design (moved)
 
-1. `speckit-plan`. A fresh reviewer checks it against the plan rubric.
-2. `speckit-tasks`, then cut milestones by [../references/milestones.md](../references/milestones.md).
-   Every milestone ships a **deliverable**: something observable on `main`. "Setup" or
-   "Foundational" is never a milestone on its own. Add the milestones to the ledger, with their **Tier** field.
-3. `speckit-analyze`, and fix what it finds. A fresh reviewer checks against the tasks and milestone
-   rubric.
-4. **Close checklists.** `speckit-implement` stops on unchecked checklist items, so resolve them
-   here. For each unchecked item, either:
-   - a reviewer subagent confirms the artifacts satisfy it, and you tick it; or
-   - you fix the spec or plan until they do; or
-   - it needs a decision, and you escalate.
-5. Open **PR 2** (`docs(NNN): clarify, plan and cut milestones for <feature>`) with the clarified
-   spec, plan, research, contracts and tasks. Docs-only: the local gate is `mise run test-scripts`.
+Design is now two units: [3-plan.md](3-plan.md), then [3-tasks.md](3-tasks.md). An orchestrator
+started before the split dispatches this file: do both in this unit, the plan file's steps first,
+skipping its return after the commit.

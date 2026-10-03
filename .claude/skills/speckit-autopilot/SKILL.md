@@ -46,16 +46,17 @@ output of `git branch --show-current`; `resume` finds the ledger by it.
 
 | # | Phase | Unit and file | Ends with |
 |---|---|---|---|
-| Q | **Quick** | Quick: [phases/Q-quick.md](phases/Q-quick.md) | One PR, then the **handoff** without a record unit. Or `NEXT: bug` (Phase 0) or `NEXT: feature` (Phase 1), with what it found as the scope. |
+| Q | **Quick** | Quick: [phases/Q-quick.md](phases/Q-quick.md) | One PR, then the **handoff**. Or `NEXT: bug` (Phase 0) or `NEXT: feature` (Phase 1), with what it found as the scope. |
 | 0 | **Bug** | Bug: [phases/0-bug.md](phases/0-bug.md) | Patched BUG record, reviewed. Then one milestone unit ships record, patch, regression test and fix in **one PR**, then the **handoff**. Or the unit returns `SWITCH: feature` and the flow goes to Phase 1. |
-| 1 | **Spec** | Spec: [phases/1-spec.md](phases/1-spec.md) | **PR 1**: the spec |
-| 2 | **Clarify**, in rounds | Clarify round: [phases/2-clarify.md](phases/2-clarify.md) | Dispatch rounds until one returns `CLEAN` as its first summary line. Answers ship in PR 2. A fifth round is an escalation (category 5). |
-| 3 | **Design** | Design: [phases/3-design.md](phases/3-design.md) | **PR 2**: clarified spec, plan, research, contracts, tasks with `## Milestones` |
+| 1 | **Spec** | Spec: [phases/1-spec.md](phases/1-spec.md) | Reviewed spec, committed; no PR |
+| 2 | **Clarify** | Clarify: [phases/2-clarify.md](phases/2-clarify.md) | The unit runs rounds until one is clean, then returns `CLEAN`. A unit that returns without it (a handover): dispatch another. |
+| 3 | **Design**, two units | Plan: [phases/3-plan.md](phases/3-plan.md), then Tasks: [phases/3-tasks.md](phases/3-tasks.md) | The **design PR**: spec, clarifications, plan, research, contracts, tasks with `## Milestones` |
 | 4 | **Milestones**, one at a time | Milestone K: [phases/4-milestone.md](phases/4-milestone.md) | One PR per milestone |
-| 5 | **Close** | Close: [phases/5-close.md](phases/5-close.md) | New milestones (back to 4, then close again), or the close PR, then the **handoff** |
-| 6 | **Record** | Record: [phases/6-record.md](phases/6-record.md) | The record PR, opened at the **handoff** |
+| 5 | **Close** | Close: [phases/5-close.md](phases/5-close.md) | New milestones (back to 4, then close again), or the close PR with the ledger finished, then the **handoff** |
 
-Every PR merges on green before the next unit starts.
+Every PR merges on green before the next unit starts. A unit that returns `DONE` with `PR: none`
+(spec, plan) leaves its commits on the branch: dispatch the next unit at once, with the previous
+PR `none`.
 
 ### Dispatching a unit
 
@@ -65,18 +66,17 @@ model by the work, not the phase name. A unit keeps its model when continued wit
 
 | Unit | `model` |
 |---|---|
-| Spec, clarify round 1, design, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
-| Clarify round 2 and later, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
+| Spec, clarify, plan, tasks, bug, close, and a milestone the ledger marks **Tier** `full` | omit (session model) |
+| A clarify unit continuing another's handover, and a milestone the ledger marks **Tier** `light` or `docs` | `"sonnet"` |
 | Bug unit when the report already names the root cause and the fix (which code, what change) | `"sonnet"` |
 | Quick | `"sonnet"` |
-| Record | `"haiku"` |
 | Helper: read a long CI log, gate log or report and return only its failures | `"haiku"` |
 
 A ledger from an older run has **Docs-only** instead of **Tier**: `yes` is `docs`, `no` is `full`.
 A cheaper unit that returns `FAILED` is retried on the session model, with the ledger's *Handover*
 as its starting point.
 
-- **Description:** name the unit (`Milestone M2 042`, `Clarify round 3 042`). Token reports group by
+- **Description:** name the unit (`Milestone M2 042`, `Plan 042`). Token reports group by
   it.
 - **Prompt:** keep this opening fixed for every unit, so the prompt cache reuses it:
   `You are a speckit-autopilot unit. Read .claude/skills/speckit-autopilot/unit.md and follow it.`
@@ -186,4 +186,4 @@ When the last PR has merged, read [references/handoff.md](references/handoff.md)
 | "main is red, I'll wait for it to recover" | Silent waiting stalls the flow. Escalate as *blocked by work outside my flow*. |
 | "Quick question for the user…" | Batch it with a recommendation under the banner, or resolve it from evidence. |
 | "I remember where I was" | The ledger and `gh pr view` say where you are. Memory does not. |
-| "Everything merged. Done!" | Run `handoff-check.sh`, then send the WORK COMPLETE handoff. |
+| "Everything merged. Done!" | Run `handoff-check.sh`, post the token report, then send the WORK COMPLETE handoff. |

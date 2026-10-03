@@ -1,5 +1,10 @@
 # Phase 6: record unit
 
+Only for a run whose orchestrator started before the record unit was retired: there the close PR
+did not finish the ledger. A newer run finishes it in its last PR and never dispatches this unit.
+After step 1, if the ledger already reads `done` (its close PR finished it), change nothing and
+return `DONE` with `PR: none`.
+
 The last PR of a run. It records the run in the ledger and changes nothing else.
 
 1. Run `scripts/autopilot/branch-start.sh <last-pr>` with the last PR the orchestrator gave you. On

@@ -1,14 +1,16 @@
 # Handoff: the last message
 
-A quick run has no record unit: its ledger is not committed. Skip to `handoff-check.sh <ledger>`.
-
-First dispatch the record unit with the last PR and its merge SHA. It closes the ledger and opens
-the record PR; wait on it and merge it as any other. It is not listed in the ledger, so pass it to
-the checks.
-
-Then run `scripts/autopilot/handoff-check.sh <ledger> <record-pr>`. It checks the tree is clean,
+When the run's last PR (the close PR, or a bug's fix PR) has merged, run
+`scripts/autopilot/handoff-check.sh <ledger>`. It checks the tree is clean,
 every commit is on `origin/main` (by patch, since rebase-merge rewrites SHAs), and every PR reads
-`MERGED`. If it prints `NOT DONE`, report exactly what remains. A ledger with an **Issue**: close
+`MERGED`. If it prints `NOT DONE`, report exactly what remains. Except for a quick run (its ledger
+is not committed), post the token report on the last PR without reading it:
+
+```bash
+mise run autopilot-tokens > "$SCRATCHPAD/tokens.md" && gh pr comment <last-pr> --body-file "$SCRATCHPAD/tokens.md"
+```
+
+ A ledger with an **Issue**: close
 it per [issue.md](issue.md). Otherwise send this with a `PushNotification`:
 
 ```
