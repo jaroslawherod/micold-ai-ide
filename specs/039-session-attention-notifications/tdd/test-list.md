@@ -56,29 +56,29 @@ ticked by `speckit-implement`.
 | A11 | After a reconnect, a session last seen working and found awaiting input with a higher sequence is claimed once and shown once | US1-11, FR-006 | example | PENDING | T022 | T118 |
 | A12 | Sessions that change at the same moment are each granted once, each grant naming its own session | US1-12, FR-009, SC-005 | example | PENDING | T021 | T118 |
 | A13 | A change that happened with no window open is never claimed: the first snapshot a window receives yields no claim and no call to `show` | US1-13, FR-008, FR-005 | example | PENDING | T022 | T118 |
-| A14 | A session that changes to awaiting input while not in view is `unread` in the snapshot every window receives, and its row is marked | US2-1, FR-016, FR-018 | example | PENDING | T048, T051 | T119 |
-| A15 | A session that changes while a window reports it in view is not `unread` | US2-2, FR-016 | example | PENDING | T048 | T119 |
-| A16 | When the user brings an unread session into view, its project's unread count falls by one at once | US2-3, FR-019, FR-021 | example | PENDING | T063 | T119 |
-| A17 | With two unread sessions in Q and none in P, Q's switcher row carries `● 2 unread` and P's row carries no unread count | US2-4, FR-021 | example | PENDING | T063, T064 | T119 |
-| A18 | The active project's switcher row carries its unread count like any other | US2-5, FR-021 | example | PENDING | T063 | T119 |
-| A19 | A session selected in an unfocused window becomes unread on its change, and the report sent when the window regains focus clears it | US2-6, FR-019 | example | PENDING | T048 | T119 |
-| A20 | A report naming a background project's unread session, sent when the user switches to that project, clears it | US2-7, FR-019 | example | PENDING | T048 | T119 |
-| A21 | An unread session that starts working again stays unread | US2-8, FR-020 | example | PENDING | T048 | T119 |
-| A22 | An unread session that is removed is in no later snapshot, so no row and no count includes it | US2-9, FR-020 | example | PENDING | T048 | T119 |
+| A14 | A session that changes to awaiting input while not in view is `unread` in the snapshot every window receives, and its row is marked | US2-1, FR-016, FR-018 | example | DONE | T048, T051 | T119 |
+| A15 | A session that changes while a window reports it in view is not `unread` | US2-2, FR-016 | example | DONE | T048 | T119 |
+| A16 | When the user brings an unread session into view, its project's unread count falls by one at once | US2-3, FR-019, FR-021 | example | DONE | T063 | T119 |
+| A17 | With two unread sessions in Q and none in P, Q's switcher row carries `● 2 unread` and P's row carries no unread count | US2-4, FR-021 | example | DONE | T063, T064 | T119 |
+| A18 | The active project's switcher row carries its unread count like any other | US2-5, FR-021 | example | DONE | T063 | T119 |
+| A19 | A session selected in an unfocused window becomes unread on its change, and the report sent when the window regains focus clears it | US2-6, FR-019 | example | DONE | T048 | T119 |
+| A20 | A report naming a background project's unread session, sent when the user switches to that project, clears it | US2-7, FR-019 | example | DONE | T048 | T119 |
+| A21 | An unread session that starts working again stays unread | US2-8, FR-020 | example | DONE | T048 | T119 |
+| A22 | An unread session that is removed is in no later snapshot, so no row and no count includes it | US2-9, FR-020 | example | DONE | T048 | T119 |
 | A23 | With desktop notifications off, a change while not in view sets `unread` exactly as with them on | US2-10, FR-017, SC-003 | example | PENDING | T104 | T121 |
-| A24 | An unread session selected in a focused window behind Settings is cleared by the report sent when Settings closes | US2-11, FR-019 | example | PENDING | T048 | T119 |
-| A25 | A session whose window shows one of its regular terminal tabs is reported in view and does not become unread | US2-12, FR-016 | example | PENDING | T048 | T119 |
-| A26 | A session whose window lost its connection is in view nowhere, so its change to awaiting input sets `unread` | US2-13, FR-006 | example | PENDING | T048 | T119 |
-| A27 | A project's unread count includes a session of a worktree the sidebar's filter hides | US2-14, FR-022 | example | PENDING | T062 | T119 |
-| A28 | With P active, two unread in Q and one in R, the switcher's button carries `● 3` | US2-15, FR-023, SC-010 | example | PENDING | T063, T065 | T119 |
-| A29 | With the only unread session in the active project, the switcher's button carries no unread count | US2-16, FR-023 | example | PENDING | T063 | T119 |
-| A30 | After a switch to Q the button's total counts R's unread session only, whether or not Q's were read | US2-17, FR-023 | example | PENDING | T062, T063 | T119 |
-| A31 | A change with no connection sets `unread`, and the first snapshot a later window receives carries it | US2-18, FR-008 | example | PENDING | T048 | T119 |
-| A32 | `unread: true` survives a restart of the session service | US2-19, FR-008a | example | PENDING | T048 | T119 |
-| A33 | A read session awaiting input whose activity did not change is not unread after a restart of the service | US2-20, FR-008a | example | PENDING | T048 | T119 |
-| A34 | A read session that works and changes to awaiting input again with no connection is unread | US2-21, FR-008 | example | PENDING | T048 | T119 |
-| A35 | A session that became unread with no connection and then works again is still unread | US2-22, FR-008, FR-020 | example | PENDING | T048 | T119 |
-| A36 | The report a window sends after `Welcome`, naming the unread session it selected, clears it, and the row hides the mark at once | US2-23, FR-019 | example | PENDING | T048, T051 | T119 |
+| A24 | An unread session selected in a focused window behind Settings is cleared by the report sent when Settings closes | US2-11, FR-019 | example | DONE | T048 | T119 |
+| A25 | A session whose window shows one of its regular terminal tabs is reported in view and does not become unread | US2-12, FR-016 | example | DONE | T048 | T119 |
+| A26 | A session whose window lost its connection is in view nowhere, so its change to awaiting input sets `unread` | US2-13, FR-006 | example | DONE | T048 | T119 |
+| A27 | A project's unread count includes a session of a worktree the sidebar's filter hides | US2-14, FR-022 | example | DONE | T062 | T119 |
+| A28 | With P active, two unread in Q and one in R, the switcher's button carries `● 3` | US2-15, FR-023, SC-010 | example | DONE | T063, T065 | T119 |
+| A29 | With the only unread session in the active project, the switcher's button carries no unread count | US2-16, FR-023 | example | DONE | T063 | T119 |
+| A30 | After a switch to Q the button's total counts R's unread session only, whether or not Q's were read | US2-17, FR-023 | example | DONE | T062, T063 | T119 |
+| A31 | A change with no connection sets `unread`, and the first snapshot a later window receives carries it | US2-18, FR-008 | example | DONE | T048 | T119 |
+| A32 | `unread: true` survives a restart of the session service | US2-19, FR-008a | example | DONE | T048 | T119 |
+| A33 | A read session awaiting input whose activity did not change is not unread after a restart of the service | US2-20, FR-008a | example | DONE | T048 | T119 |
+| A34 | A read session that works and changes to awaiting input again with no connection is unread | US2-21, FR-008 | example | DONE | T048 | T119 |
+| A35 | A session that became unread with no connection and then works again is still unread | US2-22, FR-008, FR-020 | example | DONE | T048 | T119 |
+| A36 | The report a window sends after `Welcome`, naming the unread session it selected, clears it, and the row hides the mark at once | US2-23, FR-019 | example | DONE | T048, T051 | T119 |
 | A37 | A click on a notification for a session of the active project raises the window and selects that session | US3-1, FR-011 | example | PENDING | T077 | T120 |
 | A38 | A click for a session of a background project raises the window, reopens that project, then selects the session | US3-2, FR-011 | example | PENDING | T077 | T120 |
 | A39 | After a click has shown the session, its row carries no unread mark | US3-3, FR-019 | example | PENDING | T077 | T120 |
