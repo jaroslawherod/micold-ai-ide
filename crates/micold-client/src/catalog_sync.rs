@@ -117,6 +117,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
                 existing.attention_seq = summary.attention_seq;
+                existing.unread = summary.unread;
                 // Adopt the daemon's label only when it has a real one: a title, or a label derived
                 // from the first turn (feature 032, C8.5). The daemon now overlays the live OSC-0
                 // title onto the summary (T047), but a summary can still be `Pending` before either
@@ -165,6 +166,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 s.lifecycle = lifecycle;
                 s.activity = summary.activity.clone();
                 s.attention_seq = summary.attention_seq;
+                s.unread = summary.unread;
                 list.push(s);
             }
         }
