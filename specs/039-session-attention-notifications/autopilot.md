@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #554 | M2 | merged | d4ea296f481afbd1c773adfb52cfa862ca37482a |
 | #557 | M3 | merged | f113b4a49a0c9a3146dfc5ada363b0c6d42cb4db |
 | #558 | M4 | merged | ea477587200d8efb0a0be2427ec471254cb32fd7 |
+| #559 | M5 | open | |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T034 | full | One desktop notification on Linux for a session not in view | #554 | merged |
 | M3 | T035–T044, T118, T122 | full | The same notification on macOS and Windows | #557 | merged |
 | M4 | T045–T061 | full | The unread mark on a session's row, kept across restarts | #558 | merged |
-| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | | in progress |
+| M5 | T062–T072, T119 | full | Unread counts on the switcher's rows and button | #559 | PR open |
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | | pending |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | | pending |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | | pending |
