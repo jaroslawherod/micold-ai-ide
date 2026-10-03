@@ -94,7 +94,10 @@
 /// window. An older peer would fail to decode either.
 /// And 25 → 26 for feature 039's `activation` on both reveal messages (contract W3.4): the Wayland
 /// activation token of the click rides with the reveal. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 26;
+/// And 26 → 27 for feature 039's `desktop_notifications` on `DaemonSettings` and
+/// `ClientMsg::SettingsSet` (contract W4): the Desktop notifications switch, held by the service
+/// for every window. An older peer would fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 27;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

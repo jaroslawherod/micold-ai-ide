@@ -212,7 +212,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 25 → 26 for feature 039's `activation` on both reveal messages: the Wayland activation
 /// token of the click rides with the reveal. Twentieth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 26;
+/// And 26 → 27 for feature 039's `desktop_notifications` on `DaemonSettings` and `SettingsSet`
+/// (contract W4): the service holds the Desktop notifications switch for every window. Twenty-first
+/// time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 27;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
