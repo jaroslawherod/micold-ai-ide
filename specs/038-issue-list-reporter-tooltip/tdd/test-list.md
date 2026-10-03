@@ -33,12 +33,12 @@ before the story is complete.
 | A7 | The picked issue's row carries the picked-row marker whatever its height | US1-7, FR-007 | example | DONE | T004 | T017 |
 | A8 | A row from the search beyond the cap or from a typed number has the same two lines as a listed row | US1-8, FR-006 | example | DONE | T005 | T017 |
 | A9 | At the default and at a narrow width each row wraps to the width and still shows all its text | US1-9, FR-004, SC-001 | example | DONE | T006 | T017 |
-| A10 | Typing a reporter's login (or part of it) narrows the list to that reporter's issues plus other matches | US2-1, FR-009 | example | PENDING | T024, T025 | T031 |
-| A11 | A row listed because of its reporter has the matched part of the login emphasised | US2-2, FR-010 | example | PENDING | T026 | T031 |
-| A12 | Text matching both title and reporter emphasises both matches in the row | US2-3, FR-010 | example | PENDING | T024, T026 | T031 |
-| A13 | Typing the login in a different letter case still matches the reporter's issues | US2-4, FR-009 | example | PENDING | T024 | T031 |
-| A14 | The empty search field's hint names the reporter alongside number, title and label | US2-5, FR-011 | example | PENDING | T026 | T031 |
-| A15 | With more issues than the cap, typing a login makes the same one search request (typed text, no author filter) and shows loaded matches plus returned issues matching by number, title, label or reporter | US2-6, FR-012, FR-013 | example | PENDING (T001 part done: no author filter; T025 in M3) | T001, T025 | T031 |
+| A10 | Typing a reporter's login (or part of it) narrows the list to that reporter's issues plus other matches | US2-1, FR-009 | example | DONE (U45, U18) | T024, T025 | T031 |
+| A11 | A row listed because of its reporter has the matched part of the login emphasised | US2-2, FR-010 | example | DONE (U37, U17) | T026 | T031 |
+| A12 | Text matching both title and reporter emphasises both matches in the row | US2-3, FR-010 | example | DONE (U19, U37) | T024, T026 | T031 |
+| A13 | Typing the login in a different letter case still matches the reporter's issues | US2-4, FR-009 | example | DONE (U18, U45) | T024 | T031 |
+| A14 | The empty search field's hint names the reporter alongside number, title and label | US2-5, FR-011 | example | DONE (U38) | T026 | T031 |
+| A15 | With more issues than the cap, typing a login makes the same one search request (typed text, no author filter) and shows loaded matches plus returned issues matching by number, title, label or reporter | US2-6, FR-012, FR-013 | example | DONE (U46, U47; T001's request half) | T001, T025 | T031 |
 | A16 | A tooltip for a row opens when the cursor stays still on a row with a description for 3 seconds | US3-1, FR-015, SC-003 | example | PENDING | T032, T035, T047 | T055 |
 | A17 | No tooltip is open when the cursor has been still for less than 3 seconds | US3-2, FR-015, SC-003 | example | PENDING | T032, T035 | T055 |
 | A18 | While the cursor keeps moving over the list no tooltip opens; each move beyond the tolerance restarts the 3 seconds | US3-3, FR-016, SC-004 | example | PENDING | T032, T035 | T055 |
@@ -76,18 +76,18 @@ gives the test task first, then the implementation task(s).
 | U7 | `title_line()` is `#<number> <title>` | US1-1, FR-001 | example | DONE | T002 / T008 |
 | U8 | `details_line()` is the reporter, then `  ·  ` and the comma-joined labels when there are labels | US1-2, FR-003 | example | DONE | T002 / T008 |
 | U9 | `details_line()` with no labels is the reporter alone, no separator; no author shows `ghost` | US1-3, FR-003 | example | DONE | T002 / T008 |
-| U10 | Before M3 `row_text()` is today's `#N title  ·  labels` and omits the reporter | FR-008 (M1 boundary) | characterization | DONE (baseline held) | T002 / T008 |
+| U10 | Before M3 `row_text()` is today's `#N title  ·  labels` and omits the reporter | FR-008 (M1 boundary) | characterization | SUPERSEDED in M3 by U16 (T024 replaces the case) | T002 / T008 |
 | U11 | `emphasis`: a span in the title part maps to the same range of the title line | US2-3, FR-010 | example | DONE | T002 / T008 |
 | U12 | `emphasis`: a span in the labels part maps to the details line after the reporter and its 6-byte separator | FR-010 | example | DONE | T002 / T008 |
-| U13 | `emphasis`: a span crossing the separator is split and the separator's bytes carry no emphasis; a span over a separator only yields none | FR-010 | example | DONE (M1 part; T024/T028 extend it in M3) | T002, T024 / T008, T028 |
+| U13 | `emphasis`: a span crossing the separator is split and the separator's bytes carry no emphasis; a span over a separator only yields none | FR-010 | example | DONE (M3: `github_issue_lines.rs::a_span_crossing_the_separator_is_split` holds the contract's `7..16` and `10..13`) | T002, T024 / T008, T028 |
 | U14 | `emphasis`: a span outside every part is dropped; an issue without labels yields no label emphasis | FR-010 | example | DONE | T002 / T008 |
 | U15 | `emphasis` returns sorted, non-overlapping ranges on character boundaries for multi-byte title and labels | FR-010 | example | DONE | T002 / T008 |
-| U16 | `row_text()` from M3 on is `#N title  ·  reporter  ·  labels` (reporter is matchable) | US2-1, FR-009 | example | PENDING | T024 / T028 |
-| U17 | `emphasis` maps a reporter span to the start of the details line (`ana` -> `0..3`) | US2-2, FR-010 | example | PENDING | T024 / T028 |
-| U18 | `typeahead::rank` over issues matches part of a reporter login in a different letter case | US2-1, US2-4, FR-009 | example | PENDING | T024 / T028 |
-| U19 | One `rank` result emphasises both a title match and a reporter match | US2-3, FR-010 | example | PENDING | T024 / T028 |
-| U20 | Text found only in an issue's description does not match the issue; `row_text()` never contains the description | FR-014 | example | PENDING | T024, T044 / T028, T049 |
-| U21 | Ranking 1,000 issue rows that carry reporters stays under the existing 50 ms release budget | SC-002 | example | PENDING | T027 / T028 |
+| U16 | `row_text()` from M3 on is `#N title  ·  reporter  ·  labels` (reporter is matchable) | US2-1, FR-009 | example | DONE (`github_issue_lines.rs::the_match_text_holds_the_reporter_between_title_and_labels`) | T024 / T028 |
+| U17 | `emphasis` maps a reporter span to the start of the details line (`ana` -> `0..3`) | US2-2, FR-010 | example | DONE (`github_issue_lines.rs::a_span_in_the_reporter_maps_to_the_start_of_the_details_line`) | T024 / T028 |
+| U18 | `typeahead::rank` over issues matches part of a reporter login in a different letter case | US2-1, US2-4, FR-009 | example | DONE (`github_issue_lines.rs::rank_matches_part_of_a_reporter_login_in_another_letter_case`) | T024 / T028 |
+| U19 | One `rank` result emphasises both a title match and a reporter match | US2-3, FR-010 | example | DONE (`github_issue_lines.rs::one_match_emphasises_the_title_and_the_reporter`) | T024 / T028 |
+| U20 | Text found only in an issue's description does not match the issue; `row_text()` never contains the description | FR-014 | example | DONE (M3 part: U16 holds `row_text()` to exactly number, title, reporter and labels; T044/T049 extend it once issues carry a description) | T024, T044 / T028, T049 |
+| U21 | Ranking 1,000 issue rows that carry reporters stays under the existing 50 ms release budget | SC-002 | example | DONE (`typeahead_budget.rs::the_issue_corpus_carries_reporters`, `ranking_1000_issue_rows_for_a_short_query_fits_the_budget`) | T027 / T028 |
 
 ### `crates/micold-core/src/github.rs`: description and privacy
 
@@ -114,8 +114,8 @@ gives the test task first, then the implementation task(s).
 | U34 | A row with details is at least `MENU_ITEM_BASE` high and higher when either line wraps | US1-4, US1-5, FR-004 | example | DONE | T004 / T011 |
 | U35 | A row without details keeps today's fixed `MENU_ITEM_BASE` height and single-line label | FR-029 | characterization | BASELINE | T004 / T011 |
 | U36 | Rows for a listed, a searched and a typed-number issue carry `title_line()` as label, `details_line()` as details and `emphasis` as spans | US1-8, FR-006 | example | DONE | T005 / T012 |
-| U37 | A row matched by its reporter carries the emphasis in its details at the reporter's range | US2-2, FR-010 | example | PENDING | T026 / T012, T028 |
-| U38 | The issue search field's placeholder is `Search by number, title, label or reporter` | US2-5, FR-011 | example | PENDING | T026 / T029 |
+| U37 | A row matched by its reporter carries the emphasis in its details at the reporter's range | US2-2, FR-010 | example | DONE (`issue_picker_rows.rs::a_row_matched_by_its_reporter_emphasises_the_login`) | T026 / T012, T028 |
+| U38 | The issue search field's placeholder is `Search by number, title, label or reporter` | US2-5, FR-011 | example | DONE (`issue_picker_rows.rs::the_issue_search_hint_names_the_reporter`) | T026 / T029 |
 
 ### `crates/micold-client/src/ui/picker_scroll.rs` and shell: highlight into view
 
@@ -132,10 +132,10 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U45 | Typing a login narrows a loaded list to that reporter's issues plus other matches | US2-1, FR-009 | example | PENDING | T025 / T028 |
-| U46 | A searched issue matching only by its reporter is kept; one matching by nothing is dropped | US2-6, FR-012 | example | PENDING | T025 / T028 |
-| U47 | Typing a login causes one search with the typed text and no author filter, as any other text does | US2-6, FR-013 | example | PENDING | T025 / T028 |
-| U48 | 034's pick, loading, empty, failure and retry cases pass unedited | FR-008, FR-027 | characterization | BASELINE | T025 / T028 |
+| U45 | Typing a login narrows a loaded list to that reporter's issues plus other matches | US2-1, FR-009 | example | DONE (`issue_source_state.rs::typing_a_login_narrows_to_the_reporters_issues`) | T025 / T028 |
+| U46 | A searched issue matching only by its reporter is kept; one matching by nothing is dropped | US2-6, FR-012 | example | DONE (`issue_source_state.rs::a_searched_issue_matching_only_by_its_reporter_is_kept`) | T025 / T028 |
+| U47 | Typing a login causes one search with the typed text and no author filter, as any other text does | US2-6, FR-013 | example | DONE (`issue_source_state.rs::typing_a_login_runs_the_one_search_for_the_text`) | T025 / T028 |
+| U48 | 034's pick, loading, empty, failure and retry cases pass unedited | FR-008, FR-027 | characterization | BASELINE (034's cases in `issue_source_state.rs` pass unedited in M3's gate) | T025 / T028 |
 
 ### `crates/micold-core/src/tooltip.rs`: `RestTimer`
 

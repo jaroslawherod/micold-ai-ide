@@ -8,6 +8,7 @@
 use std::ops::Range;
 
 use micold_core::github::{Issue, RowEmphasis};
+use micold_core::typeahead::{rank, Query};
 
 /// The separator between the parts of a line: two spaces, a middle dot (2 bytes), two spaces.
 const SEPARATOR_BYTES: usize = 6;
@@ -74,18 +75,87 @@ fn the_details_line_without_labels_is_the_reporter_alone() {
     );
 }
 
-/// U10 — before reporters are searched (M3), the match text is today's: number, title, labels.
+/// U16 — from M3 the match text is number and title, the reporter, then the labels, each part
+/// after the separator, so the reporter can be searched (FR-009). U20: nothing else is in it.
 #[test]
-fn the_match_text_omits_the_reporter() {
+fn the_match_text_holds_the_reporter_between_title_and_labels() {
     assert_eq!(
         seven().row_text(),
-        "#7 Fix it  ·  bug, ui",
-        "the match text is `#N title` and the labels, as before this feature"
+        "#7 Fix it  ·  ana  ·  bug, ui",
+        "the match text is `#N title`, the reporter and the labels"
     );
     assert_eq!(
         issue(8, "Docs", Some("ana"), &[]).row_text(),
-        "#8 Docs",
-        "an unlabelled issue's match text is its title line"
+        "#8 Docs  ·  ana",
+        "an unlabelled issue's match text is its title line and its reporter"
+    );
+    assert_eq!(
+        issue(9, "Old", None, &["bug"]).row_text(),
+        "#9 Old  ·  ghost  ·  bug",
+        "an issue without an author matches as reported by ghost, as its row shows"
+    );
+}
+
+/// U17 — a match in the reporter is emphasised at the start of the details line (FR-010).
+#[test]
+fn a_span_in_the_reporter_maps_to_the_start_of_the_details_line() {
+    let seven = seven();
+    let ana = range_of(seven.row_text(), "ana");
+    assert_eq!(ana, 15..18, "the contract's span for `ana`");
+    assert_eq!(
+        seven.emphasis(&[ana]),
+        RowEmphasis {
+            title: vec![],
+            details: vec![0..3],
+        },
+        "the reporter opens the details line"
+    );
+}
+
+/// U18 — `typeahead::rank` over issues finds a reporter by part of the login, in another letter
+/// case (FR-009, US2 scenarios 1 and 4).
+#[test]
+fn rank_matches_part_of_a_reporter_login_in_another_letter_case() {
+    let issues = [
+        issue(1, "Crash on start", Some("octocat"), &["bug"]),
+        issue(2, "Docs", Some("hubot"), &[]),
+        issue(3, "Slow sidebar", Some("Octavia"), &[]),
+    ];
+    let ranked = rank(&issues, |i| i.row_text(), &Query::new("OCTO"));
+    let numbers: Vec<u64> = ranked.iter().map(|(at, _)| issues[*at].number()).collect();
+    assert_eq!(
+        numbers,
+        [1],
+        "only octocat's issue holds `octo`, in any letter case"
+    );
+    let (at, found) = &ranked[0];
+    assert_eq!(
+        issues[*at].emphasis(&found.spans),
+        RowEmphasis {
+            title: vec![],
+            details: vec![0..4],
+        },
+        "the matched part of the login is emphasised"
+    );
+}
+
+/// U19 — text matching both the title and the reporter emphasises both (FR-010, US2 scenario 3).
+/// The matching rule is unchanged (contract §4), so the two are one match whose characters fall in
+/// the title and in the login; a literal match marks its leftmost occurrence only, as it does when a
+/// title holds the text twice (D11).
+#[test]
+fn one_match_emphasises_the_title_and_the_reporter() {
+    let issues = [seven()];
+    let ranked = rank(&issues, |i| i.row_text(), &Query::new("fixana"));
+    assert_eq!(ranked.len(), 1, "the issue matches");
+    let emphasis = issues[0].emphasis(&ranked[0].1.spans);
+    assert_eq!(
+        emphasis,
+        RowEmphasis {
+            title: vec![3..6],
+            details: vec![0..3],
+        },
+        "the title's `Fix` and the reporter `ana` are both emphasised"
     );
 }
 
@@ -134,36 +204,50 @@ fn a_span_in_the_labels_maps_to_the_details_line() {
 }
 
 /// U13 — a match crossing the separator is emphasised on both lines, and the separator itself
-/// never is.
+/// never is (contract §4: `7..16` and `10..13` of issue #7).
 #[test]
 fn a_span_crossing_the_separator_is_split() {
     let seven = seven();
     let title_end = "#7 Fix it".len();
-    let labels_start = title_end + SEPARATOR_BYTES;
-    // "it", the separator, "bu".
-    let crossing = title_end - 2..labels_start + 2;
+    let reporter_start = title_end + SEPARATOR_BYTES;
+    // "it", the separator, "a".
+    let crossing = title_end - 2..reporter_start + 1;
+    assert_eq!(crossing, 7..16, "the contract's crossing span");
     let emphasis = seven.emphasis(&[crossing]);
     assert_eq!(
         emphasis,
         RowEmphasis {
             title: vec![7..9],
-            details: vec![9..11],
+            details: vec![0..1],
         },
         "each side keeps its own part of the span"
     );
     assert_eq!(&seven.title_line()[7..9], "it", "the title's share");
-    assert_eq!(&seven.details_line()[9..11], "bu", "the labels' share");
+    assert_eq!(&seven.details_line()[0..1], "a", "the reporter's share");
 
-    let inside_separator = title_end + 1..labels_start - 2;
+    let inside_separator = title_end + 1..reporter_start - 2;
+    assert_eq!(
+        inside_separator,
+        10..13,
+        "the contract's separator-only span"
+    );
     assert_eq!(
         seven.emphasis(&[inside_separator]),
         RowEmphasis::default(),
         "the separator's bytes carry no emphasis"
     );
+
+    let reporter_end = reporter_start + "ana".len();
+    let between_reporter_and_labels = reporter_end + 1..reporter_end + SEPARATOR_BYTES - 1;
+    assert_eq!(
+        seven.emphasis(&[between_reporter_and_labels]),
+        RowEmphasis::default(),
+        "nor do those of the separator between reporter and labels"
+    );
 }
 
 /// U14 — the mapping is total: a span beyond the match text is dropped, and an issue without
-/// labels has nothing to emphasise on its details line.
+/// labels has nothing to emphasise on its details line but its reporter.
 #[test]
 fn a_span_outside_every_part_is_dropped() {
     let seven = seven();
@@ -188,9 +272,9 @@ fn a_span_outside_every_part_is_dropped() {
         unlabelled.emphasis(&[whole]),
         RowEmphasis {
             title: vec![0.."#8 Docs".len()],
-            details: vec![],
+            details: vec![0.."ana".len()],
         },
-        "an issue without labels yields no details emphasis"
+        "an issue without labels yields details emphasis on its reporter alone"
     );
 }
 

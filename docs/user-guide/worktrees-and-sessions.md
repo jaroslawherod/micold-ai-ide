@@ -351,10 +351,12 @@ the issue list while the source is chosen.
 **The list.** Issues are listed most recently updated first. Each takes two lines: its number and
 title, then who reported it and its labels. Long text wraps onto further lines instead of being cut
 off, and `ghost` stands for a reporter whose account has been deleted.
-Type in **Issue** to narrow the list by number, by a word of the title, or by a label, and use the
-arrow keys and Enter to pick without leaving the field. The list follows the highlight as you move
-with Up and Down, so the highlighted issue is always fully visible, however many lines it takes;
-an issue taller than the whole list shows from its top.
+Type in **Issue** to narrow the list by number, by a word of the title, by a label, or by the
+reporter's GitHub login: typing `octo` keeps the issues `octocat` reported, whatever the letter
+case, and highlights the matched part of the login in each row. Use the arrow keys and Enter to
+pick without leaving the field. The list follows the highlight as you move with Up and Down, so the
+highlighted issue is always fully visible, however many lines it takes; an issue taller than the
+whole list shows from its top.
 The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
 fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a
@@ -410,6 +412,11 @@ typing for a moment (0.3 seconds), "Searching GitHub…" appears under the list,
 GitHub finds join the loaded ones. Each issue is listed once, and pull requests and closed issues
 never appear. An issue GitHub matched only in its description or comments is left out, because
 nothing in its row shows why it matched. Pick a found issue like any other.
+
+A reporter's login is searched the same way as a label: what you type is sent as ordinary search
+text, never as a filter by author. So an older issue is found by its reporter only when GitHub's
+search for that text returns it; a found issue is then listed if its number, title, labels or
+reporter match what you typed.
 
 Each keystroke replaces the previous search, so only the answer for what is typed now is used. When
 every open issue is already loaded, nothing is sent: the search stays on your machine.

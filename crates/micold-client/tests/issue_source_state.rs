@@ -14,7 +14,7 @@ use micold_client::features::worktree_form::{
     BranchSource, GithubAvailability, IssueList, Msg, SearchState, WorktreeForm,
 };
 use micold_core::git::GitRemote;
-use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
+use micold_core::github::{search_args, GithubRepo, Issue, IssueListing, IssueLoadError};
 use micold_core::issue_types::{default_mapping, LabelTypeEntry};
 use micold_core::naming::ConventionalType;
 use micold_core::typeahead::Direction;
@@ -1178,4 +1178,92 @@ fn a_search_due_while_creating_is_not_left_pending() {
     );
     send(&mut state, Msg::IssueSearchDue { seq });
     assert_eq!(search(&state), SearchState::Searching { seq });
+}
+
+// --- 038 T025: searching by reporter (FR-009, FR-012, FR-013) -------------------------------
+
+/// Issues with reporters: `octocat` filed two, `hubot` one, and `Octopus` is in a title.
+fn reported_issues() -> Vec<Issue> {
+    vec![
+        issue(7, "Sidebar flickers on resize", &["ui"]).reported_by("octocat"),
+        issue(42, "Crash when opening empty project", &["bug"]).reported_by("hubot"),
+        issue(108, "Document the sandbox placement", &[]).reported_by("octocat"),
+        issue(55, "Octopus merge loses commits", &[]).reported_by("hubot"),
+    ]
+}
+
+/// U45, A10 — typing a login, or part of it in another case, narrows the loaded list to that
+/// reporter's issues plus the other matches (FR-009).
+#[test]
+fn typing_a_login_narrows_to_the_reporters_issues() {
+    let (mut state, seq) = loading();
+    send(&mut state, loaded_result(seq, reported_issues()));
+    query(&mut state, "OctoCat");
+    let mut shown = offered(&state);
+    shown.sort_unstable();
+    assert_eq!(
+        shown,
+        vec![7, 108],
+        "octocat's two issues, whatever the letter case"
+    );
+
+    query(&mut state, "octo");
+    let shown = offered(&state);
+    for number in [7, 108, 55] {
+        assert!(
+            shown.contains(&number),
+            "part of the login keeps octocat's issues, beside the title match: #{number} in {shown:?}"
+        );
+    }
+}
+
+/// U46, A15 — a searched issue that matches only by its reporter is kept; one that matches by
+/// nothing is dropped (FR-012).
+#[test]
+fn a_searched_issue_matching_only_by_its_reporter_is_kept() {
+    let mut state = capped_with(reported_issues());
+    let seq = searching(&mut state, "monalisa");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![
+                issue(1300, "Unrelated title", &["bug"]).reported_by("monalisa"),
+                issue(1301, "Another title", &[]).reported_by("hubot"),
+            ]),
+        },
+    );
+    assert_eq!(
+        offered(&state),
+        vec![1300],
+        "matched by its reporter, kept; matched by nothing, dropped"
+    );
+}
+
+/// U47, A15 — typing a login runs the same one search any text does: the typed text, no author
+/// filter (FR-013, US2 scenario 6).
+#[test]
+fn typing_a_login_runs_the_one_search_for_the_text() {
+    let mut state = capped_with(reported_issues());
+    let seq = searching(&mut state, "octocat");
+    assert_eq!(
+        search(&state),
+        SearchState::Searching { seq },
+        "one search runs"
+    );
+    assert_eq!(form(&state).issue_query, "octocat", "for the typed text");
+    let repo = GithubRepo::from_remote_url("git@github.com:o/r.git").expect("a GitHub URL");
+    let by_login = search_args(&repo, &form(&state).issue_query);
+    let by_title: Vec<String> = search_args(&repo, "sidebar")
+        .into_iter()
+        .map(|arg| arg.replace("sidebar", "octocat"))
+        .collect();
+    assert_eq!(
+        by_login, by_title,
+        "a login asks GitHub exactly what any other text asks"
+    );
+    assert!(
+        by_login.contains(&"q=repo:o/r is:issue is:open octocat".to_string()),
+        "the search is for the typed text, with no author filter: {by_login:?}"
+    );
 }

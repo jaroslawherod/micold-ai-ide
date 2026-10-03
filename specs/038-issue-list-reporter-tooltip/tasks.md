@@ -134,24 +134,24 @@ the reporter; the hint says so. No request is added or changed.
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T024 [P] [US2] [A10] [A12] [A13] [U13] [U16] [U17] [U18] [U19] [U20] Extend `crates/micold-core/tests/github_issue_lines.rs` (contracts/issue-fields.md §4):
+- [X] T024 [P] [US2] [A10] [A12] [A13] [U13] [U16] [U17] [U18] [U19] [U20] Extend `crates/micold-core/tests/github_issue_lines.rs` (contracts/issue-fields.md §4):
   - `row_text()` is `#N title` + `"  ·  "` + reporter + (`"  ·  "` + labels); T002's "unchanged from today" case is replaced by this one.
   - The five rows of the contract's emphasis table for issue #7 (`fix`, `ana`, `ui`, a span crossing title, separator and reporter, a span over a separator only).
   - `typeahead::rank` over issues matches a reporter by a part of the login and in a different letter case, and emphasises both a title match and a reporter match in one row (US2 scenarios 1–4).
   - An issue whose description alone contains the typed text is not matched (FR-014).
-- [ ] T025 [P] [US2] [A10] [A15] [U45] [U46] [U47] [U48] Extend `crates/micold-client/tests/issue_source_state.rs`:
+- [X] T025 [P] [US2] [A10] [A15] [U45] [U46] [U47] [U48] Extend `crates/micold-client/tests/issue_source_state.rs`:
   - Typing a login narrows a loaded list to that reporter's issues plus other matches (FR-009).
   - A searched issue that matches only by its reporter is kept; one that matches by nothing is dropped (FR-012).
   - Typing a login causes the same search request as any other text: one search with the typed text and no author filter (FR-013, US2 scenario 6).
   - 034's pick, loading, empty, failure and retry cases pass unedited (FR-008, FR-027).
-- [ ] T026 [P] [US2] [A11] [A12] [A14] [U37] [U38] Extend `crates/micold-client/tests/issue_picker_rows.rs`: the placeholder of the issue search field is `"Search by number, title, label or reporter"` (FR-011); a row matched by its reporter carries the emphasis in its details at the reporter's range (FR-010).
-- [ ] T027 [P] [US2] [U21] Extend `crates/micold-core/tests/typeahead_budget.rs`: the 1,000 issue rows carry reporters, under the existing 50 ms release budget (SC-002).
+- [X] T026 [P] [US2] [A11] [A12] [A14] [U37] [U38] Extend `crates/micold-client/tests/issue_picker_rows.rs`: the placeholder of the issue search field is `"Search by number, title, label or reporter"` (FR-011); a row matched by its reporter carries the emphasis in its details at the reporter's range (FR-010).
+- [X] T027 [P] [US2] [U21] Extend `crates/micold-core/tests/typeahead_budget.rs`: the 1,000 issue rows carry reporters, under the existing 50 ms release budget (SC-002).
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] [U13] [U16] [U17] [U18] [U19] [U20] [U21] [U37] [U45] [U46] [U47] [U48] In `crates/micold-core/src/github.rs`: add the reporter to the match text built for `row_text()` and map the reporter part to the start of the details line in `Issue::emphasis` (T024, T025, T027).
-- [ ] T029 [US2] [U38] In `crates/micold-client/src/ui/worktree_form.rs`: change the issue picker's placeholder to `"Search by number, title, label or reporter"` (T026).
-- [ ] T030 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue" and § "Searching beyond the 1,000 loaded issues": the search also matches the reporter's login; beyond the loaded issues a reporter is found only when GitHub's search for the typed text returns the issue, as for a label (FR-031, FR-013).
+- [X] T028 [US2] [U13] [U16] [U17] [U18] [U19] [U20] [U21] [U37] [U45] [U46] [U47] [U48] In `crates/micold-core/src/github.rs`: add the reporter to the match text built for `row_text()` and map the reporter part to the start of the details line in `Issue::emphasis` (T024, T025, T027).
+- [X] T029 [US2] [U38] In `crates/micold-client/src/ui/worktree_form.rs`: change the issue picker's placeholder to `"Search by number, title, label or reporter"` (T026).
+- [X] T030 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue" and § "Searching beyond the 1,000 loaded issues": the search also matches the reporter's login; beyond the loaded issues a reporter is found only when GitHub's search for the typed text returns the issue, as for a label (FR-031, FR-013).
 - [ ] T031 [US2] [A10] [A11] [A12] [A13] [A14] [A15] Run `mise run gate` and `scripts/build-lock.sh cargo test --release -p micold-core --test typeahead_budget`; run quickstart §B4 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: US1 and US2 work; `mise run gate` passes.
