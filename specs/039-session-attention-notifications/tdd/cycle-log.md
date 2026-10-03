@@ -691,3 +691,5 @@ These M4 cycles were run on the prep branch `feat/notify-session-needs-attention
   U152's test now asserts the mark under the running count, both ending at the trailing inset,
   and the pair inside the item's height. `menu_anatomy`'s height gate is unchanged and green.
 - Scoped gate green on this tree.
+- **T119**: `unread_state` 15, `unread_rows` 5 and `switcher_unread` 5 passed; `mise run gate` green on
+  `d98f1a71`. A14 to A22 and A24 to A36 are `DONE` (A23 is T121's).

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M5)
-- **Next step**: M5 verify: review A round 2 (scoped, on the fix diff from snapshot `8fc56a72…:6d386b98…`), then review B with the visual pass (quickstart §B5, B6 panel and button, B7; evidence under `visual-pass/M5/`), the full gate, tick T119, the PR (`Refs #481`).
+- **Next step**: M5: the orchestrator waits on CI for the M5 PR and merges it; then M6.
 
 ## Pull requests
 
@@ -89,6 +89,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 B | 1 | 1bc33e238c5399a29f6f1a31cd4eecb6c2a73415:1b75cdf11c322ea9af4eddea55ea00153957c266 | CLEAN (Verify: `unread_state` 14 passed, `unread_rows` 5 passed; D21 and D22 judged consistent with spec and plan). 1 MINOR fixed: no test saw a read reach the store (cycle 21, `unread_state` now 15) |
 | M4 visual | 1 | same tree (binaries from `1b75cdf1`) | PASS: showcase (light and dark), quickstart §B6 (row), B7, B8, on Xvfb `:121` with a private HOME and pin directory; turns driven by posting `UserPromptSubmit` and `Stop` to the session's hook URL, notifications logged by a stand-in service on a private bus; evidence `visual-pass/M4/`. Not covered: see *Follow-ups not done* |
 | M5 A | 1 | 8fc56a72a7a997d22816ccef4f87c914338a1b2b:6d386b988afb71757c5fdd132bdac2937a394d6b | CHANGES: 1 MAJOR, 3 MINOR (`code-review` at `high`). F1 MAJOR fixed: a switcher row with both counts left the project's name 58dp and wrapped it (measured by a new test, cycle 25); the two counts now stack (D24). F4 fixed (the guide said the button's number falls when a session is opened). F2 and F3 under *Follow-ups not done*; F3 is checked in the visual pass |
+| M5 A | 2 | bdbea09e8b478459379010c3ea30ecc3dbfbacc3:d98f1a7186c622ae8cb315e74478fa4343ea3172 | CLEAN (scoped, sonnet): the fix for F1 holds, the reasons for deferring F2 and F3 stand, nothing new in the fix diff |
+| M5 B | 1 | bdbea09e8b478459379010c3ea30ecc3dbfbacc3:d98f1a7186c622ae8cb315e74478fa4343ea3172 | CLEAN (Verify: `switcher_unread` 5 passed; `mise run test-core` all ok, 296 in the lib; D24 and D25 judged to break no requirement). 2 MINOR: F2 fixed (FR-021, the M5 goal and deliverable and quickstart B6 said "beside"; now "with" and "under"); F1 under *Follow-ups not done* |
+| M5 visual | 1 | same tree (binaries from `d98f1a71`) | PASS: showcase (light and dark; the panel row with both counts, the button with `● 3` and with none), quickstart §B5, B6 (panel and button), B7 and the button's tooltip, on Xvfb `:131` with a private HOME and pin directory; evidence `visual-pass/M5/`. Client steps in the dark theme only; no closed-panel shot of the tooltip. Seen: the tooltip stays over the open panel's top padding (review A F3), covering no row text |
 
 ## Declined review findings
 
@@ -127,6 +130,8 @@ None.
 - M3 review A (MINOR): CI's "Test (desktop notification backends)" step selects by the substring `desktop_notify` and passes on 0 tests if the module is renamed; `notification_registers_nothing.rs::rust_comment` treats any line starting with `*` as a comment and scans only `main.rs` for argument reading; `ToastText`/`Banner` copy the title and body of `DesktopNotification` field for field, and the test `notification()` helper is pasted into three backends.
 - M4 review A F3 (MINOR): `session_tree_item` in `ui/sidebar.rs` takes two positional `Option<SessionId>` (`active_session`, `in_view`) that can be swapped without a compile error, and `build_default_item` derives `in_view` a second time. Pass `unread: bool` computed with `row_unread` at the call site. M5 edits this file.
 - M5 review A F2 (MINOR): the switcher button's root widget changes type when the unread total crosses zero (the bare focusable against `Tooltip`), so iced rebuilds its subtree and the button loses keyboard focus and hover state at that moment. Keep one tree shape for a button that can carry a mark.
-- M5 review A F3 (MINOR): the unread total's tooltip opens at `Position::Bottom`, where the switcher's panel opens. If the M5 visual pass shows it over the panel's rows, suppress the tip while the panel is open.
+- M5 review A F3 (MINOR): the unread total's tooltip opens at `Position::Bottom`, where the switcher's panel opens. The M5 visual pass saw it over the open panel's top edge and padding, covering no row text and ending a few pixels above the first row (`visual-pass/M5/B5-panel-tooltip-dark.png`). Suppress the tip while the panel is open.
+- M5 review B F1 (MINOR): `button_anatomy.rs`'s height test for a button with a mark cannot fail: the button's height is `Length::Fixed`. Assert that the mark's box fits inside it. (The menu row's counts are now asserted to fit, in `menu.rs`'s U152 test.)
+- M5 visual pass: a long project name (`session-daemon-notes` in the showcase) wraps onto two lines in a switcher row that carries a count; the row is no taller. The label wrapped before 039 as well; an ellipsis on one line would read better.
 - M4 visual pass, not covered: B6–B8 ran in the dark scheme only (the showcase in both); B8's branch where the session that finished with no window open is *not* the one the application opens on (it must be marked; `unread_state.rs` covers it in the service); the other tree-row entries of the showcase were not compared with `main`. The weight difference of an unread label is real but subtle at showcase size. M9's recorded passes (T113–T117) should run B6–B8 in the light scheme.
 - M1 review A F3 is still open after M4: a view report from a window displaced from its project now also reads the session it names (`set_window_view` calls `mark_read`).

@@ -215,7 +215,7 @@ every window and outlives the last one.
 
 ## Phase 7: User Story 2, slice B — unread counts on the switcher's rows and button (Priority: P2)
 
-**Goal**: Each project's row in the switcher shows its number of unread sessions beside the running
+**Goal**: Each project's row in the switcher shows its number of unread sessions with the running
 count, and the switcher's button shows the total for the projects other than the active one, with
 its panel closed or open.
 
@@ -237,7 +237,7 @@ its panel closed or open.
 - [x] T070 [US2] The switcher's rows in `crates/micold-client/src/ui/mod.rs` pass `trailing_mark` when the count is one or more (U6); the switcher's button in `crates/micold-client/src/ui/toolbar.rs` passes `.trailing_mark` when the total is one or more (U7)
 - [x] T071 [P] [US2] Showcase entries in `crates/micold-client/src/showcase/catalogue.rs` and `crates/micold-client/src/showcase/sections/atoms.rs`: a switcher row with a running count and an unread count, and the switcher's button with an unread count (FR-030)
 - [x] T072 [US2] User guide, `docs/user-guide/project-selection.md`: the unread count on each project's row and the total on the switcher's button (FR-031)
-- [ ] T119 [US2] [A14] [A15] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A24] [A25] [A26] [A27] [A28] [A29] [A30] [A31] [A32] [A33] [A34] [A35] [A36] Story 2's outer tests are green: `scripts/build-lock.sh cargo test --test unread_state`, `--test unread_rows`, `--test switcher_unread`, and `mise run gate` for the component gates of `crates/micold-client/src/ui/material/`. Story 2 is not complete until they pass (US2.10 is closed by T121)
+- [x] T119 [US2] [A14] [A15] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A24] [A25] [A26] [A27] [A28] [A29] [A30] [A31] [A32] [A33] [A34] [A35] [A36] Story 2's outer tests are green: `scripts/build-lock.sh cargo test --test unread_state`, `--test unread_rows`, `--test switcher_unread`, and `mise run gate` for the component gates of `crates/micold-client/src/ui/material/`. Story 2 is not complete until they pass (US2.10 is closed by T121)
 
 **Checkpoint**: `mise run gate` green; quickstart §B5 to B7 pass. Story 2 is complete.
 
@@ -457,7 +457,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### M5 — Unread counts on the switcher
 
 - **Tasks**: T062–T072, T119
-- **Deliverable**: On `main`, each project's row in the switcher shows `● n unread` beside its
+- **Deliverable**: On `main`, each project's row in the switcher shows `● n unread` with its
   running count, and the switcher's button shows `● n` for the unread sessions of the other
   projects with its panel closed or open; the showcase shows both; the user guide describes them.
 - **Satisfies**: US2 acceptance scenarios 3 (count), 4, 5, 14–17; FR-021–FR-023, FR-030; SC-008,

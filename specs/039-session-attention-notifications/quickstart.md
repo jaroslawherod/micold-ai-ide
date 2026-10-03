@@ -33,7 +33,7 @@ names a look, in the light and the dark scheme.
 | B3 | Focus another application. Let A finish a turn. Return. | One notification; A marked until the window regains focus. | US1.3, US2.6 |
 | B4 | Open Settings. Let A finish a turn. Leave Settings. | One notification; A marked, then not. | US1.9, US2.11 |
 | B5 | Let C finish a turn. | Notification naming Q. Button shows `● 1`. Panel: Q `● 1 unread`. | US1.4, US2.4, US2.15 |
-| B6 | Let B finish a turn. | B's row: mark at the trailing edge, label emphasised, activity indicator unchanged. Panel: P `● 1 unread` beside its running count. Button still `● 1`. | US2.1, US2.5, US2.16, FR-018, FR-032 |
+| B6 | Let B finish a turn. | B's row: mark at the trailing edge, label emphasised, activity indicator unchanged. Panel: P `● 1 unread` under its running count. Button still `● 1`. | US2.1, US2.5, US2.16, FR-018, FR-032 |
 | B7 | Select B. | Mark and P's count gone within 1 s. | US2.3, SC-006 |
 | B8 | Close the window. Let A finish a turn. Open the application. | No notification, then or now. A is marked unless it is the session shown. | US1.13, US2.18, SC-009 |
 | B9 | Click C's notification from another application (X11). | Window in front and focused, Q active, C shown, C's mark gone. | US3.1 to US3.3, SC-004 |
