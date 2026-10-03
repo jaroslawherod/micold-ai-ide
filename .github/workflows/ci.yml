@@ -317,6 +317,7 @@ jobs:
             --test service_capability_fakes \
             --test outcome_termination \
             --test popover_displacement \
+            --test attention_notify \
             --test attention_view_report \
             --test features_attention \
             --test features_connection \
@@ -330,6 +331,14 @@ jobs:
             --test features_worktree \
             --test features_worktree_form \
             --test anatomy_call_sites
+      # Feature 039 (T122). The macOS and Windows notification backends are `cfg` modules of the
+      # client binary (`shell/desktop_notify/macos.rs`, `windows.rs`), and so are their tests. The
+      # list above names integration tests, which reach no unit test of the binary, and
+      # `cargo test --workspace` runs on the Linux leg alone: without this step those tests would be
+      # compiled on their own system and run nowhere. Linux runs `linux.rs`'s in the workspace step.
+      - name: Test (desktop notification backends)
+        if: runner.os != 'Linux'
+        run: cargo test -p micold-client --bin micold-ai-ide desktop_notify
       # Feature 010's T144 (BUG-008). The daemon's PTY tests are Unix-only and run in the Linux
       # full-workspace step below, so without this step no Windows runner ever started a session:
       # job-object process-tree teardown, the `0x03` interrupt through ConPTY, `portable-pty`'s
