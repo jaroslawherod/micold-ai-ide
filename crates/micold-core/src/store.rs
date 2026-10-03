@@ -193,6 +193,11 @@ struct StoredSession {
     /// (research R1).
     #[serde(default)]
     attention_seq: u64,
+    /// Whether the session is unread (feature 039, FR-008a, FR-025). `#[serde(default)]` →
+    /// `false`: on the first start with the feature no session is unread. Additive and defaulted,
+    /// so no `schema_version` bump, as for `attention_seq` (research R1).
+    #[serde(default)]
+    unread: bool,
 }
 
 /// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
@@ -298,6 +303,7 @@ impl StoredSession {
             archived: session.archived,
             provider: session.provider.into(),
             attention_seq: session.attention_seq,
+            unread: session.unread,
         }
     }
 
@@ -322,6 +328,7 @@ impl StoredSession {
         );
         session.archived = self.archived;
         session.attention_seq = self.attention_seq;
+        session.unread = self.unread;
         session
     }
 }
@@ -1085,6 +1092,100 @@ mod attention_seq_tests {
         assert_eq!(
             json["schema_version"], 1,
             "the field is additive and defaulted, so files keep schema version 1 (research R1)"
+        );
+    }
+}
+
+#[cfg(test)]
+mod unread_tests {
+    //! Feature 039 (FR-008a, FR-025, research R1): unread state is stored with the session.
+
+    use super::*;
+
+    fn session_with(unread: bool) -> Session {
+        let mut session = Session::restored(
+            SessionId::from_uuid(uuid::Uuid::from_u128(0x039)),
+            SessionLocation::Default,
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        session.unread = unread;
+        session
+    }
+
+    fn workspace_with(project: &Path, session: Session) -> Workspace {
+        Workspace {
+            projects: vec![Project::new(
+                project.to_path_buf(),
+                false,
+                Availability::Available,
+            )],
+            sessions: BTreeMap::from([(project.to_path_buf(), vec![session])]),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_session_stored_without_unread_reads_as_read() {
+        let before_the_feature = r#"{ "id": "00000000-0000-0000-0000-000000000039" }"#;
+        let stored: StoredSession = serde_json::from_str(before_the_feature)
+            .expect("a session written before the feature still loads");
+        assert!(
+            !stored.into_session().unread,
+            "on the first start with the feature no session is unread"
+        );
+    }
+
+    #[test]
+    fn a_store_round_trip_keeps_unread() {
+        let dir = tempfile::tempdir().expect("a store directory");
+        let project = dir.path().join("project");
+        std::fs::create_dir(&project).expect("a project directory");
+        let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+        store
+            .save(&workspace_with(&project, session_with(true)))
+            .expect("the catalog saves");
+        let loaded = store.load().workspace;
+
+        assert!(
+            loaded.sessions[&project][0].unread,
+            "a session that was unread when it was written is unread when it is read back"
+        );
+    }
+
+    #[test]
+    fn unread_is_written_to_the_sessions_state_file_and_to_no_other_file() {
+        let dir = tempfile::tempdir().expect("a store directory");
+        let store_dir = dir.path().join("store");
+        let project = dir.path().join("project");
+        std::fs::create_dir(&project).expect("a project directory");
+        let store = JsonFileStore::at(store_dir.join("projects.json"));
+
+        store
+            .save(&workspace_with(&project, session_with(true)))
+            .expect("the catalog saves");
+
+        let mut naming_unread = Vec::new();
+        let mut pending = vec![store_dir];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).expect("a readable store directory") {
+                let path = entry.expect("a directory entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if std::fs::read_to_string(&path)
+                    .expect("a readable store file")
+                    .contains("\"unread\"")
+                {
+                    naming_unread.push(path);
+                }
+            }
+        }
+        assert_eq!(
+            naming_unread,
+            vec![store.project_state_path(&project)],
+            "unread state is in the file that holds the project's sessions and nowhere else"
         );
     }
 }
