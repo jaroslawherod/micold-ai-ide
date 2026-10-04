@@ -28,6 +28,7 @@ pub mod link_opener;
 pub mod links;
 pub mod os_theme;
 pub mod persist;
+pub mod pr_status;
 pub mod sandbox;
 pub mod service_control;
 pub mod settings;

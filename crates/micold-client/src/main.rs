@@ -603,6 +603,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // effect or a write to the binary-owned `app.sandbox`, so all six are
         // `shell/sandbox.rs` now (contract M2).
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
+        Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.

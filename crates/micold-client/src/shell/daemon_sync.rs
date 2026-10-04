@@ -114,6 +114,15 @@ pub enum PendingOp {
     RemoteList {
         project: PathBuf,
     },
+    /// The `RemoteList` a pull request reading starts with (feature 040, reading-and-wire §2
+    /// step 1). Carries the reading it belongs to and what that reading covers, so the answer
+    /// needs nothing recomputed and one for a project no longer active is dropped.
+    PrStatusRemotes {
+        project: PathBuf,
+        seq: u64,
+        branches: Vec<String>,
+        started: u64,
+    },
     /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
     /// client has no git view of the daemon's filesystem (feature 027, research R2 part 2).
     /// Carries the folder it was asked about, so an answer that outlived the question (the user
@@ -171,7 +180,9 @@ impl PendingOp {
             }
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
-            PendingOp::RemoteList { .. } => "read the repository's remotes".into(),
+            PendingOp::RemoteList { .. } | PendingOp::PrStatusRemotes { .. } => {
+                "read the repository's remotes".into()
+            }
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
             }
@@ -218,6 +229,13 @@ pub fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMs
 /// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
 /// disconnected; the initial attach on connect is handled by `DaemonConnected`.
 pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path) {
+    // Feature 040: what was read describes the project being left, and the window does not hold
+    // the new one until the daemon says so (data-model §3 invariant 4). Before the early return:
+    // a switch made while disconnected leaves the old project all the same.
+    if old.as_deref() != Some(new) {
+        let _ =
+            crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
+    }
     let Some(daemon) = app.daemon.clone() else {
         return;
     };
@@ -292,6 +310,9 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
     app.disconnected = true;
+    // Nor does this window hold its project any more: what it read is removed, and the reading
+    // under way is forgotten (feature 040, data-model §3 invariant 4). `Released` starts nothing.
+    let _ = crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
     // Any request still in flight will never get a reply on this connection (`req`s are
     // per-connection). Resolve each to an explicit *unknown* outcome — never a silent
     // success or failure — and reconcile against authoritative state on reconnect
@@ -354,6 +375,9 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
                 app.core
                     .update(Message::Attach(AttachMsg::OfferApplyFailed(text)));
             }
+            // Feature 040: the reading ended with the hold, above; no failure of a reading is
+            // ever a notice (FR-025, SC-004).
+            PendingOp::PrStatusRemotes { .. } => {}
             _ => app.core.notify_error(text),
         }
     }
@@ -668,6 +692,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             adopt_mount_set(app, &catalog);
             claim_attention_events(app, &catalog, false);
             app.daemon_catalog = Some(catalog);
+            // Feature 040, S1: the first listing after `Attached` starts the reading; the reducer
+            // turns every other one into nothing.
+            follow_up = crate::shell::pr_status::listing_arrived(app);
         }
         // Feature 039 (contract N1): this window's claim was the one granted, so it raises the
         // notification. Showing it waits on the system, so it leaves the update thread; the
@@ -704,9 +731,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // (T100): the enabled/path/timeout settings may have changed, so every previously
         // cached directory's snapshot is stale.
         DaemonMsg::SettingsChanged { settings } => {
+            let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {
                 follow_up = crate::shell::env_include::run_script_path_check(job);
             }
+            // Feature 040, S2: the switch turning on reads at once; turning off clears.
+            follow_up = Task::batch([
+                follow_up,
+                crate::shell::pr_status::enabled_changed(app, pr_status_enabled),
+            ]);
         }
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
         DaemonMsg::ScrollbackResponse {
@@ -860,6 +893,22 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     app.core
                         .update(Message::WorktreeForm(FormMsg::RemotesListed(listed)));
                 }
+            }
+            // Feature 040: the remotes a pull request reading asked for. Whether the answer is
+            // still wanted is `on_remotes`' question.
+            Some(PendingOp::PrStatusRemotes {
+                project,
+                seq,
+                branches,
+                started,
+            }) => {
+                let remotes = match result {
+                    OperationResult::RemoteList { remotes } => Some(remotes),
+                    _ => None,
+                };
+                follow_up = crate::shell::pr_status::on_remotes(
+                    app, project, seq, branches, started, remotes,
+                );
             }
             // Feature 027 (research R2 part 2): the open-project gate, answered by the side
             // that has a filesystem view of the project. The path is compared, not assumed —
@@ -1020,6 +1069,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                             .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(message))));
                     }
                 }
+                // Feature 040: a reading that could not learn the remotes is a passing failure,
+                // and never a notice (FR-019, FR-025).
+                Some(PendingOp::PrStatusRemotes {
+                    project,
+                    seq,
+                    branches,
+                    started,
+                }) => {
+                    return crate::shell::pr_status::on_remotes(
+                        app, project, seq, branches, started, None,
+                    );
+                }
                 // Feature 029: the failure notice is the generic one below — "Couldn't refresh
                 // the worktree list: …" reads correctly and names the reason (FR-008). What this
                 // arm adds is the return to idle, so the control can be retried. Note what it
@@ -1118,10 +1179,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             if by.is(&ClientInstance::current()) {
                 return follow_up;
             }
+            let active = app.core.workspace.active.as_deref() == Some(project.as_path());
             app.displaced.insert(
                 project,
                 micold_client::features::connection::Hold::taken_over(by.to_string()),
             );
+            // A displaced window reads nothing and shows no indicator (feature 040, SC-007).
+            if active {
+                follow_up = crate::shell::pr_status::update(
+                    app,
+                    micold_client::features::pr_status::Msg::Released,
+                );
+            }
         }
         // A (re)attach was refused. `ProjectBusy` means another window holds it: the same
         // read-only state and the same take-over offer as a live displacement, recorded as the
@@ -1148,10 +1217,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 }
                 return follow_up;
             }
+            let active = app.core.workspace.active.as_deref() == Some(project.as_path());
             app.displaced.insert(
                 project,
                 micold_client::features::connection::Hold::already_open(holder.to_string()),
             );
+            // Refused: this window does not hold the project (feature 040, SC-007).
+            if active {
+                follow_up = crate::shell::pr_status::update(
+                    app,
+                    micold_client::features::pr_status::Msg::Released,
+                );
+            }
         }
         // An attach this window asked for was accepted (FR-024a). This is the fact that
         // falsifies a recorded displacement: the daemon decides who holds a project, and it
@@ -1171,6 +1248,14 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // one *is* overlaid.
         DaemonMsg::Attached { project, .. } => {
             app.displaced.remove(&project);
+            // The window holds its active project; the listing that follows starts the reading
+            // (feature 040, reading-and-wire §1 S1).
+            if app.core.workspace.active.as_deref() == Some(project.as_path()) {
+                follow_up = crate::shell::pr_status::update(
+                    app,
+                    micold_client::features::pr_status::Msg::Held,
+                );
+            }
         }
         // An agent's destructive request (feature 034, FR-014): every window shows it until one
         // answers or the daemon withdraws it.
@@ -1226,7 +1311,11 @@ pub fn on_connected(
     // (FR-012a/FR-012b) — including environment-include, which this client's own
     // boot-time local read may predate (e.g. another window changed it while this one was
     // still starting up). Re-source env-include under the now-authoritative values.
+    let pr_status_enabled = settings.pr_status_enabled;
     adopt_daemon_settings(app, settings);
+    // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it), so
+    // this starts no reading; the `Attached` and listing that follow do (S1).
+    let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
     reconcile_catalog(&mut app.core, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on
@@ -1477,6 +1566,13 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
                 path: remove_path,
             }
         });
+        // A forgotten project is no longer held, nor shown (feature 040).
+        if app.core.workspace.active.as_deref() == Some(path.as_path()) {
+            let _ = crate::shell::pr_status::update(
+                app,
+                micold_client::features::pr_status::Msg::Released,
+            );
+        }
         // Release this client's attachment on the project it is forgetting.
         if let Some(d) = &app.daemon {
             d.send(ClientMsg::Detach { project: path });

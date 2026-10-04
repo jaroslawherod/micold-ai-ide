@@ -5317,6 +5317,7 @@ mod issue_source {
                     Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>
                 })
             },
+            pull_requests: IssueTooling::none().pull_requests,
         };
         let mut app = base_app();
         app.caps = app.caps.clone().with_issue_tooling(tooling);
@@ -7490,5 +7491,542 @@ mod bug_574_out_of_date_is_measured {
             app.sandbox, before,
             "a report outliving a move to the host is dropped"
         );
+    }
+}
+}
+
+// ---- Feature 040, T025: the pull request reading, through the shell --------------------------
+//
+// The reducer's rules are `tests/features_pr_status.rs`. These drive the shell's half: which daemon
+// messages start a reading, what the reading asks and of whom, and that nothing else of the
+// application changes. The 10-second timer a reading returns is never run: each test drops that
+// task and sends the timer's message itself where it wants the bound to run out.
+mod pr_status {
+    use super::*;
+    use crate::shell::capabilities::IssueTooling;
+    use micold_client::features::pr_status::{Msg, Phase};
+    use micold_core::git::GitRemote;
+    use micold_core::github::IssueSource;
+    use micold_core::protocol::messages::{OperationResult, RefusalReason};
+    use micold_core::pull_request::{
+        CheckStatus, FakePullRequestSource, PrState, PullRequestSource, PullRequestStatus,
+        ReadingFailure, ReviewState,
+    };
+    use std::collections::{BTreeMap, VecDeque};
+
+    const FAKE_GH: &str = "/fake/bin/gh";
+
+    struct Rig {
+        app: App,
+        rx: iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        source: Arc<FakePullRequestSource>,
+    }
+
+    /// Connected, `DEMO` active, the switch on, and tooling that finds `gh` at `gh` (or nowhere).
+    fn rig(gh: Option<&str>, source: FakePullRequestSource) -> Rig {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let source = Arc::new(source);
+        let found = gh.map(PathBuf::from);
+        let tooling = IssueTooling {
+            locate_gh: Arc::new(move |_: Option<&str>| found.clone()),
+            source: Arc::new(|_: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
+                unreachable!("a pull request reading never builds the issue source")
+            }),
+            pull_requests: {
+                let source = Arc::clone(&source);
+                Arc::new(move |_: PathBuf| {
+                    Arc::clone(&source) as Arc<dyn PullRequestSource + Send + Sync>
+                })
+            },
+        };
+        let mut app = base_app();
+        app.caps = app.caps.clone().with_issue_tooling(tooling);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(PathBuf::from(DEMO));
+        let _ = shell::pr_status::enabled_changed(&mut app, true);
+        Rig { app, rx, source }
+    }
+
+    fn status(number: u64) -> PullRequestStatus {
+        PullRequestStatus {
+            number,
+            title: format!("Pull request {number}"),
+            url: format!("https://github.com/o/r/pull/{number}"),
+            state: PrState::Open {
+                checks: CheckStatus::Passing,
+            },
+            review: ReviewState::None,
+            head: "a".repeat(40),
+        }
+    }
+
+    fn statuses() -> BTreeMap<String, PullRequestStatus> {
+        BTreeMap::from([("feat/a".to_string(), status(7))])
+    }
+
+    fn github_remote() -> Vec<GitRemote> {
+        vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }]
+    }
+
+    /// `DEMO` with one worktree per entry: its directory and the branch it is on, if any.
+    fn listing(
+        worktrees: &[(&str, Option<&str>)],
+    ) -> micold_core::protocol::messages::CatalogSnapshot {
+        let mut catalog = snapshot_with(DEMO, Vec::new());
+        for (dir, branch) in worktrees {
+            catalog.projects[0].worktrees.push(WorktreeSnapshot {
+                dir_name: dir.to_string(),
+                branch: branch.map(str::to_string),
+                display_name: dir.to_string(),
+                status: micold_core::protocol::messages::WorktreeStatus::Clean,
+                path: PathBuf::from(DEMO).join(".claude/worktrees").join(dir),
+                included: false,
+                user_created: true,
+            });
+        }
+        catalog
+    }
+
+    fn one_worktree() -> micold_core::protocol::messages::CatalogSnapshot {
+        listing(&[("a", Some("feat/a"))])
+    }
+
+    /// Run `work` and every message it produces back through the shell until nothing is left.
+    fn settle(app: &mut App, work: Task<Message>) {
+        let mut queue: VecDeque<Message> = messages(work).into();
+        while let Some(message) = queue.pop_front() {
+            queue.extend(messages(update_inner(app, message)));
+        }
+    }
+
+    /// A daemon message whose follow-up is dropped: for a reading that is the 10-second timer.
+    fn daemon(app: &mut App, event: DaemonMsg) {
+        let _ = shell::daemon_sync::on_daemon_event(app, event);
+    }
+
+    fn attached(app: &mut App) {
+        daemon(
+            app,
+            DaemonMsg::Attached {
+                project: PathBuf::from(DEMO),
+                sessions: vec![],
+            },
+        );
+    }
+
+    fn listed(app: &mut App, catalog: micold_core::protocol::messages::CatalogSnapshot) {
+        daemon(app, DaemonMsg::CatalogChanged { catalog });
+    }
+
+    /// Everything sent to the daemon so far, drained from the outbox.
+    fn sent(rig: &mut Rig) -> Vec<ClientMsg> {
+        let mut sent = Vec::new();
+        while let Ok(msg) = rig.rx.try_recv() {
+            sent.push(msg);
+        }
+        sent
+    }
+
+    /// The `req` of every `RemoteList` sent so far.
+    fn remote_lists(rig: &mut Rig) -> Vec<u64> {
+        sent(rig)
+            .into_iter()
+            .filter_map(|msg| match msg {
+                ClientMsg::RemoteList { req, .. } => Some(req),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
+        let work = shell::daemon_sync::on_daemon_event(
+            app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RemoteList { remotes },
+            },
+        );
+        settle(app, work);
+    }
+
+    /// `Attached`, the listing, and the remotes answered with a GitHub remote: one whole reading.
+    fn read_once(rig: &mut Rig, catalog: micold_core::protocol::messages::CatalogSnapshot) {
+        attached(&mut rig.app);
+        listed(&mut rig.app, catalog);
+        let asked = remote_lists(rig);
+        assert_eq!(
+            asked.len(),
+            1,
+            "the listing after `Attached` asks for the remotes once"
+        );
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+    }
+
+    /// A rig whose first reading landed `statuses()`.
+    fn holding() -> Rig {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_answer(statuses()),
+        );
+        read_once(&mut rig, one_worktree());
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        rig
+    }
+
+    fn seq_under_way(app: &App) -> u64 {
+        match app.core.pr_status.phase {
+            Phase::Reading { seq, .. } => seq,
+            Phase::Idle => panic!("a reading is under way"),
+        }
+    }
+
+    /// Start a second reading on a rig that holds statuses, by turning the switch off and on, and
+    /// put the statuses back so that what the reading's end does to them can be seen.
+    fn read_again(rig: &mut Rig) -> u64 {
+        let _ = shell::pr_status::enabled_changed(&mut rig.app, false);
+        let _ = shell::pr_status::enabled_changed(&mut rig.app, true);
+        rig.app.core.pr_status.statuses = statuses();
+        let asked = remote_lists(rig);
+        assert_eq!(asked.len(), 1, "switching on while held reads");
+        asked[0]
+    }
+
+    // A10, U89, U91: what the reading asks, and that its answer lands.
+    #[test]
+    fn pr_status_reads_the_listed_branches_after_attached_and_the_listing() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_answer(statuses()),
+        );
+        attached(&mut rig.app);
+        assert!(sent(&mut rig).is_empty(), "`Attached` alone asks nothing");
+
+        listed(
+            &mut rig.app,
+            listing(&[
+                ("b", Some("feat/b")),
+                ("detached", None),
+                ("a", Some("feat/a")),
+                ("b-again", Some("feat/b")),
+            ]),
+        );
+        let all = sent(&mut rig);
+        let asked: Vec<u64> = all
+            .iter()
+            .filter_map(|msg| match msg {
+                ClientMsg::RemoteList { req, .. } => Some(*req),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(asked.len(), 1);
+        assert!(rig.source.calls().is_empty(), "the remotes come first");
+
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert_eq!(
+            rig.source.calls(),
+            vec![(
+                "o/r".to_string(),
+                vec!["feat/b".to_string(), "feat/a".to_string()]
+            )],
+            "listing order, deduplicated, the detached worktree left out"
+        );
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(rig.app.core.pr_status.read_at.is_some());
+        // FR-018a: a reading never asks for a listing.
+        let all: Vec<ClientMsg> = all.into_iter().chain(sent(&mut rig)).collect();
+        assert!(
+            !all.iter()
+                .any(|msg| matches!(msg, ClientMsg::WorktreeRefresh { .. })),
+            "{all:?}"
+        );
+    }
+
+    // U90: only the first listing after `Attached` reads.
+    #[test]
+    fn pr_status_a_later_listing_starts_nothing() {
+        let mut rig = holding();
+        listed(
+            &mut rig.app,
+            listing(&[("a", Some("feat/a")), ("c", Some("feat/c"))]),
+        );
+        assert!(remote_lists(&mut rig).is_empty());
+        assert_eq!(rig.source.calls().len(), 1);
+    }
+
+    // A11, A14 (FR-026): no GitHub remote, nothing is sent to GitHub and what was shown is removed.
+    #[test]
+    fn pr_status_without_a_github_remote_never_calls_the_source_and_clears() {
+        let mut rig = holding();
+        let req = read_again(&mut rig);
+        answer_remotes(
+            &mut rig.app,
+            req,
+            vec![GitRemote {
+                name: "origin".into(),
+                url: "git@example.com:o/r.git".into(),
+            }],
+        );
+        assert_eq!(rig.source.calls().len(), 1, "only the first reading's call");
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // A10 (FR-025): `gh` not found.
+    #[test]
+    fn pr_status_without_gh_never_calls_the_source_and_clears() {
+        let mut rig = rig(None, FakePullRequestSource::new());
+        rig.app.core.pr_status.statuses = statuses();
+        read_once(&mut rig, one_worktree());
+        assert!(rig.source.calls().is_empty());
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // U96 (FR-021): the remotes unanswered for 10 seconds end the reading as a passing failure.
+    #[test]
+    fn pr_status_remotes_unanswered_for_ten_seconds_keep_the_statuses() {
+        let mut rig = holding();
+        let req = read_again(&mut rig);
+        let seq = seq_under_way(&rig.app);
+
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(nothing_was_reported(&rig.app));
+
+        // The answer arriving after all is nobody's.
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(rig.source.calls().len(), 1);
+    }
+
+    // The timer of a reading that was answered in time changes nothing.
+    #[test]
+    fn pr_status_the_timer_of_an_answered_reading_changes_nothing() {
+        let mut rig = holding();
+        let before = rig.app.core.pr_status.clone();
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq: 0, req: 0 }),
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(rig.app.core.pr_status, before);
+    }
+
+    // The daemon failing the remotes request is a passing failure, and never a notice.
+    #[test]
+    fn pr_status_a_failed_remotes_request_keeps_the_statuses_without_a_notice() {
+        let mut rig = holding();
+        let req = read_again(&mut rig);
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationError {
+                req,
+                kind: micold_core::protocol::messages::ErrorKind::Internal,
+                message: "git failed".into(),
+                detail: None,
+            },
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    /// After the hold ended: nothing shown, nothing under way, and listings start nothing.
+    fn assert_released(rig: &mut Rig) {
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        let _ = sent(rig);
+        listed(&mut rig.app, one_worktree());
+        assert!(
+            remote_lists(rig).is_empty(),
+            "a window that holds nothing reads nothing"
+        );
+        assert_eq!(rig.source.calls().len(), 1, "only the first reading's call");
+    }
+
+    // A40, U92 (SC-007).
+    #[test]
+    fn pr_status_displaced_clears_and_reads_nothing() {
+        let mut rig = holding();
+        daemon(
+            &mut rig.app,
+            DaemonMsg::Displaced {
+                project: PathBuf::from(DEMO),
+                by: other_window(),
+            },
+        );
+        assert_released(&mut rig);
+    }
+
+    // A41, U93 (SC-007).
+    #[test]
+    fn pr_status_refused_as_busy_clears_and_reads_nothing() {
+        let mut rig = holding();
+        daemon(
+            &mut rig.app,
+            DaemonMsg::Refused {
+                reason: RefusalReason::ProjectBusy {
+                    project: PathBuf::from(DEMO),
+                    holder: other_window(),
+                    since_secs: 12,
+                },
+            },
+        );
+        assert_released(&mut rig);
+    }
+
+    // Losing another project changes nothing here.
+    #[test]
+    fn pr_status_displaced_from_another_project_keeps_the_statuses() {
+        let mut rig = holding();
+        daemon(
+            &mut rig.app,
+            DaemonMsg::Displaced {
+                project: PathBuf::from("/repo/other"),
+                by: other_window(),
+            },
+        );
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert!(rig.app.core.pr_status.held);
+    }
+
+    // U94: a project switch.
+    #[test]
+    fn pr_status_a_project_switch_clears_and_reads_nothing() {
+        let mut rig = holding();
+        shell::daemon_sync::switch_daemon_attachment(
+            &mut rig.app,
+            Some(PathBuf::from(DEMO)),
+            Path::new("/repo/other"),
+        );
+        assert_released(&mut rig);
+    }
+
+    // U95: a disconnect, with a reading under way: its remotes request is dropped without a notice.
+    #[test]
+    fn pr_status_a_disconnect_clears_and_reads_nothing() {
+        let mut rig = holding();
+        let _ = read_again(&mut rig);
+        let _ = shell::daemon_sync::on_disconnected(&mut rig.app);
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(!rig.app.core.pr_status.held);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // A42 (SC-007): a take-over reads once, as on opening.
+    #[test]
+    fn pr_status_a_take_over_reads_once() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_answer(statuses())
+                .with_answer(statuses()),
+        );
+        read_once(&mut rig, one_worktree());
+        daemon(
+            &mut rig.app,
+            DaemonMsg::Displaced {
+                project: PathBuf::from(DEMO),
+                by: other_window(),
+            },
+        );
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+
+        read_once(&mut rig, one_worktree());
+        assert_eq!(rig.source.calls().len(), 2);
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+    }
+
+    fn settings(pr_status_enabled: bool) -> DaemonMsg {
+        DaemonMsg::SettingsChanged {
+            settings: micold_core::protocol::messages::DaemonSettings {
+                pr_status_enabled,
+                ..quiet_settings()
+            },
+        }
+    }
+
+    // A31, U86: the switch turning on while held reads once; turning off clears.
+    #[test]
+    fn pr_status_the_switch_reads_once_when_turned_on_and_clears_when_turned_off() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_answer(statuses()),
+        );
+        let _ = shell::pr_status::enabled_changed(&mut rig.app, false);
+        attached(&mut rig.app);
+        listed(&mut rig.app, one_worktree());
+        assert!(remote_lists(&mut rig).is_empty(), "off: nothing is read");
+
+        daemon(&mut rig.app, settings(true));
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1);
+        daemon(&mut rig.app, settings(true));
+        assert!(
+            remote_lists(&mut rig).is_empty(),
+            "the same value again reads nothing"
+        );
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+
+        daemon(&mut rig.app, settings(false));
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert!(remote_lists(&mut rig).is_empty());
+        assert_eq!(rig.source.calls().len(), 1);
+    }
+
+    /// What FR-020 says a reading leaves alone, as text: the worktree list with its selection and
+    /// expansion, the sessions, the workspace and the sidebar's own state.
+    fn untouched(app: &App) -> String {
+        format!(
+            "{:?}\n{:?}\n{:?}\n{:?}\n{}",
+            app.core.worktree,
+            app.core.session,
+            app.core.workspace,
+            app.core.sidebar,
+            app.display_offset,
+        )
+    }
+
+    // A12, U97 (FR-020, SC-004): every way a reading ends leaves the rest of the application as it
+    // was and raises nothing.
+    #[test]
+    fn pr_status_a_finished_reading_changes_nothing_else_and_reports_nothing() {
+        for failure in [
+            None,
+            Some(ReadingFailure::Unavailable),
+            Some(ReadingFailure::Passing),
+            Some(ReadingFailure::RateLimited { until: u64::MAX }),
+        ] {
+            let source = FakePullRequestSource::new().with_answer(statuses());
+            let source = match failure.clone() {
+                Some(failure) => source.with_failure(failure),
+                None => source.with_answer(BTreeMap::new()),
+            };
+            let mut rig = rig(Some(FAKE_GH), source);
+            read_once(&mut rig, one_worktree());
+            let req = read_again(&mut rig);
+            let before = untouched(&rig.app);
+
+            answer_remotes(&mut rig.app, req, github_remote());
+
+            assert_eq!(rig.source.calls().len(), 2, "{failure:?}");
+            assert_eq!(rig.app.core.pr_status.phase, Phase::Idle, "{failure:?}");
+            assert_eq!(untouched(&rig.app), before, "{failure:?}");
+            assert!(nothing_was_reported(&rig.app), "{failure:?}");
+            assert!(rig.app.core.worktree_form.worktree_error.is_none());
+        }
     }
 }

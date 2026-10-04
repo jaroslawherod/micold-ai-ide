@@ -480,3 +480,37 @@ existed and failed before the implementation.
   cherry-pick, not the preparation branch's
 - suite: `mise run gate` before the pull request
 - commit: the commit that adds this entry
+
+### M3 cycle: U70–U84 — the schedule reducer (T023, T026)
+
+- red: `crates/micold-client/tests/features_pr_status.rs` against the stub `update` (commit `f8471596`'s tree, which
+  returns `Effect::None`): 3 passed, 13 failed, each on an assertion, e.g.
+  `held_then_listing_reads_once_and_a_second_listing_reads_nothing` at `features_pr_status.rs:105` and
+  `reading()`'s `held and listed with the switch on starts a reading` at `:68`
+- green: `features::pr_status::update` per reading-and-wire §2 and data-model "State transitions"; 16 passed
+- test fix on the way to green: the helper `reading_again` saved the statuses after switching off, which had
+  already cleared them; it now saves them (and `read_at`) before. `a_passing_failure_changes_nothing` and
+  `a_rate_limit_keeps_the_statuses_and_pauses` failed on that, `left: {}`, not on the reducer
+- refactor: `start` and `paused` hold the §1 conditions once, for S1, S2 and the further reading
+- commit: `feat(040): the pull request reading's schedule reducer (T026)`
+
+### M3 cycle: U85–U97, A10–A14, A31, A40–A42 — the reading through the shell (T025, T027–T029)
+
+- tests: `pr_status_*` in `crates/micold-client/src/main_tests.rs` (16), with `FakePullRequestSource`
+- written after `shell/pr_status.rs` and the wiring (the handover's order), so they passed on their first run:
+  16 passed. Red by mutant, each run on its own:
+  - `branches()` without the deduplication:
+    `pr_status_reads_the_listed_branches_after_attached_and_the_listing` fails
+  - `Displaced` not sending `Released`: `pr_status_displaced_clears_and_reads_nothing` and
+    `pr_status_a_take_over_reads_once` fail
+- green: mutants removed; `cargo test -p micold-client pr_status` 16 passed
+- guards that failed first and were answered in the code: `feature_registration_cost` (the shell half names
+  `features::pr_status::Msg`), `no_concrete_implementations` (`GhCli` is chosen once in `Capabilities::real()`)
+- commit: the commit that adds this entry
+
+### M3 cycle: U85–U88 — the source gate (T024)
+
+- test: `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs`, after
+  `issues_are_requested_only_on_named_events.rs`; a gate over the source text, green on the tree it was written
+  against (it pins what T028 and T029 built)
+- commit: the commit that adds this entry
