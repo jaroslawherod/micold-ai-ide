@@ -6,7 +6,8 @@
 //!
 //! The property underneath it is much stronger and is checkable. There is exactly one call to
 //! `Shell::request_redraw` in the entire rendering layer — inside [`Progress::on_event`], behind
-//! `if self.animating()`. So "the application asks for a frame only while something is moving" is
+//! `if self.animating()` — and, since feature 038, exactly one to `Shell::request_redraw_at`, the
+//! whole body of `motion::wake_at`, which one named component may call. So "the application asks for a frame only while something is moving" is
 //! not a behaviour to be spot-checked but a structural fact: a component *cannot* hold the render
 //! loop awake, because it has no way to ask.
 //!
@@ -188,11 +189,7 @@ fn a_rest_tooltip_that_is_away_or_spent_asks_for_no_timed_wake() {
     let start = Instant::now();
 
     let away = tip.frame(start, iced::mouse::Cursor::Available(iced::Point::ORIGIN));
-    assert_eq!(
-        away.redraw,
-        RedrawRequest::Wait,
-        "the cursor is elsewhere"
-    );
+    assert_eq!(away.redraw, RedrawRequest::Wait, "the cursor is elsewhere");
 
     let opened = tip.rest_until_open(start);
     let cursor = tip.over(20.0);
@@ -625,10 +622,11 @@ fn the_scan_actually_finds_the_rendering_layer() {
          path as the application, and this scan is what makes that true. Found: {:?}",
         sources.iter().map(|(p, _)| p).collect::<Vec<_>>()
     );
+    // Two since feature 038: the guarded next-frame request and the timed wake.
     assert_eq!(
         redraw_call_sites().len(),
-        1,
-        "expected exactly one frame request across the whole rendering layer, found: {:?}",
+        2,
+        "expected exactly two frame requests across the whole rendering layer, found: {:?}",
         redraw_call_sites()
     );
 }

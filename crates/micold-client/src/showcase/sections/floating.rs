@@ -269,6 +269,9 @@ pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
 /// That shape has a ceiling (`material::TOOLTIP_MAX_WIDTH`) and a glyph-level wrap, and neither is
 /// visible on a one-word label — so without an instance that reaches them, the gallery would be
 /// showing a component it no longer fully describes (feature 029).
+///
+/// The sixth is the rest mode (feature 038): it opens only once the cursor has been still on it for
+/// three seconds, and shows at most three lines of a much longer text.
 pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -321,6 +324,24 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                      Location: .claude/worktrees/feat-abc-123_a-long-branch-name",
                     roles,
                 ),
+                roles,
+            ),
+            // The rest mode (feature 038): nothing opens while the cursor moves, and the label is
+            // a page of prose cut to three lines.
+            posed(
+                "after 3 s at rest: hold the cursor still",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Settings, roles).on_press(Message::NoOp),
+                    "The issue list shows each issue on two lines, the number and title first \
+                     and the reporter and labels beneath, and it keeps the highlighted row in \
+                     view while the arrow keys move through it. Resting the cursor on a row for \
+                     three seconds shows the start of that issue's description, and this \
+                     sentence is long enough that it is never reached, because the panel stops \
+                     at three lines and marks the cut with an ellipsis.",
+                    roles,
+                )
+                .after_rest(std::time::Duration::from_secs(3))
+                .max_lines(3),
                 roles,
             ),
         ],

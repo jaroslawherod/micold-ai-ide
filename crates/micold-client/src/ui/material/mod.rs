@@ -60,6 +60,7 @@ mod keyboard_focus;
 /// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
 /// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
 mod labelled_toggle;
+mod line_clamp;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
@@ -241,6 +242,9 @@ pub struct Tooltip<'a, M> {
     label: String,
     roles: Roles,
     position: tooltip::Position,
+    rest: Option<std::time::Duration>,
+    max_lines: Option<usize>,
+    subject: Option<u64>,
 }
 
 impl<'a, M: 'a> Tooltip<'a, M> {
@@ -254,7 +258,32 @@ impl<'a, M: 'a> Tooltip<'a, M> {
             label: label.into(),
             roles,
             position: tooltip::Position::Bottom,
+            rest: None,
+            max_lines: None,
+            subject: None,
         }
+    }
+
+    /// Open only after the cursor has rested on the content for `delay`, and never while it moves
+    /// (feature 038, FR-015, FR-016). A press on the content closes the tooltip until the cursor
+    /// has left. Without this the tooltip opens on hover.
+    pub fn after_rest(mut self, delay: std::time::Duration) -> Self {
+        self.rest = Some(delay);
+        self
+    }
+
+    /// Show at most `lines` lines of the label; a label that takes more is cut after a whole word
+    /// and ends in an ellipsis, and one that fits is shown whole (FR-021).
+    pub fn max_lines(mut self, lines: usize) -> Self {
+        self.max_lines = Some(lines);
+        self
+    }
+
+    /// What the content describes, for a tooltip on a row a list reuses: when `key` changes, an
+    /// open tooltip closes and the rest delay starts again (FR-017).
+    pub fn subject(mut self, key: u64) -> Self {
+        self.subject = Some(key);
+        self
     }
 
     /// Override where the tooltip opens relative to its content.
@@ -271,19 +300,28 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         // `WordOrGlyph` rather than the stack's default `Word`: the labels this carries include
         // filesystem paths, which contain no spaces and so cannot be word-wrapped at all. Without
         // the glyph fallback the ceiling below would be a limit the text simply ignores.
-        let tip = container(
-            Text::new(t.label, TypeRole::Caption, t.roles)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
-        )
-        .max_width(TOOLTIP_MAX_WIDTH)
-        .padding(spacing::XS)
-        .style(style::surface(t.roles));
+        let label: Element<'a, M> = match t.max_lines {
+            // Measured where it is laid out: inside the ceiling below, less the panel's padding.
+            Some(lines) => line_clamp::LineClamped::new(t.label, TypeRole::Caption, lines).into(),
+            None => Text::new(t.label, TypeRole::Caption, t.roles)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .into(),
+        };
+        let tip = container(label)
+            .max_width(TOOLTIP_MAX_WIDTH)
+            .padding(spacing::XS)
+            .style(style::surface(t.roles));
         // Built on `cdk::tooltip` rather than the stack's own: that one slides a panel with no
         // room on its side back over the trigger, and this one opens it on the other side
         // (029 BUG-001, FR-013).
-        tooltip::Tooltip::new(t.content, tip, t.position)
-            .gap(spacing::XS)
-            .into()
+        let mut floated = tooltip::Tooltip::new(t.content, tip, t.position).gap(spacing::XS);
+        if let Some(delay) = t.rest {
+            floated = floated.after_rest(delay);
+        }
+        if let Some(key) = t.subject {
+            floated = floated.subject(key);
+        }
+        floated.into()
     }
 }
 

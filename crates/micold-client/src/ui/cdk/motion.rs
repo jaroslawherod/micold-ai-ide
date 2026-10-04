@@ -267,10 +267,10 @@ impl Progress {
 
     /// Ask for another frame while — and only while — this track is still moving.
     ///
-    /// The single sanctioned frame request for the whole rendering layer (FR-025, SC-008), which is
-    /// why it is one function rather than a line repeated at each call site:
+    /// The single sanctioned next-frame request for the whole rendering layer (FR-025, SC-008),
+    /// which is why it is one function rather than a line repeated at each call site:
     /// `tests/idle_requests_no_frames.rs` asserts there is exactly one, and that the guard is on
-    /// the line above it.
+    /// the line above it. The only other frame request is the timed one, [`wake_at`].
     fn request_frame<M>(&self, shell: &mut Shell<'_, M>) {
         if self.animating() {
             shell.request_redraw();
@@ -380,6 +380,17 @@ impl Progress {
         self.request_frame(shell);
         self.value
     }
+}
+
+/// Ask for one frame at `at`, though nothing else happens before it (feature 038, FR-018).
+///
+/// The second and last frame request in the rendering layer, for a wait rather than a movement: a
+/// tooltip that opens after the cursor has rested has to be looked at again when the rest is over.
+/// It is not a loop — it asks once and is answered once — so what holds it is who may call it:
+/// `tests/idle_requests_no_frames.rs` keeps the list of callers, and holds this body to its one
+/// line.
+pub fn wake_at<M>(shell: &mut Shell<'_, M>, at: Instant) {
+    shell.request_redraw_at(window::RedrawRequest::At(at));
 }
 
 #[cfg(test)]

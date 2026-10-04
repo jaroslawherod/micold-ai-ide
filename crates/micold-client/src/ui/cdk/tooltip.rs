@@ -17,14 +17,16 @@
 //! This is one of the modules in `cdk/` besides `overlay` that floats its own content, and
 //! `tests/one_overlay_implementation.rs` holds it to saying why.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{window, Element, Event, Length, Padding, Point, Rectangle, Size, Vector};
 
-use super::motion::Progress;
+use micold_core::tooltip::RestTimer;
+
+use super::motion::{self, Progress};
 
 /// Which side of its trigger a tooltip asks for.
 ///
@@ -52,6 +54,12 @@ pub struct Tooltip<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     tooltip: Element<'a, M, Theme, Renderer>,
     position: Position,
     gap: f32,
+    /// How long the cursor must rest on the trigger before the panel opens; `None` opens it on
+    /// hover.
+    rest: Option<Duration>,
+    /// What the trigger describes, when the same place in the tree can come to describe another
+    /// thing.
+    subject: Option<u64>,
 }
 
 impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
@@ -66,6 +74,8 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
             tooltip: tooltip.into(),
             position,
             gap: 0.0,
+            rest: None,
+            subject: None,
         }
     }
 
@@ -75,15 +85,23 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
         self
     }
 
-    /// Open only after the cursor has rested on the trigger for `delay`.
-    pub fn after_rest(self, delay: Duration) -> Self {
-        let _ = delay;
+    /// Open only after the cursor has rested on the trigger for `delay` (feature 038, FR-015).
+    ///
+    /// Resting is the rule of `micold_core::tooltip::RestTimer`: movement beyond a small tolerance
+    /// starts the wait again, a press on the trigger closes the panel until the cursor has left,
+    /// and leaving closes it. The wait costs one timed frame request, not a frame loop (FR-018).
+    pub fn after_rest(mut self, delay: Duration) -> Self {
+        self.rest = Some(delay);
         self
     }
 
-    /// What the trigger describes.
-    pub fn subject(self, key: u64) -> Self {
-        let _ = key;
+    /// What the trigger describes (FR-017).
+    ///
+    /// A list reuses its rows: the widget at one place in the tree describes one issue now and
+    /// another after the list narrows or scrolls. When `key` changes, an open panel closes and a
+    /// rest-delay wait starts from nothing, as it would for a trigger the cursor had just reached.
+    pub fn subject(mut self, key: u64) -> Self {
+        self.subject = Some(key);
         self
     }
 }
@@ -98,13 +116,29 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
 struct State {
     open: bool,
     shown: Progress,
+    /// Where a rest-delay tooltip is in its wait. Unused without `after_rest`.
+    rest: RestTimer,
+    /// The subject the open panel, or the wait under way, belongs to.
+    subject: Option<u64>,
 }
 
-impl Default for State {
-    fn default() -> Self {
+impl State {
+    fn describing(subject: Option<u64>) -> Self {
         Self {
             open: false,
             shown: Progress::new(0.0),
+            rest: RestTimer::default(),
+            subject,
+        }
+    }
+
+    /// The trigger describes `subject` now. Another one than before closes the panel and forgets
+    /// the wait: both belonged to what was described before.
+    fn describe(&mut self, subject: Option<u64>) {
+        if self.subject != subject {
+            self.subject = subject;
+            self.rest.reset();
+            self.open = false;
         }
     }
 }
@@ -118,14 +152,17 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State::describing(self.subject))
     }
 
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content), Tree::new(&self.tooltip)]
     }
 
+    /// A changed subject closes the panel here, before the rebuilt view is laid out, so the panel
+    /// of the old subject is never laid out over the new one.
     fn diff(&self, tree: &mut Tree) {
+        tree.state.downcast_mut::<State>().describe(self.subject);
         tree.diff_children(&[&self.content, &self.tooltip]);
     }
 
@@ -162,13 +199,38 @@ where
     ) {
         if let Event::Mouse(_) | Event::Window(window::Event::RedrawRequested(_)) = event {
             let state = tree.state.downcast_mut::<State>();
-            let over = cursor.is_over(layout.bounds());
-            if over != state.open {
-                state.open = over;
+            state.describe(self.subject);
+            let (open, wake) = match self.rest {
+                None => (cursor.is_over(layout.bounds()), None),
+                Some(delay) => {
+                    // Observed on every redraw as well as on every mouse event: a list that
+                    // scrolls or narrows moves the trigger from under a cursor that did not move.
+                    let at = cursor
+                        .position_over(layout.bounds())
+                        .map(|point| (point.x, point.y));
+                    // A redraw carries its instant; a mouse event carries none.
+                    let now = match event {
+                        Event::Window(window::Event::RedrawRequested(now)) => *now,
+                        _ => Instant::now(),
+                    };
+                    // The press is the trigger's own and is passed on below, not captured.
+                    if matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) && at.is_some()
+                    {
+                        state.rest.press();
+                    }
+                    let rest = state.rest.observe(at, now, delay);
+                    (rest.open, rest.wake_at)
+                }
+            };
+            if open != state.open {
+                state.open = open;
                 shell.invalidate_layout();
             }
             let target = if state.open { 1.0 } else { 0.0 };
             state.shown.on_frame(event, target, Duration::ZERO, shell);
+            if let Some(end_of_wait) = wake {
+                motion::wake_at(shell, end_of_wait);
+            }
         }
 
         self.content.as_widget_mut().update(
