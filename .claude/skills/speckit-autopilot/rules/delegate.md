@@ -10,7 +10,8 @@ that takes several calls or reads a lot of output, and that needs no design judg
 | A straightforward implementation task in a `full` milestone: tasks.md or the BUG record names the file and the change, and it copies a pattern that exists in the repo | `autopilot-worker`, `"sonnet"`, with the task ID, the files, the pattern to copy and the test that must pass. Run that test yourself afterwards. |
 | Checking static text: a doc or checklist against the spec, cross-references between spec artifacts, a log or report summarised to its failures | `autopilot-worker`, `"sonnet"` (`"haiku"` for a pure search or count) |
 
-- An `autopilot-*` type your agent types lack: use `general-purpose`.
+- Never spawn `general-purpose` from a unit or a helper: it carries about 10k more tokens on every
+  call, and a hook blocks it. Only where the `autopilot-*` types do not exist is it the fallback.
 - Keep one-command operations (`git status`, a single commit or push) in your own context: a
   subagent costs more than one call.
 - Keep design choices, debugging and review findings on your own model.

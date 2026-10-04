@@ -1,7 +1,7 @@
 # Task: fix a red CI run (the unit that opened the PR)
 
 When: the orchestrator continues you with a `RED <n> <run> <log>` line: CI failed in this flow's
-code.
+code. A fresh unit started with it stays on the PR's branch: skip `branch-start.sh`.
 
 1. `grep` the log for the failure; never read it whole.
 2. Run `systematic-debugging` on it. Do not guess-fix.

@@ -323,6 +323,41 @@ Without the spec PR, a feature number reaches `main` later, so two worktrees are
 pick the same one. The spec units of 037 and 038 checked the other worktrees' `specs/` for the
 number on their own; the skill does not require it yet.
 
+## What cost most in four runs, 2026-10-04
+
+Runs 038, 039, 040 and 041 (82.1M cost_eq, 5,763 calls), all on the skill before it was trimmed
+and split. Cache reads were 49% of the cost, cache writes 49%, output 2%. Each piece of context
+is charged where it came from: its write, plus a read on every later call of that transcript.
+Sizes other than rebuilds are characters / 4, and place 58M of the 80.6M: lower bounds.
+
+| Cause | cost_eq | Share of total |
+|---|---:|---:|
+| What a subagent starts with (system prompt, tool schemas, CLAUDE.md): 266 subagents at about 16.8k, re-read on each of their calls | 15.8M | 19% |
+| Cache rebuilds: 146, of 70k on average | 14.3M | 17% |
+| The agent's own tool input (edit payloads, long commands) | 5.4M | 7% |
+| `Read` of `.rs` files: 1,001 reads of about 1.3k | 4.6M | 6% |
+| `grep` output: 859 calls | 2.0M | 2% |
+
+Rebuilds by what came before them: the orchestrator's turn had ended, 3.2M (median idle 269
+minutes: waiting on the user); a unit's turn had ended and it was woken later, 1.8M; a unit sat in
+a long foreground command, 2.3M; a unit waited for a subagent without holding, 1.55M. Of 120 unit
+rebuilds, 54 came after 6 to 15 idle minutes, just past the 5-minute cache.
+
+Units that prepared a later milestone in another worktree ran on a branch no ledger names, so no
+hook saw them: one peaked at 266k and cost 2.66M, a fifth of its run.
+
+What changed for it:
+
+- The hooks find the run's ledger from the session's own directory too, so a prep unit gets the
+  150k handover message, the read block and the wait rule.
+- A unit's return carries `CONTEXT`; the orchestrator wakes a unit only under 100k and otherwise
+  starts a fresh one from the ledger.
+- `gate-hook.sh` blocks a subagent's foreground `Bash` call with a timeout over 250 s, other than
+  `hold.sh`.
+- `agent-hook.sh` blocks a subagent that spawns `general-purpose`.
+
+None of this is measured yet.
+
 ## Skill size
 
 What the skill itself costs is fixed per role: every orchestrator call re-reads SKILL.md and the

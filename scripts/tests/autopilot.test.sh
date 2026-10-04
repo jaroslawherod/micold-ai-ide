@@ -46,6 +46,7 @@ esac
 STUB
 chmod +x "$tmp/bin/gh"
 export PATH="$tmp/bin:$PATH"
+unset CLAUDE_PROJECT_DIR  # the hooks fall back to it; a run inside an autopilot session would leak in
 
 # Fresh origin + clone on branch `wt`; echoes the clone path. GH_FIXTURES is per case.
 new_repo() {
@@ -515,6 +516,27 @@ echo more >> specs/042-x/autopilot.md; git commit -qam "ledger after gate"
 check "hook allows docs committed after the gate" 0 '' hook "git push"
 echo 'fn x() {}' >> main.rs; git commit -qam "code after gate"
 check "hook blocks code committed after the gate" 2 'has not passed' hook "cd . && git push"
+# The unit wait rule: a subagent's foreground call may not outlive its 5-minute prompt cache.
+thook() { jq -n --arg c "$1" --arg d "${4:-$PWD}" --arg a "$2" --argjson t "$3" --argjson b "${5:-false}" '{tool_input:{command:$c,timeout:$t,run_in_background:$b},cwd:$d} + (if $a == "" then {} else {agent_id:$a} end)' | "$S/gate-hook.sh"; }
+check "hook blocks a unit's long foreground call" 2 'may wait 250 s at most.*hold.sh' thook "mise run gate" u1 600000
+check "hook allows a unit's short foreground call" 0 '^$' thook "cargo test -p x" u1 240000
+check "hook allows a unit's hold" 0 '^$' thook "scripts/autopilot/hold.sh /tmp/log" u1 300000
+check "hook allows a unit's long background call" 0 '^$' thook "mise run gate" u1 600000 "$PWD" true
+check "hook leaves the orchestrator's long call alone" 0 '^$' thook "mise run gate" "" 600000
+git clone -q "$d/wt" "$d/prep"; git -C "$d/prep" checkout -qb prep
+check "hook ignores a long call outside any run" 0 '^$' thook "mise run gate" u1 600000 "$d/prep"
+check "hook holds a prep unit in another worktree to the wait rule" 2 'may wait 250 s' env CLAUDE_PROJECT_DIR="$d/wt" bash -c "$(declare -f thook); S='$S' thook 'mise run gate' u1 600000 '$d/prep'"
+# agent-hook.sh: a subagent of a run spawns the small agent types.
+ahook() { jq -n --arg d "${3:-$PWD}" --arg a "$1" --arg t "$2" '{tool_input:(if $t == "" then {} else {subagent_type:$t} end),cwd:$d} + (if $a == "" then {} else {agent_id:$a} end)' | "$S/agent-hook.sh"; }
+check "agent hook is silent before the agent types exist" 0 '^$' ahook u1 general-purpose
+mkdir -p .claude/agents; echo worker > .claude/agents/autopilot-worker.md
+check "agent hook blocks a unit spawning general-purpose" 2 "do not spawn 'general-purpose'.*autopilot-worker" ahook u1 general-purpose
+check "agent hook blocks a unit spawning the default type" 2 "do not spawn 'general-purpose'" ahook u1 ""
+check "agent hook allows the small types" 0 '^$' ahook u1 autopilot-worker
+check "agent hook allows Explore" 0 '^$' ahook u1 Explore
+check "agent hook never blocks the orchestrator" 0 '^$' ahook "" general-purpose
+check "agent hook ignores a subagent outside any run" 0 '^$' ahook u1 general-purpose "$d/prep"
+rm -rf .claude/agents
 cd "$ROOT"
 
 # context-hook.py: tells the caller its context passed the cap, on a ledger branch, without nagging.
@@ -533,6 +555,11 @@ check "context hook repeats after the context grew a step" 0 '195000 tokens' cho
 check "context hook is silent under the cap" 0 '^$' chook u2
 check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*/speckit-autopilot resume' chook
 check "context hook honours the cap override" 0 '90000 tokens, over the 50000 cap' env AUTOPILOT_CONTEXT_CAP=50000 bash -c "$(declare -f chook); d='$d' C='$C' chook u2"
+git clone -q "$d/wt" "$d/prep" 2>/dev/null; git -C "$d/prep" checkout -qb prep
+usage a 240000 > "$d/s1/subagents/agent-p1.jsonl"
+pchook() { jq -n --arg t "$d/s1.jsonl" --arg c "$d/prep" '{transcript_path:$t,cwd:$c,session_id:"s1",agent_id:"p1"}' | "$C"; }
+check "context hook is silent in a worktree outside any run" 0 '^$' pchook
+check "context hook tells a prep unit in another worktree to hand over" 0 '240000 tokens.*STATUS: HANDOVER' env CLAUDE_PROJECT_DIR="$d/wt" bash -c "$(declare -f pchook); d='$d' C='$C' pchook"
 check "context hook ignores a missing transcript" 0 '^$' chook nope
 
 # The same hook: after three requests in a row that each made one read-only call, it says to batch.
@@ -657,6 +684,9 @@ seq 1 100 >> specs/042-x/autopilot.md
 check "read hook sends a grown ledger to brief.py" 2 'ledger has 1[0-9][0-9] lines.*brief.py ledger' rhook "$PWD/specs/042-x/autopilot.md"
 mkdir -p .claude/skills/x; seq 1 500 > .claude/skills/x/unit.md
 check "read hook passes the skill's own files" 0 '^$' rhook "$PWD/.claude/skills/x/unit.md"
+git clone -q . "$d/prep"; git -C "$d/prep" checkout -qb prep; seq 1 500 > "$d/prep/long.rs"
+check "read hook ignores a worktree outside any run" 0 '^$' bash -c "cd '$d/prep' && $(declare -f rhook); RH='$RH' rhook '$d/prep/long.rs'"
+check "read hook covers a prep unit in another worktree" 2 'long.rs has 500 lines' env CLAUDE_PROJECT_DIR="$PWD" bash -c "cd '$d/prep' && $(declare -f rhook); RH='$RH' rhook '$d/prep/long.rs'"
 cd "$ROOT"
 
 # issue.sh: claims the issue a run starts from, refuses another flow's, closes it at handoff.
