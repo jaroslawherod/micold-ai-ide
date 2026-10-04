@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2: T014–T024 done (and T007 ticked: U38 green on Windows in PR #577's run 37214267941). Scoped gate green, review A clean. Running: review B and the full gate with the macOS and Windows cross-checks. Then push and open the PR.
+- **Next step**: M2: T014–T024 done (and T007 ticked: U38 green on Windows in PR #577's run 37214267941). Reviews A and B clean. The milestone's PR went red on the Windows leg (CI run 37219182985, attempt 1 of 3): the directory's DACL had two entries, because Windows splits an inheritable entry with a generic right. Fixed (`FA` for `GA` on the directory); `mise run gate` and the Windows cross-check green, scoped review A clean. Wait for CI: its Windows leg is the only proof of the fix. Then merge, then M3.
 
 ## Pull requests
 
@@ -76,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M1 | 1 | 0d3cee6d2dd7d46785db3e702d219138c7eb3122:5267dc4cb8bac82ce70bd4b866a364b9aec0339c | CLEAN. Verify: `test result: ok. 16 passed; 0 failed`. The first dispatch only ran Verify, so a second one checked scope, acceptance, constitution, leftovers and ownership item by item: clean, 1 MINOR (U30, U33–U36 passed against the stubs and are shown able to fail by mutation, not by a red run; no change for M1) |
 | A M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN: 3 MINOR (save has no size cap; `Unchanged` trusts the last write; `ensure_dir` keeps the owner bits), none fixed, all three in *Follow-ups not done* |
 | B M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN, no findings. Verify: `history_service_restart` `test result: ok. 13 passed; 0 failed`, `history_timing` `test result: ok. 1 passed; 0 failed` |
+| A M2 (red CI fix) | 2 | 34b41574b3785e4b9aa80ac51f5cf0d475543a0d:03467a02515e4f8bc12f7a0aed8d803f64710915 | CLEAN, no findings: the cause holds, `FA` with `OICI` is stored as one entry, rights and inheritance unchanged. Not counted (follows a red CI, not A's own findings) |
 
 ## Declined review findings
 

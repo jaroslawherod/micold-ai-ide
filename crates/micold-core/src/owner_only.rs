@@ -100,10 +100,14 @@ mod imp {
     use std::path::Path;
 
     /// The directory's ACE is inheritable, so a file made in it by anyone is owner-only too.
+    ///
+    /// It names the file rights (`FA`), not the generic one (`GA`): Windows stores an inheritable
+    /// ACE with a generic right on a directory as two entries, one effective with the right mapped
+    /// and one inherit-only with the generic right, and the directory is to carry exactly one.
     pub(super) fn ensure_dir(dir: &Path) -> io::Result<()> {
         let sid = crate::endpoint::user_sid()?;
         std::fs::create_dir_all(dir)?;
-        set_protected_dacl(dir, &format!("D:P(A;OICI;GA;;;{sid})"))
+        set_protected_dacl(dir, &format!("D:P(A;OICI;FA;;;{sid})"))
     }
 
     /// A new, empty file at `path` with its own protected DACL. It is owner-only from its creation
