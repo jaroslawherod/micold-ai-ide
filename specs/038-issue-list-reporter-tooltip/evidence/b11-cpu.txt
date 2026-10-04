@@ -1,0 +1,10 @@
+a1 746 ticks/30s
+b1 695 ticks/30s
+a2 717 ticks/30s
+b2 731 ticks/30s
+a3 731 ticks/30s
+b3 730 ticks/30s
+c1 718 ticks/30s
+c2 703 ticks/30s
+c3 752 ticks/30s
+DONE
