@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #481
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone (M9)
-- **Next step**: M9 PR #563 open; wait on CI and merge. Then the close unit.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -119,6 +119,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 A | 2 | dfbe07c03ceb3060cbbba48760c183e34ce0a4a7:8dcabc5c819a9d5988ee41740a96e9dc0288df64 | CLEAN: 1 MINOR (sonnet, scoped): the proof test names the state `settings-view-environment` literally; left |
 | M8 B | 1 | 65c6f65c02c4b717ff0dc5ff63e8a4a53d3a1782:3a3fc36f1cbafa5f6c3dbc52ccb9af5bae9e5009 | CLEAN, no findings; D29–D31 judged acceptable. Verify: `settings_desktop_notifications` `10 passed; 0 failed` |
 | M8 visual (B12) | 1 | binaries of `3a3fc36f` | PASS, quickstart §B12 steps 1–4, dark scheme, Xvfb `:171` and a private `dbus-daemon --session` (`/tmp/vp171/bus`) with a stand-in notification service, private HOME; evidence `visual-pass/M8/`. The switch is shown checked under the tool-server switch and the page scrolls to its last control; off: no `Notify`, B marked; still off after a client restart; on: nothing for the earlier turn, exactly one `Notify` for the next. Not observed: see *Follow-ups not done* |
+| Close | 1 | c8bbac48b36ed1dd552f90189c3c821cbe5b1d83:e45878d45d1de3fc4c2ad04394aa89fbb434e91d | CHANGES: 1 MAJOR, 3 MINOR (tests and docs; nothing built). F1 MAJOR fixed: quickstart C3 and D33 stated a cause for the `Stale` banner that the code contradicts in one clause and no evidence shows in the other; both now say what is established and what is not. F2 (the tick's call site stays unpinned) and F3 (F11 half fixed) stated in D34; F4 fixed (a Close note in `tdd/verification.md`). The reviewer found the F2 test sound and the extraction behaviour-identical |
+| Close | 2 | a0b5c4fa72b94914ccef5fe6993595fe2fdb3281:bf5794735f159c38a753ea7a1657e60013606700 | CLEAN (scoped, sonnet): 1 MINOR, D33 cites `lifecycle.rs:424`, which is `mount_set_changed`, the function the row names; left |
 
 ## Declined review findings
 
