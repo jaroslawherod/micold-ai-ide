@@ -191,6 +191,7 @@ fn switching_off_clears_everything_and_goes_idle() {
 /// Force a reading under way on a state that already read once, by turning the switch off and on.
 fn reading_again(st: &mut State) -> u64 {
     let pause = st.pause_until.take();
+    let kept = (st.statuses.clone(), st.removable.clone(), st.read_at);
     update(
         st,
         Msg::EnabledChanged {
@@ -198,11 +199,10 @@ fn reading_again(st: &mut State) -> u64 {
             now: NOW,
         },
     );
-    let kept = (st.statuses.clone(), st.removable.clone());
     let Effect::Read { seq } = update(st, enable()) else {
         panic!("switching on while held and listed reads");
     };
-    (st.statuses, st.removable) = kept;
+    (st.statuses, st.removable, st.read_at) = kept;
     st.pause_until = pause;
     seq
 }
