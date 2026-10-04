@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 in progress, handed over during verify (review A round 1 fixed, not yet re-reviewed): see *Handover*.
+- **Next step**: M5: review A round 2 fixed (U89); next the scoped gate and review A round 3 (the last), then review B, the visual pass §B6–B9 and §B11, §B10 (T055), full gate, PR.
 
 ## Pull requests
 
@@ -73,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 code A | 1 | fbc34423b4f20cad529bf695b8d1cb7b59c0c4bd:f3c2aac3c6238ddb67b01f26c752a09ecf698c6c | CLEAN, 3 MINOR. Fixed: F2 `since + delay` could overflow, now `checked_add` with a test. Declined: F3 (below). F1 moved to *Follow-ups not done*. Scoped gate GATE_EXIT=0 on f3c2aac3 |
 | M4 code B | 1 | 502ad12d47644c82e384e1864f5a89557e43ca04:7e416cdfd6dc9826d76004236f98d1e27cec1041 | CLEAN, no findings (a short round: 5 tool calls). Verify: `mise run test-core` ok; `tooltip_rest_glue` 11 and `idle_requests_no_frames` 12 passed (the reviewer reported the two counts swapped); `--lib line_clamp` 5 passed. `mise run gate` GATE_EXIT=0 at 7e416cdf |
 | M4 visual pass | 1 | 7e416cdf | PASS §B5, light and dark: no panel at 1.5 s, three lines ending `…` at about 3.8 s, closes on leaving, none while moving for 10 s, a click closes it, existing instances unchanged; 16 `evidence/b5-*.png`, `evidence/README.md`. Not confirmed: idle redraw during the wait (the showcase ran at 4-5 cores under lavapipe with the cursor away from every tooltip too, so the wait could not be isolated; `idle_requests_no_frames` holds the rule) |
+| M5 code A | 1 | 90b8f1f973399a8868769552553b9cc93cf1533c:b9ef217d0f5df491a614df51a8d3672e03b508e7 | CHANGES: 1 MAJOR, 3 MINOR. Fixed: F1 MAJOR (a row tooltip's rest state survived the list closing, so a reopened list showed the panel at once; `Menu::update` hands a leaving list no cursor, gate test U88), F3 (invisible and control characters reached the description; `is_invisible`, U87). Not fixed: F2 (a keyboard highlight move does not close the panel; *Follow-ups not done*), F4 (`bodyText` downloads whole bodies; guarded by §B10, T055) |
+| M5 code A | 2 | a120bc479b173b8924d63261604b13a473b1e516:e841c7dd4796e1df726e3798a06b40da65e363b7 | CHANGES (scoped, sonnet): 1 MAJOR, 1 MINOR; round 1's fixes hold and its not-fixed reasons stand. Fixed: F1 MAJOR (`is_invisible` dropped U+200C and U+200D everywhere, breaking Persian spelling and emoji sequences; now kept between two visible characters, U89). Not fixed: F2 MINOR (other blank-looking characters, e.g. Hangul fillers, the braille blank, lone variation selectors, still count as text; *Follow-ups not done*) |
 
 ## Declined review findings
 
@@ -87,50 +89,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T044–T055), part 2 handed over at the context cap, during verify step 1. No PR open, nothing
-pushed. Branch is `origin/main` (01cc704d) plus four commits; T044–T054 are ticked, T055 is open.
-**Done.** Client side implemented (T050–T052), docs (T054), cycle log 19–21, test list, U82's source
-half and T048's mutant check. Review A round 1 ran on snapshot
-`90b8f1f973399a8868769552553b9cc93cf1533c:b9ef217d0f5df491a614df51a8d3672e03b508e7`: CHANGES, 1 MAJOR,
-3 MINOR. Add that row to *Review rounds* (it is not there yet):
-- F1 MAJOR, fixed: a row tooltip's rest state survived the list closing, so a reopened list showed
-  the panel at once. `Menu::update` in `cdk/picker.rs` now hands a leaving list no cursor. Red:
-  gate test `a_reopened_list_waits_the_whole_delay_again` (U88) `panicked at
-  …/picker_row_tooltip_clears_its_row.rs:1046:5`, left: 1, right: 0, `9 passed; 1 failed`; green
-  after the fix (10 passed).
-- F3 MINOR, fixed: `description_from` drops control and invisible format characters (`is_invisible`
-  in `github.rs`); two tests (U87) in `github_description.rs`, red `FAILED. 13 passed; 2 failed`
-  (`:374:9`, `:387:5`), green 15 passed.
-- F2 MINOR, not fixed: the panel opens below its row and a keyboard highlight move does not close
-  it, so the highlighted row can be drawn under it. FR-017 names no such closing. Add to
-  *Follow-ups not done*.
-- F4 MINOR, not fixed in code: `bodyText` downloads whole bodies (up to 65,536 chars each) under the
-  unchanged 10 s limit. Guard is T055's §B10: run it on a long-body repository if one is at hand and
-  record the page payload size.
-**Gate fixes made along the way (all in the working tree or b9ef217d).** Three source scans read the
-contract's method name `Row::tooltip` as the rendering stack's `tooltip(` widget or tripped on a
-test constant: `tests/one_overlay_implementation.rs` `calls` (method call and `fn` definition
-excluded, four assertions added), `tests/material_boundary.rs` `names_widget` (method call
-excluded; no self-test added yet: add one or mutant-check it), and `tests/motion_tokens.rs` flagged
-the in-crate test constant `MS = from_millis(1)` in `material/picker.rs`, now
-`ROW_TOOLTIP_REST.checked_div(1000)`. The in-crate `panels_of` reads the panel's first child.
-**State of the tree at this commit.** `cargo clippy -p micold-client --all-targets -D warnings`
-clean; `cargo test -p micold-client --no-fail-fast`: 155 binaries ok, none failed; core
-`github_description` 15, `github_privacy` 6 passed. Core clippy and the whole scoped gate have not
-run on this tree.
-**Next steps, in order.**
-1. Cycle log: add cycle 22 (U87, F3) and 23 (U88, F1) with the evidence above, and the three scan
-   fixes as deviations; test list rows U87, U88; `[U87]`/`[U88]` on T044/T049 and T047/T050.
-2. Scoped gate (`scripts/autopilot/scoped-gate.sh`, detached; it stops at the first failing binary).
-   Then review A round 2 (scoped, sonnet) on
-   `scripts/autopilot/review-snapshot.sh diff 90b8f1f973399a8868769552553b9cc93cf1533c:b9ef217d0f5df491a614df51a8d3672e03b508e7`
-   with the findings above marked fixed or not; it counts as round 2.
-3. Review B once (conformance rubric, sonnet) and the visual pass §B6–B9, §B11 through an
-   `autopilot-worker`, together; save evidence under `evidence/`. §B's run can confirm GitHub's
-   `bodyText` for scenario 12's body (the two fixtures were written from the contract).
-4. T055's §B10 load time: five runs on `main`, five after, alternating; above 1.5× escalate (R14).
-5. Full gate, tick T055, move the follow-up *M5, the clamp's cost on a very long description* out of
-   *Follow-ups not done*, PR `feat(038): …` with body ending `Refs #518`.
+None.
 
 ## Open escalation
 
@@ -159,6 +118,14 @@ None.
   with Up and Down only; chaining the operation after those handlers too (and widening U43) is a
   small follow-up, best taken with M3, which changes how typing narrows the list. Not taken in M3
   (D10).
+- M5 review A round 1, F2 (MINOR): a row's tooltip opens below its row, over the next rows, and a
+  keyboard highlight move does not close it, so Down, Down, Enter can pick a row drawn under the
+  panel. FR-017 lists when a tooltip closes and names no keyboard move; closing it on a claimed key
+  in `Menu::update` is a small follow-up that needs a spec line.
+- M5 review A round 2, F2 (MINOR): `description_from` drops controls, zero-width marks and direction
+  marks, but a body made only of other blank-looking characters (U+034F, the Hangul fillers, U+2800,
+  lone variation selectors, the tag block) still counts as a description and opens an empty-looking
+  panel. Each of those is real text in some script, so they were left alone.
 - **M5, the clamp's cost on a very long description (review A M4 F1).** `LineClamped` shapes the whole
   label once and then bisects over all of it. A description near GitHub's 65k maximum would hitch
   the frame that opens the panel. M5 should hand the tooltip a bounded prefix (its core step that

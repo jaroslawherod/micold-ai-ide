@@ -391,3 +391,29 @@ fn invisible_characters_are_dropped_from_a_description() {
     let padded = format!("{}{}", "\u{200B}".repeat(700), "Short.");
     assert_eq!(description_from(&padded), "Short.");
 }
+
+/// U89 (FR-022) — the joiners that shape text stay where they join: a zero-width non-joiner inside
+/// a Persian word and a zero-width joiner inside an emoji sequence are part of what is read, so
+/// the description keeps them. A joiner with nothing visible on one side joins nothing and goes.
+#[test]
+fn joiners_between_visible_characters_are_kept() {
+    let persian = "\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}";
+    let technologist = "\u{1F469}\u{200D}\u{1F4BB}";
+    assert_eq!(description_from(persian), persian);
+    assert_eq!(description_from(technologist), technologist);
+    assert_eq!(
+        description_from(&format!("\u{200D}a\u{200C}\u{200B}b\u{200D} \u{200C}c")),
+        "a\u{200C}b c",
+        "a joiner at a word's start or end is dropped, one between letters is kept"
+    );
+}
+
+/// U89 — a kept joiner counts toward the limit, and a cut never leaves one before the mark.
+#[test]
+fn a_cut_leaves_no_joiner_before_the_mark() {
+    let text = format!("{}\u{200D}bc", "a".repeat(DESCRIPTION_MAX_CHARS - 1));
+    assert_eq!(
+        description_from(&text),
+        format!("{}…", "a".repeat(DESCRIPTION_MAX_CHARS - 1))
+    );
+}

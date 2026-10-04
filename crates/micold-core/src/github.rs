@@ -573,43 +573,62 @@ const DESCRIPTION_CUT_MARK: char = '…';
 /// more than [`DESCRIPTION_MAX_CHARS`] characters are cut there, on a character boundary, and end
 /// in `…`. Characters that show nothing are dropped: control characters, zero-width marks and the
 /// marks that override the direction of text, so a body cannot reorder what the tooltip shows or
-/// open an empty one. A body with no text gives the empty string.
+/// open an empty one. The two joiners that shape the letters beside them are kept where they have
+/// a visible character on each side. A body with no text gives the empty string.
 ///
 /// It reads no more of `body_text` than it keeps, so a very long body costs what a short one does.
 pub fn description_from(body_text: &str) -> String {
+    /// Ends `description` at the limit: no space or joiner is left before the mark.
+    fn cut(mut description: String) -> String {
+        let end = description
+            .trim_end_matches(|c: char| c.is_whitespace() || is_joiner(c))
+            .len();
+        description.truncate(end);
+        description.push(DESCRIPTION_CUT_MARK);
+        description
+    }
+
     let mut description = String::new();
     let mut kept = 0usize;
     for word in body_text.split_whitespace() {
-        let mut visible = word.chars().filter(|c| !is_invisible(*c)).peekable();
-        if visible.peek().is_none() {
+        if !word.chars().any(|c| !is_invisible(c) && !is_joiner(c)) {
             continue;
         }
         if !description.is_empty() {
             if kept == DESCRIPTION_MAX_CHARS {
                 // More text follows the limit: cut before the space.
-                description.push(DESCRIPTION_CUT_MARK);
-                return description;
+                return cut(description);
             }
             description.push(' ');
             kept += 1;
         }
-        for c in visible {
-            if kept == DESCRIPTION_MAX_CHARS {
-                let end = description.trim_end().len();
-                description.truncate(end);
-                description.push(DESCRIPTION_CUT_MARK);
-                return description;
+        // Joiners met since the word's last visible character: kept only once another follows.
+        let mut joiners: Vec<char> = Vec::new();
+        let mut seen_visible = false;
+        for c in word.chars().filter(|c| !is_invisible(*c)) {
+            if is_joiner(c) {
+                if seen_visible {
+                    joiners.push(c);
+                }
+                continue;
             }
-            description.push(c);
-            kept += 1;
+            for c in joiners.drain(..).chain(std::iter::once(c)) {
+                if kept == DESCRIPTION_MAX_CHARS {
+                    return cut(description);
+                }
+                description.push(c);
+                kept += 1;
+            }
+            seen_visible = true;
         }
     }
     description
 }
 
-/// Whether `c` is drawn as nothing: a control character, or one of Unicode's format characters
-/// that join, hide or direct the text around them. The standard library knows no general
-/// category, so the format characters are named by their ranges.
+/// Whether `c` is drawn as nothing and shapes nothing: a control character, or one of Unicode's
+/// format characters that hide or direct the text around them. The standard library knows no
+/// general category, so the format characters are named by their ranges. The joiners are not
+/// among them ([`is_joiner`]).
 fn is_invisible(c: char) -> bool {
     c.is_control()
         || matches!(
@@ -617,13 +636,21 @@ fn is_invisible(c: char) -> bool {
             '\u{00AD}'
                 | '\u{061C}'
                 | '\u{180E}'
-                | '\u{200B}'..='\u{200F}'
+                | '\u{200B}'
+                | '\u{200E}'..='\u{200F}'
                 | '\u{202A}'..='\u{202E}'
                 | '\u{2060}'..='\u{2064}'
                 | '\u{2066}'..='\u{206F}'
                 | '\u{FEFF}'
                 | '\u{FFF9}'..='\u{FFFB}'
         )
+}
+
+/// Whether `c` is the zero-width non-joiner or joiner. Neither is drawn, but between two visible
+/// characters they are part of the text: Persian spelling needs the first, and an emoji sequence
+/// and the conjuncts of Indic scripts the second.
+fn is_joiner(c: char) -> bool {
+    matches!(c, '\u{200C}' | '\u{200D}')
 }
 
 /// What `Debug` prints in place of a reporter or a description.

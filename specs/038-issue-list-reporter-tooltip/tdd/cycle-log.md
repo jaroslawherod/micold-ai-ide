@@ -607,3 +607,68 @@ suite runs in the gate.
   `tests/fixtures/layout_snapshot.txt` did not change (the tooltip adds no layout node), so nothing
   was regenerated.
 - refactor: none.
+
+## Cycle 22 — U87 — T044, T049 (M5, review A round 1 F3)
+
+- tests: `crates/micold-core/tests/github_description.rs` (2 new):
+  `a_text_of_invisible_characters_gives_no_description` and
+  `invisible_characters_are_dropped_from_a_description`.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_description`
+  ```
+  thread 'a_text_of_invisible_characters_gives_no_description' panicked at crates/micold-core/tests/github_description.rs:374:9:
+  thread 'invisible_characters_are_dropped_from_a_description' panicked at crates/micold-core/tests/github_description.rs:387:5:
+  test result: FAILED. 13 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `is_invisible` in `crates/micold-core/src/github.rs` (control characters and the named
+  format ranges); `description_from` skips a word with no visible character and drops the marks
+  inside one before counting. `github_description` 15 passed, `github_privacy` 6 passed. Commit
+  e841c7dd.
+- refactor: none.
+
+## Cycle 23 — U88 — T047, T050 (M5, review A round 1 F1)
+
+- tests: `a_reopened_list_waits_the_whole_delay_again` in
+  `crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs`.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot picker_row_tooltip`
+  ```
+  thread 'picker_row_tooltip_clears_its_row::a_reopened_list_waits_the_whole_delay_again' panicked at crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs:1046:5:
+  assertion `left == right` failed: the list was just opened again under a still cursor: its row has not rested for the delay yet, so no panel (038 FR-015, FR-017)
+    left: 1
+   right: 0
+  test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 48 filtered out
+  ```
+- green: `Menu::update` in `crates/micold-client/src/ui/cdk/picker.rs` hands a leaving list
+  `mouse::Cursor::Unavailable`, so every row sees the cursor leave on the first leaving frame and
+  its rest state is `Away` when the list comes back. 10 passed. Commit e841c7dd.
+- deviation: two more source scans read this milestone's names as violations, as
+  `one_overlay_implementation.rs` did in cycle 20. `tests/material_boundary.rs` counted the builder
+  call `.tooltip(` as the rendering stack's `tooltip(` widget (`the_boundary_is_closed` at
+  `material_boundary.rs:362:5`, `no_feature_module_builds_a_styled_widget` at `:284:5`); its
+  `names_widget` now excludes a method call, held by the new self-test
+  `a_method_with_a_widgets_name_is_not_a_widget_call` (a free call is still counted, also after a
+  method call on the same line). `tests/motion_tokens.rs` (`every_duration_is_a_named_token` at
+  `motion_tokens.rs:158:5`) flagged the in-crate test constant `MS = Duration::from_millis(1)` in
+  `material/picker.rs`; it is now `ROW_TOOLTIP_REST.checked_div(1000)`, a part of the delay.
+- refactor: none.
+
+## Cycle 24 — U89 — T044, T049 (M5, review A round 2 F1)
+
+- tests: `crates/micold-core/tests/github_description.rs` (2 new):
+  `joiners_between_visible_characters_are_kept` and `a_cut_leaves_no_joiner_before_the_mark`.
+  Cycle 22's `is_invisible` dropped U+200C and U+200D everywhere, which changes what is read: a
+  Persian word lost its required non-joiner and an emoji sequence fell apart.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_description`
+  ```
+  thread 'a_cut_leaves_no_joiner_before_the_mark' panicked at crates/micold-core/tests/github_description.rs:415:5:
+  thread 'joiners_between_visible_characters_are_kept' panicked at crates/micold-core/tests/github_description.rs:402:5:
+    left: "میخواهم"
+   right: "می\u{200c}خواهم"
+  test result: FAILED. 15 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: `is_joiner` in `crates/micold-core/src/github.rs`; `is_invisible` no longer names the two
+  joiners; `description_from` holds a word's joiners back until a visible character follows one,
+  drops them otherwise, and `cut` trims a joiner as it trims a space. `github_description` 17
+  passed, `github_privacy` 6 passed. Cycle 22's cases still hold (a body of only invisible
+  characters, joiners among them, gives the empty string).
+- refactor: the two cut sites share the inner `cut`.
+

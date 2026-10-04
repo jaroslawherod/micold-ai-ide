@@ -370,3 +370,25 @@ fn the_boundary_is_closed() {
         breakdown()
     );
 }
+
+/// The scan's own rule (feature 038): a method call that has a widget's whole name, the library's
+/// builder step `Row::tooltip`, builds no widget and is not counted; the rendering stack's free
+/// function still is, by its path, bare, and after a method call on the same line.
+#[test]
+fn a_method_with_a_widgets_name_is_not_a_widget_call() {
+    assert_eq!(widget_calls("let row = Row::new(label).tooltip(text);"), 0);
+    assert_eq!(widget_calls("    .tooltip(issue.description())"), 0);
+    assert_eq!(
+        widget_calls("let t = iced::widget::tooltip(content, tip);"),
+        1
+    );
+    assert_eq!(widget_calls("let t = tooltip(content, tip);"), 1);
+    assert_eq!(
+        widget_calls("let t = row.key(1).into(); tooltip(t, tip)"),
+        1
+    );
+    assert_eq!(
+        widget_calls("let t = row.tooltip(a); let u = tooltip(t, b);"),
+        1
+    );
+}
