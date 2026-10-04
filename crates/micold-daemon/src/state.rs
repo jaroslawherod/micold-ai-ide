@@ -112,6 +112,10 @@ pub struct DaemonState {
     /// The light/dark scheme a client last reported (`ClientMsg::TerminalColorScheme`), which every
     /// session's terminal answers `OSC 10/11/12` from (`006` FR-003a, BUG-007).
     terminal_colors: TerminalColors,
+    /// The saved terminal histories (feature 041, data-model §5), set once at startup by
+    /// `server::run`. Absent for tests that give the state none: nothing is then saved or loaded,
+    /// and a history is carried in memory only.
+    history_store: std::sync::OnceLock<micold_core::terminal_history::HistoryStore>,
 }
 
 struct Inner {
@@ -536,7 +540,13 @@ impl DaemonState {
             session_started: tokio::sync::broadcast::channel(64).0,
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
+            history_store: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Record where terminal histories are saved (feature 041). A no-op if already set.
+    pub fn set_history_store(&self, store: micold_core::terminal_history::HistoryStore) {
+        let _ = self.history_store.set(store);
     }
 
     /// The scheme sessions answer colour queries for (`006` FR-003a, BUG-007). Clones share it.
