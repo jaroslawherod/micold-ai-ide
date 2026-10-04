@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1, step 2: T001–T006, T008–T013 ticked (T007 waits for U38's Windows CI leg); review A rounds 1 and 2 fixed (c75014df, 9be29720). Next: rebase onto `origin/main`, gate, review A round 3 (scoped on the round 2 fix; its first run was lost with the session), review B, PR.
+- **Next step**: M1, step 2, waiting on *Open escalation*. Branch rebased onto `origin/main` (17 commits ahead, not pushed, no PR); `mise run gate` and the macOS cross-check are green on `05435244`'s tree. Then: apply the answer, gate, review B, tick T007 after the Windows CI leg shows U38, PR.
 
 ## Pull requests
 
@@ -66,6 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks and milestones | 2 | 79ba8ae198dcd54098c8a807331f340d644a39d7:6f7cd710a25a78d730479ca0701bb5a566690468 | CLEAN: 2 MINOR (T061 named no exit code; T062 silent on an event that already exists), both fixed |
 | A M1 | 1 | origin/main...f08931d9 | CHANGES: 4 real (stop blocking the route loop; start during teardown misses history; respawn dropped carried before a failed swap; late insert after removal), 2 related cleanups (clone under lock, duplicated take); fixed with a `carrying` mark + condvar, `Arc` entries taken on success, stop via `spawn_blocking`; regression test added. 3 declined |
 | A M1 | 2 | f08931d9..c75014df | CHANGES: 7 real (mark left set for a shell-only stop; respawn and stop could both carry one process; tick phase 2 not under one lock; stop still awaited on the route loop; a second carrier captured early; a timed-out wait let a stale capture in; a panic left the mark), 1 cleanup (double lookup in `swap_primary`); fixed: one carrier per process by token (`Carry::Own`/`Join`), entry removal and mark under one lock everywhere, `begin_stop` on the loop and `finish_stop` on `spawn_blocking`, a timed-out wait cancels the mark, a drop guard clears it. Declined: deep copy of the seed (one copy per start) |
+| A M1 | 3 | 6f04dfa0..590a07d8 | CHANGES, not fixed (round limit): 2 MAJOR (the tick's drop path no longer runs `views.forget_session`, a 039 regression that came with the rebase; a respawn whose carry a stop joined still spawns and can swap out a primary the user started meanwhile), 6 lesser (a timed-out wait cancels whatever mark is there, also a newer one, and also for a joining stop; `finish_stop` detached, so a Regular session's old processes can outlive the next start briefly; shells killed after the carry; `remove_live_by_ids` does not notify; the guard skips a poisoned lock; `PendingStop.known` made up in the tick). Escalated |
 
 ## Declined review findings
 
@@ -83,7 +84,22 @@ None.
 
 ## Open escalation
 
-None.
+**Category 5, non-convergence: review A of M1 found MAJOR findings in its third counted round** (2026-10-04).
+The findings are all in the concurrency of the in-run history carry (`crates/micold-daemon/src/state.rs`:
+`claim_carry`, `carry_history`, `wait_carry`, `begin_stop`/`finish_stop`, `respawn_primary`; `server.rs`
+`SessionStop`). Round 1 found 4, round 2 found 7 in the fix, round 3 found 2 MAJOR and 6 lesser in the second
+fix (rows in *Review rounds*). The round 3 findings are not fixed. The feature's own behaviours (A9, A10,
+U1–U37, U133–U135, the regression test for a start during a stop's teardown) pass and the gate is green.
+
+Question: how should the carry's concurrency be settled?
+1. **(Recommended) Serialise instead of coordinating.** Drop the token/condvar machinery: a stop, a
+   supervision drop, a respawn and a start of one session each run under that session's existing
+   `session_gate` (`state.rs` `session_gates`), with the stop awaited on a spawned task, not on the
+   window's loop. One owner at a time removes every race the three rounds found by construction, and
+   each round's fix so far added states rather than removing them. Then up to 3 fresh rounds of A.
+2. Keep the current design, fix the 8 round 3 findings one by one, and allow up to 3 more rounds.
+   Each fix is small, but two rounds of this have each produced new findings.
+3. Stop the milestone here for the user to look at the design.
 
 ## Token usage
 
