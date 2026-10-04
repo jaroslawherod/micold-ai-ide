@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 code and tests green locally (T034–T041); T042 docs, then verify.md (scoped gate with review A, review B with visual pass §B5, full gate, T043) and pr.md with the `docs-not-needed` label.
+- **Next step**: M4 PR open, waiting on CI and merge; then M5.
 
 ## Pull requests
 
@@ -70,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 code B | 1 | 1dafffb1c39def022c573ad13c2671938e12a09f:615b5092fbf31d47c587d2ba3769867c431f51ee | CLEAN, 1 MINOR (F1 spec.md US2 scenario 3 did not state D11: amended in 0f2ef310). Verify: `github_issue_lines` 12 passed, `issue_picker_rows` 5 passed, `issue_source_state` 43 passed. `mise run gate` GATE_EXIT=0 at 615b5092 |
 | M3 visual pass | 1 | 615b5092 | PASS §B4, light and dark: hint, `bagtoad` narrows with the login emphasised, `BAGTOAD` alike, `JomeFavourite` finds #6413 beyond the 1,000 with the login emphasised; 8 `evidence/b4-*.png`, `evidence/README.md`. Noted: GitHub's text search does not return #3065 for its author's bare login (FR-013, as designed) |
 | M4 code A | 1 | fbc34423b4f20cad529bf695b8d1cb7b59c0c4bd:f3c2aac3c6238ddb67b01f26c752a09ecf698c6c | CLEAN, 3 MINOR. Fixed: F2 `since + delay` could overflow, now `checked_add` with a test. Declined: F3 (below). F1 moved to *Follow-ups not done*. Scoped gate GATE_EXIT=0 on f3c2aac3 |
+| M4 code B | 1 | 502ad12d47644c82e384e1864f5a89557e43ca04:7e416cdfd6dc9826d76004236f98d1e27cec1041 | CLEAN, no findings (a short round: 5 tool calls). Verify: `mise run test-core` ok; `tooltip_rest_glue` 11 and `idle_requests_no_frames` 12 passed (the reviewer reported the two counts swapped); `--lib line_clamp` 5 passed. `mise run gate` GATE_EXIT=0 at 7e416cdf |
+| M4 visual pass | 1 | 7e416cdf | PASS §B5, light and dark: no panel at 1.5 s, three lines ending `…` at about 3.8 s, closes on leaving, none while moving for 10 s, a click closes it, existing instances unchanged; 16 `evidence/b5-*.png`, `evidence/README.md`. Not confirmed: idle redraw during the wait (the showcase ran at 4-5 cores under lavapipe with the cursor away from every tooltip too, so the wait could not be isolated; `idle_requests_no_frames` holds the rule) |
 
 ## Declined review findings
 

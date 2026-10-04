@@ -41,3 +41,19 @@ Ran on Linux under Xvfb + lavapipe (not a real display), 2026-10-03, commit 615b
 Observations, not failures: a searched row emphasises the login only when the typed text matches it, as FR-012/013 say. Typing `billygriffin` did not list his beyond-cap `#3065` because the existing server search for that text does not return it (it did when typed as the number `3065`, with two lines and the login unemphasised); `#6413` for `jomefavourite` was returned. Matching is fuzzy, so a short login such as `travi` also picks up unrelated rows whose titles contain its letters.
 
 Not covered: the 150 ms look of the list narrowing.
+
+# Feature 038, milestone M4: recorded visual pass (quickstart B5)
+
+Ran on Linux under Xvfb + lavapipe (not a real display), 2026-10-04, `micold-showcase` built from the working tree at 7e416cdf and pinned in `~/vp/bin038b5`, light then dark theme, window 1600x1400. Crops, not full frames. Instance: Tooltip's sixth, "after 3 s at rest: hold the cursor still".
+
+| Step | Result | Screenshot | Notes |
+|---|---|---|---|
+| B5 at rest, 1.5 s | ok | b5-rest-1s5-{light,dark}.png | cursor on the icon button (hover tint shown), no panel |
+| B5 at rest, ~3.8 s | ok | b5-rest-open-{light,dark}.png | panel below the button, three lines, the last ending `keys…`, legible on the tooltip surface, trigger uncovered |
+| B5 cursor off | ok | b5-moved-off-{light,dark}.png | panel closed |
+| B5 moving 10 s | ok | b5-moving-mid-{light,dark}.png, b5-moving-end-{light,dark}.png | 10 px-ish steps every 100 ms inside the button, no panel at 5 s or 10 s |
+| B5 click after open | ok | b5-clicked-{light,dark}.png | panel closed right after the click; still closed 4 s later with the cursor staying |
+| B5 existing: below (default) | ok | b5-below-default-{light,dark}.png | "Settings" opens within 0.6 s |
+| B5 existing: multi-line | ok | b5-multiline-{light,dark}.png | four wrapped lines, uncut |
+
+Not covered: idle redraw. The showcase process used about 4-5 cores' worth of CPU (utime+stime, 2,200-2,500 ticks per 5 s) with the cursor away from every instance as well as while waiting, so the baseline is busy on lavapipe for a reason outside the tooltip (page-wide, likely a live pose animating) and the 3 s wait could not be told apart from it.
