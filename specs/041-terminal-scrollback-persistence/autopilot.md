@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1, step 2: review A is clean after the redesign (D17). Then: review B, full gate and macOS cross-check, PR; T007 is ticked once the Windows CI leg shows U38.
+- **Next step**: M1, PR open: wait for CI. When the Windows leg shows U38 green (`history_restart_in_run` runs there), tick T007 in tasks.md on the branch, then merge. Reviews A (after D17) and B are clean; `mise run gate` and the macOS cross-check were green at `5267dc4c`.
 
 ## Pull requests
 
@@ -70,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 | 2 | f08931d9..c75014df | CHANGES: 7 real (mark left set for a shell-only stop; respawn and stop could both carry one process; tick phase 2 not under one lock; stop still awaited on the route loop; a second carrier captured early; a timed-out wait let a stale capture in; a panic left the mark), 1 cleanup (double lookup in `swap_primary`); fixed: one carrier per process by token (`Carry::Own`/`Join`), entry removal and mark under one lock everywhere, `begin_stop` on the loop and `finish_stop` on `spawn_blocking`, a timed-out wait cancels the mark, a drop guard clears it. Declined: deep copy of the seed (one copy per start) |
 | A M1 | 3 | 6f04dfa0..590a07d8 | CHANGES, not fixed (round limit): 2 MAJOR (the tick's drop path no longer runs `views.forget_session`, a 039 regression that came with the rebase; a respawn whose carry a stop joined still spawns and can swap out a primary the user started meanwhile), 6 lesser (a timed-out wait cancels whatever mark is there, also a newer one, and also for a joining stop; `finish_stop` detached, so a Regular session's old processes can outlive the next start briefly; shells killed after the carry; `remove_live_by_ids` does not notify; the guard skips a poisoned lock; `PendingStop.known` made up in the tick). Escalated |
 | A M1 (after D17) | 1 | 137401fb3eda1010ace29618ef7cc0f1c8481d98:cc288469e7251dc41da237becae1ce869b498608 | CLEAN after the redesign (`cc288469`: gate-serialised stop, drop, respawn, start; round 3's two MAJOR fixed with tests, the 6 lesser gone by construction or fixed). 3 MINOR: `prune_empty_sessions` left an archived session's carried history (fixed); 2 declined |
+| B M1 | 1 | 0d3cee6d2dd7d46785db3e702d219138c7eb3122:5267dc4cb8bac82ce70bd4b866a364b9aec0339c | CLEAN. Verify: `test result: ok. 16 passed; 0 failed`. The first dispatch only ran Verify, so a second one checked scope, acceptance, constitution, leftovers and ownership item by item: clean, 1 MINOR (U30, U33–U36 passed against the stubs and are shown able to fail by mutation, not by a red run; no change for M1) |
 
 ## Declined review findings
 
