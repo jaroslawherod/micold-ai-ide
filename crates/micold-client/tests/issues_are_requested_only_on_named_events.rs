@@ -162,3 +162,37 @@ fn every_allowlist_entry_still_matches() {
         stale.join("\n")
     );
 }
+
+/// 038 U77 (FR-024, SC-006) — nothing under `src/ui/` fetches issues. A row's tooltip is built and
+/// opened there, from the description the issue already carries, so a cursor resting on a row
+/// cannot cause a request: the code that draws has no way to make one.
+#[test]
+fn no_view_code_fetches_issues() {
+    const UI: &str = "crates/micold-client/src/ui/";
+    let sites = call_sites();
+    let in_ui: Vec<_> = sites
+        .iter()
+        .filter(|(file, _)| file.starts_with(UI))
+        .map(|(f, l)| format!("  {f}: {l}"))
+        .collect();
+    assert!(
+        in_ui.is_empty(),
+        "view code names the issue source; a tooltip, a hover or a redraw must never fetch:\n{}",
+        in_ui.join("\n")
+    );
+    assert!(
+        ALLOWED.iter().all(|(file, _, _)| !file.starts_with(UI)),
+        "no ALLOWED entry excuses a fetch from view code"
+    );
+    assert!(
+        !sites.is_empty(),
+        "the scan finds the shell's call sites, so finding none under `ui/` means something"
+    );
+    let root = repo_root();
+    assert!(
+        client_sources(&root).iter().any(|p| p
+            .strip_prefix(&root)
+            .is_ok_and(|rel| rel.to_string_lossy().replace('\\', "/").starts_with(UI))),
+        "the scan reads the files under `ui/`"
+    );
+}

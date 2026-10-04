@@ -52,6 +52,12 @@ pub struct Row {
     /// `None` is the single-line row every picker had before; `Some` makes the row two wrapping
     /// lines. See [`Row::details`].
     pub details: Option<(String, Vec<Range<usize>>)>,
+    /// What the row's tooltip says once the cursor has rested on it; `None` is no tooltip. See
+    /// [`Row::tooltip`].
+    pub tooltip: Option<String>,
+    /// What the row stands for, so a list that reuses the row for another choice starts its
+    /// tooltip's wait again. See [`Row::key`].
+    pub key: Option<u64>,
 }
 
 impl Row {
@@ -62,6 +68,8 @@ impl Row {
             spans,
             enabled: true,
             details: None,
+            tooltip: None,
+            key: None,
         }
     }
 
@@ -75,12 +83,28 @@ impl Row {
         self
     }
 
+    /// STUB (038 T051).
+    pub fn tooltip(self, _text: impl Into<String>) -> Self {
+        self
+    }
+
+    /// STUB (038 T051).
+    pub fn key(self, _key: u64) -> Self {
+        self
+    }
+
     /// Mark the row present but unchoosable.
     pub fn disabled(mut self) -> Self {
         self.enabled = false;
         self
     }
 }
+
+/// How long the cursor rests on a row before the row's tooltip opens (038 FR-015).
+pub const ROW_TOOLTIP_REST: Duration = Duration::from_secs(3);
+
+/// The most lines a row's tooltip shows (038 FR-021).
+pub const ROW_TOOLTIP_LINES: usize = 3;
 
 /// The role a result row's label is set in. A branch name is content, so it is body text — named
 /// once here rather than at each of the three places the row measures, draws and spaces itself.
@@ -947,6 +971,313 @@ mod tests {
                 (marker_centre - first_line_centre).abs() < 1.0,
                 "the marker is centred on {marker_centre}dp and the first line of {label:?} on \
                  {first_line_centre}dp",
+            );
+        }
+    }
+
+    // --- Feature 038: the row's tooltip (contracts/picker-row.md §4) ---
+
+    use iced::advanced::Shell;
+    use iced::{window, Event, Point, Vector};
+    use std::time::Instant;
+
+    /// The window the list and its tooltip are laid out in.
+    const WINDOW: Size = Size::new(800.0, 600.0);
+    /// The list's width.
+    const LIST_WIDTH: f32 = 320.0;
+    const MS: Duration = Duration::from_millis(1);
+
+    /// Far more than three lines at the tooltip's width.
+    fn long_text() -> String {
+        "The list cuts long titles off and gives no way to tell two issues apart. ".repeat(8)
+    }
+
+    /// A list of single-line rows, laid out, that takes redraws at chosen instants.
+    struct Listed {
+        element: Element<'static, ()>,
+        tree: Tree,
+        node: layout::Node,
+        renderer: iced::Renderer,
+    }
+
+    impl Listed {
+        fn new(rows: Vec<Row>, highlighted: Option<usize>) -> Self {
+            let renderer = super::super::test_support::renderer();
+            let mut element = menu_element::<()>(rows, highlighted, None, None, None, roles());
+            let mut tree = Tree::new(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, Size::new(LIST_WIDTH, WINDOW.height)),
+            );
+            Self {
+                element,
+                tree,
+                node,
+                renderer,
+            }
+        }
+
+        /// The same list position by position, holding `rows` now: what a narrowed list is.
+        fn rebuilt(mut self, rows: Vec<Row>) -> Self {
+            self.element = menu_element::<()>(rows, None, None, None, None, roles());
+            self.tree.diff(self.element.as_widget());
+            self.node = self.element.as_widget_mut().layout(
+                &mut self.tree,
+                &self.renderer,
+                &Limits::new(Size::ZERO, Size::new(LIST_WIDTH, WINDOW.height)),
+            );
+            self
+        }
+
+        /// A point inside row `index`: every row here is one line, a menu item high.
+        fn over_row(index: usize) -> mouse::Cursor {
+            mouse::Cursor::Available(Point::new(
+                LIST_WIDTH / 2.0,
+                spacing::XS + density::MENU_ITEM_BASE * (index as f32 + 0.5),
+            ))
+        }
+
+        /// A frame at `at` with the cursor where `cursor` says. A redraw carries its instant, so
+        /// it is the event whose clock a test controls.
+        fn redraw(&mut self, at: Instant, cursor: mouse::Cursor) {
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            self.element.as_widget_mut().update(
+                &mut self.tree,
+                &Event::Window(window::Event::RedrawRequested(at)),
+                Layout::new(&self.node),
+                cursor,
+                &self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+        }
+
+        /// The sizes of the panels floating above the list: none while no tooltip is open.
+        fn panels(&mut self) -> Vec<Size> {
+            let Some(mut floated) = self.element.as_widget_mut().overlay(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &Rectangle::with_size(WINDOW),
+                Vector::ZERO,
+            ) else {
+                return Vec::new();
+            };
+            let node = floated.as_overlay_mut().layout(&self.renderer, WINDOW);
+            let mut found = Vec::new();
+            panels_of(&node, &mut found);
+            found
+        }
+    }
+
+    /// A panel is the first node on a path down that is narrower than the window: the groups that
+    /// carry it are each as large as the window.
+    fn panels_of(node: &layout::Node, found: &mut Vec<Size>) {
+        if node.size().width < WINDOW.width {
+            found.push(node.size());
+            return;
+        }
+        for child in node.children() {
+            panels_of(child, found);
+        }
+    }
+
+    /// U73 — the row holds exactly the text it was given; an empty text is no tooltip.
+    #[test]
+    fn a_row_holds_exactly_the_tooltip_text_it_was_given() {
+        let row = Row::new("#7 Fix it", Vec::new())
+            .details("ana  ·  bug", Vec::new())
+            .tooltip("  Two  spaces, kept. ")
+            .key(7);
+        assert_eq!(
+            row.tooltip.as_deref(),
+            Some("  Two  spaces, kept. "),
+            "the text is the caller's, unchanged"
+        );
+        assert_eq!(row.key, Some(7));
+        assert_eq!(
+            Row::new("a", Vec::new()).tooltip("").tooltip,
+            None,
+            "an empty text is no tooltip"
+        );
+        let plain = Row::new("a", Vec::new());
+        assert_eq!((plain.tooltip, plain.key), (None, None));
+    }
+
+    /// U74 — the constants the contract names.
+    #[test]
+    fn a_rows_tooltip_waits_three_seconds_and_shows_three_lines() {
+        assert_eq!(ROW_TOOLTIP_REST, Duration::from_secs(3));
+        assert_eq!(ROW_TOOLTIP_LINES, 3);
+    }
+
+    /// U74 — a row with a tooltip text is wrapped in a rest-delay tooltip: nothing floats before
+    /// `ROW_TOOLTIP_REST` has passed at rest, and one panel floats once it has.
+    #[test]
+    fn a_row_with_a_tooltip_opens_its_panel_after_the_rest_delay() {
+        let mut list = Listed::new(
+            vec![
+                Row::new("#1 One", Vec::new()).tooltip("About one.").key(1),
+                Row::new("#2 Two", Vec::new()).tooltip("About two.").key(2),
+            ],
+            None,
+        );
+        let start = Instant::now();
+        list.redraw(start, Listed::over_row(0));
+        assert!(list.panels().is_empty(), "nothing opens on arrival");
+        list.redraw(start + ROW_TOOLTIP_REST - MS, Listed::over_row(0));
+        assert!(
+            list.panels().is_empty(),
+            "nothing opens a millisecond before the delay"
+        );
+        list.redraw(start + ROW_TOOLTIP_REST, Listed::over_row(0));
+        assert_eq!(
+            list.panels().len(),
+            1,
+            "the rested row's panel, and only it, opens at the delay"
+        );
+    }
+
+    /// U74 — a row without a tooltip text is not wrapped: resting on it floats nothing.
+    #[test]
+    fn a_row_without_a_tooltip_floats_nothing() {
+        let mut list = Listed::new(
+            vec![
+                Row::new("#1 One", Vec::new()).key(1),
+                Row::new("#2 Two", Vec::new()).tooltip("").key(2),
+                Row::new("#3 Three", Vec::new())
+                    .tooltip("About three.")
+                    .key(3),
+            ],
+            None,
+        );
+        let start = Instant::now();
+        for row in [0, 1] {
+            list.redraw(start, Listed::over_row(row));
+            list.redraw(start + ROW_TOOLTIP_REST * 2, Listed::over_row(row));
+            assert!(
+                list.panels().is_empty(),
+                "row {row} has no tooltip text, so nothing floats"
+            );
+        }
+    }
+
+    /// U74 — the panel is at most `ROW_TOOLTIP_LINES` lines of `Caption` and its padding tall,
+    /// however long the text.
+    #[test]
+    fn a_rows_panel_is_at_most_three_lines_tall() {
+        let mut list = Listed::new(
+            vec![Row::new("#1 One", Vec::new()).tooltip(long_text()).key(1)],
+            None,
+        );
+        let start = Instant::now();
+        list.redraw(start, Listed::over_row(0));
+        list.redraw(start + ROW_TOOLTIP_REST, Listed::over_row(0));
+        let panels = list.panels();
+        assert_eq!(panels.len(), 1, "the panel opens");
+        let limit =
+            ROW_TOOLTIP_LINES as f32 * TypeRole::Caption.line_height_dp() + 2.0 * spacing::XS;
+        assert!(
+            (panels[0].height - limit).abs() <= TOLERANCE,
+            "a long text fills exactly three lines and the padding: {} against {limit}",
+            panels[0].height
+        );
+    }
+
+    /// U74 — the key is the tooltip's subject: another row arriving at the same place under a still
+    /// cursor closes the panel and waits the whole delay again.
+    #[test]
+    fn another_key_at_the_same_place_closes_the_panel_and_waits_again() {
+        let mut list = Listed::new(
+            vec![Row::new("#1 One", Vec::new()).tooltip("About one.").key(1)],
+            None,
+        );
+        let start = Instant::now();
+        list.redraw(start, Listed::over_row(0));
+        list.redraw(start + ROW_TOOLTIP_REST, Listed::over_row(0));
+        assert_eq!(list.panels().len(), 1, "precondition: the panel is open");
+
+        let mut list = list.rebuilt(vec![Row::new("#2 Two", Vec::new())
+            .tooltip("About two.")
+            .key(2)]);
+        assert!(
+            list.panels().is_empty(),
+            "the panel described the row that left"
+        );
+        let arrived = start + ROW_TOOLTIP_REST + MS;
+        list.redraw(arrived, Listed::over_row(0));
+        list.redraw(arrived + ROW_TOOLTIP_REST - MS, Listed::over_row(0));
+        assert!(
+            list.panels().is_empty(),
+            "the new row waits the whole delay"
+        );
+        list.redraw(arrived + ROW_TOOLTIP_REST, Listed::over_row(0));
+        assert_eq!(list.panels().len(), 1, "and then opens its own panel");
+    }
+
+    /// U74 — the same key at the same place keeps its panel across a rebuild: a view rebuilt for
+    /// another reason does not close what the user is reading.
+    #[test]
+    fn the_same_key_keeps_its_panel_across_a_rebuild() {
+        let row = || Row::new("#1 One", Vec::new()).tooltip("About one.").key(1);
+        let mut list = Listed::new(vec![row()], None);
+        let start = Instant::now();
+        list.redraw(start, Listed::over_row(0));
+        list.redraw(start + ROW_TOOLTIP_REST, Listed::over_row(0));
+        assert_eq!(list.panels().len(), 1, "precondition: the panel is open");
+        let mut list = list.rebuilt(vec![row()]);
+        assert_eq!(list.panels().len(), 1, "the panel stays");
+    }
+
+    /// U83 — the highlight is not a hover: a highlighted row the cursor is not over floats nothing,
+    /// however long it stays highlighted, and neither does the row the cursor left.
+    #[test]
+    fn a_highlighted_row_without_the_cursor_floats_nothing() {
+        let rows = || {
+            vec![
+                Row::new("#1 One", Vec::new()).tooltip("About one.").key(1),
+                Row::new("#2 Two", Vec::new()).tooltip("About two.").key(2),
+            ]
+        };
+        let start = Instant::now();
+        let long_after = start + ROW_TOOLTIP_REST * 4;
+
+        let mut list = Listed::new(rows(), Some(1));
+        list.redraw(start, mouse::Cursor::Unavailable);
+        list.redraw(long_after, mouse::Cursor::Unavailable);
+        assert!(
+            list.panels().is_empty(),
+            "no cursor, so no panel on the highlighted row"
+        );
+
+        // The cursor rests on the first row while the second is highlighted: the first row's
+        // panel opens, and it is the only one.
+        let mut list = Listed::new(rows(), Some(1));
+        list.redraw(start, Listed::over_row(0));
+        list.redraw(long_after, Listed::over_row(0));
+        assert_eq!(
+            list.panels().len(),
+            1,
+            "one panel: the rested row's, none for the highlighted row"
+        );
+    }
+
+    /// U86 — `{:?}` of a row prints neither its second line nor its tooltip text: for the issue
+    /// list those are a reporter and a description, which no log may hold (FR-025).
+    #[test]
+    fn debug_output_of_a_row_redacts_its_details_and_its_tooltip() {
+        let row = Row::new("#7 Fix it", Vec::new())
+            .details("a-private-login  ·  bug", Vec::new())
+            .tooltip("a-private-sentence")
+            .key(7);
+        for debug in [format!("{row:?}"), format!("{row:#?}")] {
+            assert!(debug.contains("#7 Fix it"), "the label is printed: {debug}");
+            assert!(
+                !debug.contains("a-private-login") && !debug.contains("a-private-sentence"),
+                "neither the details nor the tooltip text is printed: {debug}"
             );
         }
     }
