@@ -562,6 +562,31 @@ fn the_sequence_survives_a_restart_of_the_service_on_the_same_store() {
     );
 }
 
+/// T124 (FR-008a): the supervisor tick's own write step stores the sequence; nothing else is
+/// called by hand here.
+#[tokio::test]
+async fn the_supervisor_tick_writes_the_sequence_to_the_store() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    service.finishes_a_turn(a);
+    assert!(
+        service.state.has_unsaved_attention(),
+        "precondition: an event is counted and not stored"
+    );
+
+    micold_daemon::server::write_unsaved_attention(&service.state).await;
+
+    assert_eq!(
+        summary(
+            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            a
+        )
+        .attention_seq,
+        1,
+        "the store holds the sequence after one tick's write step"
+    );
+}
+
 /// U78 (FR-020, A5): a removed session leaves the catalog, and its sequence with it.
 #[tokio::test]
 async fn a_removed_session_is_in_no_later_catalog() {

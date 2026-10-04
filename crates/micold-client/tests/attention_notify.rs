@@ -144,10 +144,10 @@ fn the_first_snapshot_yields_no_claim_and_nothing_is_shown() {
     // U118, A13 (FR-005, US1 scenario 13): a change that happened with no window open.
     let mut state = repo_state();
     let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
-    let notifier = Recording::accepting();
 
+    // Nothing is shown by construction: `attention_on_welcome` takes no notifier and returns only
+    // the claims to send, so the assertion is that no claim comes back.
     assert_eq!(state.attention_on_welcome(&awaiting(b, 9), true), vec![]);
-    assert!(notifier.shown().is_empty());
 }
 
 #[test]
@@ -155,13 +155,15 @@ fn without_a_grant_nothing_is_shown() {
     // U120 (FR-006a, N1): a claim is a request; only the service's grant raises a notification.
     let mut state = repo_state();
     let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
-    let notifier = Recording::accepting();
     let _ = state.attention_on_welcome(&working(b, 1), true);
 
-    let claims = state.attention_on_catalog_changed(&awaiting(b, 2), true);
-
-    assert_eq!(claims.len(), 1, "the change is claimed");
-    assert!(notifier.shown().is_empty(), "and nothing is shown for it");
+    // `attention_on_catalog_changed` takes no notifier: what it returns is only a claim message,
+    // and a show happens only in `attention_granted` (covered by the tests below).
+    assert_eq!(
+        state.attention_on_catalog_changed(&awaiting(b, 2), true),
+        vec![ClientMsg::AttentionClaim { session: b, seq: 2 }],
+        "the change is claimed, and only claimed"
+    );
 }
 
 #[test]
@@ -208,10 +210,7 @@ fn a_worktree_with_no_rename_is_named_by_its_derived_name() {
 
     let _ = state.attention_granted(b, &notifier);
 
-    assert_eq!(
-        notifier.shown()[0].body,
-        format!("repo \u{2014} {}", state.worktree_display_name("feat-x"))
-    );
+    assert_eq!(notifier.shown()[0].body, "repo \u{2014} X");
 }
 
 #[test]
@@ -320,9 +319,13 @@ fn a_reported_failure_to_show_is_logged_once_per_run() {
 fn a_reported_success_logs_nothing_and_leaves_the_first_failure_to_be_logged() {
     let mut state = repo_state();
     assert_eq!(state.attention_shown(Ok(())), None);
-    assert!(state
-        .attention_shown(Err(NotifyError::Refused("blocked".to_string())))
-        .is_some());
+    let first = state.attention_shown(Err(NotifyError::Refused("blocked".to_string())));
+    assert!(
+        first
+            .as_deref()
+            .is_some_and(|line| line.contains("blocked")),
+        "the first failure is handed back with the system's reason: {first:?}"
+    );
 }
 
 #[test]
