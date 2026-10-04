@@ -5,6 +5,8 @@
 //! `alacritty_terminal`, so the daemon captures into them and seeds from them while this crate
 //! keeps its "no PTY/VT crate" boundary.
 
+use serde::{Deserialize, Serialize};
+
 pub mod format;
 pub mod text;
 
@@ -33,7 +35,9 @@ pub struct StyleRun {
     pub style: HistoryStyle,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// The style of a run. Its `serde` form, with [`HistoryColor`]'s and [`StyleFlags`]', is part of
+/// the saved-history file: a change to any of them needs a new `format::FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct HistoryStyle {
     pub fg: HistoryColor,
     pub bg: HistoryColor,
@@ -41,7 +45,7 @@ pub struct HistoryStyle {
 }
 
 /// A cell colour in this module's own numbering, independent of `alacritty_terminal`'s.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum HistoryColor {
     /// The terminal's default foreground or background.
     #[default]
@@ -73,7 +77,7 @@ impl HistoryColor {
 }
 
 /// The text attributes of a run, as a bit set.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct StyleFlags(u8);
 
 impl StyleFlags {

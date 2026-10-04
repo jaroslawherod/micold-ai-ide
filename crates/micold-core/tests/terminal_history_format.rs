@@ -15,7 +15,7 @@ const MAGIC: &[u8; 8] = b"MICOLDTH";
 /// Magic, version and payload length.
 const HEADER_BYTES: usize = 20;
 const CHECKSUM_BYTES: usize = 32;
-/// A file with an empty payload.
+/// A header and a checksum with no payload between them.
 const SMALLEST_FILE_BYTES: usize = HEADER_BYTES + CHECKSUM_BYTES;
 const VERSION_AT: std::ops::Range<usize> = 8..12;
 const LENGTH_AT: std::ops::Range<usize> = 12..HEADER_BYTES;
@@ -220,15 +220,20 @@ fn another_magic_is_not_a_history() {
     assert_eq!(decode(&file), Err(DamageReason::NotAHistory));
 }
 
-// U41, check 3: 52 bytes is the smallest file there is.
+// U41, check 3: 52 bytes, a header and a checksum around no payload, is the least a file can be.
 #[test]
 fn fewer_than_52_bytes_is_not_a_history() {
-    let smallest = encode(&HistorySnapshot::default());
-    assert_eq!(smallest.len(), SMALLEST_FILE_BYTES);
+    let no_payload = file_with_payload(&[]);
+    assert_eq!(no_payload.len(), SMALLEST_FILE_BYTES);
 
     assert_eq!(
-        decode(&smallest[..SMALLEST_FILE_BYTES - 1]),
+        decode(&no_payload[..SMALLEST_FILE_BYTES - 1]),
         Err(DamageReason::NotAHistory)
+    );
+    assert_eq!(
+        decode(&no_payload),
+        Err(DamageReason::Malformed),
+        "52 bytes pass the size check"
     );
 }
 
