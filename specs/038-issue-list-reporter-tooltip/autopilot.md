@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5: review A clean after round 3, scoped gate green; next review B, the visual pass §B6–B9 and §B11 and §B10 (T055), then the full gate and the PR.
+- **Next step**: M5 waits on the user: §B10 measured 1.88× (SC-008 allows 1.5×), see *Open escalation*. After the answer: apply it to spec.md (and the code if it changes how descriptions load), then the full gate, tick T055, PR. Reviews A (3 rounds) and B are done and clean; a code change for the answer needs a scoped round of A on it.
 
 ## Pull requests
 
@@ -76,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 code A | 1 | 90b8f1f973399a8868769552553b9cc93cf1533c:b9ef217d0f5df491a614df51a8d3672e03b508e7 | CHANGES: 1 MAJOR, 3 MINOR. Fixed: F1 MAJOR (a row tooltip's rest state survived the list closing, so a reopened list showed the panel at once; `Menu::update` hands a leaving list no cursor, gate test U88), F3 (invisible and control characters reached the description; `is_invisible`, U87). Not fixed: F2 (a keyboard highlight move does not close the panel; *Follow-ups not done*), F4 (`bodyText` downloads whole bodies; guarded by §B10, T055) |
 | M5 code A | 2 | a120bc479b173b8924d63261604b13a473b1e516:e841c7dd4796e1df726e3798a06b40da65e363b7 | CHANGES (scoped, sonnet): 1 MAJOR, 1 MINOR; round 1's fixes hold and its not-fixed reasons stand. Fixed: F1 MAJOR (`is_invisible` dropped U+200C and U+200D everywhere, breaking Persian spelling and emoji sequences; now kept between two visible characters, U89). Not fixed: F2 MINOR (other blank-looking characters, e.g. Hangul fillers, the braille blank, lone variation selectors, still count as text; *Follow-ups not done*) |
 | M5 code A | 3 | 0e8cc27ec59d7e300494974a62d295f3d9363385:a219c99b13516c33b018da039051eaa13e781974 | CLEAN (scoped, sonnet; a short round: 2 tool calls, `description_from` traced by hand, nothing run). Round 2's fix holds and its F2 reason stands. Scoped gate after it: first red on `clippy::useless_format` in the new test (fixed), then GATE_EXIT=0 |
+| M5 code B | 1 | 66acc0da35b70fdf6d2158412522150b787a16ac:c9f9d682f0f8deb18f8ab9713831655103402ecf | CLEAN, no findings (sonnet; a short round: 4 tool calls, 49 s, so the diff was not read file by file). Verify: `github_description` 17 passed; `layout_snapshot picker_row_tooltip_clears_its_row` 10 passed, 48 filtered out. Checked by the unit beside it, mechanically: no `todo!`, `dbg!`, `unimplemented!` or `cfg(target_os)` in the added lines; the 20 changed files are all M5's; both guides updated |
+| M5 visual pass | 1 | c9f9d682 | B6, B7, B8, B11 PASS; B9 PASS with comment stripping seen only on `cli/cli` #9085 (no template issue with a comment in `small`); **B10 FAIL: 1.88×** (before 11.6 s median, after 21.8 s; by hand ten pages 10.9 s and 236 KB without `bodyText`, 20.4 s and 2.08 MB with; no request over 10 s, slowest page 2.97 s). B6: 41 trials, first frame with the panel 3.04–3.13 s after the cursor stopped. B11: CPU ticks per 30 s 717–746 beside the list, 695–731 on a described row, 703–752 on an undescribed one; no `gh` started by a rest. Evidence: 33 crops `evidence/b6-*` to `b11-*`, `b6-trials.txt`, `b10-times.txt`, `b11-cpu.txt`, `evidence/README.md`. Not confirmed: light theme for B7, B9–B11; a truly blank body. The "before" build was 7cbb6c76, not `main`'s tip; the hand-run query gives the same ratio (1.87) |
 
 ## Declined review findings
 
@@ -94,7 +96,32 @@ None.
 
 ## Open escalation
 
-None.
+**M5, T055, §B10 — category 1 (product decision the repo does not settle; research R14 names it).**
+Asked 2026-10-04 by unit `Milestone M5 518 part 3`. Nothing is pushed; no PR is open for M5.
+
+- **Question**: with descriptions, the issue list of a 1,000-issue repository takes 1.88 times as
+  long to appear (about 22 s instead of 12 s). SC-008 allows 1.5 times. What should M5 do?
+- **Measured** (`evidence/b10-times.txt`, `cli/cli`, 1,000 issues loaded, alternating runs): before
+  13.6, 12.4, 11.3, 11.6, 11.1 s (median 11.6); after 23.2, 22.2, 21.8, 21.8, 19.8 s (median 21.8).
+  The query run by hand gives the same: ten pages in 10.9 s and 236 KB without `bodyText`, 20.4 s
+  and 2.08 MB with it; one page 0.97–1.02 s against 2.45–2.97 s. The cost is in GitHub's answer,
+  not in the client. No request came near the 10 s limit. A small repository (25 issues, R14)
+  shows no measurable difference.
+- **Options**:
+  1. (Recommended) Load the list as today, without `bodyText`, and fetch the descriptions in a
+     second pass that starts when the list has arrived (same occasions as a list load, never
+     because a cursor rests). The list appears as fast as before (SC-008 holds), a tooltip is
+     available once its page of descriptions is in. Cost: FR-024 and FR-026 are reworded (twice
+     the requests per load, about 20 instead of 10 on a full load), and M5 gets a rework of the
+     core query, the form's state and their tests.
+  2. Accept the slower load: change SC-008 to what was measured (2 times) and merge M5 as it is.
+     No more code. Every user of a large repository waits about 10 s longer for a list whose
+     tooltip is a convenience (US3 is P3).
+  3. Fetch a description when the cursor has rested on its row. The list is as fast as before and
+     nothing is fetched that is not read, but it contradicts FR-024 and SC-006 (no request because
+     a cursor rests) and the tooltip then opens later than 3 s.
+  4. Drop US3 from this feature: revert `bodyText`, keep M1–M4, close M5 without the tooltip.
+- **Paused**: T055 (open), the full gate and M5's PR; M6 behind it.
 
 ## Token usage
 
@@ -127,6 +154,14 @@ None.
   marks, but a body made only of other blank-looking characters (U+034F, the Hangul fillers, U+2800,
   lone variation selectors, the tag block) still counts as a description and opens an empty-looking
   panel. Each of those is real text in some script, so they were left alone.
+- M5 visual pass, seen but asked by no step: in the dark theme the tooltip panel has no visible
+  outline and little contrast against the list, so its text can read as printed over the rows
+  beneath (the light panel has an outline); the panel starts about 40 px right of the row's text.
+  Both are the shared `material::Tooltip`'s look (M4), not this milestone's code. A reference such
+  as `#284` and a bare URL in a body stay in the description: they are GitHub's `bodyText`.
+- M5 visual pass left a detached checkout registered with git at `/home/jaro/vp/m5/before-src`
+  (7cbb6c76, 54 MB), the "before" build's source. The autopilot may not delete it (the gate hook
+  refused the worker): it is for the user to delete in micold IDE.
 - **M5, the clamp's cost on a very long description (review A M4 F1).** `LineClamped` shapes the whole
   label once and then bisects over all of it. A description near GitHub's 65k maximum would hitch
   the frame that opens the panel. M5 should hand the tooltip a bounded prefix (its core step that

@@ -1,0 +1,11 @@
+bin-before 13.550222567
+bin-after 23.245912746
+bin-before 12.434925489
+bin-after 22.235416567
+bin-before 11.256177796
+bin-after 21.808383999
+bin-before 11.578244693
+bin-after 21.757639717
+bin-before 11.123863259
+bin-after 19.771090173
+ALLDONE
