@@ -207,7 +207,11 @@ fn a_node_without_a_body_is_listed_with_no_description() {
 fn the_longest_body_gives_a_bounded_description() {
     let body = "word ".repeat(GITHUB_BODY_MAX / 5 + 1);
     let body: String = body.chars().take(GITHUB_BODY_MAX).collect();
-    assert_eq!(body.chars().count(), GITHUB_BODY_MAX, "the fixture's length");
+    assert_eq!(
+        body.chars().count(),
+        GITHUB_BODY_MAX,
+        "the fixture's length"
+    );
     let issue = listed(&node_with(&format!(r#""bodyText": "{body}""#)));
     let description = issue.description();
     assert!(

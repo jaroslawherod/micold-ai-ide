@@ -53,8 +53,13 @@ fn debug_output_redacts_the_reporter() {
 #[test]
 fn debug_output_redacts_the_description() {
     const DESCRIPTION: &str = "a-private-sentence about the customer";
-    let issue = Issue::new(518, "Show the description".to_string(), vec![], "t".to_string())
-        .described(DESCRIPTION);
+    let issue = Issue::new(
+        518,
+        "Show the description".to_string(),
+        vec![],
+        "t".to_string(),
+    )
+    .described(DESCRIPTION);
     assert_eq!(
         issue.description(),
         DESCRIPTION,
@@ -100,7 +105,10 @@ fn a_malformed_page_with_a_body_gives_an_error_without_it() {
     ];
     for page in &pages {
         for (parser, result) in [
-            ("parse_list_page", parse_list_page(page.as_bytes()).map(drop)),
+            (
+                "parse_list_page",
+                parse_list_page(page.as_bytes()).map(drop),
+            ),
             ("parse_search", parse_search(page.as_bytes()).map(drop)),
         ] {
             let Err(error) = result else {
@@ -127,7 +135,10 @@ fn a_malformed_page_with_a_body_gives_an_error_without_it() {
 /// because the absence of an impl cannot be asserted on a value.
 #[test]
 fn an_issue_has_no_serialize() {
-    let path = crates_dir().join("micold-core").join("src").join("github.rs");
+    let path = crates_dir()
+        .join("micold-core")
+        .join("src")
+        .join("github.rs");
     let source =
         fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let at = source
