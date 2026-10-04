@@ -128,7 +128,8 @@ pub enum DamageReason {
     Truncated,
     /// Its checksum does not match its bytes.
     Checksum,
-    /// The payload does not decode, or bytes are left over after it.
+    /// The payload does not decode, bytes are left over after it, or it decodes to a snapshot
+    /// that breaks a rule the later checks do not name (a colour index outside its palette).
     Malformed,
     /// A run names a style that is not in the file's style table.
     BadStyleIndex,
@@ -174,6 +175,7 @@ pub fn encode(snapshot: &HistorySnapshot) -> Vec<u8> {
 
 /// The snapshot `bytes` hold, or the first check of the contract's §4 they fail (checks 2 to 10;
 /// check 1, reading the file, is the caller's). Never panics, and never returns part of a history.
+/// A snapshot it returns passes [`HistorySnapshot::validate`].
 pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
     if bytes.len() as u64 > MAX_FILE_BYTES {
         return Err(DamageReason::TooLarge);
@@ -198,7 +200,13 @@ pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
         _ => return Err(DamageReason::Malformed),
     };
     saved.check()?;
-    Ok(saved.into_snapshot())
+    let snapshot = saved.into_snapshot();
+    // What the ten checks do not cover (a colour index outside its palette): a snapshot that
+    // cannot be seeded is not returned, whatever its checksum says (FR-016).
+    snapshot
+        .validate()
+        .map_err(|_| DamageReason::Malformed)?;
+    Ok(snapshot)
 }
 
 /// The `N` bytes of `header` from `at`. The header is `HEADER_BYTES` long and both fields are
