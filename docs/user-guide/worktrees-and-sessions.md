@@ -1351,8 +1351,14 @@ from the earlier run; everything below it is new. A session that printed nothing
 line. After several restarts you see each run's output with a line between them. History beyond
 the scrollback limit is dropped, oldest lines first.
 
-- The history is kept by the background service while it runs. It is not written to disk yet, so a
-  restart of the service itself, or of the computer, still starts the terminal empty.
+- The history is also kept across a restart of the background service, or of the computer, when the
+  session was stopped or its process had exited before the restart. The service saves it to disk at
+  that moment. A session that was still running when the service restarted is not covered yet: it
+  starts with an empty terminal.
+- The saved histories are on your own computer only, one file per session in a `terminal-history`
+  folder: `~/.local/share/micold-ai-ide` on Linux, `~/Library/Application Support/micold-ai-ide`
+  on macOS, and `%LOCALAPPDATA%\micold-ai-ide\data` on Windows (the local profile, never the
+  roaming one, so Windows does not copy it to other computers). Only you can read them.
 - **Regular Terminal** instances are not covered: a stopped and started shell starts with an empty
   terminal.
 - An AI CLI that draws full-screen (Claude Code and Copilot CLI do by default) repaints its whole
