@@ -566,3 +566,125 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: `refactor(041): sync the file and its directory in owner_only::write; the daemon's write_owner_only delegates to it` (`3f90f223`): `sync_all` on the temporary file before the rename and, on Unix, of the directory after it (HF §3, R5); `platform::write_owner_only` is one call to `micold_core::owner_only::write` and the halves in `platform/unix.rs` and `platform/windows.rs` are removed. `owner_only` -> `test result: ok. 10 passed; 0 failed`; `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_file_mode` (unchanged) -> `test result: ok. 4 passed; 0 failed`; `mise run test-core` green (151 test binaries ok); clippy `-D warnings` on both crates clean; `cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` and `cargo check --workspace --target aarch64-apple-darwin` -> `Finished`
 - notes: the read-only test returns early when run as root. No test pins the two syncs: nothing a test can see here tells a synced file from an unsynced one. A failed directory sync is ignored (the whole file is under its name by then); a failed file sync fails the write.
 - commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
+
+## Cycle 51: (not on the list) a file that passes the ten checks and holds a colour index outside its palette is `Malformed`
+
+- test: `crates/micold-core/tests/terminal_history_format.rs::a_colour_index_outside_its_palette_is_malformed` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` -> `test result: FAILED. 19 passed; 1 failed` (commit `cb956e7d`)
+  -> `left: Ok(HistorySnapshot { lines: [LogicalLine { text: "ab", runs: [StyleRun { chars: 2, style: HistoryStyle { fg: Basic(16), bg: Default, flags: StyleFlags(0) } }] }] })` / `right: Err(Malformed)`
+- green: `crates/micold-core/src/terminal_history/format.rs`: after `check()` and `into_snapshot()`, `decode` runs `HistorySnapshot::validate` and maps any failure to `DamageReason::Malformed`. Same command -> `test result: ok. 20 passed; 0 failed`
+- refactor: none
+- notes: decided by the unit, not a row of the test list: FR-016 skips a history that cannot be used for any reason, and `decode` returned a snapshot `validate` rejects from a file with a valid checksum. `validate` also repeats checks 9 and 10; those run first in `check()` and keep their own reasons, so the only new rejection is `Basic(16..)` and `Dim(8..)` as a foreground or a background of a style a run uses. A live capture cannot produce one: `micold-daemon/src/history.rs::history_color` takes the index from a position in its 16- and 8-entry tables. A style in the file's table that no run uses is not looked at. HF §4's table and DM §3 still describe `Malformed` as the postcard check only; they are not edited here.
+- commit: `feat(041): decode returns only a snapshot that validates; anything else is Malformed (FR-016)` (`4c2dddd6`)
+
+## Cycle 52: U44 `save` then `load` gives `History`, in the file `<dir>/<session uuid>.history`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_saved_snapshot_loads_from_the_file_named_after_the_session`, `…::another_store_on_the_same_directory_loads_what_the_first_saved`, `…::an_empty_snapshot_loads_as_an_empty_history` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: `crates/micold-core/src/terminal_history/store.rs`: `save` encodes, takes the mutex and calls `owner_only::write(dir, "<uuid>.history", bytes)`; `load` reads the file under the mutex (`read_capped`) and decodes outside it. Same command -> `test result: FAILED. 14 passed; 4 failed` (U51's two, U52 and U54 still red)
+- refactor: none
+- notes: the file's bytes are asserted equal to `encode(&snapshot)`, and a second store on the same directory loads what the first saved (what a service start does). An empty snapshot loads as `History` with no lines (DM §3).
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 53: U45 `load` of an absent file gives `None`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_session_with_no_file_loads_as_none` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save` of the other session; the first assertion (no directory at all) held against the stub, whose `load` is `None` always
+- green: with cycle 52's green: `File::open` failing with `NotFound` is `None`, also when the directory is absent. Same run.
+- refactor: none
+- notes: the stub could not tell this from the real thing on its own, so the test also saves another session's file and loads it as `History`: a `load` that answers `None` always fails there.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 54: U46 `load` of a damaged file gives `Damaged`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_damaged_file_loads_as_damaged_with_its_reason`, `…::a_file_over_the_size_cap_loads_as_too_large`, `…::a_save_replaces_a_damaged_file` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> `a_damaged_file_loads_as_damaged_with_its_reason`: `left: None` / `right: Damaged(Truncated)`; `a_file_over_the_size_cap_loads_as_too_large`: `left: None` / `right: Damaged(TooLarge)`; `a_save_replaces_a_damaged_file`: ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green: `load` returns `decode`'s reason; the length is taken from the open file's metadata and one over `MAX_FILE_BYTES` is `TooLarge` before any content is read (HF §4 checks 1 then 2), and the read itself is capped at `MAX_FILE_BYTES + 1`. Same run.
+- refactor: none
+- notes: the too-large file is sparse (`set_len`), so the test costs no disk. An empty file is `Damaged(NotAHistory)`, not `None`.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 55: U47 `load` of a file with mode `000` gives `Damaged(Unreadable)`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::unix::a_file_that_cannot_be_opened_loads_as_unreadable` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green: an open or read error other than `NotFound` is `Damaged(Unreadable(kind))`; here `PermissionDenied`. Same run.
+- refactor: none
+- notes: returns early when run as root, as `owner_only`'s read-only test does.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 56: U48 A save over an existing file leaves no temporary file
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_save_over_an_existing_file_leaves_no_temporary_file` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green (`owner_only::write` renames its temporary file). Same run.
+- refactor: none
+- notes: none
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 57: U49 A temporary file left behind before the rename leaves the previous file loadable
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_temporary_file_left_behind_leaves_the_previous_file_loadable` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green: `load` reads only `<uuid>.history`; the next `save` goes through `owner_only::write_with`, which removes a leftover `.<uuid>.history.tmp` first. Same run.
+- refactor: none
+- notes: the leftover is half of another snapshot's encoding under the name `owner_only` uses for its temporary file. The test knows that name; a change of it in `owner_only.rs` needs this test changed with it.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 58: U50 Two ids make two files and never each other's content
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::two_sessions_have_two_files_and_never_each_others_content` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green. Same run.
+- refactor: none
+- notes: none
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 59: U51 A second `save` of an equal snapshot returns `Unchanged`, and the file's modification time and inode stay
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_second_save_of_an_equal_snapshot_is_unchanged`, `…::unix::an_unchanged_save_leaves_the_file_as_it_is`, `…::the_first_save_of_a_store_writes_even_over_an_equal_file` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`; then, with cycle 52's body, on the assertion: `left: Saved` / `right: Unchanged` in both tests
+- green: `State.last_written: HashMap<SessionId, [u8; 32]>` under the mutex; `save` compares the last 32 bytes of the encoding (its SHA-256) with the entry and returns `Unchanged` before any file operation, and records the checksum after a successful write. `format::CHECKSUM_BYTES` became `pub(super)`. Same command -> `test result: FAILED. 16 passed; 2 failed` (U52, U54)
+- refactor: none
+- notes: "last written" is what this store wrote, not what is on disk: a new store writes over an equal file (`the_first_save_of_a_store_writes_even_over_an_equal_file`). The inode and the modification time (seconds and nanoseconds, after a 20 ms sleep) are `cfg(unix)`; the answer itself is tested on every platform.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 60: U52 With `create_dir = false` and no directory `save` returns `Skipped` and creates nothing; with the directory present it saves
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::a_store_that_does_not_create_its_directory_skips_until_it_exists` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`; then, with cycle 59's body: `left: Saved` / `right: Skipped(NoDirectory)`
+- green: `HistoryStore` keeps `create_dir`; `save` returns `Skipped(SkipReason::NoDirectory)` when it is false and `dir` is not a directory, before the write and without recording a checksum. Same command -> `test result: FAILED. 17 passed; 1 failed` (U54)
+- refactor: none
+- notes: the save after the directory appears is `Saved` although the snapshot is the one that was skipped: a skipped save is not "last written". `SkipReason` has this one variant; T044 and T058 add the setting and the forgotten session.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 61: U53 The directory is mode `0700` and the file `0600`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::unix::the_directory_is_0700_and_the_file_0600` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `save`
+- green: with cycle 52's green (`owner_only::write`). Same run.
+- refactor: none
+- notes: none
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+## Cycle 62: U54 `history_dir()` ends in `terminal-history` under `data_local_dir()`, and on Windows is not under `data_dir()`
+
+- test: `crates/micold-core/tests/terminal_history_store.rs::unix::the_history_directory_is_terminal_history_under_the_local_data_directory`, `…::on_windows_the_history_directory_is_local_and_not_in_the_roaming_profile` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_store` (one shared run, all 18 tests written together against a stub: `save` returns `Err(Unsupported)`, `load` returns `None`, `history_dir()` returns `None`: `test result: FAILED. 0 passed; 18 failed`; commit `f02def10`)
+  -> `left: None` / `right: Some("/home/jaro/.local/share/micold-ai-ide/terminal-history")`
+- green: `history_dir()` is `ProjectDirs::from("", "", "micold-ai-ide")`'s `data_local_dir()` joined with `terminal-history`. Same command -> `test result: ok. 18 passed; 0 failed`
+- refactor: none
+- notes: the test was changed after this green, for a reason of its own: as first written it named `ProjectDirs::from(` to compute the expected path, and `mise run test-core` failed in `tests_never_write_the_real_data_directory` (a test file may not resolve the developer's data directory unredirected). It now sets `XDG_DATA_HOME` and `HOME` to a temporary directory and expects `<tmp>/micold-ai-ide/terminal-history` (macOS: under `Library/Application Support`), in `mod unix`. Checked with a mutant (`"terminal-histor"`): `left: Some("/tmp/.tmpJOpWwI/micold-ai-ide/terminal-histor")` / `right: Some("/tmp/.tmpJOpWwI/micold-ai-ide/terminal-history")`, restored. The `cfg(windows)` test compares with `%LOCALAPPDATA%\micold-ai-ide\data\terminal-history` and asserts the path is not under `%APPDATA%`; red not observed, it is compiled only here (`cargo check -p micold-core --all-targets --target x86_64-pc-windows-msvc` -> `Finished`) and CI's Windows leg is its first run.
+- commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
+
+End of U44-U54: `mise run test-core` green (152 test binaries ok, 1759 passed, 0 failed, 7 ignored); `terminal_history_store` -> `test result: ok. 18 passed; 0 failed`; `terminal_history_format` -> `test result: ok. 20 passed; 0 failed`; `scripts/build-lock.sh cargo clippy -p micold-core --all-targets -- -D warnings` clean; `scripts/build-lock.sh cargo check -p micold-core --all-targets --target x86_64-pc-windows-msvc` -> `Finished`. The eleven behaviours were driven as one red run against a stub and four green steps (cycles 52, 59, 60, 62), not eleven separate red-green pairs; `a_store_is_shared_between_threads` (`HistoryStore: Send + Sync`, a save from another thread) belongs to no row and passed with cycle 52's green.
