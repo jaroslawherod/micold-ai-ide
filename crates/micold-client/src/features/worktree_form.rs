@@ -29,7 +29,8 @@ use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::git::GitRemote;
 use micold_core::github::{
-    choose_remote, merge_searched, GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
+    choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
+    GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
 };
 use micold_core::issue_types::{type_for_labels, LabelTypeEntry};
 use micold_core::naming::name_from_title;
@@ -122,6 +123,57 @@ impl State {
             _ => None,
         }
     }
+
+    /// The page of descriptions the open form awaits, and what asks for it (038 FR-024).
+    ///
+    /// `Some` only while a loaded list's pass awaits a page, so the shell can tell a message that
+    /// moved the pass on (the request changed) from one the reducer dropped (it did not).
+    pub fn issue_description_request(&self) -> Option<DescriptionRequest> {
+        let form = self.form.as_ref()?;
+        match &form.issues {
+            IssueList::Loaded {
+                gh,
+                descriptions: DescriptionPass::Loading { seq, cursor, .. },
+                ..
+            } => Some(DescriptionRequest {
+                seq: *seq,
+                repo: form.github_repo()?.clone(),
+                cursor: cursor.clone(),
+                gh: gh.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// One request of the description pass: the page after `cursor` of `repo`'s open issues, read with
+/// the `gh` the list was read with, answered under `seq` (038 contracts/issue-fields.md §6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescriptionRequest {
+    /// The seq of the load this pass follows.
+    pub seq: u64,
+    pub repo: GithubRepo,
+    /// Where the page starts; `None` for the first.
+    pub cursor: Option<String>,
+    pub gh: PathBuf,
+}
+
+/// Where the second pass over a loaded list is: the one that reads the descriptions the list
+/// request leaves out, a page at a time (038 FR-024, contracts/issue-fields.md §6).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DescriptionPass {
+    /// A page is awaited; only the answer carrying this `seq` and `cursor` applies.
+    Loading {
+        /// The seq of the load this pass follows.
+        seq: u64,
+        /// Where the awaited page starts; `None` for the first.
+        cursor: Option<String>,
+        /// Pages already read.
+        pages: usize,
+    },
+    /// No page is awaited: the pass finished, failed, or there was nothing to describe.
+    #[default]
+    Done,
 }
 
 /// What a form cancelled mid-create knew about its create (feature 013, FR-010b).
@@ -201,6 +253,8 @@ pub enum IssueList {
         searched: Vec<Issue>,
         /// Where that search is.
         search: SearchState,
+        /// Where the pass that reads the listed issues' descriptions is (038 FR-024).
+        descriptions: DescriptionPass,
     },
 }
 
@@ -795,17 +849,80 @@ pub fn issues_loaded(
         }
         match result {
             Ok((listing, gh)) => {
+                // The list arrived without descriptions; they follow under this load's seq, so
+                // a later load's pass can never take this one's pages (038 FR-024).
+                let descriptions = if listing.issues.is_empty() {
+                    DescriptionPass::Done
+                } else {
+                    DescriptionPass::Loading {
+                        seq,
+                        cursor: None,
+                        pages: 0,
+                    }
+                };
                 form.issues = IssueList::Loaded {
                     listing,
                     gh,
                     searched: Vec::new(),
                     search: SearchState::Idle,
+                    descriptions,
                 };
                 form.issue_list_open = true;
                 form.rematch_issues();
             }
             Err(error) => form.issues = IssueList::Failed { error },
         }
+    });
+}
+
+/// A page of the description pass arrived (038 FR-024, contracts/issue-fields.md §6). Only the
+/// page the pass awaits applies: the one asked under the load's `seq`, from `cursor`.
+///
+/// The page's descriptions go onto the loaded issues and the pass moves to the next cursor, or
+/// ends. A failure ends it and changes nothing else: a tooltip is a convenience, so no error is
+/// shown and nothing is retried (ledger D15). A description is not match text, so the matches,
+/// the highlight and the open list are left as they are.
+pub fn issue_descriptions_loaded(
+    state: &mut crate::app::State,
+    seq: u64,
+    cursor: Option<String>,
+    result: Result<DescriptionPage, IssueLoadError>,
+) {
+    with_form(state, |form| {
+        let IssueList::Loaded {
+            listing,
+            descriptions,
+            ..
+        } = &mut form.issues
+        else {
+            return;
+        };
+        let DescriptionPass::Loading {
+            seq: awaited_seq,
+            cursor: awaited_cursor,
+            pages,
+        } = &*descriptions
+        else {
+            return;
+        };
+        if *awaited_seq != seq || *awaited_cursor != cursor {
+            return;
+        }
+        let read = pages + 1;
+        *descriptions = match result {
+            Ok(page) => {
+                describe_listed(&mut listing.issues, &page);
+                match next_description_cursor(cursor.as_deref(), &page, read) {
+                    Some(next) => DescriptionPass::Loading {
+                        seq,
+                        cursor: Some(next),
+                        pages: read,
+                    },
+                    None => DescriptionPass::Done,
+                }
+            }
+            Err(_) => DescriptionPass::Done,
+        };
     });
 }
 
@@ -1327,9 +1444,16 @@ pub enum Msg {
         seq: u64,
         result: Result<Vec<Issue>, IssueLoadError>,
     },
+    /// A page of the description pass answered (038 FR-024). Applies only while the pass awaits
+    /// exactly this `seq` and `cursor`.
+    IssueDescriptionsLoaded {
+        seq: u64,
+        cursor: Option<String>,
+        result: Result<DescriptionPage, IssueLoadError>,
+    },
 }
 
-/// The form's own reducer: one entry point, twenty-two answers (FR-004a).
+/// The form's own reducer: one entry point, thirty-five answers (FR-004a).
 ///
 /// The root sees a single arm. Everything the wizard knows about its own steps — which are inert
 /// while a create is in flight, which are inert behind a conflict prompt, which reset the branch
@@ -1371,6 +1495,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::IssuePicked { number, mapping } => issue_picked(state, number, &mapping),
         Msg::IssueSearchDue { seq } => issue_search_due(state, seq),
         Msg::IssueSearched { seq, result } => issue_searched(state, seq, result),
+        Msg::IssueDescriptionsLoaded {
+            seq,
+            cursor,
+            result,
+        } => issue_descriptions_loaded(state, seq, cursor, result),
     }
     Vec::new()
 }

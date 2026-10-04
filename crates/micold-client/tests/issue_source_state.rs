@@ -11,10 +11,14 @@ use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, Msg, SearchState, WorktreeForm,
+    BranchSource, DescriptionPass, DescriptionRequest, GithubAvailability, IssueList, Msg,
+    SearchState, WorktreeForm,
 };
 use micold_core::git::GitRemote;
-use micold_core::github::{search_args, GithubRepo, Issue, IssueListing, IssueLoadError};
+use micold_core::github::{
+    search_args, DescriptionPage, GithubRepo, Issue, IssueListing, IssueLoadError,
+    DESCRIPTION_PAGE_CAP,
+};
 use micold_core::issue_types::{default_mapping, LabelTypeEntry};
 use micold_core::naming::ConventionalType;
 use micold_core::typeahead::Direction;
@@ -1266,4 +1270,290 @@ fn typing_a_login_runs_the_one_search_for_the_text() {
         by_login.contains(&"q=repo:o/r is:issue is:open octocat".to_string()),
         "the search is for the typed text, with no author filter: {by_login:?}"
     );
+}
+
+// --- 038 T059: the description pass (contracts/issue-fields.md §6) --------------------------
+
+/// A form on the issue source with `issues()` loaded, and the seq of that load.
+fn loaded_under() -> (State, u64) {
+    let (mut state, seq) = loading();
+    send(&mut state, loaded_result(seq, issues()));
+    (state, seq)
+}
+
+/// Where the loaded list's description pass is.
+fn pass(state: &State) -> DescriptionPass {
+    match &form(state).issues {
+        IssueList::Loaded { descriptions, .. } => descriptions.clone(),
+        other => panic!("the list is not loaded: {other:?}"),
+    }
+}
+
+fn descriptions(pairs: &[(u64, &str)], next: Option<&str>) -> DescriptionPage {
+    DescriptionPage {
+        descriptions: pairs
+            .iter()
+            .map(|(number, text)| (*number, text.to_string()))
+            .collect(),
+        next_cursor: next.map(str::to_string),
+    }
+}
+
+fn page_arrives(
+    state: &mut State,
+    seq: u64,
+    cursor: Option<&str>,
+    result: Result<DescriptionPage, IssueLoadError>,
+) {
+    send(
+        state,
+        Msg::IssueDescriptionsLoaded {
+            seq,
+            cursor: cursor.map(str::to_string),
+            result,
+        },
+    );
+}
+
+/// Each loaded issue's number and description, in the list's order.
+fn described(state: &State) -> Vec<(u64, String)> {
+    let IssueList::Loaded { listing, .. } = &form(state).issues else {
+        panic!("the list is not loaded");
+    };
+    listing
+        .issues
+        .iter()
+        .map(|issue| (issue.number(), issue.description().to_string()))
+        .collect()
+}
+
+fn awaiting(seq: u64, cursor: Option<&str>, pages: usize) -> DescriptionPass {
+    DescriptionPass::Loading {
+        seq,
+        cursor: cursor.map(str::to_string),
+        pages,
+    }
+}
+
+/// 038 U95 — an accepted load awaits the first page of descriptions under the load's seq, read
+/// with the `gh` the list was read with (FR-024).
+#[test]
+fn an_accepted_load_awaits_the_first_description_page() {
+    let (state, seq) = loaded_under();
+    assert_eq!(pass(&state), awaiting(seq, None, 0));
+    let repo = form(&state).github_repo().cloned().expect("o/r");
+    assert_eq!(repo.to_string(), OWNER_NAME);
+    assert_eq!(
+        state.worktree_form.issue_description_request(),
+        Some(DescriptionRequest {
+            seq,
+            repo,
+            cursor: None,
+            gh: gh(),
+        }),
+        "the request is the first page, under the load's seq"
+    );
+}
+
+/// 038 U95 — a load of no issues has nothing to describe, and a failed load has no list (FR-024).
+#[test]
+fn a_load_of_no_issues_and_a_failed_load_await_no_descriptions() {
+    let (mut empty, seq) = loading();
+    send(&mut empty, loaded_result(seq, Vec::new()));
+    assert_eq!(pass(&empty), DescriptionPass::Done);
+    assert_eq!(empty.worktree_form.issue_description_request(), None);
+
+    let (mut failed, seq) = loading();
+    send(
+        &mut failed,
+        Msg::IssuesLoaded {
+            seq,
+            result: Err(IssueLoadError::RateLimited),
+            resolved_env: None,
+        },
+    );
+    assert_eq!(failed.worktree_form.issue_description_request(), None);
+
+    let (still_loading, _) = loading();
+    assert_eq!(
+        still_loading.worktree_form.issue_description_request(),
+        None,
+        "nothing is described before the list arrived"
+    );
+}
+
+/// 038 U96 — the awaited page puts its descriptions on the held issues and the pass awaits the
+/// page's cursor; what the user sees of the list is as it was (FR-024, FR-017).
+#[test]
+fn an_awaited_page_describes_the_held_issues_and_awaits_the_next() {
+    let (mut state, seq) = loaded_under();
+    query(&mut state, "s");
+    send(&mut state, Msg::IssueHighlightMoved(Direction::Next));
+    let (matches, highlight, open) = {
+        let f = form(&state);
+        (
+            f.issue_matches.clone(),
+            f.issue_highlight,
+            f.issue_list_open,
+        )
+    };
+    assert!(highlight.is_some() && open && !matches.is_empty());
+
+    let page = descriptions(
+        &[(7, "The sidebar"), (42, "It crashes"), (999, "Not held")],
+        Some("P2"),
+    );
+    page_arrives(&mut state, seq, None, Ok(page));
+
+    assert_eq!(
+        described(&state),
+        vec![
+            (7, "The sidebar".to_string()),
+            (42, "It crashes".to_string()),
+            (108, String::new()),
+        ],
+        "each description lands on the issue with its number; the others keep theirs"
+    );
+    assert_eq!(pass(&state), awaiting(seq, Some("P2"), 1));
+    assert_eq!(
+        state
+            .worktree_form
+            .issue_description_request()
+            .map(|request| (request.seq, request.cursor)),
+        Some((seq, Some("P2".to_string())))
+    );
+    let f = form(&state);
+    assert_eq!(f.issue_matches, matches, "the matches are as they were");
+    assert_eq!(f.issue_highlight, highlight, "the highlight is as it was");
+    assert!(f.issue_list_open, "the open list stays open");
+    assert_eq!(f.issue_query, "s");
+
+    send(&mut state, Msg::IssueDismissed);
+    assert!(!form(&state).issue_list_open);
+    page_arrives(
+        &mut state,
+        seq,
+        Some("P2"),
+        Ok(descriptions(&[(108, "The docs")], None)),
+    );
+    assert!(
+        !form(&state).issue_list_open,
+        "a page does not reopen a closed list"
+    );
+    assert_eq!(described(&state)[2], (108, "The docs".to_string()));
+}
+
+/// 038 U97 — a page that is not the awaited one changes nothing (FR-024, 034 FR-007a).
+#[test]
+fn a_page_that_is_not_awaited_changes_nothing() {
+    let one = || Ok(descriptions(&[(7, "Late")], Some("P2")));
+
+    let (mut state, seq) = loaded_under();
+    let before = form(&state).clone();
+    page_arrives(&mut state, seq + 1, None, one());
+    assert_eq!(form(&state), &before, "another seq");
+    page_arrives(&mut state, seq, Some("P9"), one());
+    assert_eq!(form(&state), &before, "another cursor");
+
+    page_arrives(
+        &mut state,
+        seq,
+        None,
+        Ok(descriptions(&[(7, "First")], None)),
+    );
+    let ended = form(&state).clone();
+    assert_eq!(pass(&state), DescriptionPass::Done);
+    page_arrives(&mut state, seq, None, one());
+    assert_eq!(form(&state), &ended, "after the pass ended");
+
+    let (mut left, seq) = loaded_under();
+    send(&mut left, Msg::SourceChanged(BranchSource::New));
+    let before = form(&left).clone();
+    page_arrives(&mut left, seq, None, one());
+    assert_eq!(form(&left), &before, "on another source");
+    assert_eq!(left.worktree_form.issue_description_request(), None);
+
+    let (mut reloaded, old) = loaded_under();
+    send(&mut reloaded, Msg::SourceChanged(BranchSource::New));
+    send(&mut reloaded, Msg::SourceChanged(BranchSource::Issue));
+    let new = awaited(&reloaded).expect("a second load");
+    send(&mut reloaded, loaded_result(new, issues()));
+    let before = form(&reloaded).clone();
+    page_arrives(&mut reloaded, old, None, one());
+    assert_eq!(
+        form(&reloaded),
+        &before,
+        "an earlier load's page on a new list"
+    );
+
+    let (mut closed, seq) = loaded_under();
+    send(&mut closed, Msg::Cancelled);
+    page_arrives(&mut closed, seq, None, one());
+    assert!(closed.worktree_form.form.is_none(), "with no form");
+    assert_eq!(closed.worktree_form.issue_description_request(), None);
+}
+
+/// 038 U98 — the pass ends on the last page and once the cap's pages are read (FR-024, FR-026).
+#[test]
+fn the_pass_ends_on_the_last_page_and_at_the_cap() {
+    let (mut state, seq) = loaded_under();
+    page_arrives(
+        &mut state,
+        seq,
+        None,
+        Ok(descriptions(&[(7, "Only")], None)),
+    );
+    assert_eq!(pass(&state), DescriptionPass::Done);
+    assert_eq!(state.worktree_form.issue_description_request(), None);
+
+    let (mut capped, seq) = loaded_under();
+    let mut cursor: Option<String> = None;
+    for read in 1..=DESCRIPTION_PAGE_CAP {
+        assert_eq!(pass(&capped), awaiting(seq, cursor.as_deref(), read - 1));
+        let next = format!("P{}", read + 1);
+        page_arrives(
+            &mut capped,
+            seq,
+            cursor.as_deref(),
+            Ok(descriptions(&[(7, "A page")], Some(&next))),
+        );
+        cursor = Some(next);
+    }
+    assert_eq!(
+        pass(&capped),
+        DescriptionPass::Done,
+        "a page that names a next cursor is still the last once the cap is read"
+    );
+    assert_eq!(capped.worktree_form.issue_description_request(), None);
+}
+
+/// 038 U98 — a failed page ends the pass and nothing else: no error, the list still loaded, the
+/// descriptions already delivered kept (FR-024, ledger D15).
+#[test]
+fn a_failed_page_ends_the_pass_and_shows_no_error() {
+    let (mut state, seq) = loaded_under();
+    page_arrives(
+        &mut state,
+        seq,
+        None,
+        Ok(descriptions(&[(7, "Kept")], Some("P2"))),
+    );
+    let mut expected = form(&state).clone();
+    let IssueList::Loaded { descriptions, .. } = &mut expected.issues else {
+        panic!("the list is loaded");
+    };
+    *descriptions = DescriptionPass::Done;
+
+    page_arrives(
+        &mut state,
+        seq,
+        Some("P2"),
+        Err(IssueLoadError::RateLimited),
+    );
+
+    assert_eq!(form(&state), &expected, "only the pass changed: it ended");
+    assert!(is_loaded(&state));
+    assert_eq!(form(&state).error, None);
+    assert_eq!(described(&state)[0], (7, "Kept".to_string()));
+    assert_eq!(state.worktree_form.issue_description_request(), None);
 }

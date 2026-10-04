@@ -201,12 +201,12 @@ gives the test task first, then the implementation task(s).
 | U92 | `parse_descriptions_page` gives numbers with folded, bounded descriptions and the next cursor; no body gives `""`; a node without a number is skipped; GraphQL errors classify as for the list; neither an error nor `{:?}` of a page carries a body | FR-020, FR-025 | example | DONE | T058 / T061 |
 | U93 | `describe_listed` puts each description on the held issue with that number and leaves every other issue and field as it was | FR-024 | example | DONE | T058 / T061 |
 | U94 | `next_description_cursor` continues while pages remain and ends on the last page, an empty page, a repeated cursor and after `DESCRIPTION_PAGE_CAP` pages; the fake source answers and records `describe_open` | FR-026 | example | DONE | T058 / T061 |
-| U95 | An accepted load awaits the first description page under the load's seq; a load of no issues and a failed load await none | FR-024 | example | PENDING | T059 / T062 |
-| U96 | An awaited page describes the held issues and awaits the next cursor; the highlight, the matches and the open list are as they were | FR-024, FR-017 | example | PENDING | T059 / T062 |
-| U97 | A page with another seq or cursor, after the pass ended, on another source or with no form changes nothing | FR-024, 034 FR-007a | example | PENDING | T059 / T062 |
-| U98 | The pass ends on the last page, at the cap and on a failure; a failure shows no error and leaves the list loaded | FR-024, FR-026 | example | PENDING | T059 / T062 |
-| U99 | `start_issue_descriptions` is called only after an accepted load and after an accepted page, and never from `src/ui/` | FR-024, SC-006 | example | PENDING | T060 / T062 |
-| U100 | Choosing the issue source reads the list, then the description pages in order, and the rows hold their descriptions; a failed page leaves the list shown | FR-024, US3-1 | example | PENDING | T060 / T062 |
+| U95 | An accepted load awaits the first description page under the load's seq; a load of no issues and a failed load await none | FR-024 | example | DONE | T059 / T062 |
+| U96 | An awaited page describes the held issues and awaits the next cursor; the highlight, the matches and the open list are as they were | FR-024, FR-017 | example | DONE | T059 / T062 |
+| U97 | A page with another seq or cursor, after the pass ended, on another source or with no form changes nothing | FR-024, 034 FR-007a | example | DONE | T059 / T062 |
+| U98 | The pass ends on the last page, at the cap and on a failure; a failure shows no error and leaves the list loaded | FR-024, FR-026 | example | DONE | T059 / T062 |
+| U99 | `start_issue_descriptions` is called only after an accepted load and after an accepted page, and never from `src/ui/` | FR-024, SC-006 | example | DONE | T060 / T062 |
+| U100 | Choosing the issue source reads the list, then the description pages in order, and the rows hold their descriptions; a failed page leaves the list shown | FR-024, US3-1 | example | DONE | T060 / T062 |
 
 ## Notes
 

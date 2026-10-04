@@ -6,12 +6,22 @@
 //!
 //! # When GitHub is contacted, and why only then
 //!
-//! [`start_issue_load`] and [`start_issue_search`] are the only paths to the issue source. The load
-//! runs when the reducer accepts `SourceChanged(Issue)` or `IssueRetry` from a failed load; the
-//! search beyond the loaded issues runs when the debounce after a keystroke on a capped list ends
-//! with the reducer accepting `IssueSearchDue`, or on `IssueRetry` from a failed search (FR-003,
-//! FR-005a). Opening the form asks the daemon for the remotes, a local read, and nothing else.
+//! [`start_issue_load`], [`start_issue_search`] and [`start_issue_descriptions`] are the only paths
+//! to the issue source. The load runs when the reducer accepts `SourceChanged(Issue)` or
+//! `IssueRetry` from a failed load; the search beyond the loaded issues runs when the debounce
+//! after a keystroke on a capped list ends with the reducer accepting `IssueSearchDue`, or on
+//! `IssueRetry` from a failed search (FR-003, FR-005a). Opening the form asks the daemon for the
+//! remotes, a local read, and nothing else.
 //! `tests/issues_are_requested_only_on_named_events.rs` counts the callers.
+//!
+//! # Why the descriptions come after the list
+//!
+//! A list request that also carried every issue's body took almost twice as long on a repository
+//! of 1,000 issues (feature 038, research R14), so the list is read without them and shown at
+//! once. The descriptions follow in a second pass, a page at a time: it starts when the reducer
+//! accepted a load, and goes on when it accepted a page and awaits another. Nothing else starts
+//! it: not a view, not a timer, not a cursor resting on a row (038 FR-024). A page that fails ends
+//! the pass and shows nothing; the next load starts a new one.
 //!
 //! # Why the search waits
 //!
@@ -32,9 +42,11 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
+use micold_client::features::worktree_form::{BranchSource, DescriptionRequest, Msg as FormMsg};
 use micold_core::env_include::EnvIncludeSnapshot;
-use micold_core::github::{env_include_path, load_listing, IssueListing, IssueLoadError};
+use micold_core::github::{
+    env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
+};
 use micold_core::protocol::messages::ClientMsg;
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
@@ -166,7 +178,8 @@ pub fn on_issue_row_picked(app: &mut App, index: usize) -> Task<Message> {
 }
 
 /// A load finished: keep the environment-include snapshot it resolved, then let the reducer decide
-/// whether the result is still the awaited one.
+/// whether the result is still the awaited one. When it was, and it listed issues, the pass that
+/// reads their descriptions starts (feature 038, FR-024).
 pub fn on_issues_loaded(
     app: &mut App,
     seq: u64,
@@ -178,13 +191,38 @@ pub fn on_issues_loaded(
     if let Some((cwd, snapshot)) = resolved_env {
         app.env_include_cache.entry(cwd).or_insert(snapshot);
     }
+    let before = app.core.worktree_form.issue_description_request();
     app.core
         .update(Message::WorktreeForm(FormMsg::IssuesLoaded {
             seq,
             result,
             resolved_env: None,
         }));
-    Task::none()
+    match newly_awaited_descriptions(app, before) {
+        Some(first) => start_issue_descriptions(app, first),
+        None => Task::none(),
+    }
+}
+
+/// A page of descriptions arrived (feature 038, FR-024). The reducer decides whether it is the
+/// awaited one; when it was and the pass awaits another, that page is read next.
+pub fn on_issue_descriptions_loaded(
+    app: &mut App,
+    seq: u64,
+    cursor: Option<String>,
+    result: Result<DescriptionPage, IssueLoadError>,
+) -> Task<Message> {
+    let before = app.core.worktree_form.issue_description_request();
+    app.core
+        .update(Message::WorktreeForm(FormMsg::IssueDescriptionsLoaded {
+            seq,
+            cursor,
+            result,
+        }));
+    match newly_awaited_descriptions(app, before) {
+        Some(next) => start_issue_descriptions(app, next),
+        None => Task::none(),
+    }
 }
 
 /// Up or Down moved the highlight (feature 038, FR-007). The reducer moves the index and nothing
@@ -210,6 +248,20 @@ fn newly_awaited(app: &App, before: u64) -> Option<u64> {
         .worktree_form
         .awaited_issue_load()
         .filter(|seq| *seq > before)
+}
+
+/// The page of descriptions the form awaits, if the last message is what made it await it.
+///
+/// A message the reducer dropped leaves the request as it was, and that request is already
+/// running: starting it again would ask GitHub twice for one page.
+fn newly_awaited_descriptions(
+    app: &App,
+    before: Option<DescriptionRequest>,
+) -> Option<DescriptionRequest> {
+    app.core
+        .worktree_form
+        .issue_description_request()
+        .filter(|request| before.as_ref() != Some(request))
 }
 
 /// Locate `gh` and read the open issues on a blocking thread, answering `IssuesLoaded { seq }`.
@@ -295,6 +347,41 @@ fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
                 )))
             });
             Message::WorktreeForm(FormMsg::IssueSearched { seq, result })
+        },
+    )
+}
+
+/// Read one page of the listed issues' descriptions on a blocking thread, answering
+/// `IssueDescriptionsLoaded` under the request's seq and cursor (feature 038, FR-024).
+///
+/// Like the search, it runs the `gh` the load located and looks for nothing.
+fn start_issue_descriptions(app: &mut App, request: DescriptionRequest) -> Task<Message> {
+    let describing = app.caps.issue_tooling().source;
+    let DescriptionRequest {
+        seq,
+        repo,
+        cursor,
+        gh,
+    } = request;
+    let asked = cursor.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                describing(gh).describe_open(&repo, asked.as_deref())
+            })
+            .await
+        },
+        move |joined| {
+            let result = joined.unwrap_or_else(|stopped| {
+                Err(IssueLoadError::Other(format!(
+                    "reading the issue descriptions stopped unexpectedly: {stopped}"
+                )))
+            });
+            Message::WorktreeForm(FormMsg::IssueDescriptionsLoaded {
+                seq,
+                cursor,
+                result,
+            })
         },
     )
 }

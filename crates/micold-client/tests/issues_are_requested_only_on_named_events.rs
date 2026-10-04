@@ -3,7 +3,9 @@
 //! Opening the add-worktree form must contact nothing but the daemon's local `RemoteList`. The
 //! issue source runs `gh`, which reaches GitHub, and the spec allows that on exactly three named
 //! events: choosing the **GitHub issue** source, pressing **Retry** after a failed load or search,
-//! and the debounce after a keystroke on a capped list running out (FR-005a). A load on form open,
+//! and the debounce after a keystroke on a capped list running out (FR-005a). The descriptions of a
+//! loaded list are read in a pass that follows the load: it starts when a load was accepted and
+//! goes on when a page of it was, so it adds no event of its own (038 FR-024). A load on form open,
 //! on reconnect or on a timer
 //! would pass every behavioural test of the picker and quietly send the repository's name to
 //! GitHub for a user who never chose the source — which is what FR-025's opt-in notice promises
@@ -17,11 +19,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The names that mean "issues are being fetched": the capability that builds the `gh`-backed
-/// source, and the two shell functions that use it — the load and the search beyond it.
+/// source, and the three shell functions that use it — the load, the search beyond it and the
+/// description pass that follows a load.
 const MARKERS: &[&str] = &[
     ".issue_tooling()",
     "start_issue_load(",
     "start_issue_search(",
+    "start_issue_descriptions(",
 ];
 
 /// `(file relative to the repository root, the trimmed line, why it is not another trigger)`.
@@ -68,6 +72,29 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "crates/micold-client/src/shell/issues.rs",
         "Some(retried) => start_issue_search(app, retried),",
         "Named event 2, for a search: the reducer accepted `IssueRetry` from a failed search.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "fn start_issue_descriptions(app: &mut App, request: DescriptionRequest) -> Task<Message> {",
+        "The definition of the single path to `describe_open`; it calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "let describing = app.caps.issue_tooling().source;",
+        "The capability's use inside `start_issue_descriptions`: the source is built from the `gh` \
+         the load located, as the search's is.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "Some(first) => start_issue_descriptions(app, first),",
+        "038 U99 (FR-024): the reducer accepted a load (named events 1 and 2) and now awaits the \
+         first page of its descriptions. A stale or failed load awaits none.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "Some(next) => start_issue_descriptions(app, next),",
+        "038 U99 (FR-024): the reducer accepted a page of that pass and awaits the one after it. \
+         A stale page, the last page, the cap and a failure await none.",
     ),
 ];
 

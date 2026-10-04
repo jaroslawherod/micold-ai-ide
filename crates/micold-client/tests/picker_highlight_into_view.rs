@@ -98,6 +98,7 @@ fn form_listing(issues: Vec<Issue>) -> StateUnderTest {
             gh: std::path::PathBuf::from("/usr/bin/gh"),
             searched: Vec::new(),
             search: SearchState::Idle,
+            descriptions: Default::default(),
         },
         issue_matches,
         issue_list_open: true,

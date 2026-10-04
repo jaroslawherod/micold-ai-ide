@@ -65,6 +65,7 @@ fn issue_search_state(search: SearchState) -> StateUnderTest {
         gh: std::path::PathBuf::from("/usr/bin/gh"),
         searched: Vec::new(),
         search,
+        descriptions: Default::default(),
     });
     form.issue_query = query.to_string();
     form.issue_matches = issue_matches;
@@ -106,6 +107,7 @@ fn issue_list_state(issues: Vec<Issue>) -> StateUnderTest {
         gh: std::path::PathBuf::from("/usr/bin/gh"),
         searched: Vec::new(),
         search: SearchState::Idle,
+        descriptions: Default::default(),
     });
     form.issue_matches = issue_matches;
     form.issue_list_open = true;
@@ -599,6 +601,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     gh: std::path::PathBuf::from("/usr/bin/gh"),
                     searched: Vec::new(),
                     search: SearchState::Idle,
+                    descriptions: Default::default(),
                 });
                 form.issue_matches = issue_matches;
                 form.type_ = None;

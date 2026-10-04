@@ -676,7 +676,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 034: the issue source. Opening asks the daemon for the remotes; choosing the
         // source or retrying runs the load; a keystroke on a capped list waits out the debounce and
         // then searches GitHub; a row pick resolves to its issue; a result caches the
-        // environment-include snapshot it resolved.
+        // environment-include snapshot it resolved and starts the pass over its descriptions.
         Message::WorktreeForm(FormMsg::Opened) => shell::issues::on_form_opened(app),
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::issues::on_source_changed(app, source)
@@ -701,6 +701,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             result,
             resolved_env,
         }) => shell::issues::on_issues_loaded(app, seq, result, resolved_env),
+        // Feature 038 (FR-024): a page of the listed issues' descriptions; the next is read when
+        // the reducer accepted this one and awaits another.
+        Message::WorktreeForm(FormMsg::IssueDescriptionsLoaded {
+            seq,
+            cursor,
+            result,
+        }) => shell::issues::on_issue_descriptions_loaded(app, seq, cursor, result),
         Message::Session(SessionMsg::StartRequested { location, provider }) => {
             shell::daemon_sync::on_session_start_requested(app, location, provider)
         }
