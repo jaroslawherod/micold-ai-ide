@@ -920,3 +920,141 @@ fn up_down_and_enter_act_under_an_open_panel_as_without_one() {
          published {last:?}"
     );
 }
+
+/// U82 (FR-017, Edge: the source changed): a form switched to another branch source, with a tooltip
+/// panel open on one of its rows, builds no row and floats no panel in its next frame.
+///
+/// The switch goes through the reducer as the segmented control's own message does. The list is a
+/// part of the issue source's view, so it is gone; the panel it floated goes with it, not left
+/// hanging over a form that has no row to attach it to.
+#[test]
+fn a_form_on_another_source_builds_no_row_and_floats_no_panel() {
+    let mut form = Form::new();
+    let at = form.list().centre_of(MIDDLE_ROW);
+    form.rest_at(at);
+    form.the_panel("a panel open before the source is changed");
+
+    form.under
+        .state
+        .update(Message::WorktreeForm(FormMsg::SourceChanged(
+            BranchSource::New,
+        )));
+    form.frame(Instant::now(), mouse::Cursor::Available(at));
+
+    assert_eq!(
+        form.panels().len(),
+        0,
+        "no tooltip panel may stay open once the form is on another source (038 FR-017)"
+    );
+    let rows_laid_out = form
+        .floated()
+        .iter()
+        .filter(|r| r.path.starts_with(LIST_VIEWPORT) && r.path.len() > LIST_VIEWPORT.len())
+        .count();
+    assert_eq!(
+        rows_laid_out, 0,
+        "no issue row may be laid out once the form is on another source (038 FR-017)"
+    );
+}
+
+/// U88 (FR-015, FR-017): a list dismissed with a tooltip open and opened again over the same row
+/// with the cursor unmoved waits the whole delay again before it shows that row's panel.
+///
+/// The picker keeps the menu's widget tree across a close and a reopen, so a row's rest state is
+/// still there when the list comes back. The list closes the way a person closes it, with Escape
+/// in the focused search field (the reducer takes `IssueDismissed`), and opens the way the
+/// reviewer's repro does, by typing a character that leaves the same issue at the same place.
+/// Redraws carry their instants, and the cursor is never moved, so no mouse event reads the wall
+/// clock: the instants are this test's own. The list's entrance runs from `first`, so the rest
+/// can have started no earlier than `first`.
+#[test]
+fn a_reopened_list_waits_the_whole_delay_again() {
+    let mut form = Form::new();
+    let field = form.search_field();
+    form.click(field.center());
+    let list = form.list();
+    let at = list.centre_of(MIDDLE_ROW);
+    let number_at = |form: &Form| {
+        form.under
+            .state
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("the form is open")
+            .issue_number_at(MIDDLE_ROW)
+    };
+    let before = number_at(&form);
+    form.rest_at(at);
+    form.the_panel("rest on the row before the list is dismissed");
+
+    // Dismiss it as a person does, and let it finish leaving with the cursor where it was.
+    let published = form.send(
+        &key(keyboard::key::Named::Escape),
+        mouse::Cursor::Available(at),
+    );
+    assert!(
+        published.contains(&Message::WorktreeForm(FormMsg::IssueDismissed)),
+        "Escape in the search field dismisses the list; it published {published:?}"
+    );
+    let mut now = Instant::now() + 2 * ROW_TOOLTIP_REST;
+    for _ in 0..120 {
+        now += lay::FRAME;
+        form.frame(now, mouse::Cursor::Available(at));
+    }
+    assert!(
+        !form.floated().iter().any(|r| r.path == LIST_VIEWPORT),
+        "the dismissed list has finished leaving and floats nothing"
+    );
+
+    // Open it again by typing, cursor unmoved, and run its entrance.
+    form.send(
+        &Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character("1".into()),
+            modified_key: keyboard::Key::Character("1".into()),
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::default(),
+            text: Some("1".into()),
+            repeat: false,
+        }),
+        mouse::Cursor::Available(at),
+    );
+    let first = now + lay::FRAME;
+    let mut last = first;
+    for step in 0..lay::SETTLE_FRAMES * 2 {
+        last = first + lay::FRAME * step;
+        form.frame(last, mouse::Cursor::Available(at));
+    }
+    let list = form.list();
+    assert!(
+        list.shows(at),
+        "the list is open again and the cursor at {at:?} is over it"
+    );
+    assert_eq!(
+        number_at(&form),
+        before,
+        "the reopened list has the same issue at row {MIDDLE_ROW} as before"
+    );
+    let row = &list.rows[MIDDLE_ROW];
+    assert!(
+        row.y <= at.y && at.y < row.y + row.height,
+        "the cursor at {at:?} is in row {MIDDLE_ROW}"
+    );
+
+    assert_eq!(
+        form.panels().len(),
+        0,
+        "the list was just opened again under a still cursor: its row has not rested for the delay \
+         yet, so no panel (038 FR-015, FR-017)"
+    );
+    form.frame(first + ROW_TOOLTIP_REST - MS, mouse::Cursor::Available(at));
+    assert_eq!(
+        form.panels().len(),
+        0,
+        "a millisecond short of the delay from the reopening there is still no panel (038 FR-015)"
+    );
+    form.frame(last + ROW_TOOLTIP_REST, mouse::Cursor::Available(at));
+    form.the_panel("a full delay after the list was opened again");
+}

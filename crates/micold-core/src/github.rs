@@ -571,13 +571,19 @@ const DESCRIPTION_CUT_MARK: char = '…';
 /// An issue's description from its `bodyText`, GitHub's plain-text rendering of the body (038
 /// data-model §2): every run of Unicode whitespace becomes one space and both ends are trimmed;
 /// more than [`DESCRIPTION_MAX_CHARS`] characters are cut there, on a character boundary, and end
-/// in `…`. A body with no text gives the empty string.
+/// in `…`. Characters that show nothing are dropped: control characters, zero-width marks and the
+/// marks that override the direction of text, so a body cannot reorder what the tooltip shows or
+/// open an empty one. A body with no text gives the empty string.
 ///
 /// It reads no more of `body_text` than it keeps, so a very long body costs what a short one does.
 pub fn description_from(body_text: &str) -> String {
     let mut description = String::new();
     let mut kept = 0usize;
     for word in body_text.split_whitespace() {
+        let mut visible = word.chars().filter(|c| !is_invisible(*c)).peekable();
+        if visible.peek().is_none() {
+            continue;
+        }
         if !description.is_empty() {
             if kept == DESCRIPTION_MAX_CHARS {
                 // More text follows the limit: cut before the space.
@@ -587,7 +593,7 @@ pub fn description_from(body_text: &str) -> String {
             description.push(' ');
             kept += 1;
         }
-        for c in word.chars() {
+        for c in visible {
             if kept == DESCRIPTION_MAX_CHARS {
                 let end = description.trim_end().len();
                 description.truncate(end);
@@ -599,6 +605,25 @@ pub fn description_from(body_text: &str) -> String {
         }
     }
     description
+}
+
+/// Whether `c` is drawn as nothing: a control character, or one of Unicode's format characters
+/// that join, hide or direct the text around them. The standard library knows no general
+/// category, so the format characters are named by their ranges.
+fn is_invisible(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{180E}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{2066}'..='\u{206F}'
+                | '\u{FEFF}'
+                | '\u{FFF9}'..='\u{FFFB}'
+        )
 }
 
 /// What `Debug` prints in place of a reporter or a description.

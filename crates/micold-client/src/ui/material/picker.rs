@@ -1036,7 +1036,11 @@ mod tests {
     const WINDOW: Size = Size::new(800.0, 600.0);
     /// The list's width.
     const LIST_WIDTH: f32 = 320.0;
-    const MS: Duration = Duration::from_millis(1);
+    /// How far short of the delay "not yet" is measured: a small part of the delay itself, so it
+    /// states no duration of its own (`tests/motion_tokens.rs`).
+    const MS: Duration = ROW_TOOLTIP_REST
+        .checked_div(1000)
+        .expect("a thousandth of the delay");
 
     /// Far more than three lines at the tooltip's width.
     fn long_text() -> String {

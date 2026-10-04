@@ -475,6 +475,15 @@ where
         if self.leaving && !matches!(event, Event::Window(_)) {
             return;
         }
+        // Nor is a leaving list pointed at. Its content keeps its widget state across a close and
+        // a reopen, so a row that went on seeing the cursor while it faded would keep its tooltip
+        // open, or its wait running, and show the panel the moment the list came back (038
+        // FR-015, FR-017). Without a cursor every row sees it leave on the first leaving frame.
+        let cursor = if self.leaving {
+            mouse::Cursor::Unavailable
+        } else {
+            cursor
+        };
 
         // The keyboard first, and only the keys the rule claims. Capturing the event is what stops
         // Enter also submitting the dialog behind the list.

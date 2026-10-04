@@ -360,3 +360,34 @@ fn the_match_text_never_holds_the_description() {
         "nor on either of the row's lines"
     );
 }
+
+/// U87 (FR-020) — a body of characters nobody can see leaves no description, so its row has no
+/// tooltip: zero-width and other invisible marks are dropped as blank space is.
+#[test]
+fn a_text_of_invisible_characters_gives_no_description() {
+    for invisible in [
+        "\u{200B}",
+        "\u{FEFF}\u{200B} \u{2060}\n\u{200D}",
+        "\u{202E}\u{202C}",
+        "\u{0007}\u{001B}",
+    ] {
+        assert_eq!(
+            description_from(invisible),
+            "",
+            "{invisible:?} shows nothing, so it is no description"
+        );
+    }
+}
+
+/// U87 — invisible marks inside a text are dropped and the words kept: a direction override in a
+/// body cannot reorder what the tooltip shows, and a dropped mark does not count toward the limit
+/// or leave a second space behind.
+#[test]
+fn invisible_characters_are_dropped_from_a_description() {
+    assert_eq!(
+        description_from("The \u{202E}list\u{202C} cuts \u{200B} long\u{FEFF} titles\u{0000} off."),
+        "The list cuts long titles off."
+    );
+    let padded = format!("{}{}", "\u{200B}".repeat(700), "Short.");
+    assert_eq!(description_from(&padded), "Short.");
+}

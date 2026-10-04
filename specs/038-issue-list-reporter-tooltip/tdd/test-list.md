@@ -55,7 +55,7 @@ before the story is complete.
 
 ## Inner loop: unit behaviors
 
-States are all `PENDING` or `BASELINE`; the test is named when the cycle writes it. The `tasks` column
+States are `PENDING`, `DONE` or `BASELINE`; the test is named when the cycle writes it. The `tasks` column
 gives the test task first, then the implementation task(s).
 
 ### `crates/micold-core/src/github.rs`: reporter and shared node selection
@@ -67,7 +67,7 @@ gives the test task first, then the implementation task(s).
 | U3 | A bot's login is kept exactly as reported | FR-002, Edge: bot | example | DONE | T001 / T007 |
 | U4 | `LIST_QUERY`, `SEARCH_QUERY` and `SEARCH_WITH_NUMBER_QUERY` each contain the one shared node selection, with `author { login }` | FR-002, FR-006 | example | DONE | T001 / T007 |
 | U5 | A list node, a search node and a typed-number node with the same fields parse to equal `Issue`s | US1-8, FR-006 | example | DONE | T001 / T007 |
-| U6 | `list_args` and `search_args` are unchanged and no argument contains `author:` | FR-013, FR-026 | example | DONE (M1 part; T044/T049 extend it in M5) | T001, T044 / T007, T049 |
+| U6 | `list_args` and `search_args` are unchanged and no argument contains `author:` | FR-013, FR-026 | example | DONE (M1 part; extended by T044/T049 in M5) | T001, T044 / T007, T049 |
 
 ### `crates/micold-core/src/github.rs`: row lines and emphasis
 
@@ -86,23 +86,23 @@ gives the test task first, then the implementation task(s).
 | U17 | `emphasis` maps a reporter span to the start of the details line (`ana` -> `0..3`) | US2-2, FR-010 | example | DONE (`github_issue_lines.rs::a_span_in_the_reporter_maps_to_the_start_of_the_details_line`) | T024 / T028 |
 | U18 | `typeahead::rank` over issues matches part of a reporter login in a different letter case | US2-1, US2-4, FR-009 | example | DONE (`github_issue_lines.rs::rank_matches_part_of_a_reporter_login_in_another_letter_case`) | T024 / T028 |
 | U19 | One `rank` result emphasises both a title match and a reporter match | US2-3, FR-010 | example | DONE (`github_issue_lines.rs::one_match_emphasises_the_title_and_the_reporter`) | T024 / T028 |
-| U20 | Text found only in an issue's description does not match the issue; `row_text()` never contains the description | FR-014 | example | DONE (M3 part: U16 holds `row_text()` to exactly number, title, reporter and labels; T044/T049 extend it once issues carry a description) | T024, T044 / T028, T049 |
+| U20 | Text found only in an issue's description does not match the issue; `row_text()` never contains the description | FR-014 | example | DONE (M3 part: U16 holds `row_text()` to exactly number, title, reporter and labels; T044/T049 extend it once issues carry a description; M5 part done) | T024, T044 / T028, T049 |
 | U21 | Ranking 1,000 issue rows that carry reporters stays under the existing 50 ms release budget | SC-002 | example | DONE (`typeahead_budget.rs::the_issue_corpus_carries_reporters`, `ranking_1000_issue_rows_for_a_short_query_fits_the_budget`) | T027 / T028 |
 
 ### `crates/micold-core/src/github.rs`: description and privacy
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U22 | `description_from` turns every run of Unicode whitespace into one space and trims both ends | FR-020, FR-022 | example | PENDING | T044 / T049 |
-| U23 | `description_from` of more than 600 characters is cut on a character boundary to 600, trimmed, then `…` appended; exactly 600 is unchanged | FR-021, SC-005 | example | PENDING | T044 / T049 |
-| U24 | `description_from` of input with no non-whitespace character gives the empty string | FR-020 | example | PENDING | T044 / T049 |
-| U25 | A node whose `bodyText` is `Problem\nThe list cuts long titles off.` parses to `Problem The list cuts long titles off.`; a comment-only body parses to `""` | US3-12, US3-13, FR-022 | example | PENDING | T044 / T049 |
-| U26 | `bodyText` null or absent gives an empty description and the issue is still listed; a 65,536-character body gives 601 characters | FR-020, Edge: very long | example | PENDING | T044 / T049 |
-| U27 | The shared node selection contains `bodyText`, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | PENDING | T044 / T049 |
-| U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | DONE (reporter; T045/T049 add the description in M5) | T003, T045 / T009, T049 |
+| U22 | `description_from` turns every run of Unicode whitespace into one space and trims both ends | FR-020, FR-022 | example | DONE | T044 / T049 |
+| U23 | `description_from` of more than 600 characters is cut on a character boundary to 600, trimmed, then `…` appended; exactly 600 is unchanged | FR-021, SC-005 | example | DONE | T044 / T049 |
+| U24 | `description_from` of input with no non-whitespace character gives the empty string | FR-020 | example | DONE | T044 / T049 |
+| U25 | A node whose `bodyText` is `Problem\nThe list cuts long titles off.` parses to `Problem The list cuts long titles off.`; a comment-only body parses to `""` | US3-12, US3-13, FR-022 | example | DONE | T044 / T049 |
+| U26 | `bodyText` null or absent gives an empty description and the issue is still listed; a 65,536-character body gives 601 characters | FR-020, Edge: very long | example | DONE | T044 / T049 |
+| U27 | The shared node selection contains `bodyText`, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | DONE | T044 / T049 |
+| U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | DONE (reporter; the description added in M5) | T003, T045 / T009, T049 |
 | U29 | No `tracing`/`log` call in `github.rs`, `shell/issues.rs` or `worktree_form.rs` names an issue, reporter or description | FR-025 | example | DONE | T003 / T009 |
-| U30 | A malformed page containing a body returns an error whose `Display` and `Debug` carry no part of the body | FR-025 | example | PENDING | T045 / T049 |
-| U81 | `Issue` derives or implements no `Serialize` (source check over `github.rs`) | FR-025 | example | PENDING | T045 / T049 |
+| U30 | A malformed page containing a body returns an error whose `Display` and `Debug` carry no part of the body | FR-025 | example | DONE | T045 / T049 |
+| U81 | `Issue` derives or implements no `Serialize` (source check over `github.rs`) | FR-025 | example | DONE | T045 / T049 |
 
 ### `crates/micold-client/src/ui/material/picker.rs` and `typeahead.rs`: details row
 
@@ -176,17 +176,18 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U71 | A row for an issue with a description carries it as tooltip text and the issue number as key, for listed, searched and typed-number issues | US3-6, US3-11, FR-019 | example | PENDING | T046 / T051, T052 |
-| U72 | A row for an issue with an empty description gets no tooltip | US3-7, FR-020 | example | PENDING | T046 / T052 |
-| U73 | The row's tooltip text is exactly the text passed to `Row::tooltip` | US3-6, FR-019 | example | PENDING | T046 / T051 |
-| U74 | `menu_element` wraps a row with tooltip text in `Tooltip` with `ROW_TOOLTIP_REST` (3 s), `ROW_TOOLTIP_LINES` (3) and the key as subject; a row without is not wrapped | FR-015, FR-021 | example | PENDING | T046 / T051 |
-| U75 | With a hover held past the rest delay on the first, last and lower-edge row exactly one panel opens, inside the window, not over its row, at most three `Caption` lines plus padding | US3-8, FR-021, FR-023 | example | PENDING | T047 / T050, T051 |
-| U76 | A click on the row under an open panel picks the issue | US3-10, FR-023 | example | PENDING | T047 / T050, T051 |
+| U71 | A row for an issue with a description carries it as tooltip text and the issue number as key, for listed, searched and typed-number issues | US3-6, US3-11, FR-019 | example | DONE | T046 / T051, T052 |
+| U72 | A row for an issue with an empty description gets no tooltip | US3-7, FR-020 | example | DONE | T046 / T052 |
+| U73 | The row's tooltip text is exactly the text passed to `Row::tooltip` | US3-6, FR-019 | example | DONE | T046 / T051 |
+| U74 | `menu_element` wraps a row with tooltip text in `Tooltip` with `ROW_TOOLTIP_REST` (3 s), `ROW_TOOLTIP_LINES` (3) and the key as subject; a row without is not wrapped | FR-015, FR-021 | example | DONE | T046 / T051 |
+| U75 | With a hover held past the rest delay on the first, last and lower-edge row exactly one panel opens, inside the window, not over its row, at most three `Caption` lines plus padding | US3-8, FR-021, FR-023 | example | DONE | T047 / T050, T051 |
+| U76 | A click on the row under an open panel picks the issue | US3-10, FR-023 | example | DONE | T047 / T050, T051 |
 | U77 | No code under `src/ui/` calls the issue source, so a resting cursor causes no request | FR-024, SC-006 | characterization | BASELINE | T048 / (none) |
-| U82 | The view of a form on another source, or whose list is `IssueList::Loading` after a newer load, builds no row and no row tooltip | FR-017, Edge: source switched | example | PENDING | T046 / T051 |
-| U83 | A highlighted row the cursor is not over shows no panel: the highlight passes nothing to the row's tooltip | FR-015, FR-007 | example | PENDING | T046 / T051 |
-| U85 | With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it | FR-023 | example | PENDING | T047 / T050, T051 |
-| U84 | With a panel open on one row, moving onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay | FR-016 | example | PENDING | T047 / T050, T051 |
+| U82 | The view of a form on another source, or whose list is `IssueList::Loading` after a newer load, builds no row and no row tooltip | FR-017, Edge: source switched | example | DONE | T046 / T051 |
+| U83 | A highlighted row the cursor is not over shows no panel: the highlight passes nothing to the row's tooltip | FR-015, FR-007 | example | DONE | T046 / T051 |
+| U85 | With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it | FR-023 | example | DONE | T047 / T050, T051 |
+| U84 | With a panel open on one row, moving onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay | FR-016 | example | DONE | T047 / T050, T051 |
+| U86 | `{:?}` of a `Row` prints neither its details nor its tooltip text | FR-025 | example | DONE | T046 / T051 |
 
 ## Notes
 
