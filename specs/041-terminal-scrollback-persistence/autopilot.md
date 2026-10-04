@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1, step 2, waiting on *Open escalation*. Branch rebased onto `origin/main` (17 commits ahead, not pushed, no PR); `mise run gate` and the macOS cross-check are green on `05435244`'s tree. Then: apply the answer, gate, review B, tick T007 after the Windows CI leg shows U38, PR.
+- **Next step**: M1, step 2: review A is clean after the redesign (D17). Then: review B, full gate and macOS cross-check, PR; T007 is ticked once the Windows CI leg shows U38.
 
 ## Pull requests
 
@@ -53,6 +53,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D14 | design | Plan review: a power loss could leave a renamed but unwritten file; the capture waited on a signal Windows does not give; ConPTY paints from a blank buffer. | Sync before the rename (R5); capture after the reader is joined (R4); the seed ends by moving its rows into history (R17, not run on Windows, pinned by a `cfg(windows)` test in M1); no write for unchanged content (FR-004). | agent-resolved | research.md R4, R5, R17 |
 | D15 | design | The design phase passed the context cap three times. Run a fourth design unit? | Yes: a fourth part continues from the handover. | decided by user, 2026-10-02 | orchestrator prompt of design unit 4 |
 | D16 | design | Tasks review: with a window attached the state's `Arc<PtySession>` is not the last, so its drop neither closes the master nor joins the reader, and the capture would race. | An explicit `PtySession::teardown(&self, bound)` called before the capture: kill, close the master, wait up to 2 s for end-of-file, join; `Drop` calls it. T007 gains cases with a client attached. SC-005's test (T074) moves to M5. | agent-resolved | research.md R4; `state.rs:237`, `supervisor.rs:548-564` |
+| D17 | 4-milestone M1 | Review A of M1 did not converge in 3 rounds (all findings in the concurrency of the in-run history carry). How is it settled? | Option 1: serialise a session's stop, supervision drop, respawn and start under its existing `session_gate`; drop the token and condvar machinery; await the stop on a spawned task off the window's loop. Then up to 3 fresh rounds of review A. | decided by user, 2026-10-04 | *Review rounds* A M1 1–3 |
+| D18 | 4-milestone M1 | Part 3 stopped at the context cap. Run a fourth milestone unit? | Yes: a fourth part continues from the ledger. | decided by user, 2026-10-04 | part 3 return |
 
 ## Review rounds
 
@@ -67,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 | 1 | origin/main...f08931d9 | CHANGES: 4 real (stop blocking the route loop; start during teardown misses history; respawn dropped carried before a failed swap; late insert after removal), 2 related cleanups (clone under lock, duplicated take); fixed with a `carrying` mark + condvar, `Arc` entries taken on success, stop via `spawn_blocking`; regression test added. 3 declined |
 | A M1 | 2 | f08931d9..c75014df | CHANGES: 7 real (mark left set for a shell-only stop; respawn and stop could both carry one process; tick phase 2 not under one lock; stop still awaited on the route loop; a second carrier captured early; a timed-out wait let a stale capture in; a panic left the mark), 1 cleanup (double lookup in `swap_primary`); fixed: one carrier per process by token (`Carry::Own`/`Join`), entry removal and mark under one lock everywhere, `begin_stop` on the loop and `finish_stop` on `spawn_blocking`, a timed-out wait cancels the mark, a drop guard clears it. Declined: deep copy of the seed (one copy per start) |
 | A M1 | 3 | 6f04dfa0..590a07d8 | CHANGES, not fixed (round limit): 2 MAJOR (the tick's drop path no longer runs `views.forget_session`, a 039 regression that came with the rebase; a respawn whose carry a stop joined still spawns and can swap out a primary the user started meanwhile), 6 lesser (a timed-out wait cancels whatever mark is there, also a newer one, and also for a joining stop; `finish_stop` detached, so a Regular session's old processes can outlive the next start briefly; shells killed after the carry; `remove_live_by_ids` does not notify; the guard skips a poisoned lock; `PendingStop.known` made up in the tick). Escalated |
+| A M1 (after D17) | 1 | 137401fb3eda1010ace29618ef7cc0f1c8481d98:cc288469e7251dc41da237becae1ce869b498608 | CLEAN after the redesign (`cc288469`: gate-serialised stop, drop, respawn, start; round 3's two MAJOR fixed with tests, the 6 lesser gone by construction or fixed). 3 MINOR: `prune_empty_sessions` left an archived session's carried history (fixed); 2 declined |
 
 ## Declined review findings
 
@@ -77,6 +80,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M1 round 1, `HistorySnapshot::validate` has no production caller: declined; per data-model §1 it is the check of a loaded file (M2 load path, M6 damaged file), which is where it gets its caller.
 
 Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5, where its baseline exists) and F4 (the join is now an explicit teardown bounded at 2 s, R4).
+- Review A M1 after D17, the tick holds every dead session's gate until its own drop or respawn is done, one after another (MINOR): declined for now; the wait is bounded by `TEARDOWN_WAIT` (2 s) per dead session and only delays a stop or start of another session that died in the same tick. A per-session blocking task is a follow-up if it shows in use.
+- Review A M1 after D17, `respawn_primary` tears a crashed primary down on the supervision thread and can wait the full 2 s when a surviving child holds the PTY (MINOR): declined; the reviewer notes it is bounded now where the old `Drop` joined without a bound, so not a regression.
 
 ## Handover
 
@@ -84,22 +89,7 @@ None.
 
 ## Open escalation
 
-**Category 5, non-convergence: review A of M1 found MAJOR findings in its third counted round** (2026-10-04).
-The findings are all in the concurrency of the in-run history carry (`crates/micold-daemon/src/state.rs`:
-`claim_carry`, `carry_history`, `wait_carry`, `begin_stop`/`finish_stop`, `respawn_primary`; `server.rs`
-`SessionStop`). Round 1 found 4, round 2 found 7 in the fix, round 3 found 2 MAJOR and 6 lesser in the second
-fix (rows in *Review rounds*). The round 3 findings are not fixed. The feature's own behaviours (A9, A10,
-U1–U37, U133–U135, the regression test for a start during a stop's teardown) pass and the gate is green.
-
-Question: how should the carry's concurrency be settled?
-1. **(Recommended) Serialise instead of coordinating.** Drop the token/condvar machinery: a stop, a
-   supervision drop, a respawn and a start of one session each run under that session's existing
-   `session_gate` (`state.rs` `session_gates`), with the stop awaited on a spawned task, not on the
-   window's loop. One owner at a time removes every race the three rounds found by construction, and
-   each round's fix so far added states rather than removing them. Then up to 3 fresh rounds of A.
-2. Keep the current design, fix the 8 round 3 findings one by one, and allow up to 3 more rounds.
-   Each fix is small, but two rounds of this have each produced new findings.
-3. Stop the milestone here for the user to look at the design.
+None.
 
 ## Token usage
 
