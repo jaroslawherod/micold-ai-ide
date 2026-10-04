@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M9)
-- **Next step**: M9 PR open; wait on CI and merge. Then the close unit.
+- **Next step**: M9 PR #563 open; wait on CI and merge. Then the close unit.
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | merged |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | #561 | merged |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | #562 | merged |
-| M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | PR | in progress |
+| M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | #563 | in progress |
 
 ## Decisions
 
