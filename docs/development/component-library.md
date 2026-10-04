@@ -96,6 +96,27 @@ No host draws it by hand. Each of the three places has a host API that builds it
 so the contrast gate measures the colour that is drawn. The showcase has an entry for each place,
 in both schemes.
 
+## `Tooltip`: the rest mode and the line limit
+
+`material::Tooltip` has three optional builder steps. Without them a tooltip behaves as it always
+did: it opens as soon as the cursor is over its content.
+
+| Step | Effect | Rule |
+|---|---|---|
+| `.after_rest(Duration)` | Opens only after the cursor has rested on the content for the delay. A move of more than 4 px (`REST_TOLERANCE`) restarts the wait; a press closes it until the cursor leaves. | `micold_core::tooltip::RestTimer` |
+| `.max_lines(n)` | The label is cut to at most `n` `Caption` lines at `TOOLTIP_MAX_WIDTH` less padding, after a whole word, ending in an ellipsis. | `micold_core::tooltip::clamp_to_lines` |
+| `.subject(u64)` | For a tooltip on a row a list reuses: a changed key closes an open tooltip and restarts the wait. | the widget's `diff` and `update` |
+
+The wait needs a wake-up with no event to carry it, so `cdk::motion` has a second frame door beside
+the guarded next-frame request: `wake_at(shell, Instant)`, the only `request_redraw_at` in
+`src/ui/`. `tests/idle_requests_no_frames.rs` holds both: exactly one next-frame request behind
+`animating()`, exactly one timed request that is the whole body of `wake_at`, and `wake_at` has one
+listed caller, `ui/cdk/tooltip.rs`. A new caller goes into that test's `CALLERS` list with the reason
+it stops asking.
+
+The line limit is `ui/material/line_clamp.rs`, which shapes the paragraph and passes its measured
+line count to `clamp_to_lines`; its tests are in-crate because `ui::material` is `pub(crate)`.
+
 ## Adding a component
 
 1. Put it in `ui/material/`, one file per component, and register it in `mod.rs`.

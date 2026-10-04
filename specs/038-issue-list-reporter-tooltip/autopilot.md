@@ -69,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 code A | 1 | c0cc58c7860cc3f164084cb953097f5f204934eb:(working tree, uncommitted) | CLEAN of BLOCKER/MAJOR; 9 MINOR. Fixed: F6 stale `Debug` comment, F8 U38 source scan now whitespace-free, F9 guide line rewrapped. Declined: F1, F2, F3, F4, F5 (below). F7 (U45 `contains`) kept: deliberate, see cycle 13 |
 | M3 code B | 1 | 1dafffb1c39def022c573ad13c2671938e12a09f:615b5092fbf31d47c587d2ba3769867c431f51ee | CLEAN, 1 MINOR (F1 spec.md US2 scenario 3 did not state D11: amended in 0f2ef310). Verify: `github_issue_lines` 12 passed, `issue_picker_rows` 5 passed, `issue_source_state` 43 passed. `mise run gate` GATE_EXIT=0 at 615b5092 |
 | M3 visual pass | 1 | 615b5092 | PASS §B4, light and dark: hint, `bagtoad` narrows with the login emphasised, `BAGTOAD` alike, `JomeFavourite` finds #6413 beyond the 1,000 with the login emphasised; 8 `evidence/b4-*.png`, `evidence/README.md`. Noted: GitHub's text search does not return #3065 for its author's bare login (FR-013, as designed) |
+| M4 code A | 1 | fbc34423b4f20cad529bf695b8d1cb7b59c0c4bd:f3c2aac3c6238ddb67b01f26c752a09ecf698c6c | CLEAN, 3 MINOR. Fixed: F2 `since + delay` could overflow, now `checked_add` with a test. Declined: F3 (below). F1 moved to *Follow-ups not done*. Scoped gate GATE_EXIT=0 on f3c2aac3 |
 
 ## Declined review findings
 
@@ -79,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A r1 | F2 `ghost` is in the match text, so `host` matches author-less issues | The row shows `ghost` as the reporter (FR-002) and the emphasis lands on it, so the match is visible; contract §3–4 build the match text from the shown lines. |
 | M3 | A r1 | F3 label matches rank by login length | Inherent in contract §4's order (reporter before labels); `rank`'s position key already depended on title length the same way. |
 | M3 | A r1 | F4 match text built twice per parsed issue; F5 `parts()` allocates the title line | Not defects: 1,000 extra short formats at load, and one allocation per shown row per view; the release budget test (U21) passes. |
+| M4 | A r1 | F3 any mouse button over the trigger spends the rest timer | Contract rest-tooltip.md §2 says `Mouse(ButtonPressed)`, any button: a right-click opens a row's own menu or does nothing, and either way the panel over it should go. |
 
 ## Handover
 
@@ -111,4 +113,7 @@ None.
   with Up and Down only; chaining the operation after those handlers too (and widening U43) is a
   small follow-up, best taken with M3, which changes how typing narrows the list. Not taken in M3
   (D10).
-
+- **M5, the clamp's cost on a very long description (review A M4 F1).** `LineClamped` shapes the whole
+  label once and then bisects over all of it. A description near GitHub's 65k maximum would hitch
+  the frame that opens the panel. M5 should hand the tooltip a bounded prefix (its core step that
+  strips Markdown is the place), or `LineClamped` should cap the source before measuring.
