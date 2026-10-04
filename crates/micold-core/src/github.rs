@@ -328,8 +328,8 @@ const PART_SEPARATOR: &str = "  ·  ";
 /// One open issue, as the picker shows and ranks it (034 data-model §2, 038 data-model §1).
 ///
 /// Held only in the open form (034 FR-023). No `Serialize`, so no code path can persist it
-/// (SC-006), and a hand-written `Debug` that redacts the reporter, so no log can print it (038
-/// FR-025).
+/// (SC-006), and a hand-written `Debug` that redacts the reporter and the description, so no log
+/// can print them (038 FR-025).
 #[derive(Clone, PartialEq, Eq)]
 pub struct Issue {
     number: u64,
@@ -338,6 +338,8 @@ pub struct Issue {
     updated_at: String,
     /// The author's login; [`GHOST_LOGIN`] when GitHub reports none. Never empty.
     reporter: String,
+    /// The start of the body as plain text ([`description_from`]); empty when there is none.
+    description: String,
     row_text: String,
 }
 
@@ -369,8 +371,9 @@ struct Part {
 }
 
 impl Issue {
-    /// An issue reported by [`GHOST_LOGIN`], with its match text derived once, here. The reporter
-    /// is set with [`Issue::reported_by`].
+    /// An issue reported by [`GHOST_LOGIN`], without a description, with its match text derived
+    /// once, here. The reporter is set with [`Issue::reported_by`], the description with
+    /// [`Issue::described`].
     pub fn new(number: u64, title: String, labels: Vec<String>, updated_at: String) -> Issue {
         let mut issue = Issue {
             number,
@@ -378,6 +381,7 @@ impl Issue {
             labels,
             updated_at,
             reporter: GHOST_LOGIN.to_string(),
+            description: String::new(),
             row_text: String::new(),
         };
         issue.row_text = issue.match_text();
@@ -400,14 +404,18 @@ impl Issue {
         )
     }
 
-    /// STUB (038 T049).
-    pub fn described(self, _body_text: &str) -> Issue {
+    /// The same issue, described by `body_text`: GitHub's plain-text rendering of its body, held as
+    /// [`description_from`] gives it. The match text is unchanged (038 FR-014).
+    pub fn described(mut self, body_text: &str) -> Issue {
+        self.description = description_from(body_text);
         self
     }
 
-    /// STUB (038 T049).
+    /// The start of the issue's body as one plain paragraph, at most [`DESCRIPTION_MAX_CHARS`]
+    /// characters and a `…`; empty when the body holds no text (038 FR-020, FR-022). Shown in the
+    /// row's tooltip, never ranked.
     pub fn description(&self) -> &str {
-        ""
+        &self.description
     }
 
     /// The issue number; the ticket is its decimal text (FR-009).
@@ -552,19 +560,52 @@ fn merged(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
     merged
 }
 
-/// STUB (038 T049).
+/// The most characters of a body an issue holds as its description (038 data-model §2). Three
+/// tooltip lines show far fewer; the bound keeps a body of GitHub's maximum length (65,536
+/// characters) from being held, and from being shaped when the tooltip measures its lines.
 pub const DESCRIPTION_MAX_CHARS: usize = 600;
 
-/// STUB (038 T049).
+/// What a description cut at [`DESCRIPTION_MAX_CHARS`] ends in.
+const DESCRIPTION_CUT_MARK: char = '…';
+
+/// An issue's description from its `bodyText`, GitHub's plain-text rendering of the body (038
+/// data-model §2): every run of Unicode whitespace becomes one space and both ends are trimmed;
+/// more than [`DESCRIPTION_MAX_CHARS`] characters are cut there, on a character boundary, and end
+/// in `…`. A body with no text gives the empty string.
+///
+/// It reads no more of `body_text` than it keeps, so a very long body costs what a short one does.
 pub fn description_from(body_text: &str) -> String {
-    body_text.to_string()
+    let mut description = String::new();
+    let mut kept = 0usize;
+    for word in body_text.split_whitespace() {
+        if !description.is_empty() {
+            if kept == DESCRIPTION_MAX_CHARS {
+                // More text follows the limit: cut before the space.
+                description.push(DESCRIPTION_CUT_MARK);
+                return description;
+            }
+            description.push(' ');
+            kept += 1;
+        }
+        for c in word.chars() {
+            if kept == DESCRIPTION_MAX_CHARS {
+                let end = description.trim_end().len();
+                description.truncate(end);
+                description.push(DESCRIPTION_CUT_MARK);
+                return description;
+            }
+            description.push(c);
+            kept += 1;
+        }
+    }
+    description
 }
 
-/// What `Debug` prints in place of a reporter.
+/// What `Debug` prints in place of a reporter or a description.
 const REDACTED: &str = "<redacted>";
 
-/// Hand-written, so that the reporter is never printed: a `{:?}` in a log line or a panic message
-/// shows which issue, not who reported it (038 FR-025). The match text is left out for the same
+/// Hand-written, so that the reporter and the description are never printed: a `{:?}` in a log line
+/// or a panic message shows which issue, not who reported it or what its body says (038 FR-025). The match text is left out for the same
 /// reason: from 038 M3 it holds the reporter too.
 impl fmt::Debug for Issue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -574,6 +615,7 @@ impl fmt::Debug for Issue {
             .field("labels", &self.labels)
             .field("updated_at", &self.updated_at)
             .field("reporter", &REDACTED)
+            .field("description", &REDACTED)
             .finish_non_exhaustive()
     }
 }
@@ -612,7 +654,7 @@ pub enum IssueLoadError {
 /// put the one text into each query (038 contracts/issue-fields.md §1).
 macro_rules! issue_node_selection {
     () => {
-        "number title updatedAt labels(first: 20) { nodes { name } } author { login }"
+        "number title updatedAt labels(first: 20) { nodes { name } } author { login } bodyText"
     };
 }
 
@@ -667,8 +709,9 @@ pub fn parse_list_page(stdout: &[u8]) -> Result<IssuePage, IssueLoadError> {
 const LABELS_PER_ISSUE: usize = 20;
 
 /// One `Issue` node, as [`ISSUE_NODE_SELECTION`] reads it: `number`, `title`, `updatedAt`,
-/// `labels.nodes[].name`, `author.login`. A node without an author — a deleted account — is still
-/// an issue, reported by [`GHOST_LOGIN`].
+/// `labels.nodes[].name`, `author.login`, `bodyText`. A node without an author — a deleted account
+/// — is still an issue, reported by [`GHOST_LOGIN`]; a node without a body is still an issue,
+/// without a description.
 fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
     let labels = node["labels"]["nodes"]
         .as_array()
@@ -686,7 +729,11 @@ fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
         labels,
         node["updatedAt"].as_str().unwrap_or_default().to_string(),
     );
-    Some(issue.reported_by(node["author"]["login"].as_str().unwrap_or_default()))
+    Some(
+        issue
+            .reported_by(node["author"]["login"].as_str().unwrap_or_default())
+            .described(node["bodyText"].as_str().unwrap_or_default()),
+    )
 }
 
 /// The error a GraphQL `errors[]` array reports, if it has one.
