@@ -68,7 +68,8 @@ impl RestTimer {
         Rest {
             open: matches!(self, Self::Open),
             wake_at: match *self {
-                Self::Waiting { since, .. } => Some(since + delay),
+                // A delay too long for the clock to hold is a wait nothing ends: no wake.
+                Self::Waiting { since, .. } => since.checked_add(delay),
                 _ => None,
             },
         }

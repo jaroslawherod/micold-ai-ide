@@ -160,17 +160,17 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U63 | Frame requests in `src/ui/` exist only in `cdk/motion.rs`, exactly two doors; `wake_at` is called outside it only from `cdk/tooltip.rs` | FR-018 | example | PENDING | T034 / T038 |
-| U64 | A waiting rest tooltip asks for exactly one timed wake at `since + delay`, none once open, away or spent, and none without `after_rest` | FR-018 | example | PENDING | T034 / T038, T039 |
-| U65 | Driven with cursor and redraw events a rest tooltip shows its panel only after the delay at rest and not while the cursor moves | US3-1, US3-3, FR-015, FR-016 | example | PENDING | T035 / T039 |
-| U66 | A press over the trigger closes the tooltip and the trigger still receives the press | US3-10, FR-017, FR-023 | example | PENDING | T035 / T039 |
-| U67 | A changed `subject` closes an open tooltip and starts the wait again | US3-4, FR-017 | example | PENDING | T035 / T039 |
-| U68 | With `max_lines(3)` and a long text the panel is at most three `Caption` lines plus padding and ends in `…`; a short text is shown whole | US3-8, US3-9, FR-021 | example | PENDING | T035 / T040 |
+| U63 | Frame requests in `src/ui/` exist only in `cdk/motion.rs`, exactly two doors; `wake_at` is called outside it only from `cdk/tooltip.rs` | FR-018 | example | DONE | T034 / T038 |
+| U64 | A waiting rest tooltip asks for exactly one timed wake at `since + delay`, none once open, away or spent, and none without `after_rest` | FR-018 | example | DONE | T034 / T038, T039 |
+| U65 | Driven with cursor and redraw events a rest tooltip shows its panel only after the delay at rest and not while the cursor moves | US3-1, US3-3, FR-015, FR-016 | example | DONE | T035 / T039 |
+| U66 | A press over the trigger closes the tooltip and the trigger still receives the press | US3-10, FR-017, FR-023 | example | DONE | T035 / T039 |
+| U67 | A changed `subject` closes an open tooltip and starts the wait again | US3-4, FR-017 | example | DONE | T035 / T039 |
+| U68 | With `max_lines(3)` and a long text the panel is at most three `Caption` lines plus padding and ends in `…`; a short text is shown whole | US3-8, US3-9, FR-021 | example | DONE | T035 / T040 |
 | U69 | A tooltip without `after_rest` opens at once, as today | FR-029 (existing tooltips), M4 | characterization | BASELINE | T035 / T039 |
-| U70 | `material_builder_api.rs` lists `after_rest`, `max_lines` and `subject` as chainable `Tooltip` builder methods | FR-028 | example | PENDING | T035 / T040 |
-| U78 | A redraw with the cursor still but the trigger's bounds no longer under it closes an open panel; a trigger with another `subject` under the still cursor waits the full delay again | FR-017 | example | PENDING | T035 / T039 |
-| U79 | With no cursor (`Cursor::Unavailable`) no panel opens and the trigger still takes keyboard input | Edge: no cursor, FR-023 | example | PENDING | T035 / T039 |
-| U80 | Two widget trees built from the same view keep separate rest state | Principle II | example | PENDING | T035 / T039 |
+| U70 | `material_builder_api.rs` lists `after_rest`, `max_lines` and `subject` as chainable `Tooltip` builder methods | FR-028 | example | DONE | T035 / T040 |
+| U78 | A redraw with the cursor still but the trigger's bounds no longer under it closes an open panel; a trigger with another `subject` under the still cursor waits the full delay again | FR-017 | example | DONE | T035 / T039 |
+| U79 | With no cursor (`Cursor::Unavailable`) no panel opens and the trigger still takes keyboard input | Edge: no cursor, FR-023 | example | DONE | T035 / T039 |
+| U80 | Two widget trees built from the same view keep separate rest state | Principle II | example | DONE | T035 / T039 |
 
 ### `crates/micold-client/src/ui/material/picker.rs`, `cdk/picker.rs`, `worktree_form.rs`: row tooltip
 

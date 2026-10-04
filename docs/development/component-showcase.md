@@ -86,7 +86,11 @@ them. Press the field to open the list and see rows of differing height, the hig
 | `showcase_state` | The reducer misbehaves |
 | `packaging_excludes_showcase` | The Debian manifest or the desktop entry names the showcase |
 | `material_boundary` | The showcase styled a widget, reached the style layer, or named a text size |
-| `idle_requests_no_frames` | Anything outside `cdk/motion.rs` asks the runtime for a frame |
+| `idle_requests_no_frames` | Anything outside `cdk/motion.rs` asks the runtime for a frame, or anything but `ui/cdk/tooltip.rs` (the `CALLERS` list) calls its timed door, `wake_at` |
+
+The `Tooltip` entry has a sixth instance, posed "after 3 s at rest: hold the cursor still". It uses
+`after_rest(3 s)` and `max_lines(3)` over a long text, so the rest mode and the line limit are seen
+together. Hold the cursor on it for three seconds to open it; moving more than 4 px restarts the wait.
 
 `showcase_completeness` is the one you will meet. Its nine rules:
 

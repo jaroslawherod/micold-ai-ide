@@ -257,3 +257,15 @@ fn it_asks_to_be_woken_only_while_waiting() {
         "spent: nothing to wake for",
     );
 }
+
+/// A delay the clock cannot add is a tooltip that never opens, not a panic (review A M4 F2).
+#[test]
+fn a_delay_too_long_for_the_clock_waits_without_a_wake() {
+    let mut timer = RestTimer::default();
+    let now = Instant::now();
+
+    let rest = timer.observe(Some((10.0, 10.0)), now, Duration::MAX);
+
+    assert!(!rest.open);
+    assert_eq!(rest.wake_at, None);
+}

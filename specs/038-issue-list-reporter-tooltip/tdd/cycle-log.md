@@ -422,3 +422,77 @@ suite runs in the gate.
 - green: `clamp_to_lines` per data-model §6 (binary search over character boundaries, back-up to a
   space within 24 characters, one `…`). 5 passed.
 - refactor: none.
+
+## Cycle 16 — U63, U64 — T034, T038, T039 (M4)
+
+- tests: `crates/micold-client/tests/idle_requests_no_frames.rs`:
+  `a_waiting_rest_tooltip_asks_for_one_timed_wake_and_none_once_open`,
+  `a_rest_tooltip_that_is_away_or_spent_asks_for_no_timed_wake`,
+  `a_tooltip_without_a_rest_delay_asks_for_no_timed_wake` (U64),
+  `the_frame_requests_are_the_guarded_one_and_the_timed_one` (replacing the one-door test) and
+  `wake_at_has_one_caller` (U63); harness `tests/support/tooltip.rs` (`Driven`).
+  Stub: `cdk::Tooltip::after_rest` and `subject` that do nothing.
+- red: `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast --test tooltip_rest_glue --test idle_requests_no_frames --test material_builder_api`
+  ```
+  thread 'a_waiting_rest_tooltip_asks_for_one_timed_wake_and_none_once_open' panicked at crates/micold-client/tests/idle_requests_no_frames.rs:153:5:
+  assertion `left == right` failed: the cursor came to rest: one wake, when the delay has run
+  expected exactly one next-frame request and one timed request in the motion primitive, found 1 and 0
+  `ui/cdk/tooltip.rs` is listed as the caller of `wake_at` and calls it 0 times: one call, on the one path that waits
+  test result: FAILED. 8 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- passed against the stub: `a_tooltip_without_a_rest_delay_asks_for_no_timed_wake` (the baseline it
+  guards).
+- deviation: after `wake_at` was added, `the_scan_actually_finds_the_rendering_layer` failed
+  ("expected exactly one frame request across the whole rendering layer, found 2"): its count is now
+  two, the guarded request and the timed one.
+- green: `motion::wake_at` (T038) and the rest mode in `cdk/tooltip.rs` (T039): 12 passed, 0 failed.
+- refactor: none.
+
+## Cycle 17 — U65, U66, U67, U69, U70, U78, U79, U80 — T035, T039, T040 (M4)
+
+- tests: `crates/micold-client/tests/tooltip_rest_glue.rs` (new, 11 tests):
+  `the_panel_shows_only_after_the_delay_at_rest` and `the_panel_does_not_show_while_the_cursor_moves`
+  (U65), `a_cursor_move_onto_the_trigger_starts_the_wait` (U65 setup),
+  `a_press_closes_the_panel_and_still_reaches_the_trigger` (U66),
+  `a_changed_subject_closes_the_panel_and_starts_the_wait_again` and
+  `an_unchanged_subject_keeps_the_panel_open_across_a_rebuild` (U67),
+  `a_tooltip_without_a_rest_delay_opens_at_once` (U69),
+  `a_trigger_that_moves_from_under_a_still_cursor_closes_the_panel` and
+  `another_subject_arriving_under_a_still_cursor_waits_the_full_delay` (U78),
+  `with_no_cursor_no_panel_opens_and_the_trigger_still_takes_keys` (U79),
+  `two_trees_from_the_same_view_keep_separate_rest_state` (U80); and
+  `the_tooltips_rest_mode_is_three_chainable_steps` in `tests/material_builder_api.rs` (U70).
+- red: the same command as cycle 16
+  ```
+  thread 'the_panel_shows_only_after_the_delay_at_rest' panicked at crates/micold-client/tests/tooltip_rest_glue.rs:51:5:
+  test result: FAILED. 4 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out
+  thread 'the_tooltips_rest_mode_is_three_chainable_steps' panicked at crates/micold-client/tests/material_builder_api.rs:138:13:
+  test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- passed against the stub: `an_unchanged_subject_keeps_the_panel_open_across_a_rebuild`,
+  `a_tooltip_without_a_rest_delay_opens_at_once` (U69, a characterization baseline),
+  `a_trigger_that_moves_from_under_a_still_cursor_closes_the_panel` (a hover tooltip also closes when
+  the trigger moves away) and `with_no_cursor_no_panel_opens_and_the_trigger_still_takes_keys`.
+- green: `Tooltip` holds `rest` and `subject`; `State` holds a `RestTimer` and the subject; a changed
+  subject resets in `diff` and at the top of `update`; `material::Tooltip::after_rest`, `max_lines`,
+  `subject`. `tooltip_rest_glue` 11 passed, `material_builder_api` 11 passed.
+- refactor: none.
+
+## Cycle 18 — U68 — T040 (M4)
+
+- tests: in-crate, `crates/micold-client/src/ui/material/line_clamp.rs` `mod tests` (5 tests):
+  `a_long_text_is_cut_to_three_lines_and_ends_in_an_ellipsis`, `a_text_that_fits_is_shown_whole`,
+  `a_text_without_spaces_is_cut_as_well`, `the_opened_panel_is_at_most_three_lines_and_its_padding_tall`,
+  `the_line_limit_leaves_a_short_tooltip_as_it_was`. In-crate per decision D12 (`ui::material` is
+  `pub(crate)`). Stub: a `LineClamped` that shapes the whole text without cutting.
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib line_clamp`
+  ```
+  thread 'ui::material::line_clamp::tests::a_long_text_is_cut_to_three_lines_and_ends_in_an_ellipsis' panicked at crates/micold-client/src/ui/material/line_clamp.rs:271:9:
+  cut, so marked: "The list cuts long titles off and gives no way to tell two issues apart. …"
+  test result: FAILED. 2 passed; 3 failed; 0 ignored; 0 measured; 508 filtered out
+  ```
+- deviation: the panel test's first form measured the overlay group's node (as wide and tall as the
+  window) instead of the panel in it, so it compared 0.0 with 32.0 for the wrong reason; it now reads
+  the group's first child.
+- green: `clamp_to_lines` with the paragraph's measured line count. 5 passed.
+- refactor: none.
