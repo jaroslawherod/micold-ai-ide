@@ -77,6 +77,25 @@ Modal::new(dialog, roles).shown(state.overlay != Overlay::None)
 fade(dialog, progress)   // ← what this used to look like
 ```
 
+## `UnreadMark`: one mark for three places
+
+`UnreadMark` (`ui/material/unread_mark.rs`, contract `specs/039-session-attention-notifications/contracts/unread-mark.md`)
+is a filled `primary` circle, optionally followed by a count and the word `unread`. It says "you
+have not looked since this session last finished a turn"; it is not the `ActivityBadge`, which says
+what the session is doing now and sits in a row's leading slot. The mark sits at the trailing edge.
+
+No host draws it by hand. Each of the three places has a host API that builds it:
+
+| Place | API | Draws |
+|---|---|---|
+| A session's row | `TreeItem::unread(bool)` | the mark at the trailing edge and an emphasised label |
+| A switcher row | `MenuItem::trailing_mark: Option<usize>` | `● n unread`, muted, under the running count; `None` and `Some(0)` draw nothing |
+| The switcher's button | `Button::trailing_mark(count, tooltip)` | `● n` inside the button, with a tooltip saying what the number counts; zero draws neither |
+
+`.count(0)` renders nothing at all. The mark's fill comes from one function, `unread_mark::fill`,
+so the contrast gate measures the colour that is drawn. The showcase has an entry for each place,
+in both schemes.
+
 ## Adding a component
 
 1. Put it in `ui/material/`, one file per component, and register it in `mod.rs`.
