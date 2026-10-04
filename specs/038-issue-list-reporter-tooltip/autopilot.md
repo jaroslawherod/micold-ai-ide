@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
 | #543 | M2: Up and Down keep the highlighted issue row wholly in view | merged | c0cc58c7860cc3f164084cb953097f5f204934eb |
 | #549 | M3: typing a login narrows the issue list, the reporter emphasised | merged | a3a57925c7b931ea1e887f7cf8d044512c19c46e |
+| #576 | M4: a rest-delay, three-line tooltip in the component library | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
-| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | in progress |
+| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | open |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
 
