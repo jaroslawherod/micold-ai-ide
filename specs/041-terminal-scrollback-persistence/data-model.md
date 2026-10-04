@@ -45,6 +45,9 @@ LoadOutcome = None | History(HistorySnapshot) | Damaged(DamageReason)
 `BadRunLength`, `ControlCharacter`. Its `Display` is the reason written to the log (FR-017); for
 `OtherVersion` it reads "written by another version".
 
+`Malformed` is also the reason when the decoded snapshot fails `HistorySnapshot::validate` (for example a
+basic or dim colour index outside its palette), checked after the ten format checks.
+
 Rules: a missing file is `None`, never `Damaged`. A read never panics and never returns part of a
 file (FR-016). A history with no lines loads as `History` with an empty snapshot, which seeds
 nothing.

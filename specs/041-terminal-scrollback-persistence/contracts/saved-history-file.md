@@ -61,6 +61,10 @@ Checks, in this order; the first that fails gives `Damaged(reason)`:
 | 9 | Each line's run lengths sum to its number of characters | `BadRunLength` |
 | 10 | No text holds a C0, C1 or `ESC` character | `ControlCharacter` |
 
+Check 7 also covers semantic validity: after the ten checks, `decode` runs `HistorySnapshot::validate`
+on the decoded snapshot and reports any failure (for example a basic or dim colour index outside its
+palette) as `Malformed`.
+
 A missing file is "no saved history", not damage. A read returns the whole history or none of it,
 and never panics, for any bytes (a test feeds random and truncated input).
 
