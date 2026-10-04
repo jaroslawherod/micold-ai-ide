@@ -138,11 +138,11 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U39 | Encode then decode returns the same snapshot, for empty, one line, 10,000 lines, every colour kind and every flag | HF §2, FR-001 | example | PENDING | T014 |
-| U40 | The encoded header bytes are those of HF §2 | HF §2 | example | PENDING | T014 |
-| U41 | Each row of HF §4's table gives its `DamageReason`: too large, wrong magic, under 52 bytes, version 2, truncated tail, one flipped payload bit, trailing payload bytes, style index out of range, run sum differs, text with `ESC` | HF §4, FR-016 | example | PENDING | T014 |
-| U42 | 1,000 random byte strings and every prefix of a valid file decode to `Damaged` without a panic | HF §4, FR-016, SC-006 | example | PENDING | T014 |
-| U43 | The bytes of `fixtures/terminal_history/v1.history` equal the encoding of a fixed snapshot built in the test | HF §5, FR-022 | example | PENDING | T014 |
+| U39 | Encode then decode returns the same snapshot, for empty, one line, 10,000 lines, every colour kind and every flag | HF §2, FR-001 | example | DONE | `crates/micold-core/tests/terminal_history_format.rs::encode_then_decode_gives_the_same_snapshot` |
+| U40 | The encoded header bytes are those of HF §2 | HF §2 | example | DONE | `crates/micold-core/tests/terminal_history_format.rs::the_encoded_bytes_are_the_header_the_payload_and_the_checksum_of_both` |
+| U41 | Each row of HF §4's table gives its `DamageReason`: too large, wrong magic, under 52 bytes, version 2, truncated tail, one flipped payload bit, trailing payload bytes, style index out of range, run sum differs, text with `ESC` | HF §4, FR-016 | example | DONE | `crates/micold-core/tests/terminal_history_format.rs::a_file_over_the_size_cap_is_too_large` and the 11 tests after it` |
+| U42 | 1,000 random byte strings and every prefix of a valid file decode to `Damaged` without a panic | HF §4, FR-016, SC-006 | example | DONE | `crates/micold-core/tests/terminal_history_format.rs::every_prefix_of_a_valid_file_is_damaged`, `::random_byte_strings_are_damaged_without_a_panic` |
+| U43 | The bytes of `fixtures/terminal_history/v1.history` equal the encoding of a fixed snapshot built in the test | HF §5, FR-022 | example | DONE | `crates/micold-core/tests/terminal_history_format.rs::the_v1_fixture_is_the_encoding_of_its_snapshot` |
 
 ### `crates/micold-core/src/terminal_history/store.rs`: save and load (T015, T021)
 

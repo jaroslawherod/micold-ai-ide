@@ -463,3 +463,53 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   `scripts/build-lock.sh cargo test -p micold-daemon` -> 702 passed, 0 failed.
 - refactor: none
 - removed tests: none (no test pinned the removed scheme; `a_start_during_the_stops_teardown_still_shows_the_earlier_lines` stays and passes because the start waits for the gate).
+
+## Cycle 41: U39 Encode then decode returns the same snapshot
+
+- test: `crates/micold-core/tests/terminal_history_format.rs::encode_then_decode_gives_the_same_snapshot` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` (one shared run, all 19 tests written together against a stub: `encode` returns no bytes, `decode` returns `Err(Unreadable(Other))`, `Display` writes nothing: `test result: FAILED. 1 passed; 18 failed`; commit `0821f1b2`)
+  -> ``assertion `left == right` failed: empty`` / `left: Err(Unreadable(Other))` / `right: Ok(HistorySnapshot { lines: [] })`
+- green: `terminal_history/format.rs`: private `SavedHistory`/`SavedLine`/`SavedRun` (styles deduplicated in order of first use), `encode` (magic, version, length, `postcard` payload, `protocol::hashing::sha256` of all before it), `decode` with checks 2 to 10 of HF §4 in order (check 1 is the reader's), `DamageReason` and its `Display`; `HistoryStyle`, `HistoryColor` and `StyleFlags` derive `Serialize`, `Deserialize` and `Hash`. Same command -> `test result: ok. 19 passed; 0 failed`; `mise run test-core` green (150 test binaries ok)
+- refactor: none needed
+- notes: assertion-level red from the stub.
+- commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
+
+## Cycle 42: U40 The encoded header bytes are those of HF §2
+
+- test: `crates/micold-core/tests/terminal_history_format.rs::the_encoded_bytes_are_the_header_the_payload_and_the_checksum_of_both`, `crates/micold-core/tests/terminal_history_format.rs::a_style_used_twice_is_stored_once` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` (one shared run, all 19 tests written together against a stub: `encode` returns no bytes, `decode` returns `Err(Unreadable(Other))`, `Display` writes nothing: `test result: FAILED. 1 passed; 18 failed`; commit `0821f1b2`)
+  -> ``assertion `left == right` failed`` / `left: 0` / `right: 63` (file length); `left: []` / `right: [77, 73, 67, 79, 76, 68, 84, 72, 1, 0, 0, 0, 16, …]`
+- green: `terminal_history/format.rs`: private `SavedHistory`/`SavedLine`/`SavedRun` (styles deduplicated in order of first use), `encode` (magic, version, length, `postcard` payload, `protocol::hashing::sha256` of all before it), `decode` with checks 2 to 10 of HF §4 in order (check 1 is the reader's), `DamageReason` and its `Display`; `HistoryStyle`, `HistoryColor` and `StyleFlags` derive `Serialize`, `Deserialize` and `Hash`. Same command -> `test result: ok. 19 passed; 0 failed`; `mise run test-core` green (150 test binaries ok)
+- refactor: none needed
+- notes: assertion-level red from the stub. The tests also pin the payload bytes of two small snapshots, written by hand, so the helper that builds damaged files is tied to the encoder.
+- commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
+
+## Cycle 43: U41 Each row of HF §4's table gives its `DamageReason`
+
+- test: `a_file_over_the_size_cap_is_too_large`, `another_magic_is_not_a_history`, `fewer_than_52_bytes_is_not_a_history`, `version_2_is_another_version`, `a_file_cut_short_or_grown_is_truncated`, `one_flipped_payload_bit_fails_the_checksum`, `bytes_after_the_payload_or_a_payload_cut_short_are_malformed`, `a_style_index_outside_the_styles_is_a_bad_style_index`, `runs_that_do_not_sum_to_the_text_are_a_bad_run_length`, `a_text_with_esc_is_a_control_character`, `the_first_failing_check_names_the_damage`, `each_reason_has_its_own_text_for_the_log` in `crates/micold-core/tests/terminal_history_format.rs` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` (one shared run, all 19 tests written together against a stub: `encode` returns no bytes, `decode` returns `Err(Unreadable(Other))`, `Display` writes nothing: `test result: FAILED. 1 passed; 18 failed`; commit `0821f1b2`)
+  -> `left: Err(Unreadable(Other))` / `right: Err(TooLarge)`, and the same with `Malformed`, `BadStyleIndex`, `BadRunLength`, `ControlCharacter`; `left: ""` / `right: "written by another version"`. The magic, version, truncation and flipped-bit tests failed on indexing the stub's empty output (`index out of bounds`), not on their assertion.
+- green: `terminal_history/format.rs`: private `SavedHistory`/`SavedLine`/`SavedRun` (styles deduplicated in order of first use), `encode` (magic, version, length, `postcard` payload, `protocol::hashing::sha256` of all before it), `decode` with checks 2 to 10 of HF §4 in order (check 1 is the reader's), `DamageReason` and its `Display`; `HistoryStyle`, `HistoryColor` and `StyleFlags` derive `Serialize`, `Deserialize` and `Hash`. Same command -> `test result: ok. 19 passed; 0 failed`; `mise run test-core` green (150 test binaries ok)
+- refactor: none needed
+- notes: one test corrected between red and green, with the reason: `fewer_than_52_bytes_is_not_a_history` took `encode` of an empty snapshot to be 52 bytes; it is 54 (the payload of two empty lists is 2 bytes), seen as `left: 54` / `right: 52` at the first green run. It now cuts a hand-built file with no payload to 51 bytes (`NotAHistory`) and also asserts that the 52-byte one passes the size check (`Malformed`). The assertion on the reason was not weakened.
+- commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
+
+## Cycle 44: U42 1,000 random byte strings and every prefix of a valid file decode to `Damaged` without a panic
+
+- test: `crates/micold-core/tests/terminal_history_format.rs::random_byte_strings_are_damaged_without_a_panic`, `crates/micold-core/tests/terminal_history_format.rs::every_prefix_of_a_valid_file_is_damaged`, `crates/micold-core/tests/terminal_history_format.rs::random_payloads_with_a_matching_checksum_do_not_panic` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` (one shared run, all 19 tests written together against a stub: `encode` returns no bytes, `decode` returns `Err(Unreadable(Other))`, `Display` writes nothing: `test result: FAILED. 1 passed; 18 failed`; commit `0821f1b2`)
+  -> `the whole file is valid` (prefixes); `random payloads reached the payload check`; `random_byte_strings_are_damaged_without_a_panic` passed at once; see notes
+- green: `terminal_history/format.rs`: private `SavedHistory`/`SavedLine`/`SavedRun` (styles deduplicated in order of first use), `encode` (magic, version, length, `postcard` payload, `protocol::hashing::sha256` of all before it), `decode` with checks 2 to 10 of HF §4 in order (check 1 is the reader's), `DamageReason` and its `Display`; `HistoryStyle`, `HistoryColor` and `StyleFlags` derive `Serialize`, `Deserialize` and `Hash`. Same command -> `test result: ok. 19 passed; 0 failed`; `mise run test-core` green (150 test binaries ok)
+- refactor: none needed
+- notes: the random-strings test passed at once against the stub, which calls everything damaged. Shown able to fail by a temporary mutation after green, restored with `git checkout`: the minimum-size check of `decode` removed -> `random_byte_strings_are_damaged_without_a_panic` and `every_prefix_of_a_valid_file_is_damaged` FAILED with `attempt to subtract with overflow` at `format.rs:184` (3 failed, 16 passed). The random inputs come from a xorshift generator in the test, so no dependency was added.
+- commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
+
+## Cycle 45: U43 The bytes of `fixtures/terminal_history/v1.history` equal the encoding of a fixed snapshot built in the test
+
+- test: `crates/micold-core/tests/terminal_history_format.rs::the_v1_fixture_is_the_encoding_of_its_snapshot` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test terminal_history_format` (one shared run, all 19 tests written together against a stub: `encode` returns no bytes, `decode` returns `Err(Unreadable(Other))`, `Display` writes nothing: `test result: FAILED. 1 passed; 18 failed`; commit `0821f1b2`)
+  -> `…/tests/fixtures/terminal_history/v1.history: No such file or directory (os error 2)` (the fixture did not exist yet, so this red is not an assertion on bytes)
+- green: `terminal_history/format.rs`: private `SavedHistory`/`SavedLine`/`SavedRun` (styles deduplicated in order of first use), `encode` (magic, version, length, `postcard` payload, `protocol::hashing::sha256` of all before it), `decode` with checks 2 to 10 of HF §4 in order (check 1 is the reader's), `DamageReason` and its `Display`; `HistoryStyle`, `HistoryColor` and `StyleFlags` derive `Serialize`, `Deserialize` and `Hash`. Same command -> `test result: ok. 19 passed; 0 failed`; `mise run test-core` green (150 test binaries ok)
+- refactor: none needed
+- notes: the fixture (307 bytes) was written once from `encode` by a temporary test that was removed before the commit; the committed test only reads it. Shown able to fail by a temporary mutation after green, restored with `git checkout`: the two fields of `SavedRun` swapped -> `the_v1_fixture_is_the_encoding_of_its_snapshot` FAILED at its byte comparison (6 failed, 13 passed).
+- commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
