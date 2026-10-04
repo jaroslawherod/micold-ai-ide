@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M8)
-- **Next step**: M8: review A is clean after round 2 (fixes in the commit after `8dcabc5c`). Next: scoped gate on that commit, review B and quickstart §B12 as the visual pass, the full gate, the PR.
+- **Next step**: M8: reviews A and B are clean and the scoped gate was green at `3a3fc36f`. Next: the result of quickstart §B12 as the visual pass (evidence in `visual-pass/M8/`), then the full gate, the PR.
 
 ## Pull requests
 
@@ -112,6 +112,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 visual (C4) | 1 | code of `1128de38` (binaries copied from `target-shared`) | PASS on a private headless GNOME Shell 50.1, real click (`visual-pass/M7/README.md`). B9: keyboard focus given, session shown, mark gone, no attention request. B11: the token crossed to the second process; the second window had focus and showed the session; an attention request followed 410 ms later because the shell's notification-list popup held the keyboard (nothing visible; follow-up). One slip by the worker: it ran `gjs --version`, `mutter --version` and `gnome-text-editor --version` outside the private environment; they printed and exited, no window opened |
 | M8 A | 1 | 6925d4765cb03d34d2392168bf754e711fe8a678:8dcabc5c819a9d5988ee41740a96e9dc0288df64 | CHANGES: 1 MAJOR, 3 MINOR; `EXEMPTION: RIGHT`, `CFG: NONE`. Fixed: F1 the `SETTINGS_PAGE_CONTENT` exemption was path-only (now state, parent and bottom edge; D31); F2 a failed write on off-to-on skipped the sweep of D29 (the sweep runs before the write). Accepted: F3 the sweep also uses up an event made while on and not yet claimed (said in the code), and a service started with the switch already on by a file edited outside the app never sweeps (follow-up). Declined: F4 |
 | M8 A | 2 | dfbe07c03ceb3060cbbba48760c183e34ce0a4a7:8dcabc5c819a9d5988ee41740a96e9dc0288df64 | CLEAN: 1 MINOR (sonnet, scoped): the proof test names the state `settings-view-environment` literally; left |
+| M8 B | 1 | 65c6f65c02c4b717ff0dc5ff63e8a4a53d3a1782:3a3fc36f1cbafa5f6c3dbc52ccb9af5bae9e5009 | CLEAN, no findings; D29–D31 judged acceptable. Verify: `settings_desktop_notifications` `10 passed; 0 failed` |
 
 ## Declined review findings
 
