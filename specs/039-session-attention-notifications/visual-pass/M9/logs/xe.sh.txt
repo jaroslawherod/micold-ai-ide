@@ -1,0 +1,4 @@
+# source: X env helper
+P=/tmp/claude-1000/m9; . $P/env.sh; . $P/xenv
+XENVV=("${PENV[@]}" DISPLAY=:2 XAUTHORITY=$XA)
+xp() { "${XENVV[@]}" "$@"; }

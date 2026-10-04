@@ -1,0 +1,16 @@
+2026-10-04T09:26:20.734426Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=377181
+2026-10-04T09:26:20.778629Z  INFO micold_daemon::server: project attached client=1 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:28:42.965037Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=398709
+2026-10-04T09:28:43.143677Z  INFO micold_daemon::server: project attached client=2 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:33:31.607247Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=479133
+2026-10-04T09:33:31.932612Z  INFO micold_daemon::server: project attached client=3 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:36:39.926048Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=518842
+2026-10-04T09:36:40.016031Z  INFO micold_daemon::server: project attached client=4 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:37:08.765544Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=519604
+2026-10-04T09:38:25.326381Z  INFO micold_daemon::server: project attached client=5 project=/tmp/claude-1000/m9/projQ force=true
+2026-10-04T09:39:31.964671Z  INFO micold_daemon::server: project attached client=5 project=/tmp/claude-1000/m9/projP force=false
+2026-10-04T09:39:49.346784Z  INFO micold_daemon::server: project attached client=5 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:40:17.090339Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=571282
+2026-10-04T09:40:17.156388Z  INFO micold_daemon::server: project attached client=6 project=/tmp/claude-1000/m9/projQ force=false
+2026-10-04T09:40:25.562623Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=571597
+2026-10-04T09:40:25.702088Z  INFO micold_daemon::server: project attached client=7 project=/tmp/claude-1000/m9/projQ force=false

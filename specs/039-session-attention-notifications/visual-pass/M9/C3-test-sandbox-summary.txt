@@ -1,0 +1,43 @@
+test sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.32s
+test sandbox_real_handshake_refuses_a_wrong_token ... ok
+test sandbox_real_handshake_succeeds_with_the_mounted_token ... ok
+test sandbox_real_state_is_written_where_the_host_can_read_it ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+test sandbox_real_a_container_stopped_from_outside_is_reported_lost ... ok
+test sandbox_real_a_file_written_inside_belongs_to_the_host_user ... ok
+test sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_without_user_action ... ok
+test sandbox_real_an_explicit_stop_leaves_no_container_behind ... ok
+test sandbox_real_no_outbound_blocks_egress_while_the_control_port_still_answers ... ok
+test sandbox_real_no_outbound_still_resolves_names ... ok
+test sandbox_real_outbound_permits_egress ... ok
+test sandbox_real_the_daemons_state_survives_container_recreation ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 52.46s
+test sandbox_real_storage_capability_matches_what_the_runtime_enforces ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+test sandbox_real_the_image_ships_every_ai_cli_the_application_offers ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.24s
+test sandbox_real_ai_cli_sessions_survive_the_sandbox_with_the_sign_in_shared ... ok
+test sandbox_real_ai_cli_sessions_survive_the_sandbox_without_the_sign_in ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.19s
+test sandbox_real_boundary_holds_from_inside_a_session ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+test sandbox_real_a_freshly_built_image_passes_the_strict_fingerprint_check ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+test sandbox_real_idle_is_off_for_the_keep_running_opt_in ... ok
+test sandbox_real_idle_sandbox_stops_and_stays_stopped ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.67s
+test sandbox_real_limits_change_only_by_recreating_the_container ... ok
+test sandbox_real_limits_stop_the_session_not_the_daemon ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.19s
+test sandbox_real_mcp_binding_answers_whoami_from_inside_the_container ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+test sandbox_real_parity_a_sandboxed_terminal_answers_exactly_as_an_unsandboxed_one ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+test sandbox_real_session_start_is_within_two_seconds_of_the_host_placement ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+test sandbox_real_a_project_registered_after_boot_is_outside_the_running_container ... ok
+test sandbox_real_sessions_survive_a_client_restart ... ok
+test sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_application ... ok
+test sandbox_real_without_the_opt_in_nothing_brings_the_sandbox_back ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.31s

@@ -136,6 +136,11 @@ None.
 
 ## Follow-ups not done
 
+- M9 C1 (macOS bundle, no Mac): run on `mise run app`: B1, B2, B9; deny notifications in System Settings and repeat B1 (expect B13's outcome). Check D26 (the click response arrives while winit runs the main loop; the notification is removed after one hour). CI covered only the backend's unit tests on macOS.
+- M9 C2 (installed Windows build, no Windows machine): B1, B2, B9; click a toast from the notification centre and record whether it is reported (research R4 stays Unverified; correct `docs/user-guide/install-windows.md` only if it contradicts the sentence T090 wrote); D27; the AppUserModelID of the desktop shortcut and the installer's launch (M3 review A). CI covered only the backend's unit tests on Windows.
+- M9 pass, found: a click on a notification for a minimised window takes about 2.7 s to un-minimise on X11 under mutter (three runs), against SC-004's 2 s; the two `_NET_ACTIVE_WINDOW` requests leave the client 2.7 s after the click is read (13 ms for an unminimised window); an external `xdotool windowactivate` took 40 ms, so the delay is in the client (`shell/window_raise.rs`; the main thread woke on 1 s ticks). Wayland: 25 ms. Not diagnosed.
+- M9 pass, not observed: B2, B3, B4 in light; B10, B11a repeated; B11 as written with a real banner; a physical seat; compositors other than GNOME Shell 50.1; a release build; C3 with a window manager; the container client's `The sandbox is out of date` banner (mounts present, not investigated).
+
 - M1 review B (MINOR): no test observes the supervisor tick writing `attention_seq` (the mutant removing the call survives); and `persist_attention` holds the state lock across the blocking write, as `record_observed_names` does. Snapshot the workspace under the lock and write after releasing it, and add a test that runs one tick.
 
 - M1 review A round 2 and M4 review A F1 (MINOR): `DaemonState::persist_attention` clears `attention_unsaved` before the write, so a failed write is retried only by a later event or catalog write, and a read that failed to write is unread again after a restart. Setting the flag again on `Err` would retry and warn every 250 ms on a read-only data directory, so it needs a back-off or a log-once. (The other half is done in M4: `unwind` calls `persist_attention` before the stop.)

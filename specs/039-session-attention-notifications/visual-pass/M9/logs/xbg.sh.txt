@@ -1,0 +1,6 @@
+#!/bin/bash
+# xbg.sh <logname> <cmd...>: run a command detached on the private X display, record pid
+. /tmp/claude-1000/m9/xe.sh
+n=$1; shift
+"${XENVV[@]}" GDK_BACKEND=x11 setsid "$@" > $P/logs/$n.log 2>&1 &
+echo $! >> $P/pids; echo "$n pid $!"

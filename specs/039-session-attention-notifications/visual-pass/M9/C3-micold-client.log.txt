@@ -1,0 +1,11 @@
+attach: disconnected
+attach: connected projects=2 sessions=0 active=<none> active_sessions=<project not in catalog>
+attach: connected projects=2 sessions=0 active=/home/jaro/vp/m9c3/proj/P active_sessions=<project not in catalog>
+attach: disconnected
+attach: disconnected
+attach: connected projects=2 sessions=0 active=<none> active_sessions=<project not in catalog>
+attach: connected projects=2 sessions=0 active=/home/jaro/vp/m9c3/proj/P active_sessions=0
+switch: entered /home/jaro/vp/m9c3/proj/Q -> active_session=None choice=Some(NoneActive { sessions: 0 }) resolve_key=/home/jaro/vp/m9c3/proj/Q session_keys=["/home/jaro/vp/m9c3/proj/P", "/home/jaro/vp/m9c3/proj/Q"]
+switch: entered /home/jaro/vp/m9c3/proj/P -> active_session=Some(SessionId(379bbd33-12dd-4a8f-93e4-5c8ef05c8d11)) choice=Some(Remembered(SessionId(379bbd33-12dd-4a8f-93e4-5c8ef05c8d11))) resolve_key=/home/jaro/vp/m9c3/proj/P session_keys=["/home/jaro/vp/m9c3/proj/P", "/home/jaro/vp/m9c3/proj/Q"]
+switch: entered /home/jaro/vp/m9c3/proj/Q -> active_session=Some(SessionId(f90d4ca0-069c-423c-8b0d-70dddde17055)) choice=Some(Remembered(SessionId(f90d4ca0-069c-423c-8b0d-70dddde17055))) resolve_key=/home/jaro/vp/m9c3/proj/Q session_keys=["/home/jaro/vp/m9c3/proj/P", "/home/jaro/vp/m9c3/proj/Q"]
+switch: entered /home/jaro/vp/m9c3/proj/Q -> active_session=Some(SessionId(f90d4ca0-069c-423c-8b0d-70dddde17055)) choice=Some(Remembered(SessionId(f90d4ca0-069c-423c-8b0d-70dddde17055))) resolve_key=/home/jaro/vp/m9c3/proj/Q session_keys=["/home/jaro/vp/m9c3/proj/P", "/home/jaro/vp/m9c3/proj/Q"]

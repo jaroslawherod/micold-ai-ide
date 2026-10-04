@@ -1,0 +1,8 @@
+1791105997.393 ready
+1791106557.934 Notify id=1 app='Micold AI IDE' summary='New session is waiting for input' body='P — Default' actions=['default', 'Open']
+1791106590.989 Notify id=2 app='Micold AI IDE' summary='New session is waiting for input' body='Q — Default' actions=['default', 'Open']
+1791106593.192 ActionInvoked id=2 default
+1791106620.279 Notify id=3 app='Micold AI IDE' summary='New session is waiting for input' body='Q — Default' actions=['default', 'Open']
+1791106625.851 ActionInvoked id=3 default
+1791106699.330 Notify id=4 app='Micold AI IDE' summary='New session is waiting for input' body='Q — Default' actions=['default', 'Open']
+1791106702.582 ActionInvoked id=4 default

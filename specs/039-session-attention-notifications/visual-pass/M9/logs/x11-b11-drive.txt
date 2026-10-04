@@ -1,0 +1,16 @@
+1791106660.638 [drive] run -> 1791106660.636340092 [hook] UserPromptSubmit -> a0082f83-376a-4ff8-9976-727f40a801d0 http 200
+1791106662.219 [drive] run -> 1791106662.217617956 [hook] Stop -> a0082f83-376a-4ff8-9976-727f40a801d0 http 200
+1791106664.750 [drive] window banner 1559702228 app=org.gnome.TextEditor.desktop pid=None has-focus=True hidden=False
+1791106664.750 [drive] window banner 1559702231 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False
+1791106664.751 [drive] window banner 1559702232 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False
+1791106665.575 [drive] button press (no move)
+1791106665.656 [drive] press done
+1791106666.285 [drive] window after0.6 1559702228 app=org.gnome.TextEditor.desktop pid=None has-focus=True hidden=False
+1791106666.285 [drive] window after0.6 1559702231 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False
+1791106666.285 [drive] window after0.6 1559702232 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False
+1791106667.720 [drive] window after2 1559702228 app=org.gnome.TextEditor.desktop pid=None has-focus=False hidden=False
+1791106667.720 [drive] window after2 1559702231 app=micold-ai-ide.desktop pid=None has-focus=True hidden=False
+1791106667.720 [drive] window after2 1559702232 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False
+1791106671.250 [drive] window after6 1559702228 app=org.gnome.TextEditor.desktop pid=None has-focus=False hidden=False
+1791106671.250 [drive] window after6 1559702231 app=micold-ai-ide.desktop pid=None has-focus=True hidden=False
+1791106671.250 [drive] window after6 1559702232 app=micold-ai-ide.desktop pid=None has-focus=False hidden=False

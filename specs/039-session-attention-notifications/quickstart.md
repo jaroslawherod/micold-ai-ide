@@ -53,3 +53,34 @@ names a look, in the light and the dark scheme.
 | C2 | Windows, installed build | B1, B2, B9; click a toast from the notification centre. | Shown under the application's name; the click shows the session. Record whether the notification-centre click is reported. |
 | C3 | Linux, session service in a container | B1, B6, B9. | Same as with the service on the host (SC-007). |
 | C4 | Linux, Wayland session | B9, then B11 (the token crosses to the second window). | Focus given, or the window marked as needing attention; record which, for each. |
+
+## Record
+
+Recorded in M9 from the evidence in `visual-pass/` (M2, M4, M5, M6, M7, M8, M9). Every pass ran on
+Xvfb or a private headless GNOME Shell on this machine, with `claude` replaced by a stub and turns
+driven by POSTing `UserPromptSubmit` then `Stop` to the session's hook URL; most used a python
+`org.freedesktop.Notifications` stand-in, and where a real service ran it is said. "Not observed"
+means no run saw it. Dark = dark scheme, light = light scheme.
+
+| Step | Result | Evidence |
+|---|---|---|
+| B1 | PASS dark (M2), PASS light (M9). Summary `<B> is waiting for input`, body `P — Default`. Real banner (GNOME helper) seen in M7/M9 wm-pass | `M2/B1.png`, `M9/B1-light.png`, `M9/light-pass.md` |
+| B2 | PASS dark (M2). Light: not observed | `M2/B2.png` |
+| B3 | PASS dark (M2): one Notify with another application focused. Light: not observed | `M2/B3.png` |
+| B4 | PASS dark (M2): one Notify with Settings open; the mark clearing on leaving Settings is covered by tests, not seen here. Light: not observed | `M2/B4.png` |
+| B5 | PASS dark (M2, M5), PASS light (M9): Notify naming Q, button `P ● 1`, panel Q `1 unread` | `M5/B5-button-dark.png`, `M9/light-pass.md` |
+| B6 | PASS dark (M4, M5), PASS light (M9). Activity indicator judged unchanged by eye, not diffed | `M4/B6.png`, `M5/B6-rows-dark.png`, `M9/B6-rows-light.png` |
+| B7 | PASS dark (M4, M5), PASS light (M9): mark gone at the first sample, 0.15 s (SC-006: within 1 s) | `M5/B7-before-after-dark.png`, `M9/B7-after-light.png` |
+| B8 | PASS dark (M4), PASS light (M9), both branches (shown session finished with no window open: unmarked; another session finished: marked, no Notify) | `M4/B8.png`, `M9/light-pass.md` |
+| B9 | PASS on Linux X11 under a real window manager (M9, mutter in a headless GNOME Shell 50.1, real banner, pointer click): in front, focused, Q active, C shown, mark gone, 24 ms (SC-004: within 2 s). PASS on Wayland (M7, GNOME Shell 50.1): focus given, no attention request. **Un-minimise on X11: 2.7 s in three runs, so SC-004 is missed for a minimised window** (follow-up). Un-minimise on Wayland 25 ms. Before M9: the selection and mark only, front/focus not observed | `M9/wm-pass.md`, `M7/README.md`, `M6/README.md` |
+| B10 | PASS dark and light (M6): selection unchanged, notice `That session is no longer available.`. Not repeated in M9 | `M6/B10-notice-crop.png`, `M6/run2-B10-…png` |
+| B11 | PASS for content (M6) and, through a real banner on X11, for the cross-window reveal (M9: the holder window came forward in 1.29 s showing C). The step as written (first window raises, second holds the project) was not observed with a real banner: the later-started client raised the banner. On Wayland (M7) the second window came forward through the notification list | `M6/B11-before-after.png`, `M9/wm-pass.md`, `M7/B11-*.png` |
+| B11a | PASS (M6, run 1; the window was destroyed with `xdotool windowclose`, not closed with its button). Not repeated | `M6/B11a-before-close-after-click.png` |
+| B12 | PASS dark (M8) and light (M9). Not observed: a Pi or Copilot session; a service restart with the switch off (the client was restarted, the service kept running; the integration tests cover the service restart) | `M8/notes.md`, `M9/light-pass.md` |
+| B13 | PASS dark (M2), PASS light (M9, stand-in stopped), PASS with GNOME's real service stopped (M9): no notification, no in-app notice, one `not shown` log line (the line carries no level in the file, so `warn` is not confirmed from it) | `M2/B13.png`, `M9/client-warn-line.txt`, `M9/wm-pass.md` |
+| B14 | PASS dark and light (M4, M5, M9): the `UnreadMark` entries and the switcher panel, no glyph collision | `M4/showcase-*.png`, `M5/showcase-*.png`, `M9/` |
+| B15 | PASS light and dark (M9): B in P and C in Q read from the sidebar and the switcher alone, about 3.5 s from C's Stop to the panel screenshot | `M9/B15-light.png`, `M9/B15-dark.png` |
+| C1 | **Follow-up**: no Mac at hand. CI covered the backend's unit tests on macOS (`Test (desktop notification backends)`, success on `7cbb6c76`, and the macOS build and test job). Not run: delivery, the click, denied permission, D26 (response arrives while winit runs the main loop; the removal after one hour). Steps in the ledger's *Follow-ups not done* | ledger |
+| C2 | **Follow-up**: no Windows machine at hand. CI covered the backend's unit tests on Windows (same step, success; the Windows build and test job, and the arm64 package and smoke job). Not run: the toast, the click, the click on a toast in the notification centre (research R4 stays **Unverified**; the sentence in `docs/user-guide/install-windows.md` stays as T090 wrote it), D27, the AppUserModelID on the desktop shortcut and the installer's launch | ledger |
+| C3 | PASS for content (M9): `mise run test-sandbox` 29 of 29; B1, B6 and B9 with the service in a container gave the same as on the host (SC-007). Raise and focus under a window manager with the container service: not observed. The client showed `The sandbox is out of date` for the whole run (both mounts were present; not investigated) | `M9/container-pass.md` |
+| C4 | PASS on Wayland (M7, GNOME Shell 50.1 only): B9 focus given; B11's second window got the focus, and an attention request followed 410 ms later although focus was given (nothing visible). Other compositors, a physical seat, a minimised window on Wayland through a banner: not observed | `M7/README.md` |

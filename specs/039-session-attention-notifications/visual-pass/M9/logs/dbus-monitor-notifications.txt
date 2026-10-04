@@ -1,0 +1,818 @@
+signal time=1791106057.568498 sender=org.freedesktop.DBus -> destination=:1.186 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.186"
+signal time=1791106057.568514 sender=org.freedesktop.DBus -> destination=:1.186 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.186"
+method call time=1791106087.555462 sender=:1.236 -> destination=org.freedesktop.Notifications serial=416 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106087.559238 sender=:1.12 -> destination=:1.0 serial=13 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 377181
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.236"
+      )
+   ]
+   int32 -1
+signal time=1791106089.845977 sender=:1.0 -> destination=(null destination) serial=527 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "gnome-shell/Micold AI IDE/370259-0-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6503847"
+signal time=1791106089.845992 sender=:1.0 -> destination=(null destination) serial=528 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1791106089.846087 sender=:1.0 -> destination=(null destination) serial=529 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+signal time=1791106089.846538 sender=:1.12 -> destination=:1.236 serial=17 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "gnome-shell/Micold AI IDE/370259-0-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6503847"
+signal time=1791106089.846676 sender=:1.12 -> destination=:1.236 serial=18 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1791106089.846823 sender=:1.12 -> destination=:1.236 serial=19 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+method call time=1791106171.438265 sender=:1.398 -> destination=org.freedesktop.Notifications serial=210 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106171.439995 sender=:1.12 -> destination=:1.0 serial=22 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 398709
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.398"
+      )
+   ]
+   int32 -1
+signal time=1791106174.883271 sender=:1.0 -> destination=(null destination) serial=791 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 2
+   string "gnome-shell/Micold AI IDE/370259-1-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6588884"
+signal time=1791106174.883284 sender=:1.0 -> destination=(null destination) serial=792 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 2
+   string "default"
+signal time=1791106174.883364 sender=:1.0 -> destination=(null destination) serial=793 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+signal time=1791106174.883777 sender=:1.12 -> destination=:1.398 serial=26 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 2
+   string "gnome-shell/Micold AI IDE/370259-1-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6588884"
+signal time=1791106174.883898 sender=:1.12 -> destination=:1.398 serial=27 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 2
+   string "default"
+signal time=1791106174.884081 sender=:1.12 -> destination=:1.398 serial=28 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+method call time=1791106206.162250 sender=:1.398 -> destination=org.freedesktop.Notifications serial=342 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106206.163997 sender=:1.12 -> destination=:1.0 serial=30 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 398709
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.398"
+      )
+   ]
+   int32 -1
+signal time=1791106209.603275 sender=:1.0 -> destination=(null destination) serial=955 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 3
+   string "gnome-shell/Micold AI IDE/370259-2-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6623605"
+signal time=1791106209.603290 sender=:1.0 -> destination=(null destination) serial=956 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 3
+   string "default"
+signal time=1791106209.603302 sender=:1.0 -> destination=(null destination) serial=957 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 3
+   uint32 2
+signal time=1791106209.603718 sender=:1.12 -> destination=:1.398 serial=32 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 3
+   string "gnome-shell/Micold AI IDE/370259-2-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6623605"
+signal time=1791106209.603804 sender=:1.12 -> destination=:1.398 serial=33 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 3
+   string "default"
+signal time=1791106209.603953 sender=:1.12 -> destination=:1.398 serial=34 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 3
+   uint32 2
+method call time=1791106256.871233 sender=:1.398 -> destination=org.freedesktop.Notifications serial=515 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106256.873482 sender=:1.12 -> destination=:1.0 serial=36 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 398709
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.398"
+      )
+   ]
+   int32 -1
+signal time=1791106260.320615 sender=:1.0 -> destination=(null destination) serial=1078 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 4
+   string "gnome-shell/Micold AI IDE/370259-3-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6674322"
+signal time=1791106260.320634 sender=:1.0 -> destination=(null destination) serial=1079 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 4
+   string "default"
+signal time=1791106260.320832 sender=:1.0 -> destination=(null destination) serial=1080 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 4
+   uint32 2
+signal time=1791106260.321095 sender=:1.12 -> destination=:1.398 serial=38 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 4
+   string "gnome-shell/Micold AI IDE/370259-3-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6674322"
+signal time=1791106260.321220 sender=:1.12 -> destination=:1.398 serial=39 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 4
+   string "default"
+signal time=1791106260.321343 sender=:1.12 -> destination=:1.398 serial=40 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 4
+   uint32 2
+method call time=1791106298.448693 sender=:1.398 -> destination=org.freedesktop.Notifications serial=666 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106298.450359 sender=:1.12 -> destination=:1.0 serial=42 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 398709
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.398"
+      )
+   ]
+   int32 -1
+signal time=1791106301.897687 sender=:1.0 -> destination=(null destination) serial=1251 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 5
+   string "gnome-shell/Micold AI IDE/370259-4-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6715899"
+signal time=1791106301.897705 sender=:1.0 -> destination=(null destination) serial=1252 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 5
+   string "default"
+signal time=1791106301.897869 sender=:1.0 -> destination=(null destination) serial=1253 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 5
+   uint32 2
+signal time=1791106301.898099 sender=:1.12 -> destination=:1.398 serial=44 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 5
+   string "gnome-shell/Micold AI IDE/370259-4-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6715899"
+signal time=1791106301.898226 sender=:1.12 -> destination=:1.398 serial=45 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 5
+   string "default"
+signal time=1791106301.898335 sender=:1.12 -> destination=:1.398 serial=46 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 5
+   uint32 2
+method call time=1791106348.070132 sender=:1.398 -> destination=org.freedesktop.Notifications serial=847 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106348.071982 sender=:1.12 -> destination=:1.0 serial=48 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 398709
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.398"
+      )
+   ]
+   int32 -1
+signal time=1791106351.541059 sender=:1.0 -> destination=(null destination) serial=1424 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 6
+   string "gnome-shell/Micold AI IDE/370259-5-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6765542"
+signal time=1791106351.541075 sender=:1.0 -> destination=(null destination) serial=1425 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 6
+   string "default"
+signal time=1791106351.541148 sender=:1.0 -> destination=(null destination) serial=1426 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 6
+   uint32 2
+signal time=1791106351.541523 sender=:1.12 -> destination=:1.398 serial=50 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 6
+   string "gnome-shell/Micold AI IDE/370259-5-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6765542"
+signal time=1791106351.541686 sender=:1.12 -> destination=:1.398 serial=51 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 6
+   string "default"
+signal time=1791106351.541854 sender=:1.12 -> destination=:1.398 serial=52 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 6
+   uint32 2
+method call time=1791106449.693803 sender=:1.918 -> destination=org.freedesktop.Notifications serial=160 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106449.696306 sender=:1.12 -> destination=:1.0 serial=55 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 479133
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.918"
+      )
+   ]
+   int32 -1
+signal time=1791106453.151087 sender=:1.0 -> destination=(null destination) serial=1697 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 7
+   string "gnome-shell/Micold AI IDE/370259-6-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6867152"
+signal time=1791106453.151100 sender=:1.0 -> destination=(null destination) serial=1698 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 7
+   string "default"
+signal time=1791106453.151104 sender=:1.0 -> destination=(null destination) serial=1699 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 7
+   uint32 2
+signal time=1791106453.151871 sender=:1.12 -> destination=:1.918 serial=59 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 7
+   string "gnome-shell/Micold AI IDE/370259-6-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6867152"
+signal time=1791106453.151882 sender=:1.12 -> destination=:1.918 serial=60 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 7
+   string "default"
+signal time=1791106453.151886 sender=:1.12 -> destination=:1.918 serial=61 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 7
+   uint32 2
+method call time=1791106527.105730 sender=:1.918 -> destination=org.freedesktop.Notifications serial=452 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106527.107187 sender=:1.12 -> destination=:1.0 serial=63 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 479133
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.918"
+      )
+   ]
+   int32 -1
+signal time=1791106530.539801 sender=:1.0 -> destination=(null destination) serial=1820 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 8
+   string "gnome-shell/Micold AI IDE/370259-7-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6944541"
+signal time=1791106530.539812 sender=:1.0 -> destination=(null destination) serial=1821 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 8
+   string "default"
+signal time=1791106530.539840 sender=:1.0 -> destination=(null destination) serial=1822 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 8
+   uint32 2
+signal time=1791106530.540174 sender=:1.12 -> destination=:1.918 serial=65 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 8
+   string "gnome-shell/Micold AI IDE/370259-7-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME6944541"
+signal time=1791106530.540255 sender=:1.12 -> destination=:1.918 serial=66 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 8
+   string "default"
+signal time=1791106530.540354 sender=:1.12 -> destination=:1.918 serial=67 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 8
+   uint32 2
+method call time=1791106662.220207 sender=:1.1365 -> destination=org.freedesktop.Notifications serial=142 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106662.221522 sender=:1.12 -> destination=:1.0 serial=70 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 519604
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.1365"
+      )
+   ]
+   int32 -1
+signal time=1791106665.656705 sender=:1.0 -> destination=(null destination) serial=1950 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 9
+   string "gnome-shell/Micold AI IDE/370259-8-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7079658"
+signal time=1791106665.656716 sender=:1.0 -> destination=(null destination) serial=1951 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 9
+   string "default"
+signal time=1791106665.656820 sender=:1.0 -> destination=(null destination) serial=1952 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 9
+   uint32 2
+signal time=1791106665.657104 sender=:1.12 -> destination=:1.1365 serial=74 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 9
+   string "gnome-shell/Micold AI IDE/370259-8-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7079658"
+signal time=1791106665.657207 sender=:1.12 -> destination=:1.1365 serial=75 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 9
+   string "default"
+signal time=1791106665.657352 sender=:1.12 -> destination=:1.1365 serial=76 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 9
+   uint32 2
+method call time=1791106718.837220 sender=:1.1365 -> destination=org.freedesktop.Notifications serial=282 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106718.838477 sender=:1.12 -> destination=:1.0 serial=78 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 519604
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.1365"
+      )
+   ]
+   int32 -1
+signal time=1791106722.274964 sender=:1.0 -> destination=(null destination) serial=2085 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 10
+   string "gnome-shell/Micold AI IDE/370259-9-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7136277"
+signal time=1791106722.274975 sender=:1.0 -> destination=(null destination) serial=2086 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 10
+   string "default"
+signal time=1791106722.275016 sender=:1.0 -> destination=(null destination) serial=2087 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 10
+   uint32 2
+signal time=1791106722.275363 sender=:1.12 -> destination=:1.1365 serial=80 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 10
+   string "gnome-shell/Micold AI IDE/370259-9-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7136277"
+signal time=1791106722.275425 sender=:1.12 -> destination=:1.1365 serial=81 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 10
+   string "default"
+signal time=1791106722.275543 sender=:1.12 -> destination=:1.1365 serial=82 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 10
+   uint32 2
+method call time=1791106785.902784 sender=:1.1365 -> destination=org.freedesktop.Notifications serial=537 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106785.904081 sender=:1.12 -> destination=:1.0 serial=84 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 519604
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.1365"
+      )
+   ]
+   int32 -1
+signal time=1791106789.340086 sender=:1.0 -> destination=(null destination) serial=2349 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 11
+   string "gnome-shell/Micold AI IDE/370259-10-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7203337"
+signal time=1791106789.340105 sender=:1.0 -> destination=(null destination) serial=2350 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 11
+   string "default"
+signal time=1791106789.340112 sender=:1.0 -> destination=(null destination) serial=2351 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 11
+   uint32 2
+signal time=1791106789.340521 sender=:1.12 -> destination=:1.1365 serial=86 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 11
+   string "gnome-shell/Micold AI IDE/370259-10-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7203337"
+signal time=1791106789.340634 sender=:1.12 -> destination=:1.1365 serial=87 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 11
+   string "default"
+signal time=1791106789.340756 sender=:1.12 -> destination=:1.1365 serial=88 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 11
+   uint32 2
+method call time=1791106874.256607 sender=:1.1878 -> destination=org.freedesktop.Notifications serial=210 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106874.257776 sender=:1.12 -> destination=:1.0 serial=91 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 571597
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.1878"
+      )
+   ]
+   int32 -1
+signal time=1791106877.688303 sender=:1.0 -> destination=(null destination) serial=2829 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 12
+   string "gnome-shell/Micold AI IDE/370259-11-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7291690"
+signal time=1791106877.688318 sender=:1.0 -> destination=(null destination) serial=2830 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 12
+   string "default"
+signal time=1791106877.688329 sender=:1.0 -> destination=(null destination) serial=2831 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 12
+   uint32 2
+signal time=1791106877.688894 sender=:1.12 -> destination=:1.1878 serial=95 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 12
+   string "gnome-shell/Micold AI IDE/370259-11-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7291690"
+signal time=1791106877.689096 sender=:1.12 -> destination=:1.1878 serial=96 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 12
+   string "default"
+signal time=1791106877.689208 sender=:1.12 -> destination=:1.1878 serial=97 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 12
+   uint32 2
+method call time=1791106929.307253 sender=:1.1878 -> destination=org.freedesktop.Notifications serial=420 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106929.308471 sender=:1.12 -> destination=:1.0 serial=99 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 571597
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.1878"
+      )
+   ]
+   int32 -1
+signal time=1791106932.746634 sender=:1.0 -> destination=(null destination) serial=4017 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 13
+   string "gnome-shell/Micold AI IDE/370259-12-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7346748"
+signal time=1791106932.746650 sender=:1.0 -> destination=(null destination) serial=4018 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 13
+   string "default"
+signal time=1791106932.746671 sender=:1.0 -> destination=(null destination) serial=4019 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 13
+   uint32 2
+signal time=1791106932.747122 sender=:1.12 -> destination=:1.1878 serial=101 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 13
+   string "gnome-shell/Micold AI IDE/370259-12-jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA_TIME7346748"
+signal time=1791106932.747180 sender=:1.12 -> destination=:1.1878 serial=102 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 13
+   string "default"
+signal time=1791106932.747303 sender=:1.12 -> destination=:1.1878 serial=103 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 13
+   uint32 2
+method call time=1791106979.881716 sender=:1.1878 -> destination=org.freedesktop.Notifications serial=593 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+method call time=1791106996.908070 sender=:1.1878 -> destination=org.freedesktop.Notifications serial=634 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "projQ — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1

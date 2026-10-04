@@ -1,0 +1,14 @@
+#!/bin/bash
+# poll.sh <outfile> <seconds>: log changes of _NET_ACTIVE_WINDOW and of the client's WM_STATE/_NET_WM_STATE at ~20ms
+. /tmp/claude-1000/m9/xe.sh
+out=$1; end=$(( $(date +%s) + $2 )); last=""
+W=$(xp xdotool search --class micold | head -1)
+while [ $(date +%s) -lt $end ]; do
+  a=$(xp xprop -root _NET_ACTIVE_WINDOW | awk '{print $NF}')
+  s=$(xp xprop -id $W WM_STATE _NET_WM_STATE | tr -s '\n\t' '  ' | sed 's/icon window: 0x0//; s/_NET_WM_STATE_MAXIMIZED_[HV]ORZ,\? \?//g; s/_NET_WM_STATE_MAXIMIZED_VERT//')
+  k="$a|$s"
+  if [ "$k" != "$last" ]; then
+    cls=$(xp xprop -id $a WM_CLASS 2>/dev/null | cut -d= -f2 | cut -d, -f1)
+    echo "$(date +%s.%3N) active=$a class=$cls | client: $s" >> $out; last=$k
+  fi
+done
