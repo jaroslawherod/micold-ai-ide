@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use micold_core::protocol::hashing::sha256;
 use micold_core::terminal_history::{
     decode, encode, DamageReason, HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine,
-    StyleFlags, StyleRun, FORMAT_VERSION, MAX_FILE_BYTES,
+    StyleFlags, StyleRun, BASIC_COLORS, DIM_COLORS, FORMAT_VERSION, MAX_FILE_BYTES,
 };
 
 const MAGIC: &[u8; 8] = b"MICOLDTH";
@@ -316,6 +316,39 @@ fn a_text_with_esc_is_a_control_character() {
     let file = ab_file_with(AB_FIRST_CHAR, ESC);
 
     assert_eq!(decode(&file), Err(DamageReason::ControlCharacter));
+}
+
+// FR-016: a file that passes the ten checks and still holds a snapshot `HistorySnapshot::validate`
+// rejects is not shown either. The checksum only says the bytes are the ones that were written.
+#[test]
+fn a_colour_index_outside_its_palette_is_malformed() {
+    /// The enum indexes of `HistoryColor::Basic` and `HistoryColor::Dim` in the payload.
+    const BASIC: u8 = 1;
+    const DIM: u8 = 2;
+    // [`AB_PAYLOAD`] with its one style's foreground, then its background, replaced.
+    let with_fg = |kind: u8, index: u8| {
+        file_with_payload(&[1, kind, index, 0, 0, 1, 2, b'a', b'b', 1, 2, 0])
+    };
+    let with_bg = |kind: u8, index: u8| {
+        file_with_payload(&[1, 0, kind, index, 0, 1, 2, b'a', b'b', 1, 2, 0])
+    };
+
+    assert_eq!(
+        decode(&with_fg(BASIC, BASIC_COLORS - 1)),
+        Ok(snapshot_of(vec![line(
+            "ab",
+            fg(HistoryColor::Basic(BASIC_COLORS - 1))
+        )])),
+        "the last basic colour is in the palette"
+    );
+    for file in [
+        with_fg(BASIC, BASIC_COLORS),
+        with_fg(DIM, DIM_COLORS),
+        with_bg(BASIC, BASIC_COLORS),
+        with_bg(DIM, DIM_COLORS),
+    ] {
+        assert_eq!(decode(&file), Err(DamageReason::Malformed));
+    }
 }
 
 // U41: the checks run in HF §4's order over the whole file, so the first one that fails names the
