@@ -31,12 +31,12 @@ a rendered screen; the rendered half is quickstart Part B (T076).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1  | After an orderly stop of the service, a start shows all 200 lines in order with colours and styles | US1-1, FR-001, FR-002, SC-001 | example | PENDING | T017, T031, T061 |
-| A2  | After a service restart, a start shows one separator `session restarted at <local date time>` below the saved history and above every new line | US1-2, FR-008, FR-009 | example | PENDING | T017 |
-| A3  | A session that printed nothing before the restart shows no separator and no blank history after it | US1-3, FR-010 | example | PENDING | T017 |
-| A4  | With one earlier separator in the history, a second restart shows output, separator, output, separator in that order | US1-4, FR-011 | example | PENDING | T017 |
-| A5  | A history longer than the scrollback limit restores the most recent lines up to the limit, older lines absent | US1-5, FR-012 | example | PENDING | T017 |
-| A6  | Two sessions with different output each show only their own history after a restart | US1-6, FR-025 | example | PENDING | T017 |
+| A1  | After an orderly stop of the service, a start shows all 200 lines in order with colours and styles | US1-1, FR-001, FR-002, SC-001 | example | PENDING | `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` passes for a session stopped before the restart (T017); the orderly stop of the service itself is T031, T061 |
+| A2  | After a service restart, a start shows one separator `session restarted at <local date time>` below the saved history and above every new line | US1-2, FR-008, FR-009 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` |
+| A3  | A session that printed nothing before the restart shows no separator and no blank history after it | US1-3, FR-010 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a3_a_session_that_printed_nothing_shows_no_separator_after_a_restart` |
+| A4  | With one earlier separator in the history, a second restart shows output, separator, output, separator in that order | US1-4, FR-011 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a4_a_second_restart_shows_output_separator_output_separator_in_order` |
+| A5  | A history longer than the scrollback limit restores the most recent lines up to the limit, older lines absent | US1-5, FR-012 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a5_a_history_longer_than_the_limit_restores_the_most_recent_lines` |
+| A6  | Two sessions with different output each show only their own history after a restart | US1-6, FR-025 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a6_two_sessions_each_show_only_their_own_history_after_a_restart` |
 | A7  | After the service is dropped without an unwind while a session prints, a restart restores the history up to the last save, at most 60 s old | US1-7, FR-003, SC-002 | example | PENDING | T026 |
 | A8  | After the service unwinds for the idle stop, a start shows the whole history above the separator, nothing missing | US1-8, FR-002, SC-001 | example | PENDING | T031 |
 | A9  | Stop then start in one service run shows the 200 lines, one separator, the new output, nothing missing | US1-9, FR-015, SC-011 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output` |
@@ -49,7 +49,7 @@ a rendered screen; the rendered half is quickstart Part B (T076).
 | A16 | After turning the setting off, a running terminal's history is unchanged; only the disk copy is gone | US2-6, FR-033 | example | PENDING | T040 |
 | A17 | Off, then on, then a service restart shows only what was saved after it was turned on; earlier files do not return | US2-7, FR-033 | example | PENDING | T040 |
 | A18 | With the setting off, a stop and start in one run still shows the earlier output above the separator and writes nothing | US2-8, FR-015 | example | PENDING | T040 |
-| A19 | A saved history of random bytes: the session starts and runs exactly as one with no saved history | US3-1, FR-016, SC-006 | example | PENDING | T051, T017 |
+| A19 | A saved history of random bytes: the session starts and runs exactly as one with no saved history | US3-1, FR-016, SC-006 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a19_a_file_of_random_bytes_starts_the_session_with_no_history_and_one_warning` (T017); T051 adds the other kinds of damage |
 | A20 | For that session the terminal holds the notice line and none of the file's bytes, and the log holds one warning naming session and reason, also in `RecentErrors` | US3-2, FR-017 | example | PENDING | T051 |
 | A21 | A history file with mode `000` gives the same outcome as a damaged one | US3-3, FR-016, FR-017 | example | PENDING | T051 |
 | A22 | With one damaged and one intact file, the second session shows its full history | US3-4, FR-018 | example | PENDING | T051 |
@@ -174,11 +174,11 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U60 | With a smaller scrollback limit in force at the restore, only the most recent lines up to the new limit are shown | FR-012, EC-Limit changed | example | PENDING | T017 |
-| U61 | A process that exits by itself is saved at that exit and restored after a restart | FR-002 | example | PENDING | T017 |
-| U62 | A Regular Terminal instance has no file after a stop | FR-014 | example | PENDING | T017 |
-| U63 | A file is not read while a carried snapshot exists | DM §6, R4 | example | PENDING | T017 |
-| U64 | A saved history of 10,000 lines of 100 characters is loaded and seeded and the session is running no more than 1 s later than with no file | FR-013, SC-004 | example | PENDING | T018 |
+| U60 | With a smaller scrollback limit in force at the restore, only the most recent lines up to the new limit are shown | FR-012, EC-Limit changed | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::u60_a_smaller_limit_at_the_restore_shows_the_most_recent_lines_up_to_it` |
+| U61 | A process that exits by itself is saved at that exit and restored after a restart | FR-002 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::u61_a_process_that_exits_by_itself_is_saved_at_the_exit_and_restored` |
+| U62 | A Regular Terminal instance has no file after a stop | FR-014 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::u62_a_regular_terminal_has_no_file_after_a_stop` |
+| U63 | A file is not read while a carried snapshot exists | DM §6, R4 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::u63_a_file_is_not_read_while_a_carried_history_exists` |
+| U64 | A saved history of 10,000 lines of 100 characters is loaded and seeded and the session is running no more than 1 s later than with no file | FR-013, SC-004 | example | DONE | `crates/micold-daemon/tests/history_timing.rs::u64_a_saved_history_of_ten_thousand_lines_delays_the_start_by_no_more_than_a_second` |
 
 ### `crates/micold-core/src/terminal_history/schedule.rs` (T025, T027)
 

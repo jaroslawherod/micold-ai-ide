@@ -688,3 +688,119 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - commit: `feat(041): HistoryStore in micold-core: save through owner_only::write, load, Unchanged on an equal checksum, no directory creation in a container (U44-U54)` (`dc92df9a`)
 
 End of U44-U54: `mise run test-core` green (152 test binaries ok, 1759 passed, 0 failed, 7 ignored); `terminal_history_store` -> `test result: ok. 18 passed; 0 failed`; `terminal_history_format` -> `test result: ok. 20 passed; 0 failed`; `scripts/build-lock.sh cargo clippy -p micold-core --all-targets -- -D warnings` clean; `scripts/build-lock.sh cargo check -p micold-core --all-targets --target x86_64-pc-windows-msvc` -> `Finished`. The eleven behaviours were driven as one red run against a stub and four green steps (cycles 52, 59, 60, 62), not eleven separate red-green pairs; `a_store_is_shared_between_threads` (`HistoryStore: Send + Sync`, a save from another thread) belongs to no row and passed with cycle 52's green.
+
+# M2, daemon: T017, T018, T022, T023 (A2-A6, A19, U60-U64)
+
+The 13 tests of `history_service_restart.rs` and the one of `history_timing.rs` were written together and run red once against a stub (`DaemonState::set_history_store` existed, nothing saved or loaded), then made green in two steps: the save at each capture point (T022), then the load at a start (T023). The entries below share that red run and name the step that turned each green.
+
+## Cycle 63: T022 An AI CLI session has a saved-history file after a stop, a Regular Terminal has none (U62)
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::u62_a_regular_terminal_has_no_file_after_a_stop` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `assertion `left == right` failed: one file, the AI CLI session's` / `left: []` / `right: ["/tmp/.tmp8eP76s/199ee9a7-….history"]`
+- green: step 1, the save: `carry_history` keeps a clone of the captured snapshot, releases the state lock and calls `save_history`, which calls `HistoryStore::save` and logs one `warn!` with `session` and `reason` on `Err`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: FAILED. 6 passed; 7 failed`
+- refactor: none
+- notes: the red was the missing file of the AI CLI session beside it; the Regular Terminal half is the negative and cannot fail before the save exists. `carry_history` is called only for a covered primary (M1), so no new condition was needed.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 64: T022 A failed save is one warning naming the session and the reason; a skipped save is none (FR-007, R15)
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a_failed_save_is_one_warning_and_the_stop_and_the_next_start_go_on`, `…::a_skipped_save_is_not_a_warning` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `assertion `left == right` failed: one warning naming the session: []` / `left: 0` / `right: 1`
+- green: with cycle 63's green. Same run.
+- refactor: none
+- notes: `a_skipped_save_is_not_a_warning` passed at the red run (nothing was saved, so nothing was logged) and guards the green: its `Skipped(NoDirectory)` is `Ok`, so it is not logged. No mutant was run for it. The failure is made with a regular file where the directory should be.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 65: U61 A process that exits by itself is saved at that exit and restored after a restart
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::u61_a_process_that_exits_by_itself_is_saved_at_the_exit_and_restored` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `saved by the tick that saw the exit, with no stop request` (the file is absent); after step 1: `assertion `left == right` failed: one separator: ["after restart", …]`
+- green: step 2, the load: `carried_seed` became `start_seed`, which calls `saved_seed` (`HistoryStore::load`) only when `carried` has no entry for the session; `server::run` builds the store from `history_dir()`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: ok. 13 passed; 0 failed` (after the test correction noted under cycle 67)
+- refactor: none
+- notes: the save half went green with step 1 (the tick's clean-exit drop goes through `carry_history`), the restore half with step 2. Runs on every platform.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 66: A1, A2 After a stop and a service restart a start shows the 200 styled lines, one separator with the time of that start, then the new output
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `no line reads "line 1" in ["new output"]`
+- green: step 2, the load: `carried_seed` became `start_seed`, which calls `saved_seed` (`HistoryStore::load`) only when `carried` has no entry for the session; `server::run` builds the store from `history_dir()`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: ok. 13 passed; 0 failed` (after the test correction noted under cycle 67)
+- refactor: none
+- notes: the service restart is a second `DaemonState` with the same sessions and a new `HistoryStore` on the same temporary directory. The separator is compared with `session restarted at <local date and minute>` taken before and after the start. Colour (`Basic(1)`) and bold are read from line 200. A1 stays PENDING in the list: its orderly stop of the service is T031 and T061. Runs on every platform.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 67: A5, U60 A history longer than the limit, and a smaller limit at the restore, restore the most recent lines up to the limit
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a5_a_history_longer_than_the_limit_restores_the_most_recent_lines`, `…::u60_a_smaller_limit_at_the_restore_shows_the_most_recent_lines_up_to_it` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> A5: `assertion `left == right` failed: one separator` / `left: 0` / `right: 1`; U60: `the stop saved no readable history`, and after step 1 the same as A5
+- green: step 2, the load: `carried_seed` became `start_seed`, which calls `saved_seed` (`HistoryStore::load`) only when `carried` has no entry for the session; `server::run` builds the store from `history_dir()`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: ok. 13 passed; 0 failed` (after the test correction noted under cycle 67)
+- refactor: none
+- notes: the tests were corrected once, before green, for a reason of their own: as first written they required at least `limit` restored lines and failed with `99 lines restored with a limit of 100 and 30 rows`. `history::seed` writes the separator below the lines and then moves the screen into the history, so a history of `limit` rows holds the separator and the most recent `limit - 1` lines. The assertion is now exact: restored lines + 1 == limit, and they count back from `line 400` without a gap. U60 first loads the file with a store of its own and finds all 400 lines in it.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 68: A4, A6 Two restarts show output, separator, output, separator; two sessions each show only their own history
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a4_a_second_restart_shows_output_separator_output_separator_in_order`, `…::a6_two_sessions_each_show_only_their_own_history_after_a_restart` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `assertion `left == right` failed: ["three"]` / `left: 0` / `right: 2` (A4); `["restarted"]` / `left: 0` / `right: 1` (A6)
+- green: step 2, the load: `carried_seed` became `start_seed`, which calls `saved_seed` (`HistoryStore::load`) only when `carried` has no entry for the session; `server::run` builds the store from `history_dir()`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: ok. 13 passed; 0 failed` (after the test correction noted under cycle 67)
+- refactor: none
+- notes: A4 uses three services on one directory. A6 uses the `args` line, which carries each session's id.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 69: A19 A file of random bytes: the session starts with no history and one warning naming the session
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a19_a_file_of_random_bytes_starts_the_session_with_no_history_and_one_warning` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `assertion `left == right` failed: one warning naming the session: []` / `left: 0` / `right: 1`
+- green: step 2, the load: `carried_seed` became `start_seed`, which calls `saved_seed` (`HistoryStore::load`) only when `carried` has no entry for the session; `server::run` builds the store from `history_dir()`. `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` -> `test result: ok. 13 passed; 0 failed` (after the test correction noted under cycle 67)
+- refactor: none
+- notes: `LoadOutcome::Damaged(reason)` gives `Seed::None` and one `warn!` (`saved terminal history could not be read; starting without it`, `session`, `reason`). The notice line of data-model §6 arrives with T054. The file holds 4 KiB from a fixed xorshift and a readable marker; the only non-empty line of the terminal is the new output.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 70: U63 A file is not read while a carried history exists
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::u63_a_file_is_not_read_while_a_carried_history_exists` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `the stop saved the history` (the file is absent)
+- green: with cycle 63's green (step 1): the start in the same run was already seeded from `carried`. Still green after step 2, which is what the row is about: `start_seed` does not call `load` when `carried` has the id.
+- refactor: none
+- notes: the file is replaced by unreadable bytes between the stop and the start; the start shows the carried line above one separator and logs nothing for the session. No mutant (a `load` before the `carried` lookup) was run.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 71: A3 A session that printed nothing shows no separator and no blank history after a restart
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a3_a_session_that_printed_nothing_shows_no_separator_after_a_restart` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> none: it passed at the red run, since nothing was restored at all
+- green: passes with steps 1 and 2: the stop saves an empty snapshot, and `LoadOutcome::History` of an empty snapshot is `Seed::None`.
+- refactor: none
+- notes: red not observed for this row; it is the negative of cycle 66 and has no failing state before the load exists. No mutant (seeding an empty history) was run.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 72: D17 A `SessionStop` followed at once by a `SessionStart` over a real connection saves and restores in that order
+
+- test: `crates/micold-daemon/tests/history_service_restart.rs::a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_service_restart` (one shared run, all 13 tests written together against a `DaemonState` that holds a `HistoryStore` and uses it for nothing: `test result: FAILED. 2 passed; 11 failed`; commit `c27e5de5`)
+  -> `the stop saved no readable history`
+- green: with cycle 63's green (step 1). Same run.
+- refactor: none
+- notes: belongs to no row of the list; it covers the path M1 left unproven. `current_thread` runtime, `serve_connection` on an in-memory stream, both messages sent back to back. `ops::start_session` and `ops::stop_session` were not changed: the save and the load run inside `stop_session_gated` and `start_session_gated`, which those already call on the blocking pool with the gate held.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+## Cycle 73: U64 A saved history of 10,000 lines of 100 characters delays the start by no more than 1 s
+
+- test: `crates/micold-daemon/tests/history_timing.rs::u64_a_saved_history_of_ten_thousand_lines_delays_the_start_by_no_more_than_a_second` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_timing -- --nocapture` (commit `c27e5de5`) -> `test result: FAILED. 0 passed; 1 failed`
+  -> `start with no file: 2.480697ms; with 10,000 saved lines: 2.314284ms` and `no line reads "saved.1....…" in ["ready"]`
+- green: step 2 (the load). Same command -> `start with no file: 2.479354ms; with 10,000 saved lines: 154.139304ms`, `test result: ok. 1 passed; 0 failed`
+- refactor: none
+- notes: debug build. Each start is timed from the request until the stand-in has created a file as its first step; a third session is started first and not measured. The test was corrected once before green: at the default limit of 10,000 the separator takes the place of the oldest line (cycle 67), so the service's limit is set to 20,000 and all 10,000 lines are asserted present above the separator.
+- commit: `feat(041): the service saves a history at each process end and loads it at a session's first start (T022, T023)` (`a76c7051`)
+
+End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13 passed; 0 failed` and `history_timing` -> `test result: ok. 1 passed; 0 failed`, three runs in a row (156.9 ms, 156.3 ms, 163.1 ms against 2.3 ms, 2.3 ms, 2.1 ms); `scripts/build-lock.sh cargo test -p micold-daemon` -> 109 test binaries ok, 716 passed, 0 failed; `cargo clippy -p micold-daemon --all-targets -- -D warnings` clean; `cargo check -p micold-daemon --all-targets --target x86_64-pc-windows-msvc` -> `Finished`; `micold-core`'s `tests_never_write_the_real_data_directory` -> `2 passed`. Refactor after green (`8e636d9e`): the stand-in CLI and the history helpers moved to `crates/micold-daemon/tests/support/history.rs`, used by `history_restart_in_run.rs`, `history_service_restart.rs` and `history_timing.rs`. The eleven behaviours were driven as one red run and two green steps, not eleven separate red-green pairs.
