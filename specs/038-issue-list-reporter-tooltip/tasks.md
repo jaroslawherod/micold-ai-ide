@@ -199,7 +199,7 @@ screen of the app uses it yet; slice B puts it on issue rows.
 - [X] T040 [US3] [U68] [U70] Add `crates/micold-client/src/ui/material/line_clamp.rs` (NEW, modelled on `ui/material/ellipsized.rs`) and, in `crates/micold-client/src/ui/material/mod.rs`, `Tooltip::after_rest`, `Tooltip::max_lines` and `Tooltip::subject`; `max_lines` measures a `Caption` paragraph at `TOOLTIP_MAX_WIDTH` less the panel's padding and calls `clamp_to_lines` (T035).
 - [X] T041 [US3] Pose it in the showcase's `Tooltip` entry, `crates/micold-client/src/showcase/sections/floating.rs`: an instance with `after_rest(3 s)` and `max_lines(3)` over a long text, captioned to hold the cursor still (FR-028).
 - [X] T042 [P] [US3] Update `docs/development/component-library.md` (the tooltip's rest mode, line limit and subject, and the second frame door in `cdk::motion` with the gate that holds it) and `docs/development/component-showcase.md` (the rest-delay `Tooltip` instance).
-- [ ] T043 [US3] Run `mise run gate`; run quickstart §B5 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
+- [X] T043 [US3] Run `mise run gate`; run quickstart §B5 with the `visual-pass` skill and save the screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`.
 
 **Checkpoint**: the showcase shows a rest-delay tooltip; every existing tooltip behaves as before.
 
