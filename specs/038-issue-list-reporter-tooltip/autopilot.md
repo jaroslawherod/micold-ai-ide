@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 rework: T058–T063 done, scoped gate green, `M5 rework code A` round 1 CLEAN. Now verify.md step 2: `M5 rework code B` round 1 and the visual pass (§B6, §B8, §B9, §B11, a cursor resting while its description arrives, §B10 re-measured), then full gate, tick T055 on a measured pass, PR.
+- **Next step**: M5 rework, see *Handover*: the visual pass (its setup has to be recreated, `/home/jaro/vp` is gone) with §B10 re-measured, then the full gate, tick T055 on a measured pass, PR.
 
 ## Pull requests
 
@@ -83,6 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 code B | 1 | 66acc0da35b70fdf6d2158412522150b787a16ac:c9f9d682f0f8deb18f8ab9713831655103402ecf | CLEAN, no findings (sonnet; a short round: 4 tool calls, 49 s, so the diff was not read file by file). Verify: `github_description` 17 passed; `layout_snapshot picker_row_tooltip_clears_its_row` 10 passed, 48 filtered out. Checked by the unit beside it, mechanically: no `todo!`, `dbg!`, `unimplemented!` or `cfg(target_os)` in the added lines; the 20 changed files are all M5's; both guides updated |
 | M5 visual pass | 1 | c9f9d682 | B6, B7, B8, B11 PASS; B9 PASS with comment stripping seen only on `cli/cli` #9085 (no template issue with a comment in `small`); **B10 FAIL: 1.88×** (before 11.6 s median, after 21.8 s; by hand ten pages 10.9 s and 236 KB without `bodyText`, 20.4 s and 2.08 MB with; no request over 10 s, slowest page 2.97 s). B6: 41 trials, first frame with the panel 3.04–3.13 s after the cursor stopped. B11: CPU ticks per 30 s 717–746 beside the list, 695–731 on a described row, 703–752 on an undescribed one; no `gh` started by a rest. Evidence: 33 crops `evidence/b6-*` to `b11-*`, `b6-trials.txt`, `b10-times.txt`, `b11-cpu.txt`, `evidence/README.md`. Not confirmed: light theme for B7, B9–B11; a truly blank body. The "before" build was 7cbb6c76, not `main`'s tip; the hand-run query gives the same ratio (1.87) |
 | M5 rework code A | 1 | 925e0c7730a1ae21ea1d027de011f1521f092cf7:b05b30685902e7c2a89394499f7ce6ab2de5e69e | CLEAN (full round, session model, `code-review` at `high`, diff 3181b467..b05b3068, read not built; 16 tool calls). 3 MINOR, none fixed, all in *Follow-ups not done*: F1 a row's widget changes from a bare row to `Tooltip(row)` when its page lands, so a press held at that moment may be lost (inferred by reading); F2 `merge_searched` drops a searched duplicate of a listed issue and its description with it; F3 the pass goes on after a pick, and stays `Loading` with no request if the repository became unknown under a loaded list. Scoped gate beside it: GATE_EXIT=0 |
+| M5 rework code B | 1 | 2c533f6ec79aa2b1484008393c0f975f7ea37202:af1d8355d55e22096a8da2eee3669cf736104b48 | CLEAN, no findings (sonnet; a short round: 6 tool calls, 22 s, so the diff was not read file by file and the rubric's scope, acceptance and constitution items rest on little reading). Verify as it reported: core `github_description` 17 passed, `github_description_pass` 10 passed; client `issue_source_state` 49 passed, `issues_are_requested_only_on_named_events` 3 passed; bin `issue_source::` 36 passed. The counts agree with the unit's own runs of the same targets (49 and 36 after cycle 26). Checked by the unit beside it, mechanically: no `todo!`, `dbg!`, `unimplemented!` or `cfg(target_os)` in the rework's added lines; every changed file is M5's (038's spec directory, `github.rs` and its two test files, the client crate, the user guide) |
 
 ## Declined review findings
 
@@ -97,7 +98,51 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Written 2026-10-04 by unit `Milestone M5 518 part 5` at 134k of the 150k context cap, before the
+visual pass was dispatched again, so that no running subagent's result is lost. No PR is open for
+M5; nothing is pushed. `branch-start.sh 576` was run: the branch is on `origin/main`.
+**Done in this part**
+- T059, T060, T062, T063 test-first (cycle 26), commit b05b3068: `DescriptionPass`,
+  `DescriptionRequest`, `Msg::IssueDescriptionsLoaded`, `issue_descriptions_loaded`,
+  `State::issue_description_request` in `features/worktree_form.rs`; `start_issue_descriptions`,
+  `on_issue_descriptions_loaded`, `newly_awaited_descriptions` in `shell/issues.rs`; one `main.rs`
+  arm; U95–U100; the user guide. `cargo test -p micold-client`: exit 0. Every task of M5 is ticked
+  but T055.
+- verify.md step 1: scoped gate GATE_EXIT=0 on b05b3068; `M5 rework code A` round 1 CLEAN (3 MINOR,
+  in *Follow-ups not done*). D16 records how the rework's rounds are counted.
+- verify.md step 2, half: `M5 rework code B` round 1 CLEAN (a short round, see *Review rounds*).
+  No code changed after either snapshot: HEAD's tree under `crates/` and `docs/` is b05b3068's.
+**Not done: the visual pass. It did not run; nothing of §B6–§B11 is confirmed for this build.**
+- The worker rebuilt the "after" pair from af1d8355 and started §B10; then `/home/jaro/vp` was
+  gone, the whole directory: the scripts (`env.sh`, `b10.sh`, `b10all.sh`, `b11.sh`,
+  `build-*.sh`), `bin-before`, `bin-after`, `data`, the `cli/cli` scratch clone and `before-src`.
+  Checked by this unit afterwards: `ls /home/jaro/vp` fails, `git worktree list` no longer lists
+  `before-src`, free space rose from 17G to 33G, and `target-shared/release/` holds neither
+  `micold-ai-ide` nor `micold-daemon`. Neither this unit nor (by its report) the worker removed
+  anything there; what did is not known (a sweep or another session, unchecked). The follow-up
+  about the leftover `before-src` checkout is thereby moot, not done by the autopilot.
+- No `r2-*` evidence file exists and `evidence/README.md` is unchanged. The first pass's numbers
+  (1.88×) describe the build with `bodyText` in the list query and say nothing about this one.
+**Next step**
+1. Visual pass through an `autopilot-worker` running the `visual-pass` skill, with a full recreate
+   of the setup (the old scripts were never in the repo; `evidence/README.md` describes how §B6,
+   §B10 and §B11 were driven): a "before" client and daemon pair from 7cbb6c76 (still an ancestor
+   of `origin/main`; main without descriptions) and an "after" pair from HEAD, each built through
+   `scripts/build-lock.sh` and pinned as a matching pair; a `cli/cli` clone as the scratch project;
+   a private Xvfb display and data dir. Where to put it is open: `/home/jaro/vp` was deleted under
+   a running pass for an unknown reason, and `/tmp` is a 13G tmpfs with 9G free. Tell the worker to
+   copy each number into `specs/038-issue-list-reporter-tooltip/evidence/r2-*` as it is measured.
+   To run: §B10 five before and five after, alternating (pass: median ratio at or below 1.5, no
+   request over 10 s); §B6 (3.0–3.5 s on a described row); §B8, §B9; §B11 after the pass has ended
+   (no `gh` started by a rest); and three observations the rework adds: how long after the list
+   the last page's rows have a tooltip, what happens to a cursor resting on a row when its
+   description arrives (review A F1 bears on it), and that scrolling, typing and the highlight are
+   undisturbed while pages land.
+2. §B10 above 1.5× is a category 1 escalation, not a retry. A real finding: fix test-first, scoped
+   gate, and a `M5 rework code A` round only if the fix answers a finding of A's.
+3. Full gate (`df -h .` first: 33G free now), tick T055 only on the measured pass, record the pass
+   in *Review rounds*, PR `feat(038): …` with the body ending `Refs #518`.
+**Open findings**: none above MINOR.
 
 ## Open escalation
 
