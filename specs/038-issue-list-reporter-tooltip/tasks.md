@@ -169,13 +169,13 @@ screen of the app uses it yet; slice B puts it on issue rows.
 
 ### Tests for User Story 3, slice A (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T032 [P] [US3] [A16] [A17] [A18] [A19] [A20] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] [U58] Write `crates/micold-core/tests/tooltip_rest.rs` (NEW; contracts/rest-tooltip.md §1, data-model §5): the nine behaviours of the contract's table, among them:
+- [X] T032 [P] [US3] [A16] [A17] [A18] [A19] [A20] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] [U58] Write `crates/micold-core/tests/tooltip_rest.rs` (NEW; contracts/rest-tooltip.md §1, data-model §5): the nine behaviours of the contract's table, among them:
   - Still for `delay` opens; at `delay − 1 ms` it is not open (FR-015).
   - A move of more than `REST_TOLERANCE` (4.0) restarts the wait; "a distance of exactly 4.0 is within tolerance"; "the anchor does not drift".
   - Moving 10 px every 100 ms for 10 s never opens (SC-004).
   - Leaving closes; `press()` closes until the cursor has left; `reset()` closes and waits the full delay again (FR-017).
   - `wake_at` is `Some(since + delay)` "only in `Waiting`" (FR-018).
-- [ ] T033 [P] [US3] [A23] [A24] [U59] [U60] [U61] [U62] Write `crates/micold-core/tests/tooltip_clamp.rs` (NEW; contracts/rest-tooltip.md §5, data-model §6): the six rows of the contract's table with the fake measure, among them a text that fits is returned borrowed and unchanged, a cut ends in one `…` after a whole word, and `lines_of(output) <= max_lines` for generated lengths (FR-021, SC-005).
+- [X] T033 [P] [US3] [A23] [A24] [U59] [U60] [U61] [U62] Write `crates/micold-core/tests/tooltip_clamp.rs` (NEW; contracts/rest-tooltip.md §5, data-model §6): the six rows of the contract's table with the fake measure, among them a text that fits is returned borrowed and unchanged, a cut ends in one `…` after a whole word, and `lines_of(output) <= max_lines` for generated lengths (FR-021, SC-005).
 - [ ] T034 [P] [US3] [U63] [U64] Extend `crates/micold-client/tests/idle_requests_no_frames.rs` (contracts/rest-tooltip.md §3):
   - Source half: frame requests in `src/ui/` exist only in `cdk/motion.rs`, exactly two (`request_redraw` behind `animating()`, `request_redraw_at` in `wake_at`); `wake_at` is called outside `motion.rs` only from `cdk/tooltip.rs`.
   - Behaviour half: a rest-mode tooltip with a cursor at rest asks for exactly one timed wake, at `since + delay`, and none once open; away, spent and a tooltip without `after_rest` ask for none (FR-018).
@@ -192,8 +192,8 @@ screen of the app uses it yet; slice B puts it on issue rows.
 
 ### Implementation for User Story 3, slice A
 
-- [ ] T036 [US3] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] [U58] Add `crates/micold-core/src/tooltip.rs` (NEW) and `pub mod tooltip` in `crates/micold-core/src/lib.rs`: `RestTimer` (`Away`, `Waiting { anchor, since }`, `Open`, `Spent`), `Rest`, `REST_TOLERANCE = 4.0`, `observe`, `press`, `reset` (T032).
-- [ ] T037 [US3] [U59] [U60] [U61] [U62] In `crates/micold-core/src/tooltip.rs`: add `clamp_to_lines(text, max_lines, lines_of)` (T033).
+- [X] T036 [US3] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] [U58] Add `crates/micold-core/src/tooltip.rs` (NEW) and `pub mod tooltip` in `crates/micold-core/src/lib.rs`: `RestTimer` (`Away`, `Waiting { anchor, since }`, `Open`, `Spent`), `Rest`, `REST_TOLERANCE = 4.0`, `observe`, `press`, `reset` (T032).
+- [X] T037 [US3] [U59] [U60] [U61] [U62] In `crates/micold-core/src/tooltip.rs`: add `clamp_to_lines(text, max_lines, lines_of)` (T033).
 - [ ] T038 [US3] [U63] [U64] In `crates/micold-client/src/ui/cdk/motion.rs`: add `wake_at(shell, Instant)`, the one `request_redraw_at` (T034).
 - [ ] T039 [US3] [U64] [U65] [U66] [U67] [U69] In `crates/micold-client/src/ui/cdk/tooltip.rs`: add the rest mode — `after_rest(Duration)`, `subject(u64)`, a `RestTimer` in the widget state fed by cursor, redraw and press events, the existing `shown` track aimed on every open and close, `motion::wake_at` while waiting; without `after_rest` the widget behaves as today (T034, T035).
 - [ ] T040 [US3] [U68] [U70] Add `crates/micold-client/src/ui/material/line_clamp.rs` (NEW, modelled on `ui/material/ellipsized.rs`) and, in `crates/micold-client/src/ui/material/mod.rs`, `Tooltip::after_rest`, `Tooltip::max_lines` and `Tooltip::subject`; `max_lines` measures a `Caption` paragraph at `TOOLTIP_MAX_WIDTH` less the panel's padding and calls `clamp_to_lines` (T035).

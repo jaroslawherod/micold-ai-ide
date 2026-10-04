@@ -376,3 +376,49 @@ suite runs in the gate.
   half was driven red in cycle 1 (T001). U48 is the 034 suite passing unedited.
 - green: core's match text (cycle 12) and the placeholder's new text (T029).
 - refactor: none.
+
+## Cycle 14 — U49–U58 — T032, T036 (M4)
+
+- tests: `crates/micold-core/tests/tooltip_rest.rs` (new, 11 tests): `a_cursor_still_for_the_delay_opens_it`
+  (U49), `a_cursor_still_for_a_millisecond_less_leaves_it_closed` (U50),
+  `a_move_beyond_the_tolerance_restarts_the_wait` (U51),
+  `a_move_of_exactly_the_tolerance_is_at_rest_and_the_anchor_does_not_drift` (U52),
+  `a_cursor_that_keeps_moving_never_opens_it` (U53), `once_open_movement_over_the_trigger_keeps_it_open`
+  (U54), `leaving_closes_it_and_the_next_entry_waits_the_full_delay` (U55),
+  `a_press_closes_it_until_the_cursor_has_left` and `a_press_while_waiting_also_spends_it` (U56),
+  `a_reset_closes_it_and_waits_the_full_delay_again` (U57), `it_asks_to_be_woken_only_while_waiting` (U58).
+  Stub: `micold_core::tooltip` with the contract's types, `observe` answering closed and no wake.
+- red: `scripts/build-lock.sh cargo test -p micold-core --no-fail-fast --test tooltip_rest --test tooltip_clamp`
+  ```
+  thread 'a_cursor_still_for_the_delay_opens_it' panicked at crates/micold-core/tests/tooltip_rest.rs:38:5:
+  still for the whole delay: Away
+  test result: FAILED. 2 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- passed against the stub: U53 and `a_press_while_waiting_also_spends_it` (a stub that never opens
+  cannot fail "never opens"). Deliberate mutants after green: the tolerance test replaced by
+  `> f32::MAX` failed U53, U51 and U52; `press()` made a no-op failed both press tests. Restored.
+- deviation: U52's first form stepped to `(+2.4, +3.2)`, which `f32` holds as a distance a hair over
+  4.0; it failed after green with `anchor: (102.4, 53.2)`. The test was wrong, not the rule: it now
+  steps 4.0 along each axis, figures `f32` holds exactly.
+- green: `RestTimer::observe`, `press`, `reset` per data-model §5. `cargo test -p micold-core
+  --all-targets`: 1699 passed, 0 failed; clippy `-D warnings` clean.
+- refactor: none.
+
+## Cycle 15 — U59–U62 — T033, T037 (M4)
+
+- tests: `crates/micold-core/tests/tooltip_clamp.rs` (new, 5 tests):
+  `a_text_that_fits_is_returned_borrowed_and_unchanged` (U59),
+  `overflowing_words_are_cut_after_a_whole_word_and_end_in_one_ellipsis` and
+  `a_text_already_ending_in_an_ellipsis_ends_in_one` (U60),
+  `a_text_without_spaces_is_cut_at_a_character_and_ends_in_an_ellipsis` (U61),
+  `no_length_yields_more_than_the_limit` (U62). Stub: `clamp_to_lines` returning its text borrowed.
+- red: the same run as cycle 14
+  ```
+  thread 'a_text_already_ending_in_an_ellipsis_ends_in_one' panicked at crates/micold-core/tests/tooltip_clamp.rs:84:5:
+  test result: FAILED. 1 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- passed against the stub: U59, which is the stub's own behaviour (a text that fits comes back
+  borrowed); the four cut cases hold the other branch.
+- green: `clamp_to_lines` per data-model §6 (binary search over character boundaries, back-up to a
+  space within 24 characters, one `…`). 5 passed.
+- refactor: none.
