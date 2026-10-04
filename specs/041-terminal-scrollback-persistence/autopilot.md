@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
 | #540 | Design | merged | 34cd2c85309171eef68ccce20ff4f709544e5cee |
+| #577 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | | in progress |
+| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | PR open |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | pending |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | pending |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
