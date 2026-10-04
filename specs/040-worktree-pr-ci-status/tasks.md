@@ -139,15 +139,15 @@ its own state. Nothing draws it yet (slice D), and the Settings control does not
 
 ### Tests for User Story 1, slice C (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T023 [P] [US1] [U70] [U71] [U72] [U73] [U74] [U75] [U76] [U77] [U78] [U79] [U80] [U81] [U82] [U83] [U84] Write `crates/micold-client/tests/features_pr_status.rs` (RW §2, DM §3) for the reducer:
+- [x] T023 [P] [US1] [U70] [U71] [U72] [U73] [U74] [U75] [U76] [U77] [U78] [U79] [U80] [U81] [U82] [U83] [U84] Write `crates/micold-client/tests/features_pr_status.rs` (RW §2, DM §3) for the reducer:
   - `Held` then `ListingArrived` → one `Read { seq }`; a second `ListingArrived` → none.
   - `EnabledChanged { true }`: reads when held and listed; starts nothing when not held or while awaiting the listing; the same value twice starts nothing.
   - `EnabledChanged { false }` clears statuses, removable, `read_at`, `pause_until` and goes `Idle` (invariant 3).
   - `Finished`: `Ok` replaces statuses and sets `read_at` to the reading's start; `Unavailable` clears; `Passing` changes nothing; `RateLimited { until }` keeps statuses and sets `pause_until`; an answer with another `seq` is dropped.
   - `Released` clears statuses, sets `held = false` and keeps `pause_until`; afterwards only `Held` + `ListingArrived` reads, exactly once (SC-007); `ListingArrived` while paused starts nothing.
   - No sequence of these messages yields two `Read` effects without a `Finished` or `Released` between them.
-- [ ] T024 [P] [US1] [U85] [U86] [U87] [U88] Write `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` (RW §1), after `issues_are_requested_only_on_named_events.rs`: `shell::pr_status::start` is called only from the lines handling S1 and S2 (S3 to S5 are added by US4, which raises the count); `Msg::ListingArrived` is sent from one line, inside the `CatalogChanged` arm; `PullRequestSource::read` is called from one place; no line of `crates/micold-client/src` logs a pull request's title or address.
-- [ ] T025 [US1] [A10] [A11] [A12] [A14] [A31] [A40] [A41] [A42] [U89] [U90] [U91] [U92] [U93] [U94] [U95] [U96] [U97] Add shell tests named `pr_status_*` to `crates/micold-client/src/main_tests.rs` (RW §1–2), with `FakePullRequestSource`:
+- [x] T024 [P] [US1] [U85] [U86] [U87] [U88] Write `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` (RW §1), after `issues_are_requested_only_on_named_events.rs`: `shell::pr_status::start` is called only from the lines handling S1 and S2 (S3 to S5 are added by US4, which raises the count); `Msg::ListingArrived` is sent from one line, inside the `CatalogChanged` arm; `PullRequestSource::read` is called from one place; no line of `crates/micold-client/src` logs a pull request's title or address.
+- [x] T025 [US1] [A10] [A11] [A12] [A14] [A31] [A40] [A41] [A42] [U89] [U90] [U91] [U92] [U93] [U94] [U95] [U96] [U97] Add shell tests named `pr_status_*` to `crates/micold-client/src/main_tests.rs` (RW §1–2), with `FakePullRequestSource`:
   - `DaemonMsg::Attached` for the active project, then `CatalogChanged`: `RemoteList` is sent, then the source is read with the listing's branches, deduplicated, in listing order, detached worktrees left out; the answer lands in `state.pr_status.statuses`.
   - A later `CatalogChanged` starts nothing.
   - No GitHub remote → the source is never called and statuses are cleared; `gh` not found → the same (FR-025, FR-026).
@@ -159,10 +159,10 @@ its own state. Nothing draws it yet (slice D), and the Settings control does not
 
 ### Implementation for User Story 1, slice C
 
-- [ ] T026 [US1] [U70] [U71] [U72] [U73] [U74] [U75] [U76] [U77] [U78] [U79] [U80] [U81] [U82] [U83] [U84] Create `crates/micold-client/src/features/pr_status.rs` (`State`, `Phase`, `Msg`, `Effect`, `update`) for the messages of T023, and hold it in the application state and `Message` enum (`crates/micold-client/src/app.rs`, `crates/micold-client/src/features/mod.rs`). T023 passes; `features_are_render_free` stays green.
-- [ ] T027 [US1] [U89] Add the pull request source factory to `IssueTooling` in `crates/micold-client/src/shell/capabilities.rs` (`GhCli` in `Capabilities::real()`, the fake in tests); `no_concrete_implementations` stays green.
-- [ ] T028 [US1] [A10] [A11] [A12] [A14] [U87] [U88] [U89] [U91] [U96] [U97] Create `crates/micold-client/src/shell/pr_status.rs` (steps 0 to 3 and 5 of RW §2 "What one reading does", after `shell/issues.rs`; step 4 is story 3's), with one `debug` log line naming the outcome kind and the branch count.
-- [ ] T029 [US1] [A31] [A40] [A41] [A42] [U85] [U86] [U90] [U92] [U93] [U94] [U95] Wire the events in `crates/micold-client/src/shell/daemon_sync.rs` and `crates/micold-client/src/shell/workspace.rs`: `Attached` → `Held`; the `CatalogChanged` arm → `ListingArrived`; `Displaced`, `Refused { ProjectBusy }`, disconnect and a project switch → `Released`; the settings mirror → `EnabledChanged`. T024 and T025 pass.
+- [x] T026 [US1] [U70] [U71] [U72] [U73] [U74] [U75] [U76] [U77] [U78] [U79] [U80] [U81] [U82] [U83] [U84] Create `crates/micold-client/src/features/pr_status.rs` (`State`, `Phase`, `Msg`, `Effect`, `update`) for the messages of T023, and hold it in the application state and `Message` enum (`crates/micold-client/src/app.rs`, `crates/micold-client/src/features/mod.rs`). T023 passes; `features_are_render_free` stays green.
+- [x] T027 [US1] [U89] Add the pull request source factory to `IssueTooling` in `crates/micold-client/src/shell/capabilities.rs` (`GhCli` in `Capabilities::real()`, the fake in tests); `no_concrete_implementations` stays green.
+- [x] T028 [US1] [A10] [A11] [A12] [A14] [U87] [U88] [U89] [U91] [U96] [U97] Create `crates/micold-client/src/shell/pr_status.rs` (steps 0 to 3 and 5 of RW §2 "What one reading does", after `shell/issues.rs`; step 4 is story 3's), with one `debug` log line naming the outcome kind and the branch count.
+- [x] T029 [US1] [A31] [A40] [A41] [A42] [U85] [U86] [U90] [U92] [U93] [U94] [U95] Wire the events in `crates/micold-client/src/shell/daemon_sync.rs` and `crates/micold-client/src/shell/workspace.rs`: `Attached` → `Held`; the `CatalogChanged` arm → `ListingArrived`; `Displaced`, `Refused { ProjectBusy }`, disconnect and a project switch → `Released`; the settings mirror → `EnabledChanged`. T024 and T025 pass.
 
 **Checkpoint**: the client reads and holds pull request status; nothing shows it yet.
 
