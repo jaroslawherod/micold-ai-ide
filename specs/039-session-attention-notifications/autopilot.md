@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M9)
-- **Next step**: M9 (light): T113, T114 written; the recorded passes (T115, T116) run by workers into `visual-pass/M9/`; then the `## Record` in quickstart.md, the full gate, review, PR.
+- **Next step**: M9 PR open; wait on CI and merge. Then the close unit.
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T073–T090, T120 | full | A click on the notification opens the session | #560 | merged |
 | M7 | T091–T100 | full | Keyboard focus from a click on Wayland (probe first) | #561 | merged |
 | M8 | T101–T112, T121 | full | The Desktop notifications switch | #562 | merged |
-| M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | | in progress |
+| M9 | T113–T117 | light | Developer docs and the recorded quickstart passes | PR | in progress |
 
 ## Decisions
 
@@ -117,6 +117,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 visual (B12) | 1 | binaries of `3a3fc36f` | PASS, quickstart §B12 steps 1–4, dark scheme, Xvfb `:171` and a private `dbus-daemon --session` (`/tmp/vp171/bus`) with a stand-in notification service, private HOME; evidence `visual-pass/M8/`. The switch is shown checked under the tool-server switch and the page scrolls to its last control; off: no `Notify`, B marked; still off after a client restart; on: nothing for the earlier turn, exactly one `Notify` for the next. Not observed: see *Follow-ups not done* |
 
 ## Declined review findings
+
+- M9 review A (code-review) not run: the diff is docs, spec records and evidence only, no code. Review B round 1 (snapshot `b109c9df:508791c1`): CLEAN, two MINORs fixed (architecture backend wording, B13 caveat).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
