@@ -10,6 +10,8 @@
 /// while everything else here is render-free core scaffolding.
 pub mod covered_states;
 pub mod layout;
+/// A `cdk` tooltip driven event by event (feature 038).
+pub mod tooltip;
 
 use micold_core::fs_scan::FakeFolderScanner;
 use micold_core::project::canonicalize_best_effort;

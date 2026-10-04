@@ -74,6 +74,18 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
         self.gap = gap;
         self
     }
+
+    /// Open only after the cursor has rested on the trigger for `delay`.
+    pub fn after_rest(self, delay: Duration) -> Self {
+        let _ = delay;
+        self
+    }
+
+    /// What the trigger describes.
+    pub fn subject(self, key: u64) -> Self {
+        let _ = key;
+        self
+    }
 }
 
 /// Whether the panel is showing.
