@@ -50,7 +50,12 @@ where
         Size::new(Length::Fixed(TRIGGER.width), Length::Fixed(TRIGGER.height))
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &mut self,
+        _tree: &mut Tree,
+        _renderer: &Renderer,
+        _limits: &layout::Limits,
+    ) -> layout::Node {
         layout::Node::new(TRIGGER)
     }
 
@@ -183,19 +188,13 @@ impl Driven {
 
     /// A redraw at `now` with the cursor at `cursor`.
     pub fn frame(&mut self, now: Instant, cursor: mouse::Cursor) -> Seen {
-        self.send(
-            Event::Window(window::Event::RedrawRequested(now)),
-            cursor,
-        )
+        self.send(Event::Window(window::Event::RedrawRequested(now)), cursor)
     }
 
     /// The cursor moved to `cursor`, now by the wall clock.
     pub fn moved(&mut self, cursor: mouse::Cursor) -> Seen {
         let position = cursor.position().unwrap_or(Point::ORIGIN);
-        self.send(
-            Event::Mouse(mouse::Event::CursorMoved { position }),
-            cursor,
-        )
+        self.send(Event::Mouse(mouse::Event::CursorMoved { position }), cursor)
     }
 
     /// A left press with the cursor at `cursor`.

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 in progress, handed over part-way: see *Handover*.
+- **Next step**: M4 code and tests green locally (T034–T041); T042 docs, then verify.md (scoped gate with review A, review B with visual pass §B5, full gate, T043) and pr.md with the `docs-not-needed` label.
 
 ## Pull requests
 
@@ -82,60 +82,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4, part 1 of the milestone unit (context cap reached). `branch-start.sh 549` was run: the branch is
-`origin/main` (a3a57925) plus this unit's commits. No PR is open for M4. Spec 036 is **not** on
-`main`: `cdk/tooltip.rs` there is still the 029 BUG-001 version, so nothing to rebase over.
-
-**Done and green (committed)**: T032, T033, T036, T037 — `micold_core::tooltip` (`RestTimer`,
-`Rest`, `REST_TOLERANCE`, `clamp_to_lines`), `tests/tooltip_rest.rs` (11) and `tests/tooltip_clamp.rs`
-(5); cycles 14 and 15 in `tdd/cycle-log.md`; U49–U62 `DONE`. `cargo test -p micold-core
---all-targets` 1699 passed; core clippy clean.
-
-**Written, red not yet observed (second commit, marked WIP; it does not compile the client's test
-targets cleanly yet and is not formatted — run `cargo fmt` first)**:
-
-- `crates/micold-client/tests/support/tooltip.rs` (NEW harness `Driven`, `tooltip(rest, subject)`,
-  `Msg`, `DELAY`; `pub mod tooltip` in `support/mod.rs`). The first compile failed on a borrow in
-  `is_open` (`node` did not live long enough); a fix modelled on `picker_visibility.rs` is in but
-  was never compiled.
-- `tests/tooltip_rest_glue.rs` (NEW; U65–U67, U69, U78–U80), `tests/idle_requests_no_frames.rs`
-  (three behaviour tests, `the_frame_requests_are_the_guarded_one_and_the_timed_one` replacing the
-  one-door test, `wake_at_has_one_caller`; U63, U64), `tests/material_builder_api.rs`
-  (`the_tooltips_rest_mode_is_three_chainable_steps`, U70).
-- `cdk/tooltip.rs`: stubs `after_rest(Duration)` and `subject(u64)` that do nothing.
-
-**Next steps, in order**:
-
-1. Make the WIP compile, run `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast --test
-   tooltip_rest_glue --test idle_requests_no_frames --test material_builder_api`, record the red
-   (cycle 16: U63, U64; cycle 17: U65–U67, U69 baseline, U78–U80; U70).
-2. T038: `pub fn wake_at<M>(shell, at: Instant)` in `cdk/motion.rs`, body exactly
-   `shell.request_redraw_at(window::RedrawRequest::At(at));` on the line after the `fn wake_at`
-   line (the gate reads the line before the call).
-3. T039, the design settled on: `Tooltip` gets `rest: Option<Duration>` and `subject: Option<u64>`;
-   `State` gets `rest: RestTimer` and `subject: Option<u64>`. A changed subject resets the timer and
-   sets `open = false`, in `diff` (so no stale panel is laid out) and at the top of `update`. In
-   rest mode `update` computes `at = cursor.position_over(layout.bounds())`, calls `press()` then
-   `observe` on `Mouse(ButtonPressed)` over the trigger, `observe(at, Instant::now(), delay)` on any
-   other mouse event, `observe(at, *now, delay)` on `RedrawRequested(now)`; then the existing
-   `open`/`invalidate_layout`/`shown.on_frame(event, target, Duration::ZERO, shell)` lines, then
-   `motion::wake_at(shell, t)` when `wake_at` is `Some` — one call site. Without `after_rest` the
-   existing branch runs untouched. The press is not captured.
-4. T040: `material/line_clamp.rs` (`pub(super) struct LineClamped<M>`, not `pub`: the inventory
-   scanner counts `pub struct` as a component the showcase must pose). Modelled on `ellipsized.rs`:
-   at layout, shape a `Caption` paragraph (`role.size()`, `role.font()`, `role.line_height()`,
-   `Shaping::Advanced`, `Wrapping::WordOrGlyph`) at `limits.max().width`, `lines = ceil(height /
-   role.line_height_dp())`, `clamp_to_lines`, cache by text and width; draw with
-   `style.text_color`. `material::Tooltip` gets `after_rest`, `max_lines`, `subject` (`mut self`,
-   `-> Self`); with `max_lines` the label is a `LineClamped` instead of `Text`. U68 in-crate (D12),
-   red first against a `LineClamped` that does not clamp.
-5. T041: a sixth `posed(..)` in `showcase/sections/floating.rs::tooltip` with `after_rest(3 s)` and
-   `max_lines(3)`; add its label to the entry's `posed:` list in `showcase/catalogue.rs:704`.
-   T042: the two docs. Tick T034, T035, T038–T042 as their behaviours go `DONE`.
-6. Then verify.md from step 1 (scoped gate with review A, review B with the visual pass §B5, full
-   gate, T043), and pr.md. The PR carries the `docs-not-needed` label.
-
-Open findings: none. Review rounds for M4: none run yet.
+None.
 
 ## Open escalation
 

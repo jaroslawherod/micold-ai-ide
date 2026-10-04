@@ -706,7 +706,10 @@ unread counts and an unavailable row",
         // side is posed as a variant.
         variants: &["Bottom", "Left", "Top", "Right"],
         density: &[],
-        posed: &["multi-line, wrapped at the ceiling"],
+        posed: &[
+            "multi-line, wrapped at the ceiling",
+            "after 3 s at rest: hold the cursor still",
+        ],
         live: &["hover and wait"],
         interactive: true,
         section: Section::Components,
