@@ -22,7 +22,7 @@ The script waits for the `ci complete` check, the only required one, and merges 
 | Last line | Do |
 |---|---|
 | `MERGED <n> <sha>` | Run `scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. After the run's last PR: [handoff.md](handoff.md). |
-| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR (its latest part) with `SendMessage`, the log path and `tasks/red-ci.md` to read, at most 3 attempts. Outside it: [ci.md](ci.md). |
+| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR ([dispatch.md](dispatch.md), *Continuing a unit*) with the log path and `tasks/red-ci.md` to read, at most 3 attempts. Outside it: [ci.md](ci.md). |
 | `CHECKLESS <n> <reason>` | [ci.md](ci.md), *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | [ci.md](ci.md), *Merge problems*, then run the script again. |
 | `CLOSED <n>` | Someone closed the PR. Escalate (category 1); never reopen it unasked. |

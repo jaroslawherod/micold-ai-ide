@@ -84,6 +84,14 @@ def lone_reads(requests, read_only):
 
 
 def on_ledger_branch(cwd):
+    """True when cwd, or the session's own directory, is on a branch a ledger names. A unit that
+    prepares a later milestone works in another worktree, on a branch no ledger names: measured
+    prep units grew to 266k because this check looked at their directory alone."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    return names_branch(cwd) or bool(project and names_branch(project))
+
+
+def names_branch(cwd):
     def git(*args):
         return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True).stdout.strip()
 

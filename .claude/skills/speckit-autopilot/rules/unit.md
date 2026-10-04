@@ -44,8 +44,11 @@ End with exactly:
 ```
 STATUS: DONE | ESCALATE | FAILED | HANDOVER
 PR: #<n> | none
+CONTEXT: <tokens, from your last checkpoint.sh>
 <at most five lines>
 ```
+
+Above 100k a fresh unit continues from the ledger: before any return, it says what is done and next.
 
 ## Red flags
 

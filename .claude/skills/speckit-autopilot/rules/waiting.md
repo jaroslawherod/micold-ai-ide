@@ -5,6 +5,9 @@ context, which costs as much as 12 calls. The orchestrator's lasts 60 minutes (2
 
 ## A unit
 
+- A foreground `Bash` call may wait 250 s at most (`timeout` ≤ 250000); a hook blocks a longer
+  one. Anything that can run longer (a gate, a test suite, a build): start it detached
+  (`setsid nohup … >"$log" 2>&1 &`) and hold.
 - While a detached gate or a background subagent runs, do not end your turn. Call
   `scripts/autopilot/hold.sh <log> [<regex>]` with Bash `timeout: 300000`, and again on each
   `HOLD`. It prints `DONE <line>` when the log matches (default: a line starting `<NAME>_EXIT=`).

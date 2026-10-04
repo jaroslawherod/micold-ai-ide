@@ -13,10 +13,25 @@
 #   git push                                   when the branch changes code (anything outside
 #                                              docs/, specs/, .claude/ and *.md) and no green
 #                                              `mise run gate` saw HEAD's code
+# And, for a subagent of a run (also one preparing a later milestone in another worktree):
+#   a foreground Bash call with a timeout over 250 s, other than hold.sh
+#                                              a subagent's prompt cache lasts 5 minutes; a longer
+#                                              wait re-writes its whole context. Detach and hold.
 # `mise run gate` records the tree it passed on in $(git rev-parse --git-path autopilot-gate-ok).
 set -uo pipefail
 in=$(cat)
 cmd=$(jq -r '.tool_input.command // empty' <<<"$in")
+
+IFS=$'\t' read -r agent tmo bg hcwd < <(jq -r '[(.agent_id // "-"), (.tool_input.timeout // 0),
+  (.tool_input.run_in_background // false), (.cwd // ".")] | @tsv' <<<"$in") || true
+if [ "${agent:--}" != - ] && [ "${bg:-false}" != true ] && [ "${tmo:-0}" -gt 250000 ] 2>/dev/null &&
+   [[ ! $cmd =~ hold\.sh ]]; then
+  . "$(dirname "$0")/ledger-of.sh"
+  if [ -n "$(run_ledger "$hcwd")" ]; then
+    printf 'autopilot gate: %s\n' "a foreground call may wait 250 s at most (timeout $tmo ms): your prompt cache expires after 5 idle minutes and the next call re-writes your whole context. Start it detached (setsid nohup … >\"\$log\" 2>&1 &) and wait with scripts/autopilot/hold.sh \"\$log\" (rules/waiting.md)." >&2
+    exit 2
+  fi
+fi
 [[ $cmd =~ (gh[[:space:]]+(pr|api)|wait-merge\.sh|git[[:space:]].*(push|worktree)) ]] || exit 0
 
 cd "$(jq -r '.cwd // "."' <<<"$in")" 2>/dev/null || exit 0

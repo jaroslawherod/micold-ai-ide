@@ -27,11 +27,8 @@ is_ledger=0
 case "$f" in *specs/*autopilot.md) is_ledger=1; max=80 ;; esac
 [ "$n" -gt "$max" ] || exit 0
 
-cd "$cwd" 2>/dev/null || exit 0
-top=$(git rev-parse --show-toplevel 2>/dev/null) && cd "$top" || exit 0
-b=$(git branch --show-current 2>/dev/null)
-[ -n "$b" ] || exit 0
-grep -qxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null || exit 0
+. "$(dirname "$0")/ledger-of.sh"
+[ -n "$(run_ledger "$cwd")" ] || exit 0
 
 if [ "$is_ledger" = 1 ]; then
   echo "autopilot read: the ledger has $n lines, most of them history you re-read on every later call. Run scripts/autopilot/brief.py ledger $f [<M-id>] for its state and your milestone's rows. To edit it, grep -n for the line, then Read with offset and limit." >&2

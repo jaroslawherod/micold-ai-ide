@@ -32,8 +32,21 @@ Read the ledger (`scripts/autopilot/brief.py ledger <ledger>`), never the transc
 | `DONE` with `PR: none` | The commits stay on the branch: dispatch the next unit at once |
 | `DONE` with `NEXT: <flow>` | [../flows/switch.md](../flows/switch.md) |
 | `DONE` with `NEW MILESTONES: …` | Run those milestone units, then a new close unit |
-| `ESCALATE` | Ask the returned questions yourself ([ask.md](ask.md)), then continue **the same** subagent with `SendMessage` and the answers |
+| `ESCALATE` | Ask the returned questions yourself ([ask.md](ask.md)), then continue the unit with the answers (*Continuing a unit*) |
 | `FAILED` | Read the ledger and the five lines. A unit on a cheaper model: retry once on the session model, from the ledger's *Handover*. Otherwise retry once with a fresh unit, or escalate |
 | `HANDOVER` | Its context passed 150k. Dispatch a fresh unit of the same kind, model, task files and scope, with `part <n>` added to the description and `Continue from the ledger's Handover.` in the prompt. A fourth part (a third, in the bug and chore flows) is an escalation (category 5), with what is done and what is left. If it had opened its PR, the new part finishes the work on that PR; send any `RED` log to the latest part |
+
+## Continuing a unit
+
+With answers, a red CI log or other feedback. Waking a unit re-writes its whole context, and every
+later call re-reads it; in measured runs that was 1.8M cost_eq.
+
+- **Its return said `CONTEXT` under 100k:** `SendMessage` to the same subagent.
+- **100k or more, or no `CONTEXT` line:** a fresh unit of the same kind, model, task files and
+  scope, with `part <n>` in the description, `Continue from the ledger.` and the feedback verbatim.
+  It counts as a part toward the `HANDOVER` limit.
+
+A unit that prepares a later milestone in another worktree follows the same rules, the 150k
+handover included; the hooks cover it there.
 
 Next: the row above.
