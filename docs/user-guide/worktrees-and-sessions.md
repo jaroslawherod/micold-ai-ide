@@ -411,6 +411,13 @@ case, and highlights the matched part of the login in each row. Use the arrow ke
 pick without leaving the field. The list follows the highlight as you move with Up and Down, so the
 highlighted issue is always fully visible, however many lines it takes; an issue taller than the
 whole list shows from its top.
+Rest the pointer on an issue for 3 seconds, without moving it, to see the start of the issue's
+description in a tooltip: plain text, without Markdown marks or link addresses, at most three lines,
+ending in "…" when the description is longer. It closes when you move to another issue, leave the
+list or pick the issue, and nothing appears while the pointer keeps moving. It needs a pointer: the
+arrow keys do not open it. An issue without a description shows nothing. The description comes with
+the list, so resting on an issue asks GitHub for nothing, and it is not searched: typing a word that
+appears only in a description does not find the issue.
 The search runs over the loaded issues, on
 your machine. A pick replaces whatever was in the ticket and name, including an earlier pick, and both
 fields stay editable afterwards. At most 1,000 issues are loaded. When the repository has more, a

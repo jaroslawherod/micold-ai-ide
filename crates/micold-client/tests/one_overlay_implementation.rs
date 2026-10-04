@@ -157,7 +157,13 @@ fn calls(line: &str, widget: &str) -> bool {
                 .chars()
                 .next_back()
                 .is_some_and(|c| c.is_alphanumeric() || c == '_');
-        if !preceded_by_ident {
+        // A method of that name (`row.tooltip(text)`) and a definition (`fn tooltip(`) are not
+        // the rendering stack's free function: `material::picker::Row::tooltip` (feature 038)
+        // only stores a text, and the row's panel is `cdk::tooltip`'s.
+        let is_method = line[..start].ends_with('.');
+        let is_definition =
+            line[..start].trim_end().ends_with("fn") && line[..start].ends_with(' ');
+        if !preceded_by_ident && !is_method && !is_definition {
             return true;
         }
         from = start + needle.len();
@@ -336,6 +342,22 @@ fn the_scan_actually_finds_the_rendering_layer() {
 fn a_helper_ending_in_the_widget_name_is_not_a_use_of_it() {
     assert!(calls("tooltip(t.content, tip, t.position)", "tooltip"));
     assert!(calls("    .push(tooltip(x))", "tooltip"));
+    assert!(calls("let t = iced::widget::tooltip(x, y, p);", "tooltip"));
+    assert!(
+        !calls("    .tooltip(issue.description())", "tooltip"),
+        "a builder method of that name is not the widget"
+    );
+    assert!(
+        !calls(
+            "pub fn tooltip(mut self, text: impl Into<String>) -> Self {",
+            "tooltip"
+        ),
+        "nor is its definition"
+    );
+    assert!(
+        calls("row.tooltip(text); tooltip(a, b, c)", "tooltip"),
+        "a method earlier on the line does not hide a call after it"
+    );
     assert!(
         !calls("item.row_tooltip(label)", "tooltip"),
         "`row_tooltip` is this crate's own builder method, not iced's tooltip widget"

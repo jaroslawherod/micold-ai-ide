@@ -553,6 +553,29 @@ where
             .as_widget_mut()
             .operate(self.state, layout, renderer, operation);
     }
+
+    /// What the list's own content floats: a row's tooltip (feature 038, FR-023).
+    ///
+    /// The rows live in this overlay, so without this their panels would never be produced. The
+    /// list's bounds are the viewport, and the layout is already in window coordinates, so there
+    /// is nothing to translate by. A leaving list floats nothing: it takes no input, so nothing
+    /// in it is rested on.
+    fn overlay<'c>(
+        &'c mut self,
+        layout: Layout<'c>,
+        renderer: &Renderer,
+    ) -> Option<overlay::Element<'c, M, Theme, Renderer>> {
+        if self.leaving {
+            return None;
+        }
+        self.content.as_widget_mut().overlay(
+            self.state,
+            layout,
+            renderer,
+            &layout.bounds(),
+            Vector::ZERO,
+        )
+    }
 }
 
 impl<'a, M, Theme, Renderer> From<Picker<'a, M, Theme, Renderer>>
