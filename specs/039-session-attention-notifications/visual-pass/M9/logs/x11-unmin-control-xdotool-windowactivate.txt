@@ -1,0 +1,2 @@
+1791106389.100663891 active=0xe00004 class= "gnome-text-editor" | client: WM_STATE(WM_STATE): window state: Iconic  _NET_WM_STATE(ATOM) = , _NET_WM_STATE_HIDDEN 
+1791106390.601017585 active=0x800002 class= "micold-ai-ide" | client: WM_STATE(WM_STATE): window state: Normal  _NET_WM_STATE(ATOM) = , _NET_WM_STATE_FOCUSED 

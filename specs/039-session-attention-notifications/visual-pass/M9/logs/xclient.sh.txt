@@ -1,0 +1,10 @@
+#!/bin/bash
+# xclient.sh <name> [render env...]: launch one client on the private Xwayland (X11)
+set -u
+P=/tmp/claude-1000/m9; . $P/env.sh; . $P/xenv
+n=$1; shift
+XENVV=("${PENV[@]}" DISPLAY=:2 XAUTHORITY=$XA)
+[ -S $RT/bus ] && [ -S $RT/sysbus ] && [ -S /tmp/.X11-unix/X2 ] || { echo ABORT; exit 1; }
+"${XENVV[@]}" env | grep -q "^WAYLAND_DISPLAY=" && { echo ABORT wl; exit 1; }
+"${XENVV[@]}" setsid env "$@" $P/bin/micold-ai-ide > $P/logs/client-$n.log 2>&1 &
+echo $! >> $P/pids; echo "client $n pid $!"

@@ -1,0 +1,10 @@
+attach: connected projects=2 sessions=0 active=/tmp/claude-1000/m9/projQ active_sessions=0
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+switch: entered /tmp/claude-1000/m9/projP -> active_session=None choice=Some(NoneActive { sessions: 0 }) resolve_key=/tmp/claude-1000/m9/projP session_keys=["/tmp/claude-1000/m9/projP", "/tmp/claude-1000/m9/projQ"]
+switch: entered /tmp/claude-1000/m9/projQ -> active_session=Some(SessionId(a0082f83-376a-4ff8-9976-727f40a801d0)) choice=Some(Remembered(SessionId(a0082f83-376a-4ff8-9976-727f40a801d0))) resolve_key=/tmp/claude-1000/m9/projQ session_keys=["/tmp/claude-1000/m9/projP", "/tmp/claude-1000/m9/projQ"]
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+attach: connected projects=2 sessions=2 active=/tmp/claude-1000/m9/projQ active_sessions=2
+desktop notification not shown (no notification service: The name org.freedesktop.Notifications was not provided by any .service files); later failures in this run are not logged

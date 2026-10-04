@@ -1,0 +1,4 @@
+1791106927.731 [drive] run -> 1791106927.728984196 [hook] UserPromptSubmit -> a0082f83-376a-4ff8-9976-727f40a801d0 http 200
+1791106929.310 [drive] run -> 1791106929.308126900 [hook] Stop -> a0082f83-376a-4ff8-9976-727f40a801d0 http 200
+1791106932.665 [drive] button press (no move)
+1791106932.746 [drive] press done

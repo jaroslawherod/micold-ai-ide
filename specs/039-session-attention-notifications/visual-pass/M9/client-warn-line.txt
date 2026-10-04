@@ -1,0 +1,1 @@
+desktop notification not shown (no notification service: The name org.freedesktop.Notifications was not provided by any .service files); later failures in this run are not logged

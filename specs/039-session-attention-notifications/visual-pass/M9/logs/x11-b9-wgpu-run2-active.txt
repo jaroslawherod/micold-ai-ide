@@ -1,0 +1,2 @@
+1791106254.602014788 active=0xe00004 class= "gnome-text-editor", "gnome-text-editor"
+1791106260.341839072 active=0x800002 class= "micold-ai-ide", "micold-ai-ide"

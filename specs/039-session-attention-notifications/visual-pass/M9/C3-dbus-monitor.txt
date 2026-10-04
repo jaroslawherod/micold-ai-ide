@@ -1,0 +1,24 @@
+signal time=1791106617.989661 sender=org.freedesktop.DBus -> destination=:1.295 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+   string ":1.295"
+signal time=1791106617.989699 sender=org.freedesktop.DBus -> destination=:1.295 serial=4 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
+   string ":1.295"
+method call time=1791106620.278696 sender=:1.174 -> destination=org.freedesktop.Notifications serial=355 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Micold AI IDE"
+   uint32 0
+   string ""
+   string "New session is waiting for input"
+   string "Q — Default"
+   array [
+      string "default"
+      string "Open"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "micold-ai-ide"
+      )
+   ]
+   int32 -1
+signal time=1791106625.851053 sender=:1.0 -> destination=(null destination) serial=7 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 3
+   string "default"

@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+# pollw.py <outfile> <seconds>: log changes of (app, has-focus, is-hidden) from org.gnome.Shell.Introspect on the PRIVATE bus
+import os, sys, time
+from gi.repository import Gio
+assert 'm9-x' in os.environ['DBUS_SESSION_BUS_ADDRESS']
+bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+out = open(sys.argv[1], 'a'); end = time.time() + float(sys.argv[2]); last = None
+while time.time() < end:
+    r = bus.call_sync('org.gnome.Shell', '/org/gnome/Shell/Introspect', 'org.gnome.Shell.Introspect', 'GetWindows', None, None, Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+    k = tuple(sorted((w.get('app-id'), bool(w.get('has-focus')), bool(w.get('is-hidden'))) for w in r.values()))
+    if k != last:
+        out.write('%.3f %s\n' % (time.time(), ' | '.join('%s focus=%s hidden=%s' % (a.replace('.desktop',''), f, h) for a, f, h in k))); out.flush(); last = k
+    time.sleep(0.02)

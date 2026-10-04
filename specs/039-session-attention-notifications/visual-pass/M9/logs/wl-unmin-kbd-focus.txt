@@ -1,0 +1,2 @@
+1791106926.925 micold-ai-ide focus=False hidden=True | org.gnome.TextEditor focus=True hidden=False
+1791106932.756 micold-ai-ide focus=True hidden=False | org.gnome.TextEditor focus=False hidden=False

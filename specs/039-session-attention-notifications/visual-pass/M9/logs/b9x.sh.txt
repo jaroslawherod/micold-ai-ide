@@ -1,0 +1,19 @@
+#!/bin/bash
+# b9x.sh <tag> <pre>: pre = none | min (client minimised by a real click on the title bar button first)
+. /tmp/claude-1000/m9/xe.sh
+C=a0082f83-376a-4ff8-9976-727f40a801d0; t=$1; pre=${2:-none}
+D() { "${PENV[@]}" python3 $P/drive.py "$@"; }
+W=$(xp xdotool search --class micold | head -1)
+if [ "$pre" = min ]; then
+  D click:1188,50 sleep:1.5 > $P/logs/$t-prep.log 2>&1
+  echo "client state after minimise click:"; xp xprop -id $W WM_STATE _NET_WM_STATE | tr '\n' ' '; echo
+fi
+echo "start $(date +%s.%3N)"
+$P/poll.sh $P/logs/$t-active.txt 22 &
+PP=$!
+sleep 0.5
+D shot:$P/shots/$t-1-before.png "run:$P/hook.sh $C UserPromptSubmit" sleep:1.5 "run:$P/hook.sh $C Stop" sleep:2.5 shot:$P/shots/$t-2-banner.png windows:banner move:640,90 sleep:0.4 press sleep:0.6 shot:$P/shots/$t-3-after0.6.png windows:after0.6 sleep:1.4 shot:$P/shots/$t-4-after2.png windows:after2 sleep:3.5 shot:$P/shots/$t-5-after6.png windows:after6 > $P/logs/$t.log 2>&1
+wait; kill -TERM $XEV 2>/dev/null
+echo "client WM state now:"; xp xprop -id $W WM_STATE _NET_WM_STATE | tr '\n' ' '; echo
+grep -v "sleep\|remote desktop\|move:" $P/logs/$t.log | sed "s|$P/||g" | cut -c1-200
+echo "--- active:"; cat $P/logs/$t-active.txt

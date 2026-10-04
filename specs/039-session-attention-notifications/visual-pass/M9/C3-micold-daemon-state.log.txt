@@ -1,0 +1,36 @@
+2026-10-04T09:34:12.376987Z  INFO micold_daemon::server: micold-daemon starting build=micold-daemon 0.16.0 sink=File log_path=Some("/var/lib/micold-ai-ide/micold-daemon.log")
+2026-10-04T09:34:12.377134Z  INFO micold_daemon::server: catalog adopted load_status=Loaded
+2026-10-04T09:34:12.377188Z  INFO micold_daemon::server: handshake authentication is enabled
+2026-10-04T09:34:12.377445Z  INFO micold_daemon::server: activity-hook receiver listening on loopback
+2026-10-04T09:34:12.377482Z  INFO micold_daemon::server: tool server listening on loopback
+2026-10-04T09:34:12.377499Z  INFO micold_daemon::server: listening (sandboxed) addr=0.0.0.0:7727
+2026-10-04T09:34:12.377510Z  INFO micold_daemon::server: idle stop armed window=1800s
+2026-10-04T09:34:12.666934Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=486451
+2026-10-04T09:34:12.681118Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/home/jaro/vp/m9c3/home
+2026-10-04T09:34:55.309779Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=497853
+2026-10-04T09:34:55.430603Z  INFO micold_daemon::server: project attached client=2 project=/home/jaro/vp/m9c3/proj/P force=false
+2026-10-04T09:34:55.430695Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/home/jaro/vp/m9c3/proj/P
+2026-10-04T09:34:56.144296Z  INFO micold_daemon::server: micold-daemon starting build=micold-daemon 0.16.0 sink=File log_path=Some("/var/lib/micold-ai-ide/micold-daemon.log")
+2026-10-04T09:34:56.144421Z  INFO micold_daemon::server: catalog adopted load_status=Loaded
+2026-10-04T09:34:56.144462Z  INFO micold_daemon::server: handshake authentication is enabled
+2026-10-04T09:34:56.144871Z  INFO micold_daemon::server: activity-hook receiver listening on loopback
+2026-10-04T09:34:56.144901Z  INFO micold_daemon::server: tool server listening on loopback
+2026-10-04T09:34:56.144919Z  INFO micold_daemon::server: listening (sandboxed) addr=0.0.0.0:7727
+2026-10-04T09:34:56.144931Z  INFO micold_daemon::server: idle stop armed window=1800s
+2026-10-04T09:35:01.740735Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=486451
+2026-10-04T09:35:01.741470Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/home/jaro/vp/m9c3/home
+2026-10-04T09:35:02.320622Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.16.0 client_window=497853
+2026-10-04T09:35:02.321622Z  INFO micold_daemon::server: project attached client=2 project=/home/jaro/vp/m9c3/proj/P force=false
+2026-10-04T09:35:02.321791Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/home/jaro/vp/m9c3/proj/P
+2026-10-04T09:35:25.780647Z  INFO micold_daemon::state: session started session=5b94208d-c08e-4cad-be3d-20296e9b8c22 mode=AiCli launch=Fresh
+2026-10-04T09:35:37.909496Z  INFO micold_daemon::state: session started session=379bbd33-12dd-4a8f-93e4-5c8ef05c8d11 mode=AiCli launch=Fresh
+2026-10-04T09:36:12.302610Z  INFO micold_daemon::server: project detached client=2 project=/home/jaro/vp/m9c3/proj/P
+2026-10-04T09:36:12.302635Z  INFO micold_daemon::server: project attached client=2 project=/home/jaro/vp/m9c3/proj/Q force=false
+2026-10-04T09:36:12.302680Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=MissingScript cwd=/home/jaro/vp/m9c3/proj/Q
+2026-10-04T09:36:15.413769Z  INFO micold_daemon::state: session started session=f90d4ca0-069c-423c-8b0d-70dddde17055 mode=AiCli launch=Fresh
+2026-10-04T09:36:26.512754Z  INFO micold_daemon::server: project detached client=2 project=/home/jaro/vp/m9c3/proj/Q
+2026-10-04T09:36:26.512833Z  INFO micold_daemon::server: project attached client=2 project=/home/jaro/vp/m9c3/proj/P force=false
+2026-10-04T09:36:33.204527Z  INFO micold_daemon::server: project attached client=1 project=/home/jaro/vp/m9c3/proj/Q force=false
+2026-10-04T09:38:06.714985Z  INFO micold_daemon::server: client disconnected client=1
+2026-10-04T09:38:22.600757Z  INFO micold_daemon::server: project detached client=2 project=/home/jaro/vp/m9c3/proj/P
+2026-10-04T09:38:22.600792Z  INFO micold_daemon::server: project attached client=2 project=/home/jaro/vp/m9c3/proj/Q force=false
