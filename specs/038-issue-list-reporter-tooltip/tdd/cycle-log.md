@@ -672,3 +672,37 @@ suite runs in the gate.
   characters, joiners among them, gives the empty string).
 - refactor: the two cut sites share the inner `cut`.
 
+## Cycle 25 — U27, U90, U91, U92, U93, U94 — T058, T061 (M5, second pass, ledger D13)
+
+- tests: `crates/micold-core/tests/github_description_pass.rs` (NEW, 10 tests) and
+  `github_description.rs` (`only_the_searches_ask_for_the_body_text` replaces
+  `every_query_asks_for_the_body_text_in_the_shared_selection`). The pass's API was first added as
+  stubs (an empty query, no arguments, an empty page, a `Debug` that printed the descriptions, a
+  cap of 1), so the tests fail on what they assert and not on a missing name.
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-core --test github_description_pass --test github_description`
+  ```
+  thread 'only_the_searches_ask_for_the_body_text' panicked at crates/micold-core/tests/github_description.rs:246:5:
+  test result: FAILED. 16 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  thread 'a_descriptions_error_is_classified_like_the_lists' panicked at crates/micold-core/tests/github_description_pass.rs:197:9:
+  thread 'a_descriptions_page_parses_to_numbers_and_descriptions' panicked at crates/micold-core/tests/github_description_pass.rs:149:5:
+  thread 'neither_an_error_nor_a_page_shows_a_body' panicked at crates/micold-core/tests/github_description_pass.rs:220:67:
+  thread 'the_descriptions_arguments_are_the_lists' panicked at crates/micold-core/tests/github_description_pass.rs:119:9:
+  thread 'describe_listed_matches_by_number' panicked at crates/micold-core/tests/github_description_pass.rs:243:5:
+  thread 'the_descriptions_query_reads_the_lists_connection' panicked at crates/micold-core/tests/github_description_pass.rs:92:9:
+  thread 'the_fake_source_scripts_and_records_description_pages' panicked at crates/micold-core/tests/github_description_pass.rs:296:5:
+  thread 'the_list_query_asks_for_no_body' panicked at crates/micold-core/tests/github_description_pass.rs:62:5:
+  thread 'the_pass_ends_where_the_list_would' panicked at crates/micold-core/tests/github_description_pass.rs:258:5:
+  thread 'the_two_passes_give_the_scenarios_description' panicked at crates/micold-core/tests/github_description_pass.rs:182:5:
+  test result: FAILED. 0 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- green: in `crates/micold-core/src/github.rs`, `issue_node_selection!` loses `bodyText` and the two
+  search queries name it after the selection; `open_issues_connection!` is shared by `LIST_QUERY`
+  and the new `DESCRIPTIONS_QUERY`; `descriptions_args` and `list_args` go through `page_args`;
+  `DescriptionPage` (its `Debug` prints the count), `parse_descriptions_page`, `describe_listed`,
+  `DESCRIPTION_PAGE_CAP`, `next_description_cursor`; `IssueSource::describe_open` for `GhCli` and
+  `FakeIssueSource` (`with_descriptions`, `description_calls`).
+  `scripts/build-lock.sh cargo test --no-fail-fast -p micold-core`: exit 0, every target `ok`.
+- refactor: `next_cursor_of` reads `pageInfo` for both page parsers.
+- not yet built: `micold-client` does not compile against this commit's trait until T062 (no
+  client type implements `IssueSource`, so only the new state and message are missing there; it
+  was not built after this change).

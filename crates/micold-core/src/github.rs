@@ -704,9 +704,26 @@ pub enum IssueLoadError {
 
 /// The fields read from an issue node, wherever the node comes from. A macro, so `concat!` can
 /// put the one text into each query (038 contracts/issue-fields.md §1).
+///
+/// The body is not among them: with `bodyText` here a list of 1,000 issues took 1.88 times as long
+/// to arrive (038 SC-008, research R14). The searches add it to their own nodes, and the listed
+/// issues' descriptions follow in a second pass ([`DESCRIPTIONS_QUERY`]).
 macro_rules! issue_node_selection {
     () => {
-        "number title updatedAt labels(first: 20) { nodes { name } } author { login } bodyText"
+        "number title updatedAt labels(first: 20) { nodes { name } } author { login }"
+    };
+}
+
+/// The opening of the open-issue connection, shared by [`LIST_QUERY`] and [`DESCRIPTIONS_QUERY`]
+/// so the second pass reads the pages the first read: same states, order and page size.
+macro_rules! open_issues_connection {
+    () => {
+        concat!(
+            "query($owner: String!, $name: String!, $cursor: String) { ",
+            "repository(owner: $owner, name: $name) { ",
+            "issues(states: OPEN, first: 100, after: $cursor, ",
+            "orderBy: {field: UPDATED_AT, direction: DESC}) { "
+        )
     };
 }
 
@@ -717,9 +734,8 @@ pub const ISSUE_NODE_SELECTION: &str = issue_node_selection!();
 /// The GraphQL document for one page of open issues (contracts/github-issue-source.md §3). One
 /// line, so every argument `gh` receives is one line.
 pub const LIST_QUERY: &str = concat!(
-    "query($owner: String!, $name: String!, $cursor: String) { ",
-    "repository(owner: $owner, name: $name) { issues(states: OPEN, first: 100, after: $cursor, ",
-    "orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount pageInfo { hasNextPage endCursor } ",
+    open_issues_connection!(),
+    "totalCount pageInfo { hasNextPage endCursor } ",
     "nodes { ",
     issue_node_selection!(),
     " } } } }"
@@ -741,11 +757,7 @@ pub fn parse_list_page(stdout: &[u8]) -> Result<IssuePage, IssueLoadError> {
     let unexpected = || IssueLoadError::Other("GitHub's answer had no issue list".into());
     let total_open = issues["totalCount"].as_u64().ok_or_else(unexpected)?;
     let nodes = issues["nodes"].as_array().ok_or_else(unexpected)?;
-    let next_cursor = if issues["pageInfo"]["hasNextPage"].as_bool() == Some(true) {
-        issues["pageInfo"]["endCursor"].as_str().map(str::to_string)
-    } else {
-        None
-    };
+    let next_cursor = next_cursor_of(issues);
     let issues = nodes
         .iter()
         .map(|node| issue_from_node(node).ok_or_else(unexpected))
@@ -761,9 +773,10 @@ pub fn parse_list_page(stdout: &[u8]) -> Result<IssuePage, IssueLoadError> {
 const LABELS_PER_ISSUE: usize = 20;
 
 /// One `Issue` node, as [`ISSUE_NODE_SELECTION`] reads it: `number`, `title`, `updatedAt`,
-/// `labels.nodes[].name`, `author.login`, `bodyText`. A node without an author — a deleted account
-/// — is still an issue, reported by [`GHOST_LOGIN`]; a node without a body is still an issue,
-/// without a description.
+/// `labels.nodes[].name`, `author.login`, and the `bodyText` a search node carries after it. A node
+/// without an author — a deleted account — is still an issue, reported by [`GHOST_LOGIN`]; a node
+/// without a body — every listed node, and a searched issue with none — is still an issue, without
+/// a description.
 fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
     let labels = node["labels"]["nodes"]
         .as_array()
@@ -813,13 +826,18 @@ fn graphql_error_of(error: &serde_json::Value) -> IssueLoadError {
 /// Every variable is a raw string (`-f`): `-F` would turn a repository named `1` or `true` into a
 /// number or a boolean (contracts/github-issue-source.md §3).
 pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    page_args(LIST_QUERY, repo, cursor)
+}
+
+/// The arguments after `gh` for one page of the open-issue connection read with `query`.
+fn page_args(query: &str, repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = [
         "api",
         "graphql",
         "--hostname",
         "github.com",
         "-f",
-        &format!("query={LIST_QUERY}"),
+        &format!("query={query}"),
         "-f",
         &format!("owner={}", repo.owner),
         "-f",
@@ -840,7 +858,7 @@ pub const SEARCH_QUERY: &str = concat!(
     "query($q: String!) { search(type: ISSUE, query: $q, first: 50) { ",
     "nodes { ... on Issue { ",
     issue_node_selection!(),
-    " state } } } }"
+    " bodyText state } } } }"
 );
 
 /// [`SEARCH_QUERY`] plus the issue whose number was typed: GitHub's search does not match an issue
@@ -850,10 +868,10 @@ pub const SEARCH_WITH_NUMBER_QUERY: &str = concat!(
     "query($q: String!, $owner: String!, $name: String!, ",
     "$n: Int!) { search(type: ISSUE, query: $q, first: 50) { nodes { ... on Issue { ",
     issue_node_selection!(),
-    " state } } } repository(owner: $owner, name: $name) ",
+    " bodyText state } } } repository(owner: $owner, name: $name) ",
     "{ issue(number: $n) { ",
     issue_node_selection!(),
-    " state } } }"
+    " bodyText state } } }"
 );
 
 /// The arguments after `gh` for a search beyond the loaded issues: only the typed text and — for a
@@ -977,6 +995,14 @@ pub trait IssueSource {
     /// Open issues matching `text` on GitHub's side (FR-005a), unfiltered: the caller holds them
     /// to FR-005's rule.
     fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError>;
+
+    /// One page of the open issues' descriptions, in the order [`IssueSource::list_open`] lists
+    /// them (038 FR-024): the second pass, read after the list has arrived.
+    fn describe_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<DescriptionPage, IssueLoadError>;
 }
 
 /// Load open issues page by page, up to [`ISSUE_LOAD_CAP`] (contracts/github-issue-source.md §4).
@@ -1008,6 +1034,112 @@ pub fn load_listing(
     })
 }
 
+/// The GraphQL document for one page of the description pass (038 contracts/issue-fields.md §6):
+/// the connection [`LIST_QUERY`] reads, in its order and page size, selecting only each issue's
+/// number and its body as text. One line, like every query.
+pub const DESCRIPTIONS_QUERY: &str = concat!(
+    open_issues_connection!(),
+    "pageInfo { hasNextPage endCursor } nodes { number bodyText } } } }"
+);
+
+/// The arguments after `gh` for one page of descriptions: what [`list_args`] sends, but for the
+/// query (038 FR-026).
+pub fn descriptions_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    page_args(DESCRIPTIONS_QUERY, repo, cursor)
+}
+
+/// Pages the description pass reads at most: as many as hold [`ISSUE_LOAD_CAP`] issues, so a load
+/// makes at most that many requests again (038 FR-026).
+pub const DESCRIPTION_PAGE_CAP: usize = ISSUE_LOAD_CAP / 100;
+
+/// One page of the description pass (038 FR-024).
+#[derive(Clone, PartialEq, Eq)]
+pub struct DescriptionPage {
+    /// Each issue's number and its description ([`description_from`] of its `bodyText`), in the
+    /// list's order.
+    pub descriptions: Vec<(u64, String)>,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<String>,
+}
+
+/// Descriptions stay out of every log line and panic message (038 FR-025): `Debug` says how many
+/// the page holds.
+impl fmt::Debug for DescriptionPage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DescriptionPage")
+            .field("descriptions", &self.descriptions.len())
+            .field("next_cursor", &self.next_cursor)
+            .finish()
+    }
+}
+
+/// Parse `gh api graphql` stdout for [`DESCRIPTIONS_QUERY`] into a page.
+///
+/// Errors are classified as [`parse_list_page`] classifies them. A node without a body has an
+/// empty description; a node without a number is skipped, since nothing held can take its text.
+pub fn parse_descriptions_page(stdout: &[u8]) -> Result<DescriptionPage, IssueLoadError> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
+    if let Some(error) = graphql_error(&json) {
+        return Err(error);
+    }
+    let issues = &json["data"]["repository"]["issues"];
+    let nodes = issues["nodes"]
+        .as_array()
+        .ok_or_else(|| IssueLoadError::Other("GitHub's answer had no issue list".into()))?;
+    let descriptions = nodes
+        .iter()
+        .filter_map(|node| {
+            let number = node["number"].as_u64()?;
+            let body_text = node["bodyText"].as_str().unwrap_or_default();
+            Some((number, description_from(body_text)))
+        })
+        .collect();
+    Ok(DescriptionPage {
+        descriptions,
+        next_cursor: next_cursor_of(issues),
+    })
+}
+
+/// Where the page after this one starts, from a connection's `pageInfo`; `None` on the last page.
+fn next_cursor_of(connection: &serde_json::Value) -> Option<String> {
+    let page_info = &connection["pageInfo"];
+    if page_info["hasNextPage"].as_bool() == Some(true) {
+        page_info["endCursor"].as_str().map(str::to_string)
+    } else {
+        None
+    }
+}
+
+/// Put each of `page`'s descriptions on the held issue with that number. An issue the page does
+/// not name keeps what it has, and a number that is not held is ignored: an issue can change
+/// pages between the two passes.
+pub fn describe_listed(issues: &mut [Issue], page: &DescriptionPage) {
+    for (number, description) in &page.descriptions {
+        if let Some(issue) = issues.iter_mut().find(|issue| issue.number == *number) {
+            issue.description.clone_from(description);
+        }
+    }
+}
+
+/// Where the description pass goes after `page`, which was asked for with `asked` and is the
+/// `pages_read`-th page read: the next page's cursor, or `None` when the pass is over.
+///
+/// It ends where [`load_listing`] ends: on the last page, on a page that adds nothing or hands
+/// back the cursor it was asked with, and once [`DESCRIPTION_PAGE_CAP`] pages are read.
+pub fn next_description_cursor(
+    asked: Option<&str>,
+    page: &DescriptionPage,
+    pages_read: usize,
+) -> Option<String> {
+    let next = page.next_cursor.as_deref()?;
+    let stalled = page.descriptions.is_empty() || Some(next) == asked;
+    if stalled || pages_read >= DESCRIPTION_PAGE_CAP {
+        return None;
+    }
+    Some(next.to_string())
+}
+
 /// A scripted [`IssueSource`] for tests: answers each call with the next scripted page, search
 /// result or error, and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
 /// [`crate::git::FakeGit`].
@@ -1017,6 +1149,9 @@ pub struct FakeIssueSource {
     calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
     searches: std::sync::Mutex<std::collections::VecDeque<Result<Vec<Issue>, IssueLoadError>>>,
     search_calls: std::sync::Mutex<Vec<(String, String)>>,
+    descriptions:
+        std::sync::Mutex<std::collections::VecDeque<Result<DescriptionPage, IssueLoadError>>>,
+    description_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
 }
 
 impl FakeIssueSource {
@@ -1044,6 +1179,23 @@ impl FakeIssueSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push_back(result);
         self
+    }
+
+    /// Answer the next unanswered `describe_open` call with `result`.
+    pub fn with_descriptions(self, result: Result<DescriptionPage, IssueLoadError>) -> Self {
+        self.descriptions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// Every `describe_open` call so far, as (`owner/name`, cursor).
+    pub fn description_calls(&self) -> Vec<(String, Option<String>)> {
+        self.description_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Every `search_open` call so far, as (`owner/name`, text).
@@ -1101,6 +1253,26 @@ impl IssueSource for FakeIssueSource {
             .unwrap_or_else(|| {
                 Err(IssueLoadError::Other(
                     "FakeIssueSource: no search scripted for this call".into(),
+                ))
+            })
+    }
+
+    fn describe_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<DescriptionPage, IssueLoadError> {
+        self.description_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), cursor.map(str::to_string)));
+        self.descriptions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(IssueLoadError::Other(
+                    "FakeIssueSource: no descriptions scripted for this call".into(),
                 ))
             })
     }
@@ -1282,6 +1454,14 @@ impl IssueSource for GhCli {
 
     fn search_open(&self, repo: &GithubRepo, text: &str) -> Result<Vec<Issue>, IssueLoadError> {
         self.run(search_args(repo, text), parse_search)
+    }
+
+    fn describe_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<DescriptionPage, IssueLoadError> {
+        self.run(descriptions_args(repo, cursor), parse_descriptions_page)
     }
 }
 

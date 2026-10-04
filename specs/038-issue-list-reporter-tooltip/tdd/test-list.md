@@ -98,7 +98,7 @@ gives the test task first, then the implementation task(s).
 | U24 | `description_from` of input with no non-whitespace character gives the empty string | FR-020 | example | DONE | T044 / T049 |
 | U25 | A node whose `bodyText` is `Problem\nThe list cuts long titles off.` parses to `Problem The list cuts long titles off.`; a comment-only body parses to `""` | US3-12, US3-13, FR-022 | example | DONE | T044 / T049 |
 | U26 | `bodyText` null or absent gives an empty description and the issue is still listed; a 65,536-character body gives 601 characters | FR-020, Edge: very long | example | DONE | T044 / T049 |
-| U27 | The search queries select `bodyText` once per issue node, the list query does not, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | PENDING (reworked for the second pass, D13) | T044, T058 / T049, T061 |
+| U27 | The search queries select `bodyText` once per issue node, the list query does not, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | DONE (reworked for the second pass, D13) | T044, T058 / T049, T061 |
 | U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | DONE (reporter; the description added in M5) | T003, T045 / T009, T049 |
 | U29 | No `tracing`/`log` call in `github.rs`, `shell/issues.rs` or `worktree_form.rs` names an issue, reporter or description | FR-025 | example | DONE | T003 / T009 |
 | U30 | A malformed page containing a body returns an error whose `Display` and `Debug` carry no part of the body | FR-025 | example | DONE | T045 / T049 |
@@ -196,11 +196,11 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 |---|---|---|---|---|---|
-| U90 | A listed node parses to an issue without a description, whatever the answer carries | FR-024, SC-008 | example | PENDING | T058 / T061 |
-| U91 | `DESCRIPTIONS_QUERY` reads the list's connection in its order and page size and selects only `number` and `bodyText`; `descriptions_args` sends what `list_args` sends | FR-026 | example | PENDING | T058 / T061 |
-| U92 | `parse_descriptions_page` gives numbers with folded, bounded descriptions and the next cursor; no body gives `""`; a node without a number is skipped; GraphQL errors classify as for the list; neither an error nor `{:?}` of a page carries a body | FR-020, FR-025 | example | PENDING | T058 / T061 |
-| U93 | `describe_listed` puts each description on the held issue with that number and leaves every other issue and field as it was | FR-024 | example | PENDING | T058 / T061 |
-| U94 | `next_description_cursor` continues while pages remain and ends on the last page, an empty page, a repeated cursor and after `DESCRIPTION_PAGE_CAP` pages; the fake source answers and records `describe_open` | FR-026 | example | PENDING | T058 / T061 |
+| U90 | `LIST_QUERY` and the shared node selection name no body, so a listed issue has no description until the pass describes it; the two passes together give the scenario fixture's description | FR-024, SC-008 | example | DONE | T058 / T061 |
+| U91 | `DESCRIPTIONS_QUERY` reads the list's connection in its order and page size and selects only `number` and `bodyText`; `descriptions_args` sends what `list_args` sends | FR-026 | example | DONE | T058 / T061 |
+| U92 | `parse_descriptions_page` gives numbers with folded, bounded descriptions and the next cursor; no body gives `""`; a node without a number is skipped; GraphQL errors classify as for the list; neither an error nor `{:?}` of a page carries a body | FR-020, FR-025 | example | DONE | T058 / T061 |
+| U93 | `describe_listed` puts each description on the held issue with that number and leaves every other issue and field as it was | FR-024 | example | DONE | T058 / T061 |
+| U94 | `next_description_cursor` continues while pages remain and ends on the last page, an empty page, a repeated cursor and after `DESCRIPTION_PAGE_CAP` pages; the fake source answers and records `describe_open` | FR-026 | example | DONE | T058 / T061 |
 | U95 | An accepted load awaits the first description page under the load's seq; a load of no issues and a failed load await none | FR-024 | example | PENDING | T059 / T062 |
 | U96 | An awaited page describes the held issues and awaits the next cursor; the highlight, the matches and the open list are as they were | FR-024, FR-017 | example | PENDING | T059 / T062 |
 | U97 | A page with another seq or cursor, after the pass ended, on another source or with no form changes nothing | FR-024, 034 FR-007a | example | PENDING | T059 / T062 |
