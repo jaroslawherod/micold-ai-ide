@@ -10,7 +10,7 @@ Nothing here is persisted. "NEW" marks what does not exist yet; everything else 
 |---|---|---|
 | `number`, `title`, `labels`, `updated_at` | as today | unchanged |
 | `reporter` NEW | `String` | The author's login as GitHub reports it. `GHOST_LOGIN` (`"ghost"`) when the node's `author` is `null` or absent (FR-002). Never empty. |
-| `description` NEW | `String` | `description_from(bodyText)`: whitespace folded, trimmed, capped (§2). Empty when the body has no text (FR-020). |
+| `description` NEW | `String` | `description_from(bodyText)`: whitespace folded, trimmed, capped (§2). Empty when the body has no text (FR-020), and on a listed issue until the description pass delivers its page (FR-024; contracts/issue-fields.md §6). |
 | `row_text` | `String` | The **match text**, what `typeahead::rank` reads (§4). No longer the text a row displays. |
 
 Construction: `Issue::new(number, title, labels, updated_at)` keeps its signature and yields

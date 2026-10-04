@@ -209,7 +209,8 @@ screen of the app uses it yet; slice B puts it on issue rows.
 
 **Goal**: Resting the cursor on an issue row for 3 seconds opens a tooltip with the start of the
 description as plain text, at most three lines; it closes on another row, on leaving, on a pick and
-when the list changes under the cursor. No request is made for it.
+when the list changes under the cursor. No request is made because a cursor rests; the descriptions
+of the listed issues follow the list in a second pass (FR-024, ledger D13).
 
 **Independent Test**: quickstart §B6–B11; automated: `github_description.rs`,
 `gates/picker_row_tooltip_clears_its_row.rs`, `issue_picker_rows.rs`.
@@ -220,7 +221,7 @@ when the list changes under the cursor. No request is made for it.
   - `description_from`: "every run of Unicode whitespace becomes one space; leading and trailing space is removed"; more than `DESCRIPTION_MAX_CHARS` (600) characters is "cut at a character boundary to 600, trailing space is removed, and `…` is appended"; "an input with no non-whitespace character gives `""`".
   - The node whose body is US3 scenario 12's parses to `description() == "Problem The list cuts long titles off."`; the node whose body is only an HTML comment parses to `""` (scenario 13).
   - `bodyText` that is `null` or absent gives `""` and the issue is still listed; a 65,536-character `bodyText` gives 601 characters.
-  - The shared node selection contains `bodyText`; the request arguments are unchanged (FR-024, FR-026).
+  - The search queries select `bodyText` after the shared node selection; the request arguments are unchanged (FR-024, FR-026). (Reworked by T058: the list query no longer selects it.)
   - `row_text()` does not contain the description (FR-014).
 - [x] T045 [P] [US3] [U28] [U30] [U81] Extend `crates/micold-core/tests/github_privacy.rs`: `{:?}` of an issue does not contain its description; `parse_list_page` on a malformed page that contains a body returns an error whose `Display` and `Debug` contain no part of the body (FR-025). `Issue` derives or implements no `Serialize` (a source check over `crates/micold-core/src/github.rs`) (FR-025).
 - [x] T046 [P] [US3] [A21] [A22] [A26] [A28] [U71] [U72] [U73] [U74] [U82] [U83] [U86] Extend `crates/micold-client/tests/issue_picker_rows.rs` and the unit tests in `crates/micold-client/src/ui/material/picker.rs` (contracts/picker-row.md §4):
@@ -234,13 +235,28 @@ when the list changes under the cursor. No request is made for it.
 
 ### Implementation for User Story 3, slice B
 
-- [x] T049 [US3] [U6] [U20] [U22] [U23] [U24] [U25] [U26] [U27] [U28] [U30] [U87] [U89] In `crates/micold-core/src/github.rs`: add `DESCRIPTION_MAX_CHARS = 600`, `description_from`, `Issue::description`, the chainable `.described(body_text)` and the accessor `description()`; add `bodyText` to the shared node selection and read it in `issue_from_node`; print `description` as `<redacted>` in `Debug` (T044, T045).
+- [x] T049 [US3] [U6] [U20] [U22] [U23] [U24] [U25] [U26] [U27] [U28] [U30] [U87] [U89] In `crates/micold-core/src/github.rs`: add `DESCRIPTION_MAX_CHARS = 600`, `description_from`, `Issue::description`, the chainable `.described(body_text)` and the accessor `description()`; add `bodyText` to the node selection (T061 moves it out of the list query) and read it in `issue_from_node`; print `description` as `<redacted>` in `Debug` (T044, T045).
 - [x] T050 [US3] [U75] [U76] [U88] In `crates/micold-client/src/ui/cdk/picker.rs`: implement `Overlay::overlay` for `Menu`, forwarding to its content's `Widget::overlay` (T047; research R10).
 - [x] T051 [US3] [U71] [U73] [U74] [U75] [U76] [U86] In `crates/micold-client/src/ui/material/picker.rs` and `crates/micold-client/src/ui/material/typeahead.rs`: add `Row::tooltip(text)`, `Row::key(u64)`, `ROW_TOOLTIP_REST`, `ROW_TOOLTIP_LINES`, and wrap a row that has a non-empty tooltip text in `material::Tooltip` with `after_rest`, `max_lines`, `subject` and `TooltipPosition::Bottom` (T046, T047).
 - [x] T052 [US3] [U71] [U72] In `crates/micold-client/src/ui/worktree_form.rs`: `issue_rows` passes `.key(issue.number)` and, when the description is not empty, `.tooltip(issue.description())` (T046).
 - [x] T053 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` if the wrapped rows changed its records, and confirm the branch picker, `Select` and 034's states did not change.
 - [x] T054 [P] [US3] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue": resting the cursor on an issue for 3 seconds shows the start of its description, at most three lines, as plain text; it needs a pointer; an issue without a description shows nothing; the description is not searched (FR-031). Update `docs/development/component-library.md` § "Pickers": `Row::tooltip`, `Row::key`.
-- [ ] T055 [US3] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A23] [A24] [A25] [A26] [A27] [A28] Run `mise run gate`; run quickstart §B6–B9 and §B11 with the `visual-pass` skill and save the results and screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`. Also run §B10 (load time: five runs before on `main` and five after, alternating) and stop and escalate above 1.5× (research R14): M5 merges `bodyText`, the only change that can slow loading.
+### Rework: descriptions in a second pass (SC-008 measured 1.88×; ledger D13, research R14)
+
+- [ ] T058 [P] [US3] [U27] [U90] [U91] [U92] [U93] [U94] Write `crates/micold-core/tests/github_description_pass.rs` (NEW) and rework `github_description.rs` (contracts/issue-fields.md §1, §6):
+  - `LIST_QUERY` selects no `bodyText`; `SEARCH_QUERY` selects it once and `SEARCH_WITH_NUMBER_QUERY` twice; a listed node parses to an issue without a description even when the answer carries a body.
+  - `DESCRIPTIONS_QUERY` reads the connection `LIST_QUERY` reads (states, order, page size, cursor) and selects only `number` and `bodyText` per node; `descriptions_args` equals `list_args` but for the query.
+  - `parse_descriptions_page`: numbers with folded, bounded descriptions and the next cursor; `null` or absent `bodyText` gives `""`; a node without a number is skipped; `NOT_FOUND` and `RATE_LIMITED` classify as in `parse_list_page`; a malformed answer's error and `{:?}` of a page carry no part of a body (FR-025).
+  - `describe_listed` puts each description on the held issue with that number and touches nothing else.
+  - `next_description_cursor`: the page's cursor while pages remain; `None` on the last page, an empty page, a repeated cursor and after `DESCRIPTION_PAGE_CAP` (10) pages.
+  - `FakeIssueSource::with_descriptions` answers `describe_open` in order and `description_calls()` records repository and cursor.
+- [ ] T059 [P] [US3] [U95] [U96] [U97] [U98] Extend `crates/micold-client/tests/issue_source_state.rs` (contracts/issue-fields.md §6): an accepted load awaits the first description page under the load's seq, a load of no issues and a failed load await none; an awaited page describes the held issues and awaits the next cursor, leaving the highlight, the matches and the open list as they were; a page with another seq or another cursor, after the pass ended, on another source or with no form changes nothing; the pass ends on the last page, at the cap and on a failure, which shows no error and leaves the list loaded.
+- [ ] T060 [P] [US3] [U99] [U100] Extend `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs`: `start_issue_descriptions(` is a marker, called only after an accepted load and after an accepted page. Add to `crates/micold-client/src/main_tests.rs`: with a fake source, choosing the issue source reads the list, then the description pages in order, and the rows hold their descriptions; a failed description page leaves the list shown.
+- [ ] T061 [US3] [U27] [U90] [U91] [U92] [U93] [U94] In `crates/micold-core/src/github.rs`: take `bodyText` out of the list query's selection and keep it in the search queries; add `DESCRIPTIONS_QUERY`, `descriptions_args`, `DescriptionPage` (redacting `Debug`), `parse_descriptions_page`, `describe_listed`, `DESCRIPTION_PAGE_CAP`, `next_description_cursor`, `IssueSource::describe_open` for `GhCli` and `FakeIssueSource` (T058).
+- [ ] T062 [US3] [U95] [U96] [U97] [U98] [U99] [U100] In `crates/micold-client/src/features/worktree_form.rs`: `DescriptionPass`, the `descriptions` field of `IssueList::Loaded`, `Msg::IssueDescriptionsLoaded { seq, cursor, result }`, `State::issue_description_request`. In `crates/micold-client/src/shell/issues.rs` and `main.rs`: `start_issue_descriptions`, run after an accepted load and after each accepted page (T059, T060).
+- [ ] T063 [P] [US3] Update `docs/user-guide/worktrees-and-sessions.md` § "From a GitHub issue": descriptions arrive shortly after the list, from the top down, so a row may have no tooltip for a moment (FR-031).
+
+- [ ] T055 [US3] [A16] [A17] [A18] [A19] [A20] [A21] [A22] [A23] [A24] [A25] [A26] [A27] [A28] Run `mise run gate`; run quickstart §B6–B9 and §B11 with the `visual-pass` skill and save the results and screenshots under `specs/038-issue-list-reporter-tooltip/evidence/`. Also run §B10 (load time: five runs before on `main` and five after, alternating) and stop and escalate above 1.5× (research R14). First run, with `bodyText` in the list query: 1.88×, escalated, answered with the second pass (T058–T063). Tick only on a measured pass of the two-pass build.
 
 **Checkpoint**: All three stories work; `mise run gate` passes.
 
@@ -344,7 +360,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M5 — An issue's description on its row
 
-- **Tasks**: T044–T055
+- **Tasks**: T044–T055, T058–T063
 - **Deliverable**: On `main`, resting the cursor on an issue row for 3 seconds opens a tooltip with
   the start of the issue's description as plain text, at most three lines; it closes on another
   row, on leaving the list and on a pick; an issue without a description shows none; the user

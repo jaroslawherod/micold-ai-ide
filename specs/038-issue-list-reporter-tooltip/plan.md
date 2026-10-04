@@ -13,9 +13,12 @@ lines tall.
 
 The design turns on five decisions, all recorded in [research.md](./research.md):
 
-1. **The new data rides the requests 034 already makes** ([R1](./research.md)). The three GraphQL
-   queries gain `author { login }` and `bodyText`. No new request, occasion or argument, so FR-013,
-   FR-024 and FR-026 hold by construction. `bodyText` is GitHub's own plain-text rendering of the
+1. **The reporter rides the requests 034 already makes; descriptions follow the list in a second
+   pass** ([R1](./research.md), [R14](./research.md)). The three GraphQL queries gain
+   `author { login }`; the two search queries also gain `bodyText`. The list query does not: with it
+   the list took 1.88× as long (SC-008), so the listed issues' descriptions are read after the list
+   has arrived, by `DESCRIPTIONS_QUERY`, page by page (FR-024, FR-026 as reworded 2026-10-04). No
+   new occasion or argument. `bodyText` is GitHub's own plain-text rendering of the
    body, so FR-022 needs no Markdown parser and **no new crate** ([R2](./research.md)); core only
    folds whitespace and caps the text at 600 characters ([R3](./research.md)).
 2. **One match text, mapped onto two lines** ([R4](./research.md)). `typeahead::rank` still reads
@@ -62,8 +65,9 @@ client reducer, source-gate and geometry-gate tests under `crates/micold-client/
 budget (`typeahead_budget.rs`, SC-002); the tooltip opens 3.0–3.5 s after rest (SC-003); the issue
 list loads in at most 1.5× today's time on 1,000 issues (SC-008, measured in §B).
 
-**Constraints**: no request added or changed beyond two fields in the node selection (FR-013,
-FR-024, FR-026); no frame request outside `cdk/motion.rs` (`idle_requests_no_frames.rs`); no
+**Constraints**: the list's requests change by one field (`author`), the searches by two; the only
+added requests are the description pass's, at most one per page of the list (FR-013, FR-024,
+FR-026); no frame request outside `cdk/motion.rs` (`idle_requests_no_frames.rs`); no
 reporter or description in files or logs (FR-025); the single-line picker row byte-for-byte as today
 (FR-029).
 
@@ -88,9 +92,10 @@ pages. Six milestones.
   fields are in that form's `IssueList`. Nothing is shared between windows (spec, Edge Cases).
 - [x] **III. Worktree Integration**: PASS. Nothing about creating a worktree changes (FR-008); a
   pick runs 034's path.
-- [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: PASS. Nothing is stored. No new contact with
-  GitHub: the same requests, on the same occasions, after the same opt-in, with two more fields in
-  the answer (FR-024, FR-026). A hover makes no request (SC-006).
+- [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: PASS. Nothing is stored. No new occasion of
+  contact with GitHub: the same requests, after the same opt-in, with one more field in the list's
+  answer, and a description pass that follows each list load and sends what the list sends
+  (FR-024, FR-026). A hover makes no request (SC-006).
 - [x] **V. Rust + iced Stack**: PASS. Rust and iced only. Types narrow the states: `RestTimer` is an
   enum (`Away`, `Waiting`, `Open`, `Spent`), so "open while waiting" cannot be written;
   `RowEmphasis` separates the two lines' spans; `Issue` holds only the capped description and has a
@@ -152,9 +157,9 @@ No entry in Complexity Tracking.
 | FR-021 | `clamp_to_lines`; `Tooltip::max_lines(ROW_TOOLTIP_LINES)` ([rest-tooltip §5](./contracts/rest-tooltip.md)) |
 | FR-022 | `bodyText` + `description_from` ([issue-fields §1–2](./contracts/issue-fields.md)) |
 | FR-023 | `TooltipPosition::Bottom` with the existing `place` flip; `Menu` forwards `Overlay::overlay`; the panel takes no input ([picker-row §5](./contracts/picker-row.md)) |
-| FR-024 | Description held on `Issue`; no call to `IssueSource` from the view or the tooltip; `issues_are_requested_only_on_named_events.rs` |
+| FR-024 | `LIST_QUERY` without `bodyText`; `DESCRIPTIONS_QUERY`, `parse_descriptions_page`, `describe_listed`, `next_description_cursor` in core; `DescriptionPass` in the form's `IssueList::Loaded`, started by an accepted load and advanced by each awaited page (`shell/issues.rs` `start_issue_descriptions`); no call to `IssueSource` from the view or the tooltip; `issues_are_requested_only_on_named_events.rs` |
 | FR-025 | No `Serialize` on `Issue`; redacting `Debug`; no log macro over issues ([issue-fields §5](./contracts/issue-fields.md)) |
-| FR-026 | Query text differs only in the node selection; arguments, page size, cap and timeout unchanged ([issue-fields §1](./contracts/issue-fields.md)) |
+| FR-026 | The list and search queries differ from 034's only in the node selection; arguments, page size, cap and timeout unchanged. `descriptions_args` sends what `list_args` sends; the pass ends after `DESCRIPTION_PAGE_CAP` requests ([issue-fields §1, §6](./contracts/issue-fields.md)) |
 | FR-027 | `IssueList`, `SearchState` and their views untouched; existing covered states stay in the layout snapshot |
 | FR-028 | `material::picker::Row::{details, tooltip, key}`, `material::Tooltip::{after_rest, max_lines, subject}`; showcase poses ([picker-row §6](./contracts/picker-row.md), [rest-tooltip §6](./contracts/rest-tooltip.md)) |
 | FR-029 | A row without details is built by today's code; `picker_parity.rs`, `menu_anatomy.rs` and the branch picker's layout records unchanged |
@@ -255,7 +260,7 @@ Sliced by story priority; each slice ships something observable (milestones in `
 | **1b (US1 AS6)** | M2 | The highlighted row kept wholly in view: `picker_highlight_into_view`, chained by the shell; guide and `component-library.md`: the list follows the highlight | §B3 |
 | **2 (US2, P2)** | M3 | Reporter in the match text; reporter emphasis; the hint; guide: search by reporter | §B4 |
 | **3a (US3, component)** | M4 | `RestTimer`, `clamp_to_lines`; `Tooltip::after_rest`, `max_lines`, `subject`; `wake_at` and the extended frame gate; showcase pose; `component-library.md` and `component-showcase.md`: the tooltip's modes | §B5 |
-| **3b (US3, issue rows)** | M5 | `bodyText` read, `description_from`; `Menu` forwards overlays; `Row::tooltip`, `Row::key`; the issue picker passes both; the row-tooltip geometry gate; guide: the tooltip; `component-library.md`: `Row::tooltip`, `Row::key` | §B6–B11 |
+| **3b (US3, issue rows)** | M5 | `bodyText` read, `description_from`; the description pass (core query and paging, the form's `DescriptionPass`, the shell's chained requests); `Menu` forwards overlays; `Row::tooltip`, `Row::key`; the issue picker passes both; the row-tooltip geometry gate; guide: the tooltip; `component-library.md`: `Row::tooltip`, `Row::key` | §B6–B11 |
 | **Polish** | M6 | §B recorded in full, SC-008 measured before and after | quickstart §B complete |
 
 US1 is split along acceptance scenario 6: 1a ships the rows (scenarios 1–5 and 7–9), 1b the
@@ -271,7 +276,7 @@ the `docs-not-needed` label; 3b carries the guide.
 
 | Risk | Handling |
 |---|---|
-| A page of 100 issues with very long bodies slows the list (SC-008) | Measured in §B on a 1,000-issue repository before (`main`) and after: measured in M5 before its PR, recorded again in M6. Above 1.5×: SC-008 conflicts with FR-024, and the flow escalates with the measurement; no fallback is decided in advance ([R14](./research.md)). |
+| A page of 100 issues with very long bodies slows the list (SC-008) | Measured in §B on a 1,000-issue repository before (`main`) and after: measured in M5 before its PR, recorded again in M6. M5 measured 1.88× with `bodyText` in the list query; the user chose a second pass for descriptions, so the list's own requests are as before plus `author` ([R14](./research.md)). §B10 is measured again on the two-pass build. |
 | A tooltip inside the picker's overlay is dropped or misplaced by a wrapper | `Menu` forwards `overlay`; the geometry gate drives a real hover and fails on a missing or displaced panel ([R10](./research.md)). |
 | The wrapping label changes the single-line row | Wrapping is a separate mode; a row without details keeps today's builder. `picker_parity.rs`, `menu_anatomy.rs` and the layout snapshot's branch-picker records must not change. |
 | The timed wake becomes a redraw loop | `wake_at` is called only in `Waiting`, with one deadline; the gate's behavioural half asserts one request while waiting and none when open, away or spent. |
