@@ -33,6 +33,7 @@ pub mod naming;
 pub mod notify;
 pub mod os_theme;
 pub mod overlay;
+pub mod owner_only;
 pub mod permission_failure;
 pub mod process;
 pub mod project;
