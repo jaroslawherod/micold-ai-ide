@@ -496,3 +496,114 @@ suite runs in the gate.
   the group's first child.
 - green: `clamp_to_lines` with the paragraph's measured line count. 5 passed.
 - refactor: none.
+
+## Cycle 19 — U6, U20, U22–U28, U30, U81 — T044, T045, T049 (M5)
+
+- tests: `crates/micold-core/tests/github_description.rs` (new, 13 tests) and three added to
+  `crates/micold-core/tests/github_privacy.rs` (`debug_output_redacts_the_description` among them,
+  U28); fixtures `issue_node_description.json` and `issue_node_comment_only.json`. Stubs:
+  `description_from`, `DESCRIPTION_MAX_CHARS`, `Issue::described` and `Issue::description` with the
+  contract's signatures, doing nothing.
+- red: `scripts/build-lock.sh bash -c 'cargo test -p micold-core --test github_description --test github_privacy'`
+  ```
+  thread 'a_long_text_is_cut_to_the_limit_and_marked' panicked at crates/micold-core/tests/github_description.rs:88:5:
+  a cut text ends in the mark
+  test result: FAILED. 3 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out
+  thread 'debug_output_redacts_the_description' panicked at crates/micold-core/tests/github_privacy.rs:58:5:
+    left: ""
+  test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+- passed against the stub: U30 (`a_malformed_page_with_a_body_gives_an_error_without_it`) and U81
+  (`an_issue_has_no_serialize`), which guard what the stub does not yet change. Mutant check after
+  green: with the page error formatting the node and `serde::Serialize` derived on `Issue`, they
+  fail at `github_privacy.rs:125:17` and `:159:5`. Restored.
+- deviation: the two fixtures are written from contracts/issue-fields.md §2, not captured from
+  GitHub as T044's word "captured" says. T055's §B run confirms GitHub's `bodyText` for scenario
+  12's body.
+- green: `description_from`, `DESCRIPTION_MAX_CHARS`, `Issue::described`, `Issue::description`,
+  `bodyText` in the shared node selection, `Debug` printing the description as `<redacted>`.
+  `cargo test -p micold-core --all-targets --no-fail-fast`: exit 0, 148 binaries ok. Commits
+  ddb85c37 (red), a34b07bc (green).
+- refactor: none.
+
+## Cycle 20 — U71, U72, U73, U74, U82 (loading half), U83, U86 — T046, T051, T052 (M5)
+
+- tests: `crates/micold-client/tests/issue_picker_rows.rs` (3 new):
+  `a_described_issues_row_carries_the_description_and_the_number` (U71),
+  `an_issue_without_a_description_gets_no_tooltip` (U72),
+  `a_list_that_is_loading_again_builds_no_row` (U82, loading half); and nine in-crate in
+  `crates/micold-client/src/ui/material/picker.rs` `mod tests`:
+  `a_row_holds_exactly_the_tooltip_text_it_was_given` (U73),
+  `a_rows_tooltip_waits_three_seconds_and_shows_three_lines` and
+  `a_row_with_a_tooltip_opens_its_panel_after_the_rest_delay` (U74),
+  `a_row_without_a_tooltip_floats_nothing`, `a_rows_panel_is_at_most_three_lines_tall`,
+  `another_key_at_the_same_place_closes_the_panel_and_waits_again`,
+  `the_same_key_keeps_its_panel_across_a_rebuild`,
+  `a_highlighted_row_without_the_cursor_floats_nothing` (U83) and
+  `debug_output_of_a_row_redacts_its_details_and_its_tooltip` (U86, new; FR-025; it also closes M1
+  review A F3). Stubs: `Row::tooltip` and `Row::key` that hold nothing, `menu_element` not wrapping.
+- red: `scripts/build-lock.sh bash -c 'cargo fmt --all; cargo test -p micold-client --test issue_picker_rows; cargo test -p micold-client --lib picker'`
+  ```
+  thread 'a_described_issues_row_carries_the_description_and_the_number' panicked at crates/micold-client/tests/issue_picker_rows.rs:256:9:
+  thread 'an_issue_without_a_description_gets_no_tooltip' panicked at crates/micold-client/tests/issue_picker_rows.rs:309:9:
+  test result: FAILED. 6 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
+  ui::material::picker::tests::a_row_holds_exactly_the_tooltip_text_it_was_given panicked at crates/micold-client/src/ui/material/picker.rs:1095:9:
+    left: None
+   right: Some("  Two  spaces, kept. ")
+  test result: FAILED. 24 passed; 7 failed; 0 ignored; 0 measured; 491 filtered out
+  ```
+- passed against the stubs: `a_list_that_is_loading_again_builds_no_row`,
+  `a_rows_tooltip_waits_three_seconds_and_shows_three_lines` and `a_row_without_a_tooltip_floats_nothing`
+  (guards for what the stubs leave as it was).
+- deviation: `a_rows_panel_is_at_most_three_lines_tall` first measured the panel's outer node, which
+  includes the 5 px margin `cdk::tooltip` keeps from the window's edge on each side (66 against 56);
+  `panels_of` now reads the panel's first child, the visible surface, as the gate does.
+- deviation: `tests/one_overlay_implementation.rs` read the builder method `Row::tooltip(` and its call
+  `.tooltip(` as the rendering stack's `tooltip(` widget (`every_widget_attached_overlay_is_on_the_list`
+  failed at `one_overlay_implementation.rs:191:5`: "ui/material/picker.rs constructs `tooltip`",
+  "ui/worktree_form.rs constructs `tooltip`"). Its `calls` now excludes a method call and a `fn`
+  definition, with four assertions added to `a_helper_ending_in_the_widget_name_is_not_a_use_of_it`,
+  two of them that a free call (`iced::widget::tooltip(`, and one after a method on the same line) is
+  still found.
+- green: `Row::tooltip` (None when empty), `Row::key`, a hand-written `Debug` for `Row`; `menu_element`
+  wraps a row with a text in `material::Tooltip` (`after_rest(ROW_TOOLTIP_REST)`,
+  `max_lines(ROW_TOOLTIP_LINES)`, `Bottom`, `subject(key)`), the tooltip outermost so its state stays
+  at the row's place when the highlight moves; `issue_rows` passes `.key(issue.number())` and
+  `.tooltip(issue.description())`. `issue_picker_rows` 8 passed, `--lib picker` 31 passed,
+  `picker_highlight_into_view` 5 passed. Commit b9ef217d.
+- refactor: none.
+
+## Cycle 21 — U75, U76, U84, U85, U82 (source half), U77 — T047, T048, T050, T053 (M5)
+
+- tests: `crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` (new, 9 tests),
+  registered in `tests/layout_snapshot.rs`:
+  `the_first_row_shows_one_panel_clear_of_itself`,
+  `a_row_at_the_lists_lower_edge_shows_one_panel_clear_of_itself`,
+  `the_last_row_of_the_scrolled_list_shows_one_panel_clear_of_itself` (U75),
+  `a_click_on_the_row_under_an_open_panel_picks_its_issue` (U76),
+  `moving_onto_the_adjacent_row_by_less_than_the_tolerance_closes_the_panel` and
+  `the_adjacent_row_opens_its_panel_only_after_its_own_full_delay` (U84),
+  `the_search_field_keeps_keyboard_focus_while_a_panel_is_open` and
+  `up_down_and_enter_act_under_an_open_panel_as_without_one` (U85),
+  `a_form_on_another_source_builds_no_row_and_floats_no_panel` (U82, source half); and U77,
+  `no_view_code_fetches_issues` in `tests/issues_are_requested_only_on_named_events.rs`.
+  Stub: no `Menu::overlay`.
+- red: `scripts/build-lock.sh bash -c 'cargo fmt --all; cargo test -p micold-client --test layout_snapshot picker_row_tooltip'`
+  ```
+  thread 'picker_row_tooltip_clears_its_row::the_first_row_shows_one_panel_clear_of_itself' panicked at crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs:563:9:
+  exactly one tooltip panel has to be open above the list, and 0 are
+  test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 48 filtered out
+  ```
+- passed against the stub: U77 (`no_view_code_fetches_issues`), a characterization that passed at once
+  (3 passed). Mutant check: a line `const _MUTANT: () = start_issue_load(app);` under `#[cfg(any())]`
+  in `ui/confirm_link_open.rs` made it panic at `issues_are_requested_only_on_named_events.rs:178:5`
+  (and the named-events test at `:137:5`). Restored.
+- deviation: U82's source half was written after the green, so it had no red against the stub; it
+  passes at once (9 passed). Mutant check: with the source switch commented out it fails at
+  `picker_row_tooltip_clears_its_row.rs:944:5` (the panel assertion). Restored.
+- green: `Overlay::overlay` for `cdk::picker`'s `Menu` forwards to its content's `Widget::overlay` with
+  the list's bounds as viewport, none while leaving (research R10). `layout_snapshot` 57 passed,
+  `one_overlay_implementation` 8 passed, `overlay_stacking` 5 passed. T053: the fixture
+  `tests/fixtures/layout_snapshot.txt` did not change (the tooltip adds no layout node), so nothing
+  was regenerated.
+- refactor: none.

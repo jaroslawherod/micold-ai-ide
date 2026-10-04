@@ -186,7 +186,11 @@ fn widget_calls(code: &str) -> usize {
                     .chars()
                     .next_back()
                     .is_some_and(|c| c.is_alphanumeric() || c == '_');
-            if !preceded_by_ident {
+            // `row.tooltip(text)` is a builder step of a library component that happens to
+            // have a widget's whole name (`material::picker::Row::tooltip`, feature 038): a
+            // method call builds no widget. The rendering stack's widgets are free functions.
+            let is_method = line[..start].ends_with('.');
+            if !preceded_by_ident && !is_method {
                 return true;
             }
             from = start + needle.len();
