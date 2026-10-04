@@ -141,20 +141,20 @@ gives the test task first, then the implementation task(s).
 
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
-| U49 | A cursor still for `delay` opens the tooltip | US3-1, FR-015 | example | PENDING | T032 / T036 |
-| U50 | A cursor still for `delay - 1 ms` leaves it closed | US3-2, FR-015, SC-003 | example | PENDING | T032 / T036 |
-| U51 | A move of more than `REST_TOLERANCE` (4.0) restarts the wait | US3-3, FR-016 | example | PENDING | T032 / T036 |
-| U52 | A move of exactly 4.0 stays within tolerance, and the anchor does not drift across many small moves | US3-3, FR-016 | example | PENDING | T032 / T036 |
-| U53 | Moving 10 px every 100 ms for 10 s never opens | US3-3, SC-004 | example | PENDING | T032 / T036 |
-| U54 | Once open, movement over the trigger keeps it open | Assumptions | example | PENDING | T032 / T036 |
-| U55 | Leaving closes it, and the next entry waits the full delay | US3-5, FR-017 | example | PENDING | T032 / T036 |
-| U56 | `press()` closes it until the cursor has left | US3-10, FR-017 | example | PENDING | T032 / T036 |
-| U57 | `reset()` closes it and waits the full delay again | US3-4, FR-017 | example | PENDING | T032 / T036 |
-| U58 | `wake_at` is `Some(since + delay)` only while waiting | FR-018 | example | PENDING | T032 / T036 |
-| U59 | `clamp_to_lines` returns text that fits unchanged and borrowed, with no `…` (100 and exactly 120 characters, three lines) | US3-9, FR-021 | example | PENDING | T033 / T037 |
-| U60 | `clamp_to_lines` cuts overflowing words after a whole word and ends in one `…`; a text already ending in `…` ends in one | US3-8, FR-021 | example | PENDING | T033 / T037 |
-| U61 | `clamp_to_lines` of 500 characters without spaces is at most three lines and ends in `…` | US3-8, FR-021, SC-005 | example | PENDING | T033 / T037 |
-| U62 | `lines_of(clamp_to_lines(t, 3)) <= 3` for generated lengths, sampled (no property library) | SC-005 | example | PENDING | T033 / T037 |
+| U49 | A cursor still for `delay` opens the tooltip | US3-1, FR-015 | example | DONE | T032 / T036 |
+| U50 | A cursor still for `delay - 1 ms` leaves it closed | US3-2, FR-015, SC-003 | example | DONE | T032 / T036 |
+| U51 | A move of more than `REST_TOLERANCE` (4.0) restarts the wait | US3-3, FR-016 | example | DONE | T032 / T036 |
+| U52 | A move of exactly 4.0 stays within tolerance, and the anchor does not drift across many small moves | US3-3, FR-016 | example | DONE | T032 / T036 |
+| U53 | Moving 10 px every 100 ms for 10 s never opens | US3-3, SC-004 | example | DONE | T032 / T036 |
+| U54 | Once open, movement over the trigger keeps it open | Assumptions | example | DONE | T032 / T036 |
+| U55 | Leaving closes it, and the next entry waits the full delay | US3-5, FR-017 | example | DONE | T032 / T036 |
+| U56 | `press()` closes it until the cursor has left | US3-10, FR-017 | example | DONE | T032 / T036 |
+| U57 | `reset()` closes it and waits the full delay again | US3-4, FR-017 | example | DONE | T032 / T036 |
+| U58 | `wake_at` is `Some(since + delay)` only while waiting | FR-018 | example | DONE | T032 / T036 |
+| U59 | `clamp_to_lines` returns text that fits unchanged and borrowed, with no `…` (100 and exactly 120 characters, three lines) | US3-9, FR-021 | example | DONE | T033 / T037 |
+| U60 | `clamp_to_lines` cuts overflowing words after a whole word and ends in one `…`; a text already ending in `…` ends in one | US3-8, FR-021 | example | DONE | T033 / T037 |
+| U61 | `clamp_to_lines` of 500 characters without spaces is at most three lines and ends in `…` | US3-8, FR-021, SC-005 | example | DONE | T033 / T037 |
+| U62 | `lines_of(clamp_to_lines(t, 3)) <= 3` for generated lengths, sampled (no property library) | SC-005 | example | DONE | T033 / T037 |
 
 ### `crates/micold-client/src/ui/cdk/motion.rs`, `cdk/tooltip.rs`, `material/Tooltip`: rest mode
 

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3 PR #549 open: wait for CI and merge.
+- **Next step**: M4 in progress, handed over part-way: see *Handover*.
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #534 | Design: clarify, plan, tasks, milestones | merged | 3d52e83e32344ee4d09964b74b80d24499e3931b |
 | #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
 | #543 | M2: Up and Down keep the highlighted issue row wholly in view | merged | c0cc58c7860cc3f164084cb953097f5f204934eb |
-| #549 | M3: typing a login narrows the issue list, the reporter emphasised | open | |
+| #549 | M3: typing a login narrows the issue list, the reporter emphasised | merged | a3a57925c7b931ea1e887f7cf8d044512c19c46e |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
-| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | PR open |
-| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | drafted |
+| M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
+| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | | in progress |
 | M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | M1 | T013 and contract §6 ask for a row highlighted and a row picked in the showcase's `Typeahead` entry, which is live and rests closed (021 BUG-001). Static open instance, or seed the live one? | Seed the live one: `Showcase::new` starts with the first sample row chosen and the second (long title) highlighted, so one press on the field shows the pose. The list still rests closed; a second, pinned-open instance would float its list over the page (the entry's own doc comment rules it out). `showcase_state.rs`'s "nothing is highlighted at rest" assertion now asserts the seeded pose. | agent-resolved | `showcase/state.rs` `Showcase::new`, `samples::SEARCH_PICKED_AT_REST`, `SEARCH_HIGHLIGHT_AT_REST`; `showcase_state` 35 passed, `showcase_determinism` 23 passed |
 | D10 | M3 | Does M2 review A F2 (re-ranking keeps the scroll offset, so the highlight can sit off screen) fit M3? | No. M3's tasks change only the match text, the hint and the guide; none touches the shell handlers for typing or loads, and FR-007/SC-007 cover Up and Down only. Chaining the scroll after a re-rank needs its own behaviour on the test list and a widened U43 (one caller today). Left in *Follow-ups not done*. | agent-resolved | tasks.md T024–T031; `rematch_issues` in `features/worktree_form.rs`; U43 `only_the_issue_highlight_move_chains_the_operation` |
 | D11 | M3 | US2 scenario 3 ("both matches are emphasised") vs the unchanged matcher, whose literal tier marks only the leftmost occurrence: is a title and a login both holding the typed text required to emphasise both? | No. FR-009 keeps the field's one matching rule and contract §4 rules out a change to `typeahead`; a title holding the text twice also gets one mark today. Both are emphasised when one match spans title and login (subsequence, e.g. `fixana`), which U19 and U37 hold. | agent-resolved | `typeahead.rs` `literal` ("at its leftmost occurrence"), contract issue-fields §4 "No change to `micold_core::typeahead`"; U19 red with `ana` stayed red after T028 |
+| D12 | M4 | T035 puts the `max_lines(3)` panel test (U68) in `tests/tooltip_rest_glue.rs`, but `ui::material` is `pub(crate)`: an integration test cannot build a `material::Tooltip`. Where does U68 live? | In-crate, as `#[cfg(test)]` tests of `ui/material/line_clamp.rs` (the widget's fitted text and height, and the opened panel's height through `material::Tooltip`). `tooltip_rest_glue.rs` holds the `cdk` half and says so in its module doc. U70 is a source scan in `material_builder_api.rs`. | agent-resolved | `crates/micold-client/src/ui/mod.rs:21` `pub(crate) mod material`; `tests/picker_visibility.rs:22` states the same limit for the select's gates |
 
 ## Review rounds
 
@@ -81,7 +82,60 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4, part 1 of the milestone unit (context cap reached). `branch-start.sh 549` was run: the branch is
+`origin/main` (a3a57925) plus this unit's commits. No PR is open for M4. Spec 036 is **not** on
+`main`: `cdk/tooltip.rs` there is still the 029 BUG-001 version, so nothing to rebase over.
+
+**Done and green (committed)**: T032, T033, T036, T037 — `micold_core::tooltip` (`RestTimer`,
+`Rest`, `REST_TOLERANCE`, `clamp_to_lines`), `tests/tooltip_rest.rs` (11) and `tests/tooltip_clamp.rs`
+(5); cycles 14 and 15 in `tdd/cycle-log.md`; U49–U62 `DONE`. `cargo test -p micold-core
+--all-targets` 1699 passed; core clippy clean.
+
+**Written, red not yet observed (second commit, marked WIP; it does not compile the client's test
+targets cleanly yet and is not formatted — run `cargo fmt` first)**:
+
+- `crates/micold-client/tests/support/tooltip.rs` (NEW harness `Driven`, `tooltip(rest, subject)`,
+  `Msg`, `DELAY`; `pub mod tooltip` in `support/mod.rs`). The first compile failed on a borrow in
+  `is_open` (`node` did not live long enough); a fix modelled on `picker_visibility.rs` is in but
+  was never compiled.
+- `tests/tooltip_rest_glue.rs` (NEW; U65–U67, U69, U78–U80), `tests/idle_requests_no_frames.rs`
+  (three behaviour tests, `the_frame_requests_are_the_guarded_one_and_the_timed_one` replacing the
+  one-door test, `wake_at_has_one_caller`; U63, U64), `tests/material_builder_api.rs`
+  (`the_tooltips_rest_mode_is_three_chainable_steps`, U70).
+- `cdk/tooltip.rs`: stubs `after_rest(Duration)` and `subject(u64)` that do nothing.
+
+**Next steps, in order**:
+
+1. Make the WIP compile, run `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast --test
+   tooltip_rest_glue --test idle_requests_no_frames --test material_builder_api`, record the red
+   (cycle 16: U63, U64; cycle 17: U65–U67, U69 baseline, U78–U80; U70).
+2. T038: `pub fn wake_at<M>(shell, at: Instant)` in `cdk/motion.rs`, body exactly
+   `shell.request_redraw_at(window::RedrawRequest::At(at));` on the line after the `fn wake_at`
+   line (the gate reads the line before the call).
+3. T039, the design settled on: `Tooltip` gets `rest: Option<Duration>` and `subject: Option<u64>`;
+   `State` gets `rest: RestTimer` and `subject: Option<u64>`. A changed subject resets the timer and
+   sets `open = false`, in `diff` (so no stale panel is laid out) and at the top of `update`. In
+   rest mode `update` computes `at = cursor.position_over(layout.bounds())`, calls `press()` then
+   `observe` on `Mouse(ButtonPressed)` over the trigger, `observe(at, Instant::now(), delay)` on any
+   other mouse event, `observe(at, *now, delay)` on `RedrawRequested(now)`; then the existing
+   `open`/`invalidate_layout`/`shown.on_frame(event, target, Duration::ZERO, shell)` lines, then
+   `motion::wake_at(shell, t)` when `wake_at` is `Some` — one call site. Without `after_rest` the
+   existing branch runs untouched. The press is not captured.
+4. T040: `material/line_clamp.rs` (`pub(super) struct LineClamped<M>`, not `pub`: the inventory
+   scanner counts `pub struct` as a component the showcase must pose). Modelled on `ellipsized.rs`:
+   at layout, shape a `Caption` paragraph (`role.size()`, `role.font()`, `role.line_height()`,
+   `Shaping::Advanced`, `Wrapping::WordOrGlyph`) at `limits.max().width`, `lines = ceil(height /
+   role.line_height_dp())`, `clamp_to_lines`, cache by text and width; draw with
+   `style.text_color`. `material::Tooltip` gets `after_rest`, `max_lines`, `subject` (`mut self`,
+   `-> Self`); with `max_lines` the label is a `LineClamped` instead of `Text`. U68 in-crate (D12),
+   red first against a `LineClamped` that does not clamp.
+5. T041: a sixth `posed(..)` in `showcase/sections/floating.rs::tooltip` with `after_rest(3 s)` and
+   `max_lines(3)`; add its label to the entry's `posed:` list in `showcase/catalogue.rs:704`.
+   T042: the two docs. Tick T034, T035, T038–T042 as their behaviours go `DONE`.
+6. Then verify.md from step 1 (scoped gate with review A, review B with the visual pass §B5, full
+   gate, T043), and pr.md. The PR carries the `docs-not-needed` label.
+
+Open findings: none. Review rounds for M4: none run yet.
 
 ## Open escalation
 
