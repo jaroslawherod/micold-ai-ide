@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod format;
+pub mod schedule;
 pub mod store;
 pub mod text;
 
