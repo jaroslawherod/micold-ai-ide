@@ -5,7 +5,7 @@ user sees changes, and no spec requirement is touched. One unit, one PR.
 
 | Unit | Task files, in order | `model` |
 |---|---|---|
-| Chore | [chore](../tasks/chore.md), [gate](../tasks/gate.md), [pr](../tasks/pr.md) | `effort:low` or none: `"sonnet"`. `effort:high`: omit (session model) |
+| Chore | [chore](../tasks/chore.md), [gate](../tasks/gate.md), [pr](../tasks/pr.md) | `effort:high`: omit (session model). `effort:low`: `"sonnet"`. None: `"sonnet"`, or `"haiku"` when the issue names only docs or config files |
 
 Continued with a red CI log, the unit also reads [red-ci](../tasks/red-ci.md).
 

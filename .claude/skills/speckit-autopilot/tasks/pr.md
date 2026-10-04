@@ -3,7 +3,7 @@
 When: the gate for this diff is green ([gate.md](gate.md)) and its reviews are done. Use **this
 worktree's own branch** for every PR. Never create other branches.
 
-1. **Commit.** Conventional commits: `feat(NNN): …` (behaviour), `fix(NNN): … (BUG-<k>)`,
+1. **Commit.** Conventional commits: `feat(NNN): …` (behaviour), `fix(NNN): … (BUG-<issue>)`,
    `test(NNN): …`, `docs(NNN): …` (spec artifacts); a bug or chore flow scopes by area
    (`fix(terminal): …`). End each message with the session attribution line from the system
    reminder. Update the ledger in the same commit that finishes the step.
@@ -14,12 +14,17 @@ worktree's own branch** for every PR. Never create other branches.
 
 | PR | Title |
 |---|---|
-| Design | `docs(NNN): specify and plan <feature>` |
-| Milestone | `feat(NNN): <deliverable, imperative>` |
-| Bugfix | `fix(NNN): <what now works> (BUG-<k>)` |
-| Bug | `fix(<area>): <what now works>` |
-| Chore | `ci\|build\|test\|chore\|refactor\|docs(<area>): …` |
-| Close | `docs(NNN): close the spec` |
+| Design | `docs(NNN): specify and plan <feature> (#<issue>)` |
+| Milestone | `feat(NNN): <deliverable, imperative> (#<issue>)` |
+| Bugfix | `fix(NNN): <what now works> (#<issue>)`; its commits keep `(BUG-<issue>)` |
+| Bug | `fix(<area>): <what now works> (#<issue>)` |
+| Chore | `ci\|build\|test\|chore\|refactor\|docs(<area>): … (#<issue>)` |
+| Close | `docs(NNN): close the spec (#<issue>)` |
+
+**Every PR title ends with `(#<issue>)`**, so the PR list shows which issue each PR belongs to.
+Check after creating: `gh pr view <n> --json title,body -q '.title, .body' | grep -c '#<issue>\b'`
+prints at least 2; else `gh pr edit`. No **Issue** in the ledger: return `FAILED`; the
+orchestrator opens one first.
 
 Keep the prefix exact: release-please builds the changelog from it, and CI's user-guide gate fires
 on `feat`. `NNN` is the spec directory's number.

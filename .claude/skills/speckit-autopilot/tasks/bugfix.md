@@ -11,8 +11,9 @@ milestone unit does that.
      repro. Behaviour nobody specified is missing: `NEXT: feature`, with the correct behaviour.
    - **Owning feature still in flight** (`**Status**` not Closed, or its ledger not `done`): it
      belongs to another flow. Escalate as *blocked by work outside my flow*, with the repro.
-3. **`speckit-bugfix-report`** writes `bugs/BUG-<k>.md` in the owning spec, with root cause and any
-   false completions. Create the ledger beside it as `bugs/BUG-<k>.autopilot.md` from
+3. **`speckit-bugfix-report`** writes the record in the owning spec, with root cause and any
+   false completions. Name it `bugs/BUG-<issue>.md`, by the run's issue number, not the skill's
+   next sequential number: two runs never take the same one. Create the ledger beside it as `bugs/BUG-<issue>.autopilot.md` from
    [../templates/autopilot-ledger.md](../templates/autopilot-ledger.md): **Kind** `bugfix`,
    **Issue** and **Input** from your prompt, **Worktree branch** the exact output of
    `git branch --show-current`.
@@ -20,7 +21,7 @@ milestone unit does that.
    [review.md](review.md) with [../rubrics/bug.md](../rubrics/bug.md).
 5. **Size it.** The fix adds behaviour the spec never intended, or the patch adds more than 10
    tasks: set the ledger's **Phase** to `done` with the note `switched to feature`, commit the BUG
-   record and ledger, and return `DONE` with `NEXT: feature`. The new spec cites `BUG-<k>`.
+   record and ledger, and return `DONE` with `NEXT: feature`. The new spec cites `BUG-<issue>`.
 6. **Tier of the fix.** `light` (Sonnet ships it) when the BUG record names a confirmed root cause
    and the exact code to change, the fix is a few tasks besides the regression test, and it meets
    `light` in [milestone-format.md](milestone-format.md). Otherwise, or when unsure, `full`. Write
