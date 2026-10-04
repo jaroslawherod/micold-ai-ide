@@ -8,9 +8,11 @@
 use serde::{Deserialize, Serialize};
 
 pub mod format;
+pub mod store;
 pub mod text;
 
 pub use format::{decode, encode, DamageReason, FORMAT_VERSION, MAX_FILE_BYTES};
+pub use store::{history_dir, HistoryStore, LoadOutcome, SaveOutcome, SkipReason};
 
 /// What one terminal held at one moment: its history rows, then its screen rows down to the last
 /// one that shows anything, oldest first. Empty means there is nothing to show.
