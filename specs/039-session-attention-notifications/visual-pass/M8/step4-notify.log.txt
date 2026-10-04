@@ -1,0 +1,2 @@
+service up on unix:path=/tmp/vp171/bus,guid=3ffaab65d4b7650ade5a3e3d6ac21274
+10:49:26 NOTIFY id=1 app=dbus.String('Micold AI IDE') summary=dbus.String('New session is waiting for input') body=dbus.String('proj — Default') actions=[dbus.String('default'), dbus.String('Open')]
