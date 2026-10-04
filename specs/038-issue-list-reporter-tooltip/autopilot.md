@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 rework: T058–T063 done (cycle 26, client tests green). Now verify.md step 1 on the rework: scoped gate with `M5 rework code A` round 1 (`high`, diff a173709b..HEAD), then `M5 rework code B` and the visual pass with §B10 re-measured, full gate, tick T055 on a measured pass, PR.
+- **Next step**: M5 rework: T058–T063 done, scoped gate green, `M5 rework code A` round 1 CLEAN. Now verify.md step 2: `M5 rework code B` round 1 and the visual pass (§B6, §B8, §B9, §B11, a cursor resting while its description arrives, §B10 re-measured), then full gate, tick T055 on a measured pass, PR.
 
 ## Pull requests
 
@@ -82,6 +82,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 code A | 3 | 0e8cc27ec59d7e300494974a62d295f3d9363385:a219c99b13516c33b018da039051eaa13e781974 | CLEAN (scoped, sonnet; a short round: 2 tool calls, `description_from` traced by hand, nothing run). Round 2's fix holds and its F2 reason stands. Scoped gate after it: first red on `clippy::useless_format` in the new test (fixed), then GATE_EXIT=0 |
 | M5 code B | 1 | 66acc0da35b70fdf6d2158412522150b787a16ac:c9f9d682f0f8deb18f8ab9713831655103402ecf | CLEAN, no findings (sonnet; a short round: 4 tool calls, 49 s, so the diff was not read file by file). Verify: `github_description` 17 passed; `layout_snapshot picker_row_tooltip_clears_its_row` 10 passed, 48 filtered out. Checked by the unit beside it, mechanically: no `todo!`, `dbg!`, `unimplemented!` or `cfg(target_os)` in the added lines; the 20 changed files are all M5's; both guides updated |
 | M5 visual pass | 1 | c9f9d682 | B6, B7, B8, B11 PASS; B9 PASS with comment stripping seen only on `cli/cli` #9085 (no template issue with a comment in `small`); **B10 FAIL: 1.88×** (before 11.6 s median, after 21.8 s; by hand ten pages 10.9 s and 236 KB without `bodyText`, 20.4 s and 2.08 MB with; no request over 10 s, slowest page 2.97 s). B6: 41 trials, first frame with the panel 3.04–3.13 s after the cursor stopped. B11: CPU ticks per 30 s 717–746 beside the list, 695–731 on a described row, 703–752 on an undescribed one; no `gh` started by a rest. Evidence: 33 crops `evidence/b6-*` to `b11-*`, `b6-trials.txt`, `b10-times.txt`, `b11-cpu.txt`, `evidence/README.md`. Not confirmed: light theme for B7, B9–B11; a truly blank body. The "before" build was 7cbb6c76, not `main`'s tip; the hand-run query gives the same ratio (1.87) |
+| M5 rework code A | 1 | 925e0c7730a1ae21ea1d027de011f1521f092cf7:b05b30685902e7c2a89394499f7ce6ab2de5e69e | CLEAN (full round, session model, `code-review` at `high`, diff 3181b467..b05b3068, read not built; 16 tool calls). 3 MINOR, none fixed, all in *Follow-ups not done*: F1 a row's widget changes from a bare row to `Tooltip(row)` when its page lands, so a press held at that moment may be lost (inferred by reading); F2 `merge_searched` drops a searched duplicate of a listed issue and its description with it; F3 the pass goes on after a pick, and stays `Loading` with no request if the repository became unknown under a loaded list. Scoped gate beside it: GATE_EXIT=0 |
 
 ## Declined review findings
 
@@ -105,6 +106,10 @@ None.
 ## Token usage
 
 ## Follow-ups not done
+
+- M5 rework review A round 1, F1 (MINOR, inferred by reading, not reproduced): `ui/material/picker.rs` pushes a bare row for an issue without a description and `Tooltip(row)` for one with, so a row's widget type changes when its description page lands and iced rebuilds that row's state; a mouse press held on the row at that instant may not pick. Fix: wrap every row in the `Tooltip`, with an empty state for no text.
+- M5 rework review A round 1, F2 (MINOR): `merge_searched` drops a searched issue that is already listed, and with it the description the search's answer carried. While the listed copy's page has not arrived, or after the pass failed, a typed-number search of a listed issue on a capped list shows no tooltip. Fix: in `issue_searched`, copy a non-empty description from a searched duplicate onto the listed issue that has none.
+- M5 rework review A round 1, F3 (MINOR): the description pass goes on after an issue is picked (up to nine more requests for a list that is closed, though it can be reopened), and `issue_description_request` answers `None` while the pass stays `Loading` if `remotes_listed` replaced the repository under a loaded list. Neither shows; ending the pass on a pick is a product choice (the list can be reopened and its tooltips used).
 
 - Spec 036 (GitHub issue #430, tooltip show delay) is not on `main`, and this feature does not
   build on it (D5). Both change `crates/micold-client/src/ui/cdk/tooltip.rs`; the flow that merges
