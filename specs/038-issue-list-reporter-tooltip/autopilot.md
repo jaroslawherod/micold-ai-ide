@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 PR open, waiting on CI and merge; then M5.
+- **Next step**: M5 in progress, handed over mid-implementation: see *Handover*.
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #538 | M1: issue rows show two wrapping lines | merged | e64446150441104b327a5d7865db07635c5197e7 |
 | #543 | M2: Up and Down keep the highlighted issue row wholly in view | merged | c0cc58c7860cc3f164084cb953097f5f204934eb |
 | #549 | M3: typing a login narrows the issue list, the reporter emphasised | merged | a3a57925c7b931ea1e887f7cf8d044512c19c46e |
-| #576 | M4: a rest-delay, three-line tooltip in the component library | open | |
+| #576 | M4: a rest-delay, three-line tooltip in the component library | merged | 01cc704d9119af8caed874c9585f5767a95a11c1 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Issue rows show two wrapping lines: number and title, then the reporter and labels; showcase pose; guide | #538 | merged |
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
-| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | open |
-| M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | drafted |
+| M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | merged |
+| M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | in progress |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
 
 ## Decisions
@@ -87,7 +87,76 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 (T044–T055), handed over at the context cap during implementation. No PR open. Branch reset onto
+`origin/main` at 01cc704d (M4 merged). Nothing in `tasks.md`, `tdd/test-list.md` or
+`tdd/cycle-log.md` is ticked or logged yet for M5: do that for what is done below.
+
+**Done and committed (core, green).** T044, T045, T049: `description_from`, `DESCRIPTION_MAX_CHARS`,
+`Issue::described`, `Issue::description`, `bodyText` in the shared selection, `Debug` redacts the
+description. Tests `crates/micold-core/tests/github_description.rs` (13) and three added to
+`github_privacy.rs`; fixtures `issue_node_description.json`, `issue_node_comment_only.json` (written
+from contracts/issue-fields.md §2, not captured from GitHub: say so in the cycle log, and T055's
+§B run can confirm GitHub's `bodyText` for scenario 12's body). Evidence for the cycle log:
+- red (stubs), `scripts/build-lock.sh bash -c 'cargo test -p micold-core --test github_description --test github_privacy'`:
+  `thread 'a_long_text_is_cut_to_the_limit_and_marked' panicked at crates/micold-core/tests/github_description.rs:88:5: a cut text ends in the mark`;
+  `test result: FAILED. 3 passed; 10 failed` (`github_description`);
+  `thread 'debug_output_redacts_the_description' panicked at crates/micold-core/tests/github_privacy.rs:58:5` (`left: ""`), `FAILED. 5 passed; 1 failed`.
+- passed against the stub: `a_malformed_page_with_a_body_gives_an_error_without_it` (U30) and
+  `an_issue_has_no_serialize` (U81). Mutant check done: with the page error formatting the node and
+  `serde::Serialize` derived on `Issue`, both fail (`github_privacy.rs:125:17`, `:159:5`); restored.
+- green: `cargo test -p micold-core --all-targets --no-fail-fast` exit 0, 148 binaries ok.
+- Commits: the red tests `test(038): WIP, the description's parsing and privacy tests…`, the green
+  `feat(038): an issue carries the start of its body…`.
+- This closes the follow-up *M5, the clamp's cost on a very long description*: the tooltip is handed
+  at most 601 characters. Move it out of *Follow-ups not done* when M5's PR opens.
+
+**Written, in the WIP commit, client side NOT yet implemented (stubs only).**
+- T046: three tests added to `crates/micold-client/tests/issue_picker_rows.rs` (U71–U73, U82's
+  loading half) and nine in-crate tests at the end of `src/ui/material/picker.rs` `mod tests`
+  (U73, U74, U83, and a new **U86**: `{:?}` of a `Row` prints neither `details` nor `tooltip`;
+  add U86 to the test list; it also closes M1 review A F3). **Their red has not been run**: run
+  `scripts/build-lock.sh bash -c 'cargo fmt --all; cargo test -p micold-client --test issue_picker_rows; cargo test -p micold-client --lib picker'`
+  first and record it. `a_list_that_is_loading_again_builds_no_row` should pass at once (a guard).
+  U82's other half (a form on another source builds no row) is not written: add it to the gate
+  below or as a view test.
+- T047: `crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs` (8 tests, written by
+  a worker, registered in `tests/layout_snapshot.rs`). Red observed:
+  `scripts/build-lock.sh bash -c 'cargo fmt --all; cargo test -p micold-client --test layout_snapshot picker_row_tooltip'`
+  gave `test result: FAILED. 0 passed; 8 failed; … 48 filtered out`, each at
+  `panicked at crates/micold-client/tests/gates/picker_row_tooltip_clears_its_row.rs:563:9: … exactly one tooltip panel has to be open above the list, and 0 are`;
+  the other 48 `layout_snapshot` tests pass. The gate assumes: the tooltip wrapper adds no layout
+  node (rows stay at overlay path `[0;8]+[i]`); the panel is what the list overlay floats (found
+  with `iced::advanced::overlay::Nested`); redraws and the cursor reach the row through
+  `Menu::update`; Up/Down/Enter publish the same messages with a panel open. It was not reviewed
+  by the unit: read it before trusting it.
+- T048: `no_view_code_fetches_issues` added to `tests/issues_are_requested_only_on_named_events.rs`
+  (U77, a characterization: expected to pass; not yet run; mutant-check it).
+- Stubs in `src/ui/material/picker.rs`: `Row.tooltip`, `Row.key` fields, `Row::tooltip`, `Row::key`
+  (both do nothing), `ROW_TOOLTIP_REST`, `ROW_TOOLTIP_LINES`.
+
+**Next steps, in order.**
+1. Run the T046 red; record it.
+2. T051: `Row::tooltip` stores the text (`None` when empty), `Row::key` stores the key; a
+   hand-written `Debug` for `Row` redacting `details` and `tooltip`; `menu_element` wraps a row
+   with tooltip text in `material::Tooltip::new(row, text, r).after_rest(ROW_TOOLTIP_REST).max_lines(ROW_TOOLTIP_LINES)`
+   plus `.subject(key)` when keyed, position `Bottom`, **the tooltip outermost** (outside the
+   `PICKER_HIGHLIGHT` container), so its state stays at the row's place when the highlight moves.
+   Check `cdk::tooltip`'s `operate` forwards to its content (the into-view operation must still find
+   `PICKER_HIGHLIGHT`; `tests/picker_highlight_into_view.rs`). Re-export the constants if a test needs them.
+3. T050: `overlay::Overlay::overlay` for `Menu` in `src/ui/cdk/picker.rs`, forwarding to
+   `self.content.as_widget_mut().overlay(self.state, layout, renderer, &layout.bounds(), Vector::ZERO)`
+   (research R10); none while `leaving`. `one_overlay_implementation.rs` and `overlay_stacking.rs` must stay green.
+4. T052: `issue_rows` in `src/ui/worktree_form.rs` adds `.key(issue.number())` and, when
+   `!issue.description().is_empty()`, `.tooltip(issue.description())`.
+5. Since M4's review B was thin: check `Tooltip::after_rest`/`subject` in `src/ui/cdk/tooltip.rs`
+   against contracts/rest-tooltip.md §2 and §4 where the gate leans on it (press not captured,
+   redraw observes the cursor, `wake_at`).
+6. T053 (snapshot unchanged or regenerated), T054 (user guide § "From a GitHub issue",
+   `docs/development/component-library.md` § "Pickers"), cycle log, test list, tick T044–T054.
+7. T055 and [verify.md](../../.claude/skills/speckit-autopilot/tasks/verify.md): scoped gate with
+   review A (`high`), review B once, visual pass §B6–B9 and §B11, §B10 load time (five runs on
+   `main`, five after, alternating; above 1.5× escalate, research R14), full gate, PR
+   (`feat(038): …`, body ends `Refs #518`).
 
 ## Open escalation
 

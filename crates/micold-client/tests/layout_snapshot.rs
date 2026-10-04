@@ -121,6 +121,14 @@ mod context_menu_anchor;
 #[path = "gates/tooltip_clears_its_row.rs"]
 mod tooltip_clears_its_row;
 
+// --- The picker-row-tooltip-clears-its-row gate (038, FR-023) ------------------------------------
+
+// Beside `tooltip_clears_its_row`, whose question it asks of another surface: a row of the issue
+// picker's floating list, whose tooltip is an overlay floated by an overlay and opens only after
+// the cursor has rested. It builds its own form and reads no cache, so the fixture does not change.
+#[path = "gates/picker_row_tooltip_clears_its_row.rs"]
+mod picker_row_tooltip_clears_its_row;
+
 // --- The issue-rows-show-all-their-text gate (038, SC-001) ---------------------------------------
 
 // Here because it reads covered states — the issue list's rows — and compares what they painted

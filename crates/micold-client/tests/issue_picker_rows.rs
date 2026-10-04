@@ -229,6 +229,107 @@ fn a_row_matched_by_its_reporter_emphasises_the_login() {
     );
 }
 
+/// A description as GitHub's listing gives it after `description_from`.
+const DESCRIPTION: &str =
+    "The list cuts long titles off and gives no way to tell two issues apart.";
+
+/// U71, U73, A21, A26 (FR-019, story 3 scenario 11): a row for an issue with a description carries
+/// exactly that description as its tooltip text and the issue's number as its key, whether the
+/// issue was listed, found by the search beyond the cap, or looked up by its typed number.
+#[test]
+fn a_described_issues_row_carries_the_description_and_the_number() {
+    let form = form(
+        vec![issue(17, "Follow-up to 1100", "octocat", &["bug"]).described(DESCRIPTION)],
+        vec![
+            issue(1100, "Titles are cut off", "ghost-writer", &["ui"])
+                .described("Looked up by its number."),
+            issue(2048, "Regression of 1100 on resize", "hubot", &[])
+                .described("Found by the search."),
+        ],
+        "1100",
+    );
+    let (rows, _) = issue_rows(&form);
+    let issues = issues_in_row_order(&form);
+    assert_eq!(rows.len(), 3, "every held issue matches `1100`");
+
+    for (row, issue) in rows.iter().zip(&issues) {
+        assert_eq!(
+            row.tooltip.as_deref(),
+            Some(issue.description()),
+            "#{}: the tooltip's text is the description and nothing else",
+            issue.number()
+        );
+        assert_eq!(
+            row.key,
+            Some(issue.number()),
+            "#{}: the row is keyed by its issue",
+            issue.number()
+        );
+        let text = row.tooltip.as_deref().expect("a tooltip");
+        assert!(
+            !text.contains(&issue.number().to_string())
+                && !text.contains(issue.title())
+                && !text.contains(issue.reporter()),
+            "#{}: no number, title or reporter in it: {text}",
+            issue.number()
+        );
+    }
+    let listed = rows
+        .iter()
+        .zip(&issues)
+        .find(|(_, issue)| issue.number() == 17)
+        .map(|(row, _)| row)
+        .expect("#17 is offered");
+    assert_eq!(listed.tooltip.as_deref(), Some(DESCRIPTION));
+}
+
+/// U72, A22, A28 (FR-020): an issue without a description — no body, a blank one, or one that
+/// left no text — gets no tooltip. Its row is still keyed.
+#[test]
+fn an_issue_without_a_description_gets_no_tooltip() {
+    let form = form(
+        vec![
+            issue(1, "No body", "octocat", &[]),
+            issue(2, "Blank body", "octocat", &[]).described("  \n\n "),
+            issue(3, "Described", "octocat", &[]).described(DESCRIPTION),
+        ],
+        Vec::new(),
+        "",
+    );
+    let (rows, _) = issue_rows(&form);
+    let issues = issues_in_row_order(&form);
+    assert_eq!(rows.len(), 3);
+    for (row, issue) in rows.iter().zip(&issues) {
+        assert_eq!(
+            row.tooltip.is_some(),
+            issue.number() == 3,
+            "#{}: only the described issue has a tooltip",
+            issue.number()
+        );
+        assert_eq!(row.key, Some(issue.number()), "#{}", issue.number());
+    }
+}
+
+/// U82 (FR-017, Edge: a newer load started): while the list is loading again the form holds no
+/// issue, so no row is built and no row tooltip with it, whatever matches were left from before.
+#[test]
+fn a_list_that_is_loading_again_builds_no_row() {
+    let mut form = form(
+        vec![issue(3, "Described", "octocat", &[]).described(DESCRIPTION)],
+        Vec::new(),
+        "",
+    );
+    assert_eq!(issue_rows(&form).0.len(), 1, "precondition: one row");
+    form.issues = IssueList::Loading { seq: 2 };
+    let (rows, selected) = issue_rows(&form);
+    assert!(
+        rows.is_empty(),
+        "no row, so no tooltip: {} built",
+        rows.len()
+    );
+    assert_eq!(selected, None);
+}
+
 fn form_with_one(issue: Issue, query: &str) -> WorktreeForm {
     form(vec![issue], Vec::new(), query)
 }
