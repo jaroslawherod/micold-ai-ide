@@ -164,11 +164,11 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U55 | `write` creates the directory `0700` and the file `0600`, and replaces an existing file through a rename (`cfg(unix)`) | R8, FR-020 | example | PENDING | T016 |
-| U56 | `ensure_dir` creates a missing directory `0700` and tightens an existing looser one (`cfg(unix)`) | R8, FR-020 | example | PENDING | T016 |
-| U57 | On Windows the directory and file carry a protected DACL with exactly one entry, for the current user (`cfg(windows)`) | R8, FR-020, FR-030, SC-009 | example | PENDING | T016 |
-| U58 | The temporary file is owner-only before any content is written | FR-020 | example | PENDING | T016 |
-| U59 | `write` into a read-only directory returns the error and leaves no temporary file | FR-007, FR-006 | example | PENDING | T016 |
+| U55 | `write` creates the directory `0700` and the file `0600`, and replaces an existing file through a rename (`cfg(unix)`) | R8, FR-020 | example | DONE | `crates/micold-core/tests/owner_only.rs::unix::write_creates_the_directory_0700_and_the_file_0600`, `…::unix::write_replaces_an_existing_file_through_a_rename`, `…::unix::write_narrows_an_existing_wider_file_and_directory`, `…::write_with_stores_what_the_fill_wrote_and_returns_the_path` |
+| U56 | `ensure_dir` creates a missing directory `0700` and tightens an existing looser one (`cfg(unix)`) | R8, FR-020 | example | DONE | `crates/micold-core/tests/owner_only.rs::unix::ensure_dir_creates_a_missing_directory_0700`, `…::unix::ensure_dir_tightens_an_existing_looser_directory` |
+| U57 | On Windows the directory and file carry a protected DACL with exactly one entry, for the current user (`cfg(windows)`) | R8, FR-020, FR-030, SC-009 | example | DONE | `crates/micold-core/tests/owner_only.rs::windows::the_written_file_and_its_directory_have_a_protected_dacl_for_the_current_user_only`, `…::windows::rewriting_replaces_the_bytes_and_keeps_the_owner_only_dacl`, `…::windows::ensure_dir_gives_a_missing_and_an_existing_directory_the_owner_only_dacl` |
+| U58 | The temporary file is owner-only before any content is written | FR-020 | example | DONE | `crates/micold-core/tests/owner_only.rs::unix::the_temporary_file_is_0600_before_any_content_is_written`, `…::windows::the_temporary_file_has_the_owner_only_dacl_before_any_content_is_written` |
+| U59 | `write` into a read-only directory returns the error and leaves no temporary file | FR-007, FR-006 | example | DONE | `crates/micold-core/tests/owner_only.rs::unix::write_into_a_read_only_directory_returns_the_error_and_leaves_no_temporary_file`, `…::a_fill_that_fails_returns_its_error_and_leaves_no_temporary_file`, `…::a_rename_that_fails_returns_the_error_and_leaves_no_temporary_file` |
 
 ### Restore after a service restart (T017, T018, T022, T023)
 
