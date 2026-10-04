@@ -1,0 +1,17 @@
+{
+  "number": 519,
+  "title": "Long titles are cut off in the issue list",
+  "updatedAt": "2026-10-02T09:30:00Z",
+  "state": "OPEN",
+  "author": {
+    "login": "octocat"
+  },
+  "labels": {
+    "nodes": [
+      {
+        "name": "bug"
+      }
+    ]
+  },
+  "bodyText": "Problem\nThe list cuts long titles off."
+}
