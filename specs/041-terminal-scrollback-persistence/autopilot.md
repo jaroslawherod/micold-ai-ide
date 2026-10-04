@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1, step 1 (TDD): group 1 done (T001–T004, T008; U1–U11). Next group 2 (U14–U28, T005/T006/T009/T010), then group 3 (A9, A10, U30–U38, U133–U135; T007/T011/T012), T013, gate.
+- **Next step**: M1, step 2: T001–T006, T008–T013 ticked (T007 waits for U38's Windows CI leg); review A rounds 1 and 2 fixed (c75014df, 9be29720). Next: rebase onto `origin/main`, gate, review A round 3 (scoped on the round 2 fix; its first run was lost with the session), review B, PR.
 
 ## Pull requests
 
