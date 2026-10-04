@@ -110,6 +110,61 @@ worktree row's tags and does not get to decide what they are. A widening that su
 restructuring it was blamed on is a widening that was never the restructuring's fault, and the
 signal is still worth having — it just says "read across a boundary" here, not "misfiled".
 
+## Session attention: notifications and unread marks
+
+_(Feature 039. Why each choice: `specs/039-session-attention-notifications/research.md` R1 to R3, R6.)_
+
+A session that finishes a turn while nobody is looking raises one desktop notification and is
+marked unread. Several windows, in several processes, may be open on one session service, and the
+service may run in a container, so the flow is split by who can know what.
+
+| Fact | Known by | Where it lives |
+|---|---|---|
+| A session changed to awaiting input | the session service only (it runs while no window is open) | `DaemonState::note_activity`, `crates/micold-daemon/src/state.rs` |
+| Which session each window has in view | the window; the service keeps the last report per connection | `micold_core::attention::in_view`, `ClientMsg::WindowView` |
+| Which window raises the notification | the service decides, once per event | `AttentionClaim`, `AttentionGranted` |
+| The system notification and its click | the window process that raised it | `crates/micold-client/src/shell/desktop_notify/` (`linux.rs`, `macos.rs`, `windows.rs`) |
+| Which window shows the clicked session | the service | `SessionReveal`, `RevealSession`, `micold_core::attention::resolve_reveal` |
+
+**View report.** A window derives `in_view` with a pure function: the window is focused, no screen
+takes the main area over (Settings), and the active project has a selected session. It sends
+`WindowView { focused, in_view }` only when the value differs from the last one sent, and once after
+each `Welcome`. Every way a session comes into view (select, notification click, project switch,
+focus regained, Settings left) changes that value, so one report clears the unread mark for all of
+them. The client hides the mark of the session in view at once and does not wait for the answer.
+
+**Attention sequence.** `note_activity` is the one place a session changes into `AwaitingInput`.
+When that happens and no connected window has the session in view, the service adds one to the
+session's `attention_seq`, sets `unread`, persists both in the catalog and lets the ordinary
+`CatalogChanged` carry them. Because the service does this with no window open, a session that
+finished while the application was closed is unread at the next start, with no notification.
+
+**Claim and grant.** Every window sees the same `attention_seq`, so something must pick one. Each
+client keeps an `AttentionTracker` (in `micold-core`): the first snapshot of a session is adopted
+without a claim, a greater `attention_seq` on an unbroken connection is claimed with
+`AttentionClaim { session, seq }`, and the service answers `AttentionGranted` to one claimer per
+sequence. The window that is granted raises the notification. The Desktop notifications setting is
+checked by the service before it grants, so the one switch holds for every window and every AI CLI.
+
+**Reveal routing.** A click arrives at the process that raised the notification, but the project
+may be open in another window. That process sends `SessionReveal { project, session, activation }`;
+the service sends `RevealSession` to the window attached to the project (else the one that last
+reported focus, else the sender). The target raises its window (`shell/window_raise.rs`, with the
+Wayland activation token when there is one) and resolves the request with `resolve_reveal`: switch
+project and select the session through the existing messages, or leave the selection and show
+`That session is no longer available.` Nothing is stopped or typed into. A click on a notification
+raised by a window that has since closed reaches no window; the session keeps its mark.
+
+**Why the service is the arbiter.** It is the only party that sees every window, survives them all,
+and runs the same way on the host and in a container (it adds no new access: the facts travel on the
+connection a window already has). A client-side file of "viewed" sessions would have several
+writers and a watcher; a service that pushed the event to one chosen window could not tell a
+window that lost its connection from no window at all.
+
+**Adding a platform backend.** Implement the notifier trait in `desktop_notify/`, report a click as
+`NotifierEvent::Activated` for the session, and add the file to CI's "Test (desktop notification
+backends)" step, which runs on Linux, macOS and Windows (Principle VI).
+
 ## Adding a floating surface
 
 A floating surface is anything the window stacks over its content: a dialog, a panel popover, a
