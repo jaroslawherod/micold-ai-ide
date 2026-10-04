@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M2: T014–T024 done (and T007 ticked: U38 green on Windows in PR #577's run 37214267941). Reviews A and B clean. The milestone's PR went red on the Windows leg (CI run 37219182985, attempt 1 of 3): the directory's DACL had two entries, because Windows splits an inheritable entry with a generic right. Fixed (`FA` for `GA` on the directory); `mise run gate` and the Windows cross-check green, scoped review A clean. Wait for CI: its Windows leg is the only proof of the fix. Then merge, then M3.
+- **Next step**: M3: implement T025–T030 (periodic saves), then gate, reviews A and B, PR.
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
 | #540 | Design | merged | 34cd2c85309171eef68ccce20ff4f709544e5cee |
 | #577 | M1 | merged | 75fe78b8cda4a3332911eaf184548abd018fcab0 |
+| #578 | M2 | merged | b0100eab588663563b14cee5756e3e511b7f8014 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
-| M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | in progress |
-| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | pending |
+| M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
+| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | in progress |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
