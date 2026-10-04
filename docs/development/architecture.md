@@ -161,9 +161,10 @@ connection a window already has). A client-side file of "viewed" sessions would 
 writers and a watcher; a service that pushed the event to one chosen window could not tell a
 window that lost its connection from no window at all.
 
-**Adding a platform backend.** Implement the notifier trait in `desktop_notify/`, report a click as
-`NotifierEvent::Activated` for the session, and add the file to CI's "Test (desktop notification
-backends)" step, which runs on Linux, macOS and Windows (Principle VI).
+**Adding a platform backend.** Add a `cfg` module to `desktop_notify/` with a `Notifier` that shows
+the notification and reports a click as `NotifierEvent::Activated` for the session. CI's "Test
+(desktop notification backends)" step runs on macOS and Windows and picks its tests up by the
+`desktop_notify` name filter (Principle VI).
 
 ## Adding a floating surface
 
