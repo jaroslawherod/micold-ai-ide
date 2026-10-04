@@ -129,3 +129,16 @@ Blocking: T124 to T130 (F1 to F7).
 - [ ] T131 [F8] Move `Service`, `idle_process`, `connect` of the five daemon attention test files into `crates/micold-daemon/tests/support/mod.rs` and `mod support;` them. Proof: `scripts/build-lock.sh cargo test -p micold-daemon --test attention_events --test attention_claims --test unread_state --test session_reveal --test settings_desktop_notifications`
 - [ ] T132 [F10] Mutate or fail-first U155 and U157 (height unchanged by the mark): add 1dp to the host's height under the mark and see `menu_anatomy`/`button_anatomy` fail. Proof: `scripts/build-lock.sh cargo test -p micold-client --test menu_anatomy --test button_anatomy`
 - [ ] T133 [TEST_AFTER] Give U13, U23, U24, U68, U81, U118, U139 a recorded fail: one mutant each, noted in `tdd/cycle-log.md`. Proof: each mutant fails its test, tree clean after
+
+### Close, 2026-10-04
+
+The verdict above stands as recorded. Answered in the close PR (ledger D34), each new test seen red under its mutant:
+
+- T124 (F1): `server::write_unsaved_attention` extracted; `attention_events::the_supervisor_tick_writes_the_sequence_to_the_store`. The call in `spawn_supervisor` itself is still not run by a test.
+- T125 (F2): `unread_state::stopping_the_service_writes_an_unsaved_event_and_a_read` (`server::unwind` is now `pub`).
+- T126 (F3): `test-list.md` states set from the cycle log.
+- T127 (F4): the unwired recorder and its assertions are deleted; the claim list is asserted exactly.
+- T128 (F5): the literal `repo — X`. F11: the returned line's text is asserted; no behaviour id added.
+- T130 (F7): `a_method_error_naming_nobody_there_is_no_notification_service`.
+- T129 (F6): declined; the exemption was reviewed in M8 (ledger D31).
+- T131 to T133: not done; ledger *Follow-ups not done*.
