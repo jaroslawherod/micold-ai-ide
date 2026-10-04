@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M1, PR open: wait for CI. When the Windows leg shows U38 green (`history_restart_in_run` runs there), tick T007 in tasks.md on the branch, then merge. Reviews A (after D17) and B are clean; `mise run gate` and the macOS cross-check were green at `5267dc4c`.
+- **Next step**: M2, implementing by TDD in component groups, one worker each, in order: format (T014, T019), owner-only (T016, T020), store (T015, T021), daemon (T017, T018, T022, T023), then T024. Then the scoped gate with review A, review B, the full gate, the PR. T007 (left from M1): U38 ran green on Windows in PR #577's CI run 37214267941 (job 111471529932, `history_restart_in_run`: 5 passed, 0 ignored); tick it in this milestone's PR.
 
 ## Pull requests
 
@@ -17,14 +17,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #531 | Spec | merged | 2eb98b232b246146d34872e0ba9d1b1f2cce3e97 |
 | #540 | Design | merged | 34cd2c85309171eef68ccce20ff4f709544e5cee |
-| #577 | M1 | open | |
+| #577 | M1 | merged | 75fe78b8cda4a3332911eaf184548abd018fcab0 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | PR open |
-| M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | pending |
+| M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
+| M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | | in progress |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | pending |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |

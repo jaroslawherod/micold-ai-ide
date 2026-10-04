@@ -513,3 +513,7 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 - refactor: none needed
 - notes: the fixture (307 bytes) was written once from `encode` by a temporary test that was removed before the commit; the committed test only reads it. Shown able to fail by a temporary mutation after green, restored with `git checkout`: the two fields of `SavedRun` swapped -> `the_v1_fixture_is_the_encoding_of_its_snapshot` FAILED at its byte comparison (6 failed, 13 passed).
 - commit: `feat(041): encode and decode the saved-history file, with the ten checks of a read (U39-U43)` (`82c1bef7`)
+
+## T007 closed: U38 on Windows (M2 unit)
+
+- U38 (`crates/micold-daemon/tests/history_restart_in_run.rs`) ran on the Windows leg of PR #577: CI run 37214267941, job 111471529932 `build + test (windows-latest)`, `Running tests\history_restart_in_run.rs` -> `test result: ok. 5 passed; 0 failed; 0 ignored`. T007 ticked.
