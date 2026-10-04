@@ -6,14 +6,20 @@
 ## 1. Queries
 
 `LIST_QUERY`, `SEARCH_QUERY` and `SEARCH_WITH_NUMBER_QUERY` each select, on every issue node,
-two more fields beside `number title updatedAt [state] labels(first: 20){nodes{name}}`:
+`author { login }` beside `number title updatedAt [state] labels(first: 20){nodes{name}}`. The two
+search queries also select `bodyText`; `LIST_QUERY` does not (SC-008, research R14):
 
 ```graphql
 author { login }
-bodyText
+bodyText        # the search queries and DESCRIPTIONS_QUERY only
 ```
 
-- `author { login }` ships in milestone M1; `bodyText` ships in M5.
+`DESCRIPTIONS_QUERY` (M5) reads the connection `LIST_QUERY` reads — `issues(states: OPEN, first:
+100, after: $cursor, orderBy: {field: UPDATED_AT, direction: DESC})` — and selects `pageInfo {
+hasNextPage endCursor }` and, per node, `number bodyText` only. `descriptions_args(repo, cursor)`
+is `list_args(repo, cursor)` with that query: the same variables, nothing more (FR-026).
+
+- `author { login }` ships in milestone M1; `bodyText` and the description pass ship in M5.
 - Nothing else in the query text changes: not the arguments, the page size, the ordering, the
   `states` filter or the search string. `list_args` and `search_args` are untouched (FR-013,
   FR-026). The existing tests `list_args_send_only_the_repository` and
@@ -21,7 +27,8 @@ bodyText
   qualifier and no variable beyond today's.
 - The three queries share one node selection (a `const` fragment string), so a node from any of
   them parses by `issue_from_node` (FR-006). A test asserts each query text contains the shared
-  selection.
+  selection. A search node carries `bodyText` after it; a list node has none and parses to an issue
+  without a description, which the description pass fills in (§6).
 
 ## 2. Parsing
 
@@ -114,7 +121,28 @@ Offsets are bytes; the separator `"  ·  "` is 6 bytes.
   takes an `Issue`, a reporter or a description. A source gate (`github_privacy.rs`, reading the
   three files) holds it.
 
-## 6. Load time (SC-008)
+## 6. The description pass and load time (FR-024, FR-026, SC-008)
 
-Not a contract of this module beyond "no extra request". Measured in
-[quickstart §B10](../quickstart.md); what happens above the limit is in research R14.
+The list appears from `LIST_QUERY` alone, so its load time is what it was before `bodyText`
+(measured in [quickstart §B10](../quickstart.md); research R14). Descriptions follow:
+
+| Item | Rule |
+|---|---|
+| `DescriptionPage { descriptions: Vec<(u64, String)>, next_cursor }` | One page of the pass: issue number and `description_from(bodyText)`. Its `Debug` prints the count, never a description (FR-025). |
+| `parse_descriptions_page(stdout)` | A node without `bodyText`, or with `null`, gives `""`; a node without a `number` is skipped. GraphQL errors and a malformed answer are classified as `parse_list_page` classifies them, and the error carries no part of a body. |
+| `IssueSource::describe_open(repo, cursor)` | One request, bound by the same 10 s as every other (034 FR-007). `FakeIssueSource::with_descriptions` scripts it and `description_calls()` records it. |
+| `describe_listed(issues, page)` | Puts each description on the held issue with that number. An issue the page does not name keeps what it has; a number that is not held is ignored. |
+| `next_description_cursor(asked, page, pages_read)` | The cursor of the next request, or `None`: on the last page, on a page with no node, on a cursor equal to the one asked with, and once `DESCRIPTION_PAGE_CAP` (10) pages are read. |
+
+The form (`features/worktree_form.rs`): `IssueList::Loaded` holds `descriptions: DescriptionPass`,
+`Loading { seq, cursor, pages }` or `Done`. An accepted load sets `Loading` with the load's `seq`
+and no cursor, unless the listing holds no issue. `Msg::IssueDescriptionsLoaded { seq, cursor,
+result }` applies only while the pass awaits exactly that `seq` and `cursor`; `Ok` describes the
+held issues and moves to the next cursor or `Done`; `Err` sets `Done` and changes nothing else: no
+error is shown and nothing is retried. Leaving the source, a new load or closing the form drops the
+pass with the list. The highlight, the matches and the open list do not change when a page lands.
+
+The shell (`shell/issues.rs`): `start_issue_descriptions` is the only path to `describe_open`. It
+runs when the reducer accepted a load, and again when it accepted a page and awaits another: never
+from a view, a timer or a hover (SC-006). `issues_are_requested_only_on_named_events.rs` counts
+its callers.

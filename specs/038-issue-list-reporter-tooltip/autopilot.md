@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 waits on the user: §B10 measured 1.88× (SC-008 allows 1.5×), see *Open escalation*. After the answer: apply it to spec.md (and the code if it changes how descriptions load), then the full gate, tick T055, PR. Reviews A (3 rounds) and B are done and clean; a code change for the answer needs a scoped round of A on it.
+- **Next step**: M5 rework for D13 (descriptions in a second pass): artifacts reworded; then T058–T063 test-first (core, reducer, shell, guide), scoped gate with review A on the rework, review B, visual pass §B6–B11 with §B10 re-measured, full gate, tick T055, PR.
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | merged |
-| M5 | T044–T055 | full | Resting on an issue row for 3 s shows its description; guide | | in progress |
+| M5 | T044–T055, T058–T063 | full | Resting on an issue row for 3 s shows its description; guide | | in progress |
 | M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
 
 ## Decisions
@@ -49,6 +49,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | M3 | Does M2 review A F2 (re-ranking keeps the scroll offset, so the highlight can sit off screen) fit M3? | No. M3's tasks change only the match text, the hint and the guide; none touches the shell handlers for typing or loads, and FR-007/SC-007 cover Up and Down only. Chaining the scroll after a re-rank needs its own behaviour on the test list and a widened U43 (one caller today). Left in *Follow-ups not done*. | agent-resolved | tasks.md T024–T031; `rematch_issues` in `features/worktree_form.rs`; U43 `only_the_issue_highlight_move_chains_the_operation` |
 | D11 | M3 | US2 scenario 3 ("both matches are emphasised") vs the unchanged matcher, whose literal tier marks only the leftmost occurrence: is a title and a login both holding the typed text required to emphasise both? | No. FR-009 keeps the field's one matching rule and contract §4 rules out a change to `typeahead`; a title holding the text twice also gets one mark today. Both are emphasised when one match spans title and login (subsequence, e.g. `fixana`), which U19 and U37 hold. | agent-resolved | `typeahead.rs` `literal` ("at its leftmost occurrence"), contract issue-fields §4 "No change to `micold_core::typeahead`"; U19 red with `ana` stayed red after T028 |
 | D12 | M4 | T035 puts the `max_lines(3)` panel test (U68) in `tests/tooltip_rest_glue.rs`, but `ui::material` is `pub(crate)`: an integration test cannot build a `material::Tooltip`. Where does U68 live? | In-crate, as `#[cfg(test)]` tests of `ui/material/line_clamp.rs` (the widget's fitted text and height, and the opened panel's height through `material::Tooltip`). `tooltip_rest_glue.rs` holds the `cdk` half and says so in its module doc. U70 is a source scan in `material_builder_api.rs`. | agent-resolved | `crates/micold-client/src/ui/mod.rs:21` `pub(crate) mod material`; `tests/picker_visibility.rs:22` states the same limit for the select's gates |
+| D13 | M5 | §B10 measured the issue list of `cli/cli` (1,000 issues) at 1.88× with `bodyText` in the list query; SC-008 allows 1.5×. What should M5 do? (category 1, asked by `Milestone M5 518 part 3`.) Options were: 1 second-pass fetch; 2 accept the slower load and change SC-008 to 2×; 3 fetch a description when the cursor rests; 4 drop US3. | Option 1, "Second-pass fetch (Recommended)": "Load the list as today without descriptions, then fetch descriptions in a second pass once the list has arrived. List stays at about 11 s (measured 10.9 s without bodyText). Cost: FR-024/FR-026 reworded (about 20 requests per full load instead of 10) and a rework of M5's query, form state and tests." The second pass starts on the same occasions as a list load and never because a cursor rests; a tooltip is available once its page of descriptions is in. SC-008 stays 1.5×. | decided by user | Escalation (category 1), answered 2026-10-04 by AskUserQuestion, relayed by the orchestrator. Measured: before 13.6, 12.4, 11.3, 11.6, 11.1 s (median 11.6); after 23.2, 22.2, 21.8, 21.8, 19.8 s (median 21.8), `evidence/b10-times.txt`; by hand ten pages 10.9 s and 236 KB without `bodyText`, 20.4 s and 2.08 MB with |
+| D14 | M5 | Do the two search queries (beyond the cap, typed number) also lose `bodyText` and get a second pass? | No. A search is one request of at most 51 nodes after a debounce; SC-008 measures the list appearing, and US3 scenario 11 needs a searched issue's description. They keep `bodyText` in their own answer (FR-024 as reworded says so). | agent-resolved | spec.md FR-024, SC-008; `SEARCH_QUERY` `first: 50`; D13's wording names the list only |
+| D15 | M5 | What does the form show when the description pass fails? | Nothing: the pass ends, the list stays, rows without a delivered description have no tooltip, no retry; the next list load starts a new pass. A tooltip is a convenience (US3 is P3) and FR-020 already has "no tooltip" as a normal row state. Written into FR-024. | agent-resolved | spec.md FR-024, FR-020; contracts/issue-fields.md §6 |
 
 ## Review rounds
 
@@ -96,32 +99,7 @@ None.
 
 ## Open escalation
 
-**M5, T055, §B10 — category 1 (product decision the repo does not settle; research R14 names it).**
-Asked 2026-10-04 by unit `Milestone M5 518 part 3`. Nothing is pushed; no PR is open for M5.
-
-- **Question**: with descriptions, the issue list of a 1,000-issue repository takes 1.88 times as
-  long to appear (about 22 s instead of 12 s). SC-008 allows 1.5 times. What should M5 do?
-- **Measured** (`evidence/b10-times.txt`, `cli/cli`, 1,000 issues loaded, alternating runs): before
-  13.6, 12.4, 11.3, 11.6, 11.1 s (median 11.6); after 23.2, 22.2, 21.8, 21.8, 19.8 s (median 21.8).
-  The query run by hand gives the same: ten pages in 10.9 s and 236 KB without `bodyText`, 20.4 s
-  and 2.08 MB with it; one page 0.97–1.02 s against 2.45–2.97 s. The cost is in GitHub's answer,
-  not in the client. No request came near the 10 s limit. A small repository (25 issues, R14)
-  shows no measurable difference.
-- **Options**:
-  1. (Recommended) Load the list as today, without `bodyText`, and fetch the descriptions in a
-     second pass that starts when the list has arrived (same occasions as a list load, never
-     because a cursor rests). The list appears as fast as before (SC-008 holds), a tooltip is
-     available once its page of descriptions is in. Cost: FR-024 and FR-026 are reworded (twice
-     the requests per load, about 20 instead of 10 on a full load), and M5 gets a rework of the
-     core query, the form's state and their tests.
-  2. Accept the slower load: change SC-008 to what was measured (2 times) and merge M5 as it is.
-     No more code. Every user of a large repository waits about 10 s longer for a list whose
-     tooltip is a convenience (US3 is P3).
-  3. Fetch a description when the cursor has rested on its row. The list is as fast as before and
-     nothing is fetched that is not read, but it contradicts FR-024 and SC-006 (no request because
-     a cursor rests) and the tooltip then opens later than 3 s.
-  4. Drop US3 from this feature: revert `bodyText`, keep M1–M4, close M5 without the tooltip.
-- **Paused**: T055 (open), the full gate and M5's PR; M6 behind it.
+None.
 
 ## Token usage
 

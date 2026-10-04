@@ -98,7 +98,7 @@ gives the test task first, then the implementation task(s).
 | U24 | `description_from` of input with no non-whitespace character gives the empty string | FR-020 | example | DONE | T044 / T049 |
 | U25 | A node whose `bodyText` is `Problem\nThe list cuts long titles off.` parses to `Problem The list cuts long titles off.`; a comment-only body parses to `""` | US3-12, US3-13, FR-022 | example | DONE | T044 / T049 |
 | U26 | `bodyText` null or absent gives an empty description and the issue is still listed; a 65,536-character body gives 601 characters | FR-020, Edge: very long | example | DONE | T044 / T049 |
-| U27 | The shared node selection contains `bodyText`, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | DONE | T044 / T049 |
+| U27 | The search queries select `bodyText` once per issue node, the list query does not, and request arguments, page size and cap are unchanged | FR-024, FR-026 | example | PENDING (reworked for the second pass, D13) | T044, T058 / T049, T061 |
 | U28 | `{:?}` of an issue contains number and title but neither the reporter nor the description | FR-025 | example | DONE (reporter; the description added in M5) | T003, T045 / T009, T049 |
 | U29 | No `tracing`/`log` call in `github.rs`, `shell/issues.rs` or `worktree_form.rs` names an issue, reporter or description | FR-025 | example | DONE | T003 / T009 |
 | U30 | A malformed page containing a body returns an error whose `Display` and `Debug` carry no part of the body | FR-025 | example | DONE | T045 / T049 |
@@ -191,6 +191,22 @@ gives the test task first, then the implementation task(s).
 | U87 | `description_from` drops control characters and invisible format characters (zero-width marks, direction overrides): a body of only such characters gives the empty string, and a dropped mark neither counts toward the limit nor leaves a second space | FR-020 | example | DONE (added in M5 after review A F3) | T044 / T049 |
 | U88 | A list dismissed with a row's panel open and opened again over the same row, cursor unmoved, shows that row's panel only after a full delay from the reopening | FR-015, FR-017 | example | DONE (added in M5 after review A F1) | T047 / T050 |
 | U89 | `description_from` keeps a zero-width joiner or non-joiner that has a visible character on each side within its word (Persian spelling, emoji sequences), drops one that has not, counts a kept one toward the limit, and leaves none before the cut mark | FR-022 | example | DONE (added in M5 after review A round 2 F1) | T044 / T049 |
+
+### Description pass (added 2026-10-04, ledger D13): `github.rs`, the form's reducer, the shell
+
+| id | behavior | traces | kind | state | tasks |
+|---|---|---|---|---|---|
+| U90 | A listed node parses to an issue without a description, whatever the answer carries | FR-024, SC-008 | example | PENDING | T058 / T061 |
+| U91 | `DESCRIPTIONS_QUERY` reads the list's connection in its order and page size and selects only `number` and `bodyText`; `descriptions_args` sends what `list_args` sends | FR-026 | example | PENDING | T058 / T061 |
+| U92 | `parse_descriptions_page` gives numbers with folded, bounded descriptions and the next cursor; no body gives `""`; a node without a number is skipped; GraphQL errors classify as for the list; neither an error nor `{:?}` of a page carries a body | FR-020, FR-025 | example | PENDING | T058 / T061 |
+| U93 | `describe_listed` puts each description on the held issue with that number and leaves every other issue and field as it was | FR-024 | example | PENDING | T058 / T061 |
+| U94 | `next_description_cursor` continues while pages remain and ends on the last page, an empty page, a repeated cursor and after `DESCRIPTION_PAGE_CAP` pages; the fake source answers and records `describe_open` | FR-026 | example | PENDING | T058 / T061 |
+| U95 | An accepted load awaits the first description page under the load's seq; a load of no issues and a failed load await none | FR-024 | example | PENDING | T059 / T062 |
+| U96 | An awaited page describes the held issues and awaits the next cursor; the highlight, the matches and the open list are as they were | FR-024, FR-017 | example | PENDING | T059 / T062 |
+| U97 | A page with another seq or cursor, after the pass ended, on another source or with no form changes nothing | FR-024, 034 FR-007a | example | PENDING | T059 / T062 |
+| U98 | The pass ends on the last page, at the cap and on a failure; a failure shows no error and leaves the list loaded | FR-024, FR-026 | example | PENDING | T059 / T062 |
+| U99 | `start_issue_descriptions` is called only after an accepted load and after an accepted page, and never from `src/ui/` | FR-024, SC-006 | example | PENDING | T060 / T062 |
+| U100 | Choosing the issue source reads the list, then the description pages in order, and the rows hold their descriptions; a failed page leaves the list shown | FR-024, US3-1 | example | PENDING | T060 / T062 |
 
 ## Notes
 

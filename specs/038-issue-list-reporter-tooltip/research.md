@@ -23,8 +23,10 @@ relative to the repository root. "NEW" marks what does not exist yet.
 
 ## R1 — Reporter and description come with the issue (FR-002, FR-024, FR-026)
 
-**Decision**: Add two fields to the node selection of all three existing queries: `author { login }`
-and `bodyText`. No new request, no new occasion, no new argument.
+**Decision**: Add `author { login }` to the node selection of all three existing queries, and
+`bodyText` to the two search queries. The list query carries no `bodyText`: the descriptions of the
+listed issues are read by a second pass after the list has arrived (R14, amended 2026-10-04). No
+new occasion and no new argument.
 
 **Rationale**: FR-024 and FR-013 forbid a request per hover or per author. The fields ride the
 requests 034 already makes. `author` is `null` for a deleted account; the row then shows `ghost`
@@ -259,21 +261,41 @@ body.
 
 ## R14 — Load time (SC-008)
 
-**Decision**: Accept the larger answer; measure in quickstart §B against the same repository before
-and after. No server-side truncation of `bodyText` exists.
+**Decision (amended 2026-10-04, decided by the user, ledger D13)**: two passes. The list loads with
+`LIST_QUERY` as before this feature plus `author`, without `bodyText`. When the list has arrived, a
+description pass reads the same connection again with `DESCRIPTIONS_QUERY` (`number bodyText` only,
+same order, same page size), one page per request, and each page's descriptions are put on the
+issues held, matched by number. The pass runs at most `DESCRIPTION_PAGE_CAP` (10) requests, ends on
+the last page, on a page that adds nothing or repeats its cursor, and on the first failure, which is
+not shown and not retried: the next list load starts a new pass. It belongs to its list load's seq,
+so a newer load, a left source or a closed form drops it. The searches keep `bodyText` in their own
+answer: one request of at most 51 nodes, after a debounce, which SC-008 does not measure (D14).
+
+**Original decision, superseded**: accept the larger answer and measure. No server-side truncation
+of `bodyText` exists.
+
+**Measured in M5** (`evidence/b10-times.txt`, `cli/cli`, 1,000 issues): 11.6 s before, 21.8 s with
+`bodyText` in the list query: 1.88×, above SC-008's 1.5×. By hand: ten pages 10.9 s and 236 KB
+without `bodyText`, 20.4 s and 2.08 MB with. That measurement raised the escalation below.
 
 **Evidence**: this repository, 25 open issues, three runs each on 2026-10-02: 4.5 KB without the
 new fields (523, 1851, 600 ms) and 39 KB with them (1397, 757, 969 ms). The spread between runs is
 larger than the difference, so the ratio must be measured on a 1,000-issue repository, as SC-008
 says. `run_bounded` already drains pipes while it waits (034 R6), so a large page cannot stall.
 
-**Risk kept**: a repository whose issues all have very long bodies makes each page of 100 large.
-If §B measures more than 1.5×, no fallback is decided in advance: SC-008 then conflicts with
-FR-024 ("the description arrives with the issue"), which is a question for the user (escalation,
-category 1), asked with the measurement.
+**Risk as first written, now realised and answered**: a repository whose issues all have very long
+bodies makes each page of 100 large. §B10 measured more than 1.5×; SC-008 then conflicted with
+FR-024 as first written ("the description arrives with the issue"), the user was asked with the
+measurement and chose the second pass. FR-024 and FR-026 are reworded for it; SC-008 stays 1.5×.
+
+**Risk kept**: a description pass costs as much again as the slow load did (about 20 s on 1,000
+issues), in the background. The issues at the top of the list are described first (about 2.5 s
+after the list appears); the last page's about 20 s later. An issue updated between the two passes
+can move to another page and miss its description: it then has no tooltip until the next load.
 
 **Alternative rejected**: a smaller page size for the listing. It multiplies the round trips, which
-cost more than the bytes, and FR-026 keeps the requests as they are.
+cost more than the bytes, and FR-026 keeps the list's requests as they are. A description fetched
+when the cursor rests (FR-024, SC-006) was offered to the user and not chosen.
 
 ## R15 — Which side the row tooltip opens on (FR-023)
 
