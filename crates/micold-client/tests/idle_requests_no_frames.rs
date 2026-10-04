@@ -19,6 +19,9 @@
 //! `Shell` and proves the guard does what it claims; the structural half proves the guard is the
 //! only door.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -28,6 +31,8 @@ use iced::window::RedrawRequest;
 use iced::{window, Event};
 
 use micold_client::ui::cdk::motion::{Progress, FRAME};
+
+use support::tooltip::{tooltip, Driven, DELAY};
 
 /// The duration a component would state in its own motion spec. Any value works; this one is a
 /// realistic transition rather than a degenerate one.
@@ -125,6 +130,109 @@ fn it_stops_asking_the_moment_it_arrives() {
         asked_after_arrival, 0,
         "the track kept asking for frames after reaching its target — this is the shape of an \
          animation that holds the render loop awake for good"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The timed wake: a tooltip waiting for a cursor at rest (feature 038, FR-018)
+// ---------------------------------------------------------------------------------------------
+
+/// Waiting for a rest delay costs one timed wake, not a frame loop.
+///
+/// A tooltip that opens after the cursor has rested for three seconds has to be looked at again
+/// when the three seconds are up, though nothing else happens meanwhile. It asks for exactly that:
+/// a redraw *at* the instant the wait ends. It never asks for the next frame while it waits, and
+/// once open it asks for nothing.
+#[test]
+fn a_waiting_rest_tooltip_asks_for_one_timed_wake_and_none_once_open() {
+    let mut tip = Driven::new(tooltip(Some(DELAY), None));
+    let start = Instant::now();
+    let cursor = tip.over(20.0);
+
+    let arrived = tip.frame(start, cursor);
+    assert_eq!(
+        arrived.redraw,
+        RedrawRequest::At(start + DELAY),
+        "the cursor came to rest: one wake, when the delay has run",
+    );
+
+    let mid_wait = tip.frame(start + Duration::from_secs(1), cursor);
+    assert_eq!(
+        mid_wait.redraw,
+        RedrawRequest::At(start + DELAY),
+        "a frame during the wait asks for the same instant again, and for no frame sooner",
+    );
+
+    let opening = tip.frame(start + DELAY, cursor);
+    assert!(tip.is_open(), "precondition: the delay opened it");
+    assert_eq!(
+        opening.redraw,
+        RedrawRequest::Wait,
+        "it opens on the frame it was woken for: that frame paints it, and nothing more is due",
+    );
+
+    for n in 1..=10 {
+        let settled = tip.frame(start + DELAY + FRAME * n, cursor);
+        assert_eq!(
+            settled.redraw,
+            RedrawRequest::Wait,
+            "an open tooltip asked for a frame {n} frames after opening",
+        );
+    }
+}
+
+/// Away and spent, there is no wait to be woken from.
+#[test]
+fn a_rest_tooltip_that_is_away_or_spent_asks_for_no_timed_wake() {
+    let mut tip = Driven::new(tooltip(Some(DELAY), None));
+    let start = Instant::now();
+
+    let away = tip.frame(start, iced::mouse::Cursor::Available(iced::Point::ORIGIN));
+    assert_eq!(
+        away.redraw,
+        RedrawRequest::Wait,
+        "the cursor is elsewhere"
+    );
+
+    let opened = tip.rest_until_open(start);
+    let cursor = tip.over(20.0);
+    let press = tip.pressed(cursor);
+    assert_eq!(
+        press.redraw,
+        RedrawRequest::NextFrame,
+        "the press closes the panel: the one frame that paints the close, through `Progress`",
+    );
+    for n in 1..=10 {
+        let spent = tip.frame(opened + FRAME * n, cursor);
+        assert_eq!(
+            spent.redraw,
+            RedrawRequest::Wait,
+            "a spent tooltip asked for something {n} frames after the press",
+        );
+    }
+}
+
+/// A tooltip that was never given a rest delay never asks for a timed wake: the twenty call sites
+/// that predate the rest mode keep the frame behaviour they had.
+#[test]
+fn a_tooltip_without_a_rest_delay_asks_for_no_timed_wake() {
+    let mut tip = Driven::new(tooltip(None, None));
+    let start = Instant::now();
+    let cursor = tip.over(20.0);
+
+    for n in 0..10 {
+        let seen = tip.frame(start + FRAME * n, cursor);
+        assert!(
+            !matches!(seen.redraw, RedrawRequest::At(_)),
+            "a tooltip without `after_rest` asked for a timed wake: {:?}",
+            seen.redraw,
+        );
+    }
+    assert!(tip.is_open(), "it opened at once, as it always has");
+    assert_eq!(
+        tip.frame(start + FRAME * 10, cursor).redraw,
+        RedrawRequest::Wait,
+        "and settled",
     );
 }
 
@@ -243,16 +351,20 @@ fn only_the_motion_primitive_asks_for_frames() {
     );
 }
 
-/// …and inside the sanctioned file, the call is behind the `animating()` guard.
+/// …and inside the sanctioned file there are exactly two doors, each held shut its own way.
 ///
 /// Without this, `only_the_motion_primitive_asks_for_frames` would still pass if the guard were
 /// deleted — the call would be in the right file and would spin forever.
 ///
-/// The check is deliberately literal: the nearest preceding line of code must open an `animating()`
-/// test. That is brittle against reformatting, and that is the correct trade — a guard this
-/// load-bearing should not be able to change shape unnoticed.
+/// 1. `request_redraw()`, the next frame: behind the `animating()` guard. The check is deliberately
+///    literal: the nearest preceding line of code must open an `animating()` test. That is brittle
+///    against reformatting, and that is the correct trade — a guard this load-bearing should not
+///    be able to change shape unnoticed.
+/// 2. `request_redraw_at(..)`, one frame at a stated instant (feature 038, FR-018): the body of
+///    `wake_at`, and nowhere else. A timed wake is not a loop — it asks once and is answered once —
+///    so what holds it is who may call it: `wake_at_has_one_caller` below.
 #[test]
-fn the_frame_request_sits_behind_the_animating_guard() {
+fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
     let src = code_only(
         &fs::read_to_string(ui_dir().join("cdk/motion.rs")).expect("read the motion primitive"),
     );
@@ -264,15 +376,20 @@ fn the_frame_request_sits_behind_the_animating_guard() {
         .filter(|(_, l)| l.contains("request_redraw"))
         .map(|(i, _)| i)
         .collect();
+    let (timed, immediate): (Vec<usize>, Vec<usize>) = calls
+        .iter()
+        .partition(|&&i| lines[i].contains("request_redraw_at"));
 
     assert_eq!(
-        calls.len(),
-        1,
-        "expected exactly one frame request in the motion primitive, found {}",
-        calls.len()
+        (immediate.len(), timed.len()),
+        (1, 1),
+        "expected exactly one next-frame request and one timed request in the motion primitive, \
+         found {} and {}",
+        immediate.len(),
+        timed.len()
     );
 
-    let at = calls[0];
+    let at = immediate[0];
     let guard = lines[..at]
         .iter()
         .rev()
@@ -287,6 +404,65 @@ fn the_frame_request_sits_behind_the_animating_guard() {
         at + 1,
         guard.trim()
     );
+
+    let at = timed[0];
+    let opener = lines[..at]
+        .iter()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .expect("a timed request cannot be the first line of the file");
+    assert!(
+        opener.contains("fn wake_at") && lines[at].contains("RedrawRequest::At("),
+        "the timed request at cdk/motion.rs:{} is not the whole body of `wake_at` — the line \
+         before it reads `{}`. It must ask for one frame at a stated instant and do nothing else.",
+        at + 1,
+        opener.trim()
+    );
+}
+
+/// The timed door has one caller: the tooltip's rest mode.
+///
+/// `wake_at` cannot spin by itself, but a component that called it on every frame with an instant
+/// a frame away would be a frame loop in two steps. So a new caller is a decision, made here: add
+/// the file to this list with the reason it stops asking.
+#[test]
+fn wake_at_has_one_caller() {
+    /// Who may ask for a timed wake, and why it ends.
+    const CALLERS: &[(&str, &str)] = &[(
+        "ui/cdk/tooltip.rs",
+        "asks only while its `RestTimer` is waiting, for the instant the wait ends",
+    )];
+
+    let mut sites = Vec::new();
+    for (path, src) in ui_sources() {
+        if path == SANCTIONED {
+            continue;
+        }
+        for (i, line) in code_only(&src).lines().enumerate() {
+            if line.contains("wake_at(") {
+                sites.push((path.clone(), i + 1, line.trim().to_string()));
+            }
+        }
+    }
+
+    let strays: Vec<String> = sites
+        .iter()
+        .filter(|(path, _, _)| !CALLERS.iter().any(|(allowed, _)| allowed == path))
+        .map(|(path, line, text)| format!("  {path}:{line}  {text}"))
+        .collect();
+    assert!(
+        strays.is_empty(),
+        "a module outside {CALLERS:?} asks for a timed wake:\n{}",
+        strays.join("\n")
+    );
+    for (caller, _) in CALLERS {
+        let calls = sites.iter().filter(|(path, _, _)| path == caller).count();
+        assert_eq!(
+            calls, 1,
+            "`{caller}` is listed as the caller of `wake_at` and calls it {calls} times: one \
+             call, on the one path that waits",
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

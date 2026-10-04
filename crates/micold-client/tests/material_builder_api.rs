@@ -113,3 +113,39 @@ fn the_scan_actually_finds_the_library_components() {
         );
     }
 }
+
+/// The tooltip's rest mode is configured like everything else: three chainable steps (feature 038,
+/// contracts/rest-tooltip.md §6).
+#[test]
+fn the_tooltips_rest_mode_is_three_chainable_steps() {
+    let sources = inventory::library_sources();
+    let (_, src) = sources
+        .iter()
+        .find(|(module, _)| module.ends_with("material/mod.rs"))
+        .expect("the material module");
+    let code = inventory::code_only(src);
+    let start = code
+        .find("impl<'a, M: 'a> Tooltip<'a, M>")
+        .expect("`material::Tooltip`'s builder impl");
+    let end = start
+        + code[start..]
+            .find("impl<'a, M: 'a> From<Tooltip<'a, M>>")
+            .expect("the conversion that ends the builder");
+    let builder = &code[start..end];
+
+    for step in ["after_rest", "max_lines", "subject"] {
+        let Some(at) = builder.find(&format!("pub fn {step}(")) else {
+            panic!("`material::Tooltip::{step}` is missing");
+        };
+        let signature = &builder[at..at + builder[at..].find('{').expect("a body")];
+        let params = &signature[signature.find('(').expect("parameters") + 1..];
+        assert!(
+            params.trim_start().starts_with("mut self") || params.trim_start().starts_with("self"),
+            "`Tooltip::{step}` must consume `self`: {signature}",
+        );
+        assert!(
+            signature.trim_end().ends_with("-> Self"),
+            "`Tooltip::{step}` must return `Self` to stay chainable: {signature}",
+        );
+    }
+}
