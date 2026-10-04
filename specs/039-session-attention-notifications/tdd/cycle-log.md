@@ -1264,3 +1264,13 @@ integration test carries the `cfg(windows)` arm of `idle_process` that `unread_s
   current `attention_seq` as granted (`Catalog::attention_seqs`, `Views::note_event(.., false)`);
   same command, `10 passed; 0 failed`.
 - refactor: none.
+
+## Cycle 46 — M8 verify: review A round 1, F1 and F2 (no new behavior id)
+
+- F1, a gate made narrower, no behavior: `crates/micold-client/tests/gates/containment.rs`
+  `is_settings_page_scroll` (state `settings-view…`, parent `0/0/0/1/0/1/0`, edge `bottom`);
+  `the_recorded_settings_overflow_is_the_environment_page` asserts it for each escape of the page.
+- F2, no test: the sweep of cycle 45 moved before the settings write in
+  `DaemonState::set_desktop_notifications`; a failing settings store is not reachable from the
+  integration tests. Cycle 45's two tests stay green.
+- green: the scoped gate and the full gate recorded in the ledger.

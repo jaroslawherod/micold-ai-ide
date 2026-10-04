@@ -168,10 +168,28 @@ const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/2/0/0/0/0"];
 ///
 /// `the_recorded_settings_overflow_is_the_environment_page` proves the attribution by showing
 /// another page at the same path, which comes clean.
+///
+/// The path alone would also allow a sideways overflow of a page, and an overflow of whatever
+/// node sits at this path in a state that shows no Settings page. So this exemption, unlike the
+/// lists above, holds only for what a page that scrolls does: in a `settings-view…` state, past
+/// the **bottom** edge of the page's `Scrollable` ([`SETTINGS_PAGE_VIEWPORT`]).
 const SETTINGS_PAGE_CONTENT: &[&str] = &["0/0/0/1/0/1/0/0"];
 
+/// The `Scrollable` a Settings page scrolls in: the parent of [`SETTINGS_PAGE_CONTENT`].
+const SETTINGS_PAGE_VIEWPORT: &str = "0/0/0/1/0/1/0";
+
+/// Whether `escape`, in the covered state `state`, is a Settings page outgrowing its viewport
+/// downwards, which is the only overhang [`SETTINGS_PAGE_CONTENT`] allows.
+fn is_settings_page_scroll(state: &str, escape: &lay::Escape) -> bool {
+    state.starts_with("settings-view")
+        && SETTINGS_PAGE_CONTENT.contains(&escape.child_path.as_str())
+        && escape.parent_path == SETTINGS_PAGE_VIEWPORT
+        && escape.edge == "bottom"
+}
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
-fn clips_deliberately(child_path: &str) -> Option<&'static str> {
+fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
+    let child_path = escape.child_path.as_str();
     if CLIP_REVEALED.contains(&child_path) {
         Some("CLIP_REVEALED")
     } else if SCROLL_CONTENT.contains(&child_path) {
@@ -180,7 +198,7 @@ fn clips_deliberately(child_path: &str) -> Option<&'static str> {
         Some("PICKER_LIST_CONTENT")
     } else if TAB_STRIP_CONTENT.contains(&child_path) {
         Some("TAB_STRIP_CONTENT")
-    } else if SETTINGS_PAGE_CONTENT.contains(&child_path) {
+    } else if is_settings_page_scroll(state, escape) {
         Some("SETTINGS_PAGE_CONTENT")
     } else {
         None
@@ -206,7 +224,7 @@ fn no_layout_node_escapes_its_parent() {
                 escape.edge,
                 escape.layer.token()
             );
-            if let Some(list) = clips_deliberately(&escape.child_path) {
+            if let Some(list) = clips_deliberately(covered.name, &escape) {
                 eprintln!("{list} still fires: {line}");
                 fired.insert(escape.child_path);
             } else {
@@ -476,7 +494,7 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
 fn the_recorded_settings_overflow_is_the_environment_page() {
     use micold_client::features::settings::{SettingsDraft, SettingsSection};
 
-    let escaping_nodes = |section: SettingsSection| -> Vec<String> {
+    let escapes_of = |section: SettingsSection| -> Vec<lay::Escape> {
         let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
         let mut state = micold_client::app::State {
@@ -501,23 +519,32 @@ fn the_recorded_settings_overflow_is_the_environment_page() {
 
         let renderer = lay::renderer();
         lay::escapes(&lay::resolve(element, &renderer), TOLERANCE)
-            .into_iter()
-            .map(|e| e.child_path)
-            .collect()
     };
 
-    let short = escaping_nodes(SettingsSection::Appearance);
-    let long = escaping_nodes(SettingsSection::Environment);
+    let short = escapes_of(SettingsSection::Appearance);
+    let long = escapes_of(SettingsSection::Environment);
 
     for path in SETTINGS_PAGE_CONTENT {
+        let of_the_page: Vec<&lay::Escape> =
+            long.iter().filter(|e| e.child_path == *path).collect();
         assert!(
-            long.contains(&path.to_string()),
+            !of_the_page.is_empty(),
             "{path} is exempted as a Settings page's scroll content, and the Environment page does \
              not lay it outside its viewport. Either it is not the page's node, or the page fits \
              again: then delete the exemption"
         );
+        for escape in of_the_page {
+            assert!(
+                is_settings_page_scroll("settings-view-environment", escape),
+                "{path} leaves {} past its {} edge with the Environment page shown. The exemption \
+                 allows only a page that outgrows its Scrollable downwards: anything else is a \
+                 real overflow",
+                escape.parent_path,
+                escape.edge
+            );
+        }
         assert!(
-            !short.contains(&path.to_string()),
+            !short.iter().any(|e| e.child_path == *path),
             "{path} escapes its parent with the Appearance page shown, which fits, so the overhang \
              is not a page outgrowing its viewport and the attribution in SETTINGS_PAGE_CONTENT is \
              wrong"
