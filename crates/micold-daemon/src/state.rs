@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
@@ -71,9 +71,6 @@ pub struct DrainedSignals {
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
-    /// Signalled whenever a carry in `Inner.carrying` ends, so a start waiting for the history of
-    /// the process that just ended wakes (feature 041, R4).
-    carry_done: Condvar,
     next_id: AtomicU64,
     /// The connection count the idle rule reads (feature 028, data-model G1).
     ///
@@ -211,17 +208,14 @@ struct Inner {
     /// client's window, not the session.
     sizes: HashMap<SessionId, (u16, u16)>,
     /// The history a covered terminal's last process left, kept for the session's next start
-    /// (feature 041, data-model §6, R4). Put at every end of such a process, by [`DaemonState::carry_history`];
-    /// taken by the next start; dropped with the session in `remove_live_by_ids`. Filled whether
-    /// saving is on or off (FR-015).
+    /// (feature 041, data-model §6, R4). Put at every end of such a process, by
+    /// [`DaemonState::carry_history`]; taken by the next start; dropped with the session in
+    /// `remove_live_by_ids`. Filled whether saving is on or off (FR-015).
+    ///
+    /// Put and taken only under the session's gate ([`DaemonState::session_gate`]): a stop, the
+    /// supervision tick's drop and respawn, and a start each hold it from before the process is
+    /// taken out until its history is here, so a start never comes between the two.
     carried: HashMap<SessionId, Arc<micold_core::terminal_history::HistorySnapshot>>,
-    /// The sessions whose ended process is being torn down and captured right now, off the lock.
-    /// Marked under the same lock that takes the process out, so a start in that gap waits for the
-    /// history instead of starting without it; cleared by `remove_live_by_ids`, so a capture that
-    /// ends after the session was removed is dropped instead of kept for nothing.
-    carrying: HashMap<SessionId, u64>,
-    /// The token the next carry is marked with, so a carry knows whether its mark still stands.
-    next_carry: u64,
     /// Agents' destructive requests waiting for the user (feature 034, FR-014). Beside `clients`
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
@@ -488,30 +482,30 @@ enum Recovered {
     Label(String),
 }
 
-/// Who carries the history of a covered process that is ending (041, R4): this end, under the
-/// mark's token; another end already carrying the same process, which this end waits for; or
-/// nobody (not a covered primary).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Carry {
-    Own(u64),
-    Join,
-    None,
-}
-
-/// A stop whose live entry is out of the state and whose processes [`DaemonState::finish_stop`]
-/// has yet to end.
-pub struct PendingStop {
-    session: SessionId,
-    removed: Option<LiveSession>,
-    carry: Carry,
-    known: bool,
+/// Run `future` to its end on this thread, wherever it is called from: a blocking thread, a plain
+/// one, or (in tests) a runtime's own. `tokio`'s `blocking_lock` refuses the last of these.
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    struct Unpark(std::thread::Thread);
+    impl std::task::Wake for Unpark {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let waker = std::task::Waker::from(Arc::new(Unpark(std::thread::current())));
+    let mut cx = std::task::Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(output) => return output,
+            std::task::Poll::Pending => std::thread::park(),
+        }
+    }
 }
 
 impl DaemonState {
     /// Build the shared state around an adopted [`Catalog`].
     pub fn new(catalog: Catalog) -> Self {
         Self {
-            carry_done: Condvar::new(),
             inner: Mutex::new(Inner {
                 catalog,
                 clients: HashMap::new(),
@@ -527,8 +521,6 @@ impl DaemonState {
                 session_gates: HashMap::new(),
                 sizes: HashMap::new(),
                 carried: HashMap::new(),
-                carrying: HashMap::new(),
-                next_carry: 0,
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
@@ -1661,64 +1653,50 @@ impl DaemonState {
     /// The live entry is taken under the lock and its processes killed and dropped off it (module
     /// invariant), so the supervisor never sees the kill as a crash. Returns whether the session is
     /// known.
+    ///
+    /// Runs under the session's gate, which it waits for: **blocking**, up to `TEARDOWN_WAIT` for a
+    /// process that holds its terminal open (041, R4). Async code takes the gate itself and calls
+    /// [`Self::stop_session_gated`] on a blocking thread (`ops::stop_session`).
     pub fn stop_session(&self, session: SessionId) -> bool {
-        let stop = self.begin_stop(session);
-        let known = stop.known;
-        self.finish_stop(stop);
-        known
+        let _gate = self.hold_gate(session);
+        self.stop_session_gated(session)
     }
 
-    /// The part of [`Self::stop_session`] that does not wait: the live entry is taken out (and its
-    /// history's carry marked) under one lock, the record is marked `Idle`, and every window is
-    /// told. [`Self::finish_stop`] then ends the processes; a window's `SessionStop` runs that part
-    /// off its connection's loop, since the carry can wait up to `TEARDOWN_WAIT` (041, R4).
-    pub fn begin_stop(&self, session: SessionId) -> PendingStop {
-        let (removed, carry, owner) = {
+    /// [`Self::stop_session`] for a caller that holds the session's gate. The gate is held until
+    /// every process has ended and the covered primary's history is carried, so the session's next
+    /// start finds both done.
+    pub fn stop_session_gated(&self, session: SessionId) -> bool {
+        let (removed, covered, owner) = {
             let mut inner = self.lock();
             let removed = inner.sessions.remove(&session);
-            let carry = Self::claim_carry(&mut inner, session, removed.as_ref());
+            let covered = Self::covered(&inner, session);
             let owner = inner.catalog.mark_session_stopped(session);
-            (removed, carry, owner)
+            (removed, covered, owner)
         };
         self.confirmations_caller_stopped(session);
         if owner.is_some() {
             tracing::info!(session = %session.0, reason = "stopped on request", "session stopped");
             self.broadcast_catalog();
         }
-        PendingStop {
-            session,
-            removed,
-            carry,
-            known: owner.is_some(),
-        }
+        self.end_processes(session, removed, covered);
+        owner.is_some()
     }
 
-    /// End the processes [`Self::begin_stop`] took out: the covered primary is torn down and its
-    /// history carried (R4), or, when another end of the same process is already carrying it, that
-    /// carry is waited for; every other process is killed. Blocking.
-    pub fn finish_stop(&self, stop: PendingStop) {
-        let PendingStop {
-            session,
-            removed,
-            carry,
-            ..
-        } = stop;
-        if let Some(live) = &removed {
-            for (key, proc) in &live.procs {
-                match (key, carry) {
-                    (SessionProcess::Primary, Carry::Own(token)) => {
-                        self.carry_history(session, token, &proc.pty)
-                    }
-                    _ => {
-                        let _ = proc.pty.kill();
-                    }
-                }
+    /// End the processes of a live entry taken out of the state, off the state lock and under the
+    /// session's gate: every process is killed first, so no shell goes on running while the primary
+    /// is waited for; then the primary of a `covered` session is torn down and its history carried
+    /// (R4); then the entry is dropped, which joins each process's reader. Blocking.
+    fn end_processes(&self, session: SessionId, live: Option<LiveSession>, covered: bool) {
+        let Some(live) = live else { return };
+        for proc in live.procs.values() {
+            let _ = proc.pty.kill();
+        }
+        if covered {
+            if let Some(primary) = live.procs.get(&SessionProcess::Primary) {
+                self.carry_history(session, &primary.pty);
             }
         }
-        if carry == Carry::Join {
-            drop(self.wait_carry(session));
-        }
-        drop(removed);
+        drop(live);
     }
 
     /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
@@ -2297,7 +2275,6 @@ impl DaemonState {
             inner.ended.remove(&id);
             // And the history its last process left (feature 041, R4).
             inner.carried.remove(&id);
-            inner.carrying.remove(&id);
         }
         removed
     }
@@ -2503,7 +2480,18 @@ impl DaemonState {
     /// durable session back (`SessionStart` — `claude --resume`). Ignored for a Regular/shell primary.
     ///
     /// Resolves `env_include` in the session's own directory (FR-012b, BUG-003).
+    ///
+    /// Runs under the session's gate, which it waits for (**blocking**): a stop or a supervision
+    /// respawn of the same session in flight ends first, so its processes are gone and its history
+    /// is carried before this spawns (041, R4). Async code takes the gate itself and calls
+    /// [`Self::start_session_gated`] on a blocking thread (`ops::start_session`).
     pub fn start_session(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
+        let _gate = self.hold_gate(id);
+        self.start_session_gated(id, launch)
+    }
+
+    /// [`Self::start_session`] for a caller that holds the session's gate.
+    pub fn start_session_gated(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
         if self.live_session(id).is_some() {
             return Ok(()); // already running — Start is idempotent
         }
@@ -2860,7 +2848,13 @@ impl DaemonState {
     /// between attended and unattended handling is the whole point of this user story.
     ///
     /// Locking discipline (module invariant): the policy is applied and respawn plans gathered under
-    /// the lock; the blocking PTY spawn and the old-process teardown happen **off** the lock. Returns
+    /// the lock; the blocking PTY spawn and the old-process teardown happen **off** the lock.
+    ///
+    /// Each exited session is handled under its gate (041, R4), from before the policy is applied
+    /// to the end of its drop or respawn, so a stop or a start of it waits for that and never meets
+    /// it half done. The tick does not wait for a gate: it tries each one (`try_lock`, off the state
+    /// lock), and a session whose stop or start is in flight is left untouched for the next tick,
+    /// 250 ms later, which sees whatever that stop or start left. Returns
     /// the distinct projects whose catalog lifecycle changed, so the caller broadcasts one
     /// `CatalogChanged` per affected project.
     pub fn supervise_exited_sessions(&self) -> Vec<PathBuf> {
@@ -2876,14 +2870,37 @@ impl DaemonState {
         let mut changed: Vec<PathBuf> = Vec::new();
         // Each with whether its primary is a covered terminal, whose history is carried (R4).
         let mut to_drop: Vec<(SessionId, bool)> = Vec::new();
-        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli)> = Vec::new();
+        // Each with the dead process the policy was applied to.
+        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Arc<PtySession>)> =
+            Vec::new();
+        // Phase 0: the gate of every session whose primary has exited, tried off the state lock.
+        let dead: Vec<(SessionId, Arc<tokio::sync::Mutex<()>>)> = {
+            let mut inner = self.lock();
+            let ids: Vec<SessionId> = inner
+                .sessions
+                .iter()
+                .filter(|(_, live)| {
+                    live.procs
+                        .get(&SessionProcess::Primary)
+                        .is_some_and(|proc| !proc.pty.is_alive())
+                })
+                .map(|(id, _)| *id)
+                .collect();
+            ids.into_iter()
+                .map(|id| (id, Arc::clone(inner.session_gates.entry(id).or_default())))
+                .collect()
+        };
+        let mut gates: HashMap<SessionId, tokio::sync::OwnedMutexGuard<()>> = dead
+            .into_iter()
+            .filter_map(|(id, gate)| Some((id, gate.try_lock_owned().ok()?)))
+            .collect();
         {
             let mut inner = self.lock();
             scrollback = inner.catalog.settings_wire().scrollback_lines;
             // Partition live primaries into those that have exited and those still alive. The alive
             // set is captured *before* this tick's respawns, so a process respawned this tick is not
             // in it; each carries the reading of its last respawn, for the survivor check below.
-            let mut exited: Vec<(SessionId, ExitOutcome)> = Vec::new();
+            let mut exited: Vec<(SessionId, ExitOutcome, Arc<PtySession>)> = Vec::new();
             let mut alive: Vec<(SessionId, Option<micold_core::clock::Uptime>)> = Vec::new();
             for (id, live) in &inner.sessions {
                 let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
@@ -2891,7 +2908,7 @@ impl DaemonState {
                 };
                 if proc.pty.is_alive() {
                     alive.push((*id, live.respawned_at));
-                } else {
+                } else if gates.contains_key(id) {
                     // A reaped-but-unclassifiable exit is treated as a crash so supervision still
                     // runs rather than the session lingering as a dead-but-alive entry.
                     exited.push((
@@ -2899,16 +2916,19 @@ impl DaemonState {
                         proc.pty
                             .exit_outcome()
                             .unwrap_or_else(|| ExitOutcome::crashed("exit status not observed")),
+                        Arc::clone(&proc.pty),
                     ));
                 }
+                // Else its gate is not held: a stop or a start of it is in flight, or it exited
+                // after the gates were tried. The next tick sees it.
             }
-            for (id, outcome) in exited {
+            for (id, outcome, dead) in exited {
                 match inner.catalog.supervise_session_exit(id, outcome) {
                     Some((project, SupervisionAction::Restart, cwd, mode, provider)) => {
                         // Session exit + restart-attempt event, with the reason (FR-045).
                         tracing::warn!(session = %id.0, reason = "unexpected exit", "session crashed; restarting");
                         changed.push(project);
-                        to_respawn.push((id, cwd, mode, provider));
+                        to_respawn.push((id, cwd, mode, provider, dead));
                     }
                     Some((project, SupervisionAction::GiveUp, _, mode, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
@@ -2971,27 +2991,19 @@ impl DaemonState {
         }
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
         for (id, covered) in to_drop {
-            // Taken out and its carry marked under one lock, as a stop does (R4).
-            let (removed, carry) = {
+            let removed = {
                 let mut inner = self.lock();
-                let removed = inner.sessions.remove(&id);
-                let carry = if covered {
-                    Self::claim_carry(&mut inner, id, removed.as_ref())
-                } else {
-                    Carry::None
-                };
-                (removed, carry)
+                // The grants of a session that is gone are not kept (feature 039).
+                inner.views.forget_session(id);
+                inner.sessions.remove(&id)
             };
-            self.finish_stop(PendingStop {
-                session: id,
-                removed,
-                carry,
-                known: true,
-            });
+            self.end_processes(id, removed, covered);
+            gates.remove(&id);
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
-        for (id, cwd, mode, provider) in to_respawn {
-            self.respawn_primary(id, cwd, mode, provider, scrollback, now);
+        for (id, cwd, mode, provider, dead) in to_respawn {
+            self.respawn_primary(id, cwd, mode, provider, scrollback, now, &dead);
+            gates.remove(&id);
         }
         changed.sort();
         changed.dedup();
@@ -3277,81 +3289,30 @@ impl DaemonState {
             .is_some_and(|(_, session)| session.mode == TerminalMode::AiCli)
     }
 
-    /// Mark the carry of `id`'s ending primary, under the lock that takes it out (or, for a
-    /// respawn, finds it dead). Only one end of a process carries it: when a carry of `id` is
-    /// already marked (a respawn's, and a stop came meanwhile), this end joins it instead, so the
-    /// same process is never torn down and captured twice. `None` when there is no covered primary.
-    fn claim_carry(inner: &mut Inner, id: SessionId, live: Option<&LiveSession>) -> Carry {
-        let has_primary =
-            live.is_some_and(|live| live.procs.contains_key(&SessionProcess::Primary));
-        Self::claim_carry_of(inner, id, has_primary)
-    }
-
-    /// [`Self::claim_carry`] given whether the session has a primary.
-    fn claim_carry_of(inner: &mut Inner, id: SessionId, has_primary: bool) -> Carry {
-        if !has_primary || !Self::covered(inner, id) {
-            return Carry::None;
-        }
-        if inner.carrying.contains_key(&id) {
-            return Carry::Join;
-        }
-        inner.next_carry += 1;
-        let token = inner.next_carry;
-        inner.carrying.insert(id, token);
-        Carry::Own(token)
-    }
-
     /// Data-model §6's order at the end of a covered process, once its `Arc` is out of the state:
     /// tear it down off the state lock, so every byte it wrote has reached the `Term`, then capture
-    /// the history and carry it to the session's next start. The caller replies or spawns after.
+    /// the history and carry it to the session's next start. The caller holds the session's gate
+    /// across this and whatever it does next (reply, spawn), so no start runs meanwhile.
     ///
-    /// The capture is kept only while the mark `token` still stands: a removal of the session, or a
-    /// start that stopped waiting, cleared it meanwhile. The mark is cleared and waiters woken
-    /// however this ends, a panic included.
-    fn carry_history(&self, id: SessionId, token: u64, pty: &PtySession) {
-        struct ClearMark<'a>(&'a DaemonState, SessionId, u64);
-        impl Drop for ClearMark<'_> {
-            fn drop(&mut self) {
-                if let Ok(mut inner) = self.0.inner.lock() {
-                    if inner.carrying.get(&self.1) == Some(&self.2) {
-                        inner.carrying.remove(&self.1);
-                    }
-                }
-                self.0.carry_done.notify_all();
-            }
-        }
-        let _clear = ClearMark(self, id, token);
+    /// Not kept for a session that was removed meanwhile: a removal takes no gate, and clears
+    /// `carried` for good (`remove_live_by_ids`).
+    fn carry_history(&self, id: SessionId, pty: &PtySession) {
         pty.teardown(TEARDOWN_WAIT);
         let snapshot = Arc::new(history::capture(&pty.term().lock()));
         let mut inner = self.lock();
-        if inner.carrying.get(&id) == Some(&token) {
-            inner.carrying.remove(&id);
+        let kept = inner
+            .catalog
+            .workspace()
+            .find_session(id)
+            .is_some_and(|(_, session)| !session.archived);
+        if kept {
             inner.carried.insert(id, snapshot);
         }
     }
 
-    /// Wait while a carry of `id` is marked, bounded by the teardown's own bound and a margin for
-    /// the capture. A carry still running after that is cancelled, so its late capture is dropped
-    /// instead of being kept for a session that has started again without it.
-    fn wait_carry(&self, id: SessionId) -> std::sync::MutexGuard<'_, Inner> {
-        let inner = self.lock();
-        let (mut inner, waited) = self
-            .carry_done
-            .wait_timeout_while(inner, TEARDOWN_WAIT * 2, |inner| {
-                inner.carrying.contains_key(&id)
-            })
-            .expect("daemon state mutex poisoned");
-        if waited.timed_out() && inner.carrying.remove(&id).is_some() {
-            tracing::warn!(session = %id.0, "the earlier output was still being kept; starting without it");
-        }
-        inner
-    }
-
     /// The seed for `id`'s next start: the history its last process left, when it has lines, and
-    /// the carried entry it came from, which the start takes only once it has succeeded.
-    ///
-    /// A start that comes while that process is still being captured waits for it
-    /// ([`Self::wait_carry`]).
+    /// the carried entry it came from, which the start takes only once it has succeeded. The
+    /// caller holds the session's gate, so that process's capture is not still under way.
     fn carried_seed(
         &self,
         id: SessionId,
@@ -3359,7 +3320,7 @@ impl DaemonState {
         Seed,
         Option<Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) {
-        let carried = self.wait_carry(id).carried.get(&id).cloned();
+        let carried = self.lock().carried.get(&id).cloned();
         // The copy is made off the lock: a history can hold up to the scrollback limit of lines.
         match carried {
             Some(snapshot) if !snapshot.is_empty() => (
@@ -3401,6 +3362,11 @@ impl DaemonState {
     /// failure here instead and dropping the entry — which this did until `010` BUG-024 — took the
     /// session out of the only collection anything walks, stranding it at `Restarting` with no
     /// process behind it for the life of the daemon.
+    ///
+    /// The tick holds the session's gate from before the policy was applied to `dead` until this
+    /// returns, so no stop and no start of the session runs in between. A removal takes no gate:
+    /// when `dead` is no longer the session's primary, this does nothing.
+    #[allow(clippy::too_many_arguments)]
     fn respawn_primary(
         &self,
         id: SessionId,
@@ -3409,7 +3375,11 @@ impl DaemonState {
         provider: AiCli,
         scrollback: usize,
         now: micold_core::clock::Uptime,
+        dead: &Arc<PtySession>,
     ) {
+        if !self.is_primary(id, dead) {
+            return;
+        }
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
         let size = self.desired_size(id);
@@ -3417,19 +3387,7 @@ impl DaemonState {
         let spawned = match mode {
             TerminalMode::AiCli => {
                 // The dead process's history first, whole, then the seed from it (R4).
-                let claimed = {
-                    let mut inner = self.lock();
-                    let old = inner
-                        .sessions
-                        .get(&id)
-                        .and_then(|live| live.procs.get(&SessionProcess::Primary))
-                        .map(|proc| Arc::clone(&proc.pty));
-                    let carry = Self::claim_carry_of(&mut inner, id, old.is_some());
-                    old.zip(Some(carry))
-                };
-                if let Some((old, Carry::Own(token))) = claimed {
-                    self.carry_history(id, token, &old);
-                }
+                self.carry_history(id, dead);
                 let (seed, from) = self.carried_seed(id);
                 seeded = from;
                 let mut spec = LaunchSpec {
@@ -3468,7 +3426,7 @@ impl DaemonState {
                 // crash-loop counter toward `Failed`. `now` is recorded as the respawn's reading:
                 // the tick resets the counter only once the process has outlived
                 // `RESTART_STABLE_AFTER` from it (`005` BUG-004).
-                let _old = self.swap_primary(id, session, now, seeded.as_ref());
+                let _old = self.swap_primary(id, session, now, dead, seeded.as_ref());
             }
             Err(_) => {
                 // Couldn't even respawn. Leave the dead primary in the registry: the next tick sees
@@ -3479,19 +3437,35 @@ impl DaemonState {
         }
     }
 
-    /// Replace a session's `Primary` process with `session`, returning the displaced [`Proc`] so the
-    /// caller drops it **off** the lock. If the session vanished meanwhile (closed concurrently), the
-    /// freshly-spawned process is torn down off the lock instead of leaking.
+    /// Whether `pty` is `id`'s primary process right now.
+    fn is_primary(&self, id: SessionId, pty: &Arc<PtySession>) -> bool {
+        self.lock()
+            .sessions
+            .get(&id)
+            .and_then(|live| live.procs.get(&SessionProcess::Primary))
+            .is_some_and(|proc| Arc::ptr_eq(&proc.pty, pty))
+    }
+
+    /// Replace a session's `Primary` process `dead` with `session`, returning the displaced [`Proc`]
+    /// so the caller drops it **off** the lock. If the session vanished meanwhile (closed
+    /// concurrently), or its primary is no longer `dead`, the freshly-spawned process is torn down
+    /// off the lock instead of leaking or replacing a process this respawn was not for.
     fn swap_primary(
         &self,
         id: SessionId,
         session: PtySession,
         respawned_at: micold_core::clock::Uptime,
+        dead: &Arc<PtySession>,
         seeded: Option<&Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) -> Option<Proc> {
         let pty = Arc::new(session);
         let mut inner = self.lock();
-        let Some(live) = inner.sessions.get_mut(&id) else {
+        let live = inner.sessions.get_mut(&id).filter(|live| {
+            live.procs
+                .get(&SessionProcess::Primary)
+                .is_some_and(|proc| Arc::ptr_eq(&proc.pty, dead))
+        });
+        let Some(live) = live else {
             drop(inner);
             // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
             return None;
@@ -3789,9 +3763,26 @@ impl DaemonState {
 
     /// The per-session gate serializing starts (T125). Spawning removed the serialization the
     /// connection loop used to provide, and two concurrent starts would both observe "not live" and
-    /// spawn a process each. Taken *inside* the spawned task, never on the loop.
+    /// spawn a process each. Awaited *inside* the spawned task, never on the loop.
+    ///
+    /// It serializes everything that ends or begins the session's processes and keeps the session
+    /// (feature 041, R4): a start, a stop, and the supervision tick's drop and respawn each run
+    /// under it from their first look at the state to their last write, so none meets another half
+    /// done. A removal of the session (archive, forget, kill) does not take it; the paths above
+    /// re-check for that under the state lock.
+    ///
+    /// Lock order: the gate first, the state lock inside it. Never waited for while the state lock
+    /// is held, and nothing that holds it calls a function that takes it again
+    /// (`start_session`, `stop_session`; their `_gated` forms are for holders).
     pub fn session_gate(&self, session: SessionId) -> Arc<tokio::sync::Mutex<()>> {
         Arc::clone(self.lock().session_gates.entry(session).or_default())
+    }
+
+    /// Wait for `session`'s gate from blocking code. `unconstrained`, since outside a task there
+    /// is no budget to yield to.
+    fn hold_gate(&self, session: SessionId) -> tokio::sync::OwnedMutexGuard<()> {
+        let gate = self.session_gate(session);
+        block_on(tokio::task::unconstrained(gate.lock_owned()))
     }
 
     fn apply_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {

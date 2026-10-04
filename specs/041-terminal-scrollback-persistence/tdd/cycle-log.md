@@ -449,3 +449,17 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
   loop) and `finish_stop` (`spawn_blocking`); a timed-out wait cancels the mark; a drop guard clears it
   on any exit. The regression test above stays the pin; the respawn-and-stop overlap and the timeout
   have no deterministic test (timing-dependent) and are covered by the token check.
+
+## Review A round 3 fix (M1): a session's stop, drop, respawn and start run under its gate
+
+- test: `crates/micold-daemon/tests/attention_claims.rs::the_grants_of_a_session_dropped_by_supervision_are_forgotten` (new; feature 039's `forget_session` on the tick's drop path, lost in a rebase)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test attention_claims -- the_grants_of`
+  -> ``assertion `left == right` failed: what was granted for the dropped session was forgotten`` / `left: []` / `right: [(SessionId(…0a), 1)]` (1 failed)
+- test: `crates/micold-daemon/tests/history_restart_in_run.rs::a_tick_leaves_a_session_whose_gate_is_held_for_the_next_tick` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_restart_in_run -- a_tick_leaves`
+  -> `no lifecycle moved while the gate was held` (1 failed: the tick respawned although a stop or start held the gate)
+- test: `…::a_respawn_does_not_replace_the_process_of_a_start_that_came_meanwhile` (new; the finding's own scenario). No red: on the old code the outcome depended on timing and this run passed. It pins the order under the gate.
+- green: the token and condvar scheme is removed (`carrying`, `next_carry`, `carry_done`, `Carry`, `claim_carry*`, `wait_carry`, the drop guard, `PendingStop`, `begin_stop`, `finish_stop`). `start_session` and `stop_session` wait for the session's gate and call their `_gated` forms; `ops::start_session` and the new `ops::stop_session` queue for the gate on the caller, await it on a task and run the `_gated` form on a blocking thread; a window's `SessionStop` goes through `ops::stop_session`. The tick tries each dead session's gate (`try_lock`, off the state lock), applies the policy only to those it holds, and holds each until its drop or respawn is done; a busy session waits for the next tick. A respawn does nothing unless the dead process it was planned for is still the primary, and swaps only over that process. The tick's drop forgets the session's grants again. Every process is killed before the primary's teardown and capture.
+  `scripts/build-lock.sh cargo test -p micold-daemon` -> 702 passed, 0 failed.
+- refactor: none
+- removed tests: none (no test pinned the removed scheme; `a_start_during_the_stops_teardown_still_shows_the_earlier_lines` stays and passes because the start waits for the gate).

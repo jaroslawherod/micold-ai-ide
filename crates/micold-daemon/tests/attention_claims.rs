@@ -48,6 +48,11 @@ struct Service {
 
 impl Service {
     fn with_sessions(sessions: &[SessionId]) -> Self {
+        Self::with_processes(sessions, idle_process)
+    }
+
+    /// As [`Self::with_sessions`], each session's process made by `spawn`.
+    fn with_processes(sessions: &[SessionId], spawn: fn(SessionId) -> PtySession) -> Self {
         let store = tempfile::tempdir().expect("a store directory");
         let project = tempfile::tempdir().expect("a project directory");
         let workspace = Workspace {
@@ -80,7 +85,7 @@ impl Service {
         let state = Arc::new(DaemonState::new(catalog_on(store.path())));
         let live = sessions
             .iter()
-            .map(|id| state.register_session(idle_process(*id)))
+            .map(|id| state.register_session(spawn(*id)))
             .collect();
         Self {
             state,
@@ -133,6 +138,25 @@ fn idle_process(id: SessionId) -> PtySession {
     };
     cmd.cwd(std::env::temp_dir());
     PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
+}
+
+/// A process that exits by itself at once, with success.
+fn process_that_exits(id: SessionId) -> PtySession {
+    #[cfg(unix)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/c");
+        cmd
+    };
+    cmd.arg("exit 0");
+    cmd.cwd(std::env::temp_dir());
+    PtySession::spawn(id, cmd, 100, None).expect("a process that exits starts")
 }
 
 /// Connect a window and take its `Welcome`. It attaches to no project (W1.6).
@@ -300,5 +324,42 @@ async fn a_claim_is_no_operation_and_needs_no_attachment() {
         answers.len(),
         1,
         "the grant is the only answer, no operation reply: {answers:?}"
+    );
+}
+
+/// Feature 039 (review A round 3 of 041's M1): the grants of a session that supervision dropped,
+/// because its process ended by itself, are not kept, as on every other path that takes a session
+/// out of the live set for good.
+#[tokio::test]
+async fn the_grants_of_a_session_dropped_by_supervision_are_forgotten() {
+    let a = session_id(0xA);
+    let service = Service::with_processes(&[a], process_that_exits);
+    let mut window = connect(&service.state, "only").await;
+    service.finishes_a_turn(a);
+    assert_eq!(service.attention_seq(a), 1, "one attention event to claim");
+    assert_eq!(
+        grants(&claims(&mut window, a, 1).await),
+        vec![(a, 1)],
+        "precondition: the event is granted once"
+    );
+
+    let deadline = std::time::Instant::now() + OWED;
+    while service._live[0].is_alive() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the process did not exit"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    service.state.supervise_exited_sessions();
+    assert!(
+        service.state.primary_pty(a).is_none(),
+        "precondition: supervision dropped the session's process"
+    );
+
+    assert_eq!(
+        grants(&claims(&mut window, a, 1).await),
+        vec![(a, 1)],
+        "what was granted for the dropped session was forgotten"
     );
 }

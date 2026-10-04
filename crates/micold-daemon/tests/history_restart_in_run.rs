@@ -899,3 +899,93 @@ fn a_start_during_the_stops_teardown_still_shows_the_earlier_lines() {
     );
     state.stop_session(id);
 }
+
+/// R4 (review A round 3 of M1): supervision acts on a session only under its gate. While a stop or
+/// a start of the session holds it, the tick leaves the dead process alone, so it cannot respawn
+/// over what that stop or start does; the next tick sees it again.
+#[test]
+fn a_tick_leaves_a_session_whose_gate_is_held_for_the_next_tick() {
+    fake_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = ai_session();
+    let id = session.id;
+    let state = service(project.path(), vec![session]);
+
+    script(project.path(), "print before exit\nexit 1\n");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    wait_exited(&state, id);
+    let dead = state
+        .primary_pty(id)
+        .expect("the dead process is still listed");
+
+    script(project.path(), "print after restart\nwait\n");
+    let gate = state.session_gate(id);
+    let in_flight = gate.try_lock().expect("nothing holds the gate yet");
+    assert!(
+        state.supervise_exited_sessions().is_empty(),
+        "no lifecycle moved while the gate was held"
+    );
+    assert!(
+        Arc::ptr_eq(&dead, &state.primary_pty(id).expect("still listed")),
+        "the tick did not respawn while the gate was held"
+    );
+    drop(in_flight);
+
+    state.supervise_exited_sessions();
+    let lines = history_showing(&state, id, "after restart");
+    let seps = separators(&lines);
+    assert_eq!(seps.len(), 1, "one separator: {lines:#?}");
+    assert!(at(&lines, "before exit") < seps[0], "{lines:#?}");
+    state.stop_session(id);
+}
+
+/// R4 (review A round 3 of M1): a stop and a start that come while a respawn is still tearing the
+/// dead process down wait for the respawn, so the process the user started is the one that stays.
+/// The detached grandchild holds the terminal open, so the respawn's teardown runs to its bound.
+#[cfg(unix)]
+#[test]
+fn a_respawn_does_not_replace_the_process_of_a_start_that_came_meanwhile() {
+    fake_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = ai_session();
+    let id = session.id;
+    let state = service(project.path(), vec![session]);
+
+    script(project.path(), "print early\ndetach\nexit 1\n");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let pid_file = project.path().join("grandchild.pid");
+    wait_file(&pid_file);
+    wait_exited(&state, id);
+
+    script(project.path(), "print respawned\nwait\n");
+    let ticking = Arc::clone(&state);
+    let tick = std::thread::spawn(move || ticking.supervise_exited_sessions());
+    let gate = state.session_gate(id);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while gate.try_lock().is_ok() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(state.stop_session(id), "the stop knew the session");
+    script(project.path(), "print user\nwait\n");
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("starts again");
+    let mine = state.primary_pty(id).expect("the user's process");
+    tick.join().unwrap();
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    let _ = std::process::Command::new("kill")
+        .args(["-9", pid.trim()])
+        .status();
+
+    assert!(
+        Arc::ptr_eq(&mine, &state.primary_pty(id).expect("still live")),
+        "the respawn left the user's process in place"
+    );
+    let lines = history_showing(&state, id, "user");
+    let seps = separators(&lines);
+    assert!(
+        at(&lines, "early") < seps[0] && seps[seps.len() - 1] < at(&lines, "user"),
+        "the earlier line, then the user's start: {lines:#?}"
+    );
+    state.stop_session(id);
+}
