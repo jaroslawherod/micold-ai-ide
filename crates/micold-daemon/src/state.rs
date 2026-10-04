@@ -2640,7 +2640,7 @@ impl DaemonState {
         let mut seeded = None;
         let spawned = match plan.mode {
             TerminalMode::AiCli => {
-                let (seed, from) = self.carried_seed(id);
+                let (seed, from) = self.start_seed(id);
                 seeded = from;
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
@@ -3314,24 +3314,55 @@ impl DaemonState {
     ///
     /// Not kept for a session that was removed meanwhile: a removal takes no gate, and clears
     /// `carried` for good (`remove_live_by_ids`).
+    ///
+    /// The snapshot is then saved, off the state lock and before this returns, so before the
+    /// caller releases the gate: the file of a process end is whole on disk before the session's
+    /// next start, and before the stop is answered. Every caller is on a blocking thread already
+    /// (the teardown above waits), which is where the write belongs.
     fn carry_history(&self, id: SessionId, pty: &PtySession) {
         pty.teardown(TEARDOWN_WAIT);
         let snapshot = Arc::new(history::capture(&pty.term().lock()));
-        let mut inner = self.lock();
-        let kept = inner
-            .catalog
-            .workspace()
-            .find_session(id)
-            .is_some_and(|(_, session)| !session.archived);
+        let kept = {
+            let mut inner = self.lock();
+            let kept = inner
+                .catalog
+                .workspace()
+                .find_session(id)
+                .is_some_and(|(_, session)| !session.archived);
+            if kept {
+                inner.carried.insert(id, Arc::clone(&snapshot));
+            }
+            kept
+        };
         if kept {
-            inner.carried.insert(id, snapshot);
+            self.save_history(id, &snapshot);
         }
     }
 
-    /// The seed for `id`'s next start: the history its last process left, when it has lines, and
-    /// the carried entry it came from, which the start takes only once it has succeeded. The
-    /// caller holds the session's gate, so that process's capture is not still under way.
-    fn carried_seed(
+    /// Write `id`'s history to its file. **Blocking**, and never under the state lock. A save
+    /// that fails is one warning and nothing else: the history stays carried in memory (FR-007).
+    /// A save the store skips (no directory in a container, R15) is not a failure.
+    fn save_history(
+        &self,
+        id: SessionId,
+        snapshot: &micold_core::terminal_history::HistorySnapshot,
+    ) {
+        let Some(store) = self.history_store.get() else {
+            return;
+        };
+        if let Err(err) = store.save(id, snapshot) {
+            tracing::warn!(session = %id.0, reason = %err, "terminal history was not saved");
+        }
+    }
+
+    /// The seed for `id`'s next start, by data-model §6's table, and the carried entry it came
+    /// from, which the start takes only once it has succeeded. The caller holds the session's
+    /// gate, so the capture and the save of its last process are not still under way.
+    ///
+    /// A carried history decides alone, with lines or without: the file is read only when nothing
+    /// is carried, which is the first start of the session in this service run. That read is
+    /// **blocking** and off the state lock; every caller is on a blocking thread.
+    fn start_seed(
         &self,
         id: SessionId,
     ) -> (
@@ -3348,7 +3379,32 @@ impl DaemonState {
                 },
                 Some(snapshot),
             ),
-            _ => (Seed::None, None),
+            Some(_) => (Seed::None, None),
+            None => (self.saved_seed(id), None),
+        }
+    }
+
+    /// The seed from `id`'s saved history. A file that cannot be read is skipped with one warning
+    /// and the session starts as one with no saved history (FR-016).
+    fn saved_seed(&self, id: SessionId) -> Seed {
+        use micold_core::terminal_history::LoadOutcome;
+        let Some(store) = self.history_store.get() else {
+            return Seed::None;
+        };
+        match store.load(id) {
+            LoadOutcome::History(snapshot) if !snapshot.is_empty() => Seed::History {
+                snapshot,
+                at: chrono::Local::now(),
+            },
+            LoadOutcome::History(_) | LoadOutcome::None => Seed::None,
+            LoadOutcome::Damaged(reason) => {
+                tracing::warn!(
+                    session = %id.0,
+                    %reason,
+                    "saved terminal history could not be read; starting without it"
+                );
+                Seed::None
+            }
         }
     }
 
@@ -3406,7 +3462,7 @@ impl DaemonState {
             TerminalMode::AiCli => {
                 // The dead process's history first, whole, then the seed from it (R4).
                 self.carry_history(id, dead);
-                let (seed, from) = self.carried_seed(id);
+                let (seed, from) = self.start_seed(id);
                 seeded = from;
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),

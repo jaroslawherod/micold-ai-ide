@@ -72,6 +72,9 @@ fn u64_a_saved_history_of_ten_thousand_lines_delays_the_start_by_no_more_than_a_
     assert_eq!(written, SaveOutcome::Saved);
 
     let state = service_saving(project.path(), sessions, saved.path());
+    // Room for every saved line and the separator: at a limit of 10,000 the separator takes the
+    // place of the oldest line, and this measures the restore of all 10,000.
+    state.set_scrollback(2 * LINES).unwrap();
     // The first start of a process pays for what no later one does (the stand-in's first exec).
     time_to_running(&state, project.path(), warm_up, "warm");
     let bare = time_to_running(&state, project.path(), without, "bare");
