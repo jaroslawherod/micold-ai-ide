@@ -239,22 +239,23 @@ fn described_holds_the_folded_bounded_text() {
     assert_eq!(plain.description(), "", "an issue has none until described");
 }
 
-/// U27 — every query asks for the body through the one shared selection, once per issue node.
+/// U27 — the searches ask for the body as text once per issue node; the list asks for none, its
+/// descriptions follow in a second pass (`github_description_pass.rs`).
 #[test]
-fn every_query_asks_for_the_body_text_in_the_shared_selection() {
+fn only_the_searches_ask_for_the_body_text() {
     assert!(
-        ISSUE_NODE_SELECTION.contains("bodyText"),
-        "the shared selection asks for the body as text: {ISSUE_NODE_SELECTION}"
+        !ISSUE_NODE_SELECTION.contains("bodyText"),
+        "the selection the list shares asks for no body: {ISSUE_NODE_SELECTION}"
     );
     for (name, query, nodes) in [
-        ("LIST_QUERY", LIST_QUERY, 1),
+        ("LIST_QUERY", LIST_QUERY, 0),
         ("SEARCH_QUERY", SEARCH_QUERY, 1),
         ("SEARCH_WITH_NUMBER_QUERY", SEARCH_WITH_NUMBER_QUERY, 2),
     ] {
         assert_eq!(
             query.matches("bodyText").count(),
             nodes,
-            "{name} names the body only inside the shared selection"
+            "{name} names the body once per searched node, and the list never"
         );
         assert!(
             !query.contains("bodyHTML") && !query.contains(" body "),
