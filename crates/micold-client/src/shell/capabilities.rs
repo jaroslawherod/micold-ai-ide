@@ -74,6 +74,7 @@ use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::github::{locate_gh_on_host, GhCli, IssueSource};
+use micold_core::pull_request::PullRequestSource;
 use micold_core::script_path_check::{ScriptPathProbe, StdScriptPathProbe};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -121,7 +122,13 @@ pub struct IssueTooling {
     pub locate_gh: LocateGh,
     /// The issue source running the `gh` at this path.
     pub source: IssueSourceFactory,
+    /// The pull request source running the `gh` at this path (feature 040).
+    pub pull_requests: PullRequestSourceFactory,
 }
+
+/// Builds the pull request source that runs the `gh` at a path.
+pub type PullRequestSourceFactory =
+    Arc<dyn Fn(PathBuf) -> Arc<dyn PullRequestSource + Send + Sync> + Send + Sync>;
 
 /// Finds `gh`, given the `PATH` the environment include contributes, if any.
 pub type LocateGh = Arc<dyn Fn(Option<&str>) -> Option<PathBuf> + Send + Sync>;
@@ -140,6 +147,9 @@ impl IssueTooling {
             source: Arc::new(|_: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
                 unreachable!("no `gh` is ever located, so no source is built")
             }),
+            pull_requests: Arc::new(|_: PathBuf| -> Arc<dyn PullRequestSource + Send + Sync> {
+                unreachable!("no `gh` is ever located, so no source is built")
+            }),
         }
     }
 }
@@ -150,6 +160,8 @@ impl Capabilities {
     pub fn real() -> Self {
         // Once: `StdFolderScanner` satisfies both folder capabilities, and it is `Copy`.
         let folders = StdFolderScanner::new();
+        // Once: `GhCli` is both the issue source and the pull request source (feature 040).
+        let gh_cli = |gh: PathBuf| Arc::new(GhCli::new(gh));
         Self {
             git: Some(Arc::new(GitCli::new())),
             projects: JsonFileStore::default_location()
@@ -163,9 +175,12 @@ impl Capabilities {
             link_opener: Arc::new(SystemLinkOpener),
             issue_tooling: IssueTooling {
                 locate_gh: Arc::new(locate_gh_here),
-                source: Arc::new(|gh: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
-                    Arc::new(GhCli::new(gh))
+                source: Arc::new(move |gh: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
+                    gh_cli(gh)
                 }),
+                pull_requests: Arc::new(
+                    move |gh: PathBuf| -> Arc<dyn PullRequestSource + Send + Sync> { gh_cli(gh) },
+                ),
             },
             notifier: Arc::from(crate::shell::desktop_notify::system(
                 crate::shell::desktop_notify::events(),

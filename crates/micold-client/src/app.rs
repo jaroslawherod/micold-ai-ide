@@ -131,6 +131,15 @@ pub enum Message {
     /// decision. `State::update` declines all six.
     Sandbox(crate::features::sandbox::Msg),
 
+    // ---- Feature 040: pull request status of the active project ----
+    /// When the pull request status is read, and how a reading ended (feature 040); see
+    /// [`crate::features::pr_status::Msg`].
+    ///
+    /// Shape B: the reducer answers with an effect only the shell can perform (the reading), so
+    /// its entry is `shell/pr_status.rs`, which reaches the reducer through
+    /// [`State::update_pr_status`]. `State::update` declines it.
+    PrStatus(crate::features::pr_status::Msg),
+
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
     /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
@@ -202,6 +211,8 @@ pub struct State {
     pub worktree_form: crate::features::worktree_form::State,
     /// What the attach feature remembers -- see [`crate::features::attach::State`].
     pub attach: crate::features::attach::State,
+    /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
+    pub pr_status: crate::features::pr_status::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -549,6 +560,17 @@ impl State {
                 .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
+    /// Apply a pull request status message and hand back what the shell must do (feature 040).
+    ///
+    /// The reading itself is the shell's (`shell/pr_status.rs`); it asks here so the root stays the
+    /// only caller of the reducer (SC-002). The reducer writes nothing but its own state (FR-020).
+    pub fn update_pr_status(
+        &mut self,
+        msg: crate::features::pr_status::Msg,
+    ) -> crate::features::pr_status::Effect {
+        crate::features::pr_status::update(&mut self.pr_status, msg)
+    }
+
     /// Apply a session message and hand back the effect requests it made (feature 031).
     ///
     /// [`Self::update`] drains every outcome through [`interpret`], which drops the two that only
@@ -607,7 +629,11 @@ impl State {
             // it — rather than here, where the answer is and always was "nothing".
             // The sandbox's state lives on the binary's `App` beside the daemon connection, for
             // the same reason: it is runtime, not pure state.
-            Message::Connection(_) | Message::Sandbox(_) | Message::NoOp => {}
+            // A pull request reading is the shell's to start (feature 040, shape B).
+            Message::Connection(_)
+            | Message::Sandbox(_)
+            | Message::PrStatus(_)
+            | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

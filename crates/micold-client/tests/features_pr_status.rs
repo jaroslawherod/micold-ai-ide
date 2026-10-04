@@ -7,7 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use micold_client::features::pr_status::{self, Effect, Msg, Outcome, Phase, State};
-use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReadingFailure, ReviewState};
+use micold_core::pull_request::{
+    CheckStatus, PrState, PullRequestStatus, ReadingFailure, ReviewState,
+};
 
 const NOW: u64 = 1_000;
 const LATER: u64 = 1_100;
@@ -136,7 +138,10 @@ fn switching_on_while_not_held_or_awaiting_the_listing_reads_nothing() {
     assert_eq!(update(&mut awaiting, enable()), Effect::None);
     assert!(awaiting.enabled);
     // S1 follows: the listing reads.
-    assert!(matches!(update(&mut awaiting, listing()), Effect::Read { .. }));
+    assert!(matches!(
+        update(&mut awaiting, listing()),
+        Effect::Read { .. }
+    ));
 }
 
 #[test]
