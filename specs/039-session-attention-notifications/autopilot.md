@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M8)
-- **Next step**: M8: reviews A and B clean, quickstart §B12 passed (`visual-pass/M8/`). Next: the full gate on the tree of this commit, then push and open the PR.
+- **Next step**: M8: the full gate was green at `9bfcf890` and the PR is open; wait on CI and merge. Then M9 (light).
 
 ## Pull requests
 
