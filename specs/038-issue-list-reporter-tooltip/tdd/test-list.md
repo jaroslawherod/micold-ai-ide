@@ -188,6 +188,9 @@ gives the test task first, then the implementation task(s).
 | U85 | With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it | FR-023 | example | DONE | T047 / T050, T051 |
 | U84 | With a panel open on one row, moving onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay | FR-016 | example | DONE | T047 / T050, T051 |
 | U86 | `{:?}` of a `Row` prints neither its details nor its tooltip text | FR-025 | example | DONE | T046 / T051 |
+| U87 | `description_from` drops control characters and invisible format characters (zero-width marks, direction overrides): a body of only such characters gives the empty string, and a dropped mark neither counts toward the limit nor leaves a second space | FR-020 | example | DONE (added in M5 after review A F3) | T044 / T049 |
+| U88 | A list dismissed with a row's panel open and opened again over the same row, cursor unmoved, shows that row's panel only after a full delay from the reopening | FR-015, FR-017 | example | DONE (added in M5 after review A F1) | T047 / T050 |
+| U89 | `description_from` keeps a zero-width joiner or non-joiner that has a visible character on each side within its word (Persian spelling, emoji sequences), drops one that has not, counts a kept one toward the limit, and leaves none before the cut mark | FR-022 | example | DONE (added in M5 after review A round 2 F1) | T044 / T049 |
 
 ## Notes
 
