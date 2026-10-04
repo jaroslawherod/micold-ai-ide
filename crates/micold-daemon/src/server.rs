@@ -171,6 +171,17 @@ pub async fn run() -> io::Result<()> {
     // `SetLogLevel` RPCs can serve it (FR-043–046).
     state.set_diagnostics(logging);
 
+    // Feature 041: where terminal histories are saved. In a container the directory is the
+    // launcher's to make, so a sandbox created before this feature saves nothing rather than
+    // writing into the state mount (R15).
+    if let Some(dir) = micold_core::terminal_history::history_dir() {
+        let in_container = !crate::state::image_reference().is_empty();
+        state.set_history_store(micold_core::terminal_history::HistoryStore::new(
+            dir,
+            !in_container,
+        ));
+    }
+
     // Feature 027: a sandboxed daemon requires the token its runtime mounted. Fatal if named and
     // unreadable — see `adopt_auth_token`.
     adopt_auth_token(&state)?;

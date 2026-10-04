@@ -18,7 +18,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use alacritty_terminal::grid::Dimensions;
 use futures_util::{SinkExt, StreamExt};
 use history::{
     ai_session, at, fake_cli, history_file, history_showing, script, separators, service,
@@ -86,18 +85,18 @@ fn run_and_stop(state: &DaemonState, project: &Path, id: SessionId, directives: 
     assert!(state.stop_session(id));
 }
 
-/// The restored lines end in `prefix<last>`, count back from it without a gap, and are no more
-/// than `limit` plus the terminal's rows: the most recent ones, with the older ones absent.
+/// The terminal's history is exactly `limit` rows: the separator, and above it the most recent
+/// `limit - 1` of the lines up to `line <last>`, in order and without a gap. The older ones are
+/// absent, as they would be in a terminal that had printed them with this limit.
 fn assert_most_recent(state: &DaemonState, id: SessionId, last: usize, limit: usize) {
     let lines = texts(&snapshot(state, id));
     let seps = separators(&lines);
     assert_eq!(seps.len(), 1, "one separator");
-    let rows = state.primary_pty(id).unwrap().term().lock().screen_lines();
     let restored = &lines[..seps[0]];
-    assert!(
-        restored.len() >= limit.min(last) && restored.len() <= limit + rows,
-        "{} lines restored with a limit of {limit} and {rows} rows",
-        restored.len()
+    assert_eq!(
+        restored.len() + 1,
+        limit,
+        "the restored lines and the separator fill the limit"
     );
     let first = last + 1 - restored.len();
     let expected: Vec<String> = (first..=last).map(|i| format!("line {i}")).collect();
