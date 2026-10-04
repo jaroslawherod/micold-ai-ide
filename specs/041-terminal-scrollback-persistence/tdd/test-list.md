@@ -148,17 +148,17 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U44 | `save` then `load` gives `History`, in the file `<dir>/<session uuid>.history` | DM §5, HF §1, FR-001 | example | PENDING | T015 |
-| U45 | `load` of an absent file gives `None` | DM §5, FR-010 | example | PENDING | T015 |
-| U46 | `load` of a damaged file gives `Damaged` | DM §5, FR-016 | example | PENDING | T015 |
-| U47 | `load` of a file with mode `000` gives `Damaged(Unreadable)` (`cfg(unix)`) | US3-3, FR-016 | example | PENDING | T015 |
-| U48 | A save over an existing file leaves no temporary file | HF §3, FR-006 | example | PENDING | T015 |
-| U49 | A temporary file left behind before the rename leaves the previous file loadable | FR-006, EC-Killed mid-save | example | PENDING | T015 |
-| U50 | Two ids make two files and never each other's content | FR-025 | example | PENDING | T015 |
-| U51 | A second `save` of an equal snapshot returns `Unchanged`, and the file's modification time and inode stay | FR-004 | example | PENDING | T015 |
-| U52 | With `create_dir = false` and no directory `save` returns `Skipped` and creates nothing; with the directory present it saves | R15, FR-021 | example | PENDING | T015 |
-| U53 | The directory is mode `0700` and the file `0600` (`cfg(unix)`) | FR-020, SC-009 | example | PENDING | T015 |
-| U54 | `history_dir()` ends in `terminal-history` under `data_local_dir()`, and on Windows is not under `data_dir()` (`cfg(windows)`) | FR-019 | example | PENDING | T015 |
+| U44 | `save` then `load` gives `History`, in the file `<dir>/<session uuid>.history` | DM §5, HF §1, FR-001 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_saved_snapshot_loads_from_the_file_named_after_the_session`, `…::another_store_on_the_same_directory_loads_what_the_first_saved`, `…::an_empty_snapshot_loads_as_an_empty_history` |
+| U45 | `load` of an absent file gives `None` | DM §5, FR-010 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_session_with_no_file_loads_as_none` |
+| U46 | `load` of a damaged file gives `Damaged` | DM §5, FR-016 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_damaged_file_loads_as_damaged_with_its_reason`, `…::a_file_over_the_size_cap_loads_as_too_large`, `…::a_save_replaces_a_damaged_file` |
+| U47 | `load` of a file with mode `000` gives `Damaged(Unreadable)` (`cfg(unix)`) | US3-3, FR-016 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::unix::a_file_that_cannot_be_opened_loads_as_unreadable` |
+| U48 | A save over an existing file leaves no temporary file | HF §3, FR-006 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_save_over_an_existing_file_leaves_no_temporary_file` |
+| U49 | A temporary file left behind before the rename leaves the previous file loadable | FR-006, EC-Killed mid-save | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_temporary_file_left_behind_leaves_the_previous_file_loadable` |
+| U50 | Two ids make two files and never each other's content | FR-025 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::two_sessions_have_two_files_and_never_each_others_content` |
+| U51 | A second `save` of an equal snapshot returns `Unchanged`, and the file's modification time and inode stay | FR-004 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_second_save_of_an_equal_snapshot_is_unchanged`, `…::unix::an_unchanged_save_leaves_the_file_as_it_is`, `…::the_first_save_of_a_store_writes_even_over_an_equal_file` |
+| U52 | With `create_dir = false` and no directory `save` returns `Skipped` and creates nothing; with the directory present it saves | R15, FR-021 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_store_that_does_not_create_its_directory_skips_until_it_exists` |
+| U53 | The directory is mode `0700` and the file `0600` (`cfg(unix)`) | FR-020, SC-009 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::unix::the_directory_is_0700_and_the_file_0600` |
+| U54 | `history_dir()` ends in `terminal-history` under `data_local_dir()`, and on Windows is not under `data_dir()` (`cfg(windows)`) | FR-019 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::unix::the_history_directory_is_terminal_history_under_the_local_data_directory`, `…::on_windows_the_history_directory_is_local_and_not_in_the_roaming_profile` |
 
 ### `crates/micold-core/src/owner_only.rs` (T016, T020)
 
