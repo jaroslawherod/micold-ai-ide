@@ -6,9 +6,12 @@
 //! placement, the same provenance record, the same safeguards and the same catalog broadcast
 //! (FR-009, FR-011). `server::route` wraps each one and keeps its protocol replies.
 
+use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 
 use micold_core::git::GitCli;
 use micold_core::naming::DerivedNames;
@@ -374,13 +377,13 @@ pub fn start_session(
     session: SessionId,
     launch: LaunchMode,
 ) -> tokio::task::JoinHandle<bool> {
+    let gate = queue_for_gate(state, session);
     let state = Arc::clone(state);
     tokio::spawn(async move {
-        let gate = state.session_gate(session);
-        let _serialized = gate.lock().await;
+        let _serialized = gate.await;
         let worker = Arc::clone(&state);
         let outcome = tokio::task::spawn_blocking(move || {
-            worker.start_session(session, launch)?;
+            worker.start_session_gated(session, launch)?;
             // Watch this session's own event log, for a provider that reports one (feature 026,
             // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
             // has just started — that is what keeps a merely discovered session unwatched.
@@ -410,6 +413,50 @@ pub fn start_session(
         state.announce_session_started(session);
         started
     })
+}
+
+/// Stop `session` off the async runtime, as [`DaemonState::stop_session`] does, and report whether
+/// the session is known (feature 041, R4).
+///
+/// Serialized per session by its gate, like a start: the stop waits for a start or a supervision
+/// respawn in flight, and holds the gate until the processes have ended and the history is carried,
+/// which can take up to `TEARDOWN_WAIT`. So it runs on a task of its own, and a connection's loop
+/// that asks for it goes on to its next message at once.
+pub fn stop_session(state: &Arc<DaemonState>, session: SessionId) -> tokio::task::JoinHandle<bool> {
+    let gate = queue_for_gate(state, session);
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        let _serialized = gate.await;
+        tokio::task::spawn_blocking(move || state.stop_session_gated(session))
+            .await
+            .unwrap_or_else(|join| {
+                tracing::warn!(session = %session.0, error = %join, "session stop task failed");
+                false
+            })
+    })
+}
+
+/// Take a place in the queue for `session`'s gate **now**, and return the wait for it.
+///
+/// The gate is fair, in the order its waiters were first polled, and a spawned task is first
+/// polled whenever the runtime gets to it. Polling once here, on the caller, is what keeps a
+/// window's `SessionStop` followed by its `SessionStart` in that order. The poll does not block:
+/// it either takes the free gate or joins the queue. The waker it registers is replaced by the
+/// task's at the task's first poll.
+fn queue_for_gate(
+    state: &DaemonState,
+    session: SessionId,
+) -> Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>> {
+    let mut waiting = Box::pin(tokio::task::unconstrained(
+        state.session_gate(session).lock_owned(),
+    ));
+    match waiting
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+    {
+        Poll::Ready(held) => Box::pin(std::future::ready(held)),
+        Poll::Pending => waiting,
+    }
 }
 
 /// Render leftover paths for one log field: `path (uid N)`, comma-separated.

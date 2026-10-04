@@ -977,15 +977,13 @@ where
             // Feature 034 (FR-009): the stop an agent's `stop_session` performs, so the two agree:
             // processes end, the record is `Idle`, and every window is told.
             //
-            // The entry leaves the live set and the record turns `Idle` here, in order with the
-            // window's next message; the processes end off this loop, because carrying the
-            // history can wait up to `TEARDOWN_WAIT` for a process that holds its terminal open
-            // (041, R4), and this loop answers the window's `Ping`. A start meanwhile waits for
-            // that history.
+            // The stop runs on a task of its own, under the session's gate, which it queues for
+            // here, in order with the window's next message (a start that follows waits for it).
+            // Not on this loop: ending the processes and carrying the history can wait up to
+            // `TEARDOWN_WAIT` for a process that holds its terminal open (041, R4), and this loop
+            // answers the window's `Ping`.
             ClientMsg::SessionStop { session } => {
-                let stop = state.begin_stop(session);
-                let st = Arc::clone(state);
-                tokio::task::spawn_blocking(move || st.finish_stop(stop));
+                drop(ops::stop_session(state, session));
             }
             ClientMsg::SessionKill { session } => {
                 // Stop the session's processes and drop it from the live registry (kill happens
