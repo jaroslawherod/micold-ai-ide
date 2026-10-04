@@ -75,6 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (after D17) | 1 | 137401fb3eda1010ace29618ef7cc0f1c8481d98:cc288469e7251dc41da237becae1ce869b498608 | CLEAN after the redesign (`cc288469`: gate-serialised stop, drop, respawn, start; round 3's two MAJOR fixed with tests, the 6 lesser gone by construction or fixed). 3 MINOR: `prune_empty_sessions` left an archived session's carried history (fixed); 2 declined |
 | B M1 | 1 | 0d3cee6d2dd7d46785db3e702d219138c7eb3122:5267dc4cb8bac82ce70bd4b866a364b9aec0339c | CLEAN. Verify: `test result: ok. 16 passed; 0 failed`. The first dispatch only ran Verify, so a second one checked scope, acceptance, constitution, leftovers and ownership item by item: clean, 1 MINOR (U30, U33–U36 passed against the stubs and are shown able to fail by mutation, not by a red run; no change for M1) |
 | A M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN: 3 MINOR (save has no size cap; `Unchanged` trusts the last write; `ensure_dir` keeps the owner bits), none fixed, all three in *Follow-ups not done* |
+| B M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN, no findings. Verify: `history_service_restart` `test result: ok. 13 passed; 0 failed`, `history_timing` `test result: ok. 1 passed; 0 failed` |
 
 ## Declined review findings
 
@@ -106,3 +107,4 @@ None.
 - From review A of M2 (MINOR, not fixed): `Unchanged` is decided from what this store instance wrote, so a file deleted or damaged on disk afterwards is not rewritten by an equal save, and a respawn that keeps failing captures, encodes and hashes on each tick. M5's and M7's deletes must clear the store's record of the last write.
 - From review A of M2 (MINOR, not fixed): `owner_only::ensure_dir` on Unix removes only group and other bits; the daemon's old helper forced `0700`. A tool-server binding directory left `0500` now fails the write instead of being reopened, and a refused `chmod` on a directory the service does not own fails the save. Decide in M9 (the mounted history directory).
 - CI is the first run of the `cfg(windows)` tests added in M2 (`owner_only` U57 and U58, `history_dir()` U54): they are only compiled here.
+- To confirm in M3: a restore at scrollback limit N shows the most recent N-1 lines and the separator, because `history::seed` counts the separator inside the limit (A5 and U60 assert that). If FR-012 means N lines and the separator, `seed` changes.
