@@ -23,7 +23,8 @@ const VERSION_AT: usize = MAGIC.len();
 const LENGTH_AT: usize = VERSION_AT + 4;
 /// Magic, version and payload length: where the payload starts.
 const HEADER_BYTES: usize = LENGTH_AT + 8;
-const CHECKSUM_BYTES: usize = 32;
+/// The SHA-256 a file ends with.
+pub(super) const CHECKSUM_BYTES: usize = 32;
 
 /// The payload: every line, and each distinct style once (data-model §2).
 #[derive(Serialize, Deserialize)]
@@ -203,9 +204,7 @@ pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
     let snapshot = saved.into_snapshot();
     // What the ten checks do not cover (a colour index outside its palette): a snapshot that
     // cannot be seeded is not returned, whatever its checksum says (FR-016).
-    snapshot
-        .validate()
-        .map_err(|_| DamageReason::Malformed)?;
+    snapshot.validate().map_err(|_| DamageReason::Malformed)?;
     Ok(snapshot)
 }
 

@@ -143,7 +143,11 @@ fn a_damaged_file_loads_as_damaged_with_its_reason() {
         "a file that lost its last byte"
     );
 
-    std::fs::write(&path, b"not a history at all, only some text of a fair length").unwrap();
+    std::fs::write(
+        &path,
+        b"not a history at all, only some text of a fair length",
+    )
+    .unwrap();
     assert_eq!(
         store.load(session()),
         LoadOutcome::Damaged(DamageReason::NotAHistory)
@@ -357,17 +361,6 @@ fn a_store_is_shared_between_threads() {
     assert_eq!(store.load(session()), LoadOutcome::History(saved));
 }
 
-// U54 (FR-019), the part every platform has.
-#[test]
-fn the_history_directory_is_terminal_history_under_the_local_data_directory() {
-    let dirs = directories::ProjectDirs::from("", "", "micold-ai-ide").unwrap();
-
-    assert_eq!(
-        history_dir(),
-        Some(dirs.data_local_dir().join("terminal-history"))
-    );
-}
-
 #[cfg(unix)]
 mod unix {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -430,6 +423,23 @@ mod unix {
         assert_eq!(entries(store.dir()), [path]);
     }
 
+    // U54, on Linux and macOS. The per-user directories are redirected first: this is the one
+    // test of this file that resolves them, and no other reads the two variables.
+    #[test]
+    fn the_history_directory_is_terminal_history_under_the_local_data_directory() {
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_DATA_HOME", home.path());
+        std::env::set_var("HOME", home.path());
+        let data_local_dir = if cfg!(target_os = "macos") {
+            home.path()
+                .join("Library/Application Support/micold-ai-ide")
+        } else {
+            home.path().join("micold-ai-ide")
+        };
+
+        assert_eq!(history_dir(), Some(data_local_dir.join("terminal-history")));
+    }
+
     // U53 (FR-020, SC-009).
     #[test]
     fn the_directory_is_0700_and_the_file_0600() {
@@ -444,19 +454,21 @@ mod unix {
 }
 
 // U54 (FR-019): the roaming profile is copied between machines; a terminal's history stays on the
-// one it was written on.
+// one it was written on. Windows resolves both folders from the user's profile, not from a
+// variable a test could redirect; nothing is created here.
 #[cfg(windows)]
 #[test]
-fn on_windows_the_history_directory_is_not_in_the_roaming_profile() {
-    let dirs = directories::ProjectDirs::from("", "", "micold-ai-ide").unwrap();
-    let dir = history_dir().unwrap();
+fn on_windows_the_history_directory_is_local_and_not_in_the_roaming_profile() {
+    let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap());
+    let roaming = PathBuf::from(std::env::var_os("APPDATA").unwrap());
 
-    assert!(
-        dir.starts_with(dirs.data_local_dir()),
-        "{dir:?} is under the local data directory"
+    assert_eq!(
+        history_dir(),
+        Some(local.join("micold-ai-ide\\data\\terminal-history")),
+        "under the local data directory"
     );
     assert!(
-        !dir.starts_with(dirs.data_dir()),
-        "{dir:?} is not under the roaming data directory"
+        !history_dir().unwrap().starts_with(&roaming),
+        "not under the roaming data directory {roaming:?}"
     );
 }
