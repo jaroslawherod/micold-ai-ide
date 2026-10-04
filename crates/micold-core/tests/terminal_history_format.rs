@@ -326,12 +326,10 @@ fn a_colour_index_outside_its_palette_is_malformed() {
     const BASIC: u8 = 1;
     const DIM: u8 = 2;
     // [`AB_PAYLOAD`] with its one style's foreground, then its background, replaced.
-    let with_fg = |kind: u8, index: u8| {
-        file_with_payload(&[1, kind, index, 0, 0, 1, 2, b'a', b'b', 1, 2, 0])
-    };
-    let with_bg = |kind: u8, index: u8| {
-        file_with_payload(&[1, 0, kind, index, 0, 1, 2, b'a', b'b', 1, 2, 0])
-    };
+    let with_fg =
+        |kind: u8, index: u8| file_with_payload(&[1, kind, index, 0, 0, 1, 2, b'a', b'b', 1, 2, 0]);
+    let with_bg =
+        |kind: u8, index: u8| file_with_payload(&[1, 0, kind, index, 0, 1, 2, b'a', b'b', 1, 2, 0]);
 
     assert_eq!(
         decode(&with_fg(BASIC, BASIC_COLORS - 1)),
