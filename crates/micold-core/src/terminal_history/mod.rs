@@ -5,7 +5,10 @@
 //! `alacritty_terminal`, so the daemon captures into them and seeds from them while this crate
 //! keeps its "no PTY/VT crate" boundary.
 
+pub mod format;
 pub mod text;
+
+pub use format::{decode, encode, DamageReason, FORMAT_VERSION, MAX_FILE_BYTES};
 
 /// What one terminal held at one moment: its history rows, then its screen rows down to the last
 /// one that shows anything, oldest first. Empty means there is nothing to show.
