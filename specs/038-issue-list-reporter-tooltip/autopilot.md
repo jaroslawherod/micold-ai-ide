@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5: review A round 2 fixed (U89); next the scoped gate and review A round 3 (the last), then review B, the visual pass §B6–B9 and §B11, §B10 (T055), full gate, PR.
+- **Next step**: M5: review A clean after round 3, scoped gate green; next review B, the visual pass §B6–B9 and §B11 and §B10 (T055), then the full gate and the PR.
 
 ## Pull requests
 
@@ -75,6 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 visual pass | 1 | 7e416cdf | PASS §B5, light and dark: no panel at 1.5 s, three lines ending `…` at about 3.8 s, closes on leaving, none while moving for 10 s, a click closes it, existing instances unchanged; 16 `evidence/b5-*.png`, `evidence/README.md`. Not confirmed: idle redraw during the wait (the showcase ran at 4-5 cores under lavapipe with the cursor away from every tooltip too, so the wait could not be isolated; `idle_requests_no_frames` holds the rule) |
 | M5 code A | 1 | 90b8f1f973399a8868769552553b9cc93cf1533c:b9ef217d0f5df491a614df51a8d3672e03b508e7 | CHANGES: 1 MAJOR, 3 MINOR. Fixed: F1 MAJOR (a row tooltip's rest state survived the list closing, so a reopened list showed the panel at once; `Menu::update` hands a leaving list no cursor, gate test U88), F3 (invisible and control characters reached the description; `is_invisible`, U87). Not fixed: F2 (a keyboard highlight move does not close the panel; *Follow-ups not done*), F4 (`bodyText` downloads whole bodies; guarded by §B10, T055) |
 | M5 code A | 2 | a120bc479b173b8924d63261604b13a473b1e516:e841c7dd4796e1df726e3798a06b40da65e363b7 | CHANGES (scoped, sonnet): 1 MAJOR, 1 MINOR; round 1's fixes hold and its not-fixed reasons stand. Fixed: F1 MAJOR (`is_invisible` dropped U+200C and U+200D everywhere, breaking Persian spelling and emoji sequences; now kept between two visible characters, U89). Not fixed: F2 MINOR (other blank-looking characters, e.g. Hangul fillers, the braille blank, lone variation selectors, still count as text; *Follow-ups not done*) |
+| M5 code A | 3 | 0e8cc27ec59d7e300494974a62d295f3d9363385:a219c99b13516c33b018da039051eaa13e781974 | CLEAN (scoped, sonnet; a short round: 2 tool calls, `description_from` traced by hand, nothing run). Round 2's fix holds and its F2 reason stands. Scoped gate after it: first red on `clippy::useless_format` in the new test (fixed), then GATE_EXIT=0 |
 
 ## Declined review findings
 

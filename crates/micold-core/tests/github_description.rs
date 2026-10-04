@@ -402,7 +402,7 @@ fn joiners_between_visible_characters_are_kept() {
     assert_eq!(description_from(persian), persian);
     assert_eq!(description_from(technologist), technologist);
     assert_eq!(
-        description_from(&format!("\u{200D}a\u{200C}\u{200B}b\u{200D} \u{200C}c")),
+        description_from("\u{200D}a\u{200C}\u{200B}b\u{200D} \u{200C}c"),
         "a\u{200C}b c",
         "a joiner at a word's start or end is dropped, one between letters is kept"
     );
