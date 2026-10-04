@@ -2378,7 +2378,15 @@ impl DaemonState {
             return Ok(Vec::new());
         }
         // 3. Archive under the lock, persisting once.
-        let archived = self.lock().catalog.archive_session_ids(&empty)?;
+        let archived = {
+            let mut inner = self.lock();
+            let archived = inner.catalog.archive_session_ids(&empty)?;
+            // An archived session is never started again, so its carried history goes with it.
+            for id in &archived {
+                inner.carried.remove(id);
+            }
+            archived
+        };
         // An archived session no longer answers as itself (FR-011).
         self.revoke_tool_credentials(&archived);
         Ok(archived)
