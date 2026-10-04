@@ -61,21 +61,12 @@ impl ProcessTree {
 /// must not be able to read it: `0700` / `0600` on Unix, a protected DACL with one ACE for the
 /// current user on Windows. The bytes go to a temporary file that is made owner-only before it is
 /// renamed over `file`, so the credential is never readable under a wider mode, and a rewrite
-/// replaces the old content atomically.
+/// replaces the old content atomically. The work is `micold_core::owner_only::write`, which the
+/// saved terminal history shares (feature 041, R8).
 pub fn write_owner_only(
     dir: &std::path::Path,
     file: &str,
     bytes: &[u8],
 ) -> std::io::Result<std::path::PathBuf> {
-    #[cfg(unix)]
-    return unix::write_owner_only(dir, file, bytes);
-    #[cfg(windows)]
-    return windows::write_owner_only(dir, file, bytes);
-    #[cfg(not(any(unix, windows)))]
-    {
-        std::fs::create_dir_all(dir)?;
-        let path = dir.join(file);
-        std::fs::write(&path, bytes)?;
-        Ok(path)
-    }
+    micold_core::owner_only::write(dir, file, bytes)
 }

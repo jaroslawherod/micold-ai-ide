@@ -5,7 +5,8 @@
 //! Windows (`D:P(A;;GA;;;<sid>)`, as the daemon's pipe has). A file is written to a temporary file
 //! in the same directory, owner-only before any content reaches it, and renamed over the old one:
 //! the content is never readable under a wider protection, and the name holds the previous whole
-//! file or the new whole one.
+//! file or the new whole one. The temporary file is synced to disk before the rename, and on Unix
+//! the directory after it (contracts/saved-history-file.md §3).
 
 use std::fs::File;
 use std::io;
@@ -44,6 +45,9 @@ pub fn write_with(
     let written = (|| {
         let mut out = imp::create_owner_only(&tmp)?;
         fill(&mut out)?;
+        // On disk before the name points at it, so a power loss leaves the old whole file or the
+        // new whole one under the name (FR-006).
+        out.sync_all()?;
         drop(out);
         std::fs::rename(&tmp, &path)
     })();
@@ -51,6 +55,7 @@ pub fn write_with(
         let _ = std::fs::remove_file(&tmp);
         return Err(error);
     }
+    imp::sync_dir(dir);
     Ok(path)
 }
 
@@ -80,6 +85,12 @@ mod imp {
             .mode(0o600)
             .open(path)
     }
+
+    /// Put the rename itself on disk. The file is whole under its name by now, so a filesystem
+    /// that cannot sync a directory does not fail the write.
+    pub(super) fn sync_dir(dir: &Path) {
+        let _ = File::open(dir).and_then(|dir| dir.sync_all());
+    }
 }
 
 #[cfg(windows)]
@@ -103,6 +114,9 @@ mod imp {
         set_protected_dacl(path, &format!("D:P(A;;GA;;;{sid})"))?;
         Ok(out)
     }
+
+    /// Windows has no handle to sync a directory through; the rename is the filesystem's own.
+    pub(super) fn sync_dir(_dir: &Path) {}
 
     /// Replace `path`'s DACL with the one `sddl` describes, protected from inheritance.
     fn set_protected_dacl(path: &Path, sddl: &str) -> io::Result<()> {
