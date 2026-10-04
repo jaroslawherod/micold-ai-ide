@@ -551,6 +551,36 @@ async fn a_read_is_written_by_persist_attention() {
     closes(window).await;
 }
 
+/// T125 (FR-008a): the stop writes what the last tick had not: an event and a read, with the
+/// window still open so no connection unwind writes them either.
+#[tokio::test]
+async fn stopping_the_service_writes_an_unsaved_event_and_a_read() {
+    let (a, b) = (session_id(A), session_id(B));
+    let service = Service::with_sessions(&[a, b]);
+    service.finishes_a_turn(a);
+    service.state.persist_attention();
+    let mut window = connect(&service.state, "window").await;
+    reports(&mut window, true, Some(a)).await;
+    service.finishes_a_turn(b);
+    assert!(!service.unread(a), "precondition: a was read");
+    assert!(service.unread(b), "precondition: b is unread");
+
+    micold_daemon::server::unwind(&service.state, micold_daemon::idle::StopReason::Requested).await;
+
+    let stored = DaemonState::new(catalog_on(service.store.path())).catalog_snapshot();
+    assert!(
+        !summary(&stored, a).unread,
+        "the read was stored by the stop"
+    );
+    assert_eq!(
+        summary(&stored, b).attention_seq,
+        1,
+        "the unsaved event was stored by the stop"
+    );
+    assert!(summary(&stored, b).unread, "b is stored as unread");
+    closes(window).await;
+}
+
 /// U93, A34 (FR-008, US2 scenario 21): read when the last window closed, then a new turn with no
 /// window open.
 #[tokio::test]

@@ -778,6 +778,40 @@ mod tests {
     }
 
     #[test]
+    fn a_method_error_naming_nobody_there_is_no_notification_service() {
+        // U160: real services answer a call to a missing name with a method-error reply, not the
+        // `FDO` variant.
+        let method_error = |name: &str, why: Option<&str>| {
+            zbus::Error::MethodError(
+                name.try_into().expect("an error name"),
+                why.map(str::to_string),
+                message("Notify", &()),
+            )
+        };
+        assert_eq!(
+            notify_error(&method_error(
+                "org.freedesktop.DBus.Error.ServiceUnknown",
+                Some("not provided")
+            )),
+            NotifyError::NoService("not provided".to_string())
+        );
+        assert_eq!(
+            notify_error(&method_error(
+                "org.freedesktop.DBus.Error.NameHasNoOwner",
+                None
+            )),
+            NotifyError::NoService("org.freedesktop.DBus.Error.NameHasNoOwner".to_string())
+        );
+        assert!(matches!(
+            notify_error(&method_error(
+                "org.freedesktop.DBus.Error.AccessDenied",
+                Some("blocked")
+            )),
+            NotifyError::Refused(_)
+        ));
+    }
+
+    #[test]
     fn any_other_bus_failure_is_a_refusal_with_the_buses_reason() {
         // U160.
         let error = zbus::Error::FDO(Box::new(zbus::fdo::Error::AccessDenied(

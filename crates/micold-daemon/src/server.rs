@@ -318,12 +318,18 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
             }
             // Attention events counted under the lock (feature 039, FR-008a) are written here for
             // the same reason: blocking I/O, off the async runtime.
-            if state.has_unsaved_attention() {
-                let writer = Arc::clone(&state);
-                let _ = tokio::task::spawn_blocking(move || writer.persist_attention()).await;
-            }
+            write_unsaved_attention(&state).await;
         }
     });
+}
+
+/// The supervisor tick's write of attention events counted since the last write (feature 039,
+/// FR-008a): one blocking hop, and none when nothing is unsaved.
+pub async fn write_unsaved_attention(state: &Arc<DaemonState>) {
+    if state.has_unsaved_attention() {
+        let writer = Arc::clone(state);
+        let _ = tokio::task::spawn_blocking(move || writer.persist_attention()).await;
+    }
 }
 
 /// Accept loop over the single-instance interprocess listener, ending when the idle window expires.
@@ -423,7 +429,7 @@ const IDLE_TICK_FLOOR: std::time::Duration = std::time::Duration::from_millis(40
 ///
 /// Dropping the session table is the teardown — `PtySession::Drop` terminates each process tree —
 /// so it is blocking, and runs on a blocking thread rather than on the runtime.
-async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
+pub async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
     // Step 1: say why, before doing anything. This line is the only record of *which* way out this
     // was; absent it, an idle stop and a crash look identical in the log (data-model G4).
     //
