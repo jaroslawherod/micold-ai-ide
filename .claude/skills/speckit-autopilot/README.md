@@ -45,10 +45,12 @@ what the run does.
 What you type in the command wins over labels, and labels win over the agent's reading of the
 text. When labels and text agree, the agent does not ask. When labels conflict with each other
 (two `flow:*` labels) or with the text (`bug` on new behaviour), it asks exactly one question.
-An unlabelled issue is read by its text. A run started from text opens its own issue, labelled.
+An unlabelled issue is read by its text. A run started from text looks for an open issue for the
+same work first, and otherwise opens its own, labelled.
 
 The issue number is the run's ID: a feature's spec lives in `specs/<issue>-<slug>`, so two runs
-never take the same number.
+never take the same number. A bugfix record is `BUG-<issue>`, and every PR title of the run ends
+with `(#<issue>)`, so the PR list shows which issue each PR serves.
 
 ## How it is built
 
@@ -181,7 +183,7 @@ micold IDE to clean up.
 
 ## Resuming
 
-The ledger is `specs/<issue>-<slug>/autopilot.md` for a feature, `bugs/BUG-<k>.autopilot.md` beside
+The ledger is `specs/<issue>-<slug>/autopilot.md` for a feature, `bugs/BUG-<issue>.autopilot.md` beside
 the BUG record for a bugfix, and `specs/quick/<date>-<issue>-<slug>.autopilot.md` (not committed)
 for a bug or chore. It holds the flow, the unit at work, PRs, milestones, every decision (and who
 made it), declined review findings, and follow-ups. After a crash or `/clear`, run

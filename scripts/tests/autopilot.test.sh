@@ -689,6 +689,10 @@ check "issue start refuses an unknown effort" 2 "unknown effort 'medium'" "$I" s
 echo body > "$d/body.md"; : > "$d/fx/gh.log"
 check "issue new opens the run's issue" 0 '^ISSUE_NEW #42$' "$I" new feat/x "Fix the flaky test" "$d/body.md" chore low
 check "issue new labels and claims it" 0 'issue create --title Fix the flaky test .*--assignee @me --label in-progress,flow:chore,effort:low' cat "$d/fx/gh.log"
+check "issue new marks a bugfix as a bug" 0 '^ISSUE_NEW #42$' "$I" new feat/x "Scrollback lost" "$d/body.md" bugfix
+check "issue new adds the bug label beside the flow" 0 '--label in-progress,flow:bugfix,bug$' cat "$d/fx/gh.log"
+check "issue new marks a feature as an enhancement" 0 '^ISSUE_NEW #42$' "$I" new feat/x "Folders" "$d/body.md" feature high
+check "issue new adds the enhancement label" 0 '--label in-progress,flow:feature,effort:high,enhancement$' cat "$d/fx/gh.log"
 check "issue new names the branch" 0 'issue comment 42 --body .*`feat/x`' cat "$d/fx/gh.log"
 check "issue flow stops when the issue cannot be read" 2 '^$' bash -c "'$I' flow 99 bug 2>/dev/null"
 check "issue new needs the body file" 2 'issue.sh new' "$I" new feat/x "t" "$d/none.md" chore

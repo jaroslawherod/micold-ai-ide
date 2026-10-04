@@ -19,6 +19,8 @@ and GitHub's state for each recorded PR.
   back to a milestone unit. If a commit on `main` reverted it, escalate (category 6).
 - A non-empty *Open escalation* means the question was never answered: ask it again, then dispatch
   a fresh unit of that kind with the answer.
+- **A ledger whose Issue is `none`** (a run from before every run had one): open one now
+  ([issue.md](issue.md)) and pass it to the next unit, which records it.
 - **An older ledger:** **Kind** `quick` is the chore flow; **Kind** `bug` with a ledger under
   `bugs/` is the bugfix flow; a **Phase** like `4-milestones` names the unit by its old number.
 

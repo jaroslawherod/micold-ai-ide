@@ -1,4 +1,4 @@
-# Autopilot ledger — #<issue> <slug> [BUG-<k>]
+# Autopilot ledger — #<issue> <slug> [BUG-<issue>]
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.

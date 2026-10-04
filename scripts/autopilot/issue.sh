@@ -13,7 +13,8 @@
 # says what the run does. Without a level, effort:* labels stay as they are.
 #
 # start prints ISSUE_STARTED #<n>, or ISSUE_TAKEN #<n> (exit 1) when the issue is already labelled
-# in-progress or assigned to someone else: that is another flow's work. new prints ISSUE_NEW #<n>.
+# in-progress or assigned to someone else: that is another flow's work. new prints ISSUE_NEW #<n>,
+# and also labels the issue bug (bug, bugfix flow) or enhancement (feature flow).
 set -uo pipefail
 usage() { sed -n '4,9p' "$0" | cut -c3- >&2; exit 2; }
 cmd=${1:-}
@@ -51,8 +52,9 @@ case $cmd in
     [ $# -ge 4 ] && [ $# -le 5 ] && [ -f "$3" ] || usage
     check_flow "$4" "${5:-}"
     ensure in-progress "flow:$4" ${5:+"effort:$5"}
+    case $4 in bug|bugfix) kind=,bug ;; feature) kind=,enhancement ;; *) kind= ;; esac
     url=$(gh issue create --title "$2" --body-file "$3" --assignee @me \
-      --label "in-progress,$(wanted "$4" "${5:-}")") || exit 2
+      --label "in-progress,$(wanted "$4" "${5:-}")$kind") || exit 2
     n=${url##*/}
     [[ $n =~ ^[0-9]+$ ]] || { echo "issue.sh: no issue number in '$url'" >&2; exit 2; }
     echo "ISSUE_NEW #$n" # before the comment: a retry after a failed comment would open a second issue

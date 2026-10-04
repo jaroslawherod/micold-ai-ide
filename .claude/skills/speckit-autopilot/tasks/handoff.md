@@ -17,7 +17,7 @@ When: the run's last PR has merged (the close PR, the bugfix's fix PR, or the bu
 ```
 ✅ WORK COMPLETE — #<issue> <feature or task> (<flow>)
 Delivered (all merged to main):
-  M1 #<pr> — <deliverable>        (bugfix: BUG-<k> #<pr> — <what now works>)
+  M1 #<pr> — <deliverable>        (bugfix: BUG-<issue> #<pr> — <what now works>)
   M2 #<pr> — <deliverable>        (bug, chore: #<pr> — <what changed>)
 Decisions: <n> made by you, <m> resolved by me from repo evidence — see <ledger path>
 Follow-ups not done: <none | list>

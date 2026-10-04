@@ -18,7 +18,7 @@ it: the type drops tool schemas a unit never uses, about 10k tokens on each of i
   4. the ledger path (`none yet` for the first unit), the worktree path and branch;
   5. the previous PR and its merge SHA (`none` for the first unit and after a unit without a PR);
   6. the scope: for the first unit, the user's prompt or the issue's title and body verbatim; after
-     a `NEXT:`, what the old unit found; for a milestone, its ID and task IDs (and `BUG-<k>` in the
+     a `NEXT:`, what the old unit found; for a milestone, its ID and task IDs (and `BUG-<issue>` in the
      bugfix flow).
 - **Then hold:** [../rules/waiting.md](../rules/waiting.md), *The orchestrator*.
 
