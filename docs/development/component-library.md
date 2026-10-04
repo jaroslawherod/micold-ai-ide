@@ -194,6 +194,14 @@ truncated; the row is as tall as its text needs, never shorter than a menu item,
 marker sits beside the label's first line. A row **without** details is unchanged: fixed height, one
 truncated line.
 
+A row may also carry a tooltip through `Row::tooltip(text)`: once the cursor has rested on the row
+for `ROW_TOOLTIP_REST` (3 s) the text opens beside the row, at most `ROW_TOOLTIP_LINES` (3) lines of
+it, on `material::Tooltip`'s rest-delay mode. The text is shown as given; an empty one is no tooltip.
+A list reuses its rows, so give each row `Row::key(u64)`, a number that stands for the choice: when
+another choice arrives at the same place, an open tooltip closes and the wait starts again. The
+panel is floated by the list itself (`cdk::picker`'s list forwards its content's overlay), takes no
+input, and never covers its row. `{:?}` of a `Row` prints neither the details nor the tooltip text.
+
 So a new picker's work is a mapping — your candidate type to a `Row`, and a row index back to your
 candidate — plus the four messages. The branch picker's version of that mapping is about twenty
 lines in `ui/worktree_form.rs`, and it is the only place branch vocabulary and component vocabulary

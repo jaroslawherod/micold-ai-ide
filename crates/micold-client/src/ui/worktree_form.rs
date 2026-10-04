@@ -335,9 +335,13 @@ pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
             selected = Some(row);
         }
         let emphasis = issue.emphasis(&matched.spans);
+        // The key tells a reused row that it stands for another issue now. An issue without a
+        // description gets no tooltip at all (FR-020): `Row::tooltip` drops an empty text.
         rows.push(
             TypeaheadRow::new(issue.title_line(), emphasis.title)
-                .details(issue.details_line(), emphasis.details),
+                .details(issue.details_line(), emphasis.details)
+                .key(issue.number())
+                .tooltip(issue.description()),
         );
     }
     (rows, selected)

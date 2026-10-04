@@ -39,7 +39,7 @@ use std::time::Duration;
 /// [`TreeItem`](super::TreeItem) — deliberately not a component. Whatever explains an unavailable
 /// row must already be part of `label` or `details`; this module has no idea why any row is
 /// disabled.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct Row {
     /// The full text of the row.
     pub label: String,
@@ -83,13 +83,24 @@ impl Row {
         self
     }
 
-    /// STUB (038 T051).
-    pub fn tooltip(self, _text: impl Into<String>) -> Self {
+    /// Give the row a tooltip: `text`, shown once the cursor has rested on the row for
+    /// [`ROW_TOOLTIP_REST`], at most [`ROW_TOOLTIP_LINES`] lines of it (038 contracts/picker-row.md
+    /// §4).
+    ///
+    /// The text is shown as given, and nothing is added to it. An empty text is no tooltip.
+    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
+        let text = text.into();
+        self.tooltip = (!text.is_empty()).then_some(text);
         self
     }
 
-    /// STUB (038 T051).
-    pub fn key(self, _key: u64) -> Self {
+    /// Say what the row stands for.
+    ///
+    /// A list reuses its rows: the row at one place stands for one choice now and for another once
+    /// the list narrows. With a key, a tooltip that was open or waiting for the choice that left
+    /// closes and waits again for the one that arrived (038 FR-017).
+    pub fn key(mut self, key: u64) -> Self {
+        self.key = Some(key);
         self
     }
 
@@ -97,6 +108,27 @@ impl Row {
     pub fn disabled(mut self) -> Self {
         self.enabled = false;
         self
+    }
+}
+
+/// `{:?}` of a row prints its label and neither its second line nor its tooltip text: what a caller
+/// puts there may be something no log should hold (038 FR-025: a reporter, a description).
+impl std::fmt::Debug for Row {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct Redacted;
+        impl std::fmt::Debug for Redacted {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("<redacted>")
+            }
+        }
+        f.debug_struct("Row")
+            .field("label", &self.label)
+            .field("spans", &self.spans)
+            .field("enabled", &self.enabled)
+            .field("details", &self.details.as_ref().map(|_| Redacted))
+            .field("tooltip", &self.tooltip.as_ref().map(|_| Redacted))
+            .field("key", &self.key)
+            .finish()
     }
 }
 
@@ -314,13 +346,14 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
     }
 
     let mut list = column![].width(Length::Fill);
-    for (index, item) in rows.into_iter().enumerate() {
+    for (index, mut item) in rows.into_iter().enumerate() {
         // A disabled row is present and readable but has nowhere to send a press, so it renders
         // unpressable rather than carrying a flag that could disagree with one (FR-012a).
         let press = item.enabled.then(|| on_pick.map(|f| f(index))).flatten();
         let is_highlighted = highlighted == Some(index);
+        let (tip, key) = (item.tooltip.take(), item.key);
         let row = row_element(item, is_highlighted, selected == Some(index), press, r);
-        list = list.push(if is_highlighted {
+        let row = if is_highlighted {
             // A container for its `Id` alone: it is the one widget that reports an `Id` with its
             // bounds to an operation, and it sizes itself as its content does, so the row lies
             // where it would without it.
@@ -329,6 +362,24 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
                 .into()
         } else {
             row
+        };
+        list = list.push(match tip {
+            // The tooltip is the outermost widget of the row, outside the highlight's container:
+            // its wait and its open panel are state kept at the row's place in the list, and a
+            // highlight arriving on the row or leaving it must not replace that place's widget.
+            // It lays out its content alone, so the row lies where it would without it.
+            Some(text) => {
+                let tooltip = super::Tooltip::new(row, text, r)
+                    .after_rest(ROW_TOOLTIP_REST)
+                    .max_lines(ROW_TOOLTIP_LINES)
+                    .position(super::TooltipPosition::Bottom);
+                match key {
+                    Some(key) => tooltip.subject(key),
+                    None => tooltip,
+                }
+                .into()
+            }
+            None => row,
         });
     }
 
@@ -1074,10 +1125,11 @@ mod tests {
     }
 
     /// A panel is the first node on a path down that is narrower than the window: the groups that
-    /// carry it are each as large as the window.
+    /// carry it are each as large as the window. Its one child is the surface a person sees; the
+    /// node around it adds the margin the panel keeps from the window's edge, drawn as nothing.
     fn panels_of(node: &layout::Node, found: &mut Vec<Size>) {
         if node.size().width < WINDOW.width {
-            found.push(node.size());
+            found.push(node.children().first().unwrap_or(node).size());
             return;
         }
         for child in node.children() {
