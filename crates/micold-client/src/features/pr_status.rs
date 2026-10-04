@@ -116,6 +116,118 @@ pub enum Effect {
 
 /// Apply `msg` (contracts/reading-and-wire.md §2).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
-    let _ = (state, msg);
-    Effect::None
+    match msg {
+        Msg::Held => {
+            state.held = true;
+            state.awaiting_listing = true;
+            Effect::None
+        }
+        Msg::ListingArrived { now } => {
+            if !state.awaiting_listing {
+                return Effect::None;
+            }
+            state.awaiting_listing = false;
+            let wanted = state.enabled && !paused(state, now);
+            match &mut state.phase {
+                Phase::Reading { again, .. } => {
+                    *again |= wanted;
+                    Effect::None
+                }
+                Phase::Idle => start(state, now),
+            }
+        }
+        Msg::EnabledChanged { enabled, now } => {
+            if enabled == state.enabled {
+                return Effect::None;
+            }
+            state.enabled = enabled;
+            if enabled {
+                start(state, now)
+            } else {
+                state.statuses.clear();
+                state.removable.clear();
+                state.read_at = None;
+                state.pause_until = None;
+                state.phase = Phase::Idle;
+                Effect::None
+            }
+        }
+        Msg::Finished { seq, outcome, now } => {
+            let Phase::Reading {
+                seq: current,
+                again,
+                ..
+            } = state.phase
+            else {
+                return Effect::None;
+            };
+            if seq != current {
+                return Effect::None;
+            }
+            state.phase = Phase::Idle;
+            let mut again = again;
+            match outcome {
+                Outcome::Ok {
+                    statuses,
+                    removable,
+                    started_at,
+                } => {
+                    state.statuses = statuses;
+                    state.removable = removable;
+                    state.read_at = Some(started_at);
+                    state.pause_until = None;
+                }
+                Outcome::Err(ReadingFailure::Unavailable) => {
+                    state.statuses.clear();
+                    state.removable.clear();
+                    state.read_at = None;
+                }
+                Outcome::Err(ReadingFailure::Passing) => {}
+                Outcome::Err(ReadingFailure::RateLimited { until }) => {
+                    state.pause_until = Some(until);
+                    again = false;
+                }
+            }
+            if again {
+                start(state, now)
+            } else {
+                Effect::None
+            }
+        }
+        Msg::Released => {
+            state.held = false;
+            state.awaiting_listing = false;
+            state.phase = Phase::Idle;
+            state.statuses.clear();
+            state.removable.clear();
+            state.read_at = None;
+            Effect::None
+        }
+        Msg::RemotesTimedOut { .. } => Effect::None,
+    }
+}
+
+/// Whether readings are held back by GitHub's request limit at `now` (FR-024).
+fn paused(state: &State, now: u64) -> bool {
+    state.pause_until.is_some_and(|until| now < until)
+}
+
+/// Start a reading if every condition of contracts/reading-and-wire.md §1 holds.
+fn start(state: &mut State, now: u64) -> Effect {
+    if !state.enabled
+        || !state.held
+        || state.awaiting_listing
+        || paused(state, now)
+        || state.phase != Phase::Idle
+    {
+        return Effect::None;
+    }
+    let seq = state.next_seq;
+    state.next_seq += 1;
+    state.phase = Phase::Reading {
+        seq,
+        again: false,
+        started: now,
+    };
+    Effect::Read { seq }
 }
