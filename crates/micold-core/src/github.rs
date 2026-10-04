@@ -400,6 +400,16 @@ impl Issue {
         )
     }
 
+    /// STUB (038 T049).
+    pub fn described(self, _body_text: &str) -> Issue {
+        self
+    }
+
+    /// STUB (038 T049).
+    pub fn description(&self) -> &str {
+        ""
+    }
+
     /// The issue number; the ticket is its decimal text (FR-009).
     pub fn number(&self) -> u64 {
         self.number
@@ -540,6 +550,14 @@ fn merged(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
         }
     }
     merged
+}
+
+/// STUB (038 T049).
+pub const DESCRIPTION_MAX_CHARS: usize = 600;
+
+/// STUB (038 T049).
+pub fn description_from(body_text: &str) -> String {
+    body_text.to_string()
 }
 
 /// What `Debug` prints in place of a reporter.

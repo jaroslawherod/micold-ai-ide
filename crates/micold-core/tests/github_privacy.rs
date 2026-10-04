@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use micold_core::github::Issue;
+use micold_core::github::{parse_list_page, parse_search, GithubRepo, Issue};
 
 /// U28 — `{:?}` shows what identifies the issue, and not who reported it.
 #[test]
@@ -46,6 +46,119 @@ fn debug_output_redacts_the_reporter() {
     assert!(
         !pretty.contains(REPORTER),
         "nor in the pretty form: {pretty}"
+    );
+}
+
+/// U28 — `{:?}` does not print what the issue's body says.
+#[test]
+fn debug_output_redacts_the_description() {
+    const DESCRIPTION: &str = "a-private-sentence about the customer";
+    let issue = Issue::new(518, "Show the description".to_string(), vec![], "t".to_string())
+        .described(DESCRIPTION);
+    assert_eq!(
+        issue.description(),
+        DESCRIPTION,
+        "the fixture issue holds the description"
+    );
+
+    for debug in [format!("{issue:?}"), format!("{issue:#?}")] {
+        assert!(debug.contains("518"), "the number is printed: {debug}");
+        assert!(
+            debug.contains("Show the description"),
+            "the title is printed: {debug}"
+        );
+        assert!(
+            debug.contains("description: \"<redacted>\""),
+            "the description's place is marked: {debug}"
+        );
+        assert!(
+            !debug.contains("a-private-sentence") && !debug.contains("customer"),
+            "no part of the description is printed: {debug}"
+        );
+    }
+}
+
+/// U30 — a page that cannot be read gives an error that says so and repeats none of the page: a
+/// body in it reaches neither the form's message nor a log.
+#[test]
+fn a_malformed_page_with_a_body_gives_an_error_without_it() {
+    const BODY: &str = "a-private-sentence";
+    let repo = GithubRepo::from_remote_url("https://github.com/o/r").expect("a GitHub remote");
+    let pages = [
+        // A node without a number, beside its body.
+        format!(
+            r#"{{"data":{{"repository":{{"issues":{{"totalCount":1,
+                "pageInfo":{{"hasNextPage":false,"endCursor":null}},
+                "nodes":[{{"title":"T","bodyText":"{BODY}"}}]}}}}}}}}"#
+        ),
+        // A body of the wrong type, and no issue list.
+        format!(r#"{{"data":{{"repository":{{"bodyText":"{BODY}"}}}}}}"#),
+        // Not JSON: cut inside the body.
+        format!(r#"{{"data":{{"repository":{{"issues":{{"nodes":[{{"bodyText":"{BODY}"#),
+        // Not JSON: an unexpected token after the body.
+        format!(r#"{{"data":{{"bodyText":"{BODY}" {BODY} }}}}"#),
+    ];
+    for page in &pages {
+        for (parser, result) in [
+            ("parse_list_page", parse_list_page(page.as_bytes()).map(drop)),
+            ("parse_search", parse_search(page.as_bytes()).map(drop)),
+        ] {
+            let Err(error) = result else {
+                // A search answer has no issue list to miss: a shape it reads as "no hits" is fine.
+                assert_eq!(parser, "parse_search", "{parser} refuses {page}");
+                continue;
+            };
+            // `message` is the error's display form: what the form shows under the field.
+            for shown in [
+                format!("{error:?}"),
+                format!("{error:#?}"),
+                error.message(&repo),
+            ] {
+                assert!(
+                    !shown.contains(BODY) && !shown.contains("private"),
+                    "{parser}'s error carries no part of the body: {shown}"
+                );
+            }
+        }
+    }
+}
+
+/// U81 — `Issue` cannot be serialized: neither derived nor implemented by hand. A source check,
+/// because the absence of an impl cannot be asserted on a value.
+#[test]
+fn an_issue_has_no_serialize() {
+    let path = crates_dir().join("micold-core").join("src").join("github.rs");
+    let source =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let at = source
+        .find("pub struct Issue {")
+        .expect("`Issue` is declared in github.rs");
+    let attributes: Vec<&str> = source[..at]
+        .rsplit("\n\n")
+        .next()
+        .expect("the lines above the declaration")
+        .lines()
+        .filter(|line| line.trim_start().starts_with("#["))
+        .collect();
+    let attributes = attributes.join("\n");
+    assert!(
+        attributes.contains("#[derive("),
+        "the scan sees the derive above `Issue`: {attributes}"
+    );
+    assert!(
+        !attributes.contains("Serialize"),
+        "`Issue` derives no `Serialize` (FR-025): {attributes}"
+    );
+    let compact: String = source.split_whitespace().collect::<Vec<_>>().join(" ");
+    for hand_written in ["Serialize for Issue", "Serialize for &Issue"] {
+        assert!(
+            !compact.contains(hand_written),
+            "`Issue` implements no `Serialize` by hand (FR-025)"
+        );
+    }
+    assert!(
+        !compact.contains("serde::Serialize") && !compact.contains("use serde::{Serialize"),
+        "nothing in github.rs is serializable, so no type holding an `Issue` can be"
     );
 }
 
