@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 rework for D13, see *Handover*: T059, T060, T062, T063 (client reducer, shell, guide), then verify (scoped gate with review A, review B, visual pass with §B10 re-measured), full gate, tick T055, PR.
+- **Next step**: M5 rework: T058–T063 done (cycle 26, client tests green). Now verify.md step 1 on the rework: scoped gate with `M5 rework code A` round 1 (`high`, diff a173709b..HEAD), then `M5 rework code B` and the visual pass with §B10 re-measured, full gate, tick T055 on a measured pass, PR.
 
 ## Pull requests
 
@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D13 | M5 | §B10 measured the issue list of `cli/cli` (1,000 issues) at 1.88× with `bodyText` in the list query; SC-008 allows 1.5×. What should M5 do? (category 1, asked by `Milestone M5 518 part 3`.) Options were: 1 second-pass fetch; 2 accept the slower load and change SC-008 to 2×; 3 fetch a description when the cursor rests; 4 drop US3. | Option 1, "Second-pass fetch (Recommended)": "Load the list as today without descriptions, then fetch descriptions in a second pass once the list has arrived. List stays at about 11 s (measured 10.9 s without bodyText). Cost: FR-024/FR-026 reworded (about 20 requests per full load instead of 10) and a rework of M5's query, form state and tests." The second pass starts on the same occasions as a list load and never because a cursor rests; a tooltip is available once its page of descriptions is in. SC-008 stays 1.5×. | decided by user | Escalation (category 1), answered 2026-10-04 by AskUserQuestion, relayed by the orchestrator. Measured: before 13.6, 12.4, 11.3, 11.6, 11.1 s (median 11.6); after 23.2, 22.2, 21.8, 21.8, 19.8 s (median 21.8), `evidence/b10-times.txt`; by hand ten pages 10.9 s and 236 KB without `bodyText`, 20.4 s and 2.08 MB with |
 | D14 | M5 | Do the two search queries (beyond the cap, typed number) also lose `bodyText` and get a second pass? | No. A search is one request of at most 51 nodes after a debounce; SC-008 measures the list appearing, and US3 scenario 11 needs a searched issue's description. They keep `bodyText` in their own answer (FR-024 as reworded says so). | agent-resolved | spec.md FR-024, SC-008; `SEARCH_QUERY` `first: 50`; D13's wording names the list only |
 | D15 | M5 | What does the form show when the description pass fails? | Nothing: the pass ends, the list stays, rows without a delivered description have no tooltip, no retry; the next list load starts a new pass. A tooltip is a convenience (US3 is P3) and FR-020 already has "no tooltip" as a normal row state. Written into FR-024. | agent-resolved | spec.md FR-024, FR-020; contracts/issue-fields.md §6 |
+| D16 | M5 | M5 code A has three counted rounds, the limit. How are reviews of the D13 rework counted? | As a new series, `M5 rework code A` and `M5 rework code B`, each from round 1 with its own limit of 3 counted rounds. Round 1 of A is a full round on the session model (`high`), its diff the rework only: a173709b (the last reviewed state) to HEAD. A third counted round of the new series that still finds a BLOCKER or MAJOR is a category 5 escalation; never a fourth. | agent-resolved | review-rounds.md *Round limit*: a round counts "only when it follows fixes to that review's own BLOCKER or MAJOR findings, or is round 1". The rework's first round follows a user decision (D13) on code no round saw, not fixes to A's findings; the old series closed CLEAN (round 3), so no finding is carried over. Ruled by the orchestrator in the dispatch of `Milestone M5 518 part 5` |
 
 ## Review rounds
 
@@ -95,68 +96,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Written 2026-10-04 by unit `Milestone M5 518 part 4` at the context cap (155k). No PR is open for
-M5; nothing is pushed. `branch-start.sh 576` was run: the branch is rebased on `origin/main`.
-
-**Done in this part**
-- D13 (the user's answer), D14, D15 recorded; *Open escalation* cleared.
-- Artifacts reworded for the two-pass load and committed: spec.md (FR-024, FR-026, two edge
-  cases), research.md (R1, R14), plan.md, contracts/issue-fields.md (§1, §6 is the design of the
-  pass), quickstart.md (§A row, §B10, §B11), data-model.md, tasks.md (T058–T063 in M5), test-list
-  (U27 reworked, U90–U100).
-- T058 and T061 (core) test-first, cycle 25: `LIST_QUERY` has no `bodyText`, the searches keep it,
-  `DESCRIPTIONS_QUERY`, `descriptions_args`, `DescriptionPage`, `parse_descriptions_page`,
-  `describe_listed`, `DESCRIPTION_PAGE_CAP`, `next_description_cursor`,
-  `IssueSource::describe_open` (`GhCli`, `FakeIssueSource::with_descriptions`,
-  `description_calls`). `cargo test -p micold-core` green; `cargo fmt` run. The client was not
-  built on it.
-
-**Next step: T059, T060, T062, T063, test-first (cycle 26 on)**. The design is contract §6; the
-plan this part had for it, nothing of which is written yet:
-- `features/worktree_form.rs`: `enum DescriptionPass { Loading { seq, cursor: Option<String>,
-  pages: usize }, #[default] Done }` as a new field `descriptions` of `IssueList::Loaded` (six test
-  files construct `Loaded` and need `descriptions: Default::default()`: `issue_picker_rows.rs`,
-  `picker_highlight_into_view.rs`, `gates/picker_row_tooltip_clears_its_row.rs`,
-  `support/covered_states.rs` three times). `issues_loaded` sets `Loading { seq, cursor: None,
-  pages: 0 }` with the load's seq unless the listing is empty. `Msg::IssueDescriptionsLoaded {
-  seq, cursor, result: Result<DescriptionPage, IssueLoadError> }` and
-  `issue_descriptions_loaded`: applies only when `seq` and `cursor` equal the awaited ones; `Ok`
-  calls `describe_listed(&mut listing.issues, &page)` then `next_description_cursor(cursor, &page,
-  pages + 1)` gives the next `Loading` or `Done`; `Err` gives `Done` and nothing else; no
-  `rematch_issues`. `State::issue_description_request() -> Option<DescriptionRequest { seq, repo,
-  cursor, gh }>`. The reducer's doc says "twenty-two answers": count again.
-- `shell/issues.rs`: `start_issue_descriptions(app, request)` runs
-  `source(gh).describe_open(&repo, cursor)` on a blocking thread like `start_issue_search` and
-  answers `IssueDescriptionsLoaded`. Called from `on_issues_loaded` and from a new
-  `on_issue_descriptions_loaded` (a `main.rs` arm), each only when
-  `issue_description_request()` after the reducer differs from before it and is `Some`: a stale
-  answer must not start a duplicate request. Update the module doc ("the only paths").
-- Tests: U95–U98 in `tests/issue_source_state.rs`; U99 in
-  `tests/issues_are_requested_only_on_named_events.rs` (marker `start_issue_descriptions(`, its
-  definition, its two call lines and its `.issue_tooling()` line in `ALLOWED`, the header's "three
-  named events" text); U100 in `src/main_tests.rs` `mod issue_source` (`issue_rig` with
-  `FakeIssueSource::with_descriptions`; `description_calls()` is `[(o/r, None), (o/r, Some(P2))]`).
-  Expect `issue_choosing_the_source_lists_open_issues` to need its `constructed` assertion
-  widened: the pass builds the source again from the same `gh`.
-- T063: the user guide's "From a GitHub issue": descriptions arrive shortly after the list, from
-  the top down. `docs/development/` if it names the issue source's requests.
-- Then verify.md from step 1. The rework is new, unreviewed code: review A (`high`, scoped to the
-  rework: snapshot diff against round 3's `0e8cc27e…:a219c99b…` will be stale after the rebase,
-  so a full round) and review B again. Visual pass: §B6 (a row's tooltip still opens at 3.0–3.5 s
-  once described), §B8, §B9, §B11 (with the pass ended), and what the rework adds: a cursor
-  resting on a row while its description arrives (does the panel open 3 s later without a move?),
-  and §B10 five before, five after, alternating; `/home/jaro/vp/m5/before-src` holds the "before"
-  checkout (7cbb6c76). Tick T055 only on a measured pass. Full gate (`df -h` first: 31 G free at
-  the start of this part), PR `feat(038): …`, body ending `Refs #518`.
-
-**Open question for the orchestrator (review-rounds.md does not settle it)**: M5 code A has three
-counted rounds, the limit. The rework after D13 is new code that no round saw. This part planned
-to run A and B on it as a new count ("M5 rework code A/B", round 1), because the three rounds
-converged (round 3 CLEAN) and the new rounds follow a user-decided change, not fixes to A's own
-findings. If that reading is wrong, a BLOCKER or MAJOR in the rework's first round would already
-be a category 5 escalation.
-
-**Open findings**: none.
+None.
 
 ## Open escalation
 

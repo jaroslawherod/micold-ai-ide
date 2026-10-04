@@ -706,3 +706,44 @@ suite runs in the gate.
 - not yet built: `micold-client` does not compile against this commit's trait until T062 (no
   client type implements `IssueSource`, so only the new state and message are missing there; it
   was not built after this change).
+
+## Cycle 26 — U95, U96, U97, U98, U99, U100 — T059, T060, T062 (M5, second pass, ledger D13)
+
+- tests: `crates/micold-client/tests/issue_source_state.rs` (6 new: U95 twice, U96, U97, U98
+  twice), `tests/issues_are_requested_only_on_named_events.rs` (the marker
+  `start_issue_descriptions(` and four `ALLOWED` lines, U99), `src/main_tests.rs` `mod issue_source`
+  (2 new, U100). The state's API was first added as stubs (`DescriptionPass`, the `descriptions`
+  field always `Done`, `Msg::IssueDescriptionsLoaded` answered by a function that does nothing,
+  `issue_description_request` always `None`, nothing in the shell), so the tests fail on what they
+  assert and not on a missing name.
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client --test issue_source_state --test issues_are_requested_only_on_named_events`
+  and `… --bin micold-ai-ide issue_source::`
+  ```
+  thread 'a_failed_page_ends_the_pass_and_shows_no_error' panicked at crates/micold-client/tests/issue_source_state.rs:1518:5:
+  thread 'an_accepted_load_awaits_the_first_description_page' panicked at crates/micold-client/tests/issue_source_state.rs:1343:5:
+  thread 'an_awaited_page_describes_the_held_issues_and_awaits_the_next' panicked at crates/micold-client/tests/issue_source_state.rs:1401:5:
+  thread 'the_pass_ends_on_the_last_page_and_at_the_cap' panicked at crates/micold-client/tests/issue_source_state.rs:1483:9:
+  test result: FAILED. 45 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+  thread 'every_allowlist_entry_still_matches' panicked at crates/micold-client/tests/issues_are_requested_only_on_named_events.rs:186:5:
+  test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
+  thread 'tests::issue_source::issue_a_failed_description_page_leaves_the_list_shown' panicked at crates/micold-client/src/main_tests.rs:5716:9:
+  thread 'tests::issue_source::issue_choosing_the_source_reads_the_descriptions_after_the_list' panicked at crates/micold-client/src/main_tests.rs:5681:9:
+  test result: FAILED. 34 passed; 2 failed; 0 ignored; 0 measured; 325 filtered out
+  ```
+  Two of the new tests passed against the stubs and cannot do otherwise, being negatives: U97
+  (`a_page_that_is_not_awaited_changes_nothing`; a reducer that does nothing changes nothing) and
+  the second U95 (`a_load_of_no_issues_and_a_failed_load_await_no_descriptions`). They guard the
+  green code: U97 fails if the seq or the cursor check is taken out of `issue_descriptions_loaded`.
+- green: `features/worktree_form.rs`: `issues_loaded` sets `DescriptionPass::Loading { seq, cursor:
+  None, pages: 0 }` unless the listing is empty; `issue_descriptions_loaded` applies only the page
+  awaited by seq and cursor, calls `describe_listed`, then `next_description_cursor` gives the next
+  `Loading` or `Done`, and `Err` gives `Done`; `State::issue_description_request`. `shell/issues.rs`:
+  `start_issue_descriptions`, called from `on_issues_loaded` and the new
+  `on_issue_descriptions_loaded` only when the request after the reducer differs from the one
+  before it; `main.rs` routes the message there. First green run: 3 failed, each a test's own
+  expectation: two `constructed` assertions of existing tests counted the sources built (the pass
+  builds one more from the same `gh`; widened, as the handover foresaw), and the new cap test fed
+  empty pages, which `next_description_cursor` rightly ends on (the pages now hold a node).
+  `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client`: exit 0, 155 targets `ok`.
+- refactor: none; the reducer's doc counts its answers again (thirty-five).
+- T063: the user guide's "From a GitHub issue" says descriptions arrive after the list, top down.

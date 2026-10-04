@@ -45,6 +45,7 @@ fn form(listed: Vec<Issue>, searched: Vec<Issue>, query: &str) -> WorktreeForm {
             gh: PathBuf::from("/usr/bin/gh"),
             searched,
             search: SearchState::Idle,
+            descriptions: Default::default(),
         },
         ..WorktreeForm::default()
     };

@@ -5245,7 +5245,9 @@ mod issue_source {
     use crate::shell::capabilities::IssueTooling;
     use micold_client::features::worktree_form::{BranchSource, IssueList, WorktreeForm};
     use micold_core::git::GitRemote;
-    use micold_core::github::{FakeIssueSource, Issue, IssueLoadError, IssuePage, IssueSource};
+    use micold_core::github::{
+        DescriptionPage, FakeIssueSource, Issue, IssueLoadError, IssuePage, IssueSource,
+    };
     use micold_core::naming::ConventionalType;
     use micold_core::protocol::messages::{ErrorKind, OperationResult};
     use micold_core::typeahead::Direction;
@@ -5614,8 +5616,8 @@ mod issue_source {
         );
         assert_eq!(
             *rig.constructed.lock().unwrap(),
-            vec![PathBuf::from(FAKE_GH)],
-            "the source runs the gh that was located"
+            vec![PathBuf::from(FAKE_GH); 2],
+            "the source runs the gh that was located, for the list and for its descriptions"
         );
         let f = form(&rig.app);
         let rows: Vec<String> = f
@@ -5633,6 +5635,97 @@ mod issue_source {
             "each row's match text is number, title, reporter and labels, in the source's order"
         );
         assert!(f.issue_list_open, "the list opens on arrival");
+    }
+
+    /// Each loaded issue's number and description, in the list's order.
+    fn described(app: &App) -> Vec<(u64, String)> {
+        let IssueList::Loaded { listing, .. } = &form(app).issues else {
+            panic!("the list is not loaded");
+        };
+        listing
+            .issues
+            .iter()
+            .map(|issue| (issue.number(), issue.description().to_string()))
+            .collect()
+    }
+
+    fn descriptions(pairs: &[(u64, &str)], next: Option<&str>) -> DescriptionPage {
+        DescriptionPage {
+            descriptions: pairs
+                .iter()
+                .map(|(n, text)| (*n, text.to_string()))
+                .collect(),
+            next_cursor: next.map(str::to_string),
+        }
+    }
+
+    /// 038 U100 — choosing the source reads the list, then its descriptions a page at a time in
+    /// order, each with the `gh` that was located, and the rows hold them (FR-024, US3-1).
+    #[test]
+    fn issue_choosing_the_source_reads_the_descriptions_after_the_list() {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new()
+                .with_page(page(issues()))
+                .with_descriptions(Ok(descriptions(
+                    &[(7, "The sidebar"), (42, "It crashes")],
+                    Some("P2"),
+                )))
+                .with_descriptions(Ok(descriptions(&[(108, "The docs")], None))),
+        );
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+
+        assert_eq!(
+            rig.source.calls(),
+            vec![("o/r".to_string(), None)],
+            "the list is read once"
+        );
+        assert_eq!(
+            rig.source.description_calls(),
+            vec![
+                ("o/r".to_string(), None),
+                ("o/r".to_string(), Some("P2".to_string())),
+            ],
+            "then the description pages, in order, and no page after the last"
+        );
+        assert_eq!(
+            described(&rig.app),
+            vec![
+                (7, "The sidebar".to_string()),
+                (42, "It crashes".to_string()),
+                (108, "The docs".to_string()),
+            ]
+        );
+        assert_eq!(
+            *rig.constructed.lock().unwrap(),
+            vec![PathBuf::from(FAKE_GH); 3],
+            "every request runs the gh the load located"
+        );
+        assert_eq!(
+            rig.located_with.lock().unwrap().len(),
+            1,
+            "the pass never looks for gh again"
+        );
+        assert_eq!(offered(&rig.app), vec![7, 42, 108]);
+    }
+
+    /// 038 U100 — a failed description page ends the pass: the list stays shown, with no error and
+    /// no further request (FR-024).
+    #[test]
+    fn issue_a_failed_description_page_leaves_the_list_shown() {
+        // Nothing scripted: the fake answers the first page with an error.
+        let rig = loaded_rig();
+        assert_eq!(
+            rig.source.description_calls(),
+            vec![("o/r".to_string(), None)],
+            "one page was asked for, and none after it failed"
+        );
+        assert!(matches!(form(&rig.app).issues, IssueList::Loaded { .. }));
+        assert_eq!(offered(&rig.app), vec![7, 42, 108], "the list is shown");
+        assert_eq!(form(&rig.app).error, None);
+        assert!(described(&rig.app).iter().all(|(_, text)| text.is_empty()));
+        assert_eq!(rig.source.calls().len(), 1, "the list is not read again");
     }
 
     /// A3 — typing narrows locally with no source call; Down then Enter picks (US1-3).
@@ -6006,8 +6099,8 @@ mod issue_source {
         );
         assert_eq!(
             *rig.constructed.lock().unwrap(),
-            vec![PathBuf::from(FAKE_GH); 2],
-            "the search runs the gh the list was read with"
+            vec![PathBuf::from(FAKE_GH); 3],
+            "the description pass and the search run the gh the list was read with"
         );
         assert_eq!(
             rig.located_with.lock().unwrap().len(),
