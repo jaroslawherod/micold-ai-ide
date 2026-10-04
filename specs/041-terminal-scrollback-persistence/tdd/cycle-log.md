@@ -517,3 +517,52 @@ commit by subject, and the *Commit index* sections give the SHAs once the commit
 ## T007 closed: U38 on Windows (M2 unit)
 
 - U38 (`crates/micold-daemon/tests/history_restart_in_run.rs`) ran on the Windows leg of PR #577: CI run 37214267941, job 111471529932 `build + test (windows-latest)`, `Running tests\history_restart_in_run.rs` -> `test result: ok. 5 passed; 0 failed; 0 ignored`. T007 ticked.
+
+## Cycle 46: U55 `write` creates the directory `0700` and the file `0600`, and replaces an existing file through a rename
+
+- test: `crates/micold-core/tests/owner_only.rs::unix::write_creates_the_directory_0700_and_the_file_0600`, `…::unix::write_replaces_an_existing_file_through_a_rename`, `…::unix::write_narrows_an_existing_wider_file_and_directory`, `…::write_with_stores_what_the_fill_wrote_and_returns_the_path` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test owner_only` (one shared run, all 10 Unix-side tests written together against a stub: `ensure_dir` and `write_with` return `Err(Unsupported)`: `test result: FAILED. 1 passed; 9 failed`; commit `b8ec8bb7`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at the first `write` of each test
+- green: `crates/micold-core/src/owner_only.rs`: `write(dir, file, bytes)` is `write_with(dir, file, fill)` with `write_all`; `write_with` held the body of the daemon's Unix half as it was (directory `0700`, temporary file `.<file>.tmp` created `0600` with `create_new`, `fill`, rename). Same command -> these four and U58's test pass, `test result: FAILED. 5 passed; 5 failed` (U56 and U59 still red)
+- refactor: none
+- notes: the red is the stub's error, not an assertion on a mode. The rename is asserted through the inode of the name and through a handle that was open on the old file and still reads the whole old content.
+- commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
+
+## Cycle 47: U56 `ensure_dir` creates a missing directory `0700` and tightens an existing looser one
+
+- test: `crates/micold-core/tests/owner_only.rs::unix::ensure_dir_creates_a_missing_directory_0700`, `…::unix::ensure_dir_tightens_an_existing_looser_directory` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test owner_only` (one shared run, all 10 Unix-side tests written together against a stub: `ensure_dir` and `write_with` return `Err(Unsupported)`: `test result: FAILED. 1 passed; 9 failed`; commit `b8ec8bb7`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` at `ensure_dir`; still so after cycle 46's green
+- green: `ensure_dir` creates the directory and its missing parents `0700` and takes the group and other bits from an existing one (`mode & 0o700`, only when any of them is set); `write_with` calls it. The Windows arm (`create_dir_all`, protected DACL with one inheritable ACE) and the per-platform `create_owner_only` were written in the same step. Same command -> `test result: FAILED. 8 passed; 2 failed` (the two cleanup tests of U59 still red)
+- refactor: none
+- notes: `ensure_dir` leaves the owner's own bits alone. The daemon's helper set `0700` always, which made a directory the user had set `0500` writable again; with that body U59's read-only test failed (cycle 49).
+- commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
+
+## Cycle 48: U57 On Windows the directory and file carry a protected DACL with exactly one entry, for the current user
+
+- test: `crates/micold-core/tests/owner_only.rs::windows::the_written_file_and_its_directory_have_a_protected_dacl_for_the_current_user_only`, `…::windows::rewriting_replaces_the_bytes_and_keeps_the_owner_only_dacl`, `…::windows::ensure_dir_gives_a_missing_and_an_existing_directory_the_owner_only_dacl` (new, `cfg(windows)`)
+- red: not observed. No Windows host here; the tests are compiled only (`scripts/build-lock.sh cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` -> `Finished`). Test-after as far as this log can show; the Windows leg of CI is the first run.
+- green: the Windows arm of `owner_only.rs`: `set_protected_dacl` moved unchanged from `crates/micold-daemon/src/platform/windows.rs`; the directory gets `D:P(A;OICI;GA;;;<sid>)`, the file `D:P(A;;GA;;;<sid>)`, the SID from `crate::endpoint::user_sid`.
+- refactor: none
+- notes: the DACL reader is the one of `crates/micold-daemon/tests/mcp_binding_file_mode.rs`, copied. Unlike that test, the directory's DACL is asserted too, and `ensure_dir` on a directory that inherited its entries.
+- commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
+
+## Cycle 49: U58 The temporary file is owner-only before any content is written
+
+- test: `crates/micold-core/tests/owner_only.rs::unix::the_temporary_file_is_0600_before_any_content_is_written`, `…::windows::the_temporary_file_has_the_owner_only_dacl_before_any_content_is_written` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test owner_only` (one shared run, all 10 Unix-side tests written together against a stub: `ensure_dir` and `write_with` return `Err(Unsupported)`: `test result: FAILED. 1 passed; 9 failed`; commit `b8ec8bb7`)
+  -> ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)`` (the Unix test; the Windows one was not run, see cycle 48)
+- green: with cycle 46's green on Unix (the file is created `0600` and `fill` runs after it). On Windows the order changed against the daemon's half, which wrote the bytes and then set the DACL: `create_owner_only` creates the empty file and sets its protected DACL, then `fill` writes.
+- refactor: none
+- notes: the test looks from inside `fill`: one entry in the directory, not the final name, mode `0600` (Windows: the owner-only DACL), length 0. `write_with` exists for this and for U59's failing fill.
+- commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
+
+## Cycle 50: U59 `write` into a read-only directory returns the error and leaves no temporary file
+
+- test: `crates/micold-core/tests/owner_only.rs::unix::write_into_a_read_only_directory_returns_the_error_and_leaves_no_temporary_file`, `…::a_fill_that_fails_returns_its_error_and_leaves_no_temporary_file`, `…::a_rename_that_fails_returns_the_error_and_leaves_no_temporary_file` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test owner_only` (one shared run, all 10 Unix-side tests written together against a stub: `ensure_dir` and `write_with` return `Err(Unsupported)`: `test result: FAILED. 1 passed; 9 failed`; commit `b8ec8bb7`)
+  -> read-only directory: `left: Unsupported` / `right: PermissionDenied`; failing fill: ``called `Result::unwrap()` on an `Err` value: Kind(Unsupported)``; `a_rename_that_fails…` passed against the stub. Then, with cycle 46's body (directory set `0700` always, no cleanup), all three failed on their assertions: read-only directory at `unwrap_err` on an `Ok` (the write went through); the other two `left: [".../.a.history.tmp", ".../a.history"]` / `right: [".../a.history"]`
+- green: cycle 47's `ensure_dir` made the read-only test pass (`PermissionDenied`, nothing in the directory, mode still `0500`); `write_with` removes the temporary file when the creation, the fill or the rename fails and returns that error. Same command -> `test result: ok. 10 passed; 0 failed`
+- refactor: `refactor(041): sync the file and its directory in owner_only::write; the daemon's write_owner_only delegates to it` (`3f90f223`): `sync_all` on the temporary file before the rename and, on Unix, of the directory after it (HF §3, R5); `platform::write_owner_only` is one call to `micold_core::owner_only::write` and the halves in `platform/unix.rs` and `platform/windows.rs` are removed. `owner_only` -> `test result: ok. 10 passed; 0 failed`; `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_binding_file_mode` (unchanged) -> `test result: ok. 4 passed; 0 failed`; `mise run test-core` green (151 test binaries ok); clippy `-D warnings` on both crates clean; `cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` and `cargo check --workspace --target aarch64-apple-darwin` -> `Finished`
+- notes: the read-only test returns early when run as root. No test pins the two syncs: nothing a test can see here tells a synced file from an unsynced one. A failed directory sync is ignored (the whole file is under its name by then); a failed file sync fails the write.
+- commit: `feat(041): owner_only::write and ensure_dir in micold-core, on both platforms (U55-U59)` (`4a318367`)
