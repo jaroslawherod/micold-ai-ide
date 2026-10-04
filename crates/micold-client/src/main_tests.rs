@@ -8011,7 +8011,7 @@ mod pr_status {
             Some(ReadingFailure::RateLimited { until: u64::MAX }),
         ] {
             let source = FakePullRequestSource::new().with_answer(statuses());
-            let source = match failure.clone() {
+            let source = match failure {
                 Some(failure) => source.with_failure(failure),
                 None => source.with_answer(BTreeMap::new()),
             };
