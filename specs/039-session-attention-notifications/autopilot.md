@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/notify-session-needs-attention
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone (M8)
-- **Next step**: M8: reviews A and B are clean and the scoped gate was green at `3a3fc36f`. Next: the result of quickstart §B12 as the visual pass (evidence in `visual-pass/M8/`), then the full gate, the PR.
+- **Next step**: M8: reviews A and B clean, quickstart §B12 passed (`visual-pass/M8/`). Next: the full gate on the tree of this commit, then push and open the PR.
 
 ## Pull requests
 
@@ -113,6 +113,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 A | 1 | 6925d4765cb03d34d2392168bf754e711fe8a678:8dcabc5c819a9d5988ee41740a96e9dc0288df64 | CHANGES: 1 MAJOR, 3 MINOR; `EXEMPTION: RIGHT`, `CFG: NONE`. Fixed: F1 the `SETTINGS_PAGE_CONTENT` exemption was path-only (now state, parent and bottom edge; D31); F2 a failed write on off-to-on skipped the sweep of D29 (the sweep runs before the write). Accepted: F3 the sweep also uses up an event made while on and not yet claimed (said in the code), and a service started with the switch already on by a file edited outside the app never sweeps (follow-up). Declined: F4 |
 | M8 A | 2 | dfbe07c03ceb3060cbbba48760c183e34ce0a4a7:8dcabc5c819a9d5988ee41740a96e9dc0288df64 | CLEAN: 1 MINOR (sonnet, scoped): the proof test names the state `settings-view-environment` literally; left |
 | M8 B | 1 | 65c6f65c02c4b717ff0dc5ff63e8a4a53d3a1782:3a3fc36f1cbafa5f6c3dbc52ccb9af5bae9e5009 | CLEAN, no findings; D29–D31 judged acceptable. Verify: `settings_desktop_notifications` `10 passed; 0 failed` |
+| M8 visual (B12) | 1 | binaries of `3a3fc36f` | PASS, quickstart §B12 steps 1–4, dark scheme, Xvfb `:171` and a private `dbus-daemon --session` (`/tmp/vp171/bus`) with a stand-in notification service, private HOME; evidence `visual-pass/M8/`. The switch is shown checked under the tool-server switch and the page scrolls to its last control; off: no `Notify`, B marked; still off after a client restart; on: nothing for the earlier turn, exactly one `Notify` for the next. Not observed: see *Follow-ups not done* |
 
 ## Declined review findings
 
@@ -177,3 +178,5 @@ None.
 - M8: the prep branch `feat/notify-session-needs-attention-m8-prep` (`d31bcd1e`) and its worktree `agent-a6dc2c475e86cc149` are taken over by cherry-pick into M8; they can be removed once M8 merges. This unit did not touch them.
 - M8 review A F4: a Save sends every service-owned field as `Some(draft)`, so a stale Settings draft in one window overwrites a change made in another (last writer wins), for `desktop_notifications` as for `tool_server_enabled`. Sending only changed fields would fix it for all of them.
 - M8 review A F3: a service started with the switch already on, after `settings.json` was changed outside the application while an event was made with it off, can still grant that event to a window that was disconnected when it happened. Storing a `notified_seq` beside `attention_seq` would close it.
+- M8 B12 pass, not observed: the light scheme; a real notification service; a Pi or Copilot session; a service restart with the switch off (the client was restarted, the service kept running; the integration tests cover the service restart). Both sessions had the default name, so the one `Notify` of step 4 cannot be told from A's by its text.
+- M8 B12 pass, seen outside the steps: with no `~/.bashrc` in the private HOME the Environment page shows `Script not found`, and the message stayed after the file was created until the page was reopened. Not from this milestone; not investigated.
