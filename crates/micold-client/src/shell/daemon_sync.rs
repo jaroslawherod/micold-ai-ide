@@ -40,6 +40,7 @@
 //! way for the same reason — `App` is the binary's type. Each fixture sits with what it is *of*,
 //! not with who happens to call it.
 
+use micold_client::features::attach::Msg as AttachMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -140,6 +141,13 @@ pub enum PendingOp {
     /// actually applies it — this variant exists only so a failure reaches the user and a
     /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
     SettingsSet,
+    /// An `AttachDiscover` (feature 582), carrying the project so a report that outlived its
+    /// dialog, or was asked for another project, is dropped by the reducer.
+    AttachDiscover {
+        project: PathBuf,
+    },
+    /// An `AttachApply` (feature 582).
+    AttachApply,
 }
 
 impl PendingOp {
@@ -170,6 +178,8 @@ impl PendingOp {
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
+            PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
+            PendingOp::AttachApply => "attach the worktrees".into(),
         }
     }
 }
@@ -314,6 +324,15 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
                     .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(
                         crate::shell::issues::NOT_CONNECTED.to_string(),
                     ))));
+            }
+            // Feature 582: the dialog is a modal, so a toast would sit under its scrim.
+            PendingOp::AttachDiscover { .. } => {
+                app.core
+                    .update(Message::Attach(AttachMsg::ListFailed(text)));
+            }
+            PendingOp::AttachApply => {
+                app.core
+                    .update(Message::Attach(AttachMsg::ApplyFailed(text)));
             }
             _ => app.core.notify_error(text),
         }
@@ -868,8 +887,22 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     .update(Message::Worktree(WorktreeMsg::RefreshFinished));
                 app.core.notify_info("Worktree list refreshed.");
             }
+            // Feature 582: the attached worktrees themselves arrive on the `CatalogChanged`
+            // broadcast; the answer says what each target came to.
+            Some(PendingOp::AttachApply) => {
+                if let OperationResult::AttachApplied { results } = result {
+                    app.core
+                        .update(Message::Attach(AttachMsg::Applied(results)));
+                }
+            }
             _ => {}
         },
+        DaemonMsg::AttachReport { req, report } => {
+            if let Some(PendingOp::AttachDiscover { project }) = app.pending_ops.remove(&req) {
+                app.core
+                    .update(Message::Attach(AttachMsg::Listed { project, report }));
+            }
+        }
         // FR-024: a stage push names the step in flight. Peeked, not removed — the
         // operation is still running and its terminal reply still needs the pending op.
         DaemonMsg::OperationProgress { req, stage, detail } => {
@@ -932,6 +965,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                         .update(Message::Worktree(WorktreeMsg::RefreshFinished));
                     app.core
                         .notify_error(format!("Couldn't refresh the worktree list: {message}"));
+                }
+                // Feature 582: both belong to a modal dialog, which shows the reason itself.
+                Some(PendingOp::AttachDiscover { .. }) => {
+                    app.core
+                        .update(Message::Attach(AttachMsg::ListFailed(message)));
+                }
+                Some(PendingOp::AttachApply) => {
+                    app.core
+                        .update(Message::Attach(AttachMsg::ApplyFailed(message)));
                 }
                 Some(op) => app
                     .core
@@ -1904,6 +1946,56 @@ pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Messa
 /// has no caller that could get it wrong. With no project open there is nothing to re-read, and
 /// the view attaches no `on_press` in that state anyway (`can_refresh_worktrees`, FR-005) — the
 /// guard below is the second line of defence for a message arriving by some other route.
+/// The attach dialog opened (feature 582): ask the daemon what the active project offers. With no
+/// connection `send_op` raises the notice; the dialog then reports the same reason in its list.
+pub fn on_attach_opened(app: &mut App) -> Task<Message> {
+    let Some(project) = app.core.attach.dialog.as_ref().map(|d| d.project.clone()) else {
+        return Task::none();
+    };
+    let asked = project.clone();
+    let before = app.pending_ops.len();
+    send_op(
+        app,
+        PendingOp::AttachDiscover { project: asked },
+        move |req| ClientMsg::AttachDiscover { req, project },
+    );
+    if app.pending_ops.len() == before {
+        app.core.update(Message::Attach(AttachMsg::ListFailed(
+            "not connected to the session service".into(),
+        )));
+    }
+    Task::none()
+}
+
+/// "Attach selected" / "Attach all" was pressed (feature 582): the reducer recorded the targets
+/// in flight; send them as one batch.
+pub fn on_attach_apply(app: &mut App) -> Task<Message> {
+    let Some((project, targets)) = app
+        .core
+        .attach
+        .dialog
+        .as_ref()
+        .filter(|d| d.applying())
+        .map(|d| (d.project.clone(), d.in_flight.clone()))
+    else {
+        return Task::none();
+    };
+    let before = app.pending_ops.len();
+    send_op(app, PendingOp::AttachApply, move |req| {
+        ClientMsg::AttachApply {
+            req,
+            project,
+            targets,
+        }
+    });
+    if app.pending_ops.len() == before {
+        app.core.update(Message::Attach(AttachMsg::ApplyFailed(
+            "not connected to the session service".into(),
+        )));
+    }
+    Task::none()
+}
+
 pub fn on_worktree_refresh_requested(app: &mut App) -> Task<Message> {
     // FR-005/FR-006 in one question. The view already withholds `on_press` when this is false, so
     // reaching here with it false means the message arrived by some other route; the running

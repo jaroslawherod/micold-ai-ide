@@ -16,3 +16,7 @@ T011) served as the list. Red evidence below is the real failure of each test be
   Green: 5 passed.
 - **T008/T011** same file (daemon level). Written with the T011 handlers not yet present
   (`AttachDiscover` unhandled); green after `state.attach_discover/attach_apply` and the server arms: 9 passed.
+- **T009/T012** `micold-client/tests/attach_dialog.rs`. The reducer and its tests were written in one
+  pass, so there is no recorded red for these; the tests were then checked to fail on the specific
+  behaviour only by inspection (summary strings, in-flight guard, project guard). Recorded as a gap.
+  Green: 13 passed, plus `features_attach.rs` for the isolation guard.

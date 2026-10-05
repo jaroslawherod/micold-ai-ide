@@ -158,6 +158,19 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // Attach existing worktrees (feature 582).
+        Dialog {
+            id: "attach_worktrees",
+            cancel: Message::Attach(micold_client::features::attach::Msg::Cancelled),
+            open: |state| {
+                state.attach.dialog = Some(micold_client::features::attach::Dialog {
+                    project: std::path::PathBuf::from("/p"),
+                    listing: micold_client::features::attach::Listing::Loading,
+                    selected: Default::default(),
+                    in_flight: Vec::new(),
+                })
+            },
+        },
         // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
         // without answering; the daemon keeps waiting for another window or times out.
         Dialog {
@@ -281,14 +294,14 @@ fn every_dialog_is_in_the_list() {
     // and does take Escape.
     assert_eq!(
         dialogs().len(),
-        11,
+        12,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        24,
-        "eleven dialogs plus nothing open, each with the filter panel open and closed"
+        26,
+        "twelve dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -346,6 +359,10 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // actually call it. Driven with real messages rather than by setting fields, so an arm that
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
+        (
+            "attach_worktrees",
+            Message::Attach(micold_client::features::attach::Msg::Opened),
+        ),
         ("about", Message::Help(HelpMsg::AboutOpened)),
         (
             "add_worktree",
@@ -356,6 +373,8 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     for (name, opening) in openers {
         for already in dialogs() {
             let mut state = state(Some(&already), false);
+            // The attach dialog is offered only with a project open.
+            state.workspace.active = Some(std::path::PathBuf::from("/p"));
             state.update(opening.clone());
 
             let open: Vec<&str> = registry::open_dialogs(&state)

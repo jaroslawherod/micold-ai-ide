@@ -153,6 +153,8 @@ pub enum FieldId {
     SettingsEnvIncludeTimeout,
     /// Settings → GitHub issues: the label of the mapping entry at this index (feature 034).
     IssueMappingLabel(usize),
+    /// The attach dialog's checkbox for the row at this index (feature 582).
+    AttachWorktreeRow(usize),
 }
 
 /// What the window reports about itself (feature 028, FR-001).

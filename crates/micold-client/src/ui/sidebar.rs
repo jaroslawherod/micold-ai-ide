@@ -82,6 +82,22 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         "Add a worktree (new git branch)",
         r,
     );
+    // Feature 582: offered only with a project open, where there is something to look in. The
+    // label is the tooltip; the glyph is the folder the "open project" action already uses.
+    let attach_existing = Tooltip::new(
+        IconButton::new(Icon::OpenProject, r)
+            .compact()
+            .tint(r.on_surface_variant)
+            .on_press_maybe(
+                state
+                    .workspace
+                    .active
+                    .is_some()
+                    .then_some(Message::Attach(crate::features::attach::Msg::Opened)),
+            ),
+        "Attach existing…",
+        r,
+    );
     let hide = Tooltip::new(
         IconButton::new(Icon::HideSidebar, r)
             .compact()
@@ -94,6 +110,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         filter_toggle,
         Text::new("Worktrees", TypeRole::Section, r).width(Length::Fill),
         refresh,
+        attach_existing,
         add_worktree,
         hide,
     ]
