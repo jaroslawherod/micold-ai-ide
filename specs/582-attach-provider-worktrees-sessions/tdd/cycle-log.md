@@ -58,3 +58,16 @@ T011) served as the list. Red evidence below is the real failure of each test be
   most the 200 newest sessions discovery returns.
 - mcp_audit_log.rs enumerates every mutating tool: added attach_worktree success and failure calls (found by the full gate).
 - mcp_binding_spawn.rs (catalog list) and mcp_read_latency.rs (SC-004 timing, `list_resumable_sessions` with no arguments) enumerate tools: updated for the two new ones (found by the full gate).
+
+## M4
+
+- **T032/T033** `micold-client/tests/attach_offer.rs` (15 tests). Red: `unresolved import offer_visible`,
+  `no variant OfferListed/OfferDismissed/OfferAttachAll/OfferApplied/OfferApplyFailed`, `no field
+  offer` (21 compile errors). Green: 15 passed. `no_records` reads the mirrored provenance records
+  and `unreadable_projects`, never catalog sessions (026 adoption).
+- T034: grep of `ui/material/` found `ConnectionBanner` (title, detail, level, one action) and a
+  snackbar (transient; `banner_is_not_a_snackbar.rs` forbids folding). Reused the banner; added
+  `.secondary_action` (a text button, actions move under the text) and a showcase specimen.
+- Deviation: "Attach all" attaches the attachable worktrees (as the dialog's does); stored sessions
+  are resumed one at a time from the dialog (resuming starts a process, not a bulk action at
+  start-up). With only sessions found the button reads "Review" and opens the dialog.

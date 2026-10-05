@@ -229,6 +229,19 @@ conversation carries on from what it stored.
 
 **Resume** adds the session to the sidebar and then starts it, so the conversation opens at once.
 
+#### The offer when you open a project
+
+When you open a project the app has no record of any worktree for (a new machine, a deleted data
+folder) and it finds worktrees or stored sessions to attach, a banner at the top of the sidebar
+says what it found. Press **Attach all** to attach every worktree it found in one step; the banner
+goes away and a message says how many were attached. If it found only stored sessions, the button
+reads **Review** and opens the **Attach existing…** list, where you resume them one at a time.
+Nothing is attached until you press a button.
+
+Press **Dismiss** to hide the banner for that project until the app is restarted. Dismissing loses
+nothing: **Attach existing…** still lists everything. A project the app already has worktree records
+for never shows the banner.
+
 ### Resizing and hiding the sidebar
 
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.

@@ -149,6 +149,14 @@ pub enum PendingOp {
     },
     /// An `AttachApply` (feature 582).
     AttachApply,
+    /// The start-up offer's `AttachDiscover` (feature 582, FR-012), asked at project open. Its
+    /// failure is silent: an offer that cannot be computed is no offer, and the sidebar's "Attach
+    /// existing…" still works.
+    AttachOfferDiscover {
+        project: PathBuf,
+    },
+    /// The banner's `AttachApply` (feature 582).
+    AttachOfferApply,
 }
 
 impl PendingOp {
@@ -180,6 +188,8 @@ impl PendingOp {
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
             PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
+            PendingOp::AttachOfferDiscover { .. } => "look for worktrees to attach".into(),
+            PendingOp::AttachOfferApply => "attach the found worktrees".into(),
             PendingOp::AttachApply => "attach the worktrees".into(),
         }
     }
@@ -234,6 +244,9 @@ pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path)
             session: None,
         }),
     }
+    // Feature 582 (FR-012): what the project offers to attach, for the start-up banner. After the
+    // attach and view messages so their order is unchanged.
+    request_attach_offer(app, new);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -334,6 +347,11 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             PendingOp::AttachApply => {
                 app.core
                     .update(Message::Attach(AttachMsg::ApplyFailed(text)));
+            }
+            PendingOp::AttachOfferDiscover { .. } => {}
+            PendingOp::AttachOfferApply => {
+                app.core
+                    .update(Message::Attach(AttachMsg::OfferApplyFailed(text)));
             }
             _ => app.core.notify_error(text),
         }
@@ -888,6 +906,17 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     .update(Message::Worktree(WorktreeMsg::RefreshFinished));
                 app.core.notify_info("Worktree list refreshed.");
             }
+            Some(PendingOp::AttachOfferApply) => match result {
+                OperationResult::AttachApplied { results } => {
+                    app.core
+                        .update(Message::Attach(AttachMsg::OfferApplied(results)));
+                }
+                _ => {
+                    app.core.update(Message::Attach(AttachMsg::OfferApplyFailed(
+                        "unexpected answer from the session service".into(),
+                    )));
+                }
+            },
             // Feature 582: the attached worktrees themselves arrive on the `CatalogChanged`
             // broadcast; the answer says what each target came to.
             Some(PendingOp::AttachApply) => {
@@ -916,12 +945,17 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             }
             _ => {}
         },
-        DaemonMsg::AttachReport { req, report } => {
-            if let Some(PendingOp::AttachDiscover { project }) = app.pending_ops.remove(&req) {
+        DaemonMsg::AttachReport { req, report } => match app.pending_ops.remove(&req) {
+            Some(PendingOp::AttachDiscover { project }) => {
                 app.core
                     .update(Message::Attach(AttachMsg::Listed { project, report }));
             }
-        }
+            Some(PendingOp::AttachOfferDiscover { project }) => {
+                app.core
+                    .update(Message::Attach(AttachMsg::OfferListed { project, report }));
+            }
+            _ => {}
+        },
         // FR-024: a stage push names the step in flight. Peeked, not removed — the
         // operation is still running and its terminal reply still needs the pending op.
         DaemonMsg::OperationProgress { req, stage, detail } => {
@@ -993,6 +1027,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 Some(PendingOp::AttachApply) => {
                     app.core
                         .update(Message::Attach(AttachMsg::ApplyFailed(message)));
+                }
+                Some(PendingOp::AttachOfferDiscover { .. }) => {}
+                Some(PendingOp::AttachOfferApply) => {
+                    app.core
+                        .update(Message::Attach(AttachMsg::OfferApplyFailed(message)));
                 }
                 Some(op) => app
                     .core
@@ -1240,6 +1279,7 @@ pub fn on_connected(
     ask_cli_availability(app, AvailabilityKey::Home);
     sync_cli_availability(app);
     if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
+        let offer_for = project.clone();
         daemon.send(ClientMsg::Attach {
             project: project.clone(),
             force: false,
@@ -1266,6 +1306,8 @@ pub fn on_connected(
                 session: None,
             }),
         }
+        // Feature 582 (FR-012): the start-up offer, asked once the attach is on the wire.
+        request_attach_offer(app, &offer_for);
     }
     Task::none()
 }
@@ -1968,6 +2010,47 @@ pub fn on_attach_opened(app: &mut App) -> Task<Message> {
     );
     if app.pending_ops.len() == before {
         app.core.update(Message::Attach(AttachMsg::ListFailed(
+            "not connected to the session service".into(),
+        )));
+    }
+    Task::none()
+}
+
+/// Ask what the project just opened offers to attach (feature 582, FR-012). The reply feeds the
+/// start-up banner, which decides for itself whether to show. Silent while disconnected: no daemon
+/// to ask, and no error worth raising for an offer.
+pub fn request_attach_offer(app: &mut App, project: &Path) {
+    if app.daemon.is_none() {
+        return;
+    }
+    let asked = project.to_path_buf();
+    let project = project.to_path_buf();
+    send_op(
+        app,
+        PendingOp::AttachOfferDiscover { project: asked },
+        move |req| ClientMsg::AttachDiscover { req, project },
+    );
+}
+
+/// The banner's "Attach all" was pressed: the reducer recorded the targets; send them as a batch.
+pub fn on_attach_offer_apply(app: &mut App) -> Task<Message> {
+    let Some(project) = app.core.workspace.active.clone() else {
+        return Task::none();
+    };
+    let targets = app.core.attach.offer.in_flight.clone();
+    if targets.is_empty() {
+        return Task::none();
+    }
+    let before = app.pending_ops.len();
+    send_op(app, PendingOp::AttachOfferApply, move |req| {
+        ClientMsg::AttachApply {
+            req,
+            project,
+            targets,
+        }
+    });
+    if app.pending_ops.len() == before {
+        app.core.update(Message::Attach(AttachMsg::OfferApplyFailed(
             "not connected to the session service".into(),
         )));
     }

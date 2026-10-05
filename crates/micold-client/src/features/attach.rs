@@ -35,6 +35,57 @@ use std::path::PathBuf;
 pub struct State {
     /// The open dialog, if any.
     pub dialog: Option<Dialog>,
+    /// The start-up offer (Story 4).
+    pub offer: Offer,
+}
+
+/// The start-up offer: what discovery found when a project opened, and what the user did with it.
+/// In memory only; a dismissal lasts until the app restarts (research R5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Offer {
+    /// The latest report for one project, as asked at project open.
+    pub report: Option<(PathBuf, DiscoveryReport)>,
+    /// Projects whose offer was dismissed this run.
+    pub dismissed: BTreeSet<PathBuf>,
+    /// The targets of an `AttachApply` sent from the banner and not yet answered.
+    pub in_flight: Vec<AttachItem>,
+}
+
+impl Offer {
+    /// The report's worktrees that can be attached, as apply targets.
+    pub fn targets(&self) -> Vec<AttachItem> {
+        self.report
+            .iter()
+            .flat_map(|(_, r)| r.worktrees.iter())
+            .filter(|w| w.availability == Availability::Attachable)
+            .map(|w| AttachItem::Worktree {
+                dir_name: w.dir_name.clone(),
+            })
+            .collect()
+    }
+
+    /// How many stored sessions the report offers.
+    pub fn session_count(&self) -> usize {
+        self.report.as_ref().map_or(0, |(_, r)| r.sessions.len())
+    }
+}
+
+/// Whether the banner is shown for the active project: no provenance records (nothing the user
+/// created, claimed or attached; catalog sessions adopted by feature 026 do not count), something
+/// found, and not dismissed this run (FR-012). A project whose records could not be read is not
+/// known to have none, so it is never offered.
+pub fn offer_visible(state: &crate::app::State) -> bool {
+    let Some(project) = state.workspace.active.as_ref() else {
+        return false;
+    };
+    let Some((asked, report)) = state.attach.offer.report.as_ref() else {
+        return false;
+    };
+    asked == project
+        && !report.is_empty()
+        && !state.attach.offer.dismissed.contains(project)
+        && state.workspace.user_created_worktrees(project).is_empty()
+        && !state.workspace.unreadable_projects.contains(project)
 }
 
 /// The attach dialog's content.
@@ -191,6 +242,21 @@ pub enum Msg {
         /// The session's id.
         id: uuid::Uuid,
     },
+    /// The discovery report asked for at project open.
+    OfferListed {
+        /// The project the report is about.
+        project: PathBuf,
+        /// What it offers.
+        report: DiscoveryReport,
+    },
+    /// The banner's dismiss button.
+    OfferDismissed,
+    /// The banner's "Attach all" button.
+    OfferAttachAll,
+    /// The daemon's answer to the banner's apply.
+    OfferApplied(Vec<AttachResult>),
+    /// The banner's apply request failed.
+    OfferApplyFailed(String),
     /// The daemon's answer to the apply.
     Applied(Vec<AttachResult>),
     /// The apply request failed.
@@ -277,6 +343,54 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
                 }
             }
             Vec::new()
+        }
+        Msg::OfferListed { project, report } => {
+            if state.workspace.active.as_ref() == Some(&project) {
+                state.attach.offer.report = Some((project, report));
+            }
+            Vec::new()
+        }
+        Msg::OfferDismissed => {
+            if let Some(project) = state.workspace.active.clone() {
+                state.attach.offer.dismissed.insert(project);
+            }
+            Vec::new()
+        }
+        Msg::OfferAttachAll => {
+            if offer_visible(state) && state.attach.offer.in_flight.is_empty() {
+                state.attach.offer.in_flight = state.attach.offer.targets();
+            }
+            Vec::new()
+        }
+        Msg::OfferApplied(results) => {
+            if state.attach.offer.in_flight.is_empty() {
+                return Vec::new();
+            }
+            state.attach.offer.in_flight.clear();
+            // The banner ends only when something was attached; a batch that all failed keeps it
+            // so the user can retry.
+            if results.iter().any(|r| {
+                matches!(
+                    r.outcome,
+                    AttachOutcome::Attached | AttachOutcome::AlreadyAttached
+                )
+            }) {
+                state.attach.offer.report = None;
+            }
+            vec![Outcome::NotificationRaised(Notification::new(
+                summary_level(&results),
+                summary(&results),
+            ))]
+        }
+        Msg::OfferApplyFailed(reason) => {
+            if state.attach.offer.in_flight.is_empty() {
+                return Vec::new();
+            }
+            state.attach.offer.in_flight.clear();
+            vec![Outcome::NotificationRaised(Notification::new(
+                Level::Error,
+                format!("Couldn't attach the found worktrees: {reason}"),
+            ))]
         }
         Msg::Applied(results) => {
             if !state.attach.dialog.as_ref().is_some_and(Dialog::applying) {
