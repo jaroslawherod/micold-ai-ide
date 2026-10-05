@@ -1470,6 +1470,56 @@ where
                     ),
                 }
             }
+            // --- 582: what the project offers to attach, and attaching it ---
+            ClientMsg::AttachDiscover { req, project } => {
+                // Blocking git and filesystem reads, so off the runtime and off the lock, in the
+                // style of `refresh_worktrees_off_runtime`.
+                let st = Arc::clone(state);
+                let report =
+                    tokio::task::spawn_blocking(move || st.attach_discover(&project)).await;
+                match report {
+                    Ok(report) => state.send(id, DaemonMsg::AttachReport { req, report }),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "could not read the project's worktrees".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
+            ClientMsg::AttachApply {
+                req,
+                project,
+                targets,
+            } => {
+                // Validate against a live read, not whatever the cache held when the dialog
+                // opened, so a stale list cannot attach a path that is no longer a worktree.
+                let st = Arc::clone(state);
+                let proj = project.clone();
+                let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+                match state.attach_apply(&project, &targets) {
+                    Ok(results) => {
+                        // One broadcast for the whole batch, and only when something changed.
+                        if results
+                            .iter()
+                            .any(|r| r.outcome == micold_core::attach::AttachOutcome::Attached)
+                        {
+                            state.broadcast_catalog();
+                        }
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::AttachApplied { results },
+                            },
+                        );
+                    }
+                    Err(e) => send_io_error(state, id, req, "failed to persist the attach", &e),
+                }
+            }
             // --- 029 FR-020: the user telling the app a worktree is theirs ---
             ClientMsg::WorktreeClaim {
                 req,

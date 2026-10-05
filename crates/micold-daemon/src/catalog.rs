@@ -12,6 +12,7 @@
 //!
 //! External-modification detection is out of scope (spec Out of Scope).
 
+use micold_core::attach::{AttachOutcome, RefuseReason};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -485,6 +486,53 @@ impl Catalog {
     /// the app what is theirs. Idempotent (FR-022).
     pub fn claim_worktree(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
         self.record_worktree_provenance(project, dir_name)
+    }
+
+    /// Attach `dir_names` under `project` in one action (feature 582, FR-002/FR-004/FR-016).
+    ///
+    /// Each name is the same provenance record [`Self::claim_worktree`] writes, so an attached
+    /// worktree is indistinguishable from a claimed one afterwards. `live` is the daemon's cached
+    /// discovery of the project's worktrees: a name absent from it, or one that lives outside the
+    /// managed directory, is refused so that a stale client list cannot record a non-worktree.
+    /// A name already recorded (or repeated within the batch) is `AlreadyAttached`.
+    ///
+    /// One result per name, in order. The catalog persists **once**, and only when something was
+    /// attached. Metadata only (FR-003): no git, no filesystem write. Concurrent attaches
+    /// serialize on the caller's catalog lock, so the second finds the record present.
+    pub fn attach_worktrees(
+        &mut self,
+        project: &Path,
+        live: &[Worktree],
+        dir_names: &[String],
+    ) -> io::Result<Vec<AttachOutcome>> {
+        let mut attached_any = false;
+        let mut outcomes = Vec::with_capacity(dir_names.len());
+        for dir_name in dir_names {
+            let outcome = if self
+                .workspace
+                .user_created_worktrees(project)
+                .contains(dir_name)
+            {
+                AttachOutcome::AlreadyAttached
+            } else {
+                match live.iter().find(|w| &w.dir_name == dir_name && !w.included) {
+                    None => AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
+                    Some(w) if !w.can_start_session() => {
+                        AttachOutcome::Refused(RefuseReason::Unavailable)
+                    }
+                    Some(_) => {
+                        self.workspace.record_user_created(project, dir_name);
+                        attached_any = true;
+                        AttachOutcome::Attached
+                    }
+                }
+            };
+            outcomes.push(outcome);
+        }
+        if attached_any {
+            self.persist()?;
+        }
+        Ok(outcomes)
     }
 
     /// Run the one-time FR-006 backfill for `project`, given the worktrees discovery just found.

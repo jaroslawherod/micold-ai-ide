@@ -11,6 +11,7 @@
 //! The iced rendering layer lives in `micold-client`; the PTY/VT session host lives in
 //! `micold-daemon`.
 
+pub mod attach;
 pub mod attention;
 pub mod cli_reason;
 pub mod clock;

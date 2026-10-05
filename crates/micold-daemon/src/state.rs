@@ -1891,6 +1891,80 @@ impl DaemonState {
         self.lock().catalog.claim_worktree(project, dir_name)
     }
 
+    /// What `project` offers to attach (feature 582, FR-001). **Blocking**: it re-reads git so the
+    /// list is live, then answers from that cache, the provenance records and the catalog's
+    /// sessions. Read-only toward the repository and the provider stores.
+    pub fn attach_discover(&self, project: &Path) -> micold_core::attach::DiscoveryReport {
+        self.refresh_worktrees(project);
+        let inner = self.lock();
+        let (records, unreadable) = {
+            let workspace = inner.catalog.workspace();
+            (
+                workspace.user_created_worktrees(project).clone(),
+                workspace.unreadable_projects.contains(project),
+            )
+        };
+        let provenance = if unreadable {
+            worktree::ProvenanceView::unreadable()
+        } else {
+            worktree::ProvenanceView::new(&records)
+        };
+        let sessions = inner
+            .catalog
+            .workspace()
+            .sessions
+            .get(project)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let worktrees = inner
+            .worktrees
+            .get(project)
+            .map(|live| micold_core::attach::attachable_worktrees(live, &provenance, sessions))
+            .unwrap_or_default();
+        micold_core::attach::DiscoveryReport {
+            worktrees,
+            ..Default::default()
+        }
+    }
+
+    /// Attach `targets` under `project`, one catalog write for the batch (feature 582).
+    ///
+    /// Worktree targets are validated against the cached live discovery (the caller refreshes it
+    /// just before) and claimed together by [`Catalog::attach_worktrees`]. A session target is not
+    /// yet supported here and is refused.
+    pub fn attach_apply(
+        &self,
+        project: &Path,
+        targets: &[micold_core::attach::AttachItem],
+    ) -> io::Result<Vec<micold_core::attach::AttachResult>> {
+        use micold_core::attach::{AttachItem, AttachOutcome, AttachResult, RefuseReason};
+        let dirs: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                AttachItem::Worktree { dir_name } => Some(dir_name.clone()),
+                AttachItem::Session { .. } => None,
+            })
+            .collect();
+        let mut inner = self.lock();
+        let live = inner.worktrees.get(project).cloned().unwrap_or_default();
+        let mut outcomes = inner
+            .catalog
+            .attach_worktrees(project, &live, &dirs)?
+            .into_iter();
+        Ok(targets
+            .iter()
+            .map(|item| AttachResult {
+                item: item.clone(),
+                outcome: match item {
+                    AttachItem::Worktree { .. } => {
+                        outcomes.next().expect("one outcome per worktree target")
+                    }
+                    AttachItem::Session { .. } => AttachOutcome::Refused(RefuseReason::Unavailable),
+                },
+            })
+            .collect())
+    }
+
     /// Drop the provenance record for a worktree that has just been removed (029 FR-018/FR-019).
     pub fn forget_worktree_provenance(&self, project: &Path, dir_name: &str) -> io::Result<()> {
         self.lock()
