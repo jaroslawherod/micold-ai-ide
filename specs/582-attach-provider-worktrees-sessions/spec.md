@@ -20,6 +20,15 @@
   visible in the app, without deleting or recreating it.
 - **Resumable session**: a session in a provider store that the provider can resume.
 
+## Clarifications
+
+### Session 2026-10-05
+
+- Q: Is listing resumable sessions a new MCP tool or an option of `list_sessions`? → A: A new
+  read-only tool; `list_sessions` keeps listing only catalog sessions, and `list_branches` already
+  sets the precedent of a separate discovery tool _(agent-resolved: docs/user-guide/agent-tools.md#What the assistant can do)_
+- Q: May a Default session call `attach_worktree` (refuse, allow after confirmation, or amend Principle III)? → A: Refuse outright; Principle III bars a Default session from modifying a worktree by any means, tool server included, and the amendment route is out of this feature _(agent-resolved: .specify/memory/constitution.md#III. Native Worktree Integration)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Attach a provider worktree from the app (Priority: P1)
@@ -93,7 +102,7 @@ listed by `list_worktrees` without the hidden-worktree option.
 3. **Given** an already attached worktree, **When** `attach_worktree` is called, **Then** it
    reports it was already attached and creates no duplicate.
 4. **Given** a Default session, **When** it calls `attach_worktree`, **Then** it is refused with a
-   clear reason and nothing is attached unless the user confirms in the app (final rule per FR-015).
+   clear reason and nothing is attached (FR-015).
 
 ---
 
@@ -166,9 +175,9 @@ found worktrees and sessions at once.
   project; the bad entry is skipped and reported, the rest are listed.
 - **FR-010**: Discovery and attaching MUST be read-only toward the provider store: Micold never
   modifies or deletes the provider's files.
-- **FR-011**: The MCP tools MUST list resumable sessions, so an agent can find them without the
-  app. [NEEDS CLARIFICATION: Is listing resumable sessions a new MCP tool, or an option of
-  `list_sessions`?]
+- **FR-011**: The MCP tools MUST list resumable sessions through a new read-only tool, separate from
+  `list_sessions` (which lists only the catalog's sessions), so an agent can find them without the
+  app. Like `list_branches`, it is a discovery tool; its name and fields are for the plan.
 - **FR-012**: When Micold starts with an empty catalog and finds attachable worktrees or resumable
   sessions, it MUST tell the user and offer attaching them in one action, and MUST NOT attach
   anything without the user's action (offer only, no automatic attaching).
@@ -176,10 +185,10 @@ found worktrees and sessions at once.
   hidden by default when they are not attached.
 - **FR-014**: Discovery MUST work for each provider through the same user-visible behaviour; a
   provider with no store support MUST show no sessions and no error.
-- **FR-015**: `attach_worktree` MUST be refused for a Default session unless the user confirms in
-  the app, because attaching changes a worktree's ownership and constitution Principle III allows a
-  Default session only `create_worktree`. [NEEDS CLARIFICATION: Refuse Default sessions outright,
-  allow after user confirmation in the app, or amend Principle III to allow attach?]
+- **FR-015**: `attach_worktree` MUST be refused outright for a Default session, with a clear reason
+  and nothing attached, because attaching changes a worktree's ownership and constitution
+  Principle III allows a Default session only `create_worktree` and forbids it to modify a worktree
+  by any means, the tool server included. Principle III is not amended.
 - **FR-016**: Concurrent attaches of one worktree (two windows, or an agent and the app) MUST result
   in exactly one catalog entry, and a session MUST be resumed in at most one place at a time; a
   second resume request is refused with a clear reason.
