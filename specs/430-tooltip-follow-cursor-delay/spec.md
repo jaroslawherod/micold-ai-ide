@@ -16,7 +16,7 @@ below, left, right) and an optional wait for the pointer to *rest* on the trigge
 spec 038: it cancels on leave, restarts on movement beyond a small tolerance). It dropped the stack's
 "follow the cursor" placement. No caller uses a pointer-following placement today, so that part is
 groundwork: it lands the capability so the next screen that wants it does not rebuild the overlay.
-Whether the issue's "show delay" is anything beyond the existing rest wait is the one open question.
+The issue's "show delay" is a separate wait, counted from entering the trigger (see Clarifications).
 
 ## Out of Scope
 
@@ -53,8 +53,7 @@ the pointer, and check the panel's position after each move.
 
 A screen author asks for a tooltip that does not appear the instant the pointer touches the trigger,
 so that sweeping across a dense list does not flash a tooltip per row. This must work together with
-the pointer-following placement; whether a delay distinct from the existing rest wait is needed is
-FR-003's open question.
+the pointer-following placement, and it is distinct from the existing rest wait (FR-003).
 
 **Why this priority**: The second capability named in the issue; lower than P1 because the existing
 rest wait already covers sweeping, so the gap is narrower.
@@ -97,7 +96,7 @@ window edge and check the panel does not overlap the trigger (or the pointer, wh
 
 ### Edge Cases
 
-- The pointer moves while the show delay runs: see FR-003's open question (restart on movement, as the rest wait does, or count from entering).
+- The pointer moves while the show delay runs: the show delay keeps counting from entering the trigger; movement does not restart it (the rest wait does).
 - A press on the trigger while a pointer-following panel is open: it closes until the pointer leaves, as the rest-wait tooltip does.
 - The panel is larger than the room on both sides of the pointer, or the window is too small to fit it anywhere: it takes the side with more room and stays as far inside the window as it fits (029 FR-013).
 - The trigger scrolls away or the window resizes while open: the panel stays inside the window and closes when the pointer is no longer over the trigger.
@@ -117,10 +116,9 @@ window edge and check the panel does not overlap the trigger (or the pointer, wh
 - **FR-002**: The pointer-following placement MUST keep the panel inside the window and MUST NOT
   place it under the pointer, opening on the pointer's other side when its first side lacks room.
 - **FR-003**: The shared tooltip MUST work with a show delay: no panel before the delay has elapsed
-  with the pointer on the trigger; leaving the trigger cancels it. [NEEDS CLARIFICATION: is a delay
-  distinct from the existing rest wait wanted (one counting from entering the trigger regardless of
-  movement), or does "show delay" mean the existing rest wait working with every placement? The
-  rest wait restarts on movement beyond a small tolerance.]
+  with the pointer on the trigger; leaving the trigger cancels it. The show delay is distinct from
+  the existing rest wait: it counts from the pointer entering the trigger and does not restart on
+  movement. The rest wait is unchanged and stays a separate opt-in.
 - **FR-004**: A tooltip with no show delay MUST open at once on hover, as today.
 - **FR-005**: Every placement, with and without a show delay, MUST keep 029 FR-013: the panel does
   not cover its trigger while either side has room, and takes the side with more room when neither does.
@@ -133,7 +131,7 @@ window edge and check the panel does not overlap the trigger (or the pointer, wh
 
 - **Placement**: where the panel sits relative to the trigger or the pointer: above, below, left,
   right, or beside the pointer.
-- **Show delay**: the wait between the pointer reaching the trigger and the panel appearing.
+- **Show delay**: the wait between the pointer entering the trigger and the panel appearing; not restarted by movement, unlike the rest wait.
 
 ## Success Criteria *(mandatory)*
 
@@ -148,6 +146,13 @@ window edge and check the panel does not overlap the trigger (or the pointer, wh
   trigger while a side with room exists.
 - **SC-004**: Every existing tooltip test passes unchanged.
 - **SC-005**: An idle window with no tooltip waiting repaints nothing.
+
+## Clarifications
+
+### Session 2026-10-05
+
+- Q: Is "show delay" the existing `after_rest` wait working with every placement, or a separate fixed delay counted from entering the trigger? → A: A separate delay counted from entering, not restarted by movement; `after_rest` stays as is. _(agent-resolved: specs/038-issue-list-reporter-tooltip/autopilot.md#D5 — the removed stack's show delay "counts from pointer entry and cannot restart on movement", and 038 built `after_rest` as its own mode so both coexist)_
+- Q: What happens when a caller sets both a show delay and `after_rest`? → A: Not specified here; each must work alone (FR-003, FR-006). The combined rule is a plan decision. _(agent-resolved: no caller uses either; out of scope per Out of Scope)_
 
 ## Assumptions
 

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #430
 - **Worktree branch**: fix/issue-430
 - **Started**: 2026-10-05
-- **Phase**: spec
-- **Next step**: Phase 2: clarify the one [NEEDS CLARIFICATION] (show delay vs existing after_rest)
+- **Phase**: clarify
+- **Next step**: Phase 3: plan (clarify round 1 clean; show delay is separate from after_rest)
 
 ## Pull requests
 
