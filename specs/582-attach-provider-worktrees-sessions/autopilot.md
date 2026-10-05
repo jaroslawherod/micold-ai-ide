@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: milestone M2 (verify)
-- **Next step**: M2: reviews A/B and visual pass T026 running; fix findings, full gate, PR
+- **Phase**: milestone M2 (PR open)
+- **Next step**: wait for CI, merge M2, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Attach provider worktrees from the app (dialog) | #587 | merged |
-| M2 | T017–T026 | full | Discover and resume provider sessions | | in progress |
+| M2 | T017–T026 | full | Discover and resume provider sessions | PR | in review |
 | M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | | pending |
 | M4 | T032–T036 | full | Start-up offer banner | | pending |
 | M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | | pending |
@@ -54,8 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 | 16f83e2bb3c3fcd8c606a488ebbbcbd213a3f849:7d9b479fef775a2c9f7046396a274e6b0b4b5df8 | CLEAN |
 | M1 Review A | 1 | e490c2c5707d3cb9064b333ff5ce9cbf9b0f8e97:6977a9592833ebd47531e6584f7c6898eda334a4 | CHANGES: 2 MAJOR (unreadable project, persist rollback) + stale-reply and list-keeping findings, all fixed |
 | M1 Review A | 2 | 58e65c5f48816255b5016fa76cce028cc5b61317:ad8191d1410cd917a8003ee27bf3d6838cb6a197 | pending |
-| M2 Review A | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | pending |
-| M2 Review B | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | pending |
+| M2 Review A | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | CLEAN (3 MINOR: F2 per-item IoFailed and F3 doc fixed; F1 restored_stub left) |
+| M2 Review B | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | CLEAN (2 MINOR fixed: T023 deviation logged, unused param) |
 
 ## Declined review findings
 
@@ -67,11 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 1 (over 150k). Branch reset by hand to origin/main 502c4969 (`git fetch` fails on broken refs: `git update-ref refs/remotes/origin/main 502c4969; git reset --hard`). Use `MICOLD_NO_BUILD_LOCK=1`, `MICOLD_SKIP_GH_LAUNCH_TEST=1` for the gate. Work is in the tree, uncommitted until this WIP commit.
-Done (core, green): T017 tests (`micold-core/tests/attach_discovery.rs`, `mod resumable`), T018 (`tests/provider_store_dirs.rs`), T021 (`AiCliProvider::store_dirs` -> `StoreDirs{dirs: Vec<StoreDir{cwd}>, notes}` and `last_activity`, both with defaults, Claude overrides store_dirs, all three override last_activity), T022 (`attach::discover_resumable(&[StoreView], &DiscoverInput{root, worktrees, provenance, known_ids, page, only})` -> `ResumableDiscovery{sessions, notes}`; `path_key`, `is_within`). Deviations to record in cycle-log: `store_dirs` takes a third arg `worktrees: &[PathBuf]` and returns notes too; `last_activity` trait method added; `DiscoverInput.only`. Red evidence (compile errors: no method `store_dirs`, unresolved `discover_resumable`) seen for both; add to tdd/cycle-log.md under M2 (not yet written).
-Added, compiles untested: `RefuseReason::AlreadyRunning` + `RefuseReason::text()`, `SessionLifecycle::is_live`, `Catalog::attach_session(project, session) -> io::Result<AttachOutcome>` (rollback on persist failure, AlreadyRunning refusal) in daemon catalog.rs. Protocol schema hash/version pins may need bumping (RefuseReason variant added; PROTOCOL_VERSION 28 -> 29 if a pin test fails).
-T019 tests written (appended to `micold-daemon/tests/attach_apply.rs`, red: no `attach_session` before; now only needs state work). They set CLAUDE_CONFIG_DIR/COPILOT_HOME/PI_CODING_AGENT_DIR once to a scratch home. They need: `DaemonState::attach_discover` to add sessions (`discover_resumable` over `AiCli::ALL` providers with `provider.config_dir()`, off the lock; page 200) and, when the daemon runs in the sandbox (`auth_token` set, i.e. `MICOLD_TOKEN_PATH`), skip stores and push a `SandboxStoreNotReadable` note; `attach_apply` for `AttachItem::Session{id}`: fresh `discover_resumable` with `only=[id]`, Unresumable or not found -> Refused(Unavailable), NeedsWorktreeAttach -> `attach_worktrees` first (refused -> Unavailable), then `Catalog::attach_session(Session::restored(id, location, label(Named(title) else Derived/Pending), AiCli mode, provider))`; make server.rs run `attach_apply` inside `spawn_blocking` (it now does filesystem reads); broadcast catalog when any Attached. Note the test calls `state.attach_discover(project)` directly.
-Remaining: T020 client reducer tests (`micold-client/tests/attach_dialog.rs`: session rows, reason text, resume action `Msg::Resume{id}`, notes footer shown when no sessions or for non-StoreMissing notes) then T024 (`features/attach.rs`: `Dialog.sessions/notes/resuming`, Resume sets in_flight=[Session{id}]; `ui/attach_dialog.rs` rows + Resume button; main.rs intercept like AttachSelected; `daemon_sync` AttachApply arm: after `Applied`, if resuming session was Attached/AlreadyAttached then `view_and_start(app, SessionId::from_uuid(id))`; summary text uses `RefuseReason::text()` and says "session"); T025 docs (`docs/user-guide/worktrees-and-sessions.md`); T026 visual pass B2/B3 via autopilot-worker into `specs/582-.../visual/`; tick T019-T020, T023-T026 in tasks.md (T017, T018, T021, T022 ticked); cycle-log M2 section; reviews A (high; reviewer must read tests, UI, docs), B (sonnet), scoped gate, full gate, PR `feat(582): discover and resume provider sessions (#582)`. Follow-up not done: dialog lists at most 200 sessions with no "more" marker.
+None.
 
 ## Open escalation
 
@@ -80,3 +76,4 @@ None.
 ## Follow-ups not done
 
 - branch-start.sh printed FETCH-FAILED (broken refs in local repo: "does not point to a valid object"); branch is at the commit it started on, not re-based on a fresh origin/main.
+- M2 visual pass (visual/results.md): ~150 px gap between worktree and session lists; dialog lingers ~5 s after Resume (maybe lavapipe); light-theme sidebar stayed dimmed after close (maybe stale frame); an unreadable Copilot store gave no note. Dialog heading/intro still say "worktrees"; Resume buttons lack keyboard focus ids; 200-session cap has no "more" marker.

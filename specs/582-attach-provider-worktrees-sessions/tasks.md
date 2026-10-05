@@ -65,7 +65,7 @@ implementation tasks they cover, and each test must be seen failing for the righ
 - [x] T023 [US2] Extend `attach_discover` and `attach_apply` in `crates/micold-daemon/src/state.rs` for sessions: adopt each as an idle `Session::restored`, attach an unattached worktree first, report `SandboxStoreNotReadable`; make the resume refusal text name "already running" in the existing start guard (R7).
 - [x] T024 [US2] Show session rows, notes and the resume action in `crates/micold-client/src/features/attach.rs` and `crates/micold-client/src/ui/attach_dialog.rs`.
 - [x] T025 [US2] Update `docs/user-guide/worktrees-and-sessions.md`: resumable sessions, why one may be unresumable, and that a session already running outside Micold is not detected (R7).
-- [ ] T026 [US2] Run the `visual-pass` skill for quickstart B2 and B3 with sessions and a note for an unreadable store; save evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
+- [x] T026 [US2] Run the `visual-pass` skill for quickstart B2 and B3 with sessions and a note for an unreadable store; save evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
 
 ## Phase 5: User Story 3 - Attach through the MCP tools (P2)
 
