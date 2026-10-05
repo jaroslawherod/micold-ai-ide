@@ -498,3 +498,89 @@ async fn sixteen_worktrees_attach_in_one_action_within_ten_seconds() {
         "SC-001: took {took:?}"
     );
 }
+
+#[test]
+fn an_unreadable_project_refuses_every_target_and_records_nothing() {
+    let store = tempfile::tempdir().unwrap();
+    let project = PathBuf::from("/p");
+    let mut seeded = Workspace {
+        projects: vec![Project::new(project.clone(), true, Availability::Available)],
+        active: Some(project.clone()),
+        ..Default::default()
+    };
+    seeded.record_user_created(&project, "old");
+    let projects_path = store.path().join("projects.json");
+    let file_store = JsonFileStore::at(projects_path.clone());
+    file_store.save(&seeded).unwrap();
+    std::fs::write(file_store.project_state_path(&project), "not json").unwrap();
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    );
+
+    let outcomes = catalog
+        .attach_worktrees(&project, &live(&project, &["a"]), &names(&["a"]))
+        .unwrap();
+
+    assert_eq!(
+        outcomes,
+        vec![AttachOutcome::Refused(RefuseReason::IoFailed)]
+    );
+}
+
+/// A store that loads from disk but whose `save` fails while `fail` is set.
+struct FlakyStore {
+    inner: JsonFileStore,
+    fail: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl ProjectStore for FlakyStore {
+    fn load(&self) -> micold_core::store::LoadOutcome {
+        self.inner.load()
+    }
+    fn save(&self, workspace: &Workspace) -> std::io::Result<()> {
+        if self.fail.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(std::io::Error::other("disk full"));
+        }
+        self.inner.save(workspace)
+    }
+}
+
+#[test]
+fn a_failed_persist_rolls_the_records_back_so_a_retry_attaches() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let store = tempfile::tempdir().unwrap();
+    let project = PathBuf::from("/p");
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    let fail = Arc::new(AtomicBool::new(true));
+    let mut catalog = Catalog::load(
+        Box::new(FlakyStore {
+            inner: JsonFileStore::at(projects_path),
+            fail: fail.clone(),
+        }),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    );
+    let live = live(&project, &["a"]);
+
+    assert!(catalog
+        .attach_worktrees(&project, &live, &names(&["a"]))
+        .is_err());
+    fail.store(false, Ordering::SeqCst);
+    let retry = catalog
+        .attach_worktrees(&project, &live, &names(&["a"]))
+        .unwrap();
+
+    assert_eq!(retry, vec![AttachOutcome::Attached]);
+    assert_eq!(recorded(store.path(), &project), ["a"]);
+}

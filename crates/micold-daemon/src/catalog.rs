@@ -505,7 +505,15 @@ impl Catalog {
         live: &[Worktree],
         dir_names: &[String],
     ) -> io::Result<Vec<AttachOutcome>> {
-        let mut attached_any = false;
+        // Records for an unreadable project are never written (`persist` skips it), so attaching
+        // would report success and lose the record on restart; refuse like `plan_backfill` does.
+        if self.workspace.unreadable_projects.contains(project) {
+            return Ok(vec![
+                AttachOutcome::Refused(RefuseReason::IoFailed);
+                dir_names.len()
+            ]);
+        }
+        let mut newly: Vec<&String> = Vec::new();
         let mut outcomes = Vec::with_capacity(dir_names.len());
         for dir_name in dir_names {
             let outcome = if self
@@ -522,15 +530,22 @@ impl Catalog {
                     }
                     Some(_) => {
                         self.workspace.record_user_created(project, dir_name);
-                        attached_any = true;
+                        newly.push(dir_name);
                         AttachOutcome::Attached
                     }
                 }
             };
             outcomes.push(outcome);
         }
-        if attached_any {
-            self.persist()?;
+        if !newly.is_empty() {
+            if let Err(e) = self.persist() {
+                // Roll back, or a retry would answer "already attached" for records the disk
+                // never got.
+                for dir_name in newly {
+                    self.workspace.forget_user_created(project, dir_name);
+                }
+                return Err(e);
+            }
         }
         Ok(outcomes)
     }

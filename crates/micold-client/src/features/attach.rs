@@ -47,6 +47,8 @@ pub struct Dialog {
     pub selected: BTreeSet<String>,
     /// The targets of an `AttachApply` that has been sent and not yet answered; empty when idle.
     pub in_flight: Vec<AttachItem>,
+    /// Why the last apply failed; the listing stays so the user can retry.
+    pub error: Option<String>,
 }
 
 /// The dialog's list area.
@@ -148,16 +150,22 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
                 listing: Listing::Loading,
                 selected: BTreeSet::new(),
                 in_flight: Vec::new(),
+                error: None,
             });
             Vec::new()
         }
         Msg::Cancelled => {
+            // While an apply is outstanding the dialog stays, so its answer has somewhere to land
+            // and a reopened dialog can never receive a stale one.
+            if state.attach.dialog.as_ref().is_some_and(Dialog::applying) {
+                return Vec::new();
+            }
             state.attach.dialog = None;
             Vec::new()
         }
         Msg::Listed { project, report } => {
             if let Some(dialog) = state.attach.dialog.as_mut() {
-                if dialog.project == project {
+                if dialog.project == project && dialog.listing == Listing::Loading {
                     dialog.listing = Listing::Listed(report.worktrees);
                     dialog.selected.clear();
                 }
@@ -166,7 +174,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::ListFailed(reason) => {
             if let Some(dialog) = state.attach.dialog.as_mut() {
-                dialog.listing = Listing::Failed(reason);
+                if dialog.listing == Listing::Loading {
+                    dialog.listing = Listing::Failed(reason);
+                }
             }
             Vec::new()
         }
@@ -197,18 +207,19 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             Vec::new()
         }
         Msg::Applied(results) => {
-            if state.attach.dialog.take().is_none() {
+            if !state.attach.dialog.as_ref().is_some_and(Dialog::applying) {
                 return Vec::new();
             }
+            state.attach.dialog = None;
             vec![Outcome::NotificationRaised(Notification::new(
                 summary_level(&results),
                 summary(&results),
             ))]
         }
         Msg::ApplyFailed(reason) => {
-            if let Some(dialog) = state.attach.dialog.as_mut() {
+            if let Some(dialog) = state.attach.dialog.as_mut().filter(|d| d.applying()) {
                 dialog.in_flight.clear();
-                dialog.listing = Listing::Failed(reason);
+                dialog.error = Some(reason);
             }
             Vec::new()
         }
@@ -226,6 +237,7 @@ fn begin_apply(dialog: &mut Dialog, targets: Vec<AttachItem>) {
     if dialog.applying() || targets.is_empty() {
         return;
     }
+    dialog.error = None;
     dialog.in_flight = targets;
 }
 

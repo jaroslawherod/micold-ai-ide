@@ -225,7 +225,34 @@ fn a_failed_apply_keeps_the_dialog_and_shows_why() {
     attach::update(&mut state, Msg::ApplyFailed("disk full".into()));
     let dialog = state.attach.dialog.as_ref().unwrap();
     assert!(!dialog.applying());
-    assert_eq!(dialog.listing, Listing::Failed("disk full".into()));
+    assert_eq!(dialog.error.as_deref(), Some("disk full"));
+    assert!(
+        matches!(dialog.listing, Listing::Listed(_)),
+        "the list is kept"
+    );
+    assert!(
+        !dialog.attachable().is_empty(),
+        "so Attach all stays usable"
+    );
+}
+
+#[test]
+fn cancel_is_ignored_while_an_apply_is_outstanding() {
+    let mut state = open_state();
+    attach::update(&mut state, Msg::AttachAll);
+    attach::update(&mut state, Msg::Cancelled);
+    assert!(state.attach.dialog.is_some());
+}
+
+#[test]
+fn a_stale_answer_with_no_apply_outstanding_is_dropped() {
+    let mut state = open_state();
+    let before = state.attach.dialog.clone();
+    let out = attach::update(&mut state, Msg::Applied(vec![]));
+    assert!(out.is_empty());
+    attach::update(&mut state, Msg::ApplyFailed("late".into()));
+    attach::update(&mut state, Msg::ListFailed("late".into()));
+    assert_eq!(state.attach.dialog, before);
 }
 
 #[test]
