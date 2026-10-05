@@ -54,13 +54,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 code, tests and showcase pose are written and uncommitted in the worktree (T001-T012 ticked; T019 open). Local checks green: core `tooltip_show` (12), client lib tooltip tests, `tooltip_show_glue`, `idle_requests_no_frames`, `tooltip_rest_glue`; clippy not re-run after the `spacing::MD` fix. Reviews A and B are CLEAN. The scoped gate (log in scratchpad `sg.log`) has waited hours on the build lock held by other worktrees; a kill of it and a `MICOLD_NO_BUILD_LOCK=1` full gate were denied by the permission classifier, so no gate has run on the final tree.
-Open: (1) run `mise run gate` (wait for the lock), commit, push, open the PR; (2) T019: this machine has no Xvfb/xdotool, so the visual pass could not run (note in visual-pass.md); install them or the orchestrator accepts T019 as not run; (3) TDD note: implementation was written before the placement/glue tests, so there is no red evidence for T003/T006/T007/T009 (T011 was seen red: missing `ShowTimer`).
-Design note: a `subject()` change on a follow tooltip with no delay reopens at once on the next observation (the zero-delay rule), it does not stay closed.
+M1 T001-T012 committed locally (97e89cf8), not pushed; reviews A and B CLEAN. Full gate `mise run gate` started detached on the final tree, log `/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-fix-issue-430/03cd0d33-2f02-4edc-8c7d-c7eaa2e1b3e2/scratchpad/gate-final.log` (ends with `GATE_EXIT=<n>`); it is queued on the build lock and will run when the lock frees. Do not start a second one.
+Next: when `GATE_EXIT=0`, push (`git push --force-with-lease -u origin HEAD`), open the PR with `/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-fix-issue-430/03cd0d33-2f02-4edc-8c7d-c7eaa2e1b3e2/scratchpad/pr-body.md` (title `feat(430): follow-cursor tooltip placement and ShowTimer (#430)`, `Refs #430`, label `docs-not-needed`), record the PR number here. If the log is gone, rerun the gate.
+T019: NOT RUN. No Xvfb/xdotool/xwininfo on this machine and installing them needs root (not done); recorded in visual-pass.md and the PR body.
+Caveats (both recorded in the PR body): tests for placement/glue were written after the code, only T011 was seen red; a `subject()` change on a zero-delay follow tooltip reopens at once on the next observation.
+Blocker: see Open escalation.
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+Blocked by work outside my flow (category 5): the build lock `/home/jaro/workspaces/micold-ai-ide/.git/micold-build.lock` is held by pid 228600, a test binary `target-shared/debug/deps/attach_apply-7ab230cce8e2ae42` (worktree feat-582-attach-provider), running 12h46m at 0% CPU, in futex wait: a hung test. Nine other builds queue behind it, including this gate. Only killing pid 228600 frees the lock; it belongs to another flow and I was told not to kill other builds.
+Question: kill pid 228600 (Recommended; it is hung, evidence above), or wait? Once the lock frees, the queued gate needs no action from me.
 
 ## Follow-ups not done
 
