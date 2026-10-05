@@ -1934,18 +1934,6 @@ pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Messa
     Task::none()
 }
 
-/// The user asked for the active project's worktree listing to be re-read (feature 029, FR-003).
-///
-/// Mutates nothing — not the repository, not the app's own settings. What it asks for is the pass
-/// the daemon already runs on attach and after every worktree operation, at a moment the user
-/// chose instead of one the app chose. The refreshed listing comes back on the `CatalogChanged`
-/// broadcast rather than in the reply, which is what makes it indistinguishable from a listing
-/// produced by any other trigger (FR-004): there is one path, not two that agree.
-///
-/// No project parameter: the active project is read here, so FR-011 ("the active project only")
-/// has no caller that could get it wrong. With no project open there is nothing to re-read, and
-/// the view attaches no `on_press` in that state anyway (`can_refresh_worktrees`, FR-005) — the
-/// guard below is the second line of defence for a message arriving by some other route.
 /// The attach dialog opened (feature 582): ask the daemon what the active project offers. With no
 /// connection `send_op` raises the notice; the dialog then reports the same reason in its list.
 pub fn on_attach_opened(app: &mut App) -> Task<Message> {
@@ -1996,6 +1984,18 @@ pub fn on_attach_apply(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
+/// The user asked for the active project's worktree listing to be re-read (feature 029, FR-003).
+///
+/// Mutates nothing — not the repository, not the app's own settings. What it asks for is the pass
+/// the daemon already runs on attach and after every worktree operation, at a moment the user
+/// chose instead of one the app chose. The refreshed listing comes back on the `CatalogChanged`
+/// broadcast rather than in the reply, which is what makes it indistinguishable from a listing
+/// produced by any other trigger (FR-004): there is one path, not two that agree.
+///
+/// No project parameter: the active project is read here, so FR-011 ("the active project only")
+/// has no caller that could get it wrong. With no project open there is nothing to re-read, and
+/// the view attaches no `on_press` in that state anyway (`can_refresh_worktrees`, FR-005) — the
+/// guard below is the second line of defence for a message arriving by some other route.
 pub fn on_worktree_refresh_requested(app: &mut App) -> Task<Message> {
     // FR-005/FR-006 in one question. The view already withholds `on_press` when this is false, so
     // reaching here with it false means the message arrived by some other route; the running
