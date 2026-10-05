@@ -707,7 +707,7 @@ unread counts and an unavailable row",
         component: "Tooltip",
         // `TooltipPosition` is `cdk::tooltip::Position`, a library enum since 029 BUG-001, so each
         // side is posed as a variant.
-        variants: &["Bottom", "Left", "Top", "Right"],
+        variants: &["Bottom", "Left", "Top", "Right", "FollowCursor"],
         density: &[],
         posed: &[
             "multi-line, wrapped at the ceiling",
