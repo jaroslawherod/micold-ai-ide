@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 rework, see *Handover*: the visual pass (its setup has to be recreated, `/home/jaro/vp` is gone) with §B10 re-measured, then the full gate, tick T055 on a measured pass, PR.
+- **Next step**: blocked, see *Open escalation* (build lock held by a hung pid 228600); then M5 rework, see *Handover*: the visual pass (its setup has to be recreated, `/home/jaro/vp` is gone) with §B10 re-measured, then the full gate, tick T055 on a measured pass, PR.
 
 ## Pull requests
 
@@ -146,7 +146,11 @@ M5; nothing is pushed. `branch-start.sh 576` was run: the branch is on `origin/m
 
 ## Open escalation
 
-None.
+Raised by `Milestone M5 518 part 6` (environment blocker, category 4: only the user can act). The visual pass did not run; nothing of §B6–§B11 is measured for HEAD. The branch is rebased on `origin/main` (HEAD 7d77db4f), nothing pushed.
+- The repo-wide build lock is held by a hung test of another session: `target-shared/debug/deps/attach_apply-7ab230cce8e2ae42`, pid 228600 (cwd `.claude/worktrees/feat-582-attach-provider/crates/micold-daemon`), running 9h40m at 0% CPU. The worker's two release builds (before and after pairs) waited 35 min on it. Another session's process is not this unit's to kill, and the permission system denied `MICOLD_NO_BUILD_LOCK=1`.
+- `Xvfb` and `xdotool` are not installed (no sudo). The worker found JetBrains' bundled Xvfb and drove input with python-xlib (`/home/jaro/vp038r2/venv`); `/home/jaro/vp` is in fact present (the earlier "gone" report was about `~/vp/bin038m5` and `~/vp038`).
+- Left behind, all under `/home/jaro/vp038r2`: `build.sh`, `logs/`, `venv/`, empty `bin-before/`, `bin-after/`, a `cli/cli` shallow clone in `data/`, a detached checkout `before-src` at 7cbb6c76 (registered with git; the user removes it), Xvfb on `:142`, two waiting `build-lock.sh` processes.
+- Options: 1 (Recommended) the user kills pid 228600 so the queue drains; 2 the user approves `MICOLD_NO_BUILD_LOCK=1` for the two builds; 3 skip the pass (not allowed: T055 stays open).
 
 ## Token usage
 
