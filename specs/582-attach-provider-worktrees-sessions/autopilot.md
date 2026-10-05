@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify round 1 (2 questions, both agent-resolved, no critical ambiguities left): FR-011 new read-only MCP tool separate from `list_sessions`; FR-015 Default session refused outright, Principle III not amended.
+- Clarify rounds: round 1 (FR-011 new read-only MCP tool; FR-015 Default refused outright); round 2 via speckit-clarify (attach session = idle entry; resume attaches its worktree first), all agent-resolved; no critical ambiguities left (deferred to plan: dismissing the start-up offer).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

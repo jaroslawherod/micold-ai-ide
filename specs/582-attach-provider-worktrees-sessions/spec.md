@@ -29,6 +29,9 @@
   sets the precedent of a separate discovery tool _(agent-resolved: docs/user-guide/agent-tools.md#What the assistant can do)_
 - Q: May a Default session call `attach_worktree` (refuse, allow after confirmation, or amend Principle III)? → A: Refuse outright; Principle III bars a Default session from modifying a worktree by any means, tool server included, and the amendment route is out of this feature _(agent-resolved: .specify/memory/constitution.md#III. Native Worktree Integration)_
 
+- Q: Does attaching a resumable session start it? → A: No; attaching adds an idle catalog entry waiting to be resumed, and only the user's resume (Start) runs the provider, so "attach all" never launches many provider processes _(agent-resolved: docs/user-guide/agent-tools.md#What the assistant can do, `start_session` "waiting to be resumed")_
+- Q: What happens when the user resumes a session whose worktree is attachable but not yet attached? → A: Resuming first attaches that worktree (an explicit user action, so FR-012 holds), then resumes; every catalog session maps to a catalog worktree _(agent-resolved: .specify/memory/constitution.md#III. Native Worktree Integration)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Attach a provider worktree from the app (Priority: P1)
@@ -170,7 +173,9 @@ found worktrees and sessions at once.
 - **FR-007**: Discovery MUST NOT list another project's sessions and MUST NOT list a session
   already in the catalog.
 - **FR-008**: Users MUST be able to resume a listed session, and the provider MUST continue that
-  conversation in the session's worktree.
+  conversation in the session's worktree. If that worktree is attachable but not attached, resuming
+  attaches it first. Attaching a session only adds an idle catalog entry; it never starts the
+  provider.
 - **FR-009**: A missing, unreadable, or corrupt provider store or entry MUST NOT block opening the
   project; the bad entry is skipped and reported, the rest are listed.
 - **FR-010**: Discovery and attaching MUST be read-only toward the provider store: Micold never
