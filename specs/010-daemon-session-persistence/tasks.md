@@ -2017,3 +2017,27 @@ wrote it, and T162 exists so the next one is not guessed at.
   stored, what the two messages mean, that the unreadable file is kept rather than discarded, and
   what to do next (copy values back out of the `.bak`, then let the next save succeed). No
   dependency
+
+## Phase 32: Bugfix BUG-592 — a refused shell open is only logged, so the Terminal toggle does nothing
+
+- [ ] T164 [P] [BUG-592] Regression tests first (SC-027). Daemon:
+  `crates/micold-daemon/tests/shell_open_refused_reported.rs` — drive `ClientMsg::SessionOpenShell`
+  for a session whose worktree directory was removed and assert the requesting client receives
+  `ShellOpenFailed` with the reason and no process is registered; and for a session whose directory
+  exists assert no `ShellOpenFailed` and the instance opens. Client: a unit test in
+  `crates/micold-client/src/shell/daemon_sync.rs` that opens a terminal, feeds `ShellOpenFailed`, and
+  asserts mode `AiCli`, no shell instance, a `SessionAttachProcess` for `Primary` sent, and an error
+  notice. Both fail on `origin/main`. No dependency
+- [ ] T165 [BUG-592] Add `DaemonMsg::ShellOpenFailed { session, instance, message }` to
+  `crates/micold-core/src/protocol/messages.rs` (plus `contracts/messages.md` and the protocol
+  round-trip test), and send it from the `Err` arms of `SessionOpenShell` and `SessionRestartShell` in
+  `crates/micold-daemon/src/server.rs` through `state.send(id, ...)`, keeping the `warn`. Depends on T164
+- [ ] T166 [BUG-592] Handle it in `crates/micold-client/src/shell/daemon_sync.rs`: for the session,
+  `Session::close_shell(instance)` (core reverts `mode` to `AiCli` with the last instance), then
+  `attach_current_process`, then `notify_error("Couldn't open a terminal: {message}")`. The client
+  never stays on a shell view the service refused. Depends on T165
+- [ ] T167 [P] [BUG-592] Document the message in the user guide (Constitution VII): what
+  "Couldn't open a terminal: session working directory does not exist" means and that the worktree
+  must be recreated or the session closed. No dependency
+
+**Bugfix**: 2026-10-05 — BUG-592 Added T164–T167 for FR-006c; added SC-027. See `bugs/BUG-592.md`.
