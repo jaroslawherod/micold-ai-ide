@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: verify M1
+- **Phase**: verify M1 (handed over)
 - **Next step**: M1 verify: review A (high), review B (sonnet), visual pass T013, full gate, push to #602 (stacked on branch claude/project-thread-8dnq8h; skip branch-start.sh).
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
@@ -48,15 +48,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec 575 (rewrite) | 1 | 84afa026eb373957d3319604344384c2c53d8ee4:6075557947bfb5e1361568a3fa8ad0408ce9d424 | CLEAN: 3 MINOR (all fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Plan 575 | 1 | a544cbbec276b6e538a862790af2b637ccd7a155:d7bf4f9b57b064be396b814b2bc37f390bf39002 | CLEAN: 2 MINOR (both fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Tasks 575 | 1 | 546c4d5d35bd1de8132ad3d6d78f2341f17c4afd:c0987c41765f310a8299693bbe13c42d8aea98f0 | CLEAN: 1 MINOR (wrong task ref in T002, fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
+| Review A M1 (code-review high) | 1 | fd51b4f49d22a526379a017d433c16857cf5036b:4f6fb12c21364a11c8f758f2b13c8a7e48a53675 | 7 unlabelled findings, none BLOCKER/MAJOR on inspection: 2 fixed (row_unread delegates to counts_as_unread; guide names the re-admitted row), 5 declined (see below). Done. |
+| Review B M1 (conformance, sonnet) | 1 | d1dac354ff9c1bab07c0cb224fbe372e7907f6b7:d8ad1e5b28906713af20e9bc9ee6708630c1324f | dispatched, result pending (see Handover) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | `!archived` in `counts_as_unread` is dead for sidebar callers | By design (plan R1/D1): the same predicate serves the switcher counts in M2 (T018), where archived sessions are present. |
+| M1 | A | `count_tint` ignores its `row_tint` parameter | Contract A6/R4: the parameter states what the count is independent of; the test pins that an error tint is not used. |
+| M1 | A | count not matched to the selected-row label colour | Location rows are never selected (only session rows are); the contrast gate covers the selected fill at 4.5:1. |
+| M1 | A | `let _ = mark(&counted)` in a geometry test | MINOR; `mark` asserts the mark exists. |
+| M1 | A | counting each entry every render | MINOR; O(sessions), same order as building the rows. |
 
 ## Handover
 
-None.
+Milestone unit M1 (part 2) handed over at 150k context. Done: T001-T012, T014 implemented and ticked (commits 4f6fb12c, d8ad1e5b), cycle log in `tdd/cycle-log.md`, review A done (above). xdotool is now installed (apt).
+
+- **Running when handed over (detached, logs in the scratchpad `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad`)**: full gate `gate3.log` (script `gate.sh`: fmt, clippy core, clippy workspace, `cargo test --workspace --no-fail-fast`, scripts/tests; ends `GATE_EXIT=done scripts=<0|1>`; `TEST_EXIT` line before it) on HEAD d8ad1e5b; review B `reviewB.log` (ends `REVB_EXIT=`). Hold on them with `scripts/autopilot/hold.sh <log>`.
+- **Gate verdict rule**: green when the only test failures are the six root-only baseline ones (Environment notes). Then record the stamp the push hook needs: `echo <tree part of gate3.log's SNAP=> >> $(git rev-parse --git-path autopilot-gate-ok)` (mise's gate does this on success). Disk is tight (8.8G free after deleting `target-shared/debug/incremental`): build with `CARGO_INCREMENTAL=0`; an earlier gate died of ENOSPC.
+- **Next**: act on review B (review-rounds.md); T013 visual pass: the worker via `claude -p --agent autopilot-worker` could not run it (non-interactive claude refuses compound Bash and the forked skill gets no args), so run `.claude/skills/visual-pass/SKILL.md`'s recipe directly: B10 (showcase UnreadMark entry, both schemes) at least; B1-B8 need a seeded data dir, record which were NOT RUN and why; evidence in `specs/575-workspace-attention-list/visual/`; tick T013. Then full gate if code changed, push `git push -u origin claude/project-thread-8dnq8h`, write `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/pr-M1.md`, return `PR: #602 (updated branch)`.
 
 ## Environment notes (M1)
 
