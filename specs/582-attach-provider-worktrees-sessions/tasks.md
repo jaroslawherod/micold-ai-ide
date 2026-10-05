@@ -85,11 +85,11 @@ implementation tasks they cover, and each test must be seen failing for the righ
 
 **Independent Test**: `crates/micold-client/tests/attach_offer.rs`; quickstart B1.
 
-- [ ] T032 [US4] Write failing reducer tests in `crates/micold-client/tests/attach_offer.rs`: `offer_visible = no_records && !report.is_empty() && !dismissed`, where `no_records` ignores catalog sessions adopted by feature 026; a project with provenance records never gets the offer and nothing is attached without a user action (FR-012, scenarios 1-2); dismissal is per project and per run, in memory, and the "Attach existing…" dialog still lists everything (R5).
-- [ ] T033 [US4] Implement `OfferState` and the offer rules in `crates/micold-client/src/features/attach.rs`, requesting `AttachDiscover` at project open from `crates/micold-client/src/shell/daemon_sync.rs`.
-- [ ] T034 [US4] Add the offer banner with "Attach all" and a dismiss button in `crates/micold-client/src/ui/sidebar.rs`: first `grep` `crates/micold-client/src/ui/material/` for a notice or snackbar with action buttons and note the finding in the commit; reuse it if found, else add a `Banner` primitive to the shared library under `crates/micold-client/src/ui/material/` and consume it (R9, Constitution VIII).
-- [ ] T035 [US4] Update `docs/user-guide/worktrees-and-sessions.md` with the start-up offer and how to dismiss it.
-- [ ] T036 [US4] Run the `visual-pass` skill for quickstart B1 and B4 (banner, light and dark); save evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
+- [x] T032 [US4] Write failing reducer tests in `crates/micold-client/tests/attach_offer.rs`: `offer_visible = no_records && !report.is_empty() && !dismissed`, where `no_records` ignores catalog sessions adopted by feature 026; a project with provenance records never gets the offer and nothing is attached without a user action (FR-012, scenarios 1-2); dismissal is per project and per run, in memory, and the "Attach existing…" dialog still lists everything (R5).
+- [x] T033 [US4] Implement `OfferState` and the offer rules in `crates/micold-client/src/features/attach.rs`, requesting `AttachDiscover` at project open from `crates/micold-client/src/shell/daemon_sync.rs`.
+- [x] T034 [US4] Add the offer banner with "Attach all" and a dismiss button in `crates/micold-client/src/ui/sidebar.rs`: first `grep` `crates/micold-client/src/ui/material/` for a notice or snackbar with action buttons and note the finding in the commit; reuse it if found, else add a `Banner` primitive to the shared library under `crates/micold-client/src/ui/material/` and consume it (R9, Constitution VIII).
+- [x] T035 [US4] Update `docs/user-guide/worktrees-and-sessions.md` with the start-up offer and how to dismiss it.
+- [x] T036 [US4] Run the `visual-pass` skill for quickstart B1 and B4 (banner, light and dark); save evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
 
 ## Phase 7: Polish
 

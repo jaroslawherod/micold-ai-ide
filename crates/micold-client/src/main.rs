@@ -878,6 +878,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_opened(app)
         }
+        Message::Attach(msg @ AttachMsg::OfferAttachAll) => {
+            app.core.update(Message::Attach(msg));
+            shell::daemon_sync::on_attach_offer_apply(app)
+        }
         Message::Attach(
             msg @ (AttachMsg::AttachSelected | AttachMsg::AttachAll | AttachMsg::Resume { .. }),
         ) => {

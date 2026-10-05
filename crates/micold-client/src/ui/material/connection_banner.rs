@@ -24,6 +24,7 @@ pub struct ConnectionBanner<'a, M> {
     detail: String,
     level: NoticeLevel,
     action: Option<(String, M)>,
+    secondary: Option<(String, M)>,
     roles: Roles,
     _marker: PhantomData<&'a M>,
 }
@@ -37,6 +38,7 @@ impl<'a, M: 'a + Clone> ConnectionBanner<'a, M> {
             detail: detail.into(),
             level: NoticeLevel::Error,
             action: None,
+            secondary: None,
             roles,
             _marker: PhantomData,
         }
@@ -51,6 +53,14 @@ impl<'a, M: 'a + Clone> ConnectionBanner<'a, M> {
     /// Add a trailing action button (e.g. "Take over" → re-attach with force).
     pub fn action(mut self, label: impl Into<String>, on_press: M) -> Self {
         self.action = Some((label.into(), on_press));
+        self
+    }
+
+    /// Add a quieter second action beside the first (e.g. "Dismiss" beside "Attach all"). With one,
+    /// the actions move to a row under the text instead of sitting beside it, so a narrow host
+    /// (the sidebar) keeps the sentence readable. Without an [`action`](Self::action) it is ignored.
+    pub fn secondary_action(mut self, label: impl Into<String>, on_press: M) -> Self {
+        self.secondary = Some((label.into(), on_press));
         self
     }
 }
@@ -70,6 +80,28 @@ impl<'a, M: 'a + Clone> From<ConnectionBanner<'a, M>> for Element<'a, M> {
         let mut line = row![text_block]
             .spacing(spacing::SM)
             .align_y(Alignment::Center);
+        let host = style::notification_host(b.roles, b.level);
+
+        if let (Some((label, on_press)), Some((second, second_press))) =
+            (b.action.clone(), b.secondary)
+        {
+            let actions = row![
+                iced::widget::Space::new().width(Length::Fill),
+                super::Button::text(second, b.roles)
+                    .on_host(host)
+                    .on_press(second_press),
+                super::Button::outlined(label, b.roles)
+                    .on_host(host)
+                    .on_press(on_press),
+            ]
+            .spacing(spacing::XS)
+            .align_y(Alignment::Center);
+            return container(column![line, actions].spacing(spacing::SM))
+                .padding(spacing::MD)
+                .width(Length::Fill)
+                .style(style::notification(b.roles, b.level))
+                .into();
+        }
 
         if let Some((label, on_press)) = b.action {
             // The shared `Button`, not a locally styled one. Building the outlined look here would

@@ -213,6 +213,18 @@ pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
                 .action("Retry now", Message::NoOp),
                 roles,
             ),
+            posed(
+                "with two actions, on Info",
+                material::ConnectionBanner::new(
+                    "2 worktrees found",
+                    "Attach them to this project, or dismiss this for now.",
+                    roles,
+                )
+                .level(NoticeLevel::Info)
+                .action("Attach all", Message::NoOp)
+                .secondary_action("Dismiss", Message::NoOp),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

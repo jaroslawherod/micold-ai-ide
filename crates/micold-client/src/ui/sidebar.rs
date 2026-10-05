@@ -240,7 +240,15 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing
     // room is kept.
-    let content = column![header, filter_accordion, body]
+    // Feature 582 (FR-012): the start-up offer, between the header and the list. The shared banner,
+    // not a snackbar: the offer stands until the user answers it.
+    let mut content = column![header];
+    if let Some(offer) = offer_banner(state, r) {
+        content = content.push(offer);
+    }
+    let content = content
+        .push(filter_accordion)
+        .push(body)
         .spacing(spacing::SM)
         .padding(iced::Padding {
             top: spacing::SM,
@@ -255,6 +263,53 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         .width(Length::Fixed(width))
         .height(Length::Fill)
         .into()
+}
+
+/// The start-up offer's banner, when the active project is offered one (feature 582, FR-012).
+/// "Attach all" attaches the found worktrees; with only stored sessions found it opens the
+/// "Attach existing…" list instead, where they are resumed one at a time.
+fn offer_banner<'a>(
+    state: &'a State,
+    r: micold_core::tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    use crate::features::attach::{offer_visible, Msg};
+    if !offer_visible(state) {
+        return None;
+    }
+    let offer = &state.attach.offer;
+    let worktrees = offer.targets().len();
+    let sessions = offer.session_count();
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mut found = Vec::new();
+    if worktrees > 0 {
+        found.push(plural(worktrees, "worktree", "worktrees"));
+    }
+    if sessions > 0 {
+        found.push(plural(sessions, "session", "sessions"));
+    }
+    let banner = material::ConnectionBanner::new(
+        format!("Found {}", found.join(" and ")),
+        "This project has none attached yet.",
+        r,
+    )
+    .level(crate::features::notifications::NoticeLevel::Info);
+    // Once "Attach all" is pressed the banner shows no buttons until the daemon answers, so the
+    // same targets cannot be sent twice.
+    if !offer.in_flight.is_empty() {
+        return Some(banner.into());
+    }
+    let (label, press) = if worktrees > 0 {
+        ("Attach all", Msg::OfferAttachAll)
+    } else {
+        ("Review", Msg::Opened)
+    };
+    Some(
+        banner
+            .action(label, Message::Attach(press))
+            .secondary_action("Dismiss", Message::Attach(Msg::OfferDismissed))
+            .into(),
+    )
 }
 
 /// The collapsed sidebar: a thin vertical strip hosting the "show sidebar" button (with a

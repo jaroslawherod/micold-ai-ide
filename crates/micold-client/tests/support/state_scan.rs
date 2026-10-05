@@ -75,6 +75,9 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // `attach.offer.targets` derives the banner's apply targets from the report; it writes nothing
+    // (feature 582).
+    "targets",
     "all",
     "and_then",
     // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store
