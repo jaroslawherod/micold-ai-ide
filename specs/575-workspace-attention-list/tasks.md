@@ -76,8 +76,8 @@ location rows add up to its switcher count (FR-010, 039 US1 scenario 9).
 
 ## Phase 6: Polish
 
-- [ ] T020 Run quickstart §A, §B (B1-B11, through the `visual-pass` skill) and §C, and record the results in `specs/575-workspace-attention-list/quickstart.md`.
-- [ ] T021 Check that `docs/user-guide/worktrees-and-sessions.md` and `docs/user-guide/project-selection.md` match the shipped behaviour of both stories and the closed-session rule.
+- [x] T020 Run quickstart §A, §B (B1-B11, through the `visual-pass` skill) and §C, and record the results in `specs/575-workspace-attention-list/quickstart.md`. Done: §A, B1-B3, B5, B6, B8-B11 pass; B4 and B7 not run; §C not run (no macOS, Windows or container runtime here). See quickstart.md § Results.
+- [x] T021 Check that `docs/user-guide/worktrees-and-sessions.md` and `docs/user-guide/project-selection.md` match the shipped behaviour of both stories and the closed-session rule. Done: one gap fixed: the switcher button's total now also says that a closed session is not counted.
 
 ## Dependencies & Execution Order
 

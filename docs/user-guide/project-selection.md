@@ -87,7 +87,7 @@ listing your known projects. Each row shows:
 The switcher's button itself shows a filled dot and a number after the project's name, for
 example "● 3", when sessions in your **other** projects are unread. You see it without opening the
 panel, and it stays while the panel is open. Unread sessions of the active project are not in that
-number: the sidebar already marks them. Hover over the button to read what the number counts
+number: the sidebar already marks them. A session you have closed is not in it either. Hover over the button to read what the number counts
 ("3 unread sessions in other projects"). When no other project has an unread session, the button
 shows its name alone.
 

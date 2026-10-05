@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-05
 
-**Status**: Draft
+**Status**: Closed 2026-10-05 — shipped in PR #602
 
 **Input**: User description: "Implement GitHub issue #575 (Show sessions that need attention at workspace level)." Scope changed by the user after the first spec: "the clue was to add indicator of attention at sidebar with the list of worktrees". In the sidebar's list of worktrees, each worktree row, and the Default (project-root) row, that holds at least one unread session (feature 039's sense) shows an attention indicator with the number of such sessions, so the user sees which worktrees need attention without expanding them. Reuse 039's unread state and the shared unread mark and tree row components; no second source of truth; the indicator updates live, clears when the session is viewed and survives a restart as 039's state does.
 

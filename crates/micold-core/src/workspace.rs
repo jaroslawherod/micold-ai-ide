@@ -578,6 +578,10 @@ mod tests {
             (R, vec![closed_unread_in("c")]),
         ]);
 
-        assert_eq!(workspace.other_projects_unread(Some(Path::new(P))), 1);
+        assert_eq!(
+            workspace.other_projects_unread(Some(Path::new(P))),
+            1,
+            "the button's total counts Q's open unread session and neither closed one (A8)"
+        );
     }
 }

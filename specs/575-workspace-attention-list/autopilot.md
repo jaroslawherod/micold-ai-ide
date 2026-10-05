@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: M2 pushed to #602 (awaiting orchestrator)
-- **Next step**: orchestrator: CI on #602 (gh unauthenticated; PR body sections in the scratchpad `pr-M1.md`, `pr-M2.md`), then the close unit (T020-T021).
+- **Phase**: close (handover)
+- **Next step**: close unit continues from *Handover*
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
@@ -66,7 +66,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Close unit 1 stopped at the 150k context cap. Committed, not pushed (no gate has run on this tree yet).
+
+**Done**
+- Converge was not run as a separate step. All of T001-T019 are ticked, M2's review was CLEAN, and M1's review B CHANGES was about tooling only. The tdd-verify traceability below checks every FR against a test.
+- T021 is done: one gap fixed in `docs/user-guide/project-selection.md`, which now says the button's total skips closed sessions.
+- T020 is done: quickstart.md § Results and `visual/close-*.png`. B1-B3, B5, B6, B8, B9 and B11 pass. B4 and B7 were not run. §C was not run: no macOS or Windows host, and no docker daemon.
+- Spec **Status** is set to Closed (PR #602).
+- tdd-verify phases 0-4 are done. `tdd/verification.md` and `cycle-log.md` are not written yet.
+  - Evidence: M1 has a red commit (41634afe) before its green commit, so M1 is PROVEN. M2's red is recorded only in *Environment notes (M2)*, and its test and source landed in one commit (7303f78e), so M2 is LIKELY. T010 (contrast) was written after the code, per cycle-log, so it is TEST_AFTER.
+  - No existing test was weakened: the diff removes no assertion.
+  - Deliberate mutants (log at /tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/mutants.log): all 8 were caught. A and A2 drop `!archived` in `counts_as_unread` (core attention test, sidebar sum test). B and B2 drop the in-view check. C makes the sidebar `unread_count` use `s.unread`. D makes `Count(n)` render as `Unread` (3 tree_view tests). E makes `count_tint` return the row tint. E2 makes `count_tint` return `outline_variant`, which `a_location_rows_unread_count_is_legible_in_every_row_state` catches. E2 is T010's red after the fact. The tree was restored with `git checkout`, and the diff is clean.
+  - Smell pass (fresh reviewer, /tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/smell-out.md): S1 HIGH 'tautological' `count_tint` test is declined, because mutant E shows it catches a real colour bug. S2 MED bypassed `mod support` is declined, because the peer files (features_sidebar.rs, switcher_unread.rs) build state the same way. S6 is LOW, a redundant `row_tint` loop. Open findings: S3 MED (about 20 asserts in sidebar_attention.rs without a rule message), S4 MED (workspace.rs:581, fixed in this commit), S5 MED (two eager tests to split), S7 LOW and S9 LOW names.
+- The worker for S3, S5 and S9 (`claude -p --agent autopilot-worker`) was refused write permission. Its unapplied edit script is `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/e.py`. Review that script before running it, or redo the work.
+
+**Next**
+1. Apply S3, S5 and S9 to `crates/micold-client/tests/sidebar_attention.rs`. Then run `cargo test -p micold-client --test sidebar_attention` and `cargo test -p micold-core --lib workspace`.
+2. Write `tdd/verification.md`. The audit verdict is FAIL, because T010 is TEST_AFTER. After the remediation, the state is PASS_WITH_GAPS: no mutation tool, M2 is LIKELY, and T010 has red evidence only after the fact (E2). Append a `Phase 7: TDD remediation` (T022 T010 red via E2, done; T023 S3/S4; T024 S5) to tasks.md. Add the M2 and E2 rows to cycle-log.md.
+3. Review the close diff with a fresh reviewer, run the full gate, finish the ledger, push, and write `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/pr-close.md`. Return `PR: #602 (updated branch)`.
 
 ## Environment notes (M1)
 
