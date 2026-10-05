@@ -24,14 +24,16 @@ use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{window, Element, Event, Length, Padding, Point, Rectangle, Size, Vector};
 
-use micold_core::tooltip::RestTimer;
+use micold_core::tooltip::{RestTimer, ShowTimer};
 
 use super::motion::{self, Progress};
 
-/// Which side of its trigger a tooltip asks for.
+/// Which side of its trigger a tooltip asks for, or that it follows the pointer.
 ///
-/// Its own type rather than the rendering stack's, which also offers "follow the cursor": a panel
-/// that follows the cursor has no side to flip to, and nothing in this application asks for one.
+/// Its own type rather than the rendering stack's: a side flips across the trigger when it has no
+/// room (029 FR-013), which the stack's tooltip cannot be told to do. [`Position::FollowCursor`] has
+/// no side: it is placed by [`place_at_pointer`] beside the pointer instead of by [`place`] beside
+/// the trigger (feature 430).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Position {
     /// Above the trigger.
@@ -42,6 +44,20 @@ pub enum Position {
     Left,
     /// To the right of the trigger.
     Right,
+    /// Beside the pointer, moving with it while it is over the trigger.
+    FollowCursor,
+}
+
+/// What a tooltip waits for before it opens.
+///
+/// A mode rather than a flag per delay: the setter called last wins (430 research R1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Wait {
+    /// Open while the pointer is over the trigger.
+    #[default]
+    Hover,
+    /// Open once the pointer has rested on the trigger for the delay (feature 038).
+    Rest(Duration),
 }
 
 /// The space kept between the panel and the window's edge, and around the panel's content — the
@@ -54,9 +70,8 @@ pub struct Tooltip<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     tooltip: Element<'a, M, Theme, Renderer>,
     position: Position,
     gap: f32,
-    /// How long the cursor must rest on the trigger before the panel opens; `None` opens it on
-    /// hover.
-    rest: Option<Duration>,
+    /// What the pointer must do over the trigger before the panel opens.
+    wait: Wait,
     /// What the trigger describes, when the same place in the tree can come to describe another
     /// thing.
     subject: Option<u64>,
@@ -74,7 +89,7 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
             tooltip: tooltip.into(),
             position,
             gap: 0.0,
-            rest: None,
+            wait: Wait::Hover,
             subject: None,
         }
     }
@@ -91,7 +106,7 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
     /// starts the wait again, a press on the trigger closes the panel until the cursor has left,
     /// and leaving closes it. The wait costs one timed frame request, not a frame loop (FR-018).
     pub fn after_rest(mut self, delay: Duration) -> Self {
-        self.rest = Some(delay);
+        self.wait = Wait::Rest(delay);
         self
     }
 
@@ -118,6 +133,11 @@ struct State {
     shown: Progress,
     /// Where a rest-delay tooltip is in its wait. Unused without `after_rest`.
     rest: RestTimer,
+    /// The press rule of a pointer-following tooltip that opens on hover. Unused otherwise.
+    show: ShowTimer,
+    /// The pointer over the trigger, in the trigger's own coordinate space; read by `overlay()`.
+    /// Recorded only for [`Position::FollowCursor`].
+    pointer: Option<Point>,
     /// The subject the open panel, or the wait under way, belongs to.
     subject: Option<u64>,
 }
@@ -128,6 +148,8 @@ impl State {
             open: false,
             shown: Progress::new(0.0),
             rest: RestTimer::default(),
+            show: ShowTimer::default(),
+            pointer: None,
             subject,
         }
     }
@@ -138,6 +160,7 @@ impl State {
         if self.subject != subject {
             self.subject = subject;
             self.rest.reset();
+            self.show.reset();
             self.open = false;
         }
     }
@@ -200,25 +223,48 @@ where
         if let Event::Mouse(_) | Event::Window(window::Event::RedrawRequested(_)) = event {
             let state = tree.state.downcast_mut::<State>();
             state.describe(self.subject);
-            let (open, wake) = match self.rest {
-                None => (cursor.is_over(layout.bounds()), None),
-                Some(delay) => {
+            let follow = self.position == Position::FollowCursor;
+            let bounds = layout.bounds();
+            let (open, wake) = match self.wait {
+                Wait::Hover if !follow => (cursor.is_over(bounds), None),
+                wait => {
                     // Observed on every redraw as well as on every mouse event: a list that
                     // scrolls or narrows moves the trigger from under a cursor that did not move.
-                    let at = cursor
-                        .position_over(layout.bounds())
-                        .map(|point| (point.x, point.y));
+                    let over = cursor.position_over(bounds);
                     // A redraw carries its instant; a mouse event carries none.
                     let now = match event {
                         Event::Window(window::Event::RedrawRequested(now)) => *now,
                         _ => Instant::now(),
                     };
                     // The press is the trigger's own and is passed on below, not captured.
-                    if matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) && at.is_some()
-                    {
-                        state.rest.press();
+                    let pressed = matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_)))
+                        && over.is_some();
+                    let rest = match wait {
+                        Wait::Rest(delay) => {
+                            if pressed {
+                                state.rest.press();
+                            }
+                            let at = over.map(|point| (point.x, point.y));
+                            state.rest.observe(at, now, delay)
+                        }
+                        // Pointer-following, opening on hover: the delay rule with no delay, for
+                        // its press rule (430 research R5).
+                        Wait::Hover => {
+                            if pressed {
+                                state.show.press();
+                            }
+                            state.show.observe(over.is_some(), now, Duration::ZERO)
+                        }
+                    };
+                    if follow && state.pointer != over {
+                        state.pointer = over;
+                        // Only a panel that is showing has a place to move; the open or close
+                        // below does its own relayout. The layout change is what gets it painted:
+                        // a frame asked for outside `Progress` would break idle quiescence.
+                        if state.open && rest.open {
+                            shell.invalidate_layout();
+                        }
                     }
-                    let rest = state.rest.observe(at, now, delay);
                     (rest.open, rest.wake_at)
                 }
             };
@@ -310,7 +356,10 @@ where
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
-        let open = tree.state.downcast_ref::<State>().open;
+        let (open, pointer) = {
+            let state = tree.state.downcast_ref::<State>();
+            (state.open, state.pointer)
+        };
         let mut children = tree.children.iter_mut();
 
         let content = self.content.as_widget_mut().overlay(
@@ -321,16 +370,28 @@ where
             translation,
         );
 
-        let panel = open.then(|| {
-            let bounds = layout.bounds();
+        let bounds = layout.bounds();
+        let trigger = Rectangle {
+            x: bounds.x + translation.x,
+            y: bounds.y + translation.y,
+            ..bounds
+        };
+        // A pointer-following panel needs a pointer to follow: none, and it is not shown.
+        let follow = match self.position {
+            Position::FollowCursor => pointer_to_follow(
+                pointer.map(|at| Point::new(at.x + translation.x, at.y + translation.y)),
+                trigger,
+                viewport.size(),
+            )
+            .map(Some),
+            _ => Some(None),
+        };
+        let panel = follow.filter(|_| open).map(|pointer| {
             overlay::Element::new(Box::new(Panel {
                 tooltip: &mut self.tooltip,
                 tree: children.next().expect("the panel's tree"),
-                trigger: Rectangle {
-                    x: bounds.x + translation.x,
-                    y: bounds.y + translation.y,
-                    ..bounds
-                },
+                trigger,
+                pointer,
                 position: self.position,
                 gap: self.gap,
             }))
@@ -349,6 +410,8 @@ struct Panel<'a, 'b, M, Theme, Renderer> {
     tree: &'b mut Tree,
     /// The trigger's on-screen rectangle; everything is placed from it.
     trigger: Rectangle,
+    /// Where the pointer is on screen: `Some` exactly for [`Position::FollowCursor`].
+    pointer: Option<Point>,
     position: Position,
     gap: f32,
 }
@@ -364,13 +427,16 @@ where
             &layout::Limits::new(Size::ZERO, bounds).shrink(Padding::new(EDGE_PADDING)),
         );
 
-        let panel = place(
-            self.position,
-            self.trigger,
-            content.size(),
-            bounds,
-            self.gap,
-        );
+        let panel = match self.pointer {
+            Some(pointer) => place_at_pointer(pointer, content.size(), bounds, self.gap),
+            None => place(
+                self.position,
+                self.trigger,
+                content.size(),
+                bounds,
+                self.gap,
+            ),
+        };
 
         layout::Node::with_children(
             panel.size(),
@@ -426,11 +492,55 @@ fn place(
     }
 }
 
+/// Where a panel whose content measures `content` goes beside the pointer, in a window of `window`.
+///
+/// Per axis, after the pointer (right, below) with its visible edge `gap` from it; when that runs
+/// past the window's edge, before it (left, above); when neither fits, the side with more room.
+/// The window then slides the panel back inside. The panel never sits under the pointer while the
+/// window has room for it beside the pointer on either axis (feature 430, FR-002).
+fn place_at_pointer(pointer: Point, content: Size, window: Size, gap: f32) -> Rectangle {
+    let size = Size::new(
+        content.width + EDGE_PADDING * 2.0,
+        content.height + EDGE_PADDING * 2.0,
+    );
+    let origin = Point::new(
+        along(pointer.x, size.width, window.width, gap),
+        along(pointer.y, size.height, window.height, gap),
+    );
+    inside(Rectangle::new(origin, size), window)
+}
+
+/// Where a panel `extent` long starts along one axis of a window `window` long, for a pointer at
+/// `at`: after the pointer when it fits there, else before it, else on the side with more room.
+fn along(at: f32, extent: f32, window: f32, gap: f32) -> f32 {
+    // The panel is padded, but only the part inside the padding is visible: `gap` is measured to it.
+    let after = at + gap - EDGE_PADDING;
+    let before = at - gap + EDGE_PADDING - extent;
+    if after + extent <= window {
+        after
+    } else if before >= 0.0 {
+        before
+    } else if window - at >= at {
+        after
+    } else {
+        before
+    }
+}
+
+/// The pointer a pointer-following panel is placed from, when there is one to follow: it is known,
+/// the trigger has an area and the window has a size. Otherwise nothing is shown (contract,
+/// Behaviour 6).
+fn pointer_to_follow(pointer: Option<Point>, trigger: Rectangle, window: Size) -> Option<Point> {
+    let pointer = pointer.filter(|at| at.x.is_finite() && at.y.is_finite())?;
+    let sized = |w: f32, h: f32| w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0;
+    (sized(trigger.width, trigger.height) && sized(window.width, window.height)).then_some(pointer)
+}
+
 /// How far the window extends past `trigger` on `side`.
 fn room(side: Position, trigger: Rectangle, window: Size) -> f32 {
     match side {
         Position::Top => trigger.y,
-        Position::Bottom => window.height - (trigger.y + trigger.height),
+        Position::Bottom | Position::FollowCursor => window.height - (trigger.y + trigger.height),
         Position::Left => trigger.x,
         Position::Right => window.width - (trigger.x + trigger.width),
     }
@@ -440,7 +550,7 @@ fn room(side: Position, trigger: Rectangle, window: Size) -> f32 {
 fn opposite(position: Position) -> Position {
     match position {
         Position::Top => Position::Bottom,
-        Position::Bottom => Position::Top,
+        Position::Bottom | Position::FollowCursor => Position::Top,
         Position::Left => Position::Right,
         Position::Right => Position::Left,
     }
@@ -457,7 +567,9 @@ fn beside(side: Position, trigger: Rectangle, content: Size, gap: f32) -> Rectan
     let centred_y = trigger.y + (trigger.height - size.height) / 2.0;
     let origin = match side {
         Position::Top => Point::new(centred_x, trigger.y - gap - size.height),
-        Position::Bottom => Point::new(centred_x, trigger.y + trigger.height + gap),
+        Position::Bottom | Position::FollowCursor => {
+            Point::new(centred_x, trigger.y + trigger.height + gap)
+        }
         Position::Left => Point::new(trigger.x - gap - size.width, centred_y),
         Position::Right => Point::new(trigger.x + trigger.width + gap, centred_y),
     };
@@ -538,5 +650,218 @@ mod placement_tests {
             "no room to the right of a trigger at the window's right edge, so the panel opens to \
              its left, clear of it: trigger {trigger:?}, panel {panel:?}",
         );
+    }
+
+    // ---- the pointer-following placement (feature 430) ------------------------------------------
+
+    const WINDOW: Size = Size::new(400.0, 300.0);
+    const CONTENT: Size = Size::new(120.0, 30.0);
+
+    /// The part of `panel` that is drawn: inside its padding.
+    fn visible(panel: Rectangle) -> Rectangle {
+        Rectangle::new(
+            Point::new(panel.x + EDGE_PADDING, panel.y + EDGE_PADDING),
+            Size::new(
+                panel.width - EDGE_PADDING * 2.0,
+                panel.height - EDGE_PADDING * 2.0,
+            ),
+        )
+    }
+
+    fn contains_pointer(panel: Rectangle, pointer: Point) -> bool {
+        let v = visible(panel);
+        pointer.x > v.x
+            && pointer.x < v.x + v.width
+            && pointer.y > v.y
+            && pointer.y < v.y + v.height
+    }
+
+    /// US1.1: with room, the panel is after the pointer on both axes, its visible edge exactly `gap`
+    /// from it.
+    #[test]
+    fn a_pointer_panel_sits_beside_the_pointer_offset_by_the_gap() {
+        let pointer = Point::new(100.0, 80.0);
+
+        let v = visible(place_at_pointer(pointer, CONTENT, WINDOW, GAP));
+
+        assert_eq!(
+            v.x,
+            pointer.x + GAP,
+            "visible left edge is `gap` right of the pointer"
+        );
+        assert_eq!(
+            v.y,
+            pointer.y + GAP,
+            "visible top edge is `gap` below the pointer"
+        );
+    }
+
+    /// US1.2: no room on the right, so the panel opens on the pointer's left.
+    #[test]
+    fn a_pointer_panel_with_no_room_on_the_right_flips_left() {
+        let pointer = Point::new(380.0, 100.0);
+
+        let v = visible(place_at_pointer(pointer, CONTENT, WINDOW, GAP));
+
+        assert_eq!(
+            v.x + v.width,
+            pointer.x - GAP,
+            "visible right edge is `gap` left of it"
+        );
+        assert_eq!(v.y, pointer.y + GAP, "vertically still below");
+    }
+
+    /// US1.2: no room below, so the panel opens above the pointer.
+    #[test]
+    fn a_pointer_panel_with_no_room_below_flips_above() {
+        let pointer = Point::new(100.0, 285.0);
+
+        let v = visible(place_at_pointer(pointer, CONTENT, WINDOW, GAP));
+
+        assert_eq!(
+            v.y + v.height,
+            pointer.y - GAP,
+            "visible bottom edge is `gap` above it"
+        );
+        assert_eq!(v.x, pointer.x + GAP, "horizontally still after it");
+    }
+
+    /// US3.2: in the window's corner it flips on both axes, stays inside and is clear of the pointer.
+    #[test]
+    fn a_pointer_panel_in_the_corner_flips_on_both_axes() {
+        let pointer = Point::new(395.0, 295.0);
+
+        let panel = place_at_pointer(pointer, CONTENT, WINDOW, GAP);
+        let v = visible(panel);
+
+        assert_eq!(v.x + v.width, pointer.x - GAP);
+        assert_eq!(v.y + v.height, pointer.y - GAP);
+        assert!(panel.x >= 0.0 && panel.y >= 0.0, "inside: {panel:?}");
+        assert!(panel.x + panel.width <= WINDOW.width && panel.y + panel.height <= WINDOW.height);
+    }
+
+    /// Neither side fits on an axis: the side with more room, slid back inside.
+    #[test]
+    fn a_pointer_panel_that_fits_neither_side_takes_the_side_with_more_room() {
+        let window = Size::new(400.0, 150.0);
+        // 110px of panel in 50px above and 100px below the pointer.
+        let content = Size::new(120.0, 100.0);
+        let below = place_at_pointer(Point::new(100.0, 50.0), content, window, GAP);
+        let above = place_at_pointer(Point::new(100.0, 100.0), content, window, GAP);
+
+        assert_eq!(
+            below.y, 40.0,
+            "more room below: after the pointer, slid up to fit: {below:?}"
+        );
+        assert_eq!(
+            above.y, 0.0,
+            "more room above: before the pointer, slid down to fit: {above:?}"
+        );
+        assert!(
+            !contains_pointer(below, Point::new(100.0, 50.0)),
+            "x axis stays clear"
+        );
+    }
+
+    /// Edge case: a window smaller than the panel keeps it as far inside as it goes.
+    #[test]
+    fn a_pointer_panel_in_a_window_too_small_stays_inside() {
+        let panel = place_at_pointer(
+            Point::new(30.0, 20.0),
+            Size::new(80.0, 60.0),
+            Size::new(60.0, 40.0),
+            GAP,
+        );
+
+        assert_eq!((panel.x, panel.y), (0.0, 0.0), "{panel:?}");
+    }
+
+    /// SC-001, US1: across the window, inside it and never under the pointer.
+    #[test]
+    fn a_pointer_panel_is_inside_the_window_and_never_under_the_pointer() {
+        for ix in 0..=40 {
+            for iy in 0..=30 {
+                let pointer = Point::new(ix as f32 * 10.0, iy as f32 * 10.0);
+
+                let panel = place_at_pointer(pointer, CONTENT, WINDOW, GAP);
+
+                assert!(
+                    panel.x >= 0.0
+                        && panel.y >= 0.0
+                        && panel.x + panel.width <= WINDOW.width
+                        && panel.y + panel.height <= WINDOW.height,
+                    "pointer {pointer:?} placed {panel:?} outside the window",
+                );
+                assert!(
+                    !contains_pointer(panel, pointer),
+                    "pointer {pointer:?} placed {panel:?} under it",
+                );
+            }
+        }
+    }
+
+    /// Behaviour 6: nothing to follow, nothing opens.
+    #[test]
+    fn a_pointer_panel_needs_a_pointer_a_trigger_with_an_area_and_a_window_with_a_size() {
+        let at = Some(Point::new(10.0, 10.0));
+        let trigger = Rectangle::new(Point::new(0.0, 0.0), Size::new(100.0, 40.0));
+        let no_width = Rectangle::new(Point::ORIGIN, Size::new(0.0, 40.0));
+        let no_height = Rectangle::new(Point::ORIGIN, Size::new(100.0, 0.0));
+
+        assert_eq!(
+            pointer_to_follow(at, trigger, WINDOW),
+            at,
+            "the working case"
+        );
+        assert_eq!(pointer_to_follow(None, trigger, WINDOW), None, "no pointer");
+        assert_eq!(
+            pointer_to_follow(at, no_width, WINDOW),
+            None,
+            "a trigger with no width"
+        );
+        assert_eq!(
+            pointer_to_follow(at, no_height, WINDOW),
+            None,
+            "a trigger with no height"
+        );
+        assert_eq!(
+            pointer_to_follow(at, trigger, Size::ZERO),
+            None,
+            "a window of no size"
+        );
+        assert_eq!(
+            pointer_to_follow(at, trigger, Size::new(f32::INFINITY, 300.0)),
+            None
+        );
+    }
+
+    // ---- every fixed placement keeps clear of its trigger (029 FR-013; 430 SC-003, SC-006) ------
+
+    /// US3.1: a trigger at each of the window's four edges, every side asked for: the panel does not
+    /// cover the trigger, as the window has room on one side or the other for it.
+    #[test]
+    fn every_fixed_placement_keeps_clear_of_a_trigger_at_each_window_edge() {
+        let size = Size::new(100.0, 40.0);
+        let triggers = [
+            ("left", Rectangle::new(Point::new(0.0, 130.0), size)),
+            ("right", Rectangle::new(Point::new(300.0, 130.0), size)),
+            ("top", Rectangle::new(Point::new(150.0, 0.0), size)),
+            ("bottom", Rectangle::new(Point::new(150.0, 260.0), size)),
+        ];
+        for position in [
+            Position::Top,
+            Position::Bottom,
+            Position::Left,
+            Position::Right,
+        ] {
+            for (edge, trigger) in triggers {
+                let panel = place(position, trigger, CONTENT, WINDOW, GAP);
+
+                assert!(
+                    !covers(panel, trigger),
+                    "{position:?} over a trigger at the {edge} edge covers it: {panel:?}",
+                );
+            }
+        }
     }
 }

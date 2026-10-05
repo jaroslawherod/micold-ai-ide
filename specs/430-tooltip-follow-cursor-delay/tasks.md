@@ -12,24 +12,24 @@ Paths: `core` = `crates/micold-core`, `client` = `crates/micold-client`, `cdk` =
 
 ## Phase 1: Foundational (the wait mode)
 
-- [ ] T001 Guard (characterization, green before and after T002; exempt from red-first): the existing tooltip tests are the proof the wait refactor changes nothing (run the existing `client/tests/tooltip_rest_glue.rs` and `client/tests/idle_requests_no_frames.rs` unchanged as the guard; SC-004)
-- [ ] T002 Replace `rest: Option<Duration>` with `pub(crate) enum Wait { Hover, Rest(Duration) }` in `cdk` (`after_rest` sets `Rest`); `material::Tooltip` in `client/src/ui/material/mod.rs` holds a `Wait` too. `Delay` joins the enum in T016. All existing tooltip tests pass unchanged.
+- [x] T001 Guard (characterization, green before and after T002; exempt from red-first): the existing tooltip tests are the proof the wait refactor changes nothing (run the existing `client/tests/tooltip_rest_glue.rs` and `client/tests/idle_requests_no_frames.rs` unchanged as the guard; SC-004)
+- [x] T002 Replace `rest: Option<Duration>` with `pub(crate) enum Wait { Hover, Rest(Duration) }` in `cdk` (`after_rest` sets `Rest`); `material::Tooltip` in `client/src/ui/material/mod.rs` holds a `Wait` too. `Delay` joins the enum in T016. All existing tooltip tests pass unchanged.
 
 **Foundational, core**: the pure delay rule, used by the follow placement (T008) and later by `show_delay` (T016).
 
-- [ ] T011 Test (red): `core/tests/tooltip_show.rs`: `ShowTimer` table of data-model.md (no open before D, open at D, movement never restarts, leave cancels, zero delay opens at once, press then leave, reset, `wake_at` only while waiting)
-- [ ] T012 Implement `ShowTimer` in `core/src/tooltip.rs` (T011 green)
+- [x] T011 Test (red): `core/tests/tooltip_show.rs`: `ShowTimer` table of data-model.md (no open before D, open at D, movement never restarts, leave cancels, zero delay opens at once, press then leave, reset, `wake_at` only while waiting)
+- [x] T012 Implement `ShowTimer` in `core/src/tooltip.rs` (T011 green)
 
 ## Phase 2: User Story 1 + 3 - pointer-following placement (P1) 🎯 MVP
 
-- [ ] T003 [US1] Test (red): `placement_tests` in `cdk` for `place_at_pointer`: beside and offset by `gap` (assert the exact offset, `gap` from the pointer to the visible edge); right edge flips left; bottom edge flips above; corner flips both; fits neither takes the side with more room; window too small stays inside; visible panel never contains the pointer while a side has room (US1.1, US1.2, US3.2, SC-001)
-- [ ] T004 [US3] Guard test (characterization, green on arrival): `placement_tests` in `cdk` that every fixed placement with a trigger at each of the four window edges does not cover the trigger while a side has room (US3.1, SC-003, SC-006)
-- [ ] T005 [US1] Implement `Position::FollowCursor` and `place_at_pointer` in `cdk` (T003 green)
-- [ ] T006 [US1] Test (red): `client/tests/tooltip_show_glue.rs` + new builder helper in `client/tests/support/tooltip.rs` (existing helper unchanged): follow panel opens at the pointer; a pointer move while open re-lays it out; a still pointer requests nothing; leaving closes; a press closes until leave; subject change closes; a trigger scrolled from under a still cursor closes on redraw (US1.1, US1.3, edge cases)
-- [ ] T007 [US1] Test (red): `cdk` unit test that no pointer, a zero-size trigger or an unknown window size opens nothing (contracts/tooltip-api.md, Behaviour 6)
-- [ ] T009 [US1] Test (red): `client/tests/idle_requests_no_frames.rs`: a follow tooltip that is open with a still pointer, or closed, requests no frame (FR-007, SC-005)
-- [ ] T008 [US1] Implement in `cdk`: `State.pointer`, recorded in `update`; `overlay()` reads it, adds `translation`, passes it to `Panel`; `FollowCursor` with `Wait::Hover` runs the delay rule with zero delay (uses `ShowTimer` from T012); guard of T007
-- [ ] T010 [P] [US1] Expose `FollowCursor` through `material::TooltipPosition` (re-export already covers it) and add the "follows the pointer" pose (large trigger) to `client/src/showcase/sections/floating.rs`
+- [x] T003 [US1] Test (red): `placement_tests` in `cdk` for `place_at_pointer`: beside and offset by `gap` (assert the exact offset, `gap` from the pointer to the visible edge); right edge flips left; bottom edge flips above; corner flips both; fits neither takes the side with more room; window too small stays inside; visible panel never contains the pointer while a side has room (US1.1, US1.2, US3.2, SC-001)
+- [x] T004 [US3] Guard test (characterization, green on arrival): `placement_tests` in `cdk` that every fixed placement with a trigger at each of the four window edges does not cover the trigger while a side has room (US3.1, SC-003, SC-006)
+- [x] T005 [US1] Implement `Position::FollowCursor` and `place_at_pointer` in `cdk` (T003 green)
+- [x] T006 [US1] Test (red): `client/tests/tooltip_show_glue.rs` + new builder helper in `client/tests/support/tooltip.rs` (existing helper unchanged): follow panel opens at the pointer; a pointer move while open re-lays it out; a still pointer requests nothing; leaving closes; a press closes until leave; subject change closes; a trigger scrolled from under a still cursor closes on redraw (US1.1, US1.3, edge cases)
+- [x] T007 [US1] Test (red): `cdk` unit test that no pointer, a zero-size trigger or an unknown window size opens nothing (contracts/tooltip-api.md, Behaviour 6)
+- [x] T009 [US1] Test (red): `client/tests/idle_requests_no_frames.rs`: a follow tooltip that is open with a still pointer, or closed, requests no frame (FR-007, SC-005)
+- [x] T008 [US1] Implement in `cdk`: `State.pointer`, recorded in `update`; `overlay()` reads it, adds `translation`, passes it to `Panel`; `FollowCursor` with `Wait::Hover` runs the delay rule with zero delay (uses `ShowTimer` from T012); guard of T007
+- [x] T010 [P] [US1] Expose `FollowCursor` through `material::TooltipPosition` (re-export already covers it) and add the "follows the pointer" pose (large trigger) to `client/src/showcase/sections/floating.rs`
 - [ ] T019 [US1] Run quickstart §B steps 1–3 and 6 through the `visual-pass` skill; record evidence in `specs/430-tooltip-follow-cursor-delay/visual-pass.md`
 
 ## Phase 3: User Story 2 - show delay (P2)

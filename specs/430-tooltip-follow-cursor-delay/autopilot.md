@@ -9,15 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #430
 - **Worktree branch**: fix/issue-430
 - **Started**: 2026-10-05
-- **Phase**: design
-- **Next step**: orchestrator: wait for the design PR to merge, then milestone M1
+- **Phase**: milestone M1
+- **Next step**: full gate (`mise run gate`), then open the M1 PR; T019 visual pass blocked (see Handover)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #594 | Spec | merged | 5ae41ab8c09440cc64a73f0fb24317185bce43af |
-| #596 | Design (clarify, plan, tasks) | open | |
+| #596 | Design (clarify, plan, tasks) | merged | 47ae6297d5e472d802897310d574e25d53bea3d3 |
 
 ## Milestones
 
@@ -44,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A tasks 430 | 2 | bd1c9cf0 | CHANGES: 1 MAJOR (T019 order, fixed) |
 | Review A tasks 430 | 3 | 037380d0:70d1227f | CLEAN |
 | Review A plan 430 | 1 | a3eb3d60:29382409 | CLEAN (3 MINOR, applied) |
+| Review A M1 430 | 1 | 269bde8a:81c36f8b | CLEAN (1 MINOR: glue harness cannot see invalidate_layout; not applied) |
+| Review B M1 430 | 1 | 269bde8a:81c36f8b | CLEAN (1 MINOR: no tdd cycle-log) |
 
 ## Declined review findings
 
@@ -52,8 +54,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 code, tests and showcase pose are written and uncommitted in the worktree (T001-T012 ticked; T019 open). Local checks green: core `tooltip_show` (12), client lib tooltip tests, `tooltip_show_glue`, `idle_requests_no_frames`, `tooltip_rest_glue`; clippy not re-run after the `spacing::MD` fix. Reviews A and B are CLEAN. The scoped gate (log in scratchpad `sg.log`) has waited hours on the build lock held by other worktrees; a kill of it and a `MICOLD_NO_BUILD_LOCK=1` full gate were denied by the permission classifier, so no gate has run on the final tree.
+Open: (1) run `mise run gate` (wait for the lock), commit, push, open the PR; (2) T019: this machine has no Xvfb/xdotool, so the visual pass could not run (note in visual-pass.md); install them or the orchestrator accepts T019 as not run; (3) TDD note: implementation was written before the placement/glue tests, so there is no red evidence for T003/T006/T007/T009 (T011 was seen red: missing `ShowTimer`).
+Design note: a `subject()` change on a follow tooltip with no delay reopens at once on the next observation (the zero-delay rule), it does not stay closed.
 
 ## Open escalation
 
