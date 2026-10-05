@@ -815,11 +815,11 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 
 ## Cycles 74-75 (M3): the save schedule of a running terminal (U65-U71)
 
-- test: `crates/micold-core/tests/terminal_history_schedule.rs` (new), written first against a stub whose `due` is never true (commit `bafd637d`)
+- test: `crates/micold-core/tests/terminal_history_schedule.rs` (new), written first against a stub whose `due` is never true (commit `3fa3b5aa`)
 - red: the stub's run failed the cases that expect a save; the cases that expect none passed against it, as a stub that is never due would
-- green: `SaveSchedule` in `schedule.rs` (commit `f3ad3d85`)
+- green: `SaveSchedule` in `schedule.rs` (commit `1456f140`)
 - refactor: none
-- commit: `feat(041): SaveSchedule — a running terminal is due when its output moved and 30 s passed (T027)` (`f3ad3d85`)
+- commit: `feat(041): SaveSchedule — a running terminal is due when its output moved and 30 s passed (T027)` (`1456f140`)
 
 ## Cycle 76 (M3): the saver saves a running terminal when due, off the state lock and under its gate (U72-U78)
 
