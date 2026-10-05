@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review A spec 430 | 1 | 7288a534:431b4987 | CHANGES: 4 MAJOR |
 | Review A spec 430 | 2 | b7d68903:431b4987 | CLEAN (3 MINOR, applied) |
+| Review A plan 430 | 1 | a3eb3d60:29382409 | CLEAN (3 MINOR, applied) |
 
 ## Declined review findings
 
