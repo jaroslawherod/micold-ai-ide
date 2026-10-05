@@ -472,3 +472,29 @@ fn a_default_caller_gets_the_same_cross_session_decisions_as_a_worktree_caller()
         }
     }
 }
+
+/// Feature 582, FR-015: attaching changes a worktree's ownership, so a Default caller is refused
+/// outright with the Principle III text; a worktree caller may attach, and listing resumable
+/// sessions is open to every caller.
+#[test]
+fn a_default_caller_is_refused_attach_worktree_and_may_list_resumable_sessions() {
+    let attach = Operation::AttachWorktree {
+        worktree: "wt-a".into(),
+    };
+    let error = refusal(decide_for(SessionLocation::Default, &attach));
+    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
+    assert!(error.message.contains("Principle III"), "{}", error.message);
+    assert!(error.message.contains("attach"), "{}", error.message);
+    assert_eq!(
+        decide_for(in_worktree("a"), &attach),
+        PolicyDecision::Proceed
+    );
+    let list = Operation::ListResumableSessions {
+        limit: 50,
+        offset: 0,
+        worktree: None,
+    };
+    for location in [SessionLocation::Default, in_worktree("a")] {
+        assert_eq!(decide_for(location, &list), PolicyDecision::Proceed);
+    }
+}

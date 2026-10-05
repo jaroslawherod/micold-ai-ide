@@ -204,6 +204,7 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
     match tool {
         "create_worktree" => json!({"branch": "audit-ok"}),
         "rename_worktree" => json!({"worktree": "b", "display_name": "Audited"}),
+        "attach_worktree" => json!({"worktree": "b"}),
         "create_session" => json!({"worktree": "b", "ai_cli": "copilot"}),
         "start_session" => json!({"session": caller.0.to_string()}),
         // An idle session: a no-op success, asked of nobody.
@@ -236,6 +237,7 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
             (json!({}), ErrorCategory::InvalidInput),
             (json!({"branch": "taken"}), ErrorCategory::Conflict),
         ],
+        "attach_worktree" => vec![(json!({"worktree": "nope"}), ErrorCategory::NotFound)],
         "rename_worktree" => vec![
             (json!({"worktree": "b"}), ErrorCategory::InvalidInput),
             (

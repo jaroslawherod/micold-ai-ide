@@ -107,6 +107,12 @@ pub enum ConfirmedOp {
 const PRINCIPLE_III: &str = "a session running in the project root (Default) may not rename or \
     delete worktrees (Constitution Principle III); ask from a session that runs in a worktree";
 
+/// The refusal a Default session gets for attaching a worktree (feature 582, FR-015): attaching
+/// changes the worktree's ownership, which Principle III keeps from a Default session.
+const PRINCIPLE_III_ATTACH: &str =
+    "a session running in the project root (Default) may not attach \
+    worktrees (Constitution Principle III); ask from a session that runs in a worktree";
+
 /// The refusal both cross-session tools get while the FR-016 option is Off.
 const CROSS_SESSION_OFF: &str = "reading and typing into other sessions is turned off in Settings \
     (\"Let agents read and type into other sessions\")";
@@ -131,6 +137,7 @@ pub fn decide(
         {
             refused(PRINCIPLE_III)
         }
+        Operation::AttachWorktree { .. } if caller.is_default() => refused(PRINCIPLE_III_ATTACH),
         Operation::DeleteWorktree {
             worktree: WorktreeRef::Named(name),
             ..

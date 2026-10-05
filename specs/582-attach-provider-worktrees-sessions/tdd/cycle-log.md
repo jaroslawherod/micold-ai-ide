@@ -41,3 +41,20 @@ T011) served as the list. Red evidence below is the real failure of each test be
 - T023 deviation: the "already running" refusal lives in `Catalog::attach_session`, not in `start_session_gated` (which stays an idempotent start).
 - Wire: `RefuseReason::AlreadyRunning` was added. `PROTOCOL_VERSION` stays 28 (M1 already moved it for
   this feature and the schema hash is recomputed); `schema_hash` and `handshake` tests pass.
+
+## M3
+
+- **T027/T029** `micold-core/tests/mcp_tools_catalog.rs`, `mcp_policy.rs`. Red: `no variant named
+  AttachWorktree found for enum Operation` (and `ListResumableSessions`), 2 errors per test binary.
+  Green: catalog 33 passed, policy 20 passed (`Operation::{AttachWorktree, ListResumableSessions}`,
+  `PRINCIPLE_III_ATTACH` arm beside rename/delete).
+- **T028/T030** `micold-daemon/tests/attach_mcp.rs`. Written with the handlers absent: the daemon
+  crate failed to compile (`non-exhaustive patterns: Operation::AttachWorktree`), the red for the
+  whole file. Green: 7 passed. Two expectations were corrected after the first run, both against the
+  fixture and not the code: the caller's own worktree `b` is already attached, so the by-path test
+  uses `c`; a worktree outside the managed directory is not in the project's list unless the user
+  included it, so it is `not_found` (contract amended).
+- Deviations: `provider` is `claude_code` (the `tool_name` every other tool uses), `total` counts at
+  most the 200 newest sessions discovery returns.
+- mcp_audit_log.rs enumerates every mutating tool: added attach_worktree success and failure calls (found by the full gate).
+- mcp_binding_spawn.rs (catalog list) and mcp_read_latency.rs (SC-004 timing, `list_resumable_sessions` with no arguments) enumerate tools: updated for the two new ones (found by the full gate).
