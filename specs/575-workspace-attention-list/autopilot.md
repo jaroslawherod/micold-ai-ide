@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: plan
-- **Next step**: plan unit (clarify on the rewritten spec CLEAN after round 1: one agent-resolved question, no requirement changed).
+- **Phase**: tasks
+- **Next step**: tasks unit (plan CLEAN after round 1; plan, research, data model, quickstart and contract committed).
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec 575 | 1 | 30231c55b37effe9790da6ea31243981031aa938:937ae9f7da42e25571db7b988153f707ba931e3e | CLEAN: 3 MINOR (all fixed, prose only) — superseded by the rewrite |
 | Spec 575 (rewrite) | 1 | 84afa026eb373957d3319604344384c2c53d8ee4:6075557947bfb5e1361568a3fa8ad0408ce9d424 | CLEAN: 3 MINOR (all fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
+| Plan 575 | 1 | a544cbbec276b6e538a862790af2b637ccd7a155:d7bf4f9b57b064be396b814b2bc37f390bf39002 | CLEAN: 2 MINOR (both fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 
 ## Declined review findings
 
