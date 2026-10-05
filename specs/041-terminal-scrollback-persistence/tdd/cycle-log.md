@@ -812,3 +812,20 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - cause: the directory's entry was `(A;OICI;GA;;;<sid>)`. Windows stores an inheritable entry with a generic right on a directory as two: one effective with the right mapped to the file rights, one inherit-only with the generic right. The file's entry has no inheritance flags, so it stays one. The SDDL came unchanged from the daemon's helper, whose test never read the directory's DACL.
 - green: `ensure_dir` writes `(A;OICI;FA;;;<sid>)`: the file rights by name, nothing to map, one entry. Not runnable here; the Windows leg of the next CI run is the proof. Locally: `cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` and `mise run gate`.
 - refactor: none
+
+## Cycles 74-75 (M3): the save schedule of a running terminal (U65-U71)
+
+- test: `crates/micold-core/tests/terminal_history_schedule.rs` (new), written first against a stub whose `due` is never true (commit `bafd637d`)
+- red: the stub's run failed the cases that expect a save; the cases that expect none passed against it, as a stub that is never due would
+- green: `SaveSchedule` in `schedule.rs` (commit `f3ad3d85`)
+- refactor: none
+- commit: `feat(041): SaveSchedule — a running terminal is due when its output moved and 30 s passed (T027)` (`f3ad3d85`)
+
+## Cycle 76 (M3): the saver saves a running terminal when due, off the state lock and under its gate (U72-U78)
+
+- test: `crates/micold-daemon/tests/history_periodic_save.rs` (new): U72, U73, U74, U75, U76, U77, U78 and one case for FR-005 (input and a resize during saves)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test history_periodic_save` against a `save_due_at` that returns at once (the test written after the saver, then the saver stubbed to prove it): `test result: FAILED. 2 passed; 6 failed`. U72, U73, U74, U75, U77 and U78 failed (`no saved history` or `the file is there`); U76 (a Regular Terminal, nothing saved) and the FR-005 case pass against a saver that does nothing, as they would
+- green: `DaemonState::save_due_at` with `history::Saver` (a `SaveSchedule` per covered live terminal, keyed by session and by process, so a restarted process starts a new one; failures logged once per session and reason), and `spawn_history_saver` in `server.rs`. Same command: `test result: ok. 8 passed; 0 failed`
+- refactor: none
+- notes: the stub was put in after the code, so this red is shown by mutation, not by a red run before the code. Input needs a rising serial per session: the first version of the tests reused serial 0 and the stand-in saw only the first line. The saver holds the session's gate from the check that the process is still the live one until its file is written, so a stop's final save is never overwritten by an older one. The saver task is spawned in `server.rs` beside the supervision tick, not in `main.rs`, which only calls `run`.
+- commit: `feat(041): the saver saves a running terminal when due, off the state lock and under its gate (T026, T028-T030)`

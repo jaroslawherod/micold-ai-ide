@@ -5,6 +5,7 @@
 //! The saver is driven by hand: `save_due_at(now)` is called with readings of a clock the test
 //! moves, so no test waits 30 seconds. Output after the start is typed into the session, which
 //! the terminal echoes. These run on Unix, where the echo is.
+// unix-only: the cases print by typing into the session, which a Unix terminal echoes
 #![cfg(unix)]
 
 #[path = "support/history.rs"]
