@@ -184,6 +184,17 @@ pub enum Operation {
     DeleteSession {
         session: SessionRef,
     },
+    /// Attach a provider's worktree: a `dir_name`, an absolute path or a branch, resolved by the
+    /// daemon (feature 582, FR-005).
+    AttachWorktree {
+        worktree: String,
+    },
+    /// Sessions in the provider stores that the catalog does not hold, newest first (FR-011).
+    ListResumableSessions {
+        limit: usize,
+        offset: usize,
+        worktree: Option<WorktreeRef>,
+    },
     /// Give a worktree (never `default`) a new display name; `display_name` is trimmed and
     /// non-blank, as the rename dialog requires.
     RenameWorktree {
@@ -215,6 +226,8 @@ impl Operation {
             Operation::StopSession { .. } => "stop_session",
             Operation::InterruptSession { .. } => "interrupt_session",
             Operation::DeleteSession { .. } => "delete_session",
+            Operation::AttachWorktree { .. } => "attach_worktree",
+            Operation::ListResumableSessions { .. } => "list_resumable_sessions",
             Operation::RenameWorktree { .. } => "rename_worktree",
             Operation::DeleteWorktree { .. } => "delete_worktree",
         }
@@ -226,6 +239,11 @@ impl Operation {
         match self {
             Operation::Whoami | Operation::ListBranches => String::new(),
             Operation::ListWorktrees { .. } => String::new(),
+            Operation::ListResumableSessions { worktree, .. } => worktree
+                .as_ref()
+                .map(|w| w.as_str().to_string())
+                .unwrap_or_default(),
+            Operation::AttachWorktree { worktree } => worktree.clone(),
             Operation::ListSessions { worktree } => worktree
                 .as_ref()
                 .map(|w| w.as_str().to_string())
@@ -346,6 +364,27 @@ const TOOLS: &[Tool] = &[
         shipped: true,
     },
     Tool {
+        name: "list_resumable_sessions",
+        description: "List the sessions the AI CLIs recorded for this project that the app does \
+            not hold (find them with list_sessions otherwise), newest first, with the worktree \
+            each ran in and whether it can be resumed. Reads only; resuming one is the app's \
+            action. Attach its worktree with attach_worktree to bring its adopted sessions back.",
+        properties: || {
+            json!({
+                "limit": {"type": "integer", "minimum": 1, "maximum": MAX_RESUMABLE_LIMIT,
+                    "default": DEFAULT_RESUMABLE_LIMIT,
+                    "description": "The most sessions to return."},
+                "offset": {"type": "integer", "minimum": 0, "default": 0,
+                    "description": "How many of the newest sessions to skip."},
+                "worktree": worktree_property(),
+            })
+        },
+        required: &[],
+        read_only: true,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
         name: "read_session_output",
         description: "Read the most recent lines another session of the project showed in its \
             terminal, as plain text: lines (default 200, at most 2000) counts from the end, and \
@@ -388,6 +427,23 @@ const TOOLS: &[Tool] = &[
             })
         },
         required: &["branch"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "attach_worktree",
+        description: "Attach a worktree an AI CLI created, so the sidebar lists it and its \
+            sessions, without deleting or recreating it. worktree is its directory name, its \
+            absolute path or its branch; nothing is checked out or moved. Reports whether it was \
+            attached or already attached. A session running in the project root (Default) is \
+            refused.",
+        properties: || {
+            json!({"worktree": {"type": "string", "minLength": 1,
+                "description": "A dir_name from list_worktrees (include_hidden), an absolute \
+                    path, or a branch name."}})
+        },
+        required: &["worktree"],
         read_only: false,
         destructive: false,
         shipped: true,
@@ -619,6 +675,19 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         "delete_session" => Operation::DeleteSession {
             session: required_session(args, "session")?,
         },
+        "attach_worktree" => Operation::AttachWorktree {
+            worktree: required_string(args, "worktree")?,
+        },
+        "list_resumable_sessions" => Operation::ListResumableSessions {
+            limit: bounded_count(
+                args,
+                "limit",
+                DEFAULT_RESUMABLE_LIMIT,
+                Some(MAX_RESUMABLE_LIMIT),
+            )?,
+            offset: bounded_count(args, "offset", 0, None)?,
+            worktree: optional_worktree(args, "worktree")?,
+        },
         "rename_worktree" => Operation::RenameWorktree {
             worktree: named_worktree(args, "worktree", "renamed")?,
             display_name: display_name(args, "display_name")?,
@@ -630,6 +699,35 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         },
         _ => unreachable!("every catalog entry is parsed above"),
     })
+}
+
+/// The default and the largest `limit` of `list_resumable_sessions`.
+pub const DEFAULT_RESUMABLE_LIMIT: usize = 50;
+pub const MAX_RESUMABLE_LIMIT: usize = 200;
+
+/// A whole number that is at least 0 (`limit` also at least 1), at most `max` when given.
+fn bounded_count(
+    args: &Map<String, Value>,
+    key: &str,
+    default: usize,
+    max: Option<usize>,
+) -> Result<usize, OpError> {
+    let min = usize::from(key == "limit");
+    let invalid = || {
+        OpError::invalid_input(match max {
+            Some(max) => format!("{key} must be a whole number from {min} to {max}"),
+            None => format!("{key} must be a whole number of at least {min}"),
+        })
+    };
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|n| *n >= min && max.is_none_or(|max| *n <= max))
+            .ok_or_else(invalid),
+        Some(_) => Err(invalid()),
+    }
 }
 
 fn optional_bool(args: &Map<String, Value>, key: &str) -> Result<Option<bool>, OpError> {

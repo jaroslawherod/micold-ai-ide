@@ -14,24 +14,27 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 /// The read-only tools, shipped in milestone M1.
-const READ_TOOLS: [&str; 6] = [
+const READ_TOOLS: [&str; 7] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
+    "list_resumable_sessions",
     "read_session_output",
 ];
 
 /// The tools whose handlers ship by milestone M6, in catalog order.
-const SHIPPED: [&str; 15] = [
+const SHIPPED: [&str; 17] = [
     "whoami",
     "list_worktrees",
     "list_branches",
     "list_sessions",
     "get_session",
+    "list_resumable_sessions",
     "read_session_output",
     "create_worktree",
+    "attach_worktree",
     "rename_worktree",
     "delete_worktree",
     "create_session",
@@ -606,4 +609,64 @@ fn only_send_session_input_is_a_mutating_cross_session_tool() {
         !format!("{operation:?}").contains("secret-text"),
         "input text must not be printable through Debug (FR-018)"
     );
+}
+
+/// Feature 582, FR-005, FR-011, FR-015 (contracts/attach-worktree-tool.md,
+/// contracts/list-resumable-sessions-tool.md).
+#[test]
+fn attach_worktree_takes_one_reference_and_is_audited_but_not_destructive() {
+    assert_eq!(
+        parse_call("attach_worktree", &json!({"worktree": "wt-a"})).unwrap(),
+        Operation::AttachWorktree {
+            worktree: "wt-a".into()
+        }
+    );
+    invalid("attach_worktree", json!({}));
+    invalid("attach_worktree", json!({"worktree": ""}));
+    invalid("attach_worktree", json!({"worktree": 3}));
+    invalid("attach_worktree", json!({"worktree": "a", "extra": true}));
+    assert!(is_mutating_tool("attach_worktree"));
+    let tools = tools_list();
+    let tool = tools
+        .iter()
+        .find(|t| t["name"] == "attach_worktree")
+        .unwrap();
+    assert_eq!(tool["annotations"]["readOnlyHint"], json!(false));
+    assert_eq!(tool["annotations"]["destructiveHint"], json!(false));
+    assert_eq!(tool["inputSchema"]["required"], json!(["worktree"]));
+    let description = tool["description"].as_str().unwrap();
+    assert!(
+        description.contains("(Default) is refused"),
+        "an agent in the project root is told up front: {description}"
+    );
+}
+
+#[test]
+fn list_resumable_sessions_pages_with_a_limit_and_an_offset() {
+    assert_eq!(
+        parse_call("list_resumable_sessions", &json!({})).unwrap(),
+        Operation::ListResumableSessions {
+            limit: 50,
+            offset: 0,
+            worktree: None
+        }
+    );
+    assert_eq!(
+        parse_call(
+            "list_resumable_sessions",
+            &json!({"limit": 200, "offset": 7, "worktree": "wt-a"})
+        )
+        .unwrap(),
+        Operation::ListResumableSessions {
+            limit: 200,
+            offset: 7,
+            worktree: Some(WorktreeRef::Named("wt-a".into()))
+        }
+    );
+    invalid("list_resumable_sessions", json!({"limit": 0}));
+    invalid("list_resumable_sessions", json!({"limit": 201}));
+    invalid("list_resumable_sessions", json!({"limit": -1}));
+    invalid("list_resumable_sessions", json!({"offset": -1}));
+    invalid("list_resumable_sessions", json!({"offset": "1"}));
+    assert!(!is_mutating_tool("list_resumable_sessions"));
 }

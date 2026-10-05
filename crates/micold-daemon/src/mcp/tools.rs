@@ -115,6 +115,7 @@ async fn dispatch(
             worktree,
             display_name,
         } => rename_worktree(&state, caller, worktree, display_name).await,
+        Operation::AttachWorktree { worktree } => attach_worktree(&state, caller, worktree).await,
         Operation::StopSession { session } => stop_session(&state, caller, session, hangup).await,
         Operation::InterruptSession { session } => {
             interrupt_session(&state, caller, session, hangup).await
@@ -177,9 +178,21 @@ fn read_call(
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
+        Operation::ListResumableSessions {
+            limit,
+            offset,
+            worktree,
+        } => Ok(list_resumable_sessions(
+            state,
+            &project,
+            limit,
+            offset,
+            worktree.as_ref(),
+        )),
         Operation::CreateWorktree { .. }
         | Operation::CreateSession { .. }
         | Operation::StartSession { .. }
+        | Operation::AttachWorktree { .. }
         | Operation::RenameWorktree { .. }
         | Operation::SendSessionInput { .. }
         | Operation::StopSession { .. }
@@ -751,6 +764,198 @@ async fn rename_worktree(
     })
     .await?;
     worktree_row(state, caller, dir_name).await
+}
+
+/// `attach_worktree` (feature 582, contracts/attach-worktree-tool.md): policy first (FR-015, a
+/// Default caller is refused outright), then the reference is resolved against a live read of the
+/// project's worktrees, then the same attach the app's dialog performs. A refused or unknown
+/// reference changes nothing.
+async fn attach_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    reference: String,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
+    check_policy(
+        &who,
+        &Operation::AttachWorktree {
+            worktree: reference.clone(),
+        },
+    )?;
+    if reference == WorktreeRef::DEFAULT {
+        return Err(OpError::invalid_input(
+            "\"default\" is the project root, not a worktree; it cannot be attached",
+        ));
+    }
+
+    let st = Arc::clone(state);
+    blocking(move || {
+        use micold_core::attach::{AttachItem, AttachOutcome, RefuseReason};
+        // A live read, so a worktree removed since the last refresh cannot be attached.
+        st.refresh_worktrees(&project.path);
+        let (_, project) = resolve_caller(&st, caller)?;
+        let target = resolve_worktree_reference(&reference, &project.worktrees)?;
+        let results = st
+            .attach_apply(
+                &project.path,
+                &[AttachItem::Worktree {
+                    dir_name: target.dir_name.clone(),
+                }],
+            )
+            .map_err(|e| OpError::service_error(format!("could not save the attach: {e}")))?;
+        let outcome = match results.first().map(|r| r.outcome) {
+            Some(AttachOutcome::Attached) => {
+                st.broadcast_catalog();
+                "attached"
+            }
+            Some(AttachOutcome::AlreadyAttached) => "already_attached",
+            Some(AttachOutcome::Refused(RefuseReason::IoFailed)) | None => {
+                return Err(OpError::service_error(
+                    "the catalog could not be written; nothing was attached",
+                ))
+            }
+            Some(AttachOutcome::Refused(RefuseReason::Unavailable)) => {
+                return Err(OpError::invalid_input(format!(
+                    "worktree \"{}\" is not available ({}); nothing was attached",
+                    target.dir_name,
+                    match target.status {
+                        WorktreeStatus::Missing => "its directory is missing",
+                        _ => "its directory is not a valid worktree",
+                    }
+                )))
+            }
+            Some(AttachOutcome::Refused(_)) => {
+                return Err(OpError::invalid_input(format!(
+                    "worktree \"{}\" is not under a provider's worktree location, so there \
+                     is nothing to attach",
+                    target.dir_name
+                )))
+            }
+        };
+        Ok(json!({
+            "worktree": target.dir_name,
+            "path": native(&target.path),
+            "branch": target.branch,
+            "outcome": outcome,
+        }))
+    })
+    .await
+}
+
+/// The worktree `reference` names: a `dir_name`, else an absolute path, else a branch; the first
+/// kind that matches decides, and a branch that matches several is `invalid_input`.
+fn resolve_worktree_reference<'a>(
+    reference: &str,
+    worktrees: &'a [WorktreeSnapshot],
+) -> Result<&'a WorktreeSnapshot, OpError> {
+    if let Some(wt) = worktrees.iter().find(|w| w.dir_name == reference) {
+        return Ok(wt);
+    }
+    let path = std::path::Path::new(reference);
+    if path.is_absolute() {
+        let key = micold_core::attach::path_key(path);
+        let real = std::fs::canonicalize(path).ok();
+        let found = worktrees.iter().find(|w| {
+            micold_core::attach::path_key(&w.path) == key
+                || real
+                    .as_deref()
+                    .zip(std::fs::canonicalize(&w.path).ok())
+                    .is_some_and(|(a, b)| a == b)
+        });
+        return found.ok_or_else(|| {
+            OpError::not_found(format!("\"{reference}\" is not a worktree of this project"))
+        });
+    }
+    let mut by_branch = worktrees
+        .iter()
+        .filter(|w| w.branch.as_deref() == Some(reference));
+    match (by_branch.next(), by_branch.next()) {
+        (Some(wt), None) => Ok(wt),
+        (Some(_), Some(_)) => Err(OpError::invalid_input(format!(
+            "branch \"{reference}\" is checked out in more than one worktree; use a dir_name \
+             or a path"
+        ))),
+        _ => Err(OpError::not_found(format!(
+            "\"{reference}\" matches no worktree of this project"
+        ))),
+    }
+}
+
+/// `list_resumable_sessions` (feature 582, contracts/list-resumable-sessions-tool.md): what the
+/// provider stores hold for this project that the catalog does not, newest first. Read-only toward
+/// the stores. **Blocking.** Discovery caps at 200 sessions, so `total` counts at most those.
+fn list_resumable_sessions(
+    state: &DaemonState,
+    project: &ProjectSnapshot,
+    limit: usize,
+    offset: usize,
+    worktree: Option<&WorktreeRef>,
+) -> Value {
+    use micold_core::attach::{AttachTarget, ResumableStatus, SkipReason, UnresumableReason};
+    let report = state.attach_discover(&project.path);
+    let target_ref = |t: &AttachTarget| match t {
+        AttachTarget::Default => WorktreeRef::DEFAULT.to_string(),
+        AttachTarget::Worktree { dir_name } => dir_name.clone(),
+    };
+    let matching: Vec<_> = report
+        .sessions
+        .iter()
+        .filter(|s| worktree.is_none_or(|w| w.as_str() == target_ref(&s.target)))
+        .collect();
+    let rows: Vec<Value> = matching
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .map(|s| {
+            let (status, reason) = match s.status {
+                ResumableStatus::Resumable => ("resumable", None),
+                ResumableStatus::NeedsWorktreeAttach => (
+                    "needs_worktree_attach",
+                    Some("its worktree is not attached; attach_worktree attaches it"),
+                ),
+                ResumableStatus::Unresumable(UnresumableReason::WorktreeMissing) => {
+                    ("unresumable", Some("its worktree's directory is missing"))
+                }
+                ResumableStatus::Unresumable(UnresumableReason::WorktreeInvalid) => (
+                    "unresumable",
+                    Some("its worktree's directory is not a valid worktree"),
+                ),
+                ResumableStatus::Unresumable(UnresumableReason::NoLocation) => (
+                    "unresumable",
+                    Some("the worktree it ran in no longer exists"),
+                ),
+            };
+            json!({
+                "session": s.id.to_string(),
+                "provider": s.provider.tool_name(),
+                "title": s.title,
+                "last_activity": chrono::DateTime::<chrono::Utc>::from(s.last_activity)
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                "worktree": target_ref(&s.target),
+                "status": status,
+                "reason": reason,
+            })
+        })
+        .collect();
+    let notes: Vec<Value> = report
+        .notes
+        .iter()
+        .map(|n| {
+            json!({
+                "provider": n.provider.map(|p| p.tool_name()),
+                "reason": match n.reason {
+                    SkipReason::StoreMissing => "the provider has no store here",
+                    SkipReason::StoreUnreadable => "the provider's store could not be read",
+                    SkipReason::EntryCorrupt => "an entry of the provider's store is unreadable",
+                    SkipReason::SandboxStoreNotReadable => {
+                        "the project runs in a sandbox whose provider store is not readable here"
+                    }
+                },
+            })
+        })
+        .collect();
+    json!({"sessions": rows, "total": matching.len(), "notes": notes})
 }
 
 /// `start_session` (contracts/mcp-tools.md): scope, then policy, then the no-op for a session that

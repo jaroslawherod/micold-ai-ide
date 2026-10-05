@@ -50,7 +50,11 @@ const PRINTED: usize = 3_000;
 /// The arguments each read-only tool is timed with, or `None` for a tool this file does not know.
 fn arguments(tool: &str) -> Option<Value> {
     match tool {
-        "whoami" | "list_worktrees" | "list_branches" | "list_sessions" => Some(json!({})),
+        "whoami"
+        | "list_worktrees"
+        | "list_branches"
+        | "list_sessions"
+        | "list_resumable_sessions" => Some(json!({})),
         "get_session" => Some(json!({"session": session_id(SESSIONS - 1).0.to_string()})),
         "read_session_output" => Some(json!({
             "session": session_id(READ).0.to_string(),
