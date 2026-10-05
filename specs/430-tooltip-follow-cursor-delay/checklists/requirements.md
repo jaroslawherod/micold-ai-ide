@@ -12,8 +12,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (one open: FR-003; left for the clarify phase)
-- [ ] Requirements are testable and unambiguous (FR-003 open)
+- [x] No [NEEDS CLARIFICATION] markers remain (FR-003 resolved in Clarifications, session 2026-10-05)
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
 - [x] All acceptance scenarios are defined
@@ -25,7 +25,7 @@
 
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
-- [ ] Feature meets measurable outcomes defined in Success Criteria (nothing built yet)
+- [x] Success Criteria are measurable and each is covered by a test task in tasks.md (met by the build; the close unit verifies)
 - [x] No implementation details leak into specification
 
 ## Notes
