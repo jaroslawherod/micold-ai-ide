@@ -62,21 +62,25 @@ result with a perfectly clear conscience. This has happened: a bar screenshot sh
 branch under test had deleted, while the source contained no reference to it and its gate passed.
 
 ```bash
-VP="$(git rev-parse --show-toplevel)/.visual-pass"; mkdir -p "$VP/bin"
+top=$(git rev-parse --show-toplevel); mkdir -p "$top/.visual-pass"
+VP=$(mktemp -d "$top/.visual-pass/run.XXXXXX"); mkdir -p "$VP/bin"; echo "VP=$VP"
 scripts/build-lock.sh bash -c \
   'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon &&
    cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" "$1"/bin/' _ "$VP"
 ```
 
-**Where working files go.** `$VP`, the git-ignored `.visual-pass/` at the root of the worktree running
-the pass (set as above, root-anchored so a later `cd` cannot misdirect cleanup; shell state does not
-persist between calls, so re-set `VP` the same way in each one). It is private to that
-worktree, so two sessions cannot overwrite each other's pinned binaries. Never `~/vp` or any other
-folder under `$HOME`. A "before" build needs the old source: export it with
-`mkdir -p "$VP/before-src" && git -C "$VP/.." archive <rev> | tar -x -C "$VP/before-src"`, never a helper
-`git worktree add`. An export registers nothing with git, so there is no worktree for housekeeping
-to miss and none for the autopilot's hook (which forbids removing one) to block. When the pass ends,
-`rm -rf "${VP:?}"` is the whole cleanup. `mise run sweep` and the `reclaim-disk` skill do not clean it.
+**Where working files go.** `$VP`, a run directory `run.XXXXXX` that `mktemp -d` creates inside the
+git-ignored `.visual-pass/` at the root of the worktree running the pass. `.visual-pass/` keeps the
+files out of `$HOME` and next to the worktree they belong to; the `mktemp` suffix makes each pass's
+directory its own, so two sessions cannot overwrite each other's pinned binaries even in the same
+worktree. Never `~/vp` or any other folder under `$HOME`. Shell state does not persist between calls:
+note the absolute path the block prints and set `VP=<that path>` at the start of each later call,
+never a fresh `mktemp`. A "before" build needs the old source: export it with
+`mkdir -p "$VP/before-src" && git -C "$(git rev-parse --show-toplevel)" archive <rev> | tar -x -C "$VP/before-src"`,
+never a helper `git worktree add`. An export registers nothing with git, so there is no worktree for
+housekeeping to miss and none for the autopilot's hook (which forbids removing one) to block. When the
+pass ends, step 9 removes it with `rm -rf "${VP:?}"`, which touches only this run's directory. `mise run
+sweep` and the `reclaim-disk` skill do not clean `.visual-pass/`.
 
 **Name both bins.** `--bin` filters the whole invocation to the targets it names, so
 `-p micold-client --bin micold-ai-ide -p micold-daemon` — what this recipe said until 2026-08-18 —
@@ -109,15 +113,21 @@ One invocation, both binaries, copy inside the lock — then run the copies. Thr
 ### 3. A private X server
 
 ```bash
-vp_n=77                                     # pick a free one; 77 is only the default
-[ -e "/tmp/.X11-unix/X$vp_n" ] && echo "display :$vp_n is taken, pick another" >&2
+vp_n=77                                     # the first number to try
+until [ ! -e "/tmp/.X11-unix/X$vp_n" ] && mkdir -m 700 "/tmp/vp$vp_n" 2>/dev/null; do
+  vp_n=$((vp_n + 1))
+done
+echo "vp_n=$vp_n"                           # yours now: the number every later step uses
 Xvfb ":$vp_n" -screen 0 1600x1400x24 -nolisten tcp &
 ```
 
 1600×1400 is deliberate: tall enough that a section and the list it floats fit in one frame, so a
 comparison is one screenshot rather than two you have to hold in your head.
 
-**Take a number nobody else is on**, and keep using that one number: step 4 derives this run's
+**Claim a number nobody else is on**, and keep using that one number. `mkdir` is atomic, so the
+run's runtime dir `/tmp/vp$vp_n` is the lock: two sessions starting at once, even in the same
+worktree on the same diff, cannot both create it, and the loser moves on to the next number. Step 9
+removes it, which releases the number. Use the number the block printed: step 4 derives this run's
 runtime and data directories from it, and step 9 recognises its own processes by them. Another
 session on the same display shows you its window and lets its cleanup stop your processes.
 
@@ -127,7 +137,7 @@ session on the same display shows you its window and lets its cleanup stop your 
 # The display number you took in step 3 -- the one thing you choose, and the one thing that makes
 # these paths yours. Repeat these four lines verbatim in every later call: a Bash call is a new
 # shell, so the variables do not survive, and the cleanup step has to derive the same runtime dir.
-vp_n=77
+vp_n=77                                      # the number step 3 printed, not a fresh guess
 vp_run=/tmp/vp$vp_n                          # short, private: see sun_path below
 vp_data=$HOME/.cache/vp$vp_n/data            # anywhere only you write, spelled out in full
 case "$vp_run:$vp_data" in /*:/*) ;; *) echo "both paths must be absolute" >&2; exit 1;; esac
@@ -261,6 +271,7 @@ for n in micold-ai-ide micold-daemon; do
     [ "$rt" = "$vp_run" ] && kill "$p"
   done
 done
+rm -rf "${vp_run:?}" "${VP:?}"  # release the display number; VP=<the path step 2 printed>
 ```
 
 Step 4 gives the run its own `XDG_RUNTIME_DIR` (and `XDG_DATA_HOME`) precisely so this test exists —
