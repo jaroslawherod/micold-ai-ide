@@ -669,6 +669,15 @@ pub enum ClientMsg {
 // Daemon → Client
 // ---------------------------------------------------------------------------------------------
 
+/// Why the daemon refused to open or restart a shell instance (feature 010 FR-006c, BUG-592).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShellOpenFailure {
+    /// The session's working directory (its worktree) no longer exists on disk.
+    WorkingDirMissing,
+    /// Any other refusal, carrying the daemon's own description of it.
+    Other(String),
+}
+
 /// A message from the daemon to a client.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DaemonMsg {
@@ -794,6 +803,17 @@ pub enum DaemonMsg {
         session: SessionId,
         /// The content to store.
         content: String,
+    },
+    /// A `SessionOpenShell` or `SessionRestartShell` was refused, so the instance does not exist
+    /// (FR-006c, BUG-592). Sent to the requesting client only: those requests have no reply
+    /// otherwise, and a client that opened the instance optimistically must take it back.
+    ShellOpenFailed {
+        /// Which session.
+        session: SessionId,
+        /// The instance that was not opened.
+        instance: ShellInstanceId,
+        /// Why.
+        reason: ShellOpenFailure,
     },
 
     // --- Scrollback ---

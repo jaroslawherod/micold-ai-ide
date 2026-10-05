@@ -24,7 +24,7 @@ use micold_core::protocol::messages::{
     ActivitySignal, BranchContainment, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg,
     ConfirmOperation, DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink,
     MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
-    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    ShellOpenFailure, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
@@ -501,6 +501,17 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::ClipboardStore {
             session: sid(),
             content: "clip".into(),
+        },
+        // BUG-592 (feature 010): both refusal reasons.
+        DaemonMsg::ShellOpenFailed {
+            session: sid(),
+            instance: ShellInstanceId(2),
+            reason: ShellOpenFailure::WorkingDirMissing,
+        },
+        DaemonMsg::ShellOpenFailed {
+            session: sid(),
+            instance: ShellInstanceId(3),
+            reason: ShellOpenFailure::Other("no such session in the catalog".into()),
         },
         DaemonMsg::ScrollbackResponse {
             session: sid(),

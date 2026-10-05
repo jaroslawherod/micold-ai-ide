@@ -100,7 +100,9 @@
 /// And 27 → 28 for feature 582's `ClientMsg::{AttachDiscover, AttachApply}`,
 /// `DaemonMsg::AttachReport` and `OperationResult::AttachApplied`: attaching a provider's existing
 /// worktrees and sessions. An older peer would fail to decode any of them.
-pub const PROTOCOL_VERSION: u32 = 28;
+/// And 28 → 29 for `DaemonMsg::ShellOpenFailed` (feature 010 BUG-592): a refused shell open is
+/// reported to the client that asked. An older client would fail to decode it.
+pub const PROTOCOL_VERSION: u32 = 29;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
