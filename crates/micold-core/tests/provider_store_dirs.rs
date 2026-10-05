@@ -25,7 +25,10 @@ fn claude_returns_the_root_and_the_git_listed_worktrees() {
     let alpha = fx.worktree_path("alpha");
     let cwds = claude_cwds(&fx, std::slice::from_ref(&alpha));
     assert!(cwds.contains(&fx.repo), "the encoded root is a store dir");
-    assert!(cwds.contains(&alpha), "a git-listed worktree is a store dir");
+    assert!(
+        cwds.contains(&alpha),
+        "a git-listed worktree is a store dir"
+    );
 }
 
 #[test]
@@ -124,7 +127,11 @@ fn copilot_and_pi_return_the_known_locations_only() {
     let fx = AttachFixture::new(&["alpha"]);
     let alpha = fx.worktree_path("alpha");
     for found in [
-        CopilotProvider.store_dirs(&fx.home.join(".copilot"), &fx.repo, std::slice::from_ref(&alpha)),
+        CopilotProvider.store_dirs(
+            &fx.home.join(".copilot"),
+            &fx.repo,
+            std::slice::from_ref(&alpha),
+        ),
         PiProvider.store_dirs(&fx.home.join(".pi"), &fx.repo, std::slice::from_ref(&alpha)),
     ] {
         let mut cwds: Vec<PathBuf> = found.dirs.into_iter().map(|d| d.cwd).collect();
@@ -140,9 +147,10 @@ fn copilot_lists_this_projects_sessions_from_its_index() {
     let fx = AttachFixture::new(&[]);
     let config = fx.home.join(".copilot");
     let id = Uuid::new_v4();
-    let index = config
-        .join("sidebar-sessions-state")
-        .join(format!("{}.json", sha256_hex(fx.repo.to_string_lossy().as_bytes())));
+    let index = config.join("sidebar-sessions-state").join(format!(
+        "{}.json",
+        sha256_hex(fx.repo.to_string_lossy().as_bytes())
+    ));
     std::fs::create_dir_all(index.parent().unwrap()).unwrap();
     std::fs::write(
         index,
@@ -188,6 +196,9 @@ fn a_provider_with_no_readable_store_lists_nothing() {
         PiProvider.recorded_session_ids(&fx.home.join("none"), &fx.repo),
         ClaudeProvider.recorded_session_ids(&fx.home.join("none"), &fx.repo),
     ] {
-        assert!(ids.is_empty(), "FR-014: no store means no sessions, no error");
+        assert!(
+            ids.is_empty(),
+            "FR-014: no store means no sessions, no error"
+        );
     }
 }

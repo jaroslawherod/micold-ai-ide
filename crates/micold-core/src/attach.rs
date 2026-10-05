@@ -308,7 +308,10 @@ struct Found {
 /// location and one `stat` per candidate; the title and label are read for the returned page only.
 /// Known catalog ids are subtracted before any archive check. A store that is missing, unreadable
 /// or partly corrupt yields a [`DiscoveryNote`] and never stops the pass.
-pub fn discover_resumable(stores: &[StoreView<'_>], input: &DiscoverInput<'_>) -> ResumableDiscovery {
+pub fn discover_resumable(
+    stores: &[StoreView<'_>],
+    input: &DiscoverInput<'_>,
+) -> ResumableDiscovery {
     let mut notes = Vec::new();
     let mut found: Vec<Found> = Vec::new();
     let mut seen: BTreeSet<Uuid> = input.known_ids.clone();

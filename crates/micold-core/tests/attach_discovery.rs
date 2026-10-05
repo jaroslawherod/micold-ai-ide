@@ -291,10 +291,13 @@ mod resumable {
             },
         );
         assert!(found.sessions.is_empty());
-        assert!(found
-            .notes
-            .iter()
-            .any(|n| n.reason == SkipReason::StoreMissing && n.provider == Some(AiCli::ClaudeCode)));
+        assert!(
+            found
+                .notes
+                .iter()
+                .any(|n| n.reason == SkipReason::StoreMissing
+                    && n.provider == Some(AiCli::ClaudeCode))
+        );
     }
 
     #[test]
@@ -439,7 +442,8 @@ mod resumable {
             let path = dir.join(format!("{id}.jsonl"));
             std::fs::write(&path, "{\"type\":\"user\"}\n").unwrap();
             let file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
-            file.set_modified(base + Duration::from_secs(n * 10)).unwrap();
+            file.set_modified(base + Duration::from_secs(n * 10))
+                .unwrap();
             by_age.push(id);
         }
         let counting = Counting {
@@ -449,7 +453,10 @@ mod resumable {
         let found = run_with(&fx, &counting, &BTreeSet::new(), 50);
         let listed: Vec<Uuid> = found.sessions.iter().map(|s| s.id).collect();
         let newest_first: Vec<Uuid> = by_age.iter().rev().take(50).copied().collect();
-        assert_eq!(listed, newest_first, "R4: newest first, bounded to the page");
+        assert_eq!(
+            listed, newest_first,
+            "R4: newest first, bounded to the page"
+        );
         assert!(
             counting.titles.get() <= 50 && counting.labels.get() <= 50,
             "titles and labels are read for the returned page only: {} / {}",
@@ -484,6 +491,10 @@ mod resumable {
         };
         let before = snapshot(&fx);
         let _ = run(&fx, &BTreeSet::new());
-        assert_eq!(before, snapshot(&fx), "FR-010: only read methods are called");
+        assert_eq!(
+            before,
+            snapshot(&fx),
+            "FR-010: only read methods are called"
+        );
     }
 }

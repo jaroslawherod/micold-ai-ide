@@ -1496,12 +1496,16 @@ where
                 targets,
             } => {
                 // Validate against a live read, not whatever the cache held when the dialog
-                // opened, so a stale list cannot attach a path that is no longer a worktree.
+                // opened, so a stale list cannot attach a path that is no longer a worktree. A
+                // session target reads the provider stores, so the whole apply is off the runtime.
                 let st = Arc::clone(state);
-                let proj = project.clone();
-                let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
-                match state.attach_apply(&project, &targets) {
-                    Ok(results) => {
+                let applied = tokio::task::spawn_blocking(move || {
+                    st.refresh_worktrees(&project);
+                    st.attach_apply(&project, &targets)
+                })
+                .await;
+                match applied {
+                    Ok(Ok(results)) => {
                         // One broadcast for the whole batch, and only when something changed.
                         if results
                             .iter()
@@ -1517,7 +1521,16 @@ where
                             },
                         );
                     }
-                    Err(e) => send_io_error(state, id, req, "failed to persist the attach", &e),
+                    Ok(Err(e)) => send_io_error(state, id, req, "failed to persist the attach", &e),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "failed to persist the attach".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
                 }
             }
             // --- 029 FR-020: the user telling the app a worktree is theirs ---

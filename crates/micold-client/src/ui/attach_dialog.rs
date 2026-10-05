@@ -3,13 +3,13 @@
 //! Attaching records the worktrees in the app and touches nothing on disk; the dialog says so.
 
 use crate::app::{Message, State};
-use crate::features::attach::{Dialog, Listing, Msg};
+use crate::features::attach::{can_resume, status_text, Dialog, Listing, Msg};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, Scrollable, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
-use micold_core::attach::{AttachableWorktree, Availability, Unavailable};
+use micold_core::attach::{AttachableWorktree, Availability, ResumableSession, Unavailable};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -62,6 +62,19 @@ pub fn modal<'a>(
         }
     }
 
+    if !dialog.sessions.is_empty() {
+        let mut list = column![].spacing(spacing::XS);
+        for (index, session) in dialog.sessions.iter().enumerate() {
+            list = list.push(session_row(dialog, session, index, r));
+        }
+        fields = fields
+            .push(Text::new("Stored sessions", TypeRole::Title, r))
+            .push(Scrollable::new(list, r).height(Length::Fixed(180.0)));
+    }
+    for note in dialog.footer_notes() {
+        fields = fields.push(Text::new(note, TypeRole::Caption, r).muted());
+    }
+
     if let Some(reason) = &dialog.error {
         fields = fields.push(
             Text::new(format!("Could not attach: {reason}"), TypeRole::Caption, r).tint(r.error),
@@ -112,6 +125,31 @@ fn row_view<'a>(
         });
     }
     checkbox.into()
+}
+
+/// One stored session: its title, provider and what resuming it does, with a Resume button.
+fn session_row<'a>(
+    dialog: &'a Dialog,
+    session: &'a ResumableSession,
+    _index: usize,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let title = session.title.as_deref().unwrap_or("Untitled session");
+    let provider = session.provider.provider().display_name();
+    let id = session.id;
+    let resume = Button::outlined("Resume", r).on_press_maybe(
+        (can_resume(session) && !dialog.applying()).then_some(Message::Attach(Msg::Resume { id })),
+    );
+    row![
+        column![
+            Text::new(format!("{title} ({provider})"), TypeRole::Body, r),
+            Text::new(status_text(session), TypeRole::Caption, r).muted(),
+        ]
+        .width(Length::Fill),
+        resume,
+    ]
+    .spacing(spacing::SM)
+    .into()
 }
 
 /// This dialog's body, built from the state that opened it.
