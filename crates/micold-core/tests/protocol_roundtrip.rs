@@ -6,6 +6,11 @@
 
 use std::path::PathBuf;
 
+use micold_core::attach::{
+    AttachItem, AttachOutcome, AttachResult, AttachTarget, AttachableWorktree, Availability,
+    DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
+    Unavailable, UnresumableReason,
+};
 use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;
@@ -225,6 +230,21 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 61,
             project: PathBuf::from("/a"),
             dir_name: "agent-a885b42dc521fbda1".into(),
+        },
+        // Feature 582 (T003): the attach messages, with both item kinds on the wire.
+        ClientMsg::AttachDiscover {
+            req: 82,
+            project: PathBuf::from("/a"),
+        },
+        ClientMsg::AttachApply {
+            req: 83,
+            project: PathBuf::from("/a"),
+            targets: vec![
+                AttachItem::Worktree {
+                    dir_name: "agent-a885b42dc521fbda1".into(),
+                },
+                AttachItem::Session { id: Uuid::nil() },
+            ],
         },
         ClientMsg::SessionCreate {
             req: 7,
@@ -495,6 +515,52 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::OperationOk {
             req: 7,
             result: OperationResult::SessionCreated { session: sid() },
+        },
+        // Feature 582 (T003): the discovery answer and the per-target attach results.
+        DaemonMsg::AttachReport {
+            req: 82,
+            report: DiscoveryReport {
+                worktrees: vec![AttachableWorktree {
+                    dir_name: "agent-a885b42dc521fbda1".into(),
+                    path: PathBuf::from("/a/.claude/worktrees/agent-a885b42dc521fbda1"),
+                    branch: Some("worktree-agent-a885b42dc521fbda1".into()),
+                    provider: Some(AiCli::ClaudeCode),
+                    session_count: 2,
+                    availability: Availability::Unavailable(Unavailable::Missing),
+                }],
+                sessions: vec![ResumableSession {
+                    id: Uuid::nil(),
+                    provider: AiCli::Pi,
+                    title: Some("t".into()),
+                    last_activity: std::time::UNIX_EPOCH + std::time::Duration::from_secs(5),
+                    target: AttachTarget::Worktree {
+                        dir_name: "w".into(),
+                    },
+                    status: ResumableStatus::Unresumable(UnresumableReason::NoLocation),
+                }],
+                notes: vec![DiscoveryNote {
+                    provider: None,
+                    path: Some(PathBuf::from("/x")),
+                    reason: SkipReason::SandboxStoreNotReadable,
+                }],
+            },
+        },
+        DaemonMsg::OperationOk {
+            req: 83,
+            result: OperationResult::AttachApplied {
+                results: vec![
+                    AttachResult {
+                        item: AttachItem::Worktree {
+                            dir_name: "w".into(),
+                        },
+                        outcome: AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
+                    },
+                    AttachResult {
+                        item: AttachItem::Session { id: Uuid::nil() },
+                        outcome: AttachOutcome::AlreadyAttached,
+                    },
+                ],
+            },
         },
         DaemonMsg::OperationOk {
             req: 8,

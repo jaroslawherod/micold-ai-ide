@@ -97,7 +97,10 @@
 /// And 26 → 27 for feature 039's `desktop_notifications` on `DaemonSettings` and
 /// `ClientMsg::SettingsSet` (contract W4): the Desktop notifications switch, held by the service
 /// for every window. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 27;
+/// And 27 → 28 for feature 582's `ClientMsg::{AttachDiscover, AttachApply}`,
+/// `DaemonMsg::AttachReport` and `OperationResult::AttachApplied`: attaching a provider's existing
+/// worktrees and sessions. An older peer would fail to decode any of them.
+pub const PROTOCOL_VERSION: u32 = 28;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

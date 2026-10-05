@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
@@ -434,6 +435,25 @@ pub enum ClientMsg {
         /// Project path.
         project: PathBuf,
     },
+    /// Ask what `project` offers to attach: provider worktrees without a provenance record and
+    /// stored sessions the catalog does not hold (feature 582, FR-001). Read-only; answered with
+    /// [`DaemonMsg::AttachReport`].
+    AttachDiscover {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+    },
+    /// Attach `targets` in one action (feature 582): one catalog write and one broadcast for the
+    /// whole batch. Answered with [`OperationResult::AttachApplied`].
+    AttachApply {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// What to attach.
+        targets: Vec<AttachItem>,
+    },
     /// Ask, for each merged pull request's branch, whether the local branch holds commits beyond
     /// the pull request's last commit (feature 040, FR-015, FR-017). Read-only and local: the
     /// daemon reads refs and the object store, fetches nothing and writes nothing. At most 50
@@ -799,6 +819,13 @@ pub enum DaemonMsg {
     },
 
     // --- Operation results ---
+    /// The answer to [`ClientMsg::AttachDiscover`] (feature 582).
+    AttachReport {
+        /// Correlation id.
+        req: u64,
+        /// What the project offers to attach.
+        report: DiscoveryReport,
+    },
     /// A mutating request succeeded.
     OperationOk {
         /// Correlation id.
@@ -1259,6 +1286,11 @@ pub enum OperationResult {
     BranchList {
         /// Every branch, ordered and annotated with any block reason.
         candidates: Vec<BranchCandidate>,
+    },
+    /// What each target of a [`ClientMsg::AttachApply`] came to (feature 582).
+    AttachApplied {
+        /// One result per requested target, in request order.
+        results: Vec<AttachResult>,
     },
     /// The repository's own remotes (feature 034, FR-002).
     RemoteList {
