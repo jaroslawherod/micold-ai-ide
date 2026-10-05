@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: verify M1 (handed over)
-- **Next step**: M1 verify: review A (high), review B (sonnet), visual pass T013, full gate, push to #602 (stacked on branch claude/project-thread-8dnq8h; skip branch-start.sh).
+- **Phase**: M1 pushed to #602 (awaiting orchestrator)
+- **Next step**: orchestrator: CI on #602 (gh unauthenticated here; PR body section for M1 in the scratchpad `pr-M1.md`), then M2.
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | `● n` on each sidebar worktree and Default row with unread sessions, collapsed or expanded, live | #602 | in progress |
+| M1 | T001–T014 | full | `● n` on each sidebar worktree and Default row with unread sessions, collapsed or expanded, live | #602 | pushed, CI pending |
 | M2 | T015–T019 | light | The switcher's counts skip closed sessions; location rows add up to the switcher count | — | pending |
 
 ## Decisions
@@ -49,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan 575 | 1 | a544cbbec276b6e538a862790af2b637ccd7a155:d7bf4f9b57b064be396b814b2bc37f390bf39002 | CLEAN: 2 MINOR (both fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Tasks 575 | 1 | 546c4d5d35bd1de8132ad3d6d78f2341f17c4afd:c0987c41765f310a8299693bbe13c42d8aea98f0 | CLEAN: 1 MINOR (wrong task ref in T002, fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Review A M1 (code-review high) | 1 | fd51b4f49d22a526379a017d433c16857cf5036b:4f6fb12c21364a11c8f758f2b13c8a7e48a53675 | 7 unlabelled findings, none BLOCKER/MAJOR on inspection: 2 fixed (row_unread delegates to counts_as_unread; guide names the re-admitted row), 5 declined (see below). Done. |
-| Review B M1 (conformance, sonnet) | 1 | d1dac354ff9c1bab07c0cb224fbe372e7907f6b7:d8ad1e5b28906713af20e9bc9ee6708630c1324f | dispatched, result pending (see Handover) |
+| Review B M1 (conformance, sonnet) | 1 | d1dac354ff9c1bab07c0cb224fbe372e7907f6b7:d8ad1e5b28906713af20e9bc9ee6708630c1324f | CHANGES on tooling only: F1 BLOCKER "could not run Verify" (its non-interactive session was refused cargo), F2 MINOR. No code finding; declined (below). Verify covered by the full gate's `cargo test --workspace`. Done. |
 
 ## Declined review findings
 
@@ -60,17 +60,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | count not matched to the selected-row label colour | Location rows are never selected (only session rows are); the contrast gate covers the selected fill at 4.5:1. |
 | M1 | A | `let _ = mark(&counted)` in a geometry test | MINOR; `mark` asserts the mark exists. |
 | M1 | A | counting each entry every render | MINOR; O(sessions), same order as building the rows. |
+| M1 | B | F1 BLOCKER: Verify not run | Not a finding about the code: the reviewer's `claude -p` session was refused every cargo command. Verify's commands are all in the full gate's `cargo test --workspace`, run by this unit. |
+| M1 | B | F2 MINOR: `row_unread` now also skips archived sessions | No visible effect: sidebar rows already filter `!s.archived` (`sidebar.rs:656,704,737`), so an archived session never renders as a row. |
 
 ## Handover
 
-Milestone unit M1 (part 2) handed over at 150k context. Done: T001-T012, T014 implemented and ticked (commits 4f6fb12c, d8ad1e5b), cycle log in `tdd/cycle-log.md`, review A done (above). xdotool is now installed (apt).
-
-- **Running when handed over (detached, logs in the scratchpad `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad`)**: full gate `gate3.log` (script `gate.sh`: fmt, clippy core, clippy workspace, `cargo test --workspace --no-fail-fast`, scripts/tests; ends `GATE_EXIT=done scripts=<0|1>`; `TEST_EXIT` line before it) on HEAD d8ad1e5b; review B `reviewB.log` (ends `REVB_EXIT=`). Hold on them with `scripts/autopilot/hold.sh <log>`.
-- **Gate verdict rule**: green when the only test failures are the six root-only baseline ones (Environment notes). Then record the stamp the push hook needs: `echo <tree part of gate3.log's SNAP=> >> $(git rev-parse --git-path autopilot-gate-ok)` (mise's gate does this on success). Disk is tight (8.8G free after deleting `target-shared/debug/incremental`): build with `CARGO_INCREMENTAL=0`; an earlier gate died of ENOSPC.
-- **Next**: act on review B (review-rounds.md); T013 visual pass: the worker via `claude -p --agent autopilot-worker` could not run it (non-interactive claude refuses compound Bash and the forked skill gets no args), so run `.claude/skills/visual-pass/SKILL.md`'s recipe directly: B10 (showcase UnreadMark entry, both schemes) at least; B1-B8 need a seeded data dir, record which were NOT RUN and why; evidence in `specs/575-workspace-attention-list/visual/`; tick T013. Then full gate if code changed, push `git push -u origin claude/project-thread-8dnq8h`, write `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/pr-M1.md`, return `PR: #602 (updated branch)`.
+None.
 
 ## Environment notes (M1)
 
+- Full gate (raw commands, `CARGO_INCREMENTAL=0`, debuginfo off for disk) green on code tree `b364a9f8` (HEAD acc37dfa = d8ad1e5b's code): fmt, clippy core and workspace, scripts/tests all pass; `cargo test --workspace` fails only the six root-only baseline tests. One run of daemon `history_service_restart::a_stop_then_a_start_over_a_connection...` hung over 15 min and was killed; rerun alone: 13 passed (flake, daemon untouched by 575). An earlier gate (gate3) died of ENOSPC and left two empty untracked files at the repo root (removed); its stamp was recorded against HEAD's tree because the gate snapshot included them.
+- T013: B10 passed both schemes (`visual/evidence.md`); B1-B5, B7, B8 not run. Needed `apt-get install libxkbcommon-x11-0 mesa-vulkan-drivers` for the showcase on Xvfb.
 - Baseline full suite in this container (run as root): 6 pre-existing failures unrelated to 575, permission tests a root user bypasses: core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2), daemon `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path...`, `settings_service_write_refuses_failed_read`. Noted in the PR body, not fixed.
 - No mise (gate commands run raw), gh unauthenticated (no gh calls), reviewers via `claude -p --agent autopilot-reviewer`.
 - `ui_glyph_literals` flags any literal U+25CF in `src/`, comments included.
