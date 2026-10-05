@@ -11,7 +11,9 @@ One round is one `speckit-clarify` run (at most 5 questions) and its triage. Tri
   answers, record them as `_(decided by user)_` and apply them to spec.md.
 
 After a round's answers are in spec.md, run the next round yourself, in this unit: do not return
-between rounds. Stop when a run reports no critical ambiguities. A fifth round is an escalation
+between rounds. Run another round only when the last round's answers changed or added a
+requirement; answers that only record an existing rule, or a deferral to the plan, end the unit.
+Otherwise stop when a run reports no critical ambiguities. A fifth round is an escalation
 (category 5).
 
 Hands on: commit (no PR; the rounds ship in the design PR) and return `DONE` with `CLEAN` as the

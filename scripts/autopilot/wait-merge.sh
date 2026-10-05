@@ -64,10 +64,25 @@ while [ -z "$(ci_state)" ]; do
   tick "waiting for ci complete to appear"
 done
 
+# A failed `ci complete` is not final while another run on the same head is still going: a second
+# event (a recreated branch, a relabel) cancels the first run, and the newer run's `ci complete`
+# appears only when its other jobs finish.
+active_run() {
+  local branch head
+  branch="$(view headRefName .headRefName 2>/dev/null)"; head="$(view headRefOid .headRefOid 2>/dev/null)"
+  [ -n "$branch" ] && [ -n "$head" ] || return 0
+  gh run list --branch "$branch" --limit 10 --json databaseId,status,headSha \
+    -q ".[] | select(.headSha==\"$head\" and (.status==\"in_progress\" or .status==\"queued\")) | .databaseId" 2>/dev/null
+}
 while :; do
-  read -r status conclusion <<<"$(ci_state)"
-  [ "${status:-}" = COMPLETED ] && break
-  tick "waiting for ci complete to finish"
+  while :; do
+    read -r status conclusion <<<"$(ci_state)"
+    [ "${status:-}" = COMPLETED ] && break
+    tick "waiting for ci complete to finish"
+  done
+  [ "$conclusion" = SUCCESS ] && break
+  [ -n "$(active_run)" ] || break
+  tick "waiting for a newer run on the same head"
 done
 
 if [ "$conclusion" != SUCCESS ]; then

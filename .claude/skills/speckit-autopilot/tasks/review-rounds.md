@@ -9,6 +9,10 @@ When: a reviewer returned.
 - Fix every BLOCKER and MAJOR that holds up. Fix a MINOR only if it takes a few minutes.
 - **Stop when clean.** `CLEAN`, or only MINORs: the review is done; fixing MINORs needs no new
   round. Otherwise fix, commit, and dispatch a **new** reviewer, never the old one.
+- **Exception: a fix that changes prose only** (wording in spec, plan, docs or comments; no code,
+  test, config or behaviour-bearing requirement) needs no new round. Check the fix yourself
+  against the finding and record `fixed, prose only` in the ledger. A fix that adds or changes a
+  claim about behaviour, evidence or results is not prose only: re-review it.
 
 ## Round 2 and later
 

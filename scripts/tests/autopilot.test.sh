@@ -263,6 +263,15 @@ check "wait-merge: a queued re-run is not overtaken by an older green" 6 '^TIMEO
   env AUTOPILOT_MAX_WAIT=0 "$S/wait-merge.sh" 5 --no-merge
 
 wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"
+echo '[{"databaseId":92,"status":"in_progress","conclusion":"","headSha":"h1"}]' > "$d/fx/runs.json"
+check "wait-merge: a failed run is not final while a newer run on the head is active" 6 '^TIMEOUT 5 waiting for a newer run' \
+  env AUTOPILOT_POLL=1 AUTOPILOT_MAX_WAIT=2 "$S/wait-merge.sh" 5
+
+wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"
+echo '[{"databaseId":92,"status":"in_progress","conclusion":"","headSha":"other"}]' > "$d/fx/runs.json"
+check "wait-merge: a run on another head does not hold a red" 1 '^RED 5 ' "$S/wait-merge.sh" 5
+
+wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"
 jq '.statusCheckRollup += [{"context":"ext/lint","state":"ERROR","targetUrl":"https://ext/1"}]' "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
 check "wait-merge: red lists a failed commit status" 1 '^- ext/lint ERROR https://ext/1' "$S/wait-merge.sh" 5
 
@@ -276,7 +285,7 @@ check "wait-merge: a PR closed while waiting" 5 '^CLOSED 5' "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN IN_PROGRESS "" > "$d/fx/pr-5.json"
 check "wait-merge: gives up after the max wait" 6 '^TIMEOUT 5 ' \
-  env AUTOPILOT_MAX_WAIT=0 "$S/wait-merge.sh" 5
+  env AUTOPILOT_POLL=1 AUTOPILOT_MAX_WAIT=2 "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"
 echo '[{"databaseId":91,"conclusion":"action_required","headSha":"old"}]' > "$d/fx/runs.json"
