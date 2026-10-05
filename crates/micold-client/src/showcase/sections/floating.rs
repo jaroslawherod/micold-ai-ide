@@ -350,15 +350,18 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
             posed(
                 "follows the pointer: move over the area",
                 material::Tooltip::new(
-                    iced::widget::container(material::Text::new(
-                        "Move the pointer over this area",
-                        TypeRole::Caption,
+                    material::Surface::new(
+                        material::Text::new(
+                            "Move the pointer over this area",
+                            TypeRole::Caption,
+                            roles,
+                        ),
+                        material::SurfaceKind::Plain,
                         roles,
-                    ))
+                    )
                     .width(Length::Fixed(420.0))
                     .height(Length::Fixed(160.0))
-                    .padding(spacing::MD)
-                    .style(material::style::surface(roles)),
+                    .padding(spacing::MD),
                     "Beside the pointer, not beside the area",
                     roles,
                 )
