@@ -4,7 +4,8 @@ name: release
 #  1. release-please watches `main` and opens/maintains a release PR from Conventional Commits,
 #     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
 #  2. When that PR is merged, release-please creates a DRAFT GitHub release and its tag; the `deb` job
-#     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft (drafts
+#     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft, the `rpm` job
+#     does the same for an .rpm (drafts
 #     are mutable, so this works even with immutable releases enabled); the `macos` job does the
 #     same for the universal .dmg, and the `windows` job for an x64 and an arm64 setup .exe; the
 #     `image` jobs build and push the sandbox image for the deb architectures; the `publish` job
@@ -147,6 +148,50 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG_NAME" target/debian/*.deb --clobber
+
+  # The RPM counterpart of `deb`, for Fedora, RHEL and openSUSE: same two architectures, same
+  # payload, built natively. cargo-generate-rpm only packs files, so the runner needs no RPM
+  # tooling; it does need the release binaries built first, which `cargo deb` does for itself.
+  # `--target-dir` is explicit because the package's source paths (`target/release/...`) are
+  # rewritten to it, and the output lands in `<target-dir>/generate-rpm/`.
+  rpm:
+    name: rpm (${{ matrix.arch }})
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install iced system dependencies
+        run: |
+          # Same repository pruning as the `deb` job, for the same reason.
+          sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcursor-dev libxrandr-dev libxi-dev
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm --locked
+      - name: Build .rpm
+        run: |
+          cargo build --release -p micold-client -p micold-daemon
+          cargo generate-rpm -p crates/micold-client --target-dir target
+      - name: Upload .rpm to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" target/generate-rpm/*.rpm --clobber
 
   # The macOS download. Same shape as `deb`: build natively, produce the artifact with the same
   # script a contributor runs locally, attach it to the still-mutable draft.
@@ -397,7 +442,7 @@ jobs:
     # so a platform missing from this list is a platform whose download is missing permanently.
     # `crates/micold-core/tests/release_publishes_complete_sets.rs` reads the workflow and holds
     # this list equal to the set of jobs that run `gh release upload`.
-    needs: [release-please, deb, macos, windows, image-manifest]
+    needs: [release-please, deb, rpm, macos, windows, image-manifest]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     # Only needs to flip the draft release to published (contents), which freezes it immutably

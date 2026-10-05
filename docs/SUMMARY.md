@@ -8,6 +8,7 @@
 
 # User guide
 
+- [Installing on Fedora, RHEL and openSUSE](user-guide/install-rpm.md)
 - [Installing on macOS](user-guide/install-macos.md)
 - [Installing on Windows](user-guide/install-windows.md)
 - [Help & About](user-guide/help-about.md)

@@ -122,10 +122,14 @@ summary = "AI-assisted desktop IDE for git worktrees and AI coding sessions"
 group = "Development/Tools"
 # Auto-detected requirements are off: cargo-generate-rpm copies the `[WEAK]` marker of weak glibc
 # symbol versions into the dependency name (`libc.so.6(GLIBC_2.39)[WEAK](64bit)`), which no
-# distribution provides, so the package would not install anywhere. winit loads the windowing
-# libraries at run time, so they are named here too.
+# distribution provides, so the package would not install anywhere. They are listed by hand, as
+# sonames rather than package names, because the package names differ between Fedora/RHEL
+# (`libgcc`, `libxkbcommon`) and openSUSE (`libgcc_s1`, `libxkbcommon0`) while every one of them
+# provides the soname. The first two are what `readelf -d` says the binary links; the rest are what
+# winit and its renderer `dlopen` at run time (Wayland, X11 through xcb and xkbcommon-x11), which
+# no tool can detect. The 64-bit suffix holds for both published architectures (x86_64, aarch64).
 auto-req = "disabled"
-requires = { glibc = "*", libgcc = "*", libxkbcommon = "*", libwayland-client = "*", desktop-file-utils = "*", hicolor-icon-theme = "*" }
+requires = { "glibc" = "*", "libgcc_s.so.1()(64bit)" = "*", "libxkbcommon.so.0()(64bit)" = "*", "libxkbcommon-x11.so.0()(64bit)" = "*", "libwayland-client.so.0()(64bit)" = "*", "libX11.so.6()(64bit)" = "*", "libxcb.so.1()(64bit)" = "*", "desktop-file-utils" = "*", "hicolor-icon-theme" = "*" }
 assets = [
     { source = "target/release/micold-ai-ide", dest = "/usr/bin/micold-ai-ide", mode = "755" },
     { source = "target/release/micold-daemon", dest = "/usr/bin/micold-daemon", mode = "755" },

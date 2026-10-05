@@ -50,6 +50,25 @@ fn deb_assets(manifest: &str) -> Option<&str> {
     None
 }
 
+/// The `[package.metadata.generate-rpm] assets` list, verbatim, or `None` when absent. Same reading
+/// as `deb_assets`: text, closed at depth. The entries are inline tables (`{ source = ..., dest =
+/// ... }`), so the depth counts braces as well as brackets.
+fn rpm_assets(manifest: &str) -> Option<&str> {
+    let after = manifest.split_once("[package.metadata.generate-rpm]")?.1;
+    let open = after.find("assets = [")?;
+    let rest = &after[open + "assets = [".len()..];
+    let mut depth = 0usize;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '[' | '{' => depth += 1,
+            ']' if depth == 0 => return Some(&rest[..i]),
+            ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
 /// One violation, phrased so the failure says what to do about it.
 #[derive(Debug, PartialEq)]
 struct Violation(String);
@@ -99,6 +118,42 @@ fn the_package_installs_no_service_unit() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+}
+
+/// The RPM ships the same payload as the deb and, like it, no unit: its destinations are absolute
+/// (`/usr/lib/systemd`), so the check is on the path without its leading slash.
+#[test]
+fn the_rpm_installs_no_service_unit() {
+    let manifest = fs::read_to_string(manifest_path()).expect("read the client manifest");
+    let assets = rpm_assets(&manifest).expect("the `[package.metadata.generate-rpm] assets` list");
+    assert!(
+        !assets.contains(UNIT_DESTINATION),
+        "an RPM asset installs to `{UNIT_DESTINATION}` — an install MUST NOT leave a unit behind \
+         (packaging contract §1.1, §1.2)"
+    );
+    assert!(
+        !assets.contains(UNIT_SOURCE),
+        "an RPM asset is sourced from `{UNIT_SOURCE}*` — those are the systemd units feature 010 \
+         shipped (packaging contract §1.2)"
+    );
+    for required in [
+        "target/release/micold-ai-ide",
+        "target/release/micold-daemon",
+        "micold-ai-ide.desktop",
+    ] {
+        assert!(
+            assets.contains(required),
+            "the RPM asset list no longer ships `{required}`"
+        );
+    }
+}
+
+#[test]
+fn the_rpm_asset_reader_reads_inline_tables_to_the_end_of_the_list() {
+    let manifest = "[package.metadata.generate-rpm]\nassets = [\n  { source = \"a\", dest = \"/b\" },\n  { source = \"c\", dest = \"/usr/lib/systemd/x\" },\n]\n";
+    let assets = rpm_assets(manifest).expect("list");
+    assert!(assets.contains("/usr/lib/systemd/x"), "{assets}");
+    assert_eq!(rpm_assets("[package]\n"), None);
 }
 
 /// The asset list still ships the things it is *supposed* to (§1.1), so the test above is a
