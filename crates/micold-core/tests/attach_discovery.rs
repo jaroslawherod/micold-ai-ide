@@ -68,7 +68,8 @@ fn a_prunable_or_missing_worktree_is_unavailable_missing() {
 #[test]
 fn only_worktrees_directly_under_the_provider_directory_qualify() {
     let fx = AttachFixture::new(&["alpha"]);
-    let outside = fx.tmp.path().join("elsewhere");
+    // Beside the repository, under the fixture's already-canonical base (no `\\?\` form on Windows).
+    let outside = fx.repo.parent().unwrap().join("elsewhere");
     attach_fixture::git(
         &fx.repo,
         &[
@@ -81,11 +82,7 @@ fn only_worktrees_directly_under_the_provider_directory_qualify() {
         ],
     );
     // Included by the user, so `discover` returns it with `included: true`.
-    let found = discover(
-        &GitCli,
-        &fx.repo,
-        &[std::fs::canonicalize(&outside).unwrap()],
-    );
+    let found = discover(&GitCli, &fx.repo, std::slice::from_ref(&outside));
     assert!(
         found.iter().any(|w| w.included),
         "precondition: the outside worktree is discovered"
