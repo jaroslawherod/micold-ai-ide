@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: implement M1 (in progress, handed over)
-- **Next step**: fresh milestone unit continues M1 from *Handover* (stacked on draft PR #602, branch claude/project-thread-8dnq8h; skip branch-start.sh).
+- **Phase**: verify M1
+- **Next step**: M1 verify: review A (high), review B (sonnet), visual pass T013, full gate, push to #602 (stacked on branch claude/project-thread-8dnq8h; skip branch-start.sh).
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
@@ -56,13 +56,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Milestone unit M1 handed over at 150k context (2026-10-05). Commit `test(575): M1 red tests and stubs` holds:
+None.
 
-- **Done (red, tests written, stubs only, nothing ticked in tasks.md)**: T001 tests (`attention.rs` `mod counted_session_tests`, stub `counts_as_unread` returns false: 2 of 5 fail, decisive red `attention::counted_session_tests::an_unread_session_out_of_view_counts ... FAILED`); T003 + T004 tests in new `crates/micold-client/tests/sidebar_attention.rs` (stubs in `features/sidebar.rs`: `SidebarEntry::unread_count` -> 0, `unread_tooltip_line` -> None, `with_unread_line` -> unchanged); T005 tests appended to `tree_view.rs` `mod tests` (stub `.unread_count` no-op; `TreeItem::label_role` extracted from the render code, behaviour-preserving; `pub(crate) fn count_tint(r, row_tint)` stub returns `row_tint`, real must return `r.on_surface`; render must call `.tint(count_tint(r, item.tint))` so T010 measures it). The client tests (sidebar_attention, tree_view lib) were NOT yet compiled/run: first step is `scripts/build-lock.sh cargo test -p micold-client --test sidebar_attention` and `--lib tree_view`, fix compile errors, record the red lines in `specs/575-workspace-attention-list/tdd/cycle-log.md`.
-- **TDD hook**: no `tdd/test-list.md` exists (design did not run tdd.plan); follow 582's precedent: the test-first task pairs serve as the list, cycle-log.md records each red (create it; T001 red above).
-- **Next**: T002, T006, T007, T008 (replace `pub unread: bool` with private `RowUnread`; grep `.unread\b|TreeItem {` across crates), T009, T010, T011, T012, T013 (visual-pass via `claude -p`), T014; then verify.md (review A high, review B sonnet, full gate), push to #602, PR-body section to the scratchpad `pr-M1.md`.
-- **Baseline full suite (this container, run as root)**: 6 pre-existing failures unrelated to 575, all permission tests root bypasses: core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2), daemon `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path...`, `settings_service_write_refuses_failed_read`. Note them in the PR body, do not fix. `ui_glyph_literals` flags any literal U+25CF in `src/` (also in comments): never write the dot glyph in code or comments.
-- **Environment**: no mise (run gate commands raw), gh unauthenticated (no gh calls, no PR), reviewers via `claude -p --agent autopilot-reviewer`.
+## Environment notes (M1)
+
+- Baseline full suite in this container (run as root): 6 pre-existing failures unrelated to 575, permission tests a root user bypasses: core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2), daemon `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path...`, `settings_service_write_refuses_failed_read`. Noted in the PR body, not fixed.
+- No mise (gate commands run raw), gh unauthenticated (no gh calls), reviewers via `claude -p --agent autopilot-reviewer`.
+- `ui_glyph_literals` flags any literal U+25CF in `src/`, comments included.
 
 ## Open escalation
 

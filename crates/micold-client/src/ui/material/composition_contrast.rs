@@ -137,6 +137,9 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
         let mark = super::unread_mark::fill(r);
         for (host, fill) in [
             ("the sidebar", rgb(style::sidebar_fill(r))),
+            // A hovered sidebar row (feature 575, FR-013): the location row's count is hovered as
+            // often as it is read.
+            ("a hovered sidebar row", hovered_sidebar_row(r)),
             ("a selected row", r.secondary_container),
             ("a menu panel", r.surface_container),
             ("the app bar", r.surface),
@@ -153,6 +156,49 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
     assert!(
         violations.is_empty(),
         "the unread mark cannot be told from the fill it is drawn on:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
+/// row's content colour over it (feature 575, FR-013).
+fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {
+    rgb(style::state_layer(
+        style::sidebar_fill(r),
+        style::color(r.on_surface),
+        tokens::state::HOVER,
+    ))
+}
+
+/// Feature 575 (FR-013, contract A9, R9): the number beside a location row's unread mark is text,
+/// so it needs 4.5:1 against the row at rest, hovered and selected, in both schemes. The colour is
+/// the one the row draws it in, `tree_view::count_tint`, also on an error-tinted row.
+#[test]
+fn a_location_rows_unread_count_is_legible_in_every_row_state() {
+    let mut violations: Vec<String> = Vec::new();
+
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for row_tint in [r.on_surface, r.error] {
+            let count = super::tree_view::count_tint(r, row_tint);
+            for (state, fill) in [
+                ("at rest", rgb(style::sidebar_fill(r))),
+                ("hovered", hovered_sidebar_row(r)),
+                ("selected", r.secondary_container),
+            ] {
+                let ratio = contrast(count, fill);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / row {state}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "a location row's unread count cannot be read on its row:\n  {}",
         violations.join("\n  ")
     );
 }

@@ -619,9 +619,12 @@ fn build_items(
     let project_root = state.workspace.active.as_deref();
 
     for entry in entries {
+        // The location's attention indicator (feature 575, FR-001/002): its unread sessions, not
+        // closed and not the one in view, counted whether the row is expanded or not (FR-003).
+        let unread = entry.unread_count(in_view);
         let node = match entry {
             crate::features::sidebar::SidebarEntry::Default(node) => {
-                items.extend(build_default_item(state, &node, r));
+                items.extend(build_default_item(state, &node, unread, r));
                 continue;
             }
             crate::features::sidebar::SidebarEntry::Worktree(node) => node,
@@ -676,11 +679,15 @@ fn build_items(
         //
         // `node.display_name` rather than a second derivation from `dir_name`: it is the exact
         // string this row renders, so the row and its tooltip cannot disagree about a name (FR-002).
-        item = item.row_tooltip(crate::features::sidebar::worktree_tooltip(
-            project_root,
-            wt,
-            &node.display_name,
-        ));
+        //
+        // The indicator states its meaning in words on the tooltip's last line (feature 575,
+        // FR-005); the row shows the mark and the number only.
+        item = item
+            .unread_count(unread)
+            .row_tooltip(crate::features::sidebar::with_unread_line(
+                crate::features::sidebar::worktree_tooltip(project_root, wt, &node.display_name),
+                unread,
+            ));
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The
@@ -780,6 +787,7 @@ fn session_tree_item(
 fn build_default_item(
     state: &State,
     node: &crate::features::sidebar::DefaultNode,
+    unread: usize,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
@@ -809,8 +817,14 @@ fn build_default_item(
             Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
         )
         .trailing_element(start_session)
-        // Location tooltip (FR-010): fixed, since the Default entry is always the project root.
-        .row_tooltip(crate::features::sidebar::DEFAULT_LOCATION_LABEL);
+        // The attention indicator (feature 575, FR-001), as on a worktree row.
+        .unread_count(unread)
+        // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
+        // plus the indicator's words when it shows (feature 575, FR-005).
+        .row_tooltip(crate::features::sidebar::with_unread_line(
+            crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
+            unread,
+        ));
     items.push(item);
 
     if node.expanded {

@@ -5,15 +5,21 @@
 //! unread, not closed, and not the session this window has in view. The number does not depend on
 //! whether the row is expanded, and a worktree the sidebar hides has no row to carry it.
 
-use micold_client::app::State;
+use micold_client::app::{Message, State};
+use micold_client::catalog_sync::reconcile_catalog;
 use micold_client::features::attention::in_view;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{
     unread_tooltip_line, with_unread_line, worktree_tooltip, SidebarEntry, TagFilter,
     DEFAULT_LOCATION_LABEL,
 };
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
+use micold_core::protocol::messages::{
+    ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
+};
+use micold_core::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::{Path, PathBuf};
 
@@ -173,7 +179,7 @@ fn expanding_a_row_does_not_change_its_count() {
 #[test]
 fn a_viewed_session_awaiting_input_does_not_count() {
     let mut viewed = in_worktree(FEATURE_X, false);
-    viewed.activity = micold_core::protocol::messages::ActivitySignal::AwaitingInput;
+    viewed.activity = ActivitySignal::AwaitingInput;
     let state = state_with(vec![in_worktree(FEATURE_X, true), viewed]);
 
     assert_eq!(count_of(&state, FEATURE_X), Some(1));
@@ -227,10 +233,7 @@ fn a_project_without_worktrees_counts_on_its_default_row() {
 /// Contract A2: a worktree the tag filters or the agent setting hide has no row, so no count.
 #[test]
 fn a_hidden_worktree_has_no_row_to_carry_a_count() {
-    let mut state = state_with(vec![
-        in_worktree(FEATURE_X, true),
-        in_worktree(AGENT, true),
-    ]);
+    let mut state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
     state
         .sidebar
         .filters
@@ -276,7 +279,10 @@ fn a_missing_or_invalid_worktree_carries_its_count() {
             worktree("feat-gone", WorktreeStatus::Missing),
             worktree("feat-bad", WorktreeStatus::Invalid),
         ],
-        vec![in_worktree("feat-gone", true), in_worktree("feat-bad", true)],
+        vec![
+            in_worktree("feat-gone", true),
+            in_worktree("feat-bad", true),
+        ],
     );
 
     assert_eq!(count_of(&state, "feat-gone"), Some(1));
@@ -326,10 +332,178 @@ fn the_line_follows_a_multi_line_worktree_tooltip() {
         &worktree(FEATURE_X, WorktreeStatus::Missing),
         "x",
     );
-    assert!(tooltip.lines().count() > 1, "the fixture must be multi-line");
+    assert!(
+        tooltip.lines().count() > 1,
+        "the fixture must be multi-line"
+    );
 
     let with_line = with_unread_line(tooltip.clone(), 1);
 
     assert_eq!(with_line, format!("{tooltip}\n1 unread session"));
     assert_eq!(with_line.lines().last(), Some("1 unread session"));
+}
+
+// --- Live updates (US2, FR-007, FR-009) ---
+
+/// A catalog snapshot of `REPO` holding `sessions` as `(id, worktree, unread)`: what the service
+/// publishes after every change (039 FR-024).
+fn catalog(sessions: &[(SessionId, Option<&str>, bool)]) -> CatalogSnapshot {
+    CatalogSnapshot {
+        schema_version: 1,
+        last_active: Some(PathBuf::from(REPO)),
+        projects: vec![ProjectSnapshot {
+            path: PathBuf::from(REPO),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            available: true,
+            worktrees: Vec::new(),
+            sessions: sessions
+                .iter()
+                .map(|&(id, worktree, unread)| SessionSummary {
+                    id,
+                    worktree_dir: worktree.map(str::to_string),
+                    title: SessionLabel::Pending,
+                    lifecycle: WireLifecycle::Running,
+                    activity: ActivitySignal::AwaitingInput,
+                    provider: AiCli::ClaudeCode,
+                    input_serial: 0,
+                    live_shells: Vec::new(),
+                    attention_seq: 1,
+                    unread,
+                })
+                .collect(),
+        }],
+    }
+}
+
+/// `feat-x` with two read sessions, and their ids.
+fn two_read_sessions_in_feature_x() -> (State, SessionId, SessionId) {
+    let (a, b) = (in_worktree(FEATURE_X, false), in_worktree(FEATURE_X, false));
+    let (a_id, b_id) = (a.id, b.id);
+    (state_with(vec![a, b]), a_id, b_id)
+}
+
+/// US2 scenarios 1 and 3 (FR-007): the count follows the service's unread state.
+#[test]
+fn a_catalog_update_raises_and_lowers_the_count() {
+    let (mut state, a, b) = two_read_sessions_in_feature_x();
+    assert_eq!(count_of(&state, FEATURE_X), Some(0));
+
+    reconcile_catalog(
+        &mut state,
+        &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), false)]),
+        false,
+    );
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(1),
+        "a session that became unread adds to its row"
+    );
+
+    reconcile_catalog(
+        &mut state,
+        &catalog(&[(a, Some(FEATURE_X), false), (b, Some(FEATURE_X), false)]),
+        false,
+    );
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(0),
+        "a session that stopped being unread no longer adds to its row"
+    );
+}
+
+/// US2 scenario 2 (039 FR-019): a session coming into view stops counting at once, before the
+/// service's next snapshot says it is read.
+#[test]
+fn selecting_a_session_drops_the_count_before_any_catalog_update() {
+    let (mut state, a, b) = two_read_sessions_in_feature_x();
+    reconcile_catalog(
+        &mut state,
+        &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
+        false,
+    );
+    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+
+    view(&mut state, a);
+
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(1),
+        "the session in view no longer counts, though no snapshot has said so yet"
+    );
+}
+
+/// FR-007: a session the service no longer reports (closed or removed) stops counting.
+#[test]
+fn a_closed_or_removed_session_lowers_the_count() {
+    let (mut state, a, b) = two_read_sessions_in_feature_x();
+    reconcile_catalog(
+        &mut state,
+        &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
+        false,
+    );
+    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+
+    reconcile_catalog(&mut state, &catalog(&[(a, Some(FEATURE_X), true)]), false);
+
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(1),
+        "a session closed or removed on the service's side adds nothing"
+    );
+}
+
+/// Edge case "A burst of changes": several snapshots in a row settle on the last one's count.
+#[test]
+fn a_burst_of_updates_settles_on_the_right_count() {
+    let (mut state, a, b) = two_read_sessions_in_feature_x();
+    for snapshot in [
+        catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), false)]),
+        catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
+        catalog(&[(a, Some(FEATURE_X), false), (b, Some(FEATURE_X), true)]),
+        catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
+    ] {
+        reconcile_catalog(&mut state, &snapshot, false);
+    }
+
+    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+}
+
+/// FR-009: expanding, collapsing and hovering a location row read nothing: every session keeps its
+/// unread state, and the window has nothing new to report as in view.
+#[test]
+fn expanding_collapsing_and_hovering_a_row_read_nothing() {
+    let (mut state, a, b) = two_read_sessions_in_feature_x();
+    reconcile_catalog(
+        &mut state,
+        &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
+        false,
+    );
+    let _ = state.view_report(true);
+    let unread_before: Vec<bool> = state.workspace.sessions[Path::new(REPO)]
+        .iter()
+        .map(|s| s.unread)
+        .collect();
+
+    for message in [
+        Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
+        Message::Worktree(WorktreeMsg::Hovered(FEATURE_X.to_string())),
+        Message::Worktree(WorktreeMsg::Unhovered(FEATURE_X.to_string())),
+        Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
+        Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
+    ] {
+        let _ = state.update(message);
+    }
+
+    let unread_after: Vec<bool> = state.workspace.sessions[Path::new(REPO)]
+        .iter()
+        .map(|s| s.unread)
+        .collect();
+    assert_eq!(unread_after, unread_before, "no session was read");
+    assert_eq!(
+        state.view_report(true),
+        None,
+        "the window's view report is unchanged, so nothing came into view"
+    );
+    assert_eq!(count_of(&state, FEATURE_X), Some(2));
 }

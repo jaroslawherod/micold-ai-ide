@@ -183,8 +183,12 @@ pub fn resolve_reveal(workspace: &Workspace, project: &Path, session: SessionId)
 
 /// Whether `session` counts as unread for a location's or a project's attention mark (feature
 /// 575, data-model "Counted session").
-pub fn counts_as_unread(_session: &Session, _in_view: Option<SessionId>) -> bool {
-    false
+///
+/// Unread in 039's sense (FR-016), not the session the window has in view (039 FR-019: a session
+/// in view is read the moment it is), and not closed (039 US1 scenario 9: a closed session is out
+/// of the user's way and must not call them back to it).
+pub fn counts_as_unread(session: &Session, in_view: Option<SessionId>) -> bool {
+    session.unread && !session.archived && in_view != Some(session.id)
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ use crate::ui::material::TypeRole;
 use iced::widget::{button, column, container, mouse_area, row, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
+use std::num::NonZeroUsize;
 
 /// What a row's right-click becomes: a message built from the press point, in window pixels.
 ///
@@ -19,6 +20,18 @@ use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
 /// same gesture, and a second shape for it is how the sidebar came to answer it differently
 /// (BUG-008).
 type OnRightPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+
+/// What a row says about unread sessions (feature 039 FR-018, feature 575).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum RowUnread {
+    /// Nothing.
+    #[default]
+    Read,
+    /// A session row that is unread: the bare mark, and the emphasised label role.
+    Unread,
+    /// A location row holding `n` unread sessions: the mark with its count.
+    Count(NonZeroUsize),
+}
 
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {
@@ -83,7 +96,12 @@ pub struct TreeItem<'a, M> {
     /// the trailing edge, before any trailing action, and the label in the view's emphasised role
     /// ([`TreeView::selected_label_role`]). The badge slot is not touched, and the row keeps its
     /// height: the name is what a narrow row shortens (contract `unread-mark.md` U8).
-    pub unread: bool,
+    ///
+    /// A location row instead carries the mark **with a count** (feature 575): the number of its
+    /// unread sessions, in the slot the bare mark takes, and its label keeps the view's label
+    /// role. Private, so a row is read, unread or counted and never two at once; the last of
+    /// [`unread`](Self::unread) and [`unread_count`](Self::unread_count) wins.
+    unread: RowUnread,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -110,13 +128,18 @@ impl<'a, M> TreeItem<'a, M> {
             row_tooltip: None,
             badge: None,
             annotation: None,
-            unread: false,
+            unread: RowUnread::Read,
             _marker: std::marker::PhantomData,
         }
     }
 
     /// Show the number of a location's unread sessions at the trailing edge (feature 575).
-    pub fn unread_count(self, _count: usize) -> Self {
+    /// `0` draws nothing, as a read row (feature 575, FR-001).
+    pub fn unread_count(mut self, count: usize) -> Self {
+        self.unread = match NonZeroUsize::new(count) {
+            Some(n) => RowUnread::Count(n),
+            None => RowUnread::Read,
+        };
         self
     }
 
@@ -124,14 +147,18 @@ impl<'a, M> TreeItem<'a, M> {
     /// unread row, else the view's label role.
     fn label_role(&self, label_role: TypeRole, selected_label_role: Option<TypeRole>) -> TypeRole {
         match selected_label_role {
-            Some(role) if self.selected || self.unread => role,
+            Some(role) if self.selected || self.unread == RowUnread::Unread => role,
             _ => label_role,
         }
     }
 
     /// Mark the row unread (feature 039, FR-018). See [`TreeItem::unread`].
     pub fn unread(mut self, unread: bool) -> Self {
-        self.unread = unread;
+        self.unread = if unread {
+            RowUnread::Unread
+        } else {
+            RowUnread::Read
+        };
         self
     }
 
@@ -281,8 +308,11 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
 }
 
 /// The colour of a location row's unread count (feature 575, contract A6).
-pub(crate) fn count_tint(_r: Roles, row_tint: Rgb) -> Rgb {
-    row_tint
+///
+/// Always the theme's text colour, whatever the row's own tint: on a missing worktree's
+/// error-tinted row the number is read as a count, not as part of the error (R4).
+pub(crate) fn count_tint(r: Roles, _row_tint: Rgb) -> Rgb {
+    r.on_surface
 }
 
 impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
@@ -317,6 +347,8 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
             let has_tags = !item.tags.is_empty();
+            // Read before any field is moved out of `item`; see where the label is pushed below.
+            let row_label_role = item.label_role(label_role, selected_label_role);
             // The indent spacer indents, and nothing else. It used to carry §7.2's height floor as
             // well, and that was BUG-005: this spacer's width *is* the indent, so on a depth-0 row
             // it is `Fixed(0)` — void — and iced drops a void child outright, floor and all. The
@@ -391,7 +423,6 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // An unread row takes the same role (feature 039, FR-018): the view has one emphasised
             // role, and the unread mark is told from the activity badge by this weight as well as
             // by its place in the row.
-            let row_label_role = item.label_role(label_role, selected_label_role);
             line = line.push(super::Ellipsized::at_role(
                 item.label,
                 row_label_role,
@@ -408,8 +439,20 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // The unread mark (feature 039): at the trailing edge, before any trailing action. It
             // has a fixed size and the name beside it is `Ellipsized`, so a narrow row shortens the
             // name and keeps the mark.
-            if item.unread {
-                line = line.push(super::UnreadMark::new(r));
+            //
+            // A location row's count (feature 575) takes the same slot, in the row's label role
+            // and the theme's text colour, never worded: the tooltip carries the words (FR-005).
+            match item.unread {
+                RowUnread::Read => {}
+                RowUnread::Unread => line = line.push(super::UnreadMark::new(r)),
+                RowUnread::Count(n) => {
+                    line = line.push(
+                        super::UnreadMark::new(r)
+                            .count(n.get())
+                            .role(row_label_role)
+                            .tint(count_tint(r, item.tint)),
+                    )
+                }
             }
 
             if let Some(custom) = item.trailing_custom {
@@ -913,7 +956,10 @@ mod tests {
         let zero = laid_out(location_row("feat-short", false).unread_count(0), ROOMY);
 
         assert!(sized(&zero, MARK, MARK).is_empty(), "no mark at zero");
-        assert_eq!(zero, plain, "a row with no unread session is laid out as before");
+        assert_eq!(
+            zero, plain,
+            "a row with no unread session is laid out as before"
+        );
     }
 
     /// U-575 (A10, data-model "Row unread state"): the last of `.unread` and `.unread_count` wins.

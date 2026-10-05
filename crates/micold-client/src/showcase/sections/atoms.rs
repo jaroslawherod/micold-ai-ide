@@ -243,6 +243,10 @@ pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
 /// (feature 039, FR-030). The switcher's rows with their unread counts are `MenuOverlay`'s second
 /// opener, because a menu's rows exist only inside its panel.
 ///
+/// With the count, on a sidebar location row collapsed and expanded, beside one without (feature
+/// 575, FR-012): what has to be checked by eye is that the count sits where a session row's mark
+/// does, and that the location row's name keeps its weight.
+///
 /// Posed in its host and not alone: what has to be checked by eye is that the mark is told from the
 /// activity badge, which both rows carry, by its place at the trailing edge and by the weight of
 /// the name (FR-018), and that the two rows are the same height (FR-032).
@@ -262,6 +266,34 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             .selected_label_role(TypeRole::SidebarSessionCurrent)
             .into()
     };
+    // A worktree row as the sidebar builds it: the count whether collapsed or expanded, and the
+    // expanded row followed by its two unread session rows.
+    let location_row = |unread: usize, expanded: bool| -> Element<'a, Message> {
+        let name = samples::WORKTREES[1].0;
+        let mut rows = vec![material::TreeItem::new(0, name, roles.on_surface)
+            .expandable(expanded, Message::NoOp)
+            .unread_count(unread)
+            .on_press(Message::NoOp)];
+        if expanded {
+            for label in [samples::LABEL, samples::OTHER_LABEL] {
+                rows.push(
+                    material::TreeItem::new(1, label, roles.on_surface)
+                        .badge(material::ActivityBadge::<Message>::new(
+                            ActivitySignal::AwaitingInput,
+                            roles,
+                        ))
+                        .annotation("claude", roles.on_surface_variant)
+                        .unread(true)
+                        .on_press(Message::NoOp),
+                );
+            }
+        }
+        material::TreeView::new(rows, roles)
+            .density(micold_core::tokens::density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into()
+    };
     // The switcher's button as the app bar builds it. A count of zero is the button as it was.
     let switcher_button = |unread: usize| -> Element<'a, Message> {
         material::Button::text(samples::LABEL, roles)
@@ -274,6 +306,17 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
         vec![
             posed("an unread session row", session_row(true), roles),
             posed("a read session row", session_row(false), roles),
+            posed(
+                "a collapsed worktree row with an unread count",
+                location_row(2, false),
+                roles,
+            ),
+            posed(
+                "the same worktree row expanded",
+                location_row(2, true),
+                roles,
+            ),
+            posed("a worktree row with none", location_row(0, false), roles),
             posed(
                 "the switcher's button with an unread count",
                 switcher_button(3),

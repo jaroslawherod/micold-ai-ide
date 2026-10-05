@@ -236,6 +236,9 @@ pub const COMPONENTS: &[Entry] = &[
         posed: &[
             "an unread session row",
             "a read session row",
+            "a collapsed worktree row with an unread count",
+            "the same worktree row expanded",
+            "a worktree row with none",
             "the switcher's button with an unread count",
             "the switcher's button with none",
         ],

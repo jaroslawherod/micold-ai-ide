@@ -172,8 +172,18 @@ pub struct WorktreeNode {
 
 impl SidebarEntry {
     /// The number of this location's sessions that count as unread (feature 575, FR-002).
-    pub fn unread_count(&self, _in_view: Option<SessionId>) -> usize {
-        0
+    ///
+    /// Counted over every session of the location, whether the row is expanded or not (FR-003):
+    /// the indicator is what a collapsed row has instead of its session rows.
+    pub fn unread_count(&self, in_view: Option<SessionId>) -> usize {
+        let sessions = match self {
+            SidebarEntry::Worktree(node) => &node.sessions,
+            SidebarEntry::Default(node) => &node.sessions,
+        };
+        sessions
+            .iter()
+            .filter(|session| micold_core::attention::counts_as_unread(session, in_view))
+            .count()
     }
 }
 
@@ -466,13 +476,20 @@ pub fn worktree_tooltip(
 }
 
 /// The tooltip line that states a location's unread count in words (feature 575, FR-005).
-pub fn unread_tooltip_line(_n: usize) -> Option<String> {
-    None
+pub fn unread_tooltip_line(n: usize) -> Option<String> {
+    match n {
+        0 => None,
+        1 => Some("1 unread session".to_string()),
+        n => Some(format!("{n} unread sessions")),
+    }
 }
 
 /// `tooltip` with [`unread_tooltip_line`] appended on a line of its own (feature 575, FR-005).
-pub fn with_unread_line(tooltip: String, _n: usize) -> String {
-    tooltip
+pub fn with_unread_line(tooltip: String, n: usize) -> String {
+    match unread_tooltip_line(n) {
+        Some(line) => format!("{tooltip}\n{line}"),
+        None => tooltip,
+    }
 }
 
 impl crate::app::State {
