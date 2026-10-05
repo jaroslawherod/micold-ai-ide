@@ -18,12 +18,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #594 | Spec | merged | 5ae41ab8c09440cc64a73f0fb24317185bce43af |
 | #596 | Design (clarify, plan, tasks) | merged | 47ae6297d5e472d802897310d574e25d53bea3d3 |
+| #600 | M1 pointer-following placement, ShowTimer | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012, T019 | full | Pointer-following placement (FollowCursor), ShowTimer in core | | pending |
+| M1 | T001–T012, T019 | full | Pointer-following placement (FollowCursor), ShowTimer in core | #600 | in review |
 | M2 | T013–T018 | full | show_delay, working alone and with FollowCursor | | pending |
 
 ## Decisions
