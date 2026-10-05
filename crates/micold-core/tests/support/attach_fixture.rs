@@ -63,7 +63,13 @@ impl AttachFixture {
     /// A repository with one valid worktree per name in `worktrees`, plus a sibling repository.
     pub fn new(worktrees: &[&str]) -> Self {
         let tmp = TempDir::new().unwrap();
-        let base = std::fs::canonicalize(tmp.path()).unwrap();
+        // On Windows `canonicalize` yields a `\\?\` verbatim path, which git cannot create
+        // worktrees under ("could not create leading directories"); strip the prefix.
+        let canonical = std::fs::canonicalize(tmp.path()).unwrap();
+        let base = canonical
+            .to_str()
+            .and_then(|p| p.strip_prefix(r"\\?\"))
+            .map_or(canonical.clone(), PathBuf::from);
         let repo = base.join("proj");
         let sibling = base.join("proj-x");
         let home = base.join("home");
