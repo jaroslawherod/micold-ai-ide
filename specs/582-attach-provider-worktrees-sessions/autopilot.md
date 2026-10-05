@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #589 | M3: attach_worktree and list_resumable_sessions MCP tools | merged | e3cef56de6611c1ce080e7bb5a39fd09c0bd079e |
 | #590 | M4: start-up offer banner | merged | 4657af19443f25a0669f5036f7c163e78f050e4a |
 | #591 | M5: quickstart result, user guide check | merged | 8947038b7e4b195071f941c099c94a6b97c08b1a |
-| #592 | Close: TDD remediation tests, close-out GUI pass, spec closed | open | |
+| #593 | Close: TDD remediation tests, close-out GUI pass, spec closed | open | |
 
 ## Milestones
 
