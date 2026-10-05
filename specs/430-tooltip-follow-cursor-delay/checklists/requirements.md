@@ -30,4 +30,4 @@
 
 ## Notes
 
-- One [NEEDS CLARIFICATION] (FR-003: show delay vs the existing rest wait) is deferred to Phase 2 by the autopilot.
+- Note: FR-003's open question was resolved in Clarifications on 2026-10-05.

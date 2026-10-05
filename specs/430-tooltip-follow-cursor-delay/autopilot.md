@@ -9,26 +9,30 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #430
 - **Worktree branch**: fix/issue-430
 - **Started**: 2026-10-05
-- **Phase**: clarify
-- **Next step**: Phase 3: plan (clarify round 1 clean; show delay is separate from after_rest)
+- **Phase**: design
+- **Next step**: orchestrator: wait for the design PR to merge, then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #594 | Spec | open | |
+| #594 | Spec | merged | 5ae41ab8c09440cc64a73f0fb24317185bce43af |
+| #… | Design (clarify, plan, tasks) | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T012, T019 | full | Pointer-following placement (FollowCursor), ShowTimer in core | | pending |
+| M2 | T013–T018 | full | show_delay, working alone and with FollowCursor | | pending |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D1 | clarify | Show delay vs after_rest? | Separate delay from entering; after_rest unchanged | agent-resolved | spec.md#Clarifications |
+| D2 | plan | Both after_rest and show_delay set? | One mode `Wait::{Hover,Delay,Rest}`; the setter called last wins | agent-resolved | research.md#R1 |
+| D3 | tasks | User guide? | None: no user-visible change; PRs take `docs-not-needed` | agent-resolved | plan.md Constitution VII |
 
 ## Review rounds
 
