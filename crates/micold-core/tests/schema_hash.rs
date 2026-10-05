@@ -218,7 +218,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 27 → 28 for feature 582's attach messages (`AttachDiscover`, `AttachApply`, `AttachReport`,
 /// `OperationResult::AttachApplied`): new variants an older peer cannot decode.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 28;
+///
+/// And 28 → 29 for feature 010 BUG-592's `DaemonMsg::ShellOpenFailed`: a refused shell open is
+/// reported to the client that asked. A new variant an older client cannot decode.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 29;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

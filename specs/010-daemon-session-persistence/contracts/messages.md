@@ -243,7 +243,17 @@ SessionTitleChanged { session: SessionId, title: Option<String> }   // OSC title
 SessionBell         { session: SessionId }
 SessionExited       { session: SessionId, status: ExitStatus, restarting: bool }
 ClipboardStore      { session: SessionId, content: String }
+ShellOpenFailed     { session: SessionId, instance: ShellInstanceId, reason: ShellOpenFailure }
+
+enum ShellOpenFailure { WorkingDirMissing, Other(String) }
 ```
+
+`ShellOpenFailed` answers a refused `SessionOpenShell` or `SessionRestartShell`, to the requesting
+client only (FR-006c, BUG-592). Those requests have no other reply, and the client has already
+opened the instance optimistically: on this it closes the instance, re-attaches what it now shows,
+and shows "Worktree directory is missing" for `WorkingDirMissing`, else "Couldn't open a terminal:
+<text>". `WorkingDirMissing` comes from the spawn's own directory check, not from matching the
+error's text.
 
 Only these cross to the client. `PtyWrite`, `ColorRequest` and `TextAreaSizeRequest` are answered by
 the daemon writing back to the PTY (protocol.md §8).
@@ -307,4 +317,5 @@ secrets (FR-047). They reference sessions by identity and state only.
 | FR-021/022 version handshake | `Hello`, `Refused::VersionMismatch` |
 | FR-023/024 exclusivity, takeover | `Attach { force }`, `Refused::ProjectBusy`, `Displaced` |
 | FR-031/034 error semantics | `OperationError`, `ErrorKind::GitFailed.detail` |
+| FR-006c refused shell start (BUG-592) | `ShellOpenFailed`, `ShellOpenFailure` |
 | FR-043/046 diagnostics | `SetLogLevel`, `LogLocation`, `RecentErrors` |

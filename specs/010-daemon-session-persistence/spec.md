@@ -385,6 +385,9 @@ a session survived; confirm it does not survive without the setting.
   explicit resume, a restore on reopening, and an automatic respawn after a crash. The check MUST be
   made against the filesystem at the moment of the spawn rather than against a cached worktree
   status, since a directory can be removed between a refresh and a start (BUG-012).
+  The refusal MUST also reach the requesting client, and for a missing directory the client MUST show "Worktree directory is missing" (any other refusal: "Couldn't open a terminal: …"), for every start path including an
+  additional terminal instance's open, and a client whose request was refused MUST NOT be left showing
+  a process the service does not have (BUG-592).
 - **FR-006d** *(added — BUG-011)*: A session whose process the service has started MUST be reported
   as **running**, from the moment the process exists until it exits, and MUST NOT be offered for
   resumption or restart while it runs. This holds for every route into a live process — a session
@@ -870,6 +873,10 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   not return the stored document is refused, in 100% of cases, and the file it could not read is
   still there afterwards — proven by an executable test that makes the read fail, not by a
   walkthrough.
+- **SC-027** (bugfix BUG-592): A shell open the service refuses is reported to the requesting client
+  in 100% of cases, and the client ends on the view the service is streaming (the AI CLI), with the
+  text "Worktree directory is missing" shown for a missing directory. Proven by an executable daemon test asserting the reply for a missing directory and
+  its absence for an existing one, and a client test asserting the mode and attachment afterwards.
 
 ### How each criterion is observed *(added 2026-08-27 — BUG-008)*
 
@@ -885,7 +892,7 @@ marked `human-only` with the reason it cannot have one. A criterion phrased in t
 ("looks right", "no perceptible delay") is unverifiable by any automated agent in any environment, and
 will be skipped for as long as no human is available — which the table in `bugs/BUG-008.md` measured at
 indefinitely. `scripts/check-criteria-observables.sh` fails the build when a criterion in this file has
-no row here — all **29** of them, SC-001 through SC-026 including SC-004a, SC-009a and SC-011a — so
+no row here — all **30** of them, SC-001 through SC-027 including SC-004a, SC-009a and SC-011a — so
 the next one cannot be written by accident.
 
 Later criteria already say this in their own text — SC-022, SC-023, SC-024 and SC-025 each read
@@ -927,6 +934,7 @@ backwards.
 | SC-024 | the spawn decision for a session whose directory does not exist — refused, no process registered — and for one whose directory does | `micold-daemon/tests/session_cwd_guard.rs` |
 | SC-025 | the **snapshot a client would receive**, not the lifecycle machine, from the moment the process exists | `micold-daemon/tests/session_start.rs` |
 | SC-026 | *(added — BUG-025)* the bytes on disk after two concurrent saves against one path: the file parses, and each writer's owned fields survive; and the bytes on disk after a save whose base read failed — unchanged, the save refused | `micold-core/tests/settings_concurrent_writers.rs`, `micold-core/tests/settings_refuses_save_over_failed_read.rs` |
+| SC-027 | *(added — BUG-592)* the daemon's reply to a `SessionOpenShell` for a session whose directory does not exist — `ShellOpenFailed { reason: WorkingDirMissing }` — and its absence for one whose directory exists; and the client's session mode, shells and sent `SessionAttachProcess` after receiving it — back on `AiCli`, no instance, attached to `Primary`, error notice "Worktree directory is missing" | `micold-daemon/tests/shell_open_refused_reported.rs`, `micold-client` unit test in `shell/daemon_sync.rs` |
 
 Three rows say `human-only` and each names why: SC-003's 3 s (wall-clock on real hardware), SC-004a's
 budget (measured on a display, not gated in CI), SC-015's 5 s (a person's reading speed). That is the
@@ -1094,3 +1102,8 @@ instances, surviving detach, dropped on archive) and SC-023 added; the "Resize w
 case annotated to record that it specified this behaviour and nothing implemented it.
 `contracts/protocol.md`'s `SessionResize` entry updated accordingly. See
 `../006-real-terminal-emulator/bugs/BUG-003.md`.
+
+**Bugfix**: 2026-10-05 — BUG-592 Extended FR-006c (the refusal reaches the requesting client, which must
+not stay on a process the service does not have) and added SC-027. BUG-012 refused the spawn but the
+shell open is fire-and-forget, so the refusal reached only the daemon log: the Terminal toggle did
+nothing on screen for a session whose worktree was removed. See `bugs/BUG-592.md`.
