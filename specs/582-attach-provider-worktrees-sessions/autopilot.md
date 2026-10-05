@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify rounds: round 1 (FR-011 new read-only MCP tool; FR-015 Default refused outright); round 2 via speckit-clarify (attach session = idle entry; resume attaches its worktree first), all agent-resolved; no critical ambiguities left (deferred to plan: dismissing the start-up offer).
+- Clarify rounds: round 1 (FR-011 new read-only MCP tool; FR-015 Default refused outright); round 2 via speckit-clarify (attach session = idle entry; resume attaches its worktree first), all agent-resolved; round 3 (speckit-clarify): "No critical ambiguities detected worth formal clarification" (deferred to plan: dismissing the start-up offer; a session already running outside Micold; "empty catalog" is per project).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
