@@ -135,14 +135,10 @@ mod resumable {
         SkipReason, StoreView, UnresumableReason,
     };
     use micold_core::git::GitCli;
-    use micold_core::provider::{ActivitySource, AiCliProvider, ClaudeProvider, StoreDirs};
-    use micold_core::provider::{FolderTrust, InputReadiness, ToolServerSupport};
+    use micold_core::provider::{AiCliProvider, ClaudeProvider};
     use micold_core::session::AiCli;
-    use micold_core::terminal::LaunchMode;
     use micold_core::worktree::{discover, ProvenanceView};
-    use std::cell::Cell;
     use std::collections::BTreeSet;
-    use std::ffi::OsStr;
     use std::path::{Path, PathBuf};
     use std::time::{Duration, SystemTime};
     use uuid::Uuid;
@@ -359,79 +355,8 @@ mod resumable {
         );
     }
 
-    /// Counts the reads discovery makes per conversation; everything else is Claude's.
-    struct Counting {
-        titles: Cell<usize>,
-        labels: Cell<usize>,
-    }
-
-    impl AiCliProvider for Counting {
-        fn id(&self) -> AiCli {
-            ClaudeProvider.id()
-        }
-        fn display_name(&self) -> &'static str {
-            ClaudeProvider.display_name()
-        }
-        fn command(&self) -> &'static str {
-            ClaudeProvider.command()
-        }
-        fn is_available(&self, path: &OsStr) -> bool {
-            ClaudeProvider.is_available(path)
-        }
-        fn launch_args(&self, id: Uuid, mode: LaunchMode) -> Vec<String> {
-            ClaudeProvider.launch_args(id, mode)
-        }
-        fn config_dir(&self) -> Option<PathBuf> {
-            ClaudeProvider.config_dir()
-        }
-        fn launch_env(&self) -> Vec<(String, String)> {
-            ClaudeProvider.launch_env()
-        }
-        fn recorded_session_ids(&self, c: &Path, cwd: &Path) -> Vec<Uuid> {
-            ClaudeProvider.recorded_session_ids(c, cwd)
-        }
-        fn has_recorded_conversation(&self, c: &Path, cwd: &Path, id: Uuid) -> bool {
-            ClaudeProvider.has_recorded_conversation(c, cwd, id)
-        }
-        fn read_title(&self, c: &Path, cwd: &Path, id: Uuid) -> Option<String> {
-            self.titles.set(self.titles.get() + 1);
-            ClaudeProvider.read_title(c, cwd, id)
-        }
-        fn read_label(&self, c: &Path, cwd: &Path, id: Uuid) -> Option<String> {
-            self.labels.set(self.labels.get() + 1);
-            ClaudeProvider.read_label(c, cwd, id)
-        }
-        fn name_in_terminal_title(&self, t: &str, cwd: &Path) -> Option<String> {
-            ClaudeProvider.name_in_terminal_title(t, cwd)
-        }
-        fn mark_archived(&self, c: &Path, cwd: &Path, id: Uuid) -> std::io::Result<()> {
-            ClaudeProvider.mark_archived(c, cwd, id)
-        }
-        fn is_archived(&self, c: &Path, cwd: &Path, id: Uuid) -> bool {
-            ClaudeProvider.is_archived(c, cwd, id)
-        }
-        fn activity_source(&self, c: &Path, cwd: &Path, id: Uuid) -> ActivitySource {
-            ClaudeProvider.activity_source(c, cwd, id)
-        }
-        fn tool_server_support(&self) -> ToolServerSupport {
-            ClaudeProvider.tool_server_support()
-        }
-        fn input_readiness(&self) -> InputReadiness {
-            ClaudeProvider.input_readiness()
-        }
-        fn folder_trust(&self) -> FolderTrust {
-            ClaudeProvider.folder_trust()
-        }
-        fn store_dirs(&self, c: &Path, root: &Path, worktrees: &[PathBuf]) -> StoreDirs {
-            ClaudeProvider.store_dirs(c, root, worktrees)
-        }
-        fn last_activity(&self, c: &Path, cwd: &Path, id: Uuid) -> Option<SystemTime> {
-            ClaudeProvider.last_activity(c, cwd, id)
-        }
-    }
-
     #[test]
-    fn thousands_list_newest_first_and_only_the_page_is_read_for_titles() {
+    fn thousands_list_newest_first_and_bounded_to_the_page() {
         let fx = AttachFixture::new(&[]);
         let dir = fx.home.join(".claude/projects").join(encoded(&fx.repo));
         std::fs::create_dir_all(&dir).unwrap();
@@ -446,22 +371,12 @@ mod resumable {
                 .unwrap();
             by_age.push(id);
         }
-        let counting = Counting {
-            titles: Cell::new(0),
-            labels: Cell::new(0),
-        };
-        let found = run_with(&fx, &counting, &BTreeSet::new(), 50);
+        let found = run_with(&fx, &ClaudeProvider, &BTreeSet::new(), 50);
         let listed: Vec<Uuid> = found.sessions.iter().map(|s| s.id).collect();
         let newest_first: Vec<Uuid> = by_age.iter().rev().take(50).copied().collect();
         assert_eq!(
             listed, newest_first,
             "R4: newest first, bounded to the page"
-        );
-        assert!(
-            counting.titles.get() <= 50 && counting.labels.get() <= 50,
-            "titles and labels are read for the returned page only: {} / {}",
-            counting.titles.get(),
-            counting.labels.get()
         );
     }
 

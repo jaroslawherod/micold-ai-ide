@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: milestone M2 (implement)
-- **Next step**: M2: finish T019/T023 (daemon), T020/T024 (client), T025, T026; then review A, B, gate, PR
+- **Phase**: milestone M2 (verify)
+- **Next step**: M2: reviews A/B and visual pass T026 running; fix findings, full gate, PR
 
 ## Pull requests
 
@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 | 16f83e2bb3c3fcd8c606a488ebbbcbd213a3f849:7d9b479fef775a2c9f7046396a274e6b0b4b5df8 | CLEAN |
 | M1 Review A | 1 | e490c2c5707d3cb9064b333ff5ce9cbf9b0f8e97:6977a9592833ebd47531e6584f7c6898eda334a4 | CHANGES: 2 MAJOR (unreadable project, persist rollback) + stale-reply and list-keeping findings, all fixed |
 | M1 Review A | 2 | 58e65c5f48816255b5016fa76cce028cc5b61317:ad8191d1410cd917a8003ee27bf3d6838cb6a197 | pending |
+| M2 Review A | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | pending |
+| M2 Review B | 1 | a2269948470b3c917a2e4a470126c2d7f352832a:2a84d8d859247c499d1f62b671378527c030a36a | pending |
 
 ## Declined review findings
 

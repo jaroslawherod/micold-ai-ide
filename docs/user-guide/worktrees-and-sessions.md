@@ -227,8 +227,7 @@ conversation carries on from what it stored.
 - The app does not detect a session that is still running in a terminal outside Micold. Resuming it
   here would start a second copy of the conversation, so close the other one first.
 
-Attaching a session only adds it to the sidebar; nothing starts until you press **Resume** (or open
-the session later).
+**Resume** adds the session to the sidebar and then starts it, so the conversation opens at once.
 
 ### Resizing and hiding the sidebar
 
