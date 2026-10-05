@@ -41,8 +41,12 @@ pub fn modal<'a>(
         }
         Listing::Failed(reason) => {
             fields = fields.push(
-                Text::new(format!("Could not attach: {reason}"), TypeRole::Caption, r)
-                    .tint(r.error),
+                Text::new(
+                    format!("Could not read worktrees: {reason}"),
+                    TypeRole::Caption,
+                    r,
+                )
+                .tint(r.error),
             );
         }
         Listing::Listed(rows) if rows.is_empty() => {
@@ -56,6 +60,12 @@ pub fn modal<'a>(
             }
             fields = fields.push(Scrollable::new(list, r).height(Length::Fixed(240.0)));
         }
+    }
+
+    if let Some(reason) = &dialog.error {
+        fields = fields.push(
+            Text::new(format!("Could not attach: {reason}"), TypeRole::Caption, r).tint(r.error),
+        );
     }
 
     let busy = dialog.applying();

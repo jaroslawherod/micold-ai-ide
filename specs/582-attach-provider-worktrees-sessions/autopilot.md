@@ -56,6 +56,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A (part 2, late) | F5 disconnect with AttachApply pending reported as ApplyFailed | The text already says it may or may not have taken effect and that reconnecting shows the current state; the dialog stays so the user can see the list refresh. Accepted for M1. |
+| M1 | A (part 2, late) | Lower confidence: Session targets refused as Unavailable; persist on async task without spawn_blocking; pending_ops.len() send check; unsorted attachable-first; discarded JoinError; backfill write on AttachDiscover | M1 attaches worktrees only (Session targets arrive in M2); the patterns match existing handlers; accepted for M1. |
+| M1 | A (round 1 part 3) | F2 test does not prove "one persist" | MINOR; the test asserts the records, which is the behaviour; not worth a counting store. |
 
 ## Handover
 

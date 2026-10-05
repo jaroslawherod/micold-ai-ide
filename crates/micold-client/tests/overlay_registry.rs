@@ -168,6 +168,7 @@ fn dialogs() -> Vec<Dialog> {
                     listing: micold_client::features::attach::Listing::Loading,
                     selected: Default::default(),
                     in_flight: Vec::new(),
+                    error: None,
                 })
             },
         },
