@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: close (handover)
-- **Next step**: close unit continues from *Handover*
+- **Phase**: done
+- **Next step**: handoff
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #602 | design + M1 + M2 stacked on the same branch | draft, open | — |
+| #602 | design + M1 + M2 + close stacked on the same branch (the close PR) | draft, open | — |
 
 ## Milestones
 
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high) | 1 | fd51b4f49d22a526379a017d433c16857cf5036b:4f6fb12c21364a11c8f758f2b13c8a7e48a53675 | 7 unlabelled findings, none BLOCKER/MAJOR on inspection: 2 fixed (row_unread delegates to counts_as_unread; guide names the re-admitted row), 5 declined (see below). Done. |
 | Review B M1 (conformance, sonnet) | 1 | d1dac354ff9c1bab07c0cb224fbe372e7907f6b7:d8ad1e5b28906713af20e9bc9ee6708630c1324f | CHANGES on tooling only: F1 BLOCKER "could not run Verify" (its non-interactive session was refused cargo), F2 MINOR. No code finding; declined (below). Verify covered by the full gate's `cargo test --workspace`. Done. |
 | Review A M2 (conformance + correctness, `claude -p --agent autopilot-reviewer`; covers A and B for the light tier) | 1 | 28140445b367d8d49868b2ed1bb543d45793f25e:b126d484e6128e1d7b9ee939a3d9e93f536e8fd6 | CLEAN: 1 MINOR (doc line over 100 columns, fixed, prose only) |
+| Close 575 (tests + docs, `claude -p --agent autopilot-reviewer`) | 1 | f1e765fc1fa097a555b24e5953576f5bd0ea48ad:1bbe8f4b4252003c794eaeb3d89043d0d2ca0507 | CLEAN: 2 MINOR (guide line rewrapped, fixed, prose only; spec Status wording declined, below) |
 
 ## Declined review findings
 
@@ -63,27 +64,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | counting each entry every render | MINOR; O(sessions), same order as building the rows. |
 | M1 | B | F1 BLOCKER: Verify not run | Not a finding about the code: the reviewer's `claude -p` session was refused every cargo command. Verify's commands are all in the full gate's `cargo test --workspace`, run by this unit. |
 | M1 | B | F2 MINOR: `row_unread` now also skips archived sessions | No visible effect: sidebar rows already filter `!s.archived` (`sidebar.rs:656,704,737`), so an archived session never renders as a row. |
+| Close | review | F1 MINOR: spec Status says "shipped in PR #602" while #602 is open | `tasks/close.md` step 3 prescribes `Closed <date> — shipped in PRs #…`, written in the close PR itself; it is true once #602 merges, and nothing else merges this spec. |
 
 ## Handover
 
-Close unit 1 stopped at the 150k context cap. Committed, not pushed (no gate has run on this tree yet).
+None.
 
-**Done**
-- Converge was not run as a separate step. All of T001-T019 are ticked, M2's review was CLEAN, and M1's review B CHANGES was about tooling only. The tdd-verify traceability below checks every FR against a test.
-- T021 is done: one gap fixed in `docs/user-guide/project-selection.md`, which now says the button's total skips closed sessions.
-- T020 is done: quickstart.md § Results and `visual/close-*.png`. B1-B3, B5, B6, B8, B9 and B11 pass. B4 and B7 were not run. §C was not run: no macOS or Windows host, and no docker daemon.
-- Spec **Status** is set to Closed (PR #602).
-- tdd-verify phases 0-4 are done. `tdd/verification.md` and `cycle-log.md` are not written yet.
-  - Evidence: M1 has a red commit (41634afe) before its green commit, so M1 is PROVEN. M2's red is recorded only in *Environment notes (M2)*, and its test and source landed in one commit (7303f78e), so M2 is LIKELY. T010 (contrast) was written after the code, per cycle-log, so it is TEST_AFTER.
-  - No existing test was weakened: the diff removes no assertion.
-  - Deliberate mutants (log at /tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/mutants.log): all 8 were caught. A and A2 drop `!archived` in `counts_as_unread` (core attention test, sidebar sum test). B and B2 drop the in-view check. C makes the sidebar `unread_count` use `s.unread`. D makes `Count(n)` render as `Unread` (3 tree_view tests). E makes `count_tint` return the row tint. E2 makes `count_tint` return `outline_variant`, which `a_location_rows_unread_count_is_legible_in_every_row_state` catches. E2 is T010's red after the fact. The tree was restored with `git checkout`, and the diff is clean.
-  - Smell pass (fresh reviewer, /tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/smell-out.md): S1 HIGH 'tautological' `count_tint` test is declined, because mutant E shows it catches a real colour bug. S2 MED bypassed `mod support` is declined, because the peer files (features_sidebar.rs, switcher_unread.rs) build state the same way. S6 is LOW, a redundant `row_tint` loop. Open findings: S3 MED (about 20 asserts in sidebar_attention.rs without a rule message), S4 MED (workspace.rs:581, fixed in this commit), S5 MED (two eager tests to split), S7 LOW and S9 LOW names.
-- The worker for S3, S5 and S9 (`claude -p --agent autopilot-worker`) was refused write permission. Its unapplied edit script is `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/e.py`. Review that script before running it, or redo the work.
+## Environment notes (close)
 
-**Next**
-1. Apply S3, S5 and S9 to `crates/micold-client/tests/sidebar_attention.rs`. Then run `cargo test -p micold-client --test sidebar_attention` and `cargo test -p micold-core --lib workspace`.
-2. Write `tdd/verification.md`. The audit verdict is FAIL, because T010 is TEST_AFTER. After the remediation, the state is PASS_WITH_GAPS: no mutation tool, M2 is LIKELY, and T010 has red evidence only after the fact (E2). Append a `Phase 7: TDD remediation` (T022 T010 red via E2, done; T023 S3/S4; T024 S5) to tasks.md. Add the M2 and E2 rows to cycle-log.md.
-3. Review the close diff with a fresh reviewer, run the full gate, finish the ledger, push, and write `/tmp/claude-0/-home-claude-micold-ai-ide/5bfc6e5e-13f8-50ba-951a-784907d209f9/scratchpad/pr-close.md`. Return `PR: #602 (updated branch)`.
+- Close unit 1 handed over at the context cap; close unit 2 applied S3, S5 and S9 by hand (test-only, `sidebar_attention.rs` 23 → 26 tests, all pass; core `--lib workspace` 8 pass), wrote `tdd/verification.md` (as found FAIL on T010 test-after; PASS_WITH_GAPS after Phase 7 T022-T024), added the M2 and E2 rows to `cycle-log.md`. S6 and S7 (LOW) stay open in verification.md. The unreviewed `e.py` was not run.
+- Full gate (raw commands, `CARGO_INCREMENTAL=0`, `--no-fail-fast`) on tree `f1e765fc`: fmt, clippy core and workspace, and all 60 `scripts/tests` suites pass. `cargo test --workspace` fails only the six root-only baseline tests (see M1). The tree the gate saw was stamped by hand, as in M1, because the root-only failures keep the raw gate from exiting 0. After the gate, only the guide rewrap and the ledger changed.
 
 ## Environment notes (M1)
 

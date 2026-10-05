@@ -172,7 +172,11 @@ fn expanding_a_row_does_not_change_its_count() {
         collapsed,
         "an expanded row carries the same number as when it was collapsed"
     );
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(2),
+        "the expanded feat-x row still counts its two unread sessions"
+    );
 }
 
 /// US1 scenario 4: a session awaiting input the user has already viewed is not unread.
@@ -182,7 +186,11 @@ fn a_viewed_session_awaiting_input_does_not_count() {
     viewed.activity = ActivitySignal::AwaitingInput;
     let state = state_with(vec![in_worktree(FEATURE_X, true), viewed]);
 
-    assert_eq!(count_of(&state, FEATURE_X), Some(1));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(1),
+        "a viewed session awaiting input is read, so only the unread one is counted"
+    );
 }
 
 /// Edge case "The session in view" (FR-002, 039 FR-019): the count does not wait for the service.
@@ -191,7 +199,11 @@ fn the_session_in_view_is_not_counted() {
     let viewed = in_worktree(FEATURE_X, true);
     let id = viewed.id;
     let mut state = state_with(vec![viewed, in_worktree(FEATURE_X, true)]);
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(2),
+        "before anything is in view, both unread sessions count"
+    );
 
     view(&mut state, id);
 
@@ -227,7 +239,11 @@ fn a_project_without_worktrees_counts_on_its_default_row() {
         ],
     );
 
-    assert_eq!(counts(&state), [("Default".to_string(), 2)]);
+    assert_eq!(
+        counts(&state),
+        [("Default".to_string(), 2)],
+        "with no worktrees, the Default row is the only row and carries both unread sessions"
+    );
 }
 
 /// Contract A2: a worktree the tag filters or the agent setting hide has no row, so no count.
@@ -267,8 +283,15 @@ fn the_row_shown_for_the_current_session_carries_its_count() {
             _ => None,
         })
         .expect("the hidden worktree holding the current session is listed (024)");
-    assert!(readmitted.shown_for_current_session);
-    assert_eq!(count_of(&state, AGENT), Some(1));
+    assert!(
+        readmitted.shown_for_current_session,
+        "the agent worktree's row is listed only because it holds the current session"
+    );
+    assert_eq!(
+        count_of(&state, AGENT),
+        Some(1),
+        "the re-admitted row counts its unread session like any other row"
+    );
 }
 
 /// Contract A2: a missing or invalid worktree (010 FR-011) still has a row and carries its count.
@@ -285,48 +308,73 @@ fn a_missing_or_invalid_worktree_carries_its_count() {
         ],
     );
 
-    assert_eq!(count_of(&state, "feat-gone"), Some(1));
-    assert_eq!(count_of(&state, "feat-bad"), Some(1));
+    assert_eq!(
+        count_of(&state, "feat-gone"),
+        Some(1),
+        "a missing worktree keeps its row, so its unread session is counted there"
+    );
+    assert_eq!(
+        count_of(&state, "feat-bad"),
+        Some(1),
+        "an invalid worktree keeps its row, so its unread session is counted there"
+    );
 }
 
 // --- The tooltip line (FR-005, contract A7) ---
 
+/// FR-005: no unread session, no line.
 #[test]
-fn no_unread_session_means_no_tooltip_line() {
-    assert_eq!(unread_tooltip_line(0), None);
+fn unread_tooltip_line_is_absent_for_zero() {
+    assert_eq!(
+        unread_tooltip_line(0),
+        None,
+        "a row with no unread session adds no tooltip line"
+    );
 }
 
+/// FR-005: one unread session reads in the singular.
 #[test]
-fn one_unread_session_is_singular() {
-    assert_eq!(unread_tooltip_line(1).as_deref(), Some("1 unread session"));
+fn unread_tooltip_line_is_singular_for_one() {
+    assert_eq!(
+        unread_tooltip_line(1).as_deref(),
+        Some("1 unread session"),
+        "one unread session is named in the singular"
+    );
 }
 
+/// FR-005: more than one unread session reads in the plural.
 #[test]
-fn several_unread_sessions_are_plural() {
+fn unread_tooltip_line_is_plural_for_several() {
     assert_eq!(
         unread_tooltip_line(12).as_deref(),
-        Some("12 unread sessions")
+        Some("12 unread sessions"),
+        "several unread sessions are named in the plural with their number"
     );
 }
 
+/// Contract A7: a row with nothing unread keeps its tooltip as it was.
 #[test]
-fn a_tooltip_is_unchanged_with_no_unread_session() {
+fn with_unread_line_leaves_the_tooltip_unchanged_for_zero() {
     assert_eq!(
         with_unread_line(DEFAULT_LOCATION_LABEL.to_string(), 0),
-        DEFAULT_LOCATION_LABEL
+        DEFAULT_LOCATION_LABEL,
+        "no unread session leaves the row's tooltip untouched"
     );
 }
 
+/// Contract A7: the unread line goes on its own line after the Default row's label.
 #[test]
-fn the_line_follows_the_default_rows_label() {
+fn with_unread_line_appends_after_the_default_rows_label() {
     assert_eq!(
         with_unread_line(DEFAULT_LOCATION_LABEL.to_string(), 2),
-        format!("{DEFAULT_LOCATION_LABEL}\n2 unread sessions")
+        format!("{DEFAULT_LOCATION_LABEL}\n2 unread sessions"),
+        "the unread line follows the label on a new line"
     );
 }
 
+/// Contract A7: the unread line goes last, after every line of a worktree's tooltip.
 #[test]
-fn the_line_follows_a_multi_line_worktree_tooltip() {
+fn with_unread_line_appends_after_a_multi_line_worktree_tooltip() {
     let tooltip = worktree_tooltip(
         Some(Path::new(REPO)),
         &worktree(FEATURE_X, WorktreeStatus::Missing),
@@ -339,8 +387,16 @@ fn the_line_follows_a_multi_line_worktree_tooltip() {
 
     let with_line = with_unread_line(tooltip.clone(), 1);
 
-    assert_eq!(with_line, format!("{tooltip}\n1 unread session"));
-    assert_eq!(with_line.lines().last(), Some("1 unread session"));
+    assert_eq!(
+        with_line,
+        format!("{tooltip}\n1 unread session"),
+        "the worktree tooltip is kept whole and the unread line is appended"
+    );
+    assert_eq!(
+        with_line.lines().last(),
+        Some("1 unread session"),
+        "the unread line is the tooltip's last line"
+    );
 }
 
 // --- Live updates (US2, FR-007, FR-009) ---
@@ -387,7 +443,11 @@ fn two_read_sessions_in_feature_x() -> (State, SessionId, SessionId) {
 #[test]
 fn a_catalog_update_raises_and_lowers_the_count() {
     let (mut state, a, b) = two_read_sessions_in_feature_x();
-    assert_eq!(count_of(&state, FEATURE_X), Some(0));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(0),
+        "two read sessions start the row at zero"
+    );
 
     reconcile_catalog(
         &mut state,
@@ -422,7 +482,11 @@ fn selecting_a_session_drops_the_count_before_any_catalog_update() {
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
         false,
     );
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(2),
+        "the snapshot marked both sessions unread"
+    );
 
     view(&mut state, a);
 
@@ -442,7 +506,11 @@ fn a_closed_or_removed_session_lowers_the_count() {
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
         false,
     );
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(2),
+        "the snapshot marked both sessions unread"
+    );
 
     reconcile_catalog(&mut state, &catalog(&[(a, Some(FEATURE_X), true)]), false);
 
@@ -466,13 +534,16 @@ fn a_burst_of_updates_settles_on_the_right_count() {
         reconcile_catalog(&mut state, &snapshot, false);
     }
 
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+    assert_eq!(
+        count_of(&state, FEATURE_X),
+        Some(2),
+        "the last snapshot, with both sessions unread, decides the count"
+    );
 }
 
-/// FR-009: expanding, collapsing and hovering a location row read nothing: every session keeps its
-/// unread state, and the window has nothing new to report as in view.
-#[test]
-fn expanding_collapsing_and_hovering_a_row_read_nothing() {
+/// `feat-x` with two unread sessions, its view already reported, before and after the user
+/// expands, hovers, unhovers and collapses its row and toggles the Default row (FR-009).
+fn rows_toggled_and_hovered() -> (State, State) {
     let (mut state, a, b) = two_read_sessions_in_feature_x();
     reconcile_catalog(
         &mut state,
@@ -480,10 +551,7 @@ fn expanding_collapsing_and_hovering_a_row_read_nothing() {
         false,
     );
     let _ = state.view_report(true);
-    let unread_before: Vec<bool> = state.workspace.sessions[Path::new(REPO)]
-        .iter()
-        .map(|s| s.unread)
-        .collect();
+    let before = state.clone();
 
     for message in [
         Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
@@ -494,18 +562,50 @@ fn expanding_collapsing_and_hovering_a_row_read_nothing() {
     ] {
         state.update(message);
     }
+    (before, state)
+}
 
-    let unread_after: Vec<bool> = state.workspace.sessions[Path::new(REPO)]
+fn unread_flags(state: &State) -> Vec<bool> {
+    state.workspace.sessions[Path::new(REPO)]
         .iter()
         .map(|s| s.unread)
-        .collect();
-    assert_eq!(unread_after, unread_before, "no session was read");
+        .collect()
+}
+
+/// FR-009: expanding, collapsing and hovering a location row mark no session read.
+#[test]
+fn expanding_collapsing_and_hovering_a_row_mark_no_session_read() {
+    let (before, after) = rows_toggled_and_hovered();
+
     assert_eq!(
-        state.view_report(true),
+        unread_flags(&after),
+        unread_flags(&before),
+        "no session's unread state changed"
+    );
+}
+
+/// FR-009: expanding, collapsing and hovering a location row bring no session into view.
+#[test]
+fn expanding_collapsing_and_hovering_a_row_bring_nothing_into_view() {
+    let (_, mut after) = rows_toggled_and_hovered();
+
+    assert_eq!(
+        after.view_report(true),
         None,
         "the window's view report is unchanged, so nothing came into view"
     );
-    assert_eq!(count_of(&state, FEATURE_X), Some(2));
+}
+
+/// FR-009: expanding, collapsing and hovering a location row leave its count as it was.
+#[test]
+fn expanding_collapsing_and_hovering_a_row_keep_its_count() {
+    let (_, after) = rows_toggled_and_hovered();
+
+    assert_eq!(
+        count_of(&after, FEATURE_X),
+        Some(2),
+        "both sessions are still unread, so the row still counts two"
+    );
 }
 
 fn switcher_count(state: &State) -> usize {
@@ -536,22 +636,56 @@ fn the_location_rows_add_up_to_the_switchers_count() {
         closed,
     ]);
 
-    assert_eq!(switcher_count(&state), 4);
-    assert_eq!(rows_total(&state), switcher_count(&state));
+    assert_eq!(
+        switcher_count(&state),
+        4,
+        "the switcher counts the four unread open sessions and skips the closed one"
+    );
+    assert_eq!(
+        rows_total(&state),
+        switcher_count(&state),
+        "with nothing hidden, the location rows add up to the switcher's count"
+    );
 }
 
-/// FR-010, R8: a worktree the sidebar hides is still counted on the switcher, so the sum holds
-/// only for a project with nothing hidden.
+/// FR-010, R8: an agent worktree the sidebar hides is still counted on the switcher, so the sum
+/// holds only for a project with nothing hidden.
 #[test]
-fn a_hidden_worktree_still_counts_on_the_switcher() {
-    let mut state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
-    assert_eq!(switcher_count(&state), 2);
-    assert_eq!(rows_total(&state), 1, "the agent worktree is hidden");
+fn an_agent_worktree_hidden_by_the_setting_still_counts_on_the_switcher() {
+    let state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
 
+    assert_eq!(
+        switcher_count(&state),
+        2,
+        "the switcher counts the hidden agent worktree's unread session too"
+    );
+    assert_eq!(
+        rows_total(&state),
+        1,
+        "the agent worktree is hidden, so only feat-x's row counts"
+    );
+}
+
+/// FR-010, R8: a worktree the tag filter hides is still counted on the switcher.
+#[test]
+fn a_worktree_hidden_by_the_tag_filter_still_counts_on_the_switcher() {
+    let mut state = state_with(vec![
+        in_worktree(FEATURE_X, true),
+        in_worktree(FEATURE_Y, true),
+    ]);
     state
         .sidebar
         .filters
         .insert(TagFilter::Type(ConventionalType::Fix));
-    assert_eq!(switcher_count(&state), 2);
-    assert_eq!(rows_total(&state), 0, "both worktrees are hidden");
+
+    assert_eq!(
+        switcher_count(&state),
+        2,
+        "the switcher counts the unread sessions of worktrees the filter hides"
+    );
+    assert_eq!(
+        rows_total(&state),
+        0,
+        "the tag filter hides both worktrees, so no row carries a count"
+    );
 }

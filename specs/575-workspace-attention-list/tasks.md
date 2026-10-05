@@ -79,6 +79,15 @@ location rows add up to its switcher count (FR-010, 039 US1 scenario 9).
 - [x] T020 Run quickstart §A, §B (B1-B11, through the `visual-pass` skill) and §C, and record the results in `specs/575-workspace-attention-list/quickstart.md`. Done: §A, B1-B3, B5, B6, B8-B11 pass; B4 and B7 not run; §C not run (no macOS, Windows or container runtime here). See quickstart.md § Results.
 - [x] T021 Check that `docs/user-guide/worktrees-and-sessions.md` and `docs/user-guide/project-selection.md` match the shipped behaviour of both stories and the closed-session rule. Done: one gap fixed: the switcher button's total now also says that a closed session is not counted.
 
+## Phase 7: TDD remediation
+
+From `tdd/verification.md`. The audit as found was FAIL (finding 1). The feature counts as done once these
+tasks are cleared, and they are.
+
+- [x] T022 Finding 1, `crates/micold-client/src/ui/material/composition_contrast.rs:177`: give T010 a red. Apply mutant E2 (`count_tint` returns `outline_variant`), see `a_location_rows_unread_count_is_legible_in_every_row_state` fail, then restore. Recorded in `tdd/cycle-log.md`.
+- [x] T023 Findings 2, 3 and 5 (S3, S4, S9): give every assertion in `crates/micold-client/tests/sidebar_attention.rs` and `the_other_projects_total_leaves_out_closed_sessions` in `crates/micold-core/src/workspace.rs` a rule message, and name the tooltip tests for their function and rule. Proven by `cargo test -p micold-client --test sidebar_attention` and `cargo test -p micold-core --lib workspace`.
+- [x] T024 Finding 4 (S5), `crates/micold-client/tests/sidebar_attention.rs`: split `expanding_collapsing_and_hovering_a_row_read_nothing` into one test each for unread flags, view report and count, and split `a_hidden_worktree_still_counts_on_the_switcher` into the agent-setting case and the tag-filter case. Proven by the same command.
+
 ## Dependencies & Execution Order
 
 - Phase 2 (T001-T002) blocks everything: every count goes through `counts_as_unread`.
