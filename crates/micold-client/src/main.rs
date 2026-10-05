@@ -878,7 +878,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_opened(app)
         }
-        Message::Attach(msg @ (AttachMsg::AttachSelected | AttachMsg::AttachAll)) => {
+        Message::Attach(
+            msg @ (AttachMsg::AttachSelected | AttachMsg::AttachAll | AttachMsg::Resume { .. }),
+        ) => {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_apply(app)
         }

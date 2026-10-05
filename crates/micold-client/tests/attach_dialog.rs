@@ -6,11 +6,15 @@
 use micold_client::app::State;
 use micold_client::features::attach::{self, Listing, Msg};
 use micold_core::attach::{
-    AttachItem, AttachOutcome, AttachResult, AttachableWorktree, Availability, DiscoveryReport,
-    RefuseReason, Unavailable,
+    AttachItem, AttachOutcome, AttachResult, AttachTarget, AttachableWorktree, Availability,
+    DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
+    Unavailable, UnresumableReason,
 };
 use micold_core::notify::Level;
+use micold_core::session::AiCli;
 use std::path::PathBuf;
+use std::time::SystemTime;
+use uuid::Uuid;
 
 fn worktree(name: &str, availability: Availability) -> AttachableWorktree {
     AttachableWorktree {
@@ -260,4 +264,203 @@ fn cancel_closes_the_dialog() {
     let mut state = open_state();
     attach::update(&mut state, Msg::Cancelled);
     assert!(state.attach.dialog.is_none());
+}
+
+// --- Sessions (T020; Story 2) ---------------------------------------------------------------
+
+fn session(n: u128, status: ResumableStatus) -> ResumableSession {
+    ResumableSession {
+        id: Uuid::from_u128(n),
+        provider: AiCli::ClaudeCode,
+        title: Some(format!("session {n}")),
+        last_activity: SystemTime::UNIX_EPOCH,
+        target: AttachTarget::Default,
+        status,
+    }
+}
+
+fn state_with(sessions: Vec<ResumableSession>, notes: Vec<DiscoveryNote>) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/p");
+    state.workspace.active = Some(path.clone());
+    attach::update(&mut state, Msg::Opened);
+    attach::update(
+        &mut state,
+        Msg::Listed {
+            project: path,
+            report: DiscoveryReport {
+                worktrees: vec![],
+                sessions,
+                notes,
+            },
+        },
+    );
+    state
+}
+
+fn note(provider: AiCli, reason: SkipReason) -> DiscoveryNote {
+    DiscoveryNote {
+        provider: Some(provider),
+        path: None,
+        reason,
+    }
+}
+
+#[test]
+fn the_report_s_sessions_are_kept_for_the_dialog_to_draw() {
+    let state = state_with(vec![session(1, ResumableStatus::Resumable)], vec![]);
+    let dialog = state.attach.dialog.as_ref().unwrap();
+    assert_eq!(dialog.sessions.len(), 1);
+    assert_eq!(dialog.sessions[0].id, Uuid::from_u128(1));
+}
+
+#[test]
+fn resume_sends_one_session_target() {
+    let mut state = state_with(
+        vec![
+            session(1, ResumableStatus::Resumable),
+            session(2, ResumableStatus::NeedsWorktreeAttach),
+        ],
+        vec![],
+    );
+    attach::update(
+        &mut state,
+        Msg::Resume {
+            id: Uuid::from_u128(2),
+        },
+    );
+    let dialog = state.attach.dialog.as_ref().unwrap();
+    assert_eq!(
+        dialog.in_flight,
+        vec![AttachItem::Session {
+            id: Uuid::from_u128(2)
+        }]
+    );
+    assert!(dialog.applying());
+}
+
+#[test]
+fn an_unresumable_session_offers_no_resume_and_says_why() {
+    let reasons = [
+        (UnresumableReason::WorktreeMissing, "folder is missing"),
+        (UnresumableReason::WorktreeInvalid, "not a usable worktree"),
+        (UnresumableReason::NoLocation, "no worktree"),
+    ];
+    for (n, (reason, text)) in reasons.into_iter().enumerate() {
+        let s = session(n as u128 + 1, ResumableStatus::Unresumable(reason));
+        assert!(!attach::can_resume(&s));
+        assert!(
+            attach::status_text(&s).contains(text),
+            "{reason:?}: {}",
+            attach::status_text(&s)
+        );
+        let mut state = state_with(vec![s.clone()], vec![]);
+        attach::update(&mut state, Msg::Resume { id: s.id });
+        assert!(!state.attach.dialog.as_ref().unwrap().applying());
+    }
+    assert!(attach::can_resume(&session(9, ResumableStatus::Resumable)));
+    assert!(
+        attach::status_text(&session(9, ResumableStatus::NeedsWorktreeAttach))
+            .contains("attaches its worktree")
+    );
+}
+
+#[test]
+fn a_second_resume_while_one_is_applying_changes_nothing() {
+    let mut state = state_with(
+        vec![
+            session(1, ResumableStatus::Resumable),
+            session(2, ResumableStatus::Resumable),
+        ],
+        vec![],
+    );
+    attach::update(
+        &mut state,
+        Msg::Resume {
+            id: Uuid::from_u128(1),
+        },
+    );
+    attach::update(
+        &mut state,
+        Msg::Resume {
+            id: Uuid::from_u128(2),
+        },
+    );
+    assert_eq!(
+        state.attach.dialog.as_ref().unwrap().in_flight,
+        vec![AttachItem::Session {
+            id: Uuid::from_u128(1)
+        }]
+    );
+}
+
+#[test]
+fn a_resumed_session_closes_the_dialog_and_a_refusal_names_its_reason() {
+    let mut state = state_with(vec![session(1, ResumableStatus::Resumable)], vec![]);
+    attach::update(
+        &mut state,
+        Msg::Resume {
+            id: Uuid::from_u128(1),
+        },
+    );
+    let item = AttachItem::Session {
+        id: Uuid::from_u128(1),
+    };
+    let outcomes = attach::update(
+        &mut state,
+        Msg::Applied(vec![AttachResult {
+            item: item.clone(),
+            outcome: AttachOutcome::Refused(RefuseReason::AlreadyRunning),
+        }]),
+    );
+    let [micold_client::features::Outcome::NotificationRaised(n)] = outcomes.as_slice() else {
+        panic!("expected one notification, got {outcomes:?}");
+    };
+    assert!(n.message.contains("already running"), "{}", n.message);
+    assert_eq!(n.level, Level::Error);
+    assert_eq!(
+        attach::summary(&[AttachResult {
+            item,
+            outcome: AttachOutcome::Attached
+        }]),
+        "Attached 1 session."
+    );
+}
+
+#[test]
+fn notes_are_a_footer_when_nothing_was_found_and_for_real_problems() {
+    // An absent store is the ordinary case: silent while sessions are listed...
+    let listed = state_with(
+        vec![session(1, ResumableStatus::Resumable)],
+        vec![note(AiCli::Pi, SkipReason::StoreMissing)],
+    );
+    assert!(listed
+        .attach
+        .dialog
+        .as_ref()
+        .unwrap()
+        .footer_notes()
+        .is_empty());
+    // ...but explains an empty list,
+    let empty = state_with(vec![], vec![note(AiCli::Pi, SkipReason::StoreMissing)]);
+    assert_eq!(
+        empty.attach.dialog.as_ref().unwrap().footer_notes().len(),
+        1
+    );
+    // ...and an unreadable store or a sandbox is always said.
+    let problem = state_with(
+        vec![session(1, ResumableStatus::Resumable)],
+        vec![
+            note(AiCli::Copilot, SkipReason::StoreUnreadable),
+            DiscoveryNote {
+                provider: None,
+                path: None,
+                reason: SkipReason::SandboxStoreNotReadable,
+            },
+        ],
+    );
+    let notes = problem.attach.dialog.as_ref().unwrap().footer_notes();
+    assert_eq!(notes.len(), 2);
+    assert!(notes[0].contains("Copilot"), "{}", notes[0]);
+    assert!(notes[1].contains("sandbox"), "{}", notes[1]);
 }

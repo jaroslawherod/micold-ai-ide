@@ -205,6 +205,31 @@ the branch, the files and any uncommitted changes stay exactly as they were. Att
 that is already attached changes nothing, and the app tells you it was already attached. If two
 windows attach the same worktree at once, it is added once.
 
+#### Resuming sessions the app has no record of
+
+Below the worktrees the same dialog lists **Stored sessions**: conversations that Claude Code,
+Copilot or Pi recorded for this project (in its folder or one of its worktrees) and that the app
+does not show yet, newest first with their title. Press **Resume** on one to add it to the sidebar
+and continue it where you left off; the assistant is started with its own resume option, so the
+conversation carries on from what it stored.
+
+- A session that ran in a worktree the app has not attached yet resumes by attaching that worktree
+  first, as the row says.
+- A session that cannot be resumed is listed with the reason and has no **Resume** button: its
+  worktree's folder is gone, its folder is not a worktree git knows, or it ran somewhere that is not
+  a worktree of this project. It is never resumed in another folder instead.
+- A session that is already starting or running in the app is refused with "that session is already
+  running"; it is resumed in one place at a time.
+- Under the list, a short note says what could not be read: an assistant's session folder that is
+  unreadable or has a damaged entry, and, when the project runs in a sandbox, that sessions stored
+  on this computer cannot be listed. A missing session folder is mentioned only when it is why the
+  list is empty.
+- The app does not detect a session that is still running in a terminal outside Micold. Resuming it
+  here would start a second copy of the conversation, so close the other one first.
+
+Attaching a session only adds it to the sidebar; nothing starts until you press **Resume** (or open
+the session later).
+
 ### Resizing and hiding the sidebar
 
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.

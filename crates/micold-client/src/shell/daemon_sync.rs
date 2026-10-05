@@ -44,6 +44,7 @@ use micold_client::features::attach::Msg as AttachMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
+use micold_core::attach::{AttachItem, AttachOutcome};
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -891,8 +892,26 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // broadcast; the answer says what each target came to.
             Some(PendingOp::AttachApply) => {
                 if let OperationResult::AttachApplied { results } = result {
+                    // A resume is an attach that then runs the session: view and start it once
+                    // the catalog holds it (the broadcast precedes this answer).
+                    let resumed =
+                        results.iter().find_map(|r| match (&r.item, r.outcome) {
+                            (
+                                AttachItem::Session { id },
+                                AttachOutcome::Attached | AttachOutcome::AlreadyAttached,
+                            ) if app.core.attach.dialog.as_ref().is_some_and(|d| {
+                                d.in_flight == [AttachItem::Session { id: *id }]
+                            }) =>
+                            {
+                                Some(*id)
+                            }
+                            _ => None,
+                        });
                     app.core
                         .update(Message::Attach(AttachMsg::Applied(results)));
+                    if let Some(id) = resumed {
+                        view_and_start(app, SessionId::from_uuid(id));
+                    }
                 }
             }
             _ => {}

@@ -674,9 +674,10 @@ async fn discovery_lists_this_projects_sessions_and_attaching_one_adds_an_idle_e
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
-    let mine = seed_claude(project.path());
     let state = fresh_state(store.path(), project.path());
     let mut client = connect_and_attach(&state, project.path()).await;
+    // Written after the attach, so feature 026's adoption pass has not already taken it.
+    let mine = seed_claude(project.path());
 
     let report = discover(&mut client, project.path(), 1).await;
     assert!(
@@ -712,9 +713,10 @@ async fn resuming_a_session_in_an_unattached_worktree_attaches_the_worktree_firs
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
     provider_worktree(project.path(), "alpha");
-    let id = seed_claude(&project.path().join(".claude/worktrees/alpha"));
     let state = fresh_state(store.path(), project.path());
     let mut client = connect_and_attach(&state, project.path()).await;
+    // Written after the attach, so feature 026's adoption pass has not already taken it.
+    let id = seed_claude(&project.path().join(".claude/worktrees/alpha"));
 
     let report = discover(&mut client, project.path(), 1).await;
     let listed = report.sessions.iter().find(|s| s.id == id).expect("listed");
@@ -792,7 +794,10 @@ fn a_second_resume_while_starting_running_or_restarting_is_refused_as_already_ru
     );
     catalog.mark_session_running(id);
     let outcome = catalog.attach_session(&project, session.clone()).unwrap();
-    assert_eq!(outcome, AttachOutcome::Refused(RefuseReason::AlreadyRunning));
+    assert_eq!(
+        outcome,
+        AttachOutcome::Refused(RefuseReason::AlreadyRunning)
+    );
     // The states that count as "running" for this guard.
     for (lifecycle, live) in [
         (SessionLifecycle::Idle, false),
@@ -810,7 +815,9 @@ fn a_second_resume_while_starting_running_or_restarting_is_refused_as_already_ru
         assert_eq!(lifecycle.is_live(), live, "{lifecycle:?}");
     }
     assert!(
-        RefuseReason::AlreadyRunning.text().contains("already running"),
+        RefuseReason::AlreadyRunning
+            .text()
+            .contains("already running"),
         "FR-016: the user is told why"
     );
     assert_eq!(catalog.known_session_ids(&project).len(), 1, "one entry");
@@ -840,9 +847,15 @@ async fn a_sandboxed_daemon_reports_the_store_is_not_readable() {
 fn the_resume_launch_carries_the_right_argument_and_session_id_for_each_provider() {
     let id = Uuid::parse_str("11111111-2222-4222-8222-333333333333").unwrap();
     let args = |cli: AiCli| cli.provider().launch_args(id, LaunchMode::Resume);
-    assert_eq!(args(AiCli::ClaudeCode), ["--resume".to_string(), id.to_string()]);
+    assert_eq!(
+        args(AiCli::ClaudeCode),
+        ["--resume".to_string(), id.to_string()]
+    );
     assert!(args(AiCli::Copilot).contains(&format!("--resume={id}")));
     let pi = args(AiCli::Pi);
-    let at = pi.iter().position(|a| a == "--session-id").expect("pi flag");
+    let at = pi
+        .iter()
+        .position(|a| a == "--session-id")
+        .expect("pi flag");
     assert_eq!(pi[at + 1], id.to_string());
 }
