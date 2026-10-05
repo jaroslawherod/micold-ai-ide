@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #587 | M1: attach provider worktrees from the app | merged | 502c49691bc45786f85f2a60a7e13417bf08cabc |
 | #588 | M2: discover and resume provider sessions | merged | e849b117222256304d49f6e01e0d449a89c96d5c |
 | #589 | M3: attach_worktree and list_resumable_sessions MCP tools | merged | e3cef56de6611c1ce080e7bb5a39fd09c0bd079e |
-| M4 | M4: start-up offer banner | open (number below) | |
+| #590 | M4: start-up offer banner | open | |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Attach provider worktrees from the app (dialog) | #587 | merged |
 | M2 | T017–T026 | full | Discover and resume provider sessions | #588 | merged |
 | M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | #589 | merged |
-| M4 | T032–T036 | full | Start-up offer banner | PR pending | in review |
+| M4 | T032–T036 | full | Start-up offer banner | #590 | in review |
 | M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | | pending |
 
 ## Decisions
