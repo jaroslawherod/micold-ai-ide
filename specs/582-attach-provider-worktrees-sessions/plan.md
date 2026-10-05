@@ -19,7 +19,7 @@ Three additions on top of machinery that already exists, no new storage:
    a deleted worktree of this project. It lists; it adopts nothing.
 3. **Surface it**: an `attach_worktree` and a `list_resumable_sessions` MCP tool, a sidebar
    "Attach existing…" dialog (reusing the dialog and button primitives), and a one-time offer banner
-   when the project's catalog is empty.
+   when the project has no provenance records.
 
 Spec alignment note (recorded in research R2): feature 026's `discover_external_sessions` already
 adopts, at every project open, sessions found at the project root and at every startable worktree.
@@ -130,10 +130,10 @@ offer and dialog rules are tested in `tests/`.
 
 ## Complexity Tracking
 
-No constitution violations. Three deviations from the spec's wording, both for the same reason (existing behaviour must not break, FR-013), recorded for the spec owner:
+No constitution violations. Three deviations from the spec's original wording (now amended in spec.md to match), all for the same reason (existing behaviour must not break, FR-013), recorded for the spec owner:
 
 | Deviation | Why | Rejected |
 |---|---|---|
-| Root and startable-worktree sessions stay auto-adopted at open (R2), against FR-012's "no automatic attaching" | feature 026 FR-014, pinned by `session_discovery.rs` | removing it regresses 026 |
+| Root and startable-worktree sessions stay auto-adopted at open (R2); spec FR-012 now scopes "offer only" to this feature and keeps 026's adoption | feature 026 FR-014, pinned by `session_discovery.rs` | removing it regresses 026 |
 | The start-up offer triggers on "no provenance records", not "empty catalog" (data-model OfferState, R5) | 026 adoption fills the catalog before the snapshot, so a lost data directory is never catalog-empty | testing catalog emptiness (offer never shows) |
 | The branch-conflict edge case maps to `NotAWorktreeOfProject` (research R1, attach-worktree-tool), because attach checks out nothing | attach is metadata-only (FR-003) | a cross-project branch scan with no failing case to guard |

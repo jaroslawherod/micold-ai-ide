@@ -54,6 +54,6 @@ A modal list dialog ("Attach existing worktrees and sessions") with a checkbox p
 |---|---|
 | core unit (`micold-core/tests/attach_*.rs`) | `attachable_worktrees` (FR-001, prunable edge), `discover_resumable` over a fixture store (FR-006, FR-007, SC-002, corrupt entry SC-005, deleted worktree, Default, thousands), read-only guarantee (FR-010: store tree hash unchanged), tool catalog, policy (FR-015), protocol round trip |
 | daemon integration (`micold-daemon/tests/attach_*.rs`) | attach persists and survives restart (FR-002, FR-003 byte-for-byte via `git status` and file hashes, SC-003), idempotence and concurrency (FR-004, FR-016), MCP `attach_worktree` and `list_resumable_sessions` end to end (Story 3, SC-004), resume attaches first (FR-008), double resume refused (FR-016), hidden-by-default unchanged (FR-013) |
-| client reducer (`micold-client/tests/attach_*.rs`) | offer only when the catalog is empty (FR-012, Story 4), dismissal, selection, "already attached" message (FR-004) |
+| client reducer (`micold-client/tests/attach_*.rs`) | offer only when the project has no provenance records (FR-012, Story 4), dismissal, selection, "already attached" message (FR-004) |
 | geometry gates | none: no new fixed geometry beyond shared primitives |
 | quickstart Part B (visual pass) | banner, dialog, attached row in light and dark theme |

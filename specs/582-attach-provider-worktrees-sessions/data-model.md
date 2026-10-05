@@ -63,7 +63,7 @@ count catalog sessions: feature 026 adopts root and startable-worktree sessions 
 (before the snapshot), so a lost data directory already has adopted sessions when the client
 evaluates the offer. Those adopted sessions are not part of the offer; the offer lists the
 attachable worktrees and the not-yet-adopted resumable sessions of the report. A project with
-records never gets the offer (FR-012 "non-empty catalog", Story 4 scenario 2).
+records never gets the offer (FR-012, Story 4 scenario 2).
 
 ## AttachOutcome (per target)
 
