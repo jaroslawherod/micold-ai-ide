@@ -712,6 +712,7 @@ unread counts and an unavailable row",
         posed: &[
             "multi-line, wrapped at the ceiling",
             "after 3 s at rest: hold the cursor still",
+            "follows the pointer: move over the area",
         ],
         live: &["hover and wait"],
         interactive: true,

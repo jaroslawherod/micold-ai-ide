@@ -271,7 +271,8 @@ pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
 /// showing a component it no longer fully describes (feature 029).
 ///
 /// The sixth is the rest mode (feature 038): it opens only once the cursor has been still on it for
-/// three seconds, and shows at most three lines of a much longer text.
+/// three seconds, and shows at most three lines of a much longer text. The seventh follows the
+/// pointer over a large trigger (feature 430).
 pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -342,6 +343,26 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                 )
                 .after_rest(std::time::Duration::from_secs(3))
                 .max_lines(3),
+                roles,
+            ),
+            // The pointer-following placement (feature 430): over a trigger as large as a canvas,
+            // the panel sits beside the pointer and moves with it, flipping at the window's edges.
+            posed(
+                "follows the pointer: move over the area",
+                material::Tooltip::new(
+                    iced::widget::container(material::Text::new(
+                        "Move the pointer over this area",
+                        TypeRole::Caption,
+                        roles,
+                    ))
+                    .width(Length::Fixed(420.0))
+                    .height(Length::Fixed(160.0))
+                    .padding(spacing::MD)
+                    .style(material::style::surface(roles)),
+                    "Beside the pointer, not beside the area",
+                    roles,
+                )
+                .position(material::TooltipPosition::FollowCursor),
                 roles,
             ),
         ],

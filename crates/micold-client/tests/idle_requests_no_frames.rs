@@ -33,7 +33,7 @@ use iced::{window, Event};
 
 use micold_client::ui::cdk::motion::{Progress, FRAME};
 
-use support::tooltip::{tooltip, Driven, DELAY};
+use support::tooltip::{follow_tooltip, tooltip, Driven, DELAY};
 
 /// The duration a component would state in its own motion spec. Any value works; this one is a
 /// realistic transition rather than a degenerate one.
@@ -665,4 +665,29 @@ fn the_scan_reaches_the_settings_surface() {
         "the section rail is not being scanned — it is the one new component here that renders a \
          selection, which is exactly the shape that grows an animation later"
     );
+}
+
+/// A pointer-following tooltip, open with a still pointer or closed, asks for no frame (feature 430,
+/// FR-007, SC-005).
+#[test]
+fn a_follow_tooltip_that_is_open_with_a_still_pointer_or_closed_requests_no_frame() {
+    let mut tip = Driven::new(follow_tooltip(None));
+    let start = Instant::now();
+    let away = iced::mouse::Cursor::Available(iced::Point::ORIGIN);
+    for n in 0..5 {
+        let seen = tip.frame(start + FRAME * n, away);
+        assert_eq!(seen.redraw, RedrawRequest::Wait, "closed, frame {n}");
+    }
+
+    let cursor = tip.over(20.0);
+    tip.frame(start + FRAME * 5, cursor);
+    assert!(tip.is_open(), "precondition: it opened on hover");
+    for n in 6..16 {
+        let seen = tip.frame(start + FRAME * n, cursor);
+        assert_eq!(
+            seen.redraw,
+            RedrawRequest::Wait,
+            "open and still, frame {n}"
+        );
+    }
 }

@@ -1,6 +1,7 @@
 //! The rules of a tooltip that waits for the cursor to rest (feature 038).
 //!
-//! Two rules, both free of rendering: when such a tooltip is open ([`RestTimer`]), and how a text
+//! Three rules, free of rendering: when such a tooltip is open ([`RestTimer`]), when one that waits
+//! after the pointer enters is ([`ShowTimer`], feature 430), and how a text
 //! is cut to a number of lines ([`clamp_to_lines`]). The client's tooltip widget feeds them the
 //! cursor, the clock and a measure of its own.
 
@@ -76,6 +77,63 @@ impl RestTimer {
     }
 
     /// The trigger was pressed: closed until the cursor has left it.
+    pub fn press(&mut self) {
+        *self = Self::Spent;
+    }
+
+    /// The trigger now describes something else: closed, and the wait starts from nothing.
+    pub fn reset(&mut self) {
+        *self = Self::Away;
+    }
+}
+
+/// Where a show-delay tooltip is in its wait (feature 430): open once the pointer has been over
+/// the trigger for the delay, counted from entering.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ShowTimer {
+    /// The pointer is not over the trigger.
+    #[default]
+    Away,
+    /// The pointer entered at `since` and has stayed over the trigger.
+    Waiting {
+        /// When it entered.
+        since: Instant,
+    },
+    /// The delay passed: open until the pointer leaves.
+    Open,
+    /// The trigger was pressed: closed until the pointer has left.
+    Spent,
+}
+
+impl ShowTimer {
+    /// Take in whether the pointer is `over` the trigger at `now`.
+    ///
+    /// Movement over the trigger never restarts the wait; only leaving does.
+    pub fn observe(&mut self, over: bool, now: Instant, delay: Duration) -> Rest {
+        *self = match (*self, over) {
+            (_, false) => Self::Away,
+            (Self::Away, true) if delay.is_zero() => Self::Open,
+            (Self::Away, true) => Self::Waiting { since: now },
+            (Self::Waiting { since }, true) => {
+                if now.saturating_duration_since(since) >= delay {
+                    Self::Open
+                } else {
+                    Self::Waiting { since }
+                }
+            }
+            (held @ (Self::Open | Self::Spent), true) => held,
+        };
+        Rest {
+            open: matches!(self, Self::Open),
+            wake_at: match *self {
+                // A delay too long for the clock to hold is a wait nothing ends: no wake.
+                Self::Waiting { since } => since.checked_add(delay),
+                _ => None,
+            },
+        }
+    }
+
+    /// The trigger was pressed: closed until the pointer has left it.
     pub fn press(&mut self) {
         *self = Self::Spent;
     }

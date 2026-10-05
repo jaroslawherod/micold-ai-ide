@@ -110,6 +110,23 @@ pub fn tooltip(rest: Option<Duration>, subject: Option<u64>) -> Tooltip<'static,
     tip
 }
 
+/// The gap a pointer-following panel keeps from the pointer, in logical pixels.
+pub const FOLLOW_GAP: f32 = 4.0;
+
+/// A tooltip over the probe that follows the pointer (feature 430).
+pub fn follow_tooltip(subject: Option<u64>) -> Tooltip<'static, Msg> {
+    let mut tip = Tooltip::new(
+        Element::new(Probe),
+        container(text("panel")),
+        Position::FollowCursor,
+    )
+    .gap(FOLLOW_GAP);
+    if let Some(key) = subject {
+        tip = tip.subject(key);
+    }
+    tip
+}
+
 /// What one event made the tooltip ask for.
 #[derive(Debug)]
 pub struct Seen {
@@ -222,6 +239,24 @@ impl Driven {
                 .is_some()
         };
         present
+    }
+
+    /// Where the panel is laid out in the window, `None` when it is not showing.
+    pub fn panel(&mut self) -> Option<Rectangle> {
+        let node = self.node();
+        let viewport = Rectangle::with_size(WINDOW);
+        let mut overlay = {
+            let layout = Layout::new(&node);
+            self.tip.overlay(
+                &mut self.tree,
+                layout,
+                &self.renderer,
+                &viewport,
+                Vector::ZERO,
+            )?
+        };
+        let laid_out = overlay.as_overlay_mut().layout(&self.renderer, WINDOW);
+        laid_out.children().first().map(|panel| panel.bounds())
     }
 
     /// Rest the cursor on the trigger from `start` until the panel opens, by redraws alone.

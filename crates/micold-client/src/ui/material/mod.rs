@@ -242,7 +242,7 @@ pub struct Tooltip<'a, M> {
     label: String,
     roles: Roles,
     position: tooltip::Position,
-    rest: Option<std::time::Duration>,
+    wait: tooltip::Wait,
     max_lines: Option<usize>,
     subject: Option<u64>,
 }
@@ -258,7 +258,7 @@ impl<'a, M: 'a> Tooltip<'a, M> {
             label: label.into(),
             roles,
             position: tooltip::Position::Bottom,
-            rest: None,
+            wait: tooltip::Wait::Hover,
             max_lines: None,
             subject: None,
         }
@@ -268,7 +268,7 @@ impl<'a, M: 'a> Tooltip<'a, M> {
     /// (feature 038, FR-015, FR-016). A press on the content closes the tooltip until the cursor
     /// has left. Without this the tooltip opens on hover.
     pub fn after_rest(mut self, delay: std::time::Duration) -> Self {
-        self.rest = Some(delay);
+        self.wait = tooltip::Wait::Rest(delay);
         self
     }
 
@@ -315,7 +315,7 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         // room on its side back over the trigger, and this one opens it on the other side
         // (029 BUG-001, FR-013).
         let mut floated = tooltip::Tooltip::new(t.content, tip, t.position).gap(spacing::XS);
-        if let Some(delay) = t.rest {
+        if let tooltip::Wait::Rest(delay) = t.wait {
             floated = floated.after_rest(delay);
         }
         if let Some(key) = t.subject {
