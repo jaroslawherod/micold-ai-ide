@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
 - **Phase**: milestone M1 (implement)
-- **Next step**: M1: Review A, visual pass (T016), review B, full gate, PR (see Handover)
+- **Next step**: M1: Review A round 2 + B in flight; T016 blocked (no Xvfb/xdotool); full gate; PR
 
 ## Pull requests
 
@@ -51,6 +51,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 2 | 55e3ee04bb1fadcb1a06aa062285101515f7e226:58eb15027e6609de65fbee294aded0d0e0d34da5 | CLEAN (3 MINOR fixed) |
 | Tasks review | 1 | 417dbb7f488aec137610fe1c8a19f5693ff81e1c:7d9b479fef775a2c9f7046396a274e6b0b4b5df8 | CHANGES: 1 MAJOR ([P] T018 shared file with T017), 2 MINOR; all fixed (speckit-analyze I1,I2,C2,C3,A1 also fixed) |
 | Tasks review | 2 | 16f83e2bb3c3fcd8c606a488ebbbcbd213a3f849:7d9b479fef775a2c9f7046396a274e6b0b4b5df8 | CLEAN |
+| M1 Review A | 1 | e490c2c5707d3cb9064b333ff5ce9cbf9b0f8e97:6977a9592833ebd47531e6584f7c6898eda334a4 | CHANGES: 2 MAJOR (unreadable project, persist rollback) + stale-reply and list-keeping findings, all fixed |
+| M1 Review A | 2 | 58e65c5f48816255b5016fa76cce028cc5b61317:ad8191d1410cd917a8003ee27bf3d6838cb6a197 | pending |
 
 ## Declined review findings
 
