@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers (FR-011, FR-015)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify round 1 (2 questions, both agent-resolved, no critical ambiguities left): FR-011 new read-only MCP tool separate from `list_sessions`; FR-015 Default session refused outright, Principle III not amended.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
