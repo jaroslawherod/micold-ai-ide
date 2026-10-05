@@ -130,9 +130,10 @@ offer and dialog rules are tested in `tests/`.
 
 ## Complexity Tracking
 
-No constitution violations. Two deviations from the spec's wording, both for the same reason (existing behaviour must not break, FR-013), recorded for the spec owner:
+No constitution violations. Three deviations from the spec's wording, both for the same reason (existing behaviour must not break, FR-013), recorded for the spec owner:
 
 | Deviation | Why | Rejected |
 |---|---|---|
 | Root and startable-worktree sessions stay auto-adopted at open (R2), against FR-012's "no automatic attaching" | feature 026 FR-014, pinned by `session_discovery.rs` | removing it regresses 026 |
+| The start-up offer triggers on "no provenance records", not "empty catalog" (data-model OfferState, R5) | 026 adoption fills the catalog before the snapshot, so a lost data directory is never catalog-empty | testing catalog emptiness (offer never shows) |
 | The branch-conflict edge case maps to `NotAWorktreeOfProject` (research R1, attach-worktree-tool), because attach checks out nothing | attach is metadata-only (FR-003) | a cross-project branch scan with no failing case to guard |
