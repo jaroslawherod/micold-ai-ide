@@ -550,6 +550,38 @@ impl Catalog {
         Ok(outcomes)
     }
 
+    /// Add `session` to `project` as it is, idle and never started (feature 582, FR-008).
+    ///
+    /// A session the catalog already holds is `AlreadyAttached`, unless it is starting, running or
+    /// restarting, which is refused: a session is resumed in one place at a time (FR-016). The
+    /// write is rolled back when it cannot be persisted, so a retry attaches.
+    pub fn attach_session(&mut self, project: &Path, session: Session) -> io::Result<AttachOutcome> {
+        if self.workspace.unreadable_projects.contains(project) {
+            return Ok(AttachOutcome::Refused(RefuseReason::IoFailed));
+        }
+        if let Some(existing) = self
+            .workspace
+            .sessions
+            .get(project)
+            .and_then(|list| list.iter().find(|s| s.id == session.id))
+        {
+            return Ok(if existing.lifecycle.is_live() {
+                AttachOutcome::Refused(RefuseReason::AlreadyRunning)
+            } else {
+                AttachOutcome::AlreadyAttached
+            });
+        }
+        let list = self.workspace.sessions.entry(project.to_path_buf()).or_default();
+        list.push(session);
+        if let Err(e) = self.persist() {
+            if let Some(list) = self.workspace.sessions.get_mut(project) {
+                list.pop();
+            }
+            return Err(e);
+        }
+        Ok(AttachOutcome::Attached)
+    }
+
     /// Run the one-time FR-006 backfill for `project`, given the worktrees discovery just found.
     ///
     /// Grandfathers the worktrees the user demonstrably already worked in — one they renamed, or
