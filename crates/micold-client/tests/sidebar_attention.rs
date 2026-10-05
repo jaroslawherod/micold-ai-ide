@@ -507,3 +507,51 @@ fn expanding_collapsing_and_hovering_a_row_read_nothing() {
     );
     assert_eq!(count_of(&state, FEATURE_X), Some(2));
 }
+
+fn switcher_count(state: &State) -> usize {
+    let active = state.workspace.active.clone();
+    state
+        .switcher_entries()
+        .iter()
+        .find(|e| Some(&e.path) == active.as_ref())
+        .map(|e| e.unread_count)
+        .expect("the active project is on the switcher")
+}
+
+fn rows_total(state: &State) -> usize {
+    counts(state).iter().map(|(_, n)| n).sum()
+}
+
+/// FR-010: the location rows add up to the switcher's count for the project, closed sessions
+/// counted on neither.
+#[test]
+fn the_location_rows_add_up_to_the_switchers_count() {
+    let mut closed = in_worktree(FEATURE_X, true);
+    closed.archived = true;
+    let state = state_with(vec![
+        in_worktree(FEATURE_X, true),
+        in_worktree(FEATURE_Y, true),
+        in_worktree(FEATURE_Y, true),
+        session_at(SessionLocation::Default, true),
+        closed,
+    ]);
+
+    assert_eq!(switcher_count(&state), 4);
+    assert_eq!(rows_total(&state), switcher_count(&state));
+}
+
+/// FR-010, R8: a worktree the sidebar hides is still counted on the switcher, so the sum holds
+/// only for a project with nothing hidden.
+#[test]
+fn a_hidden_worktree_still_counts_on_the_switcher() {
+    let mut state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
+    assert_eq!(switcher_count(&state), 2);
+    assert_eq!(rows_total(&state), 1, "the agent worktree is hidden");
+
+    state
+        .sidebar
+        .filters
+        .insert(TagFilter::Type(ConventionalType::Fix));
+    assert_eq!(switcher_count(&state), 2);
+    assert_eq!(rows_total(&state), 0, "both worktrees are hidden");
+}

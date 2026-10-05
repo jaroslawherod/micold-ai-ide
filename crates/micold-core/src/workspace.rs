@@ -325,7 +325,8 @@ impl Workspace {
     }
 
     /// The number of unread sessions a project holds (feature 039, FR-021, FR-022), less the
-    /// session `in_view`. `0` for a project with none, or an unknown path.
+    /// session `in_view` and any closed one (feature 575, FR-010). `0` for a project with none,
+    /// or an unknown path.
     ///
     /// Counted from [`Self::sessions`], which holds every session of the project: those of the
     /// Default entry and those of worktrees the sidebar's filter hides. `in_view` is the session
@@ -337,7 +338,7 @@ impl Workspace {
             .get(&key)
             .map(|list| {
                 list.iter()
-                    .filter(|s| s.unread && Some(s.id) != in_view)
+                    .filter(|s| crate::attention::counts_as_unread(s, in_view))
                     .count()
             })
             .unwrap_or(0)
@@ -548,5 +549,35 @@ mod tests {
             1,
             "with Q active its two unread sessions leave the total, and R's one stays"
         );
+    }
+
+    fn closed_unread_in(worktree: &str) -> Session {
+        let mut closed = unread_in(worktree);
+        closed.archived = true;
+        closed
+    }
+
+    /// Feature 575 A8 (FR-010, 039 US1 scenario 9): a closed session is not counted.
+    #[test]
+    fn the_unread_count_leaves_out_a_closed_session() {
+        let workspace = workspace_of(vec![(P, vec![unread_in("a"), closed_unread_in("a")])]);
+
+        assert_eq!(
+            workspace.unread_session_count(Path::new(P), None),
+            1,
+            "the closed unread session adds nothing"
+        );
+    }
+
+    /// Feature 575 A8 (FR-010): the button's total leaves out closed sessions too.
+    #[test]
+    fn the_other_projects_total_leaves_out_closed_sessions() {
+        let workspace = workspace_of(vec![
+            (P, Vec::new()),
+            (Q, vec![unread_in("a"), closed_unread_in("b")]),
+            (R, vec![closed_unread_in("c")]),
+        ]);
+
+        assert_eq!(workspace.other_projects_unread(Some(Path::new(P))), 1);
     }
 }

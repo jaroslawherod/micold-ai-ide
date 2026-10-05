@@ -68,11 +68,11 @@ location rows add up to its switcher count (FR-010, 039 US1 scenario 9).
 **Independent Test**: `mise run test-core`; `cargo test -p micold-client --test switcher_unread`;
 `cargo test -p micold-client --test sidebar_attention`; quickstart B6, B9.
 
-- [ ] T015 [P] [US1] Write failing unit tests in the `mod tests` of `crates/micold-core/src/workspace.rs`: `unread_session_count` leaves out an archived session whose `unread` is set, and `other_projects_unread` does too (contract A8).
-- [ ] T016 [P] [US1] Write failing state tests in `crates/micold-client/tests/switcher_unread.rs`: a closed unread session leaves its project's `SwitcherEntry::unread_count` and the button total; the other projects' counts are unchanged (FR-010, US1.5).
-- [ ] T017 [US1] Write a failing test in `crates/micold-client/tests/sidebar_attention.rs`: for a project with no hidden worktree and one closed unread session, the sum of `unread_count(in_view)` over `sidebar_entries()` equals the active project's `SwitcherEntry::unread_count` from `State::switcher_entries()`; and with a tag filter, or the agent-worktree setting, hiding a worktree that holds an unread session, the switcher still counts it while no entry does (FR-010, R8, spec Clarifications).
-- [ ] T018 [US1] Make `Workspace::unread_session_count` in `crates/micold-core/src/workspace.rs` filter with `crate::attention::counts_as_unread(s, in_view)` instead of `s.unread && Some(s.id) != in_view`; `other_projects_unread` follows through it (R1, plan D1). Signatures unchanged.
-- [ ] T019 [US1] Update `docs/user-guide/project-selection.md` where it describes the switcher's unread count: a closed session no longer counts (FR-010).
+- [x] T015 [P] [US1] Write failing unit tests in the `mod tests` of `crates/micold-core/src/workspace.rs`: `unread_session_count` leaves out an archived session whose `unread` is set, and `other_projects_unread` does too (contract A8).
+- [x] T016 [P] [US1] Write failing state tests in `crates/micold-client/tests/switcher_unread.rs`: a closed unread session leaves its project's `SwitcherEntry::unread_count` and the button total; the other projects' counts are unchanged (FR-010, US1.5).
+- [x] T017 [US1] Write a failing test in `crates/micold-client/tests/sidebar_attention.rs`: for a project with no hidden worktree and one closed unread session, the sum of `unread_count(in_view)` over `sidebar_entries()` equals the active project's `SwitcherEntry::unread_count` from `State::switcher_entries()`; and with a tag filter, or the agent-worktree setting, hiding a worktree that holds an unread session, the switcher still counts it while no entry does (FR-010, R8, spec Clarifications).
+- [x] T018 [US1] Make `Workspace::unread_session_count` in `crates/micold-core/src/workspace.rs` filter with `crate::attention::counts_as_unread(s, in_view)` instead of `s.unread && Some(s.id) != in_view`; `other_projects_unread` follows through it (R1, plan D1). Signatures unchanged.
+- [x] T019 [US1] Update `docs/user-guide/project-selection.md` where it describes the switcher's unread count: a closed session no longer counts (FR-010).
 
 ## Phase 6: Polish
 

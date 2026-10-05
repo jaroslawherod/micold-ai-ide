@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: M1 pushed to #602 (awaiting orchestrator)
-- **Next step**: orchestrator: CI on #602 (gh unauthenticated here; PR body section for M1 in the scratchpad `pr-M1.md`), then M2.
+- **Phase**: M2 pushed to #602 (awaiting orchestrator)
+- **Next step**: orchestrator: CI on #602 (gh unauthenticated; PR body sections in the scratchpad `pr-M1.md`, `pr-M2.md`), then the close unit (T020-T021).
 - **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
 - **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #602 | design + M1 stacked on the same branch | draft, open | — |
+| #602 | design + M1 + M2 stacked on the same branch | draft, open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | `● n` on each sidebar worktree and Default row with unread sessions, collapsed or expanded, live | #602 | pushed, CI pending |
-| M2 | T015–T019 | light | The switcher's counts skip closed sessions; location rows add up to the switcher count | — | pending |
+| M2 | T015–T019 | light | The switcher's counts skip closed sessions; location rows add up to the switcher count | #602 | pushed, CI pending |
 
 ## Decisions
 
@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks 575 | 1 | 546c4d5d35bd1de8132ad3d6d78f2341f17c4afd:c0987c41765f310a8299693bbe13c42d8aea98f0 | CLEAN: 1 MINOR (wrong task ref in T002, fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Review A M1 (code-review high) | 1 | fd51b4f49d22a526379a017d433c16857cf5036b:4f6fb12c21364a11c8f758f2b13c8a7e48a53675 | 7 unlabelled findings, none BLOCKER/MAJOR on inspection: 2 fixed (row_unread delegates to counts_as_unread; guide names the re-admitted row), 5 declined (see below). Done. |
 | Review B M1 (conformance, sonnet) | 1 | d1dac354ff9c1bab07c0cb224fbe372e7907f6b7:d8ad1e5b28906713af20e9bc9ee6708630c1324f | CHANGES on tooling only: F1 BLOCKER "could not run Verify" (its non-interactive session was refused cargo), F2 MINOR. No code finding; declined (below). Verify covered by the full gate's `cargo test --workspace`. Done. |
+| Review A M2 (conformance + correctness, `claude -p --agent autopilot-reviewer`; covers A and B for the light tier) | 1 | 28140445b367d8d49868b2ed1bb543d45793f25e:b126d484e6128e1d7b9ee939a3d9e93f536e8fd6 | CLEAN: 1 MINOR (doc line over 100 columns, fixed, prose only) |
 
 ## Declined review findings
 
@@ -74,6 +75,10 @@ None.
 - Baseline full suite in this container (run as root): 6 pre-existing failures unrelated to 575, permission tests a root user bypasses: core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2), daemon `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path...`, `settings_service_write_refuses_failed_read`. Noted in the PR body, not fixed.
 - No mise (gate commands run raw), gh unauthenticated (no gh calls), reviewers via `claude -p --agent autopilot-reviewer`.
 - `ui_glyph_literals` flags any literal U+25CF in `src/`, comments included.
+
+## Environment notes (M2)
+
+- Red: core `the_unread_count_leaves_out_a_closed_session`, `the_other_projects_total_leaves_out_closed_sessions` and `sidebar_attention::the_location_rows_add_up_to_the_switchers_count` failed before T018; green after. Full gate (raw commands, no-fail-fast) on tree bcf3ff4d: fmt, clippy core and workspace, scripts/tests pass; `cargo test --workspace` fails only the six root-only baseline tests listed above.
 
 ## Open escalation
 

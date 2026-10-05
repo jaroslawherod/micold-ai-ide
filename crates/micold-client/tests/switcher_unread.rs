@@ -134,3 +134,27 @@ fn after_a_switch_the_buttons_total_counts_the_remaining_projects() {
         "Q's two unread sessions leave the total and R's one stays"
     );
 }
+
+/// FR-010, US1 scenario 5 (switcher half): a closed unread session leaves the project's count and
+/// the button's total; the other projects' counts stay.
+#[test]
+fn a_closed_unread_session_leaves_the_switcher_counts() {
+    let mut state = state_with_unread([1, 2, 0]);
+    let mut closed = unread_session();
+    closed.archived = true;
+    for path in [P, Q] {
+        state
+            .workspace
+            .sessions
+            .get_mut(Path::new(path))
+            .unwrap()
+            .push(closed.clone());
+    }
+
+    assert_eq!(unread_counts(&state), [1, 2, 0]);
+    assert_eq!(
+        state.other_projects_unread(),
+        2,
+        "the button totals Q and R without Q's closed session"
+    );
+}
