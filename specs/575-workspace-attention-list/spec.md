@@ -1,4 +1,4 @@
-# Feature Specification: Workspace List of Sessions That Need Attention
+# Feature Specification: Attention Indicator on the Sidebar's Worktree Rows
 
 **Feature Branch**: `claude/project-thread-8dnq8h`
 
@@ -6,175 +6,142 @@
 
 **Status**: Draft
 
-**Input**: User description: "Implement GitHub issue #575 (Show sessions that need attention at workspace level). Feature 039 already tracks which sessions need attention (unread) and shows per-project counts on the switcher's rows and the other-projects total on its button. At workspace level, with several projects open, the user cannot see which projects and worktrees hold such a session without opening each project. Offer one place that lists all sessions needing attention across the workspace, each showing project, worktree and session name; selecting an entry opens that project and session the same way a desktop notification click does; the marks update live, clear when the user views the session, use the existing attention state rather than a second source of truth, and survive a client restart."
+**Input**: User description: "Implement GitHub issue #575 (Show sessions that need attention at workspace level)." Scope changed by the user after the first spec: "the clue was to add indicator of attention at sidebar with the list of worktrees". In the sidebar's list of worktrees, each worktree row, and the Default (project-root) row, that holds at least one unread session (feature 039's sense) shows an attention indicator with the number of such sessions, so the user sees which worktrees need attention without expanding them. Reuse 039's unread state and the shared unread mark and tree row components; no second source of truth; the indicator updates live, clears when the session is viewed and survives a restart as 039's state does.
 
 ## What already exists, and the gap
 
-Feature 039 (`specs/039-session-attention-notifications`) already ships most of what issue #575 asks for. This feature reuses it and changes none of it:
+Feature 039 (`specs/039-session-attention-notifications`) marks each unread **session row** in the sidebar (FR-018), shows each project's unread count on the project switcher's rows (FR-021, FR-022) and the other projects' total on the switcher's button (FR-023). This feature reuses that state and those components.
 
-| Issue #575 asks for | Already shipped by 039 |
-|---|---|
-| Every project in the switcher with an unread session shows a mark with its count | FR-021, FR-022: each switcher row shows its project's unread count, the active project's row included; no count at zero |
-| A total visible without opening the switcher | FR-023: the switcher's button shows the total for the other projects |
-| Marks update live and clear when the session is viewed | FR-019 (within 1 second), FR-024 (same in every window) |
-| One source of truth | The per-session **unread** state (039 Key Entities) |
-| Marks survive a client restart | FR-008a |
-| Opening a project and session the way a notification click does | FR-011 to FR-014 |
-
-The gap this feature fills: **one place that lists every unread session of the workspace**, naming its project, worktree and session, from which the user opens any of them in one selection.
+The gap: a session row is shown only while its worktree row is expanded. With worktree rows collapsed, the sidebar does not say which worktrees hold an unread session; the user has to expand each one to find out. This feature puts an indicator with a count on the **location row** (worktree or Default) itself.
 
 ## Terms
 
 - **Unread**, **in view**, **awaiting input**, **session service**: as defined by feature 039 (Terms and Key Entities). A session that "needs attention" in issue #575 is an unread session.
-- **Known project**: a project the project switcher lists (feature 008, FR-005).
-- **Attention list**: the list this feature adds.
-- **Entry**: one row of the attention list, standing for one unread session.
-- **Default entry**: the sidebar's entry for sessions that belong to no worktree, with the name the sidebar gives it.
+- **Location row**: a row of the sidebar's location list (feature 010) — the Default row (sessions that belong to no worktree, at the project root) or a worktree row.
+- **Closed session**: a session the user closed (feature 005 FR-015a, as amended by its bugfix BUG-003). Its record is kept but it is never shown in the sidebar again.
+- **Counted session**: a session of a location that is unread, not closed, and not the session the window has in view.
+- **Attention indicator**: the shared unread mark followed by the number of counted sessions of a location row (039 contract `unread-mark.md`, the form the switcher's rows use).
 
 ## Clarifications
 
 ### Session 2026-10-05
 
-- Q: Where does the attention list open from (FR-001)? → A: A section at the top of the project switcher's panel, above the project rows; the switcher's button, which already carries the other-projects unread total (039 FR-023), opens it. _(orchestrator default pending the user's answer)_
-- Q: In which order must the attention list show its entries (FR-004)? → A: Grouped by project in the switcher's order, then worktree and session in the sidebar's order. Ordering by when a session became unread would need a per-session time 039 does not keep (`attention_seq` counts one session's events and cannot be compared across sessions), would add stored state FR-012 forbids, and would not survive the restart FR-014 requires. _(agent-resolved: specs/039-session-attention-notifications/data-model.md#Session attention fields; spec.md#FR-012)_
+- Scope changed by the user: "the clue was to add indicator of attention at sidebar with the list of worktrees". The earlier workspace attention list in the switcher's panel (earlier FR-001 to FR-015, and the clarify answers on its placement and entry order) is dropped.
+- Q: Does the indicator show on an expanded location row, whose session rows already carry their own marks? → A: Yes. The indicator shows whether the row is expanded or collapsed; the session rows keep their marks unchanged. _(orchestrator default)_
+- Q: Do closed sessions that were unread count? → A: No, not on the location row and not in the switcher. The service does not clear `unread` when a session is closed, so a closed session can still carry it; 039 US1 scenario 9 already says a closed session's project count must no longer include it. This feature makes the switcher's counts skip closed sessions too, so the location rows of a project always add up to its switcher count. _(agent-resolved: specs/039-session-attention-notifications/spec.md US1 scenario 9; crates/micold-core/src/workspace.rs `unread_session_count` filters on `unread` only; crates/micold-core/src/session.rs `archived`)_
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - See every session that needs me, across all projects (Priority: P1)
+### User Story 1 - See which worktrees need me without expanding them (Priority: P1)
 
-The user works on several projects at once. Sessions in several of them have finished a turn while the user looked elsewhere. Without opening any project, the user opens the attention list and sees every unread session of the workspace, each naming its project, its worktree and the session, and nothing else.
+The user works in a project with several worktrees, their rows collapsed. Sessions in some of them finished a turn while the user looked elsewhere. Each worktree row holding such a session, and the Default row when it holds one, shows the attention indicator with the number of those sessions. Rows with none show nothing new.
 
-**Why this priority**: This is the gap issue #575 names. The switcher's counts say how many unread sessions a project holds, not which worktrees and sessions; today the user has to open each project and scan its sidebar to find them.
+**Why this priority**: This is the gap the user named. Without it the user expands each worktree to find the unread sessions.
 
-**Independent Test**: Make sessions unread in two projects, one of them in a worktree and one in the Default entry, and leave a third project with none. Open the attention list and compare its entries with the sessions known to be unread.
+**Independent Test**: In one project, make two sessions of worktree `feature-x` unread, one session of the Default row unread, and leave worktree `feature-y` with only read sessions; collapse every row and compare the indicators with the sessions known to be unread.
 
 **Acceptance Scenarios**:
 
-1. **Given** project A has two unread sessions, project B has one and project C has none, **When** the user opens the attention list, **Then** it shows exactly three entries — the two of A and the one of B — and none of C.
-2. **Given** an unread session in a worktree named `feature-x` of project A, **When** the attention list is shown, **Then** its entry names project A, worktree `feature-x` and the session by the label its sidebar row shows.
-3. **Given** an unread session of project B that belongs to no worktree, **When** the attention list is shown, **Then** its entry names project B, the Default entry's name and the session's label.
-4. **Given** the active project has an unread session, **When** the attention list is shown, **Then** that session has an entry too.
-5. **Given** no session of the workspace is unread, **When** the user opens the attention list, **Then** it shows no entry and says that no session needs attention.
-6. **Given** an unread session of a worktree that the sidebar's filter currently hides, **When** the attention list is shown, **Then** the session has an entry.
+1. **Given** worktree `feature-x` holds two unread sessions, worktree `feature-y` holds none and its rows are collapsed, **When** the user looks at the sidebar, **Then** the `feature-x` row shows the indicator with `2` and the `feature-y` row shows no indicator.
+2. **Given** one session of the Default row is unread, **When** the user looks at the sidebar, **Then** the Default row shows the indicator with `1`.
+3. **Given** worktree `feature-x` with two unread sessions is expanded, **When** the user looks at the sidebar, **Then** its row still shows the indicator with `2`, and each of the two session rows carries its own unread mark as today (039 FR-018).
+4. **Given** a worktree holds one unread session and one session awaiting input that the user has already viewed, **When** the user looks at the sidebar, **Then** its row shows the indicator with `1`.
+5. **Given** a session of worktree `feature-x` was unread and the user closed it, **When** the user looks at the sidebar, **Then** the session does not add to `feature-x`'s indicator, and the project's count on the switcher does not include it either.
 
 ---
 
-### User Story 2 - Go straight to a session from the list (Priority: P1)
+### User Story 2 - The indicator follows the sessions on its own (Priority: P1)
 
-The user selects an entry. The application makes the entry's project the active project and selects the session so that its terminal is shown, exactly as a click on that session's desktop notification would.
+While the user works, sessions become unread and others are viewed. The indicators change without any action, clear when the last unread session of a location is viewed, and show the same after the application is restarted.
 
-**Why this priority**: A list the user cannot act on still leaves them to navigate by hand; together with Story 1 it is the minimum that solves the issue.
+**Why this priority**: An indicator that lags or survives the session being viewed sends the user to worktrees that need nothing; with Story 1 it is the minimum that solves the issue.
 
-**Independent Test**: With an unread session in a project other than the active one, open the attention list, select its entry, and check the active project, the selected session and the unread mark.
-
-**Acceptance Scenarios**:
-
-1. **Given** an entry for a session of project B while project A is active, **When** the user selects it, **Then** project B becomes active, the session is selected and its terminal is shown.
-2. **Given** an entry for a session of the active project, **When** the user selects it, **Then** the active project stays, and the session is selected and shown.
-3. **Given** the user selected an entry, **When** the session is shown in a focused window, **Then** the session is no longer unread (039 FR-019), its entry is gone from the attention list and its project's count on the switcher is one lower.
-4. **Given** an entry whose session was closed or removed, its worktree deleted, its project forgotten or its folder unavailable, **When** the user selects it, **Then** the active project and selected session stay as they were and an in-app notice says the session is no longer available (as 039 FR-013).
-5. **Given** sessions of the project left by the selection are running, **When** the user selects an entry, **Then** they keep running and no session is stopped, restarted or sent input (as 039 FR-014).
-
----
-
-### User Story 3 - The list stays current on its own (Priority: P2)
-
-While the attention list is open, sessions become unread and others come into view. The list follows without being reopened, and it shows the same sessions after the application is restarted.
-
-**Why this priority**: Live and lasting state makes the list trustworthy; without it, it is a snapshot the user must refresh. It depends on Story 1.
-
-**Independent Test**: Keep the list open while a session in another project changes to awaiting input, then view a listed session in another window; then quit and reopen the application with unread sessions present.
+**Independent Test**: With worktree `feature-x` collapsed, have one of its sessions change to awaiting input while another session is in view; then select that session; then make it unread again and restart the application.
 
 **Acceptance Scenarios**:
 
-1. **Given** the attention list is open, **When** a session not in view changes to awaiting input, **Then** an entry for it appears within 1 second.
-2. **Given** the attention list is open in one window, **When** a listed session comes into view in another window, **Then** its entry disappears from the list within 1 second.
-3. **Given** sessions were unread when the last window was closed, **When** the application is opened again, also after a restart of the computer, **Then** the attention list shows them (039 FR-008a), and sessions that became unread while no window was open (039 FR-008) as well.
+1. **Given** worktree `feature-x` shows no indicator, **When** one of its sessions not in view changes to awaiting input, **Then** its row shows the indicator with `1` within 1 second.
+2. **Given** `feature-x` shows the indicator with `1`, **When** the user selects that session and it comes into view in a focused window, **Then** the indicator is gone within 1 second (039 FR-019).
+3. **Given** `feature-x` shows the indicator with `2`, **When** one of the two sessions comes into view, **Then** the indicator shows `1`.
+4. **Given** the same project is shown in another window (039 FR-024), **When** a session comes into view in one window, **Then** the other window's indicator for its location changes within 1 second as well.
+5. **Given** sessions were unread when the last window was closed, **When** the application is opened again, also after a restart of the computer, **Then** their location rows show the same indicators (039 FR-008a), and sessions that became unread while no window was open (039 FR-008) are counted as well.
 
 ---
 
 ### Edge Cases
 
-- **Empty workspace**: with no known project, or no unread session, the list shows no entry and the "no session needs attention" text; it never shows an error.
-- **Many entries**: with more entries than fit, the list scrolls; every entry stays reachable by pointer and by keyboard.
-- **A session changes while the user is about to select its entry**: if the session came into view or stopped being unread between the list being drawn and the selection, the selection still opens the session when it exists; when it no longer exists, the FR-013 notice of 039 is shown.
-- **The active project's sessions**: listed like any other; selecting one only changes the selected session.
-- **Several windows** (Principle II): one window at a time holds a project (feature 010). Every window's list shows the same entries (039 FR-024). Selecting an entry whose project another window holds brings that window to the front and shows the session there, as 039 FR-012 does for a notification click; otherwise the window in which the entry was selected switches to the project.
-- **Several sessions with the same label**: each has its own entry; entries are told apart by project and worktree, and selecting one opens that session only.
-- **Long names**: project, worktree and session names that do not fit are shortened so that the three remain distinguishable, and the full names are available on the entry (for example in its tooltip).
-- **Connection to the session service lost**: the list shows the unread state the application last knew, as the sidebar and switcher do; it follows the state again once reconnected (039 FR-006).
-- **Sessions run in a container** (sandbox): the list behaves the same as with sessions run directly on the computer.
-- **Cross-platform** (Principle VI): the list, its keyboard access and its selection behave the same on Linux, macOS and Windows.
+- **The session in view**: the session the window has in view is never counted, even before the service has cleared its `unread` state (039 FR-019 reads it at once), so its location's indicator drops as soon as it is shown.
+- **A location whose only unread sessions were closed**: no indicator.
+- **A worktree row the sidebar's filter hides**: it has no row, so there is no indicator to show; its unread sessions still count on the project's switcher row (039 FR-022). A worktree row listed only because it holds the current session (feature 024) shows its indicator like any other.
+- **A worktree that is missing or invalid** (feature 010 FR-011): shows its indicator like a valid one when it holds counted sessions.
+- **Many unread sessions**: counts of two or more digits are shown in full; the row keeps its height (039 contract `unread-mark.md` U8), and the name is what a narrow row shortens.
+- **Hover**: the row actions that fade in on hover (feature 008) do not cover or move the indicator.
+- **Collapsed sidebar**: no indicator is shown elsewhere; the switcher's counts are unchanged.
+- **Connection to the session service lost**: the indicators show the unread state the application last knew, as the session rows do; they follow the state again once reconnected (039 FR-006).
+- **Sessions run in a container** (sandbox): the indicators behave the same as with sessions run directly on the computer.
+- **Cross-platform** (Principle VI): the indicators behave the same on Linux, macOS and Windows.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-#### The list
+#### The indicator
 
-- **FR-001**: The application MUST offer an attention list as a section at the top of the project switcher's panel, above the project rows, in every window; it lists every unread session of every known project — the active project included — and no other session. Opening the switcher's panel shows the list; no other top-bar control is added. The list scrolls on its own when its entries do not fit (FR-006), so the project rows stay reachable below it.
-- **FR-002**: The list's entries MUST include unread sessions of the Default entry and of worktrees the sidebar's filter currently hides, as 039 FR-022 does for the counts.
-- **FR-003**: Each entry MUST name, as text, the session's project by the name the switcher gives it, the session's worktree by its name (the Default entry's name for a session in no worktree), and the session by the label its sidebar row shows at that moment, including a placeholder label (032).
-- **FR-004**: The entries MUST be shown in a fixed, predictable order: grouped by project in the order the switcher lists the projects, and within a project by worktree, then session, in the order the sidebar shows them (the Default entry where the sidebar places it, worktrees the filter hides in the place they hold when shown). The order MUST NOT depend on when a session became unread.
-- **FR-005**: With no unread session in the workspace, the list MUST show no entry and a short text saying that no session needs attention.
-- **FR-006**: When the entries do not fit, the list MUST scroll, and every entry MUST stay reachable by pointer and by keyboard; a shortened name MUST be available in full on its entry.
-- **FR-007**: The list MUST be operable by keyboard alone — opened, moved through, an entry selected, and closed — the keys moving between entries, Enter (or the platform's equivalent) selecting the focused entry, Escape closing the list, and keyboard focus returning to the control that opened it.
-
-#### Selecting an entry
-
-- **FR-008**: Selecting an entry MUST make the session's project the active project, when it is not already, and select the session so that its terminal is shown, through the same path a desktop notification click takes (039 FR-011), and MUST close the list.
-- **FR-009**: When the session's project is held by another window, selecting the entry MUST bring that window to the front with keyboard focus and show the session there (as 039 FR-012). Otherwise the window in which the entry was selected MUST be used.
-- **FR-010**: When the entry's session no longer exists or cannot be shown, selecting it MUST leave the active project and selected session as they were and show an in-app notice saying the session is no longer available (as 039 FR-013).
-- **FR-011**: Selecting an entry MUST NOT stop, interrupt, restart or send input to any session (as 039 FR-014).
+- **FR-001**: Each location row of the sidebar — every worktree row and the Default row — MUST show the attention indicator when its location holds at least one counted session, and MUST show no indicator when it holds none.
+- **FR-002**: The indicator's number MUST be the number of counted sessions of that location: sessions of the location that are unread in feature 039's sense, not closed, and not the session the window has in view.
+- **FR-003**: The indicator MUST show whether the location row is expanded or collapsed. Expanding or collapsing a row MUST NOT change its indicator, and the session rows MUST keep their own unread marks as they are (039 FR-018).
+- **FR-004**: The indicator MUST be the shared unread mark with a count from the component library (Principle VIII; 039 contract `unread-mark.md`), in the form the switcher's rows use, placed on the row's first line so that it stays visible when the row's name is shortened. The location row MUST keep its height, and the row actions that fade in on hover MUST NOT cover or shift it.
+- **FR-005**: The indicator MUST state its meaning to assistive technology and in the row's tooltip, for example "2 unread sessions".
 
 #### Staying current
 
-- **FR-012**: The list MUST show exactly the sessions that are unread in feature 039's sense, and nothing about it may be stored or sent beyond what 039 stores (039 FR-025, Principle IV): no session is listed that the sidebar does not mark unread, and none the sidebar marks unread is missing. At every moment the list's entries, each switcher row's count (039 FR-021) and the button's total (039 FR-023) MUST agree.
-- **FR-013**: While the list is shown, a session that becomes unread MUST gain an entry, and a session that stops being unread or is removed MUST lose its entry, within 1 second, without the user reopening the list.
-- **FR-014**: The list MUST show the same sessions in every open window (039 FR-024), and after the application or the computer is restarted it MUST show the sessions that are unread then (039 FR-008, FR-008a).
-- **FR-015**: Opening, scrolling or closing the list MUST NOT by itself make any session stop being unread; only a session coming into view does (039 FR-019).
+- **FR-006**: The indicators MUST be derived from the same per-session unread state that marks the session rows and counts the switcher's rows (039 Key Entities), and nothing about them may be stored or sent beyond what 039 stores (039 FR-025, Principle IV).
+- **FR-007**: A session that becomes unread MUST add to its location's indicator, and a session that stops being unread, comes into view, is closed or is removed MUST stop adding to it, within 1 second, without any user action.
+- **FR-008**: The indicators MUST agree in every open window that shows the project (039 FR-024), and after the application or the computer is restarted they MUST show the sessions unread then (039 FR-008, FR-008a).
+- **FR-009**: Showing, expanding, collapsing or hovering a location row MUST NOT by itself make any session stop being unread; only a session coming into view does (039 FR-019).
+
+#### Consistency with the switcher
+
+- **FR-010**: A closed session MUST NOT be counted in the switcher's per-project counts (039 FR-021) or the button's total (039 FR-023), as 039 US1 scenario 9 requires. For a project whose worktree rows the filter does not hide, the indicators of its location rows MUST add up to that project's count on the switcher's row in the same window.
 
 #### Unchanged behaviour, components, documentation
 
-FR-016 to FR-020 are checked by the regression tests of 039, the component showcase in both themes (FR-017, FR-018), a review of the user guide (FR-019), and SC-007 (FR-020).
+FR-011 to FR-014 are checked by the regression tests of 039, the component showcase in both themes (FR-012, FR-013), a review of the user guide (FR-014), and SC-006.
 
-- **FR-016**: The switcher's per-project unread counts, the button's other-projects total, the sidebar's unread mark, desktop notifications and their click MUST look and behave as they do today (039).
-- **FR-017**: The attention list and its entries MUST be provided by the shared component library and used from there (Principle VIII); the component showcase MUST show the list with entries from two projects, with a worktree entry and a Default-entry entry, and the empty list.
-- **FR-018**: The list's text and its focus and hover states MUST meet a contrast ratio of at least 4.5:1 for text (3:1 for non-text indicators) against their background in the light and the dark theme.
-- **FR-019**: The user guide chapter that describes unread sessions MUST describe the attention list: where it opens, what an entry shows, what selecting one does, and that viewing a session removes it.
-- **FR-020**: Everything above MUST behave the same on Linux, macOS and Windows (Principle VI), and with the session service running directly on the computer or in a container.
+- **FR-011**: The session rows' unread marks, the switcher's rows and button (apart from FR-010), desktop notifications and their click MUST look and behave as they do today (039).
+- **FR-012**: The component showcase MUST show a location row with the indicator, collapsed and expanded, beside one without, in the light and the dark theme.
+- **FR-013**: The indicator MUST meet a contrast ratio of at least 3:1 for the mark and 4.5:1 for its number against the row's background in every row state (rest, hover, selected) in the light and the dark theme.
+- **FR-014**: The user guide chapter that describes unread sessions MUST describe the indicator on worktree and Default rows: what it counts, that it shows on collapsed and expanded rows, and that viewing a session lowers it.
+- **FR-015**: Everything above MUST behave the same on Linux, macOS and Windows (Principle VI), and with the session service running directly on the computer or in a container.
 
 ### Key Entities
 
-- **Unread session** (existing, 039): a session with the unread state set. The attention list holds no data of its own; it is a view of the set of unread sessions.
-- **Attention entry**: one unread session as the list shows it — project name, worktree name (or the Default entry's name), session label — and what selecting it leads to: that project and session.
+- **Unread session** (existing, 039): a session with the unread state set. The indicator holds no data of its own; it is a count over the sessions of one location.
+- **Location attention count**: for one location row, the number of its counted sessions. Derived on display; never stored.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: With unread sessions in two of three projects, in 20 of 20 trials the attention list shows exactly the unread sessions and no other, while the switcher shows the right count on the two projects and none on the third.
-- **SC-002**: From any project, the user reaches any unread session of the workspace in at most two selections (open the list, select the entry), with its terminal shown within 2 seconds, in 20 of 20 trials — including when the session is in a background project.
-- **SC-003**: Within 1 second of a listed session coming into view, its entry is gone and its project's switcher count is one lower, in 20 of 20 trials.
-- **SC-004**: Within 1 second of a session becoming unread while the list is open, its entry appears, in 20 of 20 trials.
-- **SC-005**: After closing and reopening the application with N unread sessions, the list shows the same N sessions in 20 of 20 trials.
-- **SC-006**: A user asked "which sessions need you, in which project and worktree?" answers correctly from the attention list alone, without opening any project.
-- **SC-007**: Every trial above gives the same result on Linux, macOS and Windows, and with the session service run directly and in a container.
+- **SC-001**: With unread sessions in two of three worktrees of a project and every row collapsed, in 20 of 20 trials the two rows show the right count and the third shows none.
+- **SC-002**: A user asked "which worktrees have sessions waiting for you?" answers correctly from the collapsed sidebar alone, without expanding any row.
+- **SC-003**: Within 1 second of a counted session coming into view, its location's indicator is one lower (or gone at zero), in 20 of 20 trials.
+- **SC-004**: Within 1 second of a session becoming unread, its location's indicator is one higher, in 20 of 20 trials.
+- **SC-005**: After closing and reopening the application with N unread sessions spread over several locations, every location row shows the same count as before, in 20 of 20 trials, and the counts of a project's rows add up to its switcher count.
+- **SC-006**: Every trial above gives the same result on Linux, macOS and Windows, and with the session service run directly and in a container.
 
 ## Out of Scope
 
-- Changing what makes a session unread or what clears it (039 FR-016 to FR-019).
-- Changing the switcher's per-project counts or the button's total (039 FR-021 to FR-023); they already meet the issue's first point.
-- Marking sessions read from the list without viewing them, or a "mark all read" action.
-- Showing in the list why a session waits (turn ended, permission, idle prompt) or a preview of its output.
-- Filtering or searching the list.
-- Unread counts in the **Known projects** list of the main window and in the folder browser (as 039).
+- A workspace-wide list of unread sessions, in the switcher or elsewhere (dropped by the user's change of scope).
+- Changing what makes a session unread or what clears it (039 FR-016 to FR-019), apart from no longer counting closed sessions (FR-010).
+- An indicator on a project's name in the sidebar, or anywhere outside the location rows.
+- Marking sessions read without viewing them, or a "mark all read" action.
+- Showing why a session waits (turn ended, permission, idle prompt).
 - A taskbar or dock badge, a tray icon or sound.
 
 ## Assumptions
 
 - "Needs attention" in issue #575 is 039's unread state: a session that changed to awaiting input while not in view and has not been viewed since.
-- The issue's first point and its first, fourth and fifth acceptance criteria are met by 039 already; this feature keeps them true and adds the list (second and third criteria).
-- Selecting an entry behaves like a notification click because the issue says so; the only difference is which window is used when no window holds the project (FR-009): the user is in the window where they selected, so that one is used rather than the most recently focused one.
-- The list lists unread sessions only. Sessions awaiting input that the user has already viewed are not listed: they do not need attention in 039's sense.
-- **Dependencies**: 039 unread state, reveal path and counts; 008 project switcher; 010 one window per project; 032 session labels; the shared component library and showcase (Principle VIII).
+- The issue's switcher marks and button total are already met by 039; this feature keeps them and adds the indicator on location rows.
+- A closed session is not shown in the sidebar and cannot be viewed, so counting it would leave an indicator the user can never clear.
+- **Dependencies**: 039 unread state, unread mark and counts; 010 sidebar location list (Default and worktree rows); 024 filter and current-session rows; 005 FR-015a closed sessions; the shared component library and showcase (Principle VIII).

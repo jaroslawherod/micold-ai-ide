@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Workspace List of Sessions That Need Attention
+# Specification Quality Checklist: Attention Indicator on the Sidebar's Worktree Rows
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-10-05
+**Created**: 2026-10-05 (rewritten for the user's change of scope)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Two `[NEEDS CLARIFICATION]` markers are left open on purpose for the clarify unit: FR-001 (where the list opens from) and FR-004 (entry order). FR-001 and FR-004 are testable once those are answered.
+- Scope changed by the user ("the clue was to add indicator of attention at sidebar with the list of worktrees"): the workspace attention list in the switcher's panel is dropped. The expanded-row and closed-session questions are settled in Clarifications.
