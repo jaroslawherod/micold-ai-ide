@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #? | Spec | open | |
+| #594 | Spec | open | |
 
 ## Milestones
 
