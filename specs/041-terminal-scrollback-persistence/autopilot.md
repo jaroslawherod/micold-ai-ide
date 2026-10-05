@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3: review B round 2 (fix diff), full gate, PR.
+- **Next step**: M3: PR merged, then M4.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
-| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | | in progress |
+| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | PR_NUM | in review |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
@@ -80,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M2 (red CI fix) | 2 | 34b41574b3785e4b9aa80ac51f5cf0d475543a0d:03467a02515e4f8bc12f7a0aed8d803f64710915 | CLEAN, no findings: the cause holds, `FA` with `OICI` is stored as one entry, rights and inheritance unchanged. Not counted (follows a red CI, not A's own findings) |
 | A M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (saves record the tick's `now`, not the write's; the gap can be a little under 30 s when a write is delayed within a tick), declined: the injected clock is the tick's, ticks are 5 s, and the delay is only that of earlier writes in the same tick |
 | B M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CHANGES: 1 MAJOR (a terminal first seen by the saver counted its earlier output as saved), 1 MINOR (red by mutation only); fixed with `SaveSchedule::new(0)` for an untracked process and a first-look test shown red (cycle 77). Verify: `history_periodic_save` and `terminal_history_schedule` ok |
+| B M3 | 2 | 611fea62d521c3d6f132b95f3b34fd09102e4a61:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (no case for an idle terminal started from a restored seed; the code holds, the seed never raises the output count), not fixed. Verify: `history_periodic_save` 9 passed, `terminal_history_schedule` 8 passed |
 
 ## Declined review findings
 
