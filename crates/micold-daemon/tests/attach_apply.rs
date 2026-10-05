@@ -128,6 +128,29 @@ fn a_target_absent_from_the_live_cache_is_refused_and_unrecorded() {
 }
 
 #[test]
+fn a_worktree_outside_the_managed_directory_is_refused_and_unrecorded() {
+    let store = tempfile::tempdir().unwrap();
+    let project = PathBuf::from("/p");
+    let mut catalog = catalog_at(store.path(), &project);
+    let mut live = live(&project, &["a", "b"]);
+    live[0].included = true;
+
+    let outcomes = catalog
+        .attach_worktrees(&project, &live, &names(&["a", "b"]))
+        .unwrap();
+
+    assert_eq!(
+        outcomes,
+        vec![
+            AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
+            AttachOutcome::Attached
+        ],
+        "an included (outside-the-directory) worktree is not attachable"
+    );
+    assert_eq!(recorded(store.path(), &project), ["b"], "no record for `a`");
+}
+
+#[test]
 fn a_missing_worktree_is_refused_as_unavailable() {
     let store = tempfile::tempdir().unwrap();
     let project = PathBuf::from("/p");
@@ -770,57 +793,89 @@ async fn a_session_of_a_deleted_worktree_is_refused_not_resumed_elsewhere() {
     assert!(!session_ids(&state, project.path()).contains(&id));
 }
 
-#[test]
-fn a_second_resume_while_starting_running_or_restarting_is_refused_as_already_running() {
-    let store = tempfile::tempdir().unwrap();
-    let project = PathBuf::from("/p");
-    let mut catalog = catalog_at(store.path(), &project);
-    let session = Session::restored(
+/// A catalog holding one session of `project` in `lifecycle`, and a fresh copy of that session
+/// (the one a second resume would offer).
+fn catalog_with_session_in(
+    store: &Path,
+    project: &Path,
+    lifecycle: SessionLifecycle,
+) -> (Catalog, Session) {
+    let mut catalog = catalog_at(store, project);
+    let mut session = Session::restored(
         SessionId::from_uuid(Uuid::new_v4()),
         SessionLocation::Default,
         micold_core::session::SessionLabel::Pending,
         micold_core::session::TerminalMode::AiCli,
         AiCli::ClaudeCode,
     );
-    let id = session.id;
-    assert_eq!(
-        catalog.attach_session(&project, session.clone()).unwrap(),
-        AttachOutcome::Attached
-    );
-    assert_eq!(
-        catalog.attach_session(&project, session.clone()).unwrap(),
-        AttachOutcome::AlreadyAttached,
-        "an idle entry attached twice is one entry"
-    );
-    catalog.mark_session_running(id);
-    let outcome = catalog.attach_session(&project, session.clone()).unwrap();
+    session.lifecycle = lifecycle;
+    catalog.attach_session(project, session.clone()).unwrap();
+    (catalog, session)
+}
+
+fn second_resume_in(lifecycle: SessionLifecycle) -> (AttachOutcome, usize) {
+    let store = tempfile::tempdir().unwrap();
+    let project = PathBuf::from("/p");
+    let (mut catalog, session) = catalog_with_session_in(store.path(), &project, lifecycle);
+    let outcome = catalog.attach_session(&project, session).unwrap();
+    (outcome, catalog.known_session_ids(&project).len())
+}
+
+#[test]
+fn a_second_resume_of_a_starting_session_is_refused_as_already_running() {
+    let (outcome, entries) = second_resume_in(SessionLifecycle::Starting);
     assert_eq!(
         outcome,
         AttachOutcome::Refused(RefuseReason::AlreadyRunning)
     );
-    // The states that count as "running" for this guard.
-    for (lifecycle, live) in [
-        (SessionLifecycle::Idle, false),
-        (SessionLifecycle::Starting, true),
-        (SessionLifecycle::Running, true),
-        (SessionLifecycle::Restarting { attempts: 1 }, true),
-        (
-            SessionLifecycle::Failed {
-                reason: "x".into(),
-                attempts: 3,
-            },
-            false,
-        ),
-    ] {
-        assert_eq!(lifecycle.is_live(), live, "{lifecycle:?}");
-    }
+    assert_eq!(entries, 1, "one entry");
+}
+
+#[test]
+fn a_second_resume_of_a_running_session_is_refused_as_already_running() {
+    let (outcome, entries) = second_resume_in(SessionLifecycle::Running);
+    assert_eq!(
+        outcome,
+        AttachOutcome::Refused(RefuseReason::AlreadyRunning)
+    );
+    assert_eq!(entries, 1, "one entry");
+}
+
+#[test]
+fn a_second_resume_of_a_restarting_session_is_refused_as_already_running() {
+    let (outcome, entries) = second_resume_in(SessionLifecycle::Restarting { attempts: 1 });
+    assert_eq!(
+        outcome,
+        AttachOutcome::Refused(RefuseReason::AlreadyRunning)
+    );
+    assert_eq!(entries, 1, "one entry");
+}
+
+#[test]
+fn a_second_resume_of_an_idle_session_is_one_entry_already_attached() {
+    let (outcome, entries) = second_resume_in(SessionLifecycle::Idle);
+    assert_eq!(outcome, AttachOutcome::AlreadyAttached);
+    assert_eq!(entries, 1, "one entry");
+}
+
+#[test]
+fn a_second_resume_of_a_failed_session_is_one_entry_already_attached() {
+    let (outcome, entries) = second_resume_in(SessionLifecycle::Failed {
+        reason: "x".into(),
+        attempts: 3,
+    });
+    assert_eq!(outcome, AttachOutcome::AlreadyAttached);
+    assert_eq!(entries, 1, "one entry");
+}
+
+#[test]
+fn the_already_running_refusal_tells_the_user_why() {
     assert!(
         RefuseReason::AlreadyRunning
             .text()
             .contains("already running"),
         "FR-016: the user is told why"
     );
-    assert_eq!(catalog.known_session_ids(&project).len(), 1, "one entry");
 }
 
 #[tokio::test]

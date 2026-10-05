@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: milestone M5 (PR open)
-- **Next step**: wait for CI, merge M5, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,7 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #588 | M2: discover and resume provider sessions | merged | e849b117222256304d49f6e01e0d449a89c96d5c |
 | #589 | M3: attach_worktree and list_resumable_sessions MCP tools | merged | e3cef56de6611c1ce080e7bb5a39fd09c0bd079e |
 | #590 | M4: start-up offer banner | merged | 4657af19443f25a0669f5036f7c163e78f050e4a |
-| #591 | M5: quickstart result, user guide check | open | |
+| #591 | M5: quickstart result, user guide check | merged | 8947038b7e4b195071f941c099c94a6b97c08b1a |
+| #592 | Close: TDD remediation tests, close-out GUI pass, spec closed | open | |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T026 | full | Discover and resume provider sessions | #588 | merged |
 | M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | #589 | merged |
 | M4 | T032–T036 | full | Start-up offer banner | #590 | merged |
-| M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | #591 | in review |
+| M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | #591 | merged |
 
 ## Decisions
 
@@ -67,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 Review A | 1 | fe2c7202dc7009094e32e4754617f8ad3d5e7cb7:1ff46f9e74ccf9d560f64d26912940299c63708f | CLEAN (1 MINOR: Part B overstated, reworded) |
 | M5 Review B | 1 | fe2c7202dc7009094e32e4754617f8ad3d5e7cb7:1ff46f9e74ccf9d560f64d26912940299c63708f | CHANGES (2 MAJOR: Part B overstated, M2 defects unresolved; fixed by rewording Result to say what was not exercised and listing the defects as open follow-ups, no new visual pass; 4 MINOR fixed: Part A file list, guide refusal case, deviations, red gap) |
 | M5 Review B | 2 | c04ba2ce6f14199f3e2024c6d99a788bf6cff959:6a86fe2e77a34c7e3147472a4fcd4fad52a2ed7e | CLEAN (round 1 MAJORs hold; 1 cosmetic MINOR fixed) |
+| Close review | 1 | e4d49acedc72b5770b745d7b9cf16e020604d662:8947038b7e4b195071f941c099c94a6b97c08b1a | CLEAN (3 MINOR: test-list header, T050 wording fixed; merge-SHA row confirmed by ls-remote) |
 
 ## Declined review findings
 
@@ -86,6 +88,13 @@ None.
 
 ## Follow-ups not done
 
-- M5: no full B1-B4 visual pass on the final tree; banner with seeded sessions, banner "Attach all", and "sessions show idle" never seen in a GUI (only unit/integration tests).
+- M5: banner with seeded sessions, banner "Attach all" and sessions-idle were seen in the close GUI pass (visual/results-close.md). Still no full B1-B4 pass on the final tree.
 - branch-start.sh printed FETCH-FAILED (broken refs in local repo: "does not point to a valid object"); branch is at the commit it started on, not re-based on a fresh origin/main.
 - M2 visual pass (visual/results.md): ~150 px gap between worktree and session lists; dialog lingers ~5 s after Resume (maybe lavapipe); light-theme sidebar stayed dimmed after close (maybe stale frame); an unreadable Copilot store gave no note. Dialog heading/intro still say "worktrees"; Resume buttons lack keyboard focus ids; 200-session cap has no "more" marker.
+
+## Close unit (2026-10-05)
+
+- speckit-converge run (M1 never had a review B): converged, no unbuilt behaviour.
+- speckit-tdd-verify: FAIL (3 of 10 mutants survived). Fixed as tests only: T039-T045 (tasks.md Phase 8); T046-T050 deferred as MED/LOW test hygiene.
+- GUI pass for banner with seeded sessions, banner "Attach all" and B3 "sessions show idle": run and SEEN (visual/results-close.md). Sidebar-dimmed-after-state-change reproduced (collapse/expand fixes; probably lavapipe/Xvfb without a WM, not proven); dialog gap still ~110 px; Resume linger not retested (no resumable fixture).
+- Host note: build-lock held by stale waiters with no cargo running; builds used MICOLD_NO_BUILD_LOCK=1. A hung attach_apply test process from the red-stub run (pid 1541488 / 1542169) was not killed (kill denied).

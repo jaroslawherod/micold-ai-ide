@@ -79,6 +79,32 @@ fn claude_rejects_a_matching_name_whose_transcript_cwd_is_elsewhere() {
 }
 
 #[test]
+fn claude_rejects_a_transcript_cwd_in_a_prefix_lookalike_of_the_managed_directory() {
+    let fx = AttachFixture::new(&[]);
+    // `<root>/.claude/worktrees-old/x` shares the string prefix of `<root>/.claude/worktrees` and
+    // its encoded name passes the directory filter, so only the boundary check keeps it out.
+    let lookalike = fx.repo.join(".claude/worktrees-old/x");
+    fx.seed_session(&lookalike);
+    let cwds = claude_cwds(&fx, &[]);
+    assert!(
+        !cwds.contains(&lookalike),
+        "R3: `worktrees-old` is not inside `worktrees`; got {cwds:?}"
+    );
+}
+
+#[test]
+fn is_within_is_strictly_below_on_a_path_boundary() {
+    use micold_core::attach::is_within;
+    assert!(is_within("/p/.claude/worktrees/a", "/p/.claude/worktrees"));
+    assert!(!is_within("/p/.claude/worktrees", "/p/.claude/worktrees"));
+    assert!(!is_within("/p/.claude/worktrees/", "/p/.claude/worktrees"));
+    assert!(!is_within(
+        "/p/.claude/worktrees-old/x",
+        "/p/.claude/worktrees"
+    ));
+}
+
+#[test]
 fn claude_skips_a_directory_with_a_corrupt_first_line_and_says_so() {
     let fx = AttachFixture::new(&[]);
     let bad = fx.worktree_path("bad");
