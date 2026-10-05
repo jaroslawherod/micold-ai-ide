@@ -207,6 +207,7 @@ pub async fn run() -> io::Result<()> {
     // Restart supervision runs on its own timer, independent of any client connection: a session
     // that crashes with no window open is restarted anyway (US4, FR-005).
     spawn_supervisor(Arc::clone(&state));
+    spawn_history_saver(Arc::clone(&state));
 
     // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
     // record it on the shared state so AI-CLI spawns point `claude`'s lifecycle hooks at it. A bind
@@ -285,6 +286,24 @@ const SUPERVISION_INTERVAL: std::time::Duration = std::time::Duration::from_mill
 /// A submodule fetch emits thousands of lines; the user needs to see it moving, not to read them.
 /// Fast enough to read as motion, slow enough that the wire cost is nil.
 const PROGRESS_DETAIL_MIN_GAP: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// Spawn the loop that saves the history of running terminals (feature 041, FR-003): every
+/// [`SAVER_TICK`], those with new output and a last save 30 s ago. The saving blocks on the disk
+/// and on session gates, so it runs on the blocking pool, and the next tick waits for it.
+fn spawn_history_saver(state: Arc<DaemonState>) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(micold_core::terminal_history::schedule::SAVER_TICK);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            let worker = Arc::clone(&state);
+            let _ = tokio::task::spawn_blocking(move || {
+                worker.save_due_at(std::time::Instant::now());
+            })
+            .await;
+        }
+    });
+}
 
 /// Spawn the restart-supervision loop (US4, FR-005). Ticks on [`SUPERVISION_INTERVAL`], drives the
 /// crash-loop policy for any session whose child exited, and broadcasts `CatalogChanged` when a

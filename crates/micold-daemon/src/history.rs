@@ -1,6 +1,10 @@
 //! A session terminal's history across a restart of its process (feature 041): capturing a `Term`
 //! into `micold_core::terminal_history`'s snapshot, and seeding a fresh `Term` from one.
 
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Weak};
+use std::time::Instant;
+
 use alacritty_terminal::event::EventListener;
 use alacritty_terminal::grid::{Dimensions, GridCell, Row};
 use alacritty_terminal::index::{Column, Line};
@@ -8,10 +12,14 @@ use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::Term;
 use alacritty_terminal::vte::ansi::{Attr, ClearMode, Color, Handler, NamedColor, Rgb};
 use chrono::{DateTime, Local};
+use micold_core::session::SessionId;
+use micold_core::terminal_history::schedule::SaveSchedule;
 use micold_core::terminal_history::text::separator_line;
 use micold_core::terminal_history::{
     HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, StyleFlags, StyleRun,
 };
+
+use crate::supervisor::PtySession;
 
 /// The 16 basic colours, in `HistoryColor::Basic` order.
 const BASIC_COLORS: [NamedColor; 16] = [
@@ -282,6 +290,70 @@ fn term_color(color: HistoryColor) -> Option<Color> {
             .map(Color::Named),
         HistoryColor::Indexed(index) => Some(Color::Indexed(index)),
         HistoryColor::Rgb(r, g, b) => Some(Color::Spec(Rgb { r, g, b })),
+    }
+}
+
+/// The periodic saver's memory (feature 041, research R6): one [`SaveSchedule`] per covered live
+/// terminal, and the failures already logged in this service run. It does no I/O and takes no lock
+/// of the session state; [`crate::state::DaemonState::save_due_at`] does the saving.
+#[derive(Default)]
+pub struct Saver {
+    schedules: HashMap<SessionId, Tracked>,
+    /// Failures already logged, by session and reason (FR-007).
+    logged: HashSet<(SessionId, String)>,
+}
+
+/// A schedule and the process it is of. A restarted process counts its output from zero again,
+/// so its schedule is a new one.
+struct Tracked {
+    pty: Weak<PtySession>,
+    schedule: SaveSchedule,
+}
+
+impl Saver {
+    /// The terminals due at `now` among the covered live `terminals`, with each one's output
+    /// count. The schedule of a terminal that is no longer live is dropped.
+    pub fn due(
+        &mut self,
+        now: Instant,
+        terminals: &[(SessionId, Arc<PtySession>)],
+    ) -> Vec<(SessionId, Arc<PtySession>)> {
+        self.schedules
+            .retain(|id, _| terminals.iter().any(|(live, _)| live == id));
+        let mut due = Vec::new();
+        for (id, pty) in terminals {
+            let count = pty.signals().output_count();
+            let tracked = self.schedules.entry(*id).or_insert_with(|| Tracked {
+                pty: Arc::downgrade(pty),
+                schedule: SaveSchedule::new(count),
+            });
+            if !Weak::ptr_eq(&tracked.pty, &Arc::downgrade(pty)) {
+                *tracked = Tracked {
+                    pty: Arc::downgrade(pty),
+                    schedule: SaveSchedule::new(count),
+                };
+            }
+            if tracked.schedule.due(now, count) {
+                due.push((*id, Arc::clone(pty)));
+            }
+        }
+        due
+    }
+
+    /// `id` was saved at `now` as of `output_count`.
+    pub fn saved(&mut self, id: SessionId, now: Instant, output_count: u64) {
+        if let Some(tracked) = self.schedules.get_mut(&id) {
+            tracked.schedule.saved(now, output_count);
+        }
+    }
+
+    /// A save of `id` failed at `now` for `reason`: it is due again later. Returns whether this is
+    /// the first time the reason is seen for the session, so it is logged once (FR-007).
+    pub fn failed(&mut self, id: SessionId, now: Instant, reason: &str) -> bool {
+        if let Some(tracked) = self.schedules.get_mut(&id) {
+            tracked.schedule.failed(now);
+        }
+        self.logged.insert((id, reason.to_string()))
     }
 }
 
