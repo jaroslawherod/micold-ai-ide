@@ -16,6 +16,8 @@ use micold_core::attach::{AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use micold_core::fs_scan::FolderScanner;
 use micold_core::mcp::policy::CrossSessionAccess;
@@ -69,7 +71,7 @@ fn mark_archived_durable(project: &Path, session: &Session) {
 pub struct Catalog {
     workspace: Workspace,
     settings: Settings,
-    project_store: Option<Box<dyn ProjectStore + Send + Sync>>,
+    project_store: Option<Arc<OrderedStore>>,
     settings_store: Option<Box<dyn SettingsStore + Send + Sync>>,
     load_status: LoadStatus,
     /// Where the load moved an unreadable catalog, when it did (002 BUG-007).
@@ -87,7 +89,7 @@ impl Catalog {
         Self {
             workspace: loaded.workspace,
             settings: settings.settings,
-            project_store: Some(project_store),
+            project_store: Some(Arc::new(OrderedStore::new(project_store))),
             settings_store: Some(settings_store),
             load_status: loaded.status,
             recovered_backup: loaded.preserved,
@@ -143,7 +145,7 @@ impl Catalog {
         let Some(store) = &self.project_store else {
             return Ok(false);
         };
-        if self.workspace.projects.is_empty() || !store.is_missing() {
+        if self.workspace.projects.is_empty() || !store.store.is_missing() {
             return Ok(false);
         }
         store.save(&self.workspace)?;
@@ -411,7 +413,7 @@ impl Catalog {
     pub fn load_reviews(&self, project: &Path) -> micold_core::review::store::ReviewFile {
         self.project_store
             .as_ref()
-            .map(|store| store.load_reviews(project))
+            .map(|store| store.store.load_reviews(project))
             .unwrap_or_default()
     }
 
@@ -422,7 +424,7 @@ impl Catalog {
         file: &micold_core::review::store::ReviewFile,
     ) -> io::Result<()> {
         match &self.project_store {
-            Some(store) => store.save_reviews(project, file),
+            Some(store) => store.store.save_reviews(project, file),
             None => Ok(()),
         }
     }
@@ -1015,11 +1017,11 @@ impl Catalog {
         // and cannot be reloaded if the folder is re-opened (feature 014, FR-005/FR-012). A no-op for
         // the ephemeral catalog. Non-fatal: the catalog itself is already updated.
         if let Some(store) = &self.project_store {
-            if let Err(err) = store.remove_project_state(path) {
+            if let Err(err) = store.store.remove_project_state(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove per-project state");
             }
             // Feature 482 (W11): its review comments go with it.
-            if let Err(err) = store.remove_reviews(path) {
+            if let Err(err) = store.store.remove_reviews(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove the review comments");
             }
         }
@@ -1314,9 +1316,84 @@ impl Catalog {
         Ok(())
     }
 
+    /// The catalog as it is now, to be written after the caller has released the lock that guards
+    /// this catalog (feature 039, BUG-567). `None` for an ephemeral catalog. A snapshot that a later
+    /// write has overtaken is not written: see [`PendingWrite::write`].
+    pub fn pending_write(&self) -> Option<PendingWrite> {
+        let store = self.project_store.as_ref()?;
+        Some(PendingWrite {
+            seq: store.issue(),
+            store: Arc::clone(store),
+            workspace: self.workspace.clone(),
+        })
+    }
+
     /// Borrow the underlying workspace (read-only; mutation goes through typed methods / RPCs).
     pub fn workspace(&self) -> &Workspace {
         &self.workspace
+    }
+}
+
+/// The project store, with the order its writes were issued in (feature 039, BUG-567).
+///
+/// Every write but one is made under the state lock, so they reach the disk in the order the
+/// catalog changed. The attention write is made after the lock is released, from a snapshot: a
+/// write issued after the snapshot may reach the disk first, and the snapshot must then not
+/// overwrite it. Each write takes a sequence number when it is issued, under the state lock, and
+/// a write older than the last one stored is dropped.
+struct OrderedStore {
+    store: Box<dyn ProjectStore + Send + Sync>,
+    issued: AtomicU64,
+    /// The sequence number of the last write stored. Held across the write, so writes do not
+    /// interleave.
+    stored: Mutex<u64>,
+}
+
+impl OrderedStore {
+    fn new(store: Box<dyn ProjectStore + Send + Sync>) -> Self {
+        Self {
+            store,
+            issued: AtomicU64::new(0),
+            stored: Mutex::new(0),
+        }
+    }
+
+    fn issue(&self) -> u64 {
+        self.issued.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Write `workspace` now: the caller holds the state lock, so it is the newest.
+    fn save(&self, workspace: &Workspace) -> io::Result<()> {
+        let seq = self.issue();
+        self.save_issued(workspace, seq).map(|_| ())
+    }
+
+    /// Write `workspace`, issued as `seq`, unless a later write is already stored. Returns whether
+    /// it wrote.
+    fn save_issued(&self, workspace: &Workspace, seq: u64) -> io::Result<bool> {
+        let mut stored = self.stored.lock().unwrap_or_else(|e| e.into_inner());
+        if *stored >= seq {
+            return Ok(false);
+        }
+        self.store.save(workspace)?;
+        *stored = seq;
+        Ok(true)
+    }
+}
+
+/// A snapshot of the catalog taken under the state lock, written after it is released (feature
+/// 039, BUG-567). See [`Catalog::pending_write`].
+pub struct PendingWrite {
+    store: Arc<OrderedStore>,
+    workspace: Workspace,
+    seq: u64,
+}
+
+impl PendingWrite {
+    /// Write the snapshot. **Blocking.** `Ok(false)` when a write issued after it is already
+    /// stored, which holds everything this one would have.
+    pub fn write(self) -> io::Result<bool> {
+        self.store.save_issued(&self.workspace, self.seq)
     }
 }
 

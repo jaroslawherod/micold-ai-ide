@@ -315,42 +315,48 @@ pub fn spawn_supervisor(state: Arc<DaemonState>) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             ticker.tick().await;
-            let worker = Arc::clone(&state);
-            // Same blocking hop: the names of running sessions that gave a reason to look again
-            // (feature 029, FR-011). The flag bounds it — an idle tick reads nothing.
-            let (changed, named) = tokio::task::spawn_blocking(move || {
-                (
-                    worker.supervise_exited_sessions(),
-                    worker.recover_live_session_names(),
-                )
-            })
-            .await
-            .unwrap_or_default();
-            // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
-            // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
-            let crate::state::DrainedSignals {
-                changed: signals_changed,
-                names,
-            } = state.drain_signals();
-            if !changed.is_empty() || named > 0 || signals_changed {
-                state.broadcast_catalog();
-            }
-            // The screen first, the record second — then persist the names that changed (feature
-            // 029, FR-003). Writing one means rewriting a project's state file, which is blocking
-            // I/O and belongs on a blocking thread, not on this 250 ms tick (contract C11); the
-            // drain's own debounce is what keeps this to once per re-title rather than once per
-            // tick, so the hop is rare. Awaited rather than detached so a slow disk cannot stack
-            // up writes behind a tick that keeps firing.
-            if !names.is_empty() {
-                let writer = Arc::clone(&state);
-                let _ =
-                    tokio::task::spawn_blocking(move || writer.record_observed_names(&names)).await;
-            }
-            // Attention events counted under the lock (feature 039, FR-008a) are written here for
-            // the same reason: blocking I/O, off the async runtime.
-            write_unsaved_attention(&state).await;
+            supervisor_tick(&state).await;
         }
     });
+}
+
+/// One tick of the supervisor (US4, FR-005): supervise exited sessions, drain terminal signals,
+/// broadcast what changed, and write what the tick owes the disk. Public so a test can run one
+/// tick and observe what it wrote (feature 039, BUG-567).
+pub async fn supervisor_tick(state: &Arc<DaemonState>) {
+    let worker = Arc::clone(state);
+    // Same blocking hop: the names of running sessions that gave a reason to look again
+    // (feature 029, FR-011). The flag bounds it — an idle tick reads nothing.
+    let (changed, named) = tokio::task::spawn_blocking(move || {
+        (
+            worker.supervise_exited_sessions(),
+            worker.recover_live_session_names(),
+        )
+    })
+    .await
+    .unwrap_or_default();
+    // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
+    // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
+    let crate::state::DrainedSignals {
+        changed: signals_changed,
+        names,
+    } = state.drain_signals();
+    if !changed.is_empty() || named > 0 || signals_changed {
+        state.broadcast_catalog();
+    }
+    // The screen first, the record second — then persist the names that changed (feature
+    // 029, FR-003). Writing one means rewriting a project's state file, which is blocking
+    // I/O and belongs on a blocking thread, not on this 250 ms tick (contract C11); the
+    // drain's own debounce is what keeps this to once per re-title rather than once per
+    // tick, so the hop is rare. Awaited rather than detached so a slow disk cannot stack
+    // up writes behind a tick that keeps firing.
+    if !names.is_empty() {
+        let writer = Arc::clone(state);
+        let _ = tokio::task::spawn_blocking(move || writer.record_observed_names(&names)).await;
+    }
+    // Attention events counted under the lock (feature 039, FR-008a) are written here for
+    // the same reason: blocking I/O, off the async runtime.
+    write_unsaved_attention(state).await;
 }
 
 /// The supervisor tick's write of attention events counted since the last write (feature 039,

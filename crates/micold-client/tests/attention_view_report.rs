@@ -6,7 +6,7 @@
 //! `State::view_report` is what the shell calls after every message. Whether the window has
 //! keyboard focus is the binary's fact, so each test passes it in, as the shell does.
 
-use micold_client::app::{Message, State};
+use micold_client::app::{Message, State, WindowFacts};
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_core::attention::ViewFacts;
@@ -119,6 +119,25 @@ fn view_facts_has_the_main_area_taken_while_the_changes_view_is_open() {
             selected: Some(session),
         },
         "the Changes view fills the main area in place of the session, which stays selected"
+    );
+}
+
+#[test]
+fn view_facts_has_the_main_area_taken_while_the_window_does_not_hold_its_project() {
+    // 039 BUG-568: displaced from the project, or refused it, the window shows the takeover banner
+    // and no session.
+    let (state, session) = state_with_selected_session();
+
+    assert_eq!(
+        state.view_facts(WindowFacts {
+            focused: true,
+            holds_project: false,
+        }),
+        ViewFacts {
+            window_focused: true,
+            main_area_taken: true,
+            selected: Some(session),
+        }
     );
 }
 

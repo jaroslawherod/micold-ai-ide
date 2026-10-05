@@ -181,6 +181,27 @@ pub enum Message {
     NoOp,
 }
 
+/// The binary's facts about its window that decide what it has in view (feature 039, FR-002):
+/// see [`State::view_facts`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowFacts {
+    /// The window has the operating system's keyboard focus.
+    pub focused: bool,
+    /// The window holds its active project: it was not displaced from it, nor refused it
+    /// (`010` FR-024, BUG-023). A window that does not hold it shows no session (039 BUG-568).
+    pub holds_project: bool,
+}
+
+/// A bare focus fact, for a window that holds its project.
+impl From<bool> for WindowFacts {
+    fn from(focused: bool) -> Self {
+        Self {
+            focused,
+            holds_project: true,
+        }
+    }
+}
+
 /// Root application state for the single main window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
@@ -393,14 +414,20 @@ impl State {
     /// What decides which session this window has in view (feature 039, FR-002).
     ///
     /// **Derived, never stored**, like [`Self::terminal_focused`] above it. Whether the window has
-    /// keyboard focus is the binary's fact, so it is handed in; the rest is read here, so that no
-    /// rule about what a window shows is left in `main.rs`. There is nothing about the tab the
-    /// session shows, because [`ViewFacts`](micold_core::attention::ViewFacts) has no field for it
-    /// (US1 scenario 10).
-    pub fn view_facts(&self, window_focused: bool) -> micold_core::attention::ViewFacts {
+    /// keyboard focus, and whether it holds its active project, are the binary's facts, so they
+    /// are handed in ([`WindowFacts`]); the rest is read here, so that no rule about what a window
+    /// shows is left in `main.rs`. There is nothing about the tab the session shows, because
+    /// [`ViewFacts`](micold_core::attention::ViewFacts) has no field for it (US1 scenario 10).
+    ///
+    /// A window displaced from its active project, or refused it, shows the takeover banner in
+    /// place of the session, like Settings (039 BUG-568).
+    pub fn view_facts(&self, window: impl Into<WindowFacts>) -> micold_core::attention::ViewFacts {
+        let window = window.into();
         micold_core::attention::ViewFacts {
-            window_focused,
-            main_area_taken: self.settings.settings_draft.is_some() || self.changes.open.is_some(),
+            window_focused: window.focused,
+            main_area_taken: self.settings.settings_draft.is_some()
+                || self.changes.open.is_some()
+                || !window.holds_project,
             selected: self.session.active,
         }
     }
@@ -413,9 +440,9 @@ impl State {
     /// `tests/feature_registration_cost.rs::only_the_root_drives_a_feature`).
     pub fn view_report(
         &mut self,
-        window_focused: bool,
+        window: impl Into<WindowFacts>,
     ) -> Option<micold_core::protocol::messages::WindowView> {
-        let facts = self.view_facts(window_focused);
+        let facts = self.view_facts(window);
         crate::features::attention::view_report(&mut self.attention, facts)
     }
 
@@ -431,13 +458,9 @@ impl State {
     pub fn attention_on_welcome(
         &mut self,
         catalog: &micold_core::protocol::messages::CatalogSnapshot,
-        window_focused: bool,
+        window: impl Into<WindowFacts>,
     ) -> Vec<micold_core::protocol::messages::ClientMsg> {
-        self.attention_snapshot(
-            catalog,
-            micold_core::attention::Phase::Reconnected,
-            window_focused,
-        )
+        self.attention_snapshot(catalog, micold_core::attention::Phase::Reconnected, window)
     }
 
     /// The attention claims of a `CatalogChanged` (feature 039, research R3): the connection was
@@ -445,23 +468,23 @@ impl State {
     pub fn attention_on_catalog_changed(
         &mut self,
         catalog: &micold_core::protocol::messages::CatalogSnapshot,
-        window_focused: bool,
+        window: impl Into<WindowFacts>,
     ) -> Vec<micold_core::protocol::messages::ClientMsg> {
-        self.attention_snapshot(catalog, micold_core::attention::Phase::Live, window_focused)
+        self.attention_snapshot(catalog, micold_core::attention::Phase::Live, window)
     }
 
     fn attention_snapshot(
         &mut self,
         catalog: &micold_core::protocol::messages::CatalogSnapshot,
         phase: micold_core::attention::Phase,
-        window_focused: bool,
+        window: impl Into<WindowFacts>,
     ) -> Vec<micold_core::protocol::messages::ClientMsg> {
         let sessions: Vec<_> = catalog
             .projects
             .iter()
             .flat_map(|p| p.sessions.iter().cloned())
             .collect();
-        let in_view = micold_core::attention::in_view(self.view_facts(window_focused));
+        let in_view = micold_core::attention::in_view(self.view_facts(window));
         crate::features::attention::snapshot_claims(&mut self.attention, &sessions, phase, in_view)
     }
 
