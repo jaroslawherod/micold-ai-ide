@@ -146,6 +146,17 @@ pub enum SessionLifecycle {
     InterruptedResumable,
 }
 
+impl SessionLifecycle {
+    /// Whether a process is, or is about to be, hosting the session: a second resume of it would
+    /// run it in two places (feature 582, FR-016).
+    pub fn is_live(&self) -> bool {
+        matches!(
+            self,
+            Self::Starting | Self::Running | Self::Restarting { .. }
+        )
+    }
+}
+
 /// The maximum consecutive auto-restarts before giving up (FR-022a crash-loop guard).
 pub const MAX_RESTART_ATTEMPTS: u8 = 3;
 

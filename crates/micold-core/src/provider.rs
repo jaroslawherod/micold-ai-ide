@@ -14,7 +14,9 @@
 //! directory. A second provider would have had to override the defaults to stop them being wrong,
 //! which is how a seam comes to be un-substitutable while looking fine.
 //!
-//! So **the trait has no defaults at all now**. Every method is required, the layout arithmetic
+//! So **the trait had no defaults at all then**; feature 582 added two, `store_dirs` and
+//! `last_activity`, whose common answer genuinely is the same for every provider. Every other
+//! method is required, the layout arithmetic
 //! moved into each implementation as private helpers, and the seam gained identity
 //! ([`AiCliProvider::id`], [`AiCliProvider::display_name`]), availability
 //! ([`AiCliProvider::is_available`]) and an activity source ([`ActivitySource`]).
@@ -278,6 +280,61 @@ pub trait AiCliProvider {
     /// folder it has not trusted it shows a trust question first, and a first prompt typed then
     /// would answer it.
     fn folder_trust(&self) -> FolderTrust;
+
+    // --- attaching existing sessions (feature 582) ---
+
+    /// The working directories under which this provider's store may hold sessions of the project
+    /// rooted at `root`, with `worktrees` the paths git lists (feature 582, research R3).
+    ///
+    /// **Unlike every other method here this one has a default**, because the common answer is
+    /// the same for every provider: the known locations, the root and each listed worktree. Only a
+    /// provider whose store directory *carries the path* ([`ClaudeProvider`]) can also find the
+    /// directory of a worktree git no longer lists, and overrides it. Read-only: it lists
+    /// directories and reads the first line of at most one transcript per unknown directory.
+    fn store_dirs(&self, _config_dir: &Path, root: &Path, worktrees: &[PathBuf]) -> StoreDirs {
+        StoreDirs::known(root, worktrees)
+    }
+
+    /// When the conversation was last written, for ordering a listing newest first (feature 582,
+    /// research R4). One `stat`, never a read. `None` when it cannot be told.
+    fn last_activity(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _session_id: Uuid,
+    ) -> Option<std::time::SystemTime> {
+        None
+    }
+}
+
+/// A working directory under which a provider's store may hold sessions of one project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreDir {
+    /// The directory the sessions ran in; what the provider's read methods are asked about.
+    pub cwd: PathBuf,
+}
+
+/// What [`AiCliProvider::store_dirs`] found: the directories, and what it skipped on the way.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StoreDirs {
+    /// The directories to list.
+    pub dirs: Vec<StoreDir>,
+    /// Entries skipped, to be shown to the user (an unreadable or corrupt directory never aborts).
+    pub notes: Vec<crate::attach::DiscoveryNote>,
+}
+
+impl StoreDirs {
+    /// The known locations only: the project root and every listed worktree.
+    pub fn known(root: &Path, worktrees: &[PathBuf]) -> Self {
+        let mut dirs = vec![StoreDir {
+            cwd: root.to_path_buf(),
+        }];
+        dirs.extend(worktrees.iter().map(|cwd| StoreDir { cwd: cwd.clone() }));
+        Self {
+            dirs,
+            notes: Vec::new(),
+        }
+    }
 }
 
 impl AiCli {
@@ -426,13 +483,47 @@ impl ClaudeProvider {
     /// A private helper rather than trait surface: it is `claude`'s layout and nothing else's, and
     /// leaving it on the seam is what made the seam un-substitutable (FR-021).
     fn transcript_dir(&self, config_dir: &Path, cwd: &Path) -> PathBuf {
-        // The worktree path with every non-alphanumeric char replaced by `-`.
-        let encoded: String = cwd
-            .to_string_lossy()
+        config_dir.join("projects").join(Self::encode(cwd))
+    }
+
+    /// The worktree path with every non-alphanumeric char replaced by `-`. Lossy, which is why
+    /// [`AiCliProvider::store_dirs`] checks a transcript's own `cwd` before trusting a directory.
+    fn encode(cwd: &Path) -> String {
+        cwd.to_string_lossy()
             .chars()
             .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect()
+    }
+
+    /// The `cwd` the first transcript of `dir` records: `Ok(None)` when there is no transcript or
+    /// none of its leading lines names one, `Err` when the first line is not JSON or the
+    /// directory cannot be read. Bounded to one transcript's first-turn prefix (research R3).
+    fn first_transcript_cwd(dir: &Path) -> Result<Option<PathBuf>, ()> {
+        let mut transcripts: Vec<PathBuf> = std::fs::read_dir(dir)
+            .map_err(|_| ())?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"))
             .collect();
-        config_dir.join("projects").join(encoded)
+        transcripts.sort();
+        let Some(first) = transcripts.first() else {
+            return Ok(None);
+        };
+        let prefix = crate::first_turn::read_prefix(first).ok_or(())?;
+        let text = String::from_utf8_lossy(&prefix);
+        for (index, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+            match serde_json::from_str::<serde_json::Value>(line) {
+                Ok(value) => {
+                    if let Some(cwd) = value.get("cwd").and_then(|c| c.as_str()) {
+                        return Ok(Some(PathBuf::from(cwd)));
+                    }
+                }
+                // Only the first line decides "corrupt": later lines are the CLI's to shape.
+                Err(_) if index == 0 => return Err(()),
+                Err(_) => {}
+            }
+        }
+        Ok(None)
     }
 
     /// The conversation transcript for one session. Pure path derivation, no I/O.
@@ -597,6 +688,54 @@ impl AiCliProvider for ClaudeProvider {
 
     fn folder_trust(&self) -> FolderTrust {
         FolderTrust::ClaudeProjects
+    }
+
+    fn store_dirs(&self, config_dir: &Path, root: &Path, worktrees: &[PathBuf]) -> StoreDirs {
+        use crate::attach::{is_within, path_key, DiscoveryNote, SkipReason};
+        let mut found = StoreDirs::known(root, worktrees);
+        let known: std::collections::HashSet<String> =
+            found.dirs.iter().map(|d| Self::encode(&d.cwd)).collect();
+        let managed = root.join(".claude").join("worktrees");
+        // Every directory a worktree of this project could encode to starts with this.
+        let prefix = format!("{}-", Self::encode(&managed)).to_lowercase();
+        let Ok(entries) = std::fs::read_dir(config_dir.join("projects")) else {
+            return found;
+        };
+        let mut candidates: Vec<(String, PathBuf)> = entries
+            .flatten()
+            .filter_map(|e| Some((e.file_name().to_str()?.to_string(), e.path())))
+            .filter(|(name, path)| {
+                !known.contains(name) && name.to_lowercase().starts_with(&prefix) && path.is_dir()
+            })
+            .collect();
+        candidates.sort();
+        for (_, dir) in candidates {
+            match Self::first_transcript_cwd(&dir) {
+                // The encoding collides across projects (`a/b-c` and `a-b/c`), so the transcript
+                // has the last word (FR-007).
+                Ok(Some(cwd)) if is_within(&path_key(&cwd), &path_key(&managed)) => {
+                    found.dirs.push(StoreDir { cwd });
+                }
+                Ok(_) => {}
+                Err(()) => found.notes.push(DiscoveryNote {
+                    provider: Some(AiCli::ClaudeCode),
+                    path: Some(dir),
+                    reason: SkipReason::EntryCorrupt,
+                }),
+            }
+        }
+        found
+    }
+
+    fn last_activity(
+        &self,
+        config_dir: &Path,
+        cwd: &Path,
+        session_id: Uuid,
+    ) -> Option<std::time::SystemTime> {
+        std::fs::metadata(self.transcript_path(config_dir, cwd, session_id))
+            .and_then(|m| m.modified())
+            .ok()
     }
 
     fn activity_source(
@@ -852,6 +991,17 @@ impl AiCliProvider for CopilotProvider {
 
     fn is_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
         self.archived_marker_path(config_dir, session_id).exists()
+    }
+
+    fn last_activity(
+        &self,
+        config_dir: &Path,
+        _cwd: &Path,
+        session_id: Uuid,
+    ) -> Option<std::time::SystemTime> {
+        std::fs::metadata(self.events_path(config_dir, session_id))
+            .and_then(|m| m.modified())
+            .ok()
     }
 
     fn tool_server_support(&self) -> ToolServerSupport {
@@ -1193,6 +1343,16 @@ impl AiCliProvider for PiProvider {
     fn is_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
         self.archived_marker_path(config_dir, cwd, session_id)
             .exists()
+    }
+
+    fn last_activity(
+        &self,
+        config_dir: &Path,
+        cwd: &Path,
+        session_id: Uuid,
+    ) -> Option<std::time::SystemTime> {
+        let path = self.conversation_path(config_dir, cwd, session_id)?;
+        std::fs::metadata(path).and_then(|m| m.modified()).ok()
     }
 
     fn tool_server_support(&self) -> ToolServerSupport {
