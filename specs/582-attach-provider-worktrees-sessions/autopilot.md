@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
 - **Phase**: milestone M1 (implement)
-- **Next step**: M1 implement: T009, T012-T016 (see Handover)
+- **Next step**: M1: Review A, visual pass (T016), review B, full gate, PR (see Handover)
 
 ## Pull requests
 
@@ -59,18 +59,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 stopped at the 150k context cap. Branch `feat/582-attach-provider-worktrees-sessions` is based on the design merge a3f66693 (local `origin/main` ref was stale; `git fetch` fails on broken refs, so branch-start RESET was done by hand with `git switch -C <branch> a3f66693` and `git update-ref refs/remotes/origin/main a3f66693`; verify main with `git ls-remote origin refs/heads/main`). Commit 429b6152 holds the work, not pushed, no PR.
-
-Done and green (tests pass): T001-T008, T010, T011, ticked in tasks.md. `specs/.../tdd/cycle-log.md` records red evidence (no test-list.md exists; test-first task order used instead).
-- core: `attach.rs` (types, `attachable_worktrees(worktrees, &ProvenanceView, &[Session])`), 3 protocol messages + `OperationResult::AttachApplied { results: Vec<AttachResult> }`, PROTOCOL_VERSION 27 -> 28 (schema_hash.rs constant updated).
-- daemon: `Catalog::attach_worktrees(project, &[Worktree] live, &[String]) -> io::Result<Vec<AttachOutcome>>`; `DaemonState::{attach_discover, attach_apply}` (Session items refused as Unavailable until M2); server arms for AttachDiscover/AttachApply. `crates/micold-daemon/tests/attach_apply.rs` has 9 passing tests.
-
-Next steps:
-1. T009 tests then T012 reducer `crates/micold-client/src/features/attach.rs` (render-free; register in features/mod.rs). Client gates to respect: `features_are_render_free`, `feature_registration_cost` (a feature declaring `pub enum Msg` needs `pub fn update(&mut State, Msg) -> Vec<Outcome>` and an isolation test per `feature_write_isolation.rs`), `logical_state_ownership`. Study `features/help.rs` and `tests/features_help.rs` as the small model.
-2. T013 `PendingOp::Attach` in `shell/daemon_sync.rs`; T014 sidebar button + `ui/attach_dialog.rs` (shared primitives, builder API, Constitution VIII).
-3. T015 docs `docs/user-guide/worktrees-and-sessions.md`; T016 visual-pass (quickstart B2/B3 worktrees, light+dark) saved in `specs/582-.../visual/`, via an autopilot-worker.
-4. Then verify.md / review A+B / full gate / PR per tasks files. Check the full `mise run gate` and macOS cfg not needed.
-Build tips: another leftover cargo/flock wait wasted ~25 min; if `build-lock.sh` says another build holds the lock with no cargo running, use `MICOLD_NO_BUILD_LOCK=1`. Never run `pgrep -fa` (dumps huge command lines).
+M1 unit 2 (this unit). Branch `feat/582-attach-provider-worktrees-sessions`, local only (no PR yet). The branch is based on a3f66693 but remote main has moved (`git ls-remote origin refs/heads/main` -> 1498ad25...); `git fetch` fails on broken refs, so before pushing, rebase onto the remote main by hand if it can be fetched (`git fetch origin main` alone may work), else push and let the PR show it.
+Done: T001-T015 ticked (T009 test, T012 reducer `features/attach.rs`, T013 `PendingOp::AttachDiscover/AttachApply` + `on_attach_opened/on_attach_apply` in `shell/daemon_sync.rs` with main.rs interception, T014 sidebar header icon button "Attach existing..." (Icon::OpenProject, not a text button: a text button below the list broke the tooltip layout gate) + `ui/attach_dialog.rs`, registry registration, T015 docs). Guard tests updated (overlay_registry, popover_displacement, root_vocabulary, state_scan `as_mut`, layout snapshot regenerated). `cargo test -p micold-client` green.
+In flight when written: scoped gate (log in the session scratchpad), Review A (autopilot-reviewer, a6f475ee559d2a68b) and the T016 visual pass (autopilot-worker, a4121086316b37f69, saves to `specs/582-.../visual/`).
+Next: act on Review A, tick T016 after the visual pass, review B (conformance, sonnet), full `mise run gate`, commit, push, PR (`feat(582): attach provider worktrees from the app (#582)`), record the PR here. Use `MICOLD_NO_BUILD_LOCK=1`; never `pgrep -fa`.
 
 ## Open escalation
 
