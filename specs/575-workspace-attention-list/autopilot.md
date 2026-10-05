@@ -10,8 +10,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: tasks
-- **Next step**: tasks unit (plan CLEAN after round 1; plan, research, data model, quickstart and contract committed).
+- **Phase**: tasks (done; design PR to open)
+- **Next step**: orchestrator opens the design PR (text in the tasks unit's scratchpad pr-design.md); after its merge, milestone M1.
+- **Milestone notes**: US1 is 13 tasks plus US2's one; US2 adds no code (R7), so it rides in M1. US1 scenario 5 (closed sessions on the switcher, FR-010) is split out as M2 along that acceptance scenario. Polish T020–T021 changes no code: left to the close unit (quickstart B6, B9, B11, §C).
+- **Plan/spec fixes in tasks unit**: FR-005 reworded after speckit-analyze F5: the assistive-technology clause is now conditional on the toolkit exposing an accessible label (plan Known limitation).
 
 ## Pull requests
 
@@ -22,6 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T014 | full | `● n` on each sidebar worktree and Default row with unread sessions, collapsed or expanded, live | — | pending |
+| M2 | T015–T019 | light | The switcher's counts skip closed sessions; location rows add up to the switcher count | — | pending |
 
 ## Decisions
 
@@ -42,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec 575 | 1 | 30231c55b37effe9790da6ea31243981031aa938:937ae9f7da42e25571db7b988153f707ba931e3e | CLEAN: 3 MINOR (all fixed, prose only) — superseded by the rewrite |
 | Spec 575 (rewrite) | 1 | 84afa026eb373957d3319604344384c2c53d8ee4:6075557947bfb5e1361568a3fa8ad0408ce9d424 | CLEAN: 3 MINOR (all fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 | Plan 575 | 1 | a544cbbec276b6e538a862790af2b637ccd7a155:d7bf4f9b57b064be396b814b2bc37f390bf39002 | CLEAN: 2 MINOR (both fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
+| Tasks 575 | 1 | 546c4d5d35bd1de8132ad3d6d78f2341f17c4afd:c0987c41765f310a8299693bbe13c42d8aea98f0 | CLEAN: 1 MINOR (wrong task ref in T002, fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 
 ## Declined review findings
 

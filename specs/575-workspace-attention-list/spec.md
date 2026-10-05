@@ -94,7 +94,7 @@ While the user works, sessions become unread and others are viewed. The indicato
 - **FR-002**: The indicator's number MUST be the number of counted sessions of that location: sessions of the location that are unread in feature 039's sense, not closed, and not the session the window has in view.
 - **FR-003**: The indicator MUST show whether the location row is expanded or collapsed. Expanding or collapsing a row MUST NOT change its indicator, and the session rows MUST keep their own unread marks as they are (039 FR-018).
 - **FR-004**: The indicator MUST be the shared unread mark with a count from the component library (Principle VIII; 039 contract `unread-mark.md`), in the form the switcher's rows use, and MUST stay visible when the row's name is shortened. The location row MUST keep its height, and the row actions that fade in on hover MUST NOT cover or shift it.
-- **FR-005**: The indicator MUST state its meaning to assistive technology and in the row's tooltip, for example "2 unread sessions".
+- **FR-005**: The indicator MUST state its meaning in words in the row's tooltip, for example "2 unread sessions", and MUST give assistive technology the same words wherever the UI toolkit exposes an accessible label; the toolkit used today exposes none to any widget, 039's marks included (plan.md, Known limitation).
 
 #### Staying current
 
