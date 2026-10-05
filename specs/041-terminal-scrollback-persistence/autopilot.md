@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3: implement T025–T030 (periodic saves), then gate, reviews A and B, PR.
+- **Next step**: M3: review B round 2 (fix diff), full gate, PR.
 
 ## Pull requests
 
@@ -78,6 +78,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN: 3 MINOR (save has no size cap; `Unchanged` trusts the last write; `ensure_dir` keeps the owner bits), none fixed, all three in *Follow-ups not done* |
 | B M2 | 1 | 62fff50efd30c05d9eb64fa5dd81f91c8fae59d6:b2243c4ce50b5ae54562965bc2a172add0529435 | CLEAN, no findings. Verify: `history_service_restart` `test result: ok. 13 passed; 0 failed`, `history_timing` `test result: ok. 1 passed; 0 failed` |
 | A M2 (red CI fix) | 2 | 34b41574b3785e4b9aa80ac51f5cf0d475543a0d:03467a02515e4f8bc12f7a0aed8d803f64710915 | CLEAN, no findings: the cause holds, `FA` with `OICI` is stored as one entry, rights and inheritance unchanged. Not counted (follows a red CI, not A's own findings) |
+| A M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (saves record the tick's `now`, not the write's; the gap can be a little under 30 s when a write is delayed within a tick), declined: the injected clock is the tick's, ticks are 5 s, and the delay is only that of earlier writes in the same tick |
+| B M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CHANGES: 1 MAJOR (a terminal first seen by the saver counted its earlier output as saved), 1 MINOR (red by mutation only); fixed with `SaveSchedule::new(0)` for an untracked process and a first-look test shown red (cycle 77). Verify: `history_periodic_save` and `terminal_history_schedule` ok |
 
 ## Declined review findings
 

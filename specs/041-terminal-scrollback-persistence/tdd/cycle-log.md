@@ -829,3 +829,11 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - refactor: none
 - notes: the stub was put in after the code, so this red is shown by mutation, not by a red run before the code. Input needs a rising serial per session: the first version of the tests reused serial 0 and the stand-in saw only the first line. The saver holds the session's gate from the check that the process is still the live one until its file is written, so a stop's final save is never overwritten by an older one. The saver task is spawned in `server.rs` beside the supervision tick, not in `main.rs`, which only calls `run`.
 - commit: `feat(041): the saver saves a running terminal when due, off the state lock and under its gate (T026, T028-T030)`
+
+## Cycle 77 (M3, review B): output printed before the saver first looks at a terminal is saved
+
+- test: `crates/micold-daemon/tests/history_periodic_save.rs::output_printed_before_the_saver_first_looks_is_saved` (new)
+- red: with the saver as it was (`SaveSchedule::new(count)` at first sight, so the banner counted as saved): `cargo test -p micold-daemon --test history_periodic_save before_the_saver` -> `test result: FAILED. 0 passed; 1 failed`
+- green: a terminal not yet tracked starts with `SaveSchedule::new(0)`: a process's output count starts at 0, so what it printed before the first look is due. `test result: ok. 9 passed; 0 failed`
+- refactor: the other cases' `running` helper now looks 30 s before `t0`, which saves the banner and leaves a quiet schedule at `t0`; U75 and U78 assert on their own lines instead of on the file's absence
+- notes: found by review B (MAJOR). A restored seed does not move the output count, so an idle restored terminal still causes no write (FR-004).
