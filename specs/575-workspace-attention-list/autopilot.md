@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #575
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
-- **Phase**: clarify
-- **Next step**: clarify unit on the rewritten spec (Spec 575 rewrite review CLEAN in round 1).
+- **Phase**: plan
+- **Next step**: plan unit (clarify on the rewritten spec CLEAN after round 1: one agent-resolved question, no requirement changed).
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | spec | What does #575 ask for? (scope change) | An attention indicator (unread mark + count) on each sidebar worktree row and the Default row holding unread sessions; the switcher attention list is dropped. | user: "the clue was to add indicator of attention at sidebar with the list of worktrees" | spec.md Clarifications |
 | D5 | spec | Does the indicator show on an expanded location row? | Yes, expanded or collapsed; session rows keep their own marks. | orchestrator default | spec.md FR-003 |
 | D6 | spec | Do closed (archived) unread sessions count? | No, on location rows nor in the switcher counts/button total, so a project's location rows add up to its switcher count (FR-010). | agent-resolved | 039 spec US1 scenario 9; crates/micold-core/src/workspace.rs:334 (`unread_session_count` filters on `unread` only); crates/micold-core/src/session.rs:339 `archived` |
+| D7 | clarify | Which hidden worktrees does "the sidebar's filter" cover (edge case, FR-010)? | Both tag filters (008 FR-025) and hidden agent-owned worktrees (014); hidden rows show no indicator but still count on the switcher; the 024 re-admitted row shows its indicator. Wording only. | agent-resolved | crates/micold-client/src/features/sidebar.rs `filtered_worktree_tree`, `visible_worktrees`; crates/micold-core/src/workspace.rs:334 |
 
 ## Review rounds
 

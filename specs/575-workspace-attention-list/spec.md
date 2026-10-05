@@ -29,6 +29,7 @@ The gap: a session row is shown only while its worktree row is expanded. With wo
 - Scope changed by the user: "the clue was to add indicator of attention at sidebar with the list of worktrees". The earlier workspace attention list in the switcher's panel (earlier FR-001 to FR-015, and the clarify answers on its placement and entry order) is dropped.
 - Q: Does the indicator show on an expanded location row, whose session rows already carry their own marks? → A: Yes. The indicator shows whether the row is expanded or collapsed; the session rows keep their marks unchanged. _(orchestrator default)_
 - Q: Do closed sessions that were unread count? → A: No, not on the location row and not in the switcher. The service does not clear `unread` when a session is closed, so a closed session can still carry it; 039 US1 scenario 9 already says a closed session's project count must no longer include it. This feature makes the switcher's counts skip closed sessions too, so the location rows of a project always add up to its switcher count. _(agent-resolved: specs/039-session-attention-notifications/spec.md US1 scenario 9; crates/micold-core/src/workspace.rs `unread_session_count` filters on `unread` only; crates/micold-core/src/session.rs `archived`)_
+- Q: Which hidden worktree rows does "the sidebar's filter" cover in the edge cases and FR-010? → A: Both mechanisms that keep a worktree out of the location list: the tag filters (feature 008 FR-025) and the setting that hides agent-owned worktrees (feature 014). A worktree hidden either way has no row and no indicator, its unread sessions still count on the switcher, and the row re-admitted for the current session (feature 024) shows its indicator. _(agent-resolved: crates/micold-client/src/features/sidebar.rs `filtered_worktree_tree` ("Two mechanisms hide a row") and `visible_worktrees`; crates/micold-core/src/workspace.rs `unread_session_count` counts every session of the project)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -74,7 +75,7 @@ While the user works, sessions become unread and others are viewed. The indicato
 - **A location whose only unread sessions were closed**: no indicator.
 - **A burst of changes** (Principle II): when several sessions of one location become unread or come into view within the same second, the indicator settles on the right count within 1 second of the last change.
 - **A project with no worktrees**: only the Default row exists, and it carries the indicator.
-- **A worktree row the sidebar's filter hides**: it has no row, so there is no indicator to show; its unread sessions still count on the project's switcher row (039 FR-022). A worktree row listed only because it holds the current session (feature 024) shows its indicator like any other.
+- **A worktree the sidebar hides** (by its tag filters, feature 008, or by hiding agent-owned worktrees, feature 014): it has no row, so there is no indicator to show; its unread sessions still count on the project's switcher row (039 FR-022). A worktree row listed only because it holds the current session (feature 024) shows its indicator like any other.
 - **A worktree that is missing or invalid** (feature 010 FR-011): shows its indicator like a valid one when it holds counted sessions.
 - **Many unread sessions**: counts of two or more digits are shown in full; the row keeps its height (039 contract `unread-mark.md` U8), and the name is what a narrow row shortens.
 - **Hover**: the row actions that fade in on hover (feature 008) do not cover or move the indicator.
@@ -104,7 +105,7 @@ While the user works, sessions become unread and others are viewed. The indicato
 
 #### Consistency with the switcher
 
-- **FR-010**: A closed session MUST NOT be counted in the switcher's per-project counts (039 FR-021) or the button's total (039 FR-023), as 039 US1 scenario 9 requires. For a project whose worktree rows the filter does not hide, the indicators of its location rows MUST add up to that project's count on the switcher's row in the same window.
+- **FR-010**: A closed session MUST NOT be counted in the switcher's per-project counts (039 FR-021) or the button's total (039 FR-023), as 039 US1 scenario 9 requires. For a project none of whose worktrees the sidebar hides (tag filters or hidden agent-owned worktrees), the indicators of its location rows MUST add up to that project's count on the switcher's row in the same window.
 
 #### Unchanged behaviour, components, documentation
 
