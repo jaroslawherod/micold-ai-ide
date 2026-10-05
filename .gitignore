@@ -43,4 +43,3 @@ __pycache__/
 
 # speckit-autopilot bug and chore runs keep their ledger local (flows/bug.md, flows/chore.md).
 /specs/quick/
-/.claude/worktrees/

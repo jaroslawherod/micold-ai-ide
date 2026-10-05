@@ -21,7 +21,5 @@ its own directory.
 - `SWEEP_ARGS` replaces the default, e.g. `SWEEP_ARGS='--dry-run --time 7'` to preview, or
   `SWEEP_ARGS='--maxsize 50GB'` to bound each directory by size instead of age.
 
-`mise run sweep` does not touch visual-pass working files: `.visual-pass/` in a worktree (pinned
-binaries) and `.claude/worktrees/vp-*` (helper worktrees for a "before" build). A finished pass
-removes them itself; to reclaim by hand, `git worktree remove` each `vp-*` helper and `rm -rf
-.visual-pass`.
+`mise run sweep` does not clean `.visual-pass/` (visual-pass working files, pinned binaries). A
+finished pass removes its own; to reclaim by hand, remove each worktree's `.visual-pass/`.

@@ -62,19 +62,20 @@ result with a perfectly clear conscience. This has happened: a bar screenshot sh
 branch under test had deleted, while the source contained no reference to it and its gate passed.
 
 ```bash
-mkdir -p .visual-pass/bin
+VP="$(git rev-parse --show-toplevel)/.visual-pass"; mkdir -p "$VP/bin"
 scripts/build-lock.sh bash -c \
   'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon &&
-   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" .visual-pass/bin/'
+   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" "$1"/bin/' _ "$VP"
 ```
 
-**Where working files go.** `.visual-pass/` at the root of the worktree running the pass (git-ignored,
-so it is private to that worktree and two sessions cannot overwrite each other's pinned binaries).
-Never `~/vp` or any other folder under `$HOME`. A helper worktree for a "before" build goes under
-`.claude/worktrees/vp-<name>` (`git worktree add --detach .claude/worktrees/vp-before <rev>`), where
-housekeeping looks, and you remove it with `git worktree remove` when the pass ends. Delete
-`.visual-pass/` too at the end (`rm -rf .visual-pass`); `mise run sweep` and the `reclaim-disk`
-skill do not count it.
+**Where working files go.** `$VP`, the git-ignored `.visual-pass/` at the root of the worktree running
+the pass (set as above, root-anchored so a later `cd` cannot misdirect cleanup). It is private to that
+worktree, so two sessions cannot overwrite each other's pinned binaries. Never `~/vp` or any other
+folder under `$HOME`. A "before" build needs the old source: export it with
+`mkdir -p "$VP/before-src" && git archive <rev> | tar -x -C "$VP/before-src"`, never a helper
+`git worktree add`. An export registers nothing with git, so there is no worktree for housekeeping
+to miss and none for the autopilot's hook (which forbids removing one) to block. When the pass ends,
+`rm -rf "$VP"` is the whole cleanup. `mise run sweep` and the `reclaim-disk` skill do not count it.
 
 **Name both bins.** `--bin` filters the whole invocation to the targets it names, so
 `-p micold-client --bin micold-ai-ide -p micold-daemon` — what this recipe said until 2026-08-18 —
