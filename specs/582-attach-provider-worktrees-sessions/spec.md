@@ -36,20 +36,20 @@
 
 ### User Story 1 - Attach a provider worktree from the app (Priority: P1)
 
-A user whose catalog is empty (new machine, lost data directory) opens a project that already has
+A user whose project has no provenance records (new machine, lost data directory: the catalog may still hold sessions that feature 026 adopted at open) opens a project that already has
 provider worktrees. They find the worktrees offered for attaching, attach one, and it appears in
 the sidebar as a normal worktree with its branch and files untouched.
 
 **Why this priority**: It is the core loss in the issue: the worktrees exist but the user cannot
 reach them without turning on a hidden-worktree filter, and cannot re-create them either.
 
-**Independent Test**: Create worktrees under `.claude/worktrees/`, start with an empty catalog,
+**Independent Test**: Create worktrees under `.claude/worktrees/`, start with no provenance records,
 attach one from the app, and check it shows in the sidebar with the filter off and with its
 uncommitted changes intact.
 
 **Acceptance Scenarios**:
 
-1. **Given** an empty catalog and 3 provider worktrees in the project, **When** the user opens the
+1. **Given** no provenance records and 3 provider worktrees in the project, **When** the user opens the
    project, **Then** the 3 worktrees are listed as available to attach.
 2. **Given** an attachable worktree, **When** the user attaches it, **Then** it appears in the
    sidebar with "Show agent worktrees" off, and its branch, files and uncommitted changes are
@@ -61,14 +61,14 @@ uncommitted changes intact.
 
 ### User Story 2 - Discover and resume provider sessions (Priority: P1)
 
-A user opens a project whose catalog is empty. Micold looks in the provider's own store, finds the
+A user opens a project with no provenance records. Micold looks in the provider's own store, finds the
 sessions the provider can resume for that project, and lists them as resumable. The user resumes
 one and the provider continues that conversation in the right worktree.
 
 **Why this priority**: Today only the running session appears, so past work is lost.
 
 **Independent Test**: Seed a provider store with sessions for a project and another project, start
-with an empty catalog, and check only this project's sessions are listed as resumable, and one
+with no provenance records, and check only this project's sessions are listed as resumable, and one
 resumes.
 
 **Acceptance Scenarios**:
@@ -111,7 +111,7 @@ listed by `list_worktrees` without the hidden-worktree option.
 
 ### User Story 4 - Everything is found at start without manual steps (Priority: P3)
 
-When Micold starts with an empty catalog it finds attachable worktrees and resumable sessions on its
+When Micold starts for a project with no provenance records it finds attachable worktrees and resumable sessions on its
 own and tells the user, so a lost data directory is recovered in one click.
 
 **Why this priority**: A convenience on top of Stories 1 and 2.
@@ -121,10 +121,10 @@ found worktrees and sessions at once.
 
 **Acceptance Scenarios**:
 
-1. **Given** an empty catalog with attachable worktrees and sessions, **When** Micold starts,
-   **Then** the user is offered attaching all of them in one action.
-2. **Given** a non-empty catalog, **When** Micold starts, **Then** nothing is attached without the
-   user asking.
+1. **Given** a project with no provenance records and attachable worktrees and sessions, **When**
+   Micold starts, **Then** the user is offered attaching all of them in one action.
+2. **Given** a project that has provenance records, **When** Micold starts, **Then** this feature
+   attaches nothing without the user asking (feature 026's existing adoption is unchanged).
 
 ---
 
@@ -132,8 +132,9 @@ found worktrees and sessions at once.
 
 - A provider worktree directory was deleted but git still lists it (prunable): it is shown as
   unavailable, not attachable.
-- A worktree's branch is checked out in another worktree of another project: attaching reports the
-  conflict and changes nothing.
+- A path or branch that is not a worktree of this project (including a branch checked out only in
+  another project's worktree): attaching fails with `NotAWorktreeOfProject` and changes nothing;
+  attaching checks out nothing, so there is no branch conflict to report.
 - A provider store holds thousands of sessions: listing stays responsive and shows the most recent
   first.
 - A session's worktree no longer exists: the session is flagged unresumable with the reason; it is
@@ -171,6 +172,8 @@ found worktrees and sessions at once.
   provider keeps a store of resumable sessions it can read; Copilot and Pi are otherwise covered by
   FR-014.
 - **FR-007**: Discovery MUST NOT list another project's sessions and MUST NOT list a session
+  (feature 026's open-time adoption counts as already in the catalog: sessions it adopted are visible
+  as sessions and are not listed again; attaching their hidden worktree is what shows them)
   already in the catalog.
 - **FR-008**: Users MUST be able to resume a listed session, and the provider MUST continue that
   conversation in the session's worktree. If that worktree is attachable but not attached, resuming
@@ -183,9 +186,11 @@ found worktrees and sessions at once.
 - **FR-011**: The MCP tools MUST list resumable sessions through a new read-only tool, separate from
   `list_sessions` (which lists only the catalog's sessions), so an agent can find them without the
   app. Like `list_branches`, it is a discovery tool; its name and fields are for the plan.
-- **FR-012**: When Micold starts with an empty catalog and finds attachable worktrees or resumable
-  sessions, it MUST tell the user and offer attaching them in one action, and MUST NOT attach
-  anything without the user's action (offer only, no automatic attaching).
+- **FR-012**: When Micold starts for a project that has no provenance records (a new machine or a
+  lost data directory) and finds attachable worktrees or resumable sessions, it MUST tell the user
+  and offer attaching them in one action. This feature MUST NOT attach anything without the user's
+  action (offer only), with one existing exception: feature 026's open-time adoption of sessions
+  found at the project root and at startable worktrees keeps running (FR-013) and is not changed.
 - **FR-013**: The system MUST NOT break the existing behaviour that agent-created worktrees are
   hidden by default when they are not attached.
 - **FR-014**: Discovery MUST work for each provider through the same user-visible behaviour; a

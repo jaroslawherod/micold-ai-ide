@@ -6,7 +6,7 @@
 - [x] No implementation details
 - [x] Focused on user value
 - [x] Mandatory sections completed
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 left for the clarify unit: FR-011, FR-015)
+- [x] No [NEEDS CLARIFICATION] markers remain (FR-011, FR-015 resolved in clarify round 1)
 - [x] Requirements testable
 - [x] Success criteria measurable and technology-agnostic
 - [x] Acceptance scenarios and edge cases defined
@@ -14,4 +14,4 @@
 
 ## Notes
 
-- The two markers are deliberate; the clarify unit resolves them.
+- The two markers were resolved in clarify round 1.
