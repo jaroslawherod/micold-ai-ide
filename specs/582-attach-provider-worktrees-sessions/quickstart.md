@@ -27,3 +27,9 @@ Needs a private Xvfb display, a scratch `XDG_DATA_HOME` (empty catalog), a scrat
 | B2 | Dismiss, then open "Attach existing…" | The list still shows all items; a note appears if a store is unreadable |
 | B3 | Attach all | 3 worktrees show in the sidebar, no agent chip; sessions show idle |
 | B4 | Repeat B1 in the light and dark theme | Banner and dialog readable in both |
+
+## Result (T037, 2026-10-05)
+
+- **Part A**: `mise run gate` passed on the final tree (fmt, clippy, `cargo test --workspace`, scripts/tests; run with `MICOLD_SKIP_GH_LAUNCH_TEST=1` on this host, CI unaffected). Every test file listed above is in the workspace run.
+- **Part B**: passed across the milestone passes in [visual/results.md](visual/results.md): B1 and the dismissal half of B2 and B4 (M4, banner and dismiss, light and dark), B2 and B3 (M1 dialog and Attach all; M2 stored sessions and Resume, light and dark). Defects and observations are listed there, none blocking.
+- **Deviations from the plan, as built**: "Attach all" in the banner attaches worktrees only; with only sessions found the button reads "Review" and opens the dialog (sessions are resumed one at a time). `provider` in the MCP tools is `claude_code`. See `tdd/cycle-log.md`.

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: milestone M4 (PR open)
-- **Next step**: wait for CI, merge M4, then M5
+- **Phase**: milestone M5 (PR open)
+- **Next step**: wait for CI, merge M5, then close
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #587 | M1: attach provider worktrees from the app | merged | 502c49691bc45786f85f2a60a7e13417bf08cabc |
 | #588 | M2: discover and resume provider sessions | merged | e849b117222256304d49f6e01e0d449a89c96d5c |
 | #589 | M3: attach_worktree and list_resumable_sessions MCP tools | merged | e3cef56de6611c1ce080e7bb5a39fd09c0bd079e |
-| #590 | M4: start-up offer banner | open | |
+| #590 | M4: start-up offer banner | merged | 4657af19443f25a0669f5036f7c163e78f050e4a |
+| M5 | Polish: quickstart result, user guide check | open | |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Attach provider worktrees from the app (dialog) | #587 | merged |
 | M2 | T017–T026 | full | Discover and resume provider sessions | #588 | merged |
 | M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | #589 | merged |
-| M4 | T032–T036 | full | Start-up offer banner | #590 | in review |
-| M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | | pending |
+| M4 | T032–T036 | full | Start-up offer banner | #590 | merged |
+| M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | (this PR) | in review |
 
 ## Decisions
 
@@ -63,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review B | 1 | 008f809719dfdb601d404858fe5102758a1bcb39:e849b117222256304d49f6e01e0d449a89c96d5c | CLEAN (2 MINOR: doc wrap fixed; invalid_input branch for an included worktree kept, untested) |
 | M4 Review A | 1 | 4dc431a9a600f74b5525391611ff3001a671f12a:e3cef56de6611c1ce080e7bb5a39fd09c0bd079e | CLEAN (3 MINOR fixed: vacuous test dropped, all-failed batch keeps banner, unexpected result variant reports failure) |
 | M4 Review B | 1 | 2bad84caf7398a5aa3372772f646b1abf2bed1ee:e3cef56de6611c1ce080e7bb5a39fd09c0bd079e | CLEAN (1 MINOR: offer_visible is evaluated live at render, so a late provenance mirror only hides the banner; left) |
+| M5 reviews | - | - | not run: docs-only diff (quickstart result, task ticks, ledger); user guide already matched, no change |
 
 ## Declined review findings
 
