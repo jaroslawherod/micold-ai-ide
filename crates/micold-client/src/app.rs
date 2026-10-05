@@ -101,6 +101,9 @@ pub enum Message {
     /// or dismissed as a unit, and no other feature reads its intermediate state. Twenty-two
     /// variants — 17% of this enum — collapse to this one.
     WorktreeForm(crate::features::worktree_form::Msg),
+    /// Everything the attach-existing-worktrees dialog says about itself (feature 582); see
+    /// [`crate::features::attach::Msg`].
+    Attach(crate::features::attach::Msg),
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -197,6 +200,8 @@ pub struct State {
     pub session: crate::features::session::State,
     /// What the worktree_form feature remembers -- see [`crate::features::worktree_form::State`].
     pub worktree_form: crate::features::worktree_form::State,
+    /// What the attach feature remembers -- see [`crate::features::attach::State`].
+    pub attach: crate::features::attach::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -640,6 +645,10 @@ impl State {
             Message::EscapePressed => self.dismiss_topmost(),
             Message::WorktreeForm(msg) => {
                 let outcomes = crate::features::worktree_form::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::Attach(msg) => {
+                let outcomes = crate::features::attach::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Notifications(msg) => {

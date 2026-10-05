@@ -188,6 +188,23 @@ notes for as long as the file stays unreadable, rather than replacing it with an
 passing glitch can't quietly erase what it knew. The file is left untouched for you to inspect or
 delete; once it reads cleanly again, everything resumes as before.
 
+### Attaching worktrees an assistant made
+
+If you lost the app's notes (a new machine, a deleted data folder), or an assistant made worktrees
+the app never recorded, they are hidden and you would otherwise have to switch on **Show agent
+worktrees** to see them. Instead, press the folder button in the sidebar header (its tooltip reads
+**Attach existing…**). It needs a project to be open.
+
+The dialog lists the project's worktrees that the app has no record of, each with its branch. Tick
+the ones you want and press **Attach selected**, or press **Attach all**. Attached worktrees appear
+in the sidebar like any worktree you created, with **Show agent worktrees** still off. A worktree
+whose folder is gone, or that git no longer knows, is listed with the reason and can't be ticked.
+
+Attaching only records the worktree in the app. It never creates, deletes or checks out anything:
+the branch, the files and any uncommitted changes stay exactly as they were. Attaching a worktree
+that is already attached changes nothing, and the app tells you it was already attached. If two
+windows attach the same worktree at once, it is added once.
+
 ### Resizing and hiding the sidebar
 
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.

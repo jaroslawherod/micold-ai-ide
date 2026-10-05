@@ -41,6 +41,8 @@ use std::path::{Path, PathBuf};
 pub const MUTATORS: &[&str] = &[
     "advance",
     "append",
+    // `attach.dialog.as_mut` borrows the open dialog to edit it (feature 582).
+    "as_mut",
     // `AvailabilityAnswers::asked` / `answered` / `env_include_changed` record a request, file its
     // answer, and record the settings the answers describe (feature 033).
     "answered",

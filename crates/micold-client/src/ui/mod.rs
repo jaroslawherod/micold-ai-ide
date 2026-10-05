@@ -1,6 +1,7 @@
 //! iced rendering layer for the main window. Bin-only; compiled with the `gui` feature.
 
 pub(crate) mod about;
+pub(crate) mod attach_dialog;
 pub mod cdk;
 pub(crate) mod confirm_agent_request;
 pub(crate) mod confirm_delete;

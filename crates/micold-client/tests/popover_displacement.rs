@@ -161,7 +161,8 @@ fn every_popover_is_in_the_table() {
     // with `confirm_link_open`, the question a sandboxed file link asks before this machine opens
     // it (FR-018a).
     // Eleven with `confirm_agent_request`, an agent's destructive request (034 FR-014).
-    const DIALOGS: usize = 11;
+    // Twelve with `attach_worktrees`, the dialog that attaches provider worktrees (feature 582).
+    const DIALOGS: usize = 12;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

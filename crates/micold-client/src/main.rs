@@ -17,6 +17,7 @@ mod shell;
 use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
+use micold_client::features::attach::Msg as AttachMsg;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -871,6 +872,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::Worktree(WorktreeMsg::ExcludeRequested(dir)) => {
             shell::daemon_sync::on_worktree_exclude_requested(app, dir)
+        }
+        // Feature 582: the reducer opens the dialog or records the targets, the shell sends.
+        Message::Attach(msg @ AttachMsg::Opened) => {
+            app.core.update(Message::Attach(msg));
+            shell::daemon_sync::on_attach_opened(app)
+        }
+        Message::Attach(msg @ (AttachMsg::AttachSelected | AttachMsg::AttachAll)) => {
+            app.core.update(Message::Attach(msg));
+            shell::daemon_sync::on_attach_apply(app)
         }
         Message::Worktree(WorktreeMsg::RefreshRequested) => {
             shell::daemon_sync::on_worktree_refresh_requested(app)
