@@ -84,6 +84,24 @@ fn deb_assets(manifest: &str) -> Option<&str> {
     None
 }
 
+/// The `[package.metadata.generate-rpm] assets` list, verbatim, or `None` when absent. Same reading
+/// as `deb_assets`, with braces counted too because the entries are inline tables.
+fn rpm_assets(manifest: &str) -> Option<&str> {
+    let after = manifest.split_once("[package.metadata.generate-rpm]")?.1;
+    let open = after.find("assets = [")?;
+    let rest = &after[open + "assets = [".len()..];
+    let mut depth = 0usize;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '[' | '{' => depth += 1,
+            ']' if depth == 0 => return Some(&rest[..i]),
+            ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Whether a file's text names the showcase — by binary name or by build-output path.
 fn names_showcase(text: &str, bin: &str) -> bool {
     text.contains(bin)
@@ -222,6 +240,22 @@ fn the_manifest_declares_the_showcase_binary_but_does_not_ship_it() {
         !assets.contains(SHOWCASE_BIN),
         "declared as a binary and listed as an asset — the second is the part that ships it"
     );
+}
+
+/// The RPM is the same requirement in a third shape (issue #583): cargo-generate-rpm also ships
+/// only what `assets` lists, and ships *every* binary the crate builds when the list is absent.
+#[test]
+fn the_rpm_contains_no_showcase() {
+    let manifest = fs::read_to_string(manifest_path()).expect("read the client manifest");
+    let assets = rpm_assets(&manifest).expect("the `[package.metadata.generate-rpm] assets` list");
+    assert!(
+        !assets.trim().is_empty() && !names_showcase(assets, SHOWCASE_BIN),
+        "the RPM asset list is empty or names `{SHOWCASE_BIN}` — the showcase is a development \
+         tool and MUST NOT reach an end user through an installation (FR-018)"
+    );
+    for bin in BUNDLED_BINS {
+        assert!(assets.contains(bin), "the RPM does not ship `{bin}`");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

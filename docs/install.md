@@ -34,6 +34,12 @@ To upgrade, install the newer `.deb` over the top. To remove it:
 $ sudo apt remove micold-client
 ```
 
+## Linux (Fedora, RHEL, openSUSE)
+
+Each release also carries an `.rpm` for `x86_64` and `aarch64`, with the same contents as the `.deb`.
+[Installing on Fedora, RHEL and openSUSE](user-guide/install-rpm.md) has the downloads and the
+`dnf` and `zypper` commands.
+
 ## Windows
 
 Each release carries a per-user installer for the two architectures Windows runs on:
