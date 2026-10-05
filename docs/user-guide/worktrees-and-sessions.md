@@ -1146,7 +1146,8 @@ need you without expanding them.
   sessions*.
 - **Hidden worktrees.** A worktree the sidebar hides — by a tag filter, or an agent's worktree
   while **Show agent worktrees** is off — has no row to carry the number. Its unread sessions are
-  counted only on the project switcher.
+  counted only on the project switcher. The one exception is the worktree of the session you are
+  in: its row stays listed, and carries its number like any other.
 
 Unread state is kept on your computer with the rest of the session list and is sent nowhere.
 

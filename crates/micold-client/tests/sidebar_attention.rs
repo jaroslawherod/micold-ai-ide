@@ -492,7 +492,7 @@ fn expanding_collapsing_and_hovering_a_row_read_nothing() {
         Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
         Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
     ] {
-        let _ = state.update(message);
+        state.update(message);
     }
 
     let unread_after: Vec<bool> = state.workspace.sessions[Path::new(REPO)]
