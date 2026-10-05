@@ -20,7 +20,10 @@ fn entered(start: Instant) -> ShowTimer {
 /// A timer that has opened: the pointer entered at `start` and stayed for the delay.
 fn opened(start: Instant) -> ShowTimer {
     let mut timer = entered(start);
-    assert!(timer.observe(true, start + DELAY, DELAY).open, "fixture opens");
+    assert!(
+        timer.observe(true, start + DELAY, DELAY).open,
+        "fixture opens"
+    );
     timer
 }
 
@@ -136,7 +139,10 @@ fn a_press_closes_it_until_the_pointer_has_left() {
 
     timer.observe(false, start + DELAY * 3, DELAY);
     timer.observe(true, start + DELAY * 4, DELAY);
-    assert!(timer.observe(true, start + DELAY * 5, DELAY).open, "reopens");
+    assert!(
+        timer.observe(true, start + DELAY * 5, DELAY).open,
+        "reopens"
+    );
 }
 
 #[test]
@@ -167,8 +173,19 @@ fn a_wake_is_only_asked_for_while_waiting() {
     let mut timer = ShowTimer::default();
 
     assert_eq!(timer.observe(false, start, DELAY).wake_at, None, "away");
-    assert!(timer.observe(true, start, DELAY).wake_at.is_some(), "waiting");
-    assert_eq!(timer.observe(true, start + DELAY, DELAY).wake_at, None, "open");
+    assert!(
+        timer.observe(true, start, DELAY).wake_at.is_some(),
+        "waiting"
+    );
+    assert_eq!(
+        timer.observe(true, start + DELAY, DELAY).wake_at,
+        None,
+        "open"
+    );
     timer.press();
-    assert_eq!(timer.observe(true, start + DELAY, DELAY).wake_at, None, "spent");
+    assert_eq!(
+        timer.observe(true, start + DELAY, DELAY).wake_at,
+        None,
+        "spent"
+    );
 }
