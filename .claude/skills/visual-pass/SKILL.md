@@ -69,13 +69,14 @@ scripts/build-lock.sh bash -c \
 ```
 
 **Where working files go.** `$VP`, the git-ignored `.visual-pass/` at the root of the worktree running
-the pass (set as above, root-anchored so a later `cd` cannot misdirect cleanup). It is private to that
+the pass (set as above, root-anchored so a later `cd` cannot misdirect cleanup; shell state does not
+persist between calls, so re-set `VP` the same way in each one). It is private to that
 worktree, so two sessions cannot overwrite each other's pinned binaries. Never `~/vp` or any other
 folder under `$HOME`. A "before" build needs the old source: export it with
-`mkdir -p "$VP/before-src" && git archive <rev> | tar -x -C "$VP/before-src"`, never a helper
+`mkdir -p "$VP/before-src" && git -C "$VP/.." archive <rev> | tar -x -C "$VP/before-src"`, never a helper
 `git worktree add`. An export registers nothing with git, so there is no worktree for housekeeping
 to miss and none for the autopilot's hook (which forbids removing one) to block. When the pass ends,
-`rm -rf "$VP"` is the whole cleanup. `mise run sweep` and the `reclaim-disk` skill do not count it.
+`rm -rf "${VP:?}"` is the whole cleanup. `mise run sweep` and the `reclaim-disk` skill do not clean it.
 
 **Name both bins.** `--bin` filters the whole invocation to the targets it names, so
 `-p micold-client --bin micold-ai-ide -p micold-daemon` — what this recipe said until 2026-08-18 —
