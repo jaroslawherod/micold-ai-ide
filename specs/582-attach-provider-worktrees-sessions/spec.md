@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-05
 
-**Status**: Closed 2026-10-05 — shipped in PRs #585, #587, #588, #589, #590, #591 and the close PR
+**Status**: Closed 2026-10-05 — shipped in PRs #585, #587, #588, #589, #590, #591 and #593
 
 **Input**: User description: "Implement GitHub issue #582: AI CLI providers should be able to attach existing worktrees and sessions. When Micold starts with an empty catalog (a new machine, or a lost data directory), a provider's existing worktrees and sessions are not picked up. The worktrees under `.claude/worktrees/` are known but marked assistant-owned, so the sidebar hides them until "Show agent worktrees" is on. Claude Code's own sessions for the project are not found; only the running session appears. `create_worktree` cannot re-attach those worktrees because their branches are already checked out in the agent worktree. Expected: an AI CLI provider (Claude Code, Copilot, Pi) can attach worktrees it created and sessions it can resume, and they appear in the app instead of being hidden or lost; resumable sessions from the provider's own store (for example `~/.claude/projects/<project>`) are discovered and listed as resumable; attaching a provider-owned worktree is possible from the app and from the MCP tools (an `attach_worktree` operation) without deleting and recreating it."
 
