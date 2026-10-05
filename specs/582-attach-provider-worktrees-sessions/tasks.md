@@ -93,8 +93,8 @@ implementation tasks they cover, and each test must be seen failing for the righ
 
 ## Phase 7: Polish
 
-- [ ] T037 Run quickstart Part A and Part B end to end and record the result in `specs/582-attach-provider-worktrees-sessions/quickstart.md`.
-- [ ] T038 Check that the user guide pages match the shipped behaviour of all four stories and that no `docs/` page still says attaching or the offer is missing.
+- [x] T037 Run quickstart Part A and Part B end to end and record the result in `specs/582-attach-provider-worktrees-sessions/quickstart.md`.
+- [x] T038 Check that the user guide pages match the shipped behaviour of all four stories and that no `docs/` page still says attaching or the offer is missing.
 
 ## Dependencies & Execution Order
 
