@@ -115,6 +115,20 @@ impl<'a, M> TreeItem<'a, M> {
         }
     }
 
+    /// Show the number of a location's unread sessions at the trailing edge (feature 575).
+    pub fn unread_count(self, _count: usize) -> Self {
+        self
+    }
+
+    /// The role this row's label is drawn in: the view's emphasised role for a selected or an
+    /// unread row, else the view's label role.
+    fn label_role(&self, label_role: TypeRole, selected_label_role: Option<TypeRole>) -> TypeRole {
+        match selected_label_role {
+            Some(role) if self.selected || self.unread => role,
+            _ => label_role,
+        }
+    }
+
     /// Mark the row unread (feature 039, FR-018). See [`TreeItem::unread`].
     pub fn unread(mut self, unread: bool) -> Self {
         self.unread = unread;
@@ -266,6 +280,11 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
     }
 }
 
+/// The colour of a location row's unread count (feature 575, contract A6).
+pub(crate) fn count_tint(_r: Roles, row_tint: Rgb) -> Rgb {
+    row_tint
+}
+
 impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
     fn from(tv: TreeView<'a, M>) -> Self {
         let TreeView {
@@ -372,10 +391,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // An unread row takes the same role (feature 039, FR-018): the view has one emphasised
             // role, and the unread mark is told from the activity badge by this weight as well as
             // by its place in the row.
-            let row_label_role = match selected_label_role {
-                Some(role) if item.selected || item.unread => role,
-                _ => label_role,
-            };
+            let row_label_role = item.label_role(label_role, selected_label_role);
             line = line.push(super::Ellipsized::at_role(
                 item.label,
                 row_label_role,
@@ -756,6 +772,198 @@ mod tests {
                 unread, read,
                 "the activity badge's box is unchanged by the unread mark ({label:?})"
             );
+        }
+    }
+
+    // --- Feature 575 (contract `attention-indicator.md` A4-A6, A10): a location row's count ---
+
+    /// A location row as the sidebar builds it: depth 0, expandable, optionally with tag chips.
+    fn location_row(label: &str, tagged: bool) -> TreeItem<'static, ()> {
+        let row = TreeItem::new(0, label, roles().on_surface).expandable(false, ());
+        if tagged {
+            row.tags(vec![("feat".to_string(), roles().primary)])
+        } else {
+            row
+        }
+    }
+
+    /// The width of the mark and its number drawn on their own, in the sidebar's label role.
+    fn indicator_width(count: usize) -> f32 {
+        let element: Element<'static, ()> = super::super::UnreadMark::new(roles())
+            .count(count)
+            .role(TypeRole::SidebarName)
+            .into();
+        let renderer = super::super::test_support::renderer();
+        let mut element = element;
+        let mut tree = Tree::new(element.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, Size::new(600.0, 600.0));
+        element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits)
+            .bounds()
+            .width
+    }
+
+    /// The node that starts where the mark does and is as wide as the whole indicator.
+    fn indicator(nodes: &[Rectangle], count: usize) -> Rectangle {
+        let (mark, width) = (mark(nodes), indicator_width(count));
+        *nodes
+            .iter()
+            .find(|n| (n.x - mark.x).abs() < TOLERANCE && (n.width - width).abs() < TOLERANCE)
+            .unwrap_or_else(|| panic!("no {width}dp indicator starting at the mark: {nodes:?}"))
+    }
+
+    /// The trailing cluster as the sidebar reserves it: always laid out, shown on hover.
+    fn cluster(shown: bool) -> Element<'static, ()> {
+        super::super::HoverReveal::new(
+            Space::new()
+                .width(Length::Fixed(ACTION))
+                .height(Length::Fixed(ACTION)),
+            roles().surface,
+        )
+        .shown(shown)
+        .into()
+    }
+
+    /// U-575 (A4, FR-004): the count keeps a location row at its height, one-line and two-line.
+    #[test]
+    fn a_counted_location_row_has_the_height_of_a_plain_one() {
+        for tagged in [false, true] {
+            for label in ["feat-short", LONG_NAME] {
+                let plain = laid_out(location_row(label, tagged), NARROW)[0];
+                let counted = laid_out(location_row(label, tagged).unread_count(2), NARROW);
+
+                let _ = mark(&counted);
+                assert_eq!(
+                    counted[0].height, plain.height,
+                    "the count leaves the row's height as it was ({label:?}, tagged: {tagged})"
+                );
+            }
+        }
+    }
+
+    /// U-575 (A4, U8): a narrow row shortens the name and the indicator keeps its full width.
+    #[test]
+    fn a_long_name_is_cut_short_before_the_count_is() {
+        let nodes = laid_out(location_row(LONG_NAME, false).unread_count(12), NARROW);
+        let (row, indicator) = (nodes[0], indicator(&nodes, 12));
+
+        assert!(
+            indicator.x + indicator.width <= row.x + row.width + TOLERANCE,
+            "the whole mark and number are inside the row: it ends at {} and the row at {}",
+            indicator.x + indicator.width,
+            row.x + row.width
+        );
+    }
+
+    /// U-575 (A4, A5, FR-004): before the trailing cluster, clear of it, and still on hover.
+    #[test]
+    fn the_count_comes_before_the_row_actions_and_does_not_move_on_hover() {
+        let at = |shown: bool| {
+            let nodes = laid_out(
+                location_row("feat-short", true)
+                    .unread_count(2)
+                    .trailing_element(cluster(shown)),
+                ROOMY,
+            );
+            let action = sized(&nodes, ACTION, ACTION)[0];
+            (indicator(&nodes, 2), action)
+        };
+        let (rest, action) = at(false);
+        let (hovered, hovered_action) = at(true);
+
+        assert!(
+            rest.x + rest.width <= action.x + TOLERANCE,
+            "the count ends at {} and the row actions start at {}",
+            rest.x + rest.width,
+            action.x
+        );
+        assert_eq!(
+            hovered, rest,
+            "hovering the row does not move or resize the count"
+        );
+        assert_eq!(hovered_action, action, "the cluster's width is reserved");
+    }
+
+    /// U-575 (A6, R4): a counted row's name keeps the view's label role; only `Unread` emphasises.
+    #[test]
+    fn a_counted_row_keeps_its_label_role() {
+        let (plain, emphasised) = (TypeRole::SidebarName, Some(TypeRole::SidebarSessionCurrent));
+
+        assert_eq!(
+            location_row("feat-short", false)
+                .unread_count(2)
+                .label_role(plain, emphasised),
+            plain,
+            "a location row with a count is not emphasised"
+        );
+        assert_eq!(
+            session_row("feat-short")
+                .unread(true)
+                .label_role(plain, emphasised),
+            TypeRole::SidebarSessionCurrent,
+            "an unread session row still is (039 FR-018)"
+        );
+    }
+
+    /// U-575 (A1, U2): a count of zero draws nothing.
+    #[test]
+    fn a_count_of_zero_draws_nothing() {
+        let plain = laid_out(location_row("feat-short", false), ROOMY);
+        let zero = laid_out(location_row("feat-short", false).unread_count(0), ROOMY);
+
+        assert!(sized(&zero, MARK, MARK).is_empty(), "no mark at zero");
+        assert_eq!(zero, plain, "a row with no unread session is laid out as before");
+    }
+
+    /// U-575 (A10, data-model "Row unread state"): the last of `.unread` and `.unread_count` wins.
+    #[test]
+    fn the_last_unread_builder_call_wins() {
+        let counted = laid_out(location_row("feat-short", false).unread_count(2), ROOMY);
+
+        assert_eq!(
+            laid_out(
+                location_row("feat-short", false)
+                    .unread(true)
+                    .unread_count(2),
+                ROOMY
+            ),
+            counted,
+            "`.unread_count(2)` after `.unread(true)` draws the count"
+        );
+        assert_eq!(
+            laid_out(
+                location_row("feat-short", false)
+                    .unread_count(2)
+                    .unread(false),
+                ROOMY
+            ),
+            laid_out(location_row("feat-short", false), ROOMY),
+            "`.unread(false)` after `.unread_count(2)` draws nothing"
+        );
+        assert_eq!(
+            laid_out(
+                location_row("feat-short", false)
+                    .unread_count(2)
+                    .unread(true),
+                ROOMY
+            ),
+            laid_out(location_row("feat-short", false).unread(true), ROOMY),
+            "`.unread(true)` after `.unread_count(2)` draws the bare mark"
+        );
+    }
+
+    /// U-575 (A6, R4): on an error-tinted row the count is in the theme's text colour.
+    #[test]
+    fn the_count_is_drawn_in_the_text_colour_on_an_error_tinted_row() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            assert_eq!(
+                count_tint(r, r.error),
+                r.on_surface,
+                "a missing worktree's count is read as a number, not as part of the error ({scheme:?})"
+            );
+            assert_eq!(count_tint(r, r.on_surface), r.on_surface);
         }
     }
 }

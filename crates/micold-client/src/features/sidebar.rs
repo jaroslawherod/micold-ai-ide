@@ -170,6 +170,13 @@ pub struct WorktreeNode {
     pub shown_for_current_session: bool,
 }
 
+impl SidebarEntry {
+    /// The number of this location's sessions that count as unread (feature 575, FR-002).
+    pub fn unread_count(&self, _in_view: Option<SessionId>) -> usize {
+        0
+    }
+}
+
 /// A tag filter the sidebar can apply (feature 008, FR-024). Typed so an impossible filter is
 /// unrepresentable (Principle V); ordered so it lives in a `BTreeSet`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -456,6 +463,16 @@ pub fn worktree_tooltip(
     }
 
     lines.join("\n")
+}
+
+/// The tooltip line that states a location's unread count in words (feature 575, FR-005).
+pub fn unread_tooltip_line(_n: usize) -> Option<String> {
+    None
+}
+
+/// `tooltip` with [`unread_tooltip_line`] appended on a line of its own (feature 575, FR-005).
+pub fn with_unread_line(tooltip: String, _n: usize) -> String {
+    tooltip
 }
 
 impl crate::app::State {

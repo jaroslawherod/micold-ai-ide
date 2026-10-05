@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::project::Availability;
 use crate::protocol::messages::{ActivitySignal, SessionSummary};
-use crate::session::SessionId;
+use crate::session::{Session, SessionId};
 use crate::workspace::Workspace;
 
 /// What decides whether a window has a session in view.
@@ -179,6 +179,12 @@ pub fn resolve_reveal(workspace: &Workspace, project: &Path, session: SessionId)
     } else {
         Reveal::Unavailable
     }
+}
+
+/// Whether `session` counts as unread for a location's or a project's attention mark (feature
+/// 575, data-model "Counted session").
+pub fn counts_as_unread(_session: &Session, _in_view: Option<SessionId>) -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -598,6 +604,64 @@ mod tests {
         assert_eq!(
             resolve_reveal(&workspace, Path::new(REPO), id(1)),
             Reveal::Unavailable
+        );
+    }
+}
+
+#[cfg(test)]
+mod counted_session_tests {
+    use super::*;
+    use crate::session::{AiCli, SessionLocation};
+
+    fn unread_session() -> Session {
+        let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        session.unread = true;
+        session
+    }
+
+    #[test]
+    fn an_unread_session_out_of_view_counts() {
+        assert!(
+            counts_as_unread(&unread_session(), None),
+            "an unread, not closed session no window has in view counts (575 FR-002)"
+        );
+    }
+
+    #[test]
+    fn the_session_in_view_does_not_count() {
+        let session = unread_session();
+        assert!(
+            !counts_as_unread(&session, Some(session.id)),
+            "the session the window has in view is not counted (039 FR-019)"
+        );
+    }
+
+    #[test]
+    fn a_read_session_does_not_count() {
+        let mut session = unread_session();
+        session.unread = false;
+        assert!(
+            !counts_as_unread(&session, None),
+            "a session that is not unread is not counted (575 FR-002)"
+        );
+    }
+
+    #[test]
+    fn a_closed_unread_session_does_not_count() {
+        let mut session = unread_session();
+        session.archived = true;
+        assert!(
+            !counts_as_unread(&session, None),
+            "a closed session has no row and adds to no mark (575 FR-002, US1 scenario 5)"
+        );
+    }
+
+    #[test]
+    fn an_unread_session_counts_while_another_is_in_view() {
+        let session = unread_session();
+        assert!(
+            counts_as_unread(&session, Some(SessionId::new())),
+            "another session in view leaves this one counted (575 FR-002)"
         );
     }
 }
