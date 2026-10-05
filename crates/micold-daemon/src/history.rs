@@ -325,12 +325,12 @@ impl Saver {
             let count = pty.signals().output_count();
             let tracked = self.schedules.entry(*id).or_insert_with(|| Tracked {
                 pty: Arc::downgrade(pty),
-                schedule: SaveSchedule::new(count),
+                schedule: SaveSchedule::new(0),
             });
             if !Weak::ptr_eq(&tracked.pty, &Arc::downgrade(pty)) {
                 *tracked = Tracked {
                     pty: Arc::downgrade(pty),
-                    schedule: SaveSchedule::new(count),
+                    schedule: SaveSchedule::new(0),
                 };
             }
             if tracked.schedule.due(now, count) {

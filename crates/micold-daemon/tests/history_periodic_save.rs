@@ -23,6 +23,7 @@ use history::{
 };
 use micold_core::session::{SessionId, TerminalMode};
 use micold_core::terminal::LaunchMode;
+use micold_core::terminal_history::schedule::SAVE_SPACING;
 use micold_core::terminal_history::{HistoryStore, LoadOutcome};
 use micold_daemon::state::DaemonState;
 use tracing_subscriber::fmt::MakeWriter;
@@ -60,8 +61,9 @@ fn warnings_of<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
     (result, text.lines().map(str::to_string).collect())
 }
 
-/// A running session in `project` whose stand-in has printed `first` and then waits on stdin; the
-/// saver has been shown it once, at `at`, so its schedule is that of a terminal that just started.
+/// A running session in `project` whose stand-in has printed `first` and then waits on stdin. The
+/// saver looks at it once, which saves `first`; that look is made as of 30 s before `at`, so at
+/// `at` the spacing since the last save is over and the case starts from a quiet schedule.
 fn running(state: &DaemonState, project: &Path, id: SessionId, first: &str, at: Instant) {
     let ready = project.join(format!("ready-{}", id.0));
     script(
@@ -71,7 +73,7 @@ fn running(state: &DaemonState, project: &Path, id: SessionId, first: &str, at: 
     state.start_session(id, LaunchMode::Fresh).expect("starts");
     wait_file(&ready);
     history_showing(state, id, first);
-    state.save_due_at(at);
+    state.save_due_at(at - SAVE_SPACING);
 }
 
 /// The next input serial: one counter for every session, so each session's serials only rise.
@@ -220,7 +222,10 @@ fn u75_two_printing_sessions_are_each_saved_on_their_own_schedule() {
     type_line(&state, a, "only-a");
     state.save_due_at(t0 + 5 * SECOND);
     assert!(holds(&saved_lines(saved.path(), a), "only-a"));
-    assert!(!history_file(saved.path(), b).exists(), "b printed nothing");
+    assert!(
+        !holds(&saved_lines(saved.path(), b), "only-a"),
+        "b's file has none of a's lines"
+    );
 
     type_line(&state, b, "only-b");
     state.save_due_at(t0 + 10 * SECOND);
@@ -319,7 +324,10 @@ fn u78_a_failed_save_is_one_warning_and_is_tried_again_30_seconds_later() {
         state.save_due_at(t0 + 40 * SECOND);
     });
     assert!(state.primary_pty(id).unwrap().is_alive(), "still running");
-    assert!(!history_file(saved.path(), id).exists());
+    assert!(
+        !holds(&saved_lines(saved.path(), id), "kept"),
+        "the failed saves wrote nothing"
+    );
     let named: Vec<_> = warnings
         .iter()
         .filter(|l| l.contains(&id.0.to_string()))
@@ -333,7 +341,7 @@ fn u78_a_failed_save_is_one_warning_and_is_tried_again_30_seconds_later() {
     set_mode(0o700);
     state.save_due_at(t0 + 69 * SECOND);
     assert!(
-        !history_file(saved.path(), id).exists(),
+        !holds(&saved_lines(saved.path(), id), "kept"),
         "not yet 30 s after the try"
     );
     state.save_due_at(t0 + 70 * SECOND);
@@ -383,5 +391,29 @@ fn input_and_a_resize_during_saves_reach_the_process() {
     }
     let columns = state.primary_pty(id).unwrap().term().lock().columns();
     assert_eq!(columns, 133, "the resize arrived");
+    state.stop_session(id);
+}
+
+/// FR-003, SC-002: output printed before the saver first sees the terminal is saved too, though
+/// the terminal then goes idle.
+#[test]
+fn output_printed_before_the_saver_first_looks_is_saved() {
+    fake_cli();
+    let project = tempfile::tempdir().unwrap();
+    let saved = tempfile::tempdir().unwrap();
+    let session = ai_session();
+    let id = session.id;
+    let state = service_saving(project.path(), vec![session], saved.path());
+    let ready = project.path().join("ready");
+    script(
+        project.path(),
+        &format!("print banner\ntouch {}\nwait\n", ready.display()),
+    );
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    wait_file(&ready);
+    history_showing(&state, id, "banner");
+
+    state.save_due_at(Instant::now());
+    assert!(holds(&saved_lines(saved.path(), id), "banner"));
     state.stop_session(id);
 }
