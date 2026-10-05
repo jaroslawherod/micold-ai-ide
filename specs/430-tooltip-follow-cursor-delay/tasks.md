@@ -29,8 +29,8 @@ Paths: `core` = `crates/micold-core`, `client` = `crates/micold-client`, `cdk` =
 - [ ] T007 [US1] Test (red): `cdk` unit test that no pointer, a zero-size trigger or an unknown window size opens nothing (contracts/tooltip-api.md, Behaviour 6)
 - [ ] T009 [US1] Test (red): `client/tests/idle_requests_no_frames.rs`: a follow tooltip that is open with a still pointer, or closed, requests no frame (FR-007, SC-005)
 - [ ] T008 [US1] Implement in `cdk`: `State.pointer`, recorded in `update`; `overlay()` reads it, adds `translation`, passes it to `Panel`; `FollowCursor` with `Wait::Hover` runs the delay rule with zero delay (uses `ShowTimer` from T012); guard of T007
-- [ ] T019 [US1] Run quickstart §B steps 1–3 and 6 through the `visual-pass` skill; record evidence in `specs/430-tooltip-follow-cursor-delay/visual-pass.md`
 - [ ] T010 [P] [US1] Expose `FollowCursor` through `material::TooltipPosition` (re-export already covers it) and add the "follows the pointer" pose (large trigger) to `client/src/showcase/sections/floating.rs`
+- [ ] T019 [US1] Run quickstart §B steps 1–3 and 6 through the `visual-pass` skill; record evidence in `specs/430-tooltip-follow-cursor-delay/visual-pass.md`
 
 ## Phase 3: User Story 2 - show delay (P2)
 
@@ -43,7 +43,7 @@ Paths: `core` = `crates/micold-core`, `client` = `crates/micold-client`, `cdk` =
 
 ## Dependencies
 
-T001 → T002; T011 → T012; (T003, T004) → T005; T006, T007, T009 → T008; T008 needs T002, T005 and T012; T010 and T019 need T008. M2: T013–T015 → T016 → T017, T018.
+T001 → T002; T011 → T012; (T003, T004) → T005; T006, T007, T009 → T008; T008 needs T002, T005 and T012; T010 needs T008; T019 needs T008 and T010. M2: T013–T015 → T016 → T017 → T018.
 
 ## Implementation Strategy
 
