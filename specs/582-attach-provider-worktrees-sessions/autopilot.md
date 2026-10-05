@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #582
 - **Worktree branch**: feat/582-attach-provider-worktrees-sessions
 - **Started**: 2026-10-05
-- **Phase**: milestone M3 (PR pending)
-- **Next step**: open M3 PR, wait for CI, merge, then M4
+- **Phase**: milestone M3 (PR open)
+- **Next step**: wait for CI, merge M3, then M4
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #585 | Design PR: spec, plan, tasks | merged | a3f66693402b1242bd2e20d658b51549fb22fc9e |
 | #587 | M1: attach provider worktrees from the app | merged | 502c49691bc45786f85f2a60a7e13417bf08cabc |
 | #588 | M2: discover and resume provider sessions | merged | e849b117222256304d49f6e01e0d449a89c96d5c |
+| #589 | M3: attach_worktree and list_resumable_sessions MCP tools | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Attach provider worktrees from the app (dialog) | #587 | merged |
 | M2 | T017–T026 | full | Discover and resume provider sessions | #588 | merged |
-| M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | PR | in review |
+| M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | #589 | in review |
 | M4 | T032–T036 | full | Start-up offer banner | | pending |
 | M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | | pending |
 
