@@ -21,5 +21,6 @@ its own directory.
 - `SWEEP_ARGS` replaces the default, e.g. `SWEEP_ARGS='--dry-run --time 7'` to preview, or
   `SWEEP_ARGS='--maxsize 50GB'` to bound each directory by size instead of age.
 
-`mise run sweep` does not clean `.visual-pass/` (visual-pass working files, pinned binaries). A
-finished pass removes its own; to reclaim by hand, remove each worktree's `.visual-pass/`.
+`mise run sweep` does not clean `.visual-pass/` (visual-pass working files, pinned binaries). Each
+pass works in its own `.visual-pass/run.*` directory and removes it when it ends; one left behind
+by an interrupted pass can be removed by hand once no pass is running in that worktree.
