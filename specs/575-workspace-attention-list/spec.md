@@ -31,6 +31,12 @@ The gap this feature fills: **one place that lists every unread session of the w
 - **Entry**: one row of the attention list, standing for one unread session.
 - **Default entry**: the sidebar's entry for sessions that belong to no worktree, with the name the sidebar gives it.
 
+## Clarifications
+
+### Session 2026-10-05
+
+- Q: In which order must the attention list show its entries (FR-004)? → A: Grouped by project in the switcher's order, then worktree and session in the sidebar's order. Ordering by when a session became unread would need a per-session time 039 does not keep (`attention_seq` counts one session's events and cannot be compared across sessions), would add stored state FR-012 forbids, and would not survive the restart FR-014 requires. _(agent-resolved: specs/039-session-attention-notifications/data-model.md#Session attention fields; spec.md#FR-012)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See every session that needs me, across all projects (Priority: P1)
@@ -108,7 +114,7 @@ While the attention list is open, sessions become unread and others come into vi
 - **FR-001**: The application MUST offer an attention list, reachable from the top bar in every window, that lists every unread session of every known project — the active project included — and no other session. [NEEDS CLARIFICATION: where does the list open from — (a) a section at the top of the project switcher's panel, above the project rows; (b) its own button in the top bar beside the switcher, opening its own panel; (c) other? The issue says "one place"; 039 put the counts on the switcher.]
 - **FR-002**: The list's entries MUST include unread sessions of the Default entry and of worktrees the sidebar's filter currently hides, as 039 FR-022 does for the counts.
 - **FR-003**: Each entry MUST name, as text, the session's project by the name the switcher gives it, the session's worktree by its name (the Default entry's name for a session in no worktree), and the session by the label its sidebar row shows at that moment, including a placeholder label (032).
-- **FR-004**: The entries MUST be shown in a fixed, predictable order. [NEEDS CLARIFICATION: which order — (a) grouped by project in the switcher's order, then worktree and session in the sidebar's order; (b) most recently unread first, across projects; (c) other?]
+- **FR-004**: The entries MUST be shown in a fixed, predictable order: grouped by project in the order the switcher lists the projects, and within a project by worktree, then session, in the order the sidebar shows them (the Default entry where the sidebar places it, worktrees the filter hides in the place they hold when shown). The order MUST NOT depend on when a session became unread.
 - **FR-005**: With no unread session in the workspace, the list MUST show no entry and a short text saying that no session needs attention.
 - **FR-006**: When the entries do not fit, the list MUST scroll, and every entry MUST stay reachable by pointer and by keyboard; a shortened name MUST be available in full on its entry.
 - **FR-007**: The list MUST be operable by keyboard alone — opened, moved through, an entry selected, and closed — the keys moving between entries, Enter (or the platform's equivalent) selecting the focused entry, Escape closing the list, and keyboard focus returning to the control that opened it.

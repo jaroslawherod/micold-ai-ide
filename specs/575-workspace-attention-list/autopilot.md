@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
 - **Phase**: clarify
-- **Next step**: clarify unit: resolve the [NEEDS CLARIFICATION] markers in spec.md FR-001 (where the list opens) and FR-004 (entry order).
+- **Next step**: clarify unit (continued with the user's FR-001 answer): record it as decided by user, apply it to spec.md FR-001, then decide whether another round is needed (FR-004 answer changed a requirement, so a round 2 runs).
 
 ## Pull requests
 
@@ -27,6 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | What of #575 does 039 already ship? | Switcher row counts (FR-021/022), button total (FR-023), live clearing (FR-019), restart persistence (FR-008a), reveal path (FR-011–014). Spec covers only the workspace-wide list and its navigation. | agent-resolved | specs/039-session-attention-notifications/spec.md; crates/micold-client/src/ui/toolbar.rs:78; crates/micold-client/src/app.rs:503 |
+| D2 | clarify | FR-004: order of attention-list entries? | Grouped by project in switcher order, then worktree and session in sidebar order; never by time of becoming unread. | agent-resolved | specs/039-session-attention-notifications/data-model.md (attention_seq is per-session, no time kept); spec.md FR-012, FR-014 |
 
 ## Review rounds
 
@@ -45,7 +46,10 @@ None.
 
 ## Open escalation
 
-None.
+Category 1 (product/UX decision the repo does not settle). Clarify round 1, FR-001:
+Where does the attention list open from?
+- (a) (Recommended) A section at the top of the project switcher's panel, above the project rows. The switcher button already carries the other-projects unread total (039 FR-023, crates/micold-client/src/ui/toolbar.rs:79-84), so the mark that says "something needs you" opens the place that says what; no new top-bar control, the panel and its overlay/keyboard handling are reused.
+- (b) Its own button in the top bar beside the switcher, opening its own panel, with its own all-projects count. More discoverable as a separate control, but a third trailing action and a second unread badge beside the switcher's.
 
 ## Follow-ups not done
 
