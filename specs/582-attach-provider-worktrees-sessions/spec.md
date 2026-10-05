@@ -86,14 +86,14 @@ listed by `list_worktrees` without the hidden-worktree option.
 
 **Acceptance Scenarios**:
 
-4. **Given** a Default session, **When** it calls `attach_worktree`, **Then** the outcome follows
-   FR-015.
 1. **Given** an existing provider worktree, **When** `attach_worktree` is called with its path or
    branch, **Then** it is attached and `list_worktrees` returns it as not hidden.
 2. **Given** a path that is not a worktree of the project, **When** `attach_worktree` is called,
    **Then** it fails with a clear reason and changes nothing.
 3. **Given** an already attached worktree, **When** `attach_worktree` is called, **Then** it
    reports it was already attached and creates no duplicate.
+4. **Given** a Default session, **When** it calls `attach_worktree`, **Then** it is refused with a
+   clear reason and nothing is attached unless the user confirms in the app (final rule per FR-015).
 
 ---
 
@@ -172,6 +172,10 @@ found worktrees and sessions at once.
 - **FR-012**: When Micold starts with an empty catalog and finds attachable worktrees or resumable
   sessions, it MUST tell the user and offer attaching them in one action, and MUST NOT attach
   anything without the user's action (offer only, no automatic attaching).
+- **FR-013**: The system MUST NOT break the existing behaviour that agent-created worktrees are
+  hidden by default when they are not attached.
+- **FR-014**: Discovery MUST work for each provider through the same user-visible behaviour; a
+  provider with no store support MUST show no sessions and no error.
 - **FR-015**: `attach_worktree` MUST be refused for a Default session unless the user confirms in
   the app, because attaching changes a worktree's ownership and constitution Principle III allows a
   Default session only `create_worktree`. [NEEDS CLARIFICATION: Refuse Default sessions outright,
@@ -179,10 +183,6 @@ found worktrees and sessions at once.
 - **FR-016**: Concurrent attaches of one worktree (two windows, or an agent and the app) MUST result
   in exactly one catalog entry, and a session MUST be resumed in at most one place at a time; a
   second resume request is refused with a clear reason.
-- **FR-013**: The system MUST NOT break the existing behaviour that agent-created worktrees are
-  hidden by default when they are not attached.
-- **FR-014**: Discovery MUST work for each provider through the same user-visible behaviour; a
-  provider with no store support MUST show no sessions and no error.
 
 ### Key Entities
 
