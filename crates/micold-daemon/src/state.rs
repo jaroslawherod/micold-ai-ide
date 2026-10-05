@@ -117,6 +117,8 @@ pub struct DaemonState {
     /// `server::run`. Absent for tests that give the state none: nothing is then saved or loaded,
     /// and a history is carried in memory only.
     history_store: std::sync::OnceLock<micold_core::terminal_history::HistoryStore>,
+    /// The periodic saver's schedules (feature 041, R6). Never held across a write.
+    saver: Mutex<history::Saver>,
 }
 
 struct Inner {
@@ -542,6 +544,7 @@ impl DaemonState {
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
+            saver: Mutex::new(history::Saver::default()),
         }
     }
 
@@ -3590,6 +3593,66 @@ impl DaemonState {
         };
         if let Err(err) = store.save(id, snapshot) {
             tracing::warn!(session = %id.0, reason = %err, "terminal history was not saved");
+        }
+    }
+
+    /// The covered live terminals: the AI CLI of each live `AiCli` session (FR-014).
+    fn covered_live_terminals(&self) -> Vec<(SessionId, Arc<PtySession>)> {
+        let inner = self.lock();
+        inner
+            .sessions
+            .iter()
+            .filter(|(id, _)| Self::covered(&inner, **id))
+            .filter_map(|(id, live)| {
+                live.procs
+                    .get(&SessionProcess::Primary)
+                    .map(|proc| (*id, Arc::clone(&proc.pty)))
+            })
+            .collect()
+    }
+
+    /// Save the history of every covered running terminal that is due at `now` (FR-003, FR-004,
+    /// research R6), one at a time. **Blocking**: it takes each session's gate and writes a file,
+    /// so the saver task runs it on the blocking pool. The state lock is never held while writing.
+    ///
+    /// The gate is held from the check that the process is still the live one until the write is
+    /// done, so a stop or a process end, which save the final history under the same gate, never
+    /// has an older save land after theirs.
+    pub fn save_due_at(&self, now: Instant) {
+        let Some(store) = self.history_store.get() else {
+            return;
+        };
+        let terminals = self.covered_live_terminals();
+        let due = self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .due(now, &terminals);
+        for (id, pty) in due {
+            let _gate = self.hold_gate(id);
+            if !self
+                .primary_pty(id)
+                .is_some_and(|live| Arc::ptr_eq(&live, &pty))
+            {
+                continue;
+            }
+            // Read before the capture: output that lands between them is saved again later.
+            let count = pty.signals().output_count();
+            let snapshot = history::capture(&pty.term().lock());
+            let result = store.save(id, &snapshot);
+            let mut saver = self
+                .saver
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match result {
+                Ok(_) => saver.saved(id, now, count),
+                Err(err) => {
+                    let reason = err.to_string();
+                    if saver.failed(id, now, &reason) {
+                        tracing::warn!(session = %id.0, %reason, "terminal history was not saved");
+                    }
+                }
+            }
         }
     }
 
