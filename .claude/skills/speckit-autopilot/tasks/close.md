@@ -11,7 +11,9 @@ When: every milestone in the ledger is merged.
    [milestones.md](milestones.md), add it to the ledger, commit, and return `DONE` with
    `NEW MILESTONES: M<n>…` (do not push; they ship in the first new milestone's PR). The
    orchestrator runs them, then a new close unit.
-3. Otherwise fix test-strength and docs findings that add no behaviour, and set the spec's
+3. Otherwise do the tasks of a code-free Polish phase ([milestones.md](milestones.md), rule 4:
+   record quickstart results, doc wording), and fix test-strength and docs findings that add no
+   behaviour, and set the spec's
    `**Status**` to `Closed <date> — shipped in PRs #…`. Test-strength findings go to
    `autopilot-worker` subagents on `"sonnet"`, one per crate: give each its findings from
    `tdd/verification.md` by ID, the test files, and the test command that must pass. Run that

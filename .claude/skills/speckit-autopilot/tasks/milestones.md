@@ -11,11 +11,13 @@ are the order of work. Milestones are what ships. Map phases to milestones by th
 1. **M1 = Setup + Foundational + the P1 user story (the 🎯 MVP).** Setup or Foundational alone is
    never a milestone: nothing to observe.
 2. **Each further user story is its own milestone**, in priority order.
-3. **Split a story** when it has more than about 15 tasks or its diff would exceed about 800 changed
+3. **Split a story** when it has more than about 10 tasks or its diff would exceed about 800 changed
    lines. Split along an acceptance scenario, so each half has a deliverable. If no such split
    exists, keep the story whole and note why in the ledger.
 4. **The last milestone is Polish:** cleanup, cross-cutting docs, convergence tasks. Its deliverable
-   is usually "quickstart §B passes" or "the architecture doc describes X".
+   is usually "quickstart §B passes" or "the architecture doc describes X". **A Polish that changes
+   no code** (quickstart results, doc wording, task ticks) is not a milestone: leave its tasks to
+   the close unit, which does them in the close PR.
    **The user guide is not Polish work.** CI's user-guide gate (`scripts/check-user-guide-updated.sh`,
    Constitution VII) needs the guide updated in the same `feat` PR, so put each story's user-guide
    task in that story's milestone. Use the `docs-not-needed` label only when no guide update is
