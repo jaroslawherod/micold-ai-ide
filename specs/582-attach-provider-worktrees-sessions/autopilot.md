@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #585 | Design PR: spec, plan, tasks | merged | a3f66693402b1242bd2e20d658b51549fb22fc9e |
 | #587 | M1: attach provider worktrees from the app | merged | 502c49691bc45786f85f2a60a7e13417bf08cabc |
+| #588 | M2: discover and resume provider sessions | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Attach provider worktrees from the app (dialog) | #587 | merged |
-| M2 | T017–T026 | full | Discover and resume provider sessions | PR | in review |
+| M2 | T017–T026 | full | Discover and resume provider sessions | #588 | in review |
 | M3 | T027–T031 | full | `attach_worktree` and `list_resumable_sessions` MCP tools | | pending |
 | M4 | T032–T036 | full | Start-up offer banner | | pending |
 | M5 | T037–T038 | docs | Polish: quickstart passes, user guide matches | | pending |
