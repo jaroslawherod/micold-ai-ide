@@ -2056,7 +2056,8 @@ impl DaemonState {
                         None if known.contains(id) => self
                             .lock()
                             .catalog
-                            .attach_session(project, self.restored_stub(*id))?,
+                            .attach_session(project, self.restored_stub(*id))
+                            .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed)),
                         None => AttachOutcome::Refused(RefuseReason::Unavailable),
                         Some(s) if matches!(s.status, ResumableStatus::Unresumable(_)) => {
                             AttachOutcome::Refused(RefuseReason::Unavailable)
@@ -2099,7 +2100,10 @@ impl DaemonState {
                                     TerminalMode::AiCli,
                                     s.provider,
                                 );
-                                self.lock().catalog.attach_session(project, session)?
+                                self.lock()
+                                    .catalog
+                                    .attach_session(project, session)
+                                    .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed))
                             }
                         }
                     }

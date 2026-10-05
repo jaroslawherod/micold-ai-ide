@@ -38,5 +38,6 @@ T011) served as the list. Red evidence below is the real failure of each test be
   worktrees into the catalog on attach, which correctly removes them from the resumable list.
 - **T020/T024** `micold-client/tests/attach_dialog.rs`. Red: `no variant named Resume found for enum
   Msg`, `no method footer_notes`, `no field sessions` (16 compile errors). Green: 21 passed.
+- T023 deviation: the "already running" refusal lives in `Catalog::attach_session`, not in `start_session_gated` (which stays an idempotent start).
 - Wire: `RefuseReason::AlreadyRunning` was added. `PROTOCOL_VERSION` stays 28 (M1 already moved it for
   this feature and the schema hash is recomputed); `schema_hash` and `handshake` tests pass.

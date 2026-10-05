@@ -416,7 +416,7 @@ fn locate(cwd: &Path, input: &DiscoverInput<'_>) -> Option<(AttachTarget, Resuma
         .rsplit(['/', '\\'])
         .find(|part| !part.is_empty())?
         .to_string();
-    (!rest.is_empty() && !rest.contains('/')).then(|| {
+    (!rest.is_empty() && !rest.contains('/')).then_some({
         (
             AttachTarget::Worktree { dir_name },
             ResumableStatus::Unresumable(UnresumableReason::NoLocation),

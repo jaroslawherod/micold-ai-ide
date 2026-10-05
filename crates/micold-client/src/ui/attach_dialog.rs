@@ -64,8 +64,8 @@ pub fn modal<'a>(
 
     if !dialog.sessions.is_empty() {
         let mut list = column![].spacing(spacing::XS);
-        for (index, session) in dialog.sessions.iter().enumerate() {
-            list = list.push(session_row(dialog, session, index, r));
+        for session in &dialog.sessions {
+            list = list.push(session_row(dialog, session, r));
         }
         fields = fields
             .push(Text::new("Stored sessions", TypeRole::Title, r))
@@ -131,7 +131,6 @@ fn row_view<'a>(
 fn session_row<'a>(
     dialog: &'a Dialog,
     session: &'a ResumableSession,
-    _index: usize,
     r: tokens::Roles,
 ) -> Element<'a, Message> {
     let title = session.title.as_deref().unwrap_or("Untitled session");

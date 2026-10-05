@@ -169,6 +169,8 @@ fn dialogs() -> Vec<Dialog> {
                     selected: Default::default(),
                     in_flight: Vec::new(),
                     error: None,
+                    sessions: Vec::new(),
+                    notes: Vec::new(),
                 })
             },
         },
