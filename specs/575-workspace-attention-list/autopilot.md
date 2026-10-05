@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8dnq8h
 - **Started**: 2026-10-05
 - **Phase**: clarify
-- **Next step**: Spec 575 review round 1 of the rewritten spec (snapshot recorded below; the spec unit had no Agent tool to dispatch a reviewer, so the orchestrator dispatches it with rubrics/spec.md), then the clarify unit on the rewritten spec.
+- **Next step**: clarify unit on the rewritten spec (Spec 575 rewrite review CLEAN in round 1).
 
 ## Pull requests
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec 575 | 1 | 30231c55b37effe9790da6ea31243981031aa938:937ae9f7da42e25571db7b988153f707ba931e3e | CLEAN: 3 MINOR (all fixed, prose only) — superseded by the rewrite |
-| Spec 575 (rewrite) | 1 | 84afa026eb373957d3319604344384c2c53d8ee4:6075557947bfb5e1361568a3fa8ad0408ce9d424 | not run: no Agent tool in the spec unit; orchestrator to dispatch |
+| Spec 575 (rewrite) | 1 | 84afa026eb373957d3319604344384c2c53d8ee4:6075557947bfb5e1361568a3fa8ad0408ce9d424 | CLEAN: 3 MINOR (all fixed, prose only; run via `claude -p --agent autopilot-reviewer`) |
 
 ## Declined review findings
 

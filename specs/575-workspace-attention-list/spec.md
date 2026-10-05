@@ -72,6 +72,8 @@ While the user works, sessions become unread and others are viewed. The indicato
 
 - **The session in view**: the session the window has in view is never counted, even before the service has cleared its `unread` state (039 FR-019 reads it at once), so its location's indicator drops as soon as it is shown.
 - **A location whose only unread sessions were closed**: no indicator.
+- **A burst of changes** (Principle II): when several sessions of one location become unread or come into view within the same second, the indicator settles on the right count within 1 second of the last change.
+- **A project with no worktrees**: only the Default row exists, and it carries the indicator.
 - **A worktree row the sidebar's filter hides**: it has no row, so there is no indicator to show; its unread sessions still count on the project's switcher row (039 FR-022). A worktree row listed only because it holds the current session (feature 024) shows its indicator like any other.
 - **A worktree that is missing or invalid** (feature 010 FR-011): shows its indicator like a valid one when it holds counted sessions.
 - **Many unread sessions**: counts of two or more digits are shown in full; the row keeps its height (039 contract `unread-mark.md` U8), and the name is what a narrow row shortens.
@@ -90,7 +92,7 @@ While the user works, sessions become unread and others are viewed. The indicato
 - **FR-001**: Each location row of the sidebar — every worktree row and the Default row — MUST show the attention indicator when its location holds at least one counted session, and MUST show no indicator when it holds none.
 - **FR-002**: The indicator's number MUST be the number of counted sessions of that location: sessions of the location that are unread in feature 039's sense, not closed, and not the session the window has in view.
 - **FR-003**: The indicator MUST show whether the location row is expanded or collapsed. Expanding or collapsing a row MUST NOT change its indicator, and the session rows MUST keep their own unread marks as they are (039 FR-018).
-- **FR-004**: The indicator MUST be the shared unread mark with a count from the component library (Principle VIII; 039 contract `unread-mark.md`), in the form the switcher's rows use, placed on the row's first line so that it stays visible when the row's name is shortened. The location row MUST keep its height, and the row actions that fade in on hover MUST NOT cover or shift it.
+- **FR-004**: The indicator MUST be the shared unread mark with a count from the component library (Principle VIII; 039 contract `unread-mark.md`), in the form the switcher's rows use, and MUST stay visible when the row's name is shortened. The location row MUST keep its height, and the row actions that fade in on hover MUST NOT cover or shift it.
 - **FR-005**: The indicator MUST state its meaning to assistive technology and in the row's tooltip, for example "2 unread sessions".
 
 #### Staying current
@@ -124,7 +126,7 @@ FR-011 to FR-014 are checked by the regression tests of 039, the component showc
 ### Measurable Outcomes
 
 - **SC-001**: With unread sessions in two of three worktrees of a project and every row collapsed, in 20 of 20 trials the two rows show the right count and the third shows none.
-- **SC-002**: A user asked "which worktrees have sessions waiting for you?" answers correctly from the collapsed sidebar alone, without expanding any row.
+- **SC-002**: In 5 of 5 trials, a user asked "which worktrees have sessions waiting for you?" answers correctly from the collapsed sidebar alone, without expanding any row.
 - **SC-003**: Within 1 second of a counted session coming into view, its location's indicator is one lower (or gone at zero), in 20 of 20 trials.
 - **SC-004**: Within 1 second of a session becoming unread, its location's indicator is one higher, in 20 of 20 trials.
 - **SC-005**: After closing and reopening the application with N unread sessions spread over several locations, every location row shows the same count as before, in 20 of 20 trials, and the counts of a project's rows add up to its switcher count.
