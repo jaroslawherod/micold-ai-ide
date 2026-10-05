@@ -1900,7 +1900,11 @@ fn on_shell_open_failed(
 ) {
     if let Some((_, session)) = app.core.workspace.find_session_mut(id) {
         session.close_shell(instance);
-        attach_current_process(app, id);
+        // The refusal arrives a round trip later; if the user has moved to another session,
+        // its pane keeps its attachment.
+        if app.core.session.active == Some(id) {
+            attach_current_process(app, id);
+        }
     }
     app.core.notify_error(match reason {
         ShellOpenFailure::WorkingDirMissing => "Worktree directory is missing".to_string(),
@@ -4002,6 +4006,47 @@ pub(crate) mod tests {
             ShellOpenFailure::Other("no such session in the catalog".into()),
             "Couldn't open a terminal: no such session in the catalog",
         );
+    }
+
+    /// The refusal arrives after the user moved to another session: the instance is still taken
+    /// back and the notice shown, but the pane on screen keeps its attachment.
+    #[test]
+    fn a_shell_open_refused_after_switching_away_does_not_steal_the_pane() {
+        let (mut app, mut rx, id, shell) = app_that_just_opened_a_terminal();
+        let other = SessionId::new();
+        app.core.session.active = Some(other);
+
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::ShellOpenFailed {
+                session: id,
+                instance: shell,
+                reason: ShellOpenFailure::WorkingDirMissing,
+            },
+        );
+
+        let session = app
+            .core
+            .workspace
+            .find_session(id)
+            .expect("the session is still there")
+            .1;
+        assert_eq!(session.mode, TerminalMode::AiCli);
+        assert!(session.shells.is_empty());
+        let sent = wire(&mut rx);
+        assert!(
+            !sent
+                .iter()
+                .any(|m| matches!(m, ClientMsg::SessionAttachProcess { .. })),
+            "the pane shows another session; re-attaching the refused one would stream it there. Sent: {sent:?}"
+        );
+        let visible = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("the refusal is still on screen");
+        assert_eq!(visible.message, "Worktree directory is missing");
     }
 
     /// A `ConfirmationRequested` for a delete-worktree request, as the daemon sends it.
