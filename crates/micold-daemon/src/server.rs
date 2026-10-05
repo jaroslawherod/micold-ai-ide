@@ -931,10 +931,19 @@ where
             }
             ClientMsg::SessionOpenShell { session, instance } => {
                 match state.open_shell(session, instance) {
-                    // Fire-and-forget: the client gets no reply, so this log is the only place a
-                    // failed shell open is visible at all.
+                    // The request is fire-and-forget, and the client has already switched to the
+                    // instance and asked to attach it. Without this reply the refusal reached only
+                    // the log and the Terminal toggle did nothing on screen (FR-006c, BUG-592).
                     Err(err) => {
-                        tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed")
+                        tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed");
+                        state.send(
+                            id,
+                            DaemonMsg::ShellOpenFailed {
+                                session,
+                                instance,
+                                reason: crate::supervisor::shell_open_failure(&err),
+                            },
+                        );
                     }
                     Ok(()) => {
                         tracing::info!(session = %session.0, instance = instance.0, "shell instance opened");
@@ -969,6 +978,15 @@ where
                     Ok(()) => {}
                     Err(err) => {
                         tracing::warn!(session = %session.0, instance = instance.0, %err, "restart shell failed");
+                        // Tell the client, which still holds the instance (BUG-592).
+                        state.send(
+                            id,
+                            DaemonMsg::ShellOpenFailed {
+                                session,
+                                instance,
+                                reason: crate::supervisor::shell_open_failure(&err),
+                            },
+                        );
                         // Respawn failed: fall back to the primary `close_shell` reattached to, so
                         // the view stream and input routing agree (both on Primary) instead of the
                         // view showing the dead shell while input goes to Primary.

@@ -969,6 +969,12 @@ commands, scripts, or anything else scoped to that session's worktree without le
   even mid-turn. It keeps running in the background exactly as it was, including its own
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
   reattaches to that same conversation with nothing lost.
+- **If a shell can't be started**, the pane stays on the AI tab, no new tab is left behind, and a
+  notice says why:
+  - **Worktree directory is missing** — the session's worktree folder was deleted or moved outside
+    the app, so there is nowhere to start the shell. The app never starts it somewhere else
+    instead. Recreate the worktree at the same path, or close the session.
+  - **Couldn't open a terminal: …** — any other reason, followed by the service's own description.
 
 <!-- media: switch-session-light -->
 

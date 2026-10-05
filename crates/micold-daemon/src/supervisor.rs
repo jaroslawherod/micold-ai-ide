@@ -23,6 +23,7 @@ use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
 use micold_core::env_include::is_inherited_terminal_identity;
+use micold_core::protocol::messages::ShellOpenFailure;
 use micold_core::session::SessionId;
 use micold_core::terminal::{default_shell_command, launch_args, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -108,17 +109,45 @@ pub const TEARDOWN_WAIT: Duration = Duration::from_secs(2);
 /// Checked against the filesystem at spawn time rather than against the daemon's cached worktree
 /// statuses: the cache is refreshed on its own schedule, and the directory can vanish between a
 /// refresh and this call. The cache remains the right source for the row's `missing` badge.
+///
+/// The refusal carries a [`WorkingDirMissing`] inside the `io::Error`, so a caller can tell it from
+/// any other spawn failure without matching the message (BUG-592): see [`shell_open_failure`].
 fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
     if cwd.is_dir() {
         return Ok(());
     }
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!(
-            "session working directory does not exist: {}",
-            cwd.display()
-        ),
+        WorkingDirMissing(cwd.to_path_buf()),
     ))
+}
+
+/// A spawn refused because the session's working directory does not exist (FR-006c, BUG-012).
+/// Carried inside the `io::Error` [`ensure_cwd_exists`] returns.
+#[derive(Debug)]
+pub struct WorkingDirMissing(pub std::path::PathBuf);
+
+impl std::fmt::Display for WorkingDirMissing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "session working directory does not exist: {}",
+            self.0.display()
+        )
+    }
+}
+
+impl std::error::Error for WorkingDirMissing {}
+
+/// What to tell a client whose shell open or restart failed with `err` (BUG-592).
+pub fn shell_open_failure(err: &io::Error) -> ShellOpenFailure {
+    match err
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<WorkingDirMissing>())
+    {
+        Some(_) => ShellOpenFailure::WorkingDirMissing,
+        None => ShellOpenFailure::Other(err.to_string()),
+    }
 }
 
 /// A session's child together with the process tree its teardown reaches.

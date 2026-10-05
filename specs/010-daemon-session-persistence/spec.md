@@ -385,7 +385,7 @@ a session survived; confirm it does not survive without the setting.
   explicit resume, a restore on reopening, and an automatic respawn after a crash. The check MUST be
   made against the filesystem at the moment of the spawn rather than against a cached worktree
   status, since a directory can be removed between a refresh and a start (BUG-012).
-  The refusal MUST also reach the requesting client as a structured reason, and for a missing directory the client MUST show "Worktree directory is missing" (any other refusal: "Couldn't open a terminal: …"), for every start path including an
+  The refusal MUST also reach the requesting client, and for a missing directory the client MUST show "Worktree directory is missing" (any other refusal: "Couldn't open a terminal: …"), for every start path including an
   additional terminal instance's open, and a client whose request was refused MUST NOT be left showing
   a process the service does not have (BUG-592).
 - **FR-006d** *(added — BUG-011)*: A session whose process the service has started MUST be reported

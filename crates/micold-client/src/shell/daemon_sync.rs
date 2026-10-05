@@ -62,6 +62,7 @@ use micold_client::features::worktree_form::{
 };
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
+    ShellOpenFailure,
 };
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::worktree::{BranchOrigin, CreateMode};
@@ -1184,6 +1185,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.core
                 .update(Message::AgentConfirm(AgentConfirmMsg::Withdrawn(id)));
         }
+        DaemonMsg::ShellOpenFailed {
+            session,
+            instance,
+            reason,
+        } => on_shell_open_failed(app, session, instance, reason),
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
@@ -1880,6 +1886,26 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
             .update(Message::Session(SessionMsg::ShellInstanceOpenRequested));
     }
     Task::none()
+}
+
+/// The daemon refused to open (or restart) a shell instance this client already shows (feature
+/// 010 FR-006c, BUG-592). Take the instance back — closing the last one returns the session to its
+/// AI tab — re-attach what the session now shows so the daemon and the client agree, and say why.
+/// The client never stays on a shell view the service refused.
+fn on_shell_open_failed(
+    app: &mut App,
+    id: SessionId,
+    instance: ShellInstanceId,
+    reason: ShellOpenFailure,
+) {
+    if let Some((_, session)) = app.core.workspace.find_session_mut(id) {
+        session.close_shell(instance);
+        attach_current_process(app, id);
+    }
+    app.core.notify_error(match reason {
+        ShellOpenFailure::WorkingDirMissing => "Worktree directory is missing".to_string(),
+        ShellOpenFailure::Other(text) => format!("Couldn't open a terminal: {text}"),
+    });
 }
 
 /// Close an individual Regular Terminal instance (feature 011, FR-011–FR-013,
@@ -3873,6 +3899,108 @@ pub(crate) mod tests {
                     if *session == id && *s == shell
             )),
             "and the attachment follows it, so the keyboard drives what is displayed. Sent: {sent:?}"
+        );
+    }
+
+    // ---- feature 010 BUG-592: a refused shell open reaches the user -------------------------
+
+    /// A session on its AI tab whose "+" was just pressed: the client has opened the instance
+    /// optimistically and asked the daemon to spawn and attach it. Returns the instance's id.
+    fn app_that_just_opened_a_terminal() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        SessionId,
+        ShellInstanceId,
+    ) {
+        let (mut app, mut rx) = connected_app();
+        let project = PathBuf::from("/repo");
+        let session = Session::start_new(
+            SessionLocation::Worktree("feat-583-rpm-package".to_string()),
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        app.core
+            .workspace
+            .sessions
+            .insert(project.clone(), vec![session]);
+        app.core.workspace.active = Some(project);
+        app.core.session.active = Some(id);
+        let _ = on_shell_instance_open_requested(&mut app);
+        let shell = app
+            .core
+            .workspace
+            .find_session(id)
+            .expect("the session is still there")
+            .1
+            .shells[0]
+            .id;
+        let _ = wire(&mut rx);
+        (app, rx, id, shell)
+    }
+
+    /// Feed the daemon's refusal of `shell` and check the client took the instance back: back on
+    /// the AI CLI, no instance, the daemon told to attach the primary, and `notice` on screen.
+    fn assert_refusal_reverts_to_the_ai_cli(reason: ShellOpenFailure, notice: &str) {
+        let (mut app, mut rx, id, shell) = app_that_just_opened_a_terminal();
+
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::ShellOpenFailed {
+                session: id,
+                instance: shell,
+                reason,
+            },
+        );
+
+        let session = app
+            .core
+            .workspace
+            .find_session(id)
+            .expect("the session is still there")
+            .1;
+        assert_eq!(
+            session.mode,
+            TerminalMode::AiCli,
+            "the client must not stay on a shell view the daemon refused (FR-006c, BUG-592)"
+        );
+        assert!(
+            session.shells.is_empty(),
+            "the refused instance is taken back, or its tab stays as a terminal that never was"
+        );
+        let sent = wire(&mut rx);
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionAttachProcess { session, process: SessionProcess::Primary }
+                    if *session == id
+            )),
+            "the daemon is told the client shows the AI CLI again, so both agree. Sent: {sent:?}"
+        );
+        let visible = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("the refusal is on screen, not only in the daemon log");
+        assert_eq!(visible.level, micold_core::notify::Level::Error);
+        assert_eq!(visible.message, notice);
+    }
+
+    /// The reported case: the worktree was deleted from outside the app (BUG-592).
+    #[test]
+    fn a_shell_open_refused_for_a_missing_worktree_reverts_and_says_so() {
+        assert_refusal_reverts_to_the_ai_cli(
+            ShellOpenFailure::WorkingDirMissing,
+            "Worktree directory is missing",
+        );
+    }
+
+    /// Any other refusal carries the daemon's own reason.
+    #[test]
+    fn a_shell_open_refused_for_another_reason_reverts_and_shows_it() {
+        assert_refusal_reverts_to_the_ai_cli(
+            ShellOpenFailure::Other("no such session in the catalog".into()),
+            "Couldn't open a terminal: no such session in the catalog",
         );
     }
 
