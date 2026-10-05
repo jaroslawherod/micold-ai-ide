@@ -113,3 +113,30 @@ assets = [
     ["../../assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
     ["../../README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
 ]
+
+# RPM packaging (`mise run rpm`, i.e. `cargo generate-rpm -p crates/micold-client`). Same payload as
+# the deb above, and like it installs no service-manager artefact. Source paths are relative to the
+# workspace root; `target/release/` is rewritten to the shared target dir by `--target-dir`.
+[package.metadata.generate-rpm]
+summary = "AI-assisted desktop IDE for git worktrees and AI coding sessions"
+group = "Development/Tools"
+# Auto-detected requirements are off: cargo-generate-rpm copies the `[WEAK]` marker of weak glibc
+# symbol versions into the dependency name (`libc.so.6(GLIBC_2.39)[WEAK](64bit)`), which no
+# distribution provides, so the package would not install anywhere. winit loads the windowing
+# libraries at run time, so they are named here too.
+auto-req = "disabled"
+requires = { glibc = "*", libgcc = "*", libxkbcommon = "*", libwayland-client = "*", desktop-file-utils = "*", hicolor-icon-theme = "*" }
+assets = [
+    { source = "target/release/micold-ai-ide", dest = "/usr/bin/micold-ai-ide", mode = "755" },
+    { source = "target/release/micold-daemon", dest = "/usr/bin/micold-daemon", mode = "755" },
+    { source = "packaging/micold-ai-ide.desktop", dest = "/usr/share/applications/micold-ai-ide.desktop", mode = "644" },
+    { source = "assets/icon/png/icon-16.png", dest = "/usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-32.png", dest = "/usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-64.png", dest = "/usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/png/icon-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", mode = "644" },
+    { source = "assets/icon/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/micold-ai-ide/README.md", mode = "644", doc = true },
+]

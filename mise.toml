@@ -217,6 +217,19 @@ echo 'Built:'
 ls -1 "$({{config_root}}/scripts/build-lock.sh --print-target-dir)"/debian/*.deb
 """
 
+# The RPM counterpart of `deb` (Fedora, RHEL, openSUSE): same payload, built by cargo-generate-rpm
+# from `[package.metadata.generate-rpm]`. It packages an existing release build, so build first.
+[tasks.rpm]
+description = "Build the RPM package for the host arch (installs cargo-generate-rpm if missing) [build-locked]"
+run = """
+command -v cargo-generate-rpm >/dev/null 2>&1 || cargo install cargo-generate-rpm --locked
+target="$({{config_root}}/scripts/build-lock.sh --print-target-dir)"
+{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client -p micold-daemon
+{{config_root}}/scripts/build-lock.sh cargo generate-rpm -p crates/micold-client --target-dir "$target"
+echo 'Built:'
+ls -1 "$target"/generate-rpm/*.rpm
+"""
+
 # The macOS application bundle, from a release build of the two shipped binaries (feature 028).
 #
 # The counterpart of `deb`: same place in the workflow, same build lock, one platform over. It
