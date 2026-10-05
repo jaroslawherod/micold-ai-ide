@@ -71,3 +71,48 @@ T011) served as the list. Red evidence below is the real failure of each test be
 - Deviation: "Attach all" attaches the attachable worktrees (as the dialog's does); stored sessions
   are resumed one at a time from the dialog (resuming starts a process, not a bulk action at
   start-up). With only sessions found the button reads "Review" and opens the dialog.
+
+## T042 remediation, daemon half (T008/T011 red, recorded after the fact)
+
+- Stub: `DaemonState::attach_discover` and `attach_apply` (`crates/micold-daemon/src/state.rs`) bodies
+  replaced by `todo!("red stub")`; restored with `git checkout -- crates/micold-daemon/src/state.rs`.
+- Command: `MICOLD_NO_BUILD_LOCK=1 cargo test -p micold-daemon --test attach_apply`. The run did not
+  finish: tests that wait for the daemon's answer hang (the `AttachDiscover` handler panics inside
+  `spawn_blocking`, so no `AttachReport` is sent). Each test was therefore run alone with `timeout 20`
+  on the test binary.
+- Result: `a_sandboxed_daemon_reports_the_store_is_not_readable` FAILED (`not yet implemented: red stub`).
+  `attaching_again_reports_already_attached`, `attaching_changes_nothing_in_the_worktree` and
+  `a_session_of_a_deleted_worktree_is_refused_not_resumed_elsewhere` failed with `OperationError { kind:
+  IoFailed, message: "failed to persist the attach", detail: "task 5 panicked with message \"not yet
+  implemented: red stub\"" }`. `attached_worktrees_survive_a_restart_and_show_with_the_filter_off`,
+  `discovery_lists_this_projects_sessions_and_attaching_one_adds_an_idle_entry`,
+  `resuming_a_session_in_an_unattached_worktree_attaches_the_worktree_first` and
+  `sixteen_worktrees_attach_in_one_action_within_ten_seconds` hung (timeout). The catalog-level tests pass
+  (they do not touch the handlers).
+- After restore: 23 passed.
+- T041: new `a_worktree_outside_the_managed_directory_is_refused_and_unrecorded` fails with
+  `&& !w.included` removed at `catalog.rs:526`.
+- T045: the guard split into one test per state (`Starting`, `Running`, `Restarting` refused; `Idle`,
+  `Failed` already attached). With the guard changed to `matches!(.., Running)`,
+  `a_second_resume_of_a_starting_session...` and `..._restarting_session...` fail.
+
+## Phase 8 (client): T042 reducer red, T039/T043/T049
+
+- **T042 (reducer, T009/T012).** Red: `features/attach.rs::update` stubbed to `Vec::new()` (original kept
+  as `update_real`), then `MICOLD_NO_BUILD_LOCK=1 cargo test -p micold-client --test attach_dialog
+  --no-fail-fast`. Result: `test result: FAILED. 3 passed; 18 failed`, among them
+  `opening_waits_for_the_report_then_lists_it`, `attach_selected_sends_only_the_ticked_rows`,
+  `attach_all_sends_every_attachable_row_and_not_the_missing_one`, `resume_sends_one_session_target`,
+  `an_applied_batch_closes_the_dialog_and_says_what_happened`. Restored; `git diff --stat crates/*/src`
+  shows no change to `features/attach.rs`.
+- **T039** `daemon_sync.rs` tests `a_resume_answered_attached_or_already_attached_starts_that_session`,
+  `a_resume_refused_as_already_running_starts_nothing`. Fail with `view_and_start(...)` replaced by
+  `let _ = id;` (first), and with the outcome match widened to `_` (second).
+- **T043** `opening_a_project_asks_for_the_offer_and_the_report_reaches_it`,
+  `the_dialog_apply_answer_routes_to_applied`, `the_banner_apply_answer_routes_to_offer_applied`. Each
+  fails with its arm removed (`if false` guard on the `AttachApply`, `AttachOfferApply`,
+  `AttachOfferDiscover` arms); the first also fails with `request_attach_offer` made a no-op.
+- **T049** `attach_offer.rs` now asserts message and `Level` of both notifications;
+  `attach_dialog.rs::a_refusal_is_reported_as_an_error` asserts `Level::Error` through the reducer.
+  Fail with the failure text changed, `OfferApplyFailed` level `Info`, `summary_level` refusal ->
+  `Info`, and the summary text changed. (The `attach_discovery.rs:316` half belongs to the core worker.)

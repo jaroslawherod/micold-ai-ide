@@ -5,9 +5,11 @@
 
 use micold_client::app::State;
 use micold_client::features::attach::{self, offer_visible, Msg};
+use micold_client::features::Outcome;
 use micold_core::attach::{
     AttachItem, AttachOutcome, AttachResult, AttachableWorktree, Availability, DiscoveryReport,
 };
+use micold_core::notify::Level;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -193,7 +195,11 @@ fn the_answer_ends_the_offer_and_says_what_happened() {
     );
     assert!(!offer_visible(&state));
     assert!(state.attach.offer.in_flight.is_empty());
-    assert_eq!(outcomes.len(), 1);
+    let [Outcome::NotificationRaised(n)] = outcomes.as_slice() else {
+        panic!("expected one notification, got {outcomes:?}");
+    };
+    assert_eq!(n.message, "Attached 2 worktrees.");
+    assert_eq!(n.level, Level::Info);
 }
 
 #[test]
@@ -203,7 +209,11 @@ fn a_failed_attach_keeps_the_offer_so_it_can_be_retried() {
     let outcomes = attach::update(&mut state, Msg::OfferApplyFailed("boom".into()));
     assert!(offer_visible(&state));
     assert!(state.attach.offer.in_flight.is_empty());
-    assert_eq!(outcomes.len(), 1);
+    let [Outcome::NotificationRaised(n)] = outcomes.as_slice() else {
+        panic!("expected one notification, got {outcomes:?}");
+    };
+    assert_eq!(n.message, "Couldn't attach the found worktrees: boom");
+    assert_eq!(n.level, Level::Error);
 }
 
 #[test]

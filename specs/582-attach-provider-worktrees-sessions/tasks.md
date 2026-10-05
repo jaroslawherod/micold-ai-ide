@@ -47,7 +47,7 @@ implementation tasks they cover, and each test must be seen failing for the righ
 - [X] T013 [US1] Add `PendingOp::Attach` request/response plumbing in `crates/micold-client/src/shell/daemon_sync.rs`.
 - [X] T014 [US1] Add the sidebar "Attach existing…" button and the modal list dialog (checkbox per row, "Attach selected", "Attach all") in `crates/micold-client/src/ui/sidebar.rs` and new `crates/micold-client/src/ui/attach_dialog.rs`, built from the existing overlay dialog and shared button/row primitives with the builder API (R9, Constitution VIII).
 - [X] T015 [US1] Update `docs/user-guide/worktrees-and-sessions.md`: how to attach provider worktrees from the app and what attaching does not touch.
-- [ ] T016 [US1] Run the `visual-pass` skill for quickstart B2 and B3 (worktrees only), light and dark theme, and save the evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
+- [x] T016 [US1] Run the `visual-pass` skill for quickstart B2 and B3 (worktrees only), light and dark theme, and save the evidence in `specs/582-attach-provider-worktrees-sessions/visual/`.
 
 ## Phase 4: User Story 2 - Discover and resume provider sessions (P1)
 
@@ -156,3 +156,23 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: quickstart Part A and Part B
 - **Depends on**: M1, M2, M3, M4
 - **Tier**: docs
+
+## Phase 8: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL). **The feature is not done until T039-T044 (the HIGH findings) are cleared.** Each task adds or strengthens a test; do not change source to make a test pass except where the task says a code gap is real.
+
+- [x] T039 [US2] Finding 1: add a test that a `Msg::Applied` for a lone `AttachItem::Session` answered `Attached` or `AlreadyAttached` sends `ClientMsg::SessionStart` for that id, and that an `AlreadyRunning` refusal sends none, beside the fake-daemon tests in `crates/micold-client/src/shell/daemon_sync.rs` (~:2663, :2847). Proof: the test fails with `view_and_start(app, SessionId::from_uuid(id))` at `daemon_sync.rs:942` replaced by `let _ = id;`; `cargo test -p micold-client` is green after restoring.
+- [x] T040 [US2] Finding 2: in `crates/micold-core/tests/provider_store_dirs.rs` add a Claude test whose transcript cwd is `<root>/.claude/worktrees-old/x` (a prefix lookalike) and assert its directory is not returned; add a unit test for `is_within` equal-key and `rest.len() > 1` boundaries. Proof: fails with `rest.starts_with('/')` removed at `crates/micold-core/src/attach.rs:256`; `cargo test -p micold-core --test provider_store_dirs`.
+- [x] T041 [US1] Finding 3: in `crates/micold-daemon/tests/attach_apply.rs` add a catalog test where a live worktree has `included: true` and assert `Refused(NotAWorktreeOfProject)` and no record written. Proof: fails with `&& !w.included` removed at `crates/micold-daemon/src/catalog.rs:526`; `cargo test -p micold-daemon --test attach_apply`.
+- [x] T042 [US1] Finding 4: record a real red for T008 and T011 in `tdd/cycle-log.md` by running the `attach_apply.rs` daemon tests against the handlers stubbed out (restore afterwards), and do the same for the reducer tests in `attach_dialog.rs` against `features/attach.rs` stubbed; log command and output. Proof: cycle-log entries carry the command and failure text; `cargo test -p micold-daemon --test attach_apply -p micold-client --test attach_dialog` green after restore.
+- [x] T043 [US4] Finding 5: add a test through the shell that opening a project with no records sends `ClientMsg::AttachDiscover` and that the answer reaches `Msg::OfferListed`; add a test that `PendingOp::AttachApply` and `AttachOfferApply` answers route to `Applied`/`OfferApplied`. Proof: each fails with its arm in `daemon_sync.rs:909-940` removed; `cargo test -p micold-client`.
+- [x] T044 Finding 5: run `speckit-tdd-plan` for 582 to write `tdd/test-list.md` (behaviors, states, `traces`) from the tests as they now stand, so the next audit has per-behavior evidence. Proof: `specs/582-attach-provider-worktrees-sessions/tdd/test-list.md` exists and every `traces` value names a test that runs.
+- [x] T045 [US2] Finding 6: split `a_second_resume_while_starting_running_or_restarting_is_refused_as_already_running` so `Starting`, `Running` and `Restarting` each go through `Catalog::attach_session` and `Idle`/`Failed` return `AlreadyAttached`. Proof: a guard that tests only `== Running` fails it; `cargo test -p micold-daemon --test attach_apply`.
+
+Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the HIGH findings (T039-T045) are cleared. T049: client assertions done, the `attach_discovery.rs:316` assertion is open.
+
+- [ ] T046 [US1] Finding 7: make the two-attach test race through `DaemonState` (two `AttachApply` messages on two connections) instead of a test-owned `Mutex`. Proof: `cargo test -p micold-daemon --test attach_apply two_concurrent` repeated 20 times is green.
+- [ ] T047 Finding 8: replace the 20 ms and 30 ms sleeps with `set_modified` (as `attach_discovery.rs:370` already does) and read the persisted file's content instead of its mtime; widen or drop the 10 s wall-clock assertion to the generous bound the plan names. Proof: `grep -n "thread::sleep" crates/micold-daemon/tests/attach_*.rs` prints nothing.
+- [ ] T048 Finding 9: have every test in `attach_apply.rs` and `attach_mcp.rs` that runs discovery call `provider_home()` first (or move it into the daemon `tests/support/` and have `connect_and_attach` call it). Proof: `HOME=/nonexistent CLAUDE_CONFIG_DIR= cargo test -p micold-daemon --test attach_apply` reads nothing outside the scratch home.
+- [ ] T049 Findings 10, 11: assert the notification text and `Level` in `attach_offer.rs:196,206`, assert `Level::Error` in `attach_dialog.rs` `a_refusal_is_reported_as_an_error`, and assert the note's reason in `attach_discovery.rs:316`. Proof: each fails with the message or level changed in `features/attach.rs`; `cargo test -p micold-client --test attach_offer --test attach_dialog` and `-p micold-core --test attach_discovery`.
+- [ ] T050 Findings 13, 14, 15, 16: move `provider_home`/`seed_claude` into `crates/micold-daemon/tests/support/`, and add a Copilot or Pi store case to `attach_discovery.rs::resumable`. Proof: `mise run gate`.

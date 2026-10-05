@@ -220,6 +220,16 @@ fn a_refusal_is_reported_as_an_error() {
         attach::summary(&results),
         "Attached 1 worktree. 1 could not be attached."
     );
+
+    // The level the name promises: through the reducer, a refusal raises an error notification.
+    let mut state = open_state();
+    attach::update(&mut state, Msg::AttachAll);
+    let outcomes = attach::update(&mut state, Msg::Applied(results));
+    let [micold_client::features::Outcome::NotificationRaised(n)] = outcomes.as_slice() else {
+        panic!("expected one notification, got {outcomes:?}");
+    };
+    assert_eq!(n.message, "Attached 1 worktree. 1 could not be attached.");
+    assert_eq!(n.level, Level::Error);
 }
 
 #[test]

@@ -2624,6 +2624,294 @@ pub(crate) mod tests {
         (app, rx)
     }
 
+    // --- Feature 582 (T039, T043): the attach answers, through the shell -----------------------
+
+    use micold_core::attach::{
+        AttachResult, AttachTarget, DiscoveryReport, RefuseReason, ResumableSession,
+        ResumableStatus,
+    };
+
+    fn attach_project() -> PathBuf {
+        PathBuf::from("/repo/p")
+    }
+
+    fn resumable(id: uuid::Uuid) -> ResumableSession {
+        ResumableSession {
+            id,
+            provider: AiCli::ClaudeCode,
+            title: Some("stored".into()),
+            last_activity: std::time::SystemTime::UNIX_EPOCH,
+            target: AttachTarget::Default,
+            status: ResumableStatus::Resumable,
+        }
+    }
+
+    /// A connected app whose attach dialog is open on `report` for the active project.
+    fn app_with_attach_dialog(
+        report: DiscoveryReport,
+    ) -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (mut app, rx) = connected_app();
+        app.core.workspace.active = Some(attach_project());
+        app.core.update(Message::Attach(AttachMsg::Opened));
+        app.core.update(Message::Attach(AttachMsg::Listed {
+            project: attach_project(),
+            report,
+        }));
+        (app, rx)
+    }
+
+    /// Press "Resume" on `id` and send the batch; returns the correlation id of the `AttachApply`.
+    fn press_resume(
+        app: &mut App,
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        id: uuid::Uuid,
+    ) -> u64 {
+        app.core.update(Message::Attach(AttachMsg::Resume { id }));
+        let _ = on_attach_apply(app);
+        drain_sent(rx)
+            .into_iter()
+            .find_map(|m| match m {
+                ClientMsg::AttachApply { req, .. } => Some(req),
+                _ => None,
+            })
+            .expect("the apply went on the wire")
+    }
+
+    fn attach_answer(req: u64, results: Vec<AttachResult>) -> DaemonMsg {
+        DaemonMsg::OperationOk {
+            req,
+            result: OperationResult::AttachApplied { results },
+        }
+    }
+
+    fn session_result(id: uuid::Uuid, outcome: AttachOutcome) -> AttachResult {
+        AttachResult {
+            item: AttachItem::Session { id },
+            outcome,
+        }
+    }
+
+    fn starts_of(sent: &[ClientMsg], id: SessionId) -> usize {
+        sent.iter()
+            .filter(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+            .count()
+    }
+
+    /// T039 (US2.2, FR-008): a resume that came back attached runs the provider: the client
+    /// starts the session, once, whether it was newly attached or already in the catalog.
+    #[test]
+    fn a_resume_answered_attached_or_already_attached_starts_that_session() {
+        for outcome in [AttachOutcome::Attached, AttachOutcome::AlreadyAttached] {
+            let uuid = uuid::Uuid::from_u128(7);
+            let (mut app, mut rx) = app_with_attach_dialog(DiscoveryReport {
+                sessions: vec![resumable(uuid)],
+                ..Default::default()
+            });
+            let req = press_resume(&mut app, &mut rx, uuid);
+
+            let _ = on_daemon_event(
+                &mut app,
+                attach_answer(req, vec![session_result(uuid, outcome)]),
+            );
+
+            let sent = drain_sent(&mut rx);
+            assert_eq!(
+                starts_of(&sent, SessionId::from_uuid(uuid)),
+                1,
+                "{outcome:?}: exactly one start for the resumed session, got {sent:?}"
+            );
+            assert!(
+                app.core.attach.dialog.is_none(),
+                "{outcome:?}: the dialog closes"
+            );
+        }
+    }
+
+    /// T039: an `AlreadyRunning` refusal means it runs elsewhere already: nothing is started.
+    #[test]
+    fn a_resume_refused_as_already_running_starts_nothing() {
+        let uuid = uuid::Uuid::from_u128(7);
+        let (mut app, mut rx) = app_with_attach_dialog(DiscoveryReport {
+            sessions: vec![resumable(uuid)],
+            ..Default::default()
+        });
+        let req = press_resume(&mut app, &mut rx, uuid);
+
+        let _ = on_daemon_event(
+            &mut app,
+            attach_answer(
+                req,
+                vec![session_result(
+                    uuid,
+                    AttachOutcome::Refused(RefuseReason::AlreadyRunning),
+                )],
+            ),
+        );
+
+        let sent = drain_sent(&mut rx);
+        assert_eq!(
+            starts_of(&sent, SessionId::from_uuid(uuid)),
+            0,
+            "got {sent:?}"
+        );
+        assert!(
+            !sent
+                .iter()
+                .any(|m| matches!(m, ClientMsg::SessionStart { .. })),
+            "no session is started at all"
+        );
+    }
+
+    /// T043 (US4.1): opening a project with no records asks the daemon what it could attach, and
+    /// the report that answers reaches the offer.
+    #[test]
+    fn opening_a_project_asks_for_the_offer_and_the_report_reaches_it() {
+        let (mut app, mut rx) = connected_app();
+        app.core.workspace.active = Some(attach_project());
+
+        request_attach_offer(&mut app, &attach_project());
+
+        let (req, asked) = drain_sent(&mut rx)
+            .into_iter()
+            .find_map(|m| match m {
+                ClientMsg::AttachDiscover { req, project } => Some((req, project)),
+                _ => None,
+            })
+            .expect("an AttachDiscover went out");
+        assert_eq!(asked, attach_project());
+        assert!(matches!(
+            app.pending_ops.get(&req),
+            Some(PendingOp::AttachOfferDiscover { .. })
+        ));
+
+        let report = DiscoveryReport {
+            sessions: vec![resumable(uuid::Uuid::from_u128(1))],
+            ..Default::default()
+        };
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::AttachReport {
+                req,
+                report: report.clone(),
+            },
+        );
+
+        assert_eq!(
+            app.core.attach.offer.report,
+            Some((attach_project(), report)),
+            "the answer reached the offer"
+        );
+        assert!(app.pending_ops.is_empty());
+    }
+
+    /// T043: the dialog's apply answer routes to `Applied`: the dialog closes.
+    #[test]
+    fn the_dialog_apply_answer_routes_to_applied() {
+        let (mut app, mut rx) = app_with_attach_dialog(DiscoveryReport {
+            worktrees: vec![micold_core::attach::AttachableWorktree {
+                dir_name: "a".into(),
+                path: attach_project().join(".claude/worktrees/a"),
+                branch: None,
+                provider: None,
+                session_count: 0,
+                availability: micold_core::attach::Availability::Attachable,
+            }],
+            ..Default::default()
+        });
+        app.core.update(Message::Attach(AttachMsg::AttachAll));
+        let _ = on_attach_apply(&mut app);
+        let req = drain_sent(&mut rx)
+            .into_iter()
+            .find_map(|m| match m {
+                ClientMsg::AttachApply { req, .. } => Some(req),
+                _ => None,
+            })
+            .expect("sent");
+        assert!(matches!(
+            app.pending_ops.get(&req),
+            Some(PendingOp::AttachApply)
+        ));
+
+        let _ = on_daemon_event(
+            &mut app,
+            attach_answer(
+                req,
+                vec![AttachResult {
+                    item: AttachItem::Worktree {
+                        dir_name: "a".into(),
+                    },
+                    outcome: AttachOutcome::Attached,
+                }],
+            ),
+        );
+
+        assert!(
+            app.core.attach.dialog.is_none(),
+            "Applied closed the dialog"
+        );
+        assert!(app.pending_ops.is_empty());
+    }
+
+    /// T043: the banner's apply answer routes to `OfferApplied`: the offer ends.
+    #[test]
+    fn the_banner_apply_answer_routes_to_offer_applied() {
+        let (mut app, mut rx) = connected_app();
+        app.core.workspace.active = Some(attach_project());
+        let wt = micold_core::attach::AttachableWorktree {
+            dir_name: "a".into(),
+            path: attach_project().join(".claude/worktrees/a"),
+            branch: None,
+            provider: None,
+            session_count: 0,
+            availability: micold_core::attach::Availability::Attachable,
+        };
+        app.core.update(Message::Attach(AttachMsg::OfferListed {
+            project: attach_project(),
+            report: DiscoveryReport {
+                worktrees: vec![wt],
+                ..Default::default()
+            },
+        }));
+        app.core.update(Message::Attach(AttachMsg::OfferAttachAll));
+        let _ = on_attach_offer_apply(&mut app);
+        let req = drain_sent(&mut rx)
+            .into_iter()
+            .find_map(|m| match m {
+                ClientMsg::AttachApply { req, .. } => Some(req),
+                _ => None,
+            })
+            .expect("sent");
+        assert!(matches!(
+            app.pending_ops.get(&req),
+            Some(PendingOp::AttachOfferApply)
+        ));
+
+        let _ = on_daemon_event(
+            &mut app,
+            attach_answer(
+                req,
+                vec![AttachResult {
+                    item: AttachItem::Worktree {
+                        dir_name: "a".into(),
+                    },
+                    outcome: AttachOutcome::Attached,
+                }],
+            ),
+        );
+
+        assert!(
+            app.core.attach.offer.in_flight.is_empty(),
+            "OfferApplied cleared the batch"
+        );
+        assert!(
+            app.core.attach.offer.report.is_none(),
+            "and ended the offer"
+        );
+    }
+
     /// BUG-002 (FR-004a, contract §3.3a): a project switch **starts** the session it restores.
     ///
     /// The switch and the launch reach the same dead end for the same reason — `SetViewedSession`
