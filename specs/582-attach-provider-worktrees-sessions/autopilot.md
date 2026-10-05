@@ -64,7 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review B | 1 | 008f809719dfdb601d404858fe5102758a1bcb39:e849b117222256304d49f6e01e0d449a89c96d5c | CLEAN (2 MINOR: doc wrap fixed; invalid_input branch for an included worktree kept, untested) |
 | M4 Review A | 1 | 4dc431a9a600f74b5525391611ff3001a671f12a:e3cef56de6611c1ce080e7bb5a39fd09c0bd079e | CLEAN (3 MINOR fixed: vacuous test dropped, all-failed batch keeps banner, unexpected result variant reports failure) |
 | M4 Review B | 1 | 2bad84caf7398a5aa3372772f646b1abf2bed1ee:e3cef56de6611c1ce080e7bb5a39fd09c0bd079e | CLEAN (1 MINOR: offer_visible is evaluated live at render, so a late provenance mirror only hides the banner; left) |
-| M5 reviews | - | - | not run: docs-only diff (quickstart result, task ticks, ledger); user guide already matched, no change |
+| M5 Review A | 1 | fe2c7202dc7009094e32e4754617f8ad3d5e7cb7:1ff46f9e74ccf9d560f64d26912940299c63708f | CLEAN (1 MINOR: Part B overstated, reworded) |
+| M5 Review B | 1 | fe2c7202dc7009094e32e4754617f8ad3d5e7cb7:1ff46f9e74ccf9d560f64d26912940299c63708f | CHANGES (2 MAJOR: Part B overstated, M2 defects unresolved; fixed by rewording Result to say what was not exercised and listing the defects as open follow-ups, no new visual pass; 4 MINOR fixed: Part A file list, guide refusal case, deviations, red gap) |
 
 ## Declined review findings
 
@@ -83,6 +84,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M5: no full B1-B4 visual pass on the final tree; banner with seeded sessions, banner "Attach all", and "sessions show idle" never seen in a GUI (only unit/integration tests).
 
 - branch-start.sh printed FETCH-FAILED (broken refs in local repo: "does not point to a valid object"); branch is at the commit it started on, not re-based on a fresh origin/main.
 - M2 visual pass (visual/results.md): ~150 px gap between worktree and session lists; dialog lingers ~5 s after Resume (maybe lavapipe); light-theme sidebar stayed dimmed after close (maybe stale frame); an unreadable Copilot store gave no note. Dialog heading/intro still say "worktrees"; Resume buttons lack keyboard focus ids; 200-session cap has no "more" marker.
