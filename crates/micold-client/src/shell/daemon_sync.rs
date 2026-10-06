@@ -686,6 +686,12 @@ pub(crate) fn on_settings_changed(
     // Spec 035 T3: every window showing Settings shows the answer for the stored path, whichever
     // window saved it (Edge Cases, "Several sessions and several open windows"). Opened, not
     // Saved: only the window that saved posts the save's notice (FR-007).
+    recheck_open_settings(app)
+}
+
+/// Prepare a check of the stored script path when Settings is showing, none otherwise (spec 035
+/// T3; also after a reconnect's `Welcome`, which hands over the current settings the same way).
+fn recheck_open_settings(app: &mut App) -> Option<crate::shell::env_include::ScriptPathCheckJob> {
     app.core.settings.settings_draft.as_ref()?;
     Some(crate::shell::env_include::prepare_script_path_check(
         app,
@@ -1380,6 +1386,10 @@ pub fn on_connected(
     // still starting up). Re-source env-include under the now-authoritative values.
     let pr_status_enabled = settings.pr_status_enabled;
     adopt_daemon_settings(app, settings);
+    // The path may have changed while this window was disconnected: an open Settings page shows
+    // the answer for the path it now holds, as after `SettingsChanged`.
+    let script_check =
+        recheck_open_settings(app).map(crate::shell::env_include::run_script_path_check);
     // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it), so
     // this starts no reading; the `Attached` and listing that follow do (S1).
     let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
@@ -1483,7 +1493,7 @@ pub fn on_connected(
         // Feature 582 (FR-012): the start-up offer, asked once the attach is on the wire.
         request_attach_offer(app, &offer_for);
     }
-    reread_sandbox(app)
+    Task::batch([script_check.unwrap_or_else(Task::none), reread_sandbox(app)])
 }
 
 /// Tell the daemon the window's resolved colour scheme when this connection has not been told it yet
