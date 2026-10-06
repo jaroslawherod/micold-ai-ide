@@ -1274,3 +1274,13 @@ integration test carries the `cfg(windows)` arm of `idle_process` that `unread_s
   `DaemonState::set_desktop_notifications`; a failing settings store is not reachable from the
   integration tests. Cycle 45's two tests stay green.
 - green: the scoped gate and the full gate recorded in the ledger.
+
+## Cycle 47 — BUG-566: only the service that showed a notification reports its click (U179–U181)
+
+- red: `linux.rs` tests against stubs that compile (`sender` returns none, `Shown` ignores the
+  sender, `ServiceGone` is nothing): `cargo test -p micold-client desktop_notify::linux` gave
+  `26 passed; 6 failed`. Each of the six failed on its assertion: a click, a token or a close from
+  `:1.9` acted on `:1.5`'s notification (U179); the same id from `:1.6` after a restart opened the
+  old session (U180); `NameOwnerChanged` from the bus dropped nothing and was not read (U181); the
+  header's sender was not read (U179). `a_change_of_owner_not_sent_by_the_bus_drops_nothing` passed
+  against the stub, as a guard for the green step.

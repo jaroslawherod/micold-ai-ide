@@ -33,6 +33,12 @@ const DEFAULT_ACTION_LABEL: &str = "Open";
 const ACTION_INVOKED: &str = "ActionInvoked";
 const NOTIFICATION_CLOSED: &str = "NotificationClosed";
 const ACTIVATION_TOKEN: &str = "ActivationToken";
+/// The bus name of the notification service, and its interface.
+const NOTIFICATIONS: &str = "org.freedesktop.Notifications";
+/// The bus itself: the sender of its own signals, a name no peer can own.
+const BUS: &str = "org.freedesktop.DBus";
+/// The bus's signal that a name changed owner.
+const NAME_OWNER_CHANGED: &str = "NameOwnerChanged";
 /// Every signal of the notification service's interface.
 const SIGNALS: &str = "type='signal',interface='org.freedesktop.Notifications',\
                        path='/org/freedesktop/Notifications'";
@@ -100,6 +106,16 @@ pub(super) enum Signal {
     /// `ActivationToken(id, token)`: the Wayland activation token of the click on notification
     /// `id` that an `ActionInvoked` is about to report.
     ActivationToken { id: u32, token: String },
+    /// `NameOwnerChanged("org.freedesktop.Notifications", old_owner, _)`: the notification
+    /// service `old_owner` no longer owns the name, so it can no longer report a click.
+    ServiceGone { old_owner: String },
+}
+
+/// The unique name of the connection that sent `message`, as the bus stamped it. A message with
+/// none (one that never crossed a bus) has no sender.
+pub(super) fn sender(message: &zbus::Message) -> Option<String> {
+    let _ = message;
+    None
 }
 
 /// The signal `message` carries, when it is one of the three this window reads.
@@ -146,7 +162,8 @@ pub(super) struct Shown {
 
 impl Shown {
     /// The service showed a notification for `session` of `project` under `id`.
-    pub(super) fn record(&mut self, id: u32, project: PathBuf, session: SessionId) {
+    pub(super) fn record(&mut self, service: &str, id: u32, project: PathBuf, session: SessionId) {
+        let _ = service;
         self.by_id.insert(
             id,
             Entry {
@@ -159,7 +176,8 @@ impl Shown {
 
     /// Whether `id` is a notification of this window that is still shown.
     #[cfg(test)]
-    pub(super) fn holds(&self, id: u32) -> bool {
+    pub(super) fn holds(&self, service: &str, id: u32) -> bool {
+        let _ = service;
         self.by_id.contains_key(&id)
     }
 
@@ -178,7 +196,8 @@ impl Shown {
     /// GNOME Shell sends every signal twice, from two bus names (research R7). The click removes
     /// the entry, so the second `ActionInvoked` finds nothing, and so does a second token that
     /// arrives after it; a second token that arrives before it replaces the first with its equal.
-    pub(super) fn on_signal(&mut self, signal: Signal) -> Option<NotifierEvent> {
+    pub(super) fn on_signal(&mut self, sender: &str, signal: Signal) -> Option<NotifierEvent> {
+        let _ = sender;
         match signal {
             Signal::ActionInvoked { id, key } if key == DEFAULT_ACTION => {
                 let Entry {
@@ -210,6 +229,7 @@ impl Shown {
                 self.by_id.remove(&id);
                 None
             }
+            Signal::ServiceGone { .. } => None,
         }
     }
 }
@@ -311,12 +331,15 @@ impl Notifier {
                     let Ok(message) = message else {
                         return;
                     };
-                    let event = signal(&message).and_then(|signal| {
-                        shown
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .on_signal(signal)
-                    });
+                    let event =
+                        sender(&message)
+                            .zip(signal(&message))
+                            .and_then(|(sender, signal)| {
+                                shown
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .on_signal(&sender, signal)
+                            });
                     if event.is_some_and(|event| events.unbounded_send(event).is_err()) {
                         return;
                     }
@@ -411,11 +434,13 @@ impl DesktopNotifier for Notifier {
             })?;
         // The service's id for the notification, by which its signals name it. A reply that
         // carries none leaves the notification shown and its click unheard (N7).
-        if let Ok(id) = reply.body().deserialize::<u32>() {
+        // The id means something only with the service that numbered it: the sender of the reply.
+        let service = reply.header().sender().map(|name| name.to_string());
+        if let (Some(service), Ok(id)) = (service, reply.body().deserialize::<u32>()) {
             self.shown
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .record(id, notification.project, notification.session);
+                .record(&service, id, notification.project, notification.session);
         }
         Ok(())
     }
@@ -466,10 +491,18 @@ mod tests {
 
     const SHOWN: u32 = 7;
     const NOT_OURS: u32 = 8;
+    /// The unique name of the service that answered `Notify`.
+    const SERVICE: &str = ":1.5";
+    /// GNOME Shell's own connection, which sends a copy of each of the service's signals.
+    const SHELL: &str = ":1.3";
+    /// Another peer on the session bus: it showed nothing.
+    const PEER: &str = ":1.9";
+    /// The service that owns `org.freedesktop.Notifications` after [`SERVICE`] went.
+    const NEW_SERVICE: &str = ":1.6";
 
     fn shown_for(session: SessionId) -> Shown {
         let mut shown = Shown::default();
-        shown.record(SHOWN, PathBuf::from("/repo"), session);
+        shown.record(SERVICE, SHOWN, PathBuf::from("/repo"), session);
         shown
     }
 
@@ -486,7 +519,7 @@ mod tests {
         let session = SessionId::new();
         let mut shown = shown_for(session);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             Some(NotifierEvent::Activated {
                 project: PathBuf::from("/repo"),
                 session,
@@ -499,24 +532,32 @@ mod tests {
     fn a_click_is_reported_once_however_many_times_the_service_says_it() {
         // U162: a second connection of this window hears the same signal.
         let mut shown = shown_for(SessionId::new());
-        assert!(shown.on_signal(invoked(SHOWN, "default")).is_some());
-        assert_eq!(shown.on_signal(invoked(SHOWN, "default")), None);
+        assert!(shown
+            .on_signal(SERVICE, invoked(SHOWN, "default"))
+            .is_some());
+        assert_eq!(shown.on_signal(SERVICE, invoked(SHOWN, "default")), None);
     }
 
     #[test]
     fn an_id_the_table_does_not_hold_is_no_event() {
         // U163 (FR-015, N9): another window's notification, or one older than this window.
         let mut shown = shown_for(SessionId::new());
-        assert_eq!(shown.on_signal(invoked(NOT_OURS, "default")), None);
-        assert!(shown.holds(SHOWN), "this window's own is untouched");
+        assert_eq!(shown.on_signal(SERVICE, invoked(NOT_OURS, "default")), None);
+        assert!(
+            shown.holds(SERVICE, SHOWN),
+            "this window's own is untouched"
+        );
     }
 
     #[test]
     fn another_action_key_is_no_event() {
         // U164 (FR-011): only the action this window offered opens a session.
         let mut shown = shown_for(SessionId::new());
-        assert_eq!(shown.on_signal(invoked(SHOWN, "dismiss")), None);
-        assert!(shown.holds(SHOWN), "and the notification is still shown");
+        assert_eq!(shown.on_signal(SERVICE, invoked(SHOWN, "dismiss")), None);
+        assert!(
+            shown.holds(SERVICE, SHOWN),
+            "and the notification is still shown"
+        );
     }
 
     #[test]
@@ -524,12 +565,12 @@ mod tests {
         // U165 (FR-015).
         let mut shown = shown_for(SessionId::new());
         assert_eq!(
-            shown.on_signal(Signal::NotificationClosed { id: SHOWN }),
+            shown.on_signal(SERVICE, Signal::NotificationClosed { id: SHOWN }),
             None
         );
-        assert!(!shown.holds(SHOWN));
+        assert!(!shown.holds(SERVICE, SHOWN));
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             None,
             "a click the service reports after the close finds nothing"
         );
@@ -605,12 +646,12 @@ mod tests {
         let session = SessionId::new();
         let mut shown = shown_for(session);
         assert_eq!(
-            shown.on_signal(token(SHOWN, TOKEN)),
+            shown.on_signal(SERVICE, token(SHOWN, TOKEN)),
             None,
             "the token alone is no click"
         );
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(session, Some(TOKEN))
         );
     }
@@ -621,7 +662,7 @@ mod tests {
         let session = SessionId::new();
         let mut shown = shown_for(session);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(session, None)
         );
     }
@@ -632,10 +673,10 @@ mod tests {
         // none.
         let session = SessionId::new();
         let mut shown = shown_for(session);
-        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
-        assert_eq!(shown.on_signal(invoked(SHOWN, "dismiss")), None);
+        assert_eq!(shown.on_signal(SERVICE, token(SHOWN, TOKEN)), None);
+        assert_eq!(shown.on_signal(SERVICE, invoked(SHOWN, "dismiss")), None);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(session, None)
         );
     }
@@ -645,34 +686,36 @@ mod tests {
         // U166: the signals are matched by notification id.
         let (first, second) = (SessionId::new(), SessionId::new());
         let mut shown = shown_for(first);
-        shown.record(NOT_OURS, PathBuf::from("/repo"), second);
-        assert_eq!(shown.on_signal(token(NOT_OURS, TOKEN)), None);
+        shown.record(SERVICE, NOT_OURS, PathBuf::from("/repo"), second);
+        assert_eq!(shown.on_signal(SERVICE, token(NOT_OURS, TOKEN)), None);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(first, None)
         );
         assert_eq!(
-            shown.on_signal(invoked(NOT_OURS, "default")),
+            shown.on_signal(SERVICE, invoked(NOT_OURS, "default")),
             activated(second, Some(TOKEN))
         );
     }
 
     #[test]
     fn every_signal_sent_twice_is_still_one_click_with_its_token() {
-        // U166, U162 (research R7): GNOME Shell sends each signal twice, from two bus names. In
-        // either order the click is reported once, with the token, and nothing is left behind.
-        let orders: [[fn() -> Signal; 4]; 2] = [
+        // U166, U162 (research R7): GNOME Shell sends each signal twice, from two bus names: the
+        // service that answered `Notify` and the shell's own connection. In either order the
+        // click is reported once, with the token, and nothing is left behind (U179: the shell's
+        // copies are not the service's, and are passed over).
+        let orders: [[(&str, fn() -> Signal); 4]; 2] = [
             [
-                || token(SHOWN, TOKEN),
-                || token(SHOWN, TOKEN),
-                || invoked(SHOWN, "default"),
-                || invoked(SHOWN, "default"),
+                (SHELL, || token(SHOWN, TOKEN)),
+                (SERVICE, || token(SHOWN, TOKEN)),
+                (SHELL, || invoked(SHOWN, "default")),
+                (SERVICE, || invoked(SHOWN, "default")),
             ],
             [
-                || token(SHOWN, TOKEN),
-                || invoked(SHOWN, "default"),
-                || token(SHOWN, TOKEN),
-                || invoked(SHOWN, "default"),
+                (SERVICE, || token(SHOWN, TOKEN)),
+                (SERVICE, || invoked(SHOWN, "default")),
+                (SHELL, || token(SHOWN, TOKEN)),
+                (SHELL, || invoked(SHOWN, "default")),
             ],
         ];
         for order in orders {
@@ -680,7 +723,7 @@ mod tests {
             let mut shown = shown_for(session);
             let events: Vec<_> = order
                 .iter()
-                .filter_map(|signal| shown.on_signal(signal()))
+                .filter_map(|(sender, signal)| shown.on_signal(sender, signal()))
                 .collect();
             assert_eq!(events, Vec::from_iter(activated(session, Some(TOKEN))));
             assert!(shown.is_empty(), "the notification and its token are gone");
@@ -694,12 +737,12 @@ mod tests {
         // a later notification the service shows under the same id.
         let session = SessionId::new();
         let mut shown = Shown::default();
-        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
+        assert_eq!(shown.on_signal(SERVICE, token(SHOWN, TOKEN)), None);
         assert!(shown.is_empty(), "nothing is stored for it");
 
-        shown.record(SHOWN, PathBuf::from("/repo"), session);
+        shown.record(SERVICE, SHOWN, PathBuf::from("/repo"), session);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(session, None)
         );
     }
@@ -709,17 +752,172 @@ mod tests {
         // U166, U165: a token is the click's, and the click did not come.
         let session = SessionId::new();
         let mut shown = shown_for(SessionId::new());
-        assert_eq!(shown.on_signal(token(SHOWN, TOKEN)), None);
+        assert_eq!(shown.on_signal(SERVICE, token(SHOWN, TOKEN)), None);
         assert_eq!(
-            shown.on_signal(Signal::NotificationClosed { id: SHOWN }),
+            shown.on_signal(SERVICE, Signal::NotificationClosed { id: SHOWN }),
             None
         );
         assert!(shown.is_empty());
 
-        shown.record(SHOWN, PathBuf::from("/repo"), session);
+        shown.record(SERVICE, SHOWN, PathBuf::from("/repo"), session);
         assert_eq!(
-            shown.on_signal(invoked(SHOWN, "default")),
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
             activated(session, None)
+        );
+    }
+
+    fn gone(old_owner: &str) -> Signal {
+        Signal::ServiceGone {
+            old_owner: old_owner.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_click_from_a_peer_other_than_the_service_that_showed_it_is_no_event() {
+        // U179 (FR-015b, N9a): any peer on the session bus can send `ActionInvoked` for a guessed
+        // id, broadcast or to this window's unique name.
+        let session = SessionId::new();
+        let mut shown = shown_for(session);
+        assert_eq!(shown.on_signal(PEER, invoked(SHOWN, "default")), None);
+        assert!(
+            shown.holds(SERVICE, SHOWN),
+            "the forged click leaves it shown"
+        );
+        assert_eq!(
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
+            activated(session, None),
+            "the service's own click still opens the session"
+        );
+    }
+
+    #[test]
+    fn a_token_another_action_or_a_close_from_another_peer_changes_nothing() {
+        // U179 (FR-015b, N9a).
+        let session = SessionId::new();
+        let mut shown = shown_for(session);
+        assert_eq!(shown.on_signal(SERVICE, token(SHOWN, TOKEN)), None);
+        assert_eq!(shown.on_signal(PEER, token(SHOWN, "forged")), None);
+        assert_eq!(shown.on_signal(PEER, invoked(SHOWN, "dismiss")), None);
+        assert_eq!(
+            shown.on_signal(PEER, Signal::NotificationClosed { id: SHOWN }),
+            None
+        );
+        assert!(shown.holds(SERVICE, SHOWN));
+        assert_eq!(
+            shown.on_signal(SERVICE, invoked(SHOWN, "default")),
+            activated(session, Some(TOKEN)),
+            "the service's token, untouched by the peer's signals"
+        );
+    }
+
+    #[test]
+    fn the_same_id_from_a_restarted_service_is_no_event() {
+        // U180 (FR-015b, N9a): a restarted service numbers from 1 again, under a new unique name.
+        let mut shown = shown_for(SessionId::new());
+        assert_eq!(shown.on_signal(BUS, gone(SERVICE)), None);
+        assert_eq!(
+            shown.on_signal(NEW_SERVICE, invoked(SHOWN, "default")),
+            None
+        );
+
+        // Before the change of owner is read, too.
+        let mut shown = shown_for(SessionId::new());
+        assert_eq!(
+            shown.on_signal(NEW_SERVICE, invoked(SHOWN, "default")),
+            None
+        );
+        assert!(shown.holds(SERVICE, SHOWN));
+    }
+
+    #[test]
+    fn a_change_of_owner_drops_the_old_owners_notifications_and_keeps_the_new_owners() {
+        // U181 (N9a): the new owner showed its first notification, under the same id, before
+        // the listening thread read the change of owner.
+        let (old, new) = (SessionId::new(), SessionId::new());
+        let mut shown = shown_for(old);
+        shown.record(NEW_SERVICE, SHOWN, PathBuf::from("/repo"), new);
+        assert_eq!(shown.on_signal(BUS, gone(SERVICE)), None);
+        assert!(!shown.holds(SERVICE, SHOWN), "the old owner's is gone");
+        assert!(shown.holds(NEW_SERVICE, SHOWN), "the new owner's is kept");
+        assert_eq!(
+            shown.on_signal(NEW_SERVICE, invoked(SHOWN, "default")),
+            activated(new, None)
+        );
+        assert!(shown.is_empty());
+    }
+
+    #[test]
+    fn a_change_of_owner_not_sent_by_the_bus_drops_nothing() {
+        // U181 (N9a): only the bus says who owns a name.
+        let mut shown = shown_for(SessionId::new());
+        assert_eq!(shown.on_signal(PEER, gone(SERVICE)), None);
+        assert_eq!(shown.on_signal(SERVICE, gone(SERVICE)), None);
+        assert!(shown.holds(SERVICE, SHOWN));
+    }
+
+    fn from(
+        sender: &str,
+        path: &str,
+        interface: &str,
+        member: &str,
+        body: &(&str, &str, &str),
+    ) -> zbus::Message {
+        zbus::Message::signal(path, interface, member)
+            .expect("a signal header")
+            .sender(sender)
+            .expect("a sender")
+            .build(body)
+            .expect("a signal")
+    }
+
+    #[test]
+    fn the_sender_is_read_from_the_header_the_bus_stamped() {
+        // U179: the unique name of the connection that sent the signal.
+        let sent = zbus::Message::signal(
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "ActionInvoked",
+        )
+        .expect("a signal header")
+        .sender(SERVICE)
+        .expect("a sender")
+        .build(&(SHOWN, "default"))
+        .expect("a signal");
+        assert_eq!(sender(&sent).as_deref(), Some(SERVICE));
+        assert_eq!(
+            sender(&message("ActionInvoked", &(SHOWN, "default"))),
+            None,
+            "a message that never crossed a bus has no sender"
+        );
+    }
+
+    #[test]
+    fn a_change_of_owner_of_the_notification_service_is_read_from_the_buses_signal() {
+        // U181: `NameOwnerChanged(name, old_owner, new_owner)`, for the service's name only.
+        let changed = |name| {
+            from(
+                BUS,
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                "NameOwnerChanged",
+                &(name, SERVICE, NEW_SERVICE),
+            )
+        };
+        assert_eq!(
+            signal(&changed("org.freedesktop.Notifications")),
+            Some(gone(SERVICE))
+        );
+        assert_eq!(signal(&changed("org.example.Other")), None);
+        assert_eq!(
+            signal(&from(
+                BUS,
+                "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications",
+                "NameOwnerChanged",
+                &("org.freedesktop.Notifications", SERVICE, NEW_SERVICE),
+            )),
+            None,
+            "the member on the notification interface is not the bus's signal"
         );
     }
 
