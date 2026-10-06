@@ -1,0 +1,26 @@
+# r2 B6 trials, HEAD 7d77db4f client, Xvfb :142 + lavapipe, 2026-10-05, dark. Cursor moved from outside the list onto a row (rows #14593 y632, #14598 y740, #14386 y856), area under the row polled every ~20 ms (screen grabs), 'first frame' = first frame that differs from the one 0.5 s after the move (hover highlight settled). Polling, not a stopwatch. Descriptions pass had ended (>25 s after list).
+dark trial1 row_y=632 panel_first_frame_s=3.063
+dark trial2 row_y=740 panel_first_frame_s=3.061
+dark trial3 row_y=856 panel_first_frame_s=3.056
+dark trial4 row_y=632 panel_first_frame_s=3.051
+dark trial5 row_y=740 panel_first_frame_s=3.068
+dark trial6 row_y=856 panel_first_frame_s=3.063
+dark trial7 row_y=632 panel_first_frame_s=3.060
+dark trial8 row_y=740 panel_first_frame_s=3.060
+dark trial9 row_y=856 panel_first_frame_s=3.054
+dark trial10 row_y=632 panel_first_frame_s=3.047
+dark trial11 row_y=740 panel_first_frame_s=3.047
+dark trial12 row_y=856 panel_first_frame_s=3.048
+ dark trial13 row_y=632 panel_first_frame_s=3.055
+ dark trial14 row_y=740 panel_first_frame_s=3.062
+ dark trial15 row_y=856 panel_first_frame_s=3.056
+ dark trial16 row_y=632 panel_first_frame_s=3.059
+ dark trial17 row_y=740 panel_first_frame_s=3.057
+ dark trial18 row_y=856 panel_first_frame_s=3.068
+ dark trial19 row_y=632 panel_first_frame_s=3.049
+ dark trial20 row_y=740 panel_first_frame_s=3.045
+# trials 13-20 below (8 more, same method, fresh client; the first 1-2 started 15 s after the list while the description pass was still running; gh count of my instances 2 for the first 7 s, then 0): min 3.045 max 3.068
+ light trial1 row_y=632 panel_first_frame_s=3.087
+ light trial2 row_y=740 panel_first_frame_s=3.077
+ light trial3 row_y=856 panel_first_frame_s=3.057
+# 3 light-theme trials above (fresh client, 28 s after list; rows y632/740/856): 3.057-3.087 s. Total 20 dark + 3 light, range 3.045-3.087 s, none before 3.0 s. Screenshot r2-b6-light-open-row.png

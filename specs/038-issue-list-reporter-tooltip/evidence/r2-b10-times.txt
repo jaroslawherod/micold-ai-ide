@@ -1,0 +1,36 @@
+# set A started 22:30:12, HEAD 7d77db4f vs before 7cbb6c76
+A run1 bin-before 1.834 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run1 bin-after 13.054 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run2 bin-before 1.833 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run2 bin-after 12.704 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run3 bin-before 1.773 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run3 bin-after 13.201 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run4 bin-before 2.998 first_black=0.367  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run4 bin-after 12.869 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run5 bin-before 1.709 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+A run5 bin-after 12.067 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+SET-A-DONE
+# SET A IS INVALID: the client resolved `gh` to the mise shim; run from the client's cwd (/home/jaro) the
+# shim tried to install github-cli and failed on GitHub's unauthenticated API rate limit ("mise WARN GitHub
+# rate limit exceeded"), so every "before" run ended at 1.7-3.0 s with the form's "GitHub's rate limit was
+# reached" error (no list), and the "after" runs' 12-13 s are not comparable. The before client's failing gh
+# call was captured through a logging pass-through. From set B on, a pass-through `gh` (logs start/end of
+# every call, then execs the real gh 2.102.0 binary) is first on the client's PATH in both builds.
+# set B started 22:38:09, HEAD 7d77db4f vs before 7cbb6c76
+B run1 bin-before 10.576 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run1 bin-after 10.730 first_black=0.001  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run2 bin-before 10.718 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run2 bin-after 10.722 first_black=0.397  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run3 bin-before 11.615 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run3 bin-after 10.936 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run4 bin-before 9.591 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run4 bin-after 11.998 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run5 bin-before 10.055 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+B run5 bin-after 11.753 first_black=0.031  [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+SET-B-DONE
+# SET B (valid) summary. Time = click on "GitHub issue" -> first frame where the loading box is gone and the list is shown
+# (pixel polling every ~30 ms; includes ~60 ms of polling margin). Longest single gh call per run, from the pass-through log:
+#  before: 10.576 10.718 11.615  9.591 10.055 s  median 10.576  (10 gh calls/run, longest 1.43 1.39 1.26 1.10 1.09 s)
+#  after : 10.730 10.722 10.936 11.998 11.753 s  median 10.936  (list pages 10 + description calls, longest 2.22 2.14 1.78 2.19 2.16 s)
+#  ratio after/before = 10.936 / 10.576 = 1.03  (<= 1.5)   no single request over 10 s (longest 2.22 s)   => PASS
+# (Set A above is invalid and not counted; no second set needed.)
