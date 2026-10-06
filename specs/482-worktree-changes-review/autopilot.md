@@ -43,7 +43,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- Done: `speckit-plan` ran; plan.md, research.md (R1-R15), data-model.md, quickstart.md and
+  contracts/{review-wire,review-prompt,changes-view}.md written and committed. No review run yet.
+- Next step: plan review round 1 (tasks/review.md with rubrics/plan.md, session model, fresh
+  reviewer via the scratchpad run-review.sh), then review-rounds.md, then set **Next step** to
+  `tasks unit` and return DONE, PR none.
+- Open findings: none. PR: none.
+- Handed over at the 150k context cap.
 
 ## Open escalation
 
