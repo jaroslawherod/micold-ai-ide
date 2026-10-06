@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #613
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
-- **Phase**: verify
-- **Next step**: M1 scoped gate + review A round 2 on the fix diff, then review B, full gate, push
+- **Phase**: implement
+- **Next step**: orchestrator updates PR #618 body with the M1 section and waits on CI; then milestone M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | in progress |
+| M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | — | todo |
 | M3 | T032–T045 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
@@ -51,6 +51,7 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | Tasks | 1 | 9a5fcef479387b7f6b0609e566bbd79d671c39aa:14028ac91c0fbb74f7f5b7af762b1d64d48359b8 | CHANGES: 1 MAJOR (T006 [P] on a shared file), 2 MINOR — all fixed, prose only (task markers, Verify line, checklist tick); review done |
 | M1 A (code-review high) | 1 | not taken (tree before 3a651085; HEAD 6a9d2397 + T010/T020 work) | 10 findings: F2 spinner-lifted turn never started the clock (MAJOR, fixed + test); F1, F3–F10 declined (below) |
 | M1 A (code-review, sonnet, fix diff) | 2 | 6a9d2397..b67fb7b7 | CLEAN after triage: 7 findings, none holds as BLOCKER/MAJOR (declined below) |
+| M1 B (conformance, sonnet) | 1 | 89404f970ba2ec63f2c289d34bcb7bd0b433a7ef:b67fb7b7987edfecaa9cb8ac3db962a33c9d5acf | CHANGES: 1 MAJOR (no red runs for cycles 4–7): fixed with stub red runs logged in cycle-log; MINOR (010 hooks.md edit, required by T015) noted. Verify output all green. Fix touches only the TDD log: no re-run |
 
 ## Declined review findings
 

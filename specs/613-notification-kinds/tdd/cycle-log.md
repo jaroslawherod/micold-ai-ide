@@ -47,7 +47,9 @@ assertion's failure; where only a field or variant was missing, the red is the c
 
 - **Tests**: `crates/micold-daemon/src/catalog.rs` — `notify_tests::*`: `notify(kind)` is the master
   switch AND the kind's own switch; `persist_service_settings` keeps the stored `notification_kinds`.
-- **Red**: written with the code in commit 6a9d2397 (unit 2, WIP); the red run was not logged.
+- **Red** (recorded in unit 3 by stubbing `Catalog::notify` to the master switch alone; tests were
+  written with the code in 6a9d2397): `cargo test -p micold-daemon --lib catalog` → `FAILED. 2 passed;
+  1 failed`, `notify_follows_each_kind_while_the_master_switch_is_on` (catalog.rs:1358).
 - **Green**: `cargo test -p micold-daemon --lib` attention/activity/hooks/catalog → 47 passed.
 - **Refactor**: none needed.
 
@@ -56,7 +58,11 @@ assertion's failure; where only a field or variant was missing, the red is the c
 - **Tests**: `activity.rs::turn_change_maps_each_event`,
   `a_spinner_is_work_only_when_it_lifted_the_signal`; `hooks.rs` SubagentStop → `Ignored`, not
   registered; `tests/hooks_receiver.rs`.
-- **Red**: written with the code in commit 6a9d2397; the red run was not logged.
+- **Red** (recorded in unit 3 by stubbing): `turn_change` → `None`: `--lib activity` `FAILED. 11 passed;
+  2 failed` (`turn_change_maps_each_event`), `--test attention_claims` `FAILED. 7 passed; 12 failed`
+  (`a_long_turn_is_granted_as_long_task_finished`). SubagentStop classified as `Stop` again: `--lib
+  hooks` `FAILED. 6 passed; 1 failed` (`classifies_hook_event_names`), `--test attention_claims`
+  `FAILED. 18 passed; 1 failed` (`a_helper_agent_finishing_changes_nothing`).
 - **Green**: daemon lib 47 passed; `--test hooks_receiver` 5 passed.
 - **Refactor**: none needed.
 
@@ -68,7 +74,10 @@ assertion's failure; where only a field or variant was missing, the red is the c
   (`attention_claims`, `settings_desktop_notifications`, `unread_state`) moved to threshold zero.
 - **Red**: in unit 3 before the last fixes, `attention_claims` had two failures (the supervision
   test expected a grant, now refused per C12; SC-001 claimed only at the end and lost the
-  overwritten kinds). Earlier reds not logged.
+  overwritten kinds). Recorded in unit 3 by stubbing `Views::grant` to ignore `notify`: `--lib
+  attention` → `FAILED. 24 passed; 2 failed`
+  (`with_the_kind_off_now_a_claim_is_refused_and_records_nothing`); `attention_claims` stays green
+  under that stub, since `note_event` already uses up an event whose kind is off.
 - **Green**: `cargo test -p micold-daemon --test attention_claims --test settings_desktop_notifications
   --test unread_state --test hooks_receiver --test attention_events --test copilot_activity
   --test pi_activity` → 18, 14, 11, 5, 8, 10, 16 passed.
@@ -78,7 +87,9 @@ assertion's failure; where only a field or variant was missing, the red is the c
 
 - **Tests**: `crates/micold-client/tests/attention_notify.rs` (grant's kind titles the
   notification); bin `desktop_notify`, `persist`.
-- **Red**: written with the code in commit 6a9d2397; the red run was not logged.
+- **Red** (recorded in unit 3 by stubbing the client to title every grant `TurnFinished`):
+  `cargo test -p micold-client --test attention_notify` → `FAILED. 11 passed; 3 failed`
+  (`a_needs_permission_grant_shows_the_needs_permission_title`).
 - **Green**: `attention_notify` 14 passed; bin tests passed.
 - **Refactor**: none needed.
 
