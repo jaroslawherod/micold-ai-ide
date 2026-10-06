@@ -3680,15 +3680,18 @@ impl DaemonState {
             return;
         }
         let snapshot = history::capture(&pty.term().lock());
-        if let Err(err) = store.save(id, &snapshot) {
-            let reason = err.to_string();
-            let first = self
-                .saver
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .failed(id, Instant::now(), &reason);
-            if first {
-                tracing::warn!(session = %id.0, %reason, "terminal history was not saved");
+        let result = store.save(id, &snapshot);
+        let mut saver = self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match result {
+            Ok(_) => saver.saved(id, Instant::now(), count),
+            Err(err) => {
+                let reason = err.to_string();
+                if saver.failed(id, Instant::now(), &reason) {
+                    tracing::warn!(session = %id.0, %reason, "terminal history was not saved");
+                }
             }
         }
     }

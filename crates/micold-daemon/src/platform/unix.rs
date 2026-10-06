@@ -129,23 +129,29 @@ impl ProcessTree {
 /// reboot), `SIGINT` or `SIGHUP` (a terminal closed under a foreground service). Pending until
 /// then. A later signal changes nothing: the handlers stay installed, so none of them ends the
 /// process by default while the unwind runs (stop-request contract §1).
-pub async fn stop_requested() {
+///
+/// The handlers are installed when this is **called**, not at the first poll, so a signal that
+/// arrives before the accept loop starts is held for it rather than ending the process by its
+/// default action. Call it inside the runtime.
+pub fn stop_requested() -> impl std::future::Future<Output = ()> + Send {
     use tokio::signal::unix::{signal, SignalKind};
     let handlers = (
         signal(SignalKind::terminate()),
         signal(SignalKind::interrupt()),
         signal(SignalKind::hangup()),
     );
-    let (Ok(mut term), Ok(mut int), Ok(mut hup)) = handlers else {
-        tracing::warn!(
-            "could not listen for stop signals; only the idle stop will stop this service"
-        );
-        return std::future::pending().await;
-    };
-    tokio::select! {
-        _ = term.recv() => {}
-        _ = int.recv() => {}
-        _ = hup.recv() => {}
+    async move {
+        let (Ok(mut term), Ok(mut int), Ok(mut hup)) = handlers else {
+            tracing::warn!(
+                "could not listen for stop signals; only the idle stop will stop this service"
+            );
+            return std::future::pending().await;
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+            _ = hup.recv() => {}
+        }
     }
 }
 

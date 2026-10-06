@@ -34,9 +34,17 @@ fn main() {
     }
 }
 
-#[tokio::main]
-async fn start() -> std::io::Result<()> {
-    micold_daemon::run().await
+/// The runtime is built here rather than by `#[tokio::main]` so its end can be bounded: dropping
+/// a runtime waits for every blocking task, and an orderly stop abandons a history save that a
+/// stuck disk never finishes (feature 041, stop-request contract §4). Everything the stop needs has
+/// finished by the time `run` returns, so what is left is given 5 s and then left behind.
+fn start() -> std::io::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let result = runtime.block_on(micold_daemon::run());
+    runtime.shutdown_timeout(std::time::Duration::from_secs(5));
+    result
 }
 
 /// Best-effort: a daemon failing to start has nowhere better to report a failure to log.
