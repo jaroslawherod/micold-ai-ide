@@ -24,7 +24,10 @@ const TERM_VALUE: &str = "xterm-256color";
 /// The result of the most recent attempt to resolve the include script (data-model.md).
 /// An enum (not a `bool` + `Option<String>`) so "failed but has no category" or "succeeded but
 /// also has a failure category" cannot be constructed (Constitution Principle V).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Serializable because the service reports a failed attempt per session directory to its clients
+/// in the catalog snapshot (FR-022, BUG-454: `CatalogSnapshot::env_include_failures`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum EnvIncludeOutcome {
     /// The feature is off, or the configured path is empty/blank (spec Edge Cases). `resolve()`
     /// never returns this itself — it is the caller's short-circuit before invoking `resolve()`

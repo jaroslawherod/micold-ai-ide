@@ -23,7 +23,7 @@ use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
-    RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle, WorktreeSnapshot,
+    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle, WorktreeSnapshot,
     WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ToolServerSupport};
@@ -191,6 +191,10 @@ struct Inner {
     /// first resolve runs: later askers for the directory wait on that one run, and an invalidation
     /// removes the cell whether filled or not, so a resolve in progress fills only a cell nobody
     /// will be served from again (FR-021, BUG-005; see `DaemonState::env_include_vars_for`).
+    ///
+    /// Also the source of the catalog snapshot's `env_include_failures` (FR-022, BUG-454): every
+    /// filled cell whose attempt failed is reported, for as long as the cell is here. Projected
+    /// into what is sent to clients only, never into the catalog file, like `start_failures`.
     env_include_cache: HashMap<PathBuf, EnvIncludeCell>,
     /// One mutual-exclusion gate per project for mutating worktree work (BUG-009, T120). Worktree
     /// creates run as spawned tasks now — they must not park the connection loop that dispatched
@@ -311,6 +315,23 @@ struct ResolvedEnv {
     vars: Vec<(String, String)>,
     /// Which of FR-001's six states the attempt, or the settings that ruled one out, left.
     env: SpawnEnv,
+    /// The attempt's own outcome, with the script's captured output: what a failure reports to
+    /// clients (011 FR-022, BUG-454). `None` when the settings ruled an attempt out.
+    outcome: Option<micold_core::env_include::EnvIncludeOutcome>,
+}
+
+impl ResolvedEnv {
+    /// Whether this is an attempt that failed: what the catalog snapshot reports (FR-022).
+    fn failed(&self) -> bool {
+        self.outcome
+            .as_ref()
+            .is_some_and(|outcome| *outcome != micold_core::env_include::EnvIncludeOutcome::Success)
+    }
+}
+
+/// Whether `cell` holds a finished attempt that failed (FR-022, BUG-454).
+fn holds_failure(cell: &EnvIncludeCell) -> bool {
+    cell.get().is_some_and(ResolvedEnv::failed)
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -920,6 +941,7 @@ impl DaemonState {
                 return ResolvedEnv {
                     vars: micold_core::env_include::merge_with_term(&[]),
                     env,
+                    outcome: None,
                 };
             }
             let cell = Arc::clone(
@@ -934,21 +956,34 @@ impl DaemonState {
                 cell,
             )
         };
-        cell.get_or_init(|| {
-            let (vars, outcome) = micold_core::env_include::resolve(
-                Path::new(&script_path),
-                cwd,
-                std::time::Duration::from_secs(timeout_secs),
-            );
-            if outcome != micold_core::env_include::EnvIncludeOutcome::Success {
-                tracing::warn!(?outcome, cwd = %cwd.display(), "env-include resolution did not succeed");
-            }
-            ResolvedEnv {
-                vars: micold_core::env_include::merge_with_term(&vars),
-                env: attempted(&outcome),
-            }
-        })
-        .clone()
+        let mut failed_here = false;
+        let resolved = cell
+            .get_or_init(|| {
+                let (vars, outcome) = micold_core::env_include::resolve(
+                    Path::new(&script_path),
+                    cwd,
+                    std::time::Duration::from_secs(timeout_secs),
+                );
+                let resolved = ResolvedEnv {
+                    vars: micold_core::env_include::merge_with_term(&vars),
+                    env: attempted(&outcome),
+                    outcome: Some(outcome),
+                };
+                if resolved.failed() {
+                    // The category and the directory only: the captured output stays in memory
+                    // (FR-013), and this log is a file.
+                    tracing::warn!(env = ?resolved.env, cwd = %cwd.display(), "env-include resolution did not succeed");
+                    failed_here = true;
+                }
+                resolved
+            })
+            .clone();
+        // A new failure is news to every open Settings page (FR-022, BUG-454). Off the lock, after
+        // the cell is filled, so the snapshot holds it unless an invalidation already took it.
+        if failed_here {
+            self.broadcast_catalog();
+        }
+        resolved
     }
 
     /// The environment an **AI-CLI** launch runs in: the session's resolved environment
@@ -1073,8 +1108,14 @@ impl DaemonState {
     /// Removes a resolve in progress for `cwd` too, which then answers only the callers already
     /// waiting on it and caches nothing: the invalidation wins, and the next ask resolves afresh
     /// (FR-021, BUG-005).
+    ///
+    /// A cell that held a failure takes its report with it, so every window is sent the catalog
+    /// again (FR-022, BUG-454).
     pub fn invalidate_env_include(&self, cwd: &Path) {
-        self.lock().env_include_cache.remove(cwd);
+        let removed = self.lock().env_include_cache.remove(cwd);
+        if removed.as_ref().is_some_and(holds_failure) {
+            self.broadcast_catalog();
+        }
     }
 
     /// Drop the cached environment-include resolution for `session`'s own directory, so the next
@@ -1112,6 +1153,10 @@ impl DaemonState {
     /// own refusals drop it; what else should is #438's question.
     ///
     /// One short lock for both. Not for a caller that holds the state lock: it is not reentrant.
+    ///
+    /// A failure the dropped cell held leaves the catalog snapshot's `env_include_failures` with it
+    /// (FR-022, BUG-454). Nothing is broadcast here: the start this refuses returns an error, and
+    /// `ops::start_session` broadcasts the catalog for a failed start once it has finished.
     fn refuse_and_forget_env(&self, id: SessionId, cwd: &Path, reason: &str) {
         let mut inner = self.lock();
         inner.start_failures.insert(id, reason.to_string());
@@ -1165,6 +1210,22 @@ impl DaemonState {
     /// come from the durable `worktree_names` overrides.
     fn snapshot_locked(inner: &Inner) -> CatalogSnapshot {
         let mut snapshot = inner.catalog.snapshot();
+        // Each session directory whose cached attempt failed (FR-022, BUG-454), in a stable order.
+        snapshot.env_include_failures = inner
+            .env_include_cache
+            .iter()
+            .filter_map(|(dir, cell)| {
+                let resolved = cell.get()?;
+                let outcome = resolved.outcome.as_ref().filter(|_| resolved.failed())?;
+                Some(EnvIncludeFailure {
+                    dir: dir.clone(),
+                    outcome: outcome.clone(),
+                })
+            })
+            .collect();
+        snapshot
+            .env_include_failures
+            .sort_by(|a, b| a.dir.cmp(&b.dir));
         let overrides = &inner.catalog.workspace().worktree_names;
         for project in &mut snapshot.projects {
             Self::overlay_live_summaries(inner, &mut project.sessions);
@@ -1776,15 +1837,20 @@ impl DaemonState {
         script_path: Option<String>,
         timeout_secs: Option<u64>,
     ) -> std::io::Result<()> {
-        let settings = {
+        let (settings, had_failure) = {
             let mut inner = self.lock();
             inner
                 .catalog
                 .set_env_include(enabled, script_path, timeout_secs)?;
+            let had_failure = inner.env_include_cache.values().any(holds_failure);
             inner.env_include_cache.clear();
-            inner.catalog.settings_wire()
+            (inner.catalog.settings_wire(), had_failure)
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
+        // The failures went with the cache (FR-022, BUG-454).
+        if had_failure {
+            self.broadcast_catalog();
+        }
         Ok(())
     }
 

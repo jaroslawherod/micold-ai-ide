@@ -1733,6 +1733,30 @@ fn lines_011(
     lines
 }
 
+/// The lines for each session directory whose own resolution by the service failed (011 FR-022,
+/// BUG-454), shown right after [`script_path_notice`]'s: per directory, 011's category label
+/// naming the directory, then what the script printed there when it printed anything.
+///
+/// `failures` is the service's list from the latest catalog snapshot; `last` is the outcome the
+/// note above reports. A directory whose outcome equals it is folded into that note rather than
+/// repeated, so an absolute path missing everywhere still reads as one note.
+pub fn directory_failure_lines(
+    failures: &[micold_core::protocol::messages::EnvIncludeFailure],
+    last: &micold_core::env_include::EnvIncludeOutcome,
+) -> Vec<NoticeLine> {
+    failures
+        .iter()
+        .filter(|failure| failure.outcome != *last)
+        .flat_map(|failure| {
+            let mut lines = lines_011(&failure.outcome, None);
+            if let Some(NoticeLine::Caution(category)) = lines.first_mut() {
+                *category = format!("{category} in {}", failure.dir.display());
+            }
+            lines
+        })
+        .collect()
+}
+
 // --- Where a CLI is missing, and what to say about it (027 FR-023b, 037 FR-006) ---
 
 /// The sentence shown where an image is chosen and where a CLI is chosen, when a session would not

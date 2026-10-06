@@ -1685,6 +1685,89 @@ mod script_path_notice_on {
     }
 }
 
+// --- 011 BUG-454: each session directory whose own resolution failed (FR-022) ---
+
+mod directory_failure_lines {
+    use super::script_path_notice_off::{caution, non_zero_exit, note, timed_out, DIAGNOSTIC};
+    use micold_client::features::settings::directory_failure_lines;
+    use micold_core::env_include::EnvIncludeOutcome;
+    use micold_core::protocol::messages::EnvIncludeFailure;
+    use std::path::PathBuf;
+
+    const DIR_A: &str = "/work/app/.claude/worktrees/feat-a";
+    const DIR_B: &str = "/work/other";
+
+    fn failure(dir: &str, outcome: EnvIncludeOutcome) -> EnvIncludeFailure {
+        EnvIncludeFailure {
+            dir: PathBuf::from(dir),
+            outcome,
+        }
+    }
+
+    /// Each failing directory gets a caution naming it and FR-013's category label, then a note
+    /// holding what the script printed there.
+    #[test]
+    fn each_failing_directory_is_named_with_its_category_and_its_output() {
+        let failures = [failure(DIR_A, non_zero_exit()), failure(DIR_B, timed_out())];
+        assert_eq!(
+            directory_failure_lines(&failures, &EnvIncludeOutcome::Success),
+            vec![
+                caution(&format!("Exited with an error in {DIR_A}")),
+                note(DIAGNOSTIC),
+                caution(&format!("Timed out in {DIR_B}")),
+                note(DIAGNOSTIC),
+            ]
+        );
+    }
+
+    /// A missing script has no output, and an attempt that printed nothing adds no empty note.
+    #[test]
+    fn a_failure_with_no_output_has_no_note() {
+        let failures = [
+            failure(DIR_A, EnvIncludeOutcome::MissingScript),
+            failure(
+                DIR_B,
+                EnvIncludeOutcome::NonZeroExit {
+                    code: 2,
+                    diagnostic: String::new(),
+                },
+            ),
+        ];
+        assert_eq!(
+            directory_failure_lines(&failures, &EnvIncludeOutcome::Success),
+            vec![
+                caution(&format!("Script not found in {DIR_A}")),
+                caution(&format!("Exited with an error in {DIR_B}")),
+            ]
+        );
+    }
+
+    /// A directory whose failure is the one the representative note above already shows is folded
+    /// into it (FR-022 MAY): an absolute path missing everywhere still reads as one note.
+    #[test]
+    fn a_failure_equal_to_the_representative_note_is_folded_into_it() {
+        let failures = [
+            failure(DIR_A, EnvIncludeOutcome::MissingScript),
+            failure(DIR_B, non_zero_exit()),
+        ];
+        assert_eq!(
+            directory_failure_lines(&failures, &EnvIncludeOutcome::MissingScript),
+            vec![
+                caution(&format!("Exited with an error in {DIR_B}")),
+                note(DIAGNOSTIC),
+            ]
+        );
+    }
+
+    #[test]
+    fn no_failures_say_nothing() {
+        assert_eq!(
+            directory_failure_lines(&[], &non_zero_exit()),
+            Vec::<micold_client::features::settings::NoticeLine>::new()
+        );
+    }
+}
+
 // ---- The diff layout (feature 482, T042, R12, contracts/changes-view.md D1) ----
 
 use micold_client::features::changes::{self, Effect as ChangesEffect, Msg as ChangesMsg};

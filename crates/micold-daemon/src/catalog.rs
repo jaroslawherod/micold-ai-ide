@@ -259,6 +259,10 @@ impl Catalog {
             schema_version: 1,
             last_active: self.workspace.active.clone(),
             projects,
+            // Runtime-only (011 FR-022): `DaemonState::snapshot_locked` fills it from the
+            // per-directory cache, which the catalog does not hold, so the catalog's own snapshot
+            // never carries it.
+            env_include_failures: Vec::new(),
         }
     }
 

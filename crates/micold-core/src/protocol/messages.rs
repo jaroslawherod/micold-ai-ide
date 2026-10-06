@@ -1210,6 +1210,27 @@ pub struct CatalogSnapshot {
     pub last_active: Option<PathBuf>,
     /// The projects.
     pub projects: Vec<ProjectSnapshot>,
+    /// Every session directory whose environment-include resolution by the service failed, sorted
+    /// by directory (011 FR-022, BUG-454). Runtime-only: the service projects it from its
+    /// per-directory cache at send time and never writes it to the catalog file, so it holds the
+    /// script's captured output only in memory (FR-013).
+    ///
+    /// Left out of the encoding when empty, and read back empty when absent. That keeps a frame
+    /// with nothing to report as it was; it does not make an older peer compatible, which the
+    /// handshake refuses on `PROTOCOL_VERSION` and `SCHEMA_HASH` anyway.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env_include_failures: Vec<EnvIncludeFailure>,
+}
+
+/// One session directory whose environment-include resolution failed (011 FR-022, BUG-454): the
+/// directory the script was sourced in, and the outcome of that attempt — never `Success` or
+/// `Disabled`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnvIncludeFailure {
+    /// The directory the script was sourced in.
+    pub dir: PathBuf,
+    /// The failed attempt's outcome: its category and captured output.
+    pub outcome: crate::env_include::EnvIncludeOutcome,
 }
 
 /// A project within a [`CatalogSnapshot`].
