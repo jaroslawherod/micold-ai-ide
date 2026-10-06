@@ -1492,10 +1492,12 @@ the scrollback limit is dropped, oldest lines first.
 - The history is also kept across a restart of the background service, or of the computer, when the
   session was stopped or its process had exited before the restart. The service saves it to disk at
   that moment.
+- After **Restart service**, after a logout or a reboot on Linux and macOS, and after the service
+  stopped itself because no window was open for 30 minutes, no output is missing: the service saves
+  every running terminal before it stops, and waits at most 3 seconds for that.
 - A session that is still running is saved at most every 30 seconds, and only when it printed
   something new. So after a crash or a power loss, up to the last minute of its output can be
-  missing from the restored history. Stopping the service in an orderly way is not covered by this
-  yet.
+  missing from the restored history. An orderly stop is not affected: see above.
 - The saved histories are on your own computer only, one file per session in a `terminal-history`
   folder: `~/.local/share/micold-ai-ide` on Linux, `~/Library/Application Support/micold-ai-ide`
   on macOS, and `%LOCALAPPDATA%\micold-ai-ide\data` on Windows (the local profile, never the

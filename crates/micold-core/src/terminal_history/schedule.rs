@@ -42,6 +42,12 @@ impl SaveSchedule {
         self.saved_count = Some(output_count);
     }
 
+    /// Whether output has come since the last save, however recent that was. The orderly stop
+    /// saves what changed and ignores the spacing (FR-004).
+    pub fn needs_save(&self, output_count: u64) -> bool {
+        self.saved_count != Some(output_count)
+    }
+
     /// A save was tried at `now` and failed: it is due again [`SAVE_SPACING`] later (FR-007).
     pub fn failed(&mut self, now: Instant) {
         self.last_attempt = Some(now);

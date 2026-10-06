@@ -124,3 +124,54 @@ impl ProcessTree {
         }
     }
 }
+
+/// Completes when the process is asked to stop: `SIGTERM` (the service manager, `kill`, logout,
+/// reboot), `SIGINT` or `SIGHUP` (a terminal closed under a foreground service). Pending until
+/// then. A later signal changes nothing: the handlers stay installed, so none of them ends the
+/// process by default while the unwind runs (stop-request contract §1).
+pub async fn stop_requested() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let handlers = (
+        signal(SignalKind::terminate()),
+        signal(SignalKind::interrupt()),
+        signal(SignalKind::hangup()),
+    );
+    let (Ok(mut term), Ok(mut int), Ok(mut hup)) = handlers else {
+        tracing::warn!(
+            "could not listen for stop signals; only the idle stop will stop this service"
+        );
+        return std::future::pending().await;
+    };
+    tokio::select! {
+        _ = term.recv() => {}
+        _ = int.recv() => {}
+        _ = hup.recv() => {}
+    }
+}
+
+#[cfg(test)]
+mod stop_request_tests {
+    use super::stop_requested;
+    use std::time::Duration;
+
+    /// U85, SR §1: the future is pending until the process receives `SIGTERM`, then completes;
+    /// a second signal while it is completed changes nothing.
+    #[tokio::test]
+    async fn stop_requested_waits_for_sigterm_and_a_second_signal_changes_nothing() {
+        let mut stop = Box::pin(stop_requested());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(150), &mut stop)
+                .await
+                .is_err(),
+            "completed with no signal"
+        );
+        // SAFETY: signals this process, which the future above has a handler for.
+        unsafe { libc::kill(libc::getpid(), libc::SIGTERM) };
+        tokio::time::timeout(Duration::from_secs(5), &mut stop)
+            .await
+            .expect("completes on SIGTERM");
+        // SAFETY: as above; the handler stays installed after the future completed.
+        unsafe { libc::kill(libc::getpid(), libc::SIGTERM) };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}

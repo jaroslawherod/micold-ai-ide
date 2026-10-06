@@ -20,12 +20,12 @@
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
-pub use unix::ProcessTree;
+pub use unix::{stop_requested, ProcessTree};
 
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use windows::ProcessTree;
+pub use windows::{stop_requested, ProcessTree};
 
 /// Fallback for exotic targets with neither Unix signals nor Windows job objects: reaping the direct
 /// child (the caller's own `child.kill()`) is the best available, so teardown is a no-op.
@@ -52,6 +52,12 @@ impl ProcessTree {
 
     /// Nothing beyond the direct child to terminate.
     pub fn terminate(&self) {}
+}
+
+/// No Unix signals and no Windows stop request here: nothing asks this process to stop.
+#[cfg(not(any(unix, windows)))]
+pub async fn stop_requested() {
+    std::future::pending().await
 }
 
 /// Write `bytes` to `dir/file` so that only the user running the service can read it, creating
