@@ -44,6 +44,7 @@ click (story 3); `activation` with the Wayland slice.
 | N7 | A backend that cannot learn of a click still shows the notification. | FR-015 |
 | N8 | No backend registers the application to be started by a click, and the client accepts no argument that names a session. | FR-015a |
 | N9 | A click is reported to the window that raised the notification, and to no other. When that window has closed, the click is reported to nobody: the windows still open do not change, and the session keeps its unread mark (research R6, Known limit). | FR-015 |
+| N9a | Linux: an id in the table belongs to the unique bus name that answered its `Notify` call. A signal whose sender is another name is nothing, whatever its id. When `org.freedesktop.Notifications` changes owner (`NameOwnerChanged` from `org.freedesktop.DBus`), the old owner's entries are dropped and the new owner's kept. The match rule names `sender='org.freedesktop.Notifications'`; the check above does not rest on it. *(BUG-566)* | FR-015b |
 
 ## Raising the window
 
@@ -76,7 +77,7 @@ with the step `ActivationWatch::settled(check)` gives, on the window that reques
 
 | OS | Module | Shows with | Reports a click by | Registration |
 |---|---|---|---|---|
-| Linux | `linux.rs` | `zbus`: `org.freedesktop.Notifications.Notify`, action `default`, hint `desktop-entry = micold-ai-ide` | signals `ActivationToken` then `ActionInvoked("default")`, matched by notification id | none |
+| Linux | `linux.rs` | `zbus`: `org.freedesktop.Notifications.Notify`, action `default`, hint `desktop-entry = micold-ai-ide` | signals `ActivationToken` then `ActionInvoked("default")`, matched by notification id and by the service that numbered it (N9a) | none |
 | macOS | `macos.rs` | `mac-usernotifications`: `UNUserNotificationCenter` | the crate's delegate response | bundle identifier; authorisation asked on first use |
 | Windows | `windows.rs` | `tauri-winrt-notification`: `Toast::new("MicoldAiIde.Client")` | the `on_activated` callback, called with `None` for a click on the body, on a system thread | `AppUserModelID` on the Start-menu shortcut (`packaging/windows/micold-ai-ide.iss`) |
 

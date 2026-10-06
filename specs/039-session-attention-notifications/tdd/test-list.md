@@ -385,6 +385,9 @@ the step T122 adds to `.github/workflows/ci.yml`; their red phase is that step's
 | U164 | Linux: another action key maps to no event | FR-011 | example | DONE | T078 / T085 |
 | U165 | Linux: `NotificationClosed` removes the id from the table | FR-015 | example | DONE | T078 / T085 |
 | U166 | Linux: an `ActivationToken` signal that precedes `ActionInvoked` for the same id is carried as `activation: Some(token)`; without it `activation` is `None` | FR-011 | example | DONE | T095 / T099 |
+| U179 | Linux: a signal for an id in the table, from a sender other than the one that answered its `Notify`, is nothing and leaves the entry and its token as they were; from that sender it is the click (BUG-566) | FR-015b | example | TODO | T124 / T125 |
+| U180 | Linux: after the service's owner changes, the new owner's signal for an id the old owner gave is nothing (BUG-566) | FR-015b | example | TODO | T124 / T125 |
+| U181 | Linux: `NameOwnerChanged` for `org.freedesktop.Notifications` from `org.freedesktop.DBus` drops the old owner's entries and keeps the new owner's; the same signal from another sender, or for another name, drops nothing (BUG-566) | FR-015b | example | TODO | T124 / T125 |
 | U167 | macOS: a `DesktopNotification` maps to the title and message passed to the system | FR-004, FR-029 | example | DONE | T035 / T039 |
 | U168 | macOS: each error of the notification crate (no bundle, authorisation refused) maps to a `NotifyError` | FR-010 | example | DONE | T035 / T039 |
 | U169 | macOS: a response with the default action maps to `Activated` | FR-011 | example | DONE | T079 / T086 |

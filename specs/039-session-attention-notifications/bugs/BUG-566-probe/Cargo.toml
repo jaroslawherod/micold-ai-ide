@@ -1,0 +1,11 @@
+[package]
+name = "probe566"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone: not a member of the repository workspace.
+[workspace]
+
+[dependencies]
+zbus = { version = "=5.19.0", default-features = false, features = ["blocking-api", "async-io"] }
