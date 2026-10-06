@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M2 handover: review A + scoped gate, review B, full gate, push (see Handover)
+- **Next step**: M2 reviews and full gate, then push to #618
 
 ## Pull requests
 
@@ -53,6 +53,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M1 A (code-review, sonnet, fix diff) | 2 | 6a9d2397..b67fb7b7 | CLEAN after triage: 7 findings, none holds as BLOCKER/MAJOR (declined below) |
 | M1 B (conformance, sonnet) | 1 | 89404f970ba2ec63f2c289d34bcb7bd0b433a7ef:b67fb7b7987edfecaa9cb8ac3db962a33c9d5acf | CHANGES: 1 MAJOR (no red runs for cycles 4–7): fixed with stub red runs logged in cycle-log; MINOR (010 hooks.md edit, required by T015) noted. Verify output all green. Fix touches only the TDD log: no re-run |
 | D4 amendment (spec+plan+tasks) | 1 | 4bd5df0c073ae15298790294ebe96cd38024d535:ec36c53871c732e3d4854660c23eee980c818a81 | CHANGES: 1 MAJOR (T066 must reword M1's "a minute or more" in settings.md:157), 2 MINOR (plan supporting text; name `effective_long_task_threshold()`) — all fixed, prose only (task/plan wording); review done |
+| M2 A (code-review high) | 1 | 39cd0b1ee3295d1f961bdf985a1671a9b4525567:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CHANGES: 1 MAJOR (open point decided: suppress the give-up notice after a reported error, FR-007) — fixed + test (cycle 10), C7 reworded |
 
 ## Declined review findings
 
@@ -76,18 +77,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-M2 unit hit the 150k context cap after implementing. **Done**: T021–T031 implemented and ticked
-in dc6ac923 (protocol 31 `SessionErrorNotice`; `ActivityEvent::Ended { error }`;
-`Views::error_notice_target`; `DaemonState::error_notice` called from the GiveUp arm and from
-`note_activity`; client `State::session_error_notice(_ification)` + daemon_sync arm; user guide
-settings.md). TDD cycle 9 logged with red and green runs; targeted Verify tests green (only the
-known root-only permission tests fail locally). **Next**: scoped gate detached with review A
-(`code-review` high on origin/main...HEAD) in its shadow; then review B (conformance, sonnet);
-no visual pass (no GUI change, only a desktop notification through the existing path); full gate
-(raw mise.toml `gate` commands, CARGO_INCREMENTAL=0); push to #618; write
-$SCRATCHPAD/pr-613-body-M2.md. **Open point for review**: C7 is applied literally, so a Copilot
-session whose CLI reported an error and later crash-loops to give-up gets a second notice. Not
-pushed: no green full gate yet.
+None.
 
 ## Open escalation
 

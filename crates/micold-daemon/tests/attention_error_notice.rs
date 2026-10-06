@@ -37,7 +37,7 @@ use uuid::Uuid;
 type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 const OWED: Duration = Duration::from_secs(10);
-const NONCE: u64 = 0x0613_e;
+const NONCE: u64 = 0x613e;
 
 /// Point the platform shell, which every respawn runs, at a command that exits 1.
 fn respawns_crash() {
@@ -308,6 +308,25 @@ async fn a_give_up_sends_one_notice_to_the_focused_window_only() {
     let after = service.summary();
     assert_eq!(after.attention_seq, before.attention_seq);
     assert!(!after.unread, "an error does not mark the session unread");
+}
+
+/// C7, FR-007: a session whose CLI already reported its error ending and then crash-loops to
+/// give-up sends one notice in all, for the reported error, and none for the give-up.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_give_up_after_a_reported_error_sends_no_second_notice() {
+    respawns_crash();
+    let (service, _live) = Service::exiting(1);
+    let mut window = connect(&service.state, "window").await;
+    reports(&mut window, true, None).await;
+    service.note(ActivityEvent::Ended {
+        reason: "upstream request failed".into(),
+        error: true,
+    });
+    assert_eq!(notices(&mut window).await, [service.notice()]);
+
+    service.crash_until_give_up();
+
+    assert_eq!(notices(&mut window).await, []);
 }
 
 /// C9, Edge Cases "repeated crashes": a crash the service restarts sends nothing.

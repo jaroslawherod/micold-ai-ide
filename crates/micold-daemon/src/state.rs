@@ -3217,9 +3217,17 @@ impl DaemonState {
                     Some((project, SupervisionAction::GiveUp, _, mode, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
+                        // `Ended` is absorbing and survives a respawn, so a session the CLI
+                        // already reported ended (C8) had its one notice then (FR-007).
+                        let already_ended = inner.sessions.get(&id).is_some_and(|live| {
+                            matches!(live.activity.signal(), ActivitySignal::Ended { .. })
+                        });
                         Self::note_ended(&mut inner, id, "crash loop");
-                        // An error ending (feature 613, C7).
-                        if let Some(notice) = Self::error_notice(&inner, &project, id) {
+                        // An error ending (feature 613, C7), unless the session had already ended.
+                        if let Some(notice) = (!already_ended)
+                            .then(|| Self::error_notice(&inner, &project, id))
+                            .flatten()
+                        {
                             notices.push(notice);
                         }
                         to_drop.push((id, mode == TerminalMode::AiCli));

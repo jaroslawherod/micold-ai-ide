@@ -25,7 +25,7 @@ Data model: [../data-model.md](../data-model.md).
 
 | # | Rule |
 |---|---|
-| C7 | `SupervisionAction::GiveUp` in the supervision tick is an error ending. |
+| C7 | `SupervisionAction::GiveUp` in the supervision tick is an error ending, unless the session had already ended (a CLI-reported error ending, C8, had its one notice then; FR-007). |
 | C8 | `ActivityEvent::Ended { error: true }` applied to a live session whose signal was not already `Ended` is an error ending. `copilot_event` sets `error: true` for `session.error` only. |
 | C9 | `SupervisionAction::Stop` (clean exit), `Ended { error: false }`, a user stop or close, and an abnormal exit followed by `Restart` are not. |
 

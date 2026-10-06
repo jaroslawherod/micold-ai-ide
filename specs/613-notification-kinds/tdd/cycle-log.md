@@ -124,3 +124,13 @@ assertion's failure; where only a field or variant was missing, the red is the c
   `attention_claims` 19, `activity_ended` 2 passed; client `attention_notify` 16 passed;
   `micold-core --all-targets` green but for the root-only permission tests.
 - **Refactor**: none needed.
+
+## Cycle 10 — M2 review A F1: a give-up after a reported error sends no second notice (C7, FR-007)
+
+- **Test**: `tests/attention_error_notice.rs`
+  `a_give_up_after_a_reported_error_sends_no_second_notice`.
+- **Red**: `attention_error_notice` → `FAILED. 9 passed; 1 failed` (`left: [SessionErrorNotice
+  {..}]`, `right: []`): the give-up sent a second notice.
+- **Green**: the GiveUp arm reads whether the session had already ended before `note_ended`, and
+  sends no notice if it had; `attention_error_notice` 10 passed.
+- **Refactor**: none needed.
