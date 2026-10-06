@@ -456,3 +456,31 @@ fn snapshot(
         (0..s.len()).map(|i| s.shown(i)).collect(),
     )
 }
+
+// ---------------------------------------------------------------------------------------------
+// One opener, one panel (#548)
+// ---------------------------------------------------------------------------------------------
+
+/// Pressing one opener must open one panel. The gallery's overlay always carries the closed
+/// overflow menu as its first surface, so an open pose adds exactly one more; the context menu
+/// used to add two (one per anchor) behind a single opener, which read as a duplicate render.
+#[test]
+fn each_opener_opens_exactly_one_panel() {
+    use micold_client::showcase::sections::floating::surfaces;
+    let roles = micold_core::tokens::roles(ColorScheme::Light);
+    for open in [
+        Floating::Modal,
+        Floating::ContextMenu,
+        Floating::ContextMenuBottom,
+        Floating::ProjectSwitcher,
+        Floating::MenuWithNote,
+    ] {
+        let mut s = showcase();
+        s.update(Message::Opened(open));
+        assert_eq!(
+            surfaces(&s, roles).len(),
+            2,
+            "{open:?} opens one panel beside the always-present closed menu"
+        );
+    }
+}
