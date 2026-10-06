@@ -371,6 +371,8 @@ fn sample_catalog() -> CatalogSnapshot {
             }],
             sessions: vec![sample_summary()],
         }],
+        // Empty here: the per-directory failures have their own round-trip test below (BUG-454).
+        env_include_failures: Vec::new(),
     }
 }
 
@@ -1105,6 +1107,54 @@ fn a_send_input_confirmation_has_no_field_that_can_carry_the_input_text() {
         serde_json::from_str::<ConfirmOperation>(with_text).is_err(),
         "a SendInput carrying text must not decode"
     );
+}
+
+/// 011 FR-022, BUG-454: the service's per-directory environment-include failures ride in the catalog
+/// snapshot, each with its category and the script's captured output, so the Settings page can say
+/// which session directories got no environment and why.
+#[test]
+fn per_directory_env_include_failures_round_trip_in_the_catalog_snapshot() {
+    use micold_core::env_include::EnvIncludeOutcome;
+    use micold_core::protocol::messages::EnvIncludeFailure;
+
+    let mut catalog = sample_catalog();
+    catalog.env_include_failures = vec![
+        EnvIncludeFailure {
+            dir: PathBuf::from("/a/.claude/worktrees/feat-x"),
+            outcome: EnvIncludeOutcome::NonZeroExit {
+                code: 3,
+                diagnostic: "mise: config not trusted".into(),
+            },
+        },
+        EnvIncludeFailure {
+            dir: PathBuf::from("/b"),
+            outcome: EnvIncludeOutcome::TimedOut {
+                diagnostic: "still waiting".into(),
+            },
+        },
+        EnvIncludeFailure {
+            dir: PathBuf::from("/c"),
+            outcome: EnvIncludeOutcome::MissingScript,
+        },
+    ];
+    json_roundtrip(&DaemonMsg::CatalogChanged { catalog });
+}
+
+/// The list is optional in the encoding (`serde(default)`): a snapshot with no failures carries no
+/// field, and one encoded without the field reads back with an empty list. That keeps every
+/// catalog frame of a service with nothing to report as it was; it does not make an older peer
+/// compatible, which the handshake's version and schema check refuses anyway.
+#[test]
+fn a_catalog_snapshot_without_env_include_failures_reads_back_with_none() {
+    let catalog = sample_catalog();
+    let encoded = serde_json::to_value(&catalog).expect("json encode");
+    assert!(
+        encoded.get("env_include_failures").is_none(),
+        "an empty list is not encoded: {encoded}"
+    );
+    let back: CatalogSnapshot = serde_json::from_value(encoded).expect("json decode");
+    assert!(back.env_include_failures.is_empty());
+    assert_eq!(back, catalog);
 }
 
 /// Feature 482 (T007, contracts/review-wire.md): every review message and the diff layout setting

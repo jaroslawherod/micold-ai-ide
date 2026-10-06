@@ -117,7 +117,9 @@
 /// `DaemonSettings` and `ClientMsg::SettingsSet` (wire W5.3, W5.4, W5.6): the per-kind switches and
 /// the long-task threshold, held by the service for every window. An older peer would fail to
 /// decode either.
-pub const PROTOCOL_VERSION: u32 = 34;
+/// And 34 → 35 for `CatalogSnapshot::env_include_failures` (feature 011 BUG-454, FR-022): the
+/// service reports each session directory whose environment-include resolution failed.
+pub const PROTOCOL_VERSION: u32 = 35;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

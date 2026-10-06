@@ -239,7 +239,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 33 → 34 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
 /// `DaemonSettings` and `SettingsSet` (wire W5.3, W5.4, W5.6): the service holds the per-kind
 /// switches and the long-task threshold for every window. An older peer cannot decode them.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 34;
+///
+/// And 34 → 35 for feature 011 BUG-454's `CatalogSnapshot::env_include_failures`: the service
+/// reports each session directory whose environment-include resolution failed.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 35;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -464,9 +467,6 @@ fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
              message set that carries the kind switches and the long-task threshold"
         );
     }
-    assert_eq!(
-        micold_core::protocol::version::PROTOCOL_VERSION,
-        34,
-        "W5.3, W5.4 and W5.6 are version 34"
-    );
+    // The number itself is pinned once, by `FEATURE_026_PROTOCOL_VERSION` above: BUG-454 took 35
+    // after this, so this test checks only what version 34 added.
 }
