@@ -428,6 +428,12 @@ pub fn menu_toggled(
     crate::features::surface_opened(state.worktree.menu_open.is_some(), WorktreeContextMenu::ID)
 }
 
+/// Close the worktree context menu, as a pick from it does (feature 482: **Review changes** opens
+/// the Changes view and the menu goes).
+pub fn close_menu(state: &mut crate::app::State) {
+    crate::overlay::registry::dismiss(state, WorktreeContextMenu::ID);
+}
+
 /// The worktree context menu was dismissed.
 pub fn menu_dismissed(state: &mut crate::app::State) {
     state.worktree.menu_open = None;
