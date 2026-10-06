@@ -140,7 +140,10 @@ a session is now running in that worktree and that its first input is the review
    first input, and the comments become sent.
 2. **Given** the session fails to start, **When** the user chooses Send to session, **Then** an
    error says so and every comment stays pending.
-3. **Given** a worktree with more than one running session, **When** the user chooses Send to
+3. **Given** a send in progress for a worktree, **When** the user chooses Send to session again in
+   the same or a second window, **Then** the action is unavailable and each comment reaches the
+   session exactly once.
+4. **Given** a worktree with more than one running session, **When** the user chooses Send to
    session, **Then** [NEEDS CLARIFICATION: which session receives the prompt when several run, and
    whether a stopped session is resumed or a new one started when none runs: ask each time, the
    most recently active one, or always a new session?].
@@ -227,7 +230,7 @@ check the list and the diff update; then clear the sent comments and check only 
   from: the repository's default branch (remote HEAD), the project root's checked-out branch, or a
   user choice?]. The "Default" entry MUST list uncommitted changes only.
 - **FR-004**: The view MUST have two independent toggles, committed and uncommitted, both on by
-  default; the list and diffs MUST show only the kinds switched on, and a file changed in both
+  default (the "Default" entry has only uncommitted, per FR-003); the list and diffs MUST show only the kinds switched on, and a file changed in both
   appears once with the combined change.
 - **FR-005**: Uncommitted changes MUST include staged changes, unstaged changes and untracked files
   that are not ignored.
