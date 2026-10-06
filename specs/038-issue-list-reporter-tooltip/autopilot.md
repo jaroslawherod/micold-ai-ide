@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #576 | M4: a rest-delay, three-line tooltip in the component library | merged | 01cc704d9119af8caed874c9585f5767a95a11c1 |
 | #603 | M5: description tooltip on issue rows, second pass | merged | 2b367040d63ee74151687f2fb47dd7fd4b63671f |
 | #605 | M6: quickstart B recorded, SC-008 measured | merged | 89408097dbb2052a2915d7dbca74ad4799be4fa9 |
-| #PR | Close: tdd-verify remediation (T064-T070), spec closed | open | |
+| #606 | Close: tdd-verify remediation (T064-T070), spec closed | open | |
 
 ## Milestones
 
