@@ -617,8 +617,8 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     let scan = scan();
     assert_eq!(
         scan.variants.len(),
-        18,
-        "the root vocabulary is 13 feature wrappers and 5 cross-cutting variants (SC-002); the \
+        19,
+        "the root vocabulary is 14 feature wrappers and 5 cross-cutting variants (SC-002); the \
          scan found {:?}",
         scan.variants.iter().map(|v| &v.name).collect::<Vec<_>>()
     );

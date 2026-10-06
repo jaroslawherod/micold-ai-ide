@@ -7493,7 +7493,6 @@ mod bug_574_out_of_date_is_measured {
         );
     }
 }
-}
 
 // ---- Feature 040, T025: the pull request reading, through the shell --------------------------
 //

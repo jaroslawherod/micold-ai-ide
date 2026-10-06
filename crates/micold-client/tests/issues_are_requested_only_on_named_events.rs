@@ -96,6 +96,12 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "038 U99 (FR-024): the reducer accepted a page of that pass and awaits the one after it. \
          A stale page, the last page, the cap and a failure await none.",
     ),
+    (
+        "crates/micold-client/src/shell/pr_status.rs",
+        "let tooling = app.caps.issue_tooling();",
+        "040: reads the pull request source's factory off the same capability; it reads pull \
+         requests, not issues, and is itself gated by pr_status_is_read_only_on_named_events.",
+    ),
 ];
 
 fn repo_root() -> PathBuf {
