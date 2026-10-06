@@ -119,3 +119,5 @@ None.
 - From review A of M2 (MINOR, not fixed): `owner_only::ensure_dir` on Unix removes only group and other bits; the daemon's old helper forced `0700`. A tool-server binding directory left `0500` now fails the write instead of being reopened, and a refused `chmod` on a directory the service does not own fails the save. Decide in M9 (the mounted history directory).
 - CI is the first run of the `cfg(windows)` tests added in M2 (`owner_only` U57 and U58, `history_dir()` U54): they are only compiled here.
 - To confirm in M3: a restore at scrollback limit N shows the most recent N-1 lines and the separator, because `history::seed` counts the separator inside the limit (A5 and U60 assert that). If FR-012 means N lines and the separator, `seed` changes.
+
+- RED CI run 37519388539 (windows): ConPTY throughput (10 busy sessions reached line ~565 in 10 s) starved the test setup wait, not the 3.5 s unwind bound; Windows now prints 500 lines. Attempt 1; gate green (gh desktop-launch test skipped via MICOLD_SKIP_GH_LAUNCH_TEST=1, local env only).
