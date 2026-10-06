@@ -68,6 +68,17 @@ pub(super) fn banner_image(kind: NotificationKind, icons: &IconFiles) -> Option<
     icons.path(kind).map(|path| path.display().to_string())
 }
 
+/// A copy of the icon file at `source`, for one banner to attach: the system moves an attached
+/// file into its own store (`UNNotificationAttachment`), so the run's shared file would be gone
+/// after the first banner of its kind. `None`, and the banner is shown without an icon, when the
+/// copy cannot be made (FR-016).
+pub(super) fn attachable_copy(source: &str, dir: &std::path::Path) -> Option<String> {
+    let stem = std::path::Path::new(source).file_stem()?.to_string_lossy();
+    let copy = dir.join(format!("micold-ai-ide-{stem}-{}.png", uuid::Uuid::new_v4()));
+    std::fs::copy(source, &copy).ok()?;
+    Some(copy.display().to_string())
+}
+
 /// What a failure of `mac-usernotifications` means for the user (FR-010): a binary outside a
 /// bundle has no notification centre to ask; anything else is the system not taking the request.
 pub(super) fn notify_error(error: &mac_usernotifications::Error) -> NotifyError {
@@ -163,7 +174,7 @@ fn deliver(
         .title(banner.title)
         .message(banner.message)
         .timeout(CLICK_WAIT);
-    if let Some(path) = image {
+    if let Some(path) = image.and_then(|path| attachable_copy(&path, &std::env::temp_dir())) {
         request = request.image_path(path);
     }
     mac_usernotifications::block_on(request.send()).map_err(|error| notify_error(&error))
@@ -481,5 +492,30 @@ mod tests {
         for kind in NotificationKind::ALL {
             assert_eq!(banner_image(kind, &IconFiles::default()), None, "{kind:?}");
         }
+    }
+
+    #[test]
+    fn each_banner_attaches_its_own_copy_of_the_icon_file() {
+        // Review A F1 (M4): the system moves an attachment away, so the run's file must stay.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let files = write_files(dir.path()).expect("a writable directory");
+        let source = banner_image(NotificationKind::SessionError, &files).expect("written");
+        let first = attachable_copy(&source, dir.path()).expect("a copy");
+        let second = attachable_copy(&source, dir.path()).expect("a copy");
+        assert_ne!(first, second);
+        assert_ne!(first, source);
+        std::fs::remove_file(&first).expect("the copy is a file");
+        assert!(
+            std::path::Path::new(&source).is_file(),
+            "the run's file stays"
+        );
+        assert_eq!(std::fs::read(&second).ok(), std::fs::read(&source).ok());
+    }
+
+    #[test]
+    fn an_icon_file_that_cannot_be_copied_attaches_nothing() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let missing = dir.path().join("gone.png").display().to_string();
+        assert_eq!(attachable_copy(&missing, dir.path()), None);
     }
 }

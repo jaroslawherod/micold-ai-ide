@@ -62,6 +62,11 @@ const CORNER: f32 = 0.22;
 /// `kind`'s icon, `px` by `px`: its glyph in white, centred, on a rounded square of its tile colour,
 /// transparent outside the tile (I3).
 pub fn render(kind: NotificationKind, px: u32) -> Rgba {
+    straight(&draw(kind, px))
+}
+
+/// The pixmap [`render`] and [`png`] read.
+fn draw(kind: NotificationKind, px: u32) -> Pixmap {
     let mut pixmap = canvas(px);
     let [r, g, b] = tile_colour(kind);
     let side = px as f32;
@@ -75,7 +80,7 @@ pub fn render(kind: NotificationKind, px: u32) -> Rgba {
         );
     }
     draw_glyph(&mut pixmap, kind, px, GLYPH_SPAN);
-    straight(&pixmap)
+    pixmap
 }
 
 /// `kind`'s glyph alone, in one colour, its ink box spanning a `px` by `px` square: `px * px`
@@ -88,14 +93,10 @@ pub fn glyph_mask(kind: NotificationKind, px: u32) -> Vec<bool> {
 }
 
 /// `kind`'s icon at `px` encoded as PNG, for a notification facility that takes a file (I6).
-pub fn png(kind: NotificationKind, px: u32) -> Vec<u8> {
-    let Rgba { pixels, .. } = render(kind, px);
-    let mut pixmap = canvas(px);
-    for (to, from) in pixmap.pixels_mut().iter_mut().zip(pixels.chunks_exact(4)) {
-        *to = tiny_skia::ColorU8::from_rgba(from[0], from[1], from[2], from[3]).premultiply();
-    }
-    // Encoding a well-formed pixmap into memory has no failure to report.
-    pixmap.encode_png().unwrap_or_default()
+pub fn png(kind: NotificationKind, px: u32) -> std::io::Result<Vec<u8>> {
+    draw(kind, px)
+        .encode_png()
+        .map_err(|error| std::io::Error::other(error.to_string()))
 }
 
 /// The side, in pixels, of the icon files: large enough for the biggest place a system shows one.
@@ -126,7 +127,7 @@ pub fn write_files(dir: &Path) -> std::io::Result<IconFiles> {
     let mut paths = Vec::with_capacity(NotificationKind::ALL.len());
     for kind in NotificationKind::ALL {
         let path = icons.join(format!("{}.png", file_stem(kind)));
-        std::fs::write(&path, png(kind, FILE_PX))?;
+        std::fs::write(&path, png(kind, FILE_PX)?)?;
         paths.push((kind, path));
     }
     Ok(IconFiles { paths })
