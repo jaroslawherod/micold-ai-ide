@@ -206,7 +206,7 @@ impl GitCli {
 /// Keep a read-only question to local objects (040 FR-016): in a partial clone git 2.44 and later
 /// would otherwise fetch a missing object from the promisor remote, and no credential prompt may
 /// hold the call. Older git ignores `GIT_NO_LAZY_FETCH`.
-fn local_only(command: &mut Command) -> &mut Command {
+pub(crate) fn local_only(command: &mut Command) -> &mut Command {
     command
         .env("GIT_NO_LAZY_FETCH", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -214,7 +214,7 @@ fn local_only(command: &mut Command) -> &mut Command {
 
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying
 /// stderr on a non-zero exit.
-fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
+pub(crate) fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
     let output = no_window(&mut Command::new("git"))
         .arg("-C")
         .arg(repo)
