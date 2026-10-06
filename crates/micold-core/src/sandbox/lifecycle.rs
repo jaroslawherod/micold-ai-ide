@@ -373,22 +373,6 @@ fn acquire<R: ContainerRuntime>(
         })
 }
 
-/// What a running sandbox becomes when the set of things it should be sharing changes (R9, M-4).
-///
-/// A container's mounts are fixed when it is created. Register a project after that and the
-/// sandbox cannot see it, however many times it is asked to — so the state has to say so, and
-/// `Stale` is that answer.
-///
-/// # Why this does not restart anything
-///
-/// Restarting would be the obliging thing to do and it is the wrong thing to do: the sessions
-/// inside the container are the user's work, and ending them to service a settings change they
-/// made in another window turns an edit into an outage. `Stale` still accepts sessions for the
-/// same reason — what is out of date is the mount set, not the container.
-///
-/// Every other state is returned unchanged. A sandbox that is still coming up will pick the new
-/// mount set up when it creates its container, and one that has failed or is disabled has no
-/// mounts to be out of date.
 /// What a sandbox becomes when the container it names has gone away (FR-036, US6 scenario 3).
 ///
 /// The trigger is a lost connection, not a poll: the application does not watch the container, it
@@ -421,30 +405,126 @@ pub fn container_lost(state: &SandboxState, name: &str) -> Option<SandboxState> 
     }
 }
 
-pub fn mount_set_changed(state: &SandboxState) -> SandboxState {
+/// Why a running sandbox is out of date (FR-036c, data-model S-8).
+///
+/// Kept beside [`SandboxState::Stale`] rather than inside it, so the many matches on `Stale(_)`
+/// across the client do not change shape. Two reasons, because they clear differently: the mount
+/// set is measured against the running container on every catalog and clears when the two match
+/// again; a keep-running change clears only with a new container.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OutOfDate {
+    /// The container does not share exactly the registered projects.
+    pub mount_set: bool,
+    /// The keep-running answer (feature 028, FR-022a) changed since the container was created.
+    pub keep_running: bool,
+}
+
+impl OutOfDate {
+    /// Whether any reason holds.
+    pub fn any(self) -> bool {
+        self.mount_set || self.keep_running
+    }
+}
+
+/// The state a sandbox with these reasons is in (FR-036c).
+///
+/// `Running` with a reason is `Stale`; `Stale` with none is `Running` again, with no restart.
+/// Every state without a container is returned unchanged: one still coming up picks the current
+/// settings up when it creates its container, and one that failed or is disabled has no mounts to
+/// be out of date.
+pub fn with_reasons(state: &SandboxState, reasons: OutOfDate) -> SandboxState {
     match state {
-        SandboxState::Running(id) => SandboxState::Stale(id.clone()),
+        SandboxState::Running(id) | SandboxState::Stale(id) if reasons.any() => {
+            SandboxState::Stale(id.clone())
+        }
+        SandboxState::Running(id) | SandboxState::Stale(id) => SandboxState::Running(id.clone()),
         other => other.clone(),
     }
+}
+
+/// Whether a container sharing `container_projects` is out of date for the `registered` projects
+/// (FR-036c, FR-004): a registered project it does not share, or a shared one that is no longer
+/// registered. Compared as sets, so order and repetition are not a difference.
+///
+/// `container_projects` are container paths ([`MountSet::container_projects`]); `registered` are
+/// host paths, mapped as [`MountSet::build`] maps a project. On Linux and macOS the two are equal
+/// (rule M-2).
+pub fn mount_set_out_of_date(
+    container_projects: &[String],
+    registered: &[std::path::PathBuf],
+) -> bool {
+    let shared: std::collections::BTreeSet<&str> =
+        container_projects.iter().map(String::as_str).collect();
+    let wanted: std::collections::BTreeSet<String> = registered
+        .iter()
+        .map(|p| {
+            super::ProjectMount::project(p)
+                .container
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    shared.len() != wanted.len() || wanted.iter().any(|w| !shared.contains(w.as_str()))
+}
+
+/// What a running sandbox becomes when the set of things it should be sharing changes (R9, M-4).
+///
+/// A container's mounts are fixed when it is created. Register a project after that and the
+/// sandbox cannot see it, however many times it is asked to — so the state has to say so, and
+/// `Stale` is that answer.
+///
+/// # Why this does not restart anything
+///
+/// Restarting would be the obliging thing to do and it is the wrong thing to do: the sessions
+/// inside the container are the user's work, and ending them to service a settings change they
+/// made in another window turns an edit into an outage. `Stale` still accepts sessions for the
+/// same reason — what is out of date is the mount set, not the container.
+///
+/// Every other state is returned unchanged. A sandbox that is still coming up will pick the new
+/// mount set up when it creates its container, and one that has failed or is disabled has no
+/// mounts to be out of date.
+///
+/// Since BUG-574 (FR-036c) the answer is measured, not remembered: `out_of_date` is
+/// [`mount_set_out_of_date`] for the running container, and `false` clears the reason, which
+/// returns `Stale` to `Running` when no other reason holds.
+pub fn mount_set_changed(
+    state: &SandboxState,
+    reasons: OutOfDate,
+    out_of_date: bool,
+) -> (SandboxState, OutOfDate) {
+    if state.container().is_none() {
+        return (state.clone(), OutOfDate::default());
+    }
+    let reasons = OutOfDate {
+        mount_set: out_of_date,
+        ..reasons
+    };
+    (with_reasons(state, reasons), reasons)
 }
 
 /// The keep-it-running opt-in changed, so a running sandbox no longer matches the settings
 /// (feature 028, FR-022a, research R2a).
 ///
-/// Exactly [`mount_set_changed`], for exactly its reason, over a different input. Both halves of
-/// the opt-in — the restart policy and `MICOLD_IDLE_STOP` — are fixed when the container is
-/// created, so a container already up was made under the old answer and there is no way to talk it
-/// into the new one. Without this the user toggles the control, the settings say one thing, the
-/// container does the other, and nothing on screen admits it.
+/// The same transition as [`mount_set_changed`], over a different reason. Both halves of the
+/// opt-in — the restart policy and `MICOLD_IDLE_STOP` — are fixed when the container is created, so
+/// a container already up was made under the old answer and there is no way to talk it into the
+/// new one. Without this the user toggles the control, the settings say one thing, the container
+/// does the other, and nothing on screen admits it.
 ///
-/// Its own function rather than a second caller of `mount_set_changed`, because the two are the
-/// same *transition* for different reasons and only one of them may change: if registering a
-/// project ever stops making a sandbox stale, this must not silently stop too.
-pub fn survive_logout_changed(state: &SandboxState) -> SandboxState {
-    match state {
-        SandboxState::Running(id) => SandboxState::Stale(id.clone()),
-        other => other.clone(),
+/// Its own reason, because only a new container clears it: a catalog that matches the container's
+/// projects must not (FR-036c).
+pub fn survive_logout_changed(
+    state: &SandboxState,
+    reasons: OutOfDate,
+) -> (SandboxState, OutOfDate) {
+    if state.container().is_none() {
+        return (state.clone(), OutOfDate::default());
     }
+    let reasons = OutOfDate {
+        keep_running: true,
+        ..reasons
+    };
+    (with_reasons(state, reasons), reasons)
 }
 
 /// The user asked, in so many words, for the sandbox to be restarted.

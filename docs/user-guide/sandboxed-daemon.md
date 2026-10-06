@@ -296,7 +296,7 @@ would leave you with a sandbox that survives the night but not the afternoon.
 The setting is applied when the container is **created**, so changing it marks the running sandbox as
 out of date and takes effect the next time the sandbox starts. The application tells you so at the
 control rather than applying it silently underneath a container that was created with the other
-answer.
+answer, and the notice names this setting, not your projects. Only a new container clears it.
 
 Without the sandbox there is no equivalent: a service running directly on this computer cannot
 outlive signing out, on any platform. Your sessions are still kept and come back resumable — running
@@ -346,7 +346,14 @@ back into the sandbox once you have fixed whatever the message named.
 
 If you add or remove a project while the sandbox is running, it is marked as needing a restart rather
 than restarting itself. What the container can see is fixed when it is created, and restarting on its
-own would end sessions you are using to service a settings change.
+own would end sessions you are using to service a settings change. The notice says the sandbox does
+not share exactly the registered projects.
+
+That is measured against the container that is actually running, as a set: the order projects are
+listed in makes no difference. The notice clears by itself, with no restart, as soon as the running
+container shares exactly the registered projects again — for example after you unregister the
+project you just added, or after another window restarted the sandbox and the new container shares
+them all. Each window notices a container another window replaced when it reconnects to it.
 
 ## For maintainers
 

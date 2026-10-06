@@ -396,6 +396,12 @@ without the user having chosen that for the occasion.
    accumulating another beside it.
 6. **Given** any sandbox failure, **When** the user asks for detail, **Then** the service's own
    diagnostics from inside the sandbox are retrievable through the app.
+7. **Given** a running sandbox whose container shares every registered project and no other, **When**
+   the service lists those projects (in any order, and whichever window created or replaced the
+   container), **Then** the app does not report the sandbox out of date; **and When** a project the
+   container does not share is registered, **Then** it reports the sandbox out of date for that
+   reason; **and When** that project is unregistered again, **Then** the report clears without a
+   restart (FR-036c). *(Added 2026-10-06 — BUG-574.)*
 
 ---
 
@@ -410,7 +416,8 @@ without the user having chosen that for the occasion.
   the runtime does not accept.
 - A project directory is renamed, moved, or deleted while the sandbox is running.
 - The user registers a new project *after* the sandbox has started, when what is shared with the
-  sandbox was fixed at creation.
+  sandbox was fixed at creation. FR-036c says when the sandbox is reported out of date, and when it
+  stops being.
 - The user switches modes — sandboxed to unsandboxed or back — while sessions are live.
 - The user narrows the resource budget while a session is already exceeding the new value.
 - The project contains symbolic links, submodules, or a git directory pointing outside the shared
@@ -729,6 +736,15 @@ asked, what declining costs, and that confirming acts now rather than at the nex
   and MUST NOT present the absence of the service it is starting as a connection failure. A
   successful bring-up that takes minutes and a failed one MUST NOT look the same, and the one that
   is working MUST NOT be the louder of the two.
+- **FR-036c**: The application MUST report the running sandbox as out of date exactly while one of
+  these holds: its container does not share a registered project; its container shares a project
+  that is no longer registered; or the keep-running answer (feature 028, FR-022a) has changed since
+  its container was created. It is measured against the container that is running — the one this
+  application created or adopted, or the one another window replaced it with — and not against an
+  earlier list of projects. The order the projects are listed in is not a difference. When none of
+  these holds any more, the report MUST clear without a restart. Each reason is named for what it
+  is: a changed keep-running answer is not reported as an unshared project. *(Added 2026-10-06 —
+  BUG-574.)*
 - **FR-037**: The application MUST recognise a stale sandbox left by a previous or mismatched
   version and replace it, rather than attaching to it or creating another alongside it.
 - **FR-038**: The service's own diagnostics from inside the sandbox MUST be retrievable through the
@@ -748,6 +764,13 @@ is. See `bugs/BUG-005.md`.
 case points at FR-004g. That edge case said an absent sign-in token "is reported" and no requirement
 said where, so the bring-up dropped the share and wrote one line to stderr. The settings view went on
 showing the share ticked and the sign-in shared. See `bugs/BUG-008.md`.
+
+**Bugfix**: 2026-10-06 — BUG-574 (GitHub #574). FR-036c and US6 scenario 7 added; the
+registered-after-start edge case points at FR-036c. Research R9 said that changing the registered
+projects marks the sandbox stale, and nothing said what staleness is measured against or when it
+ends. The client compared each project list with the previous one, as an ordered list, and never
+with the container, so a container sharing every project could be reported out of date for the
+rest of the run. See `bugs/BUG-574.md`.
 
 **Bugfix**: 2026-09-27 — BUG-007 (GitHub #403). FR-004f and US2 scenario 11 added. FR-004e said
 what the sign-in share mounts but not what the user gets from it: a sandboxed `claude` found a valid

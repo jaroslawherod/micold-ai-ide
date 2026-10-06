@@ -334,6 +334,10 @@ degraded state.
 excludes by default). Restarting the sandbox automatically (rejected per above). Refusing to register
 a project while the sandbox runs (rejected: unnecessarily harsh, and forces a stop/start anyway).
 
+**Bugfix**: 2026-10-06 — BUG-574. "Adding or removing a project marks the sandbox stale" was read as
+an event and implemented as a comparison with the previous list. FR-036c restates it as a property of
+the running container, which clears when the container again shares exactly the registered projects.
+
 ## R10 — Which limits does each runtime support, and how is that surfaced?
 
 **Decision.** Each dialect declares a `RuntimeCapabilities` set, refined by a **probe** executed once

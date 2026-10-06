@@ -576,20 +576,32 @@ pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
 ///
 /// A project registered after boot is not inside the running container's mount set, and no amount
 /// of restarting *inside* the sandbox will put it there — the bind mounts are fixed when the
-/// container is created. So the sandbox is marked stale and the plan updated, and the user is
-/// offered a restart. Nothing restarts on its own: a restart ends every session in the container,
-/// which is not a price to pay for a side effect of registering a project.
+/// container is created. So the running container is measured against every catalog, as sets
+/// (FR-036c, BUG-574): out of date while the two differ, and no longer once they match again. The
+/// plan follows the catalog, for the next bring-up. Nothing restarts on its own: a restart ends
+/// every session in the container, which is not a price to pay for a side effect of registering a
+/// project.
 fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::CatalogSnapshot) {
     let Some(plan) = app.sandbox_boot.as_mut() else {
         return;
     };
     let projects: Vec<std::path::PathBuf> =
         catalog.projects.iter().map(|p| p.path.clone()).collect();
-    if projects == plan.projects {
-        return;
-    }
+    app.sandbox.mounts_changed(&projects);
     plan.projects = projects;
-    app.sandbox.mounts_changed();
+}
+
+/// Look for a container another window put in place of the one this client holds (FR-036c,
+/// BUG-574): on each connection under the sandbox placement while the sandbox has a container.
+/// Read-only; a different id comes back as `SandboxMsg::Replaced`.
+fn reread_sandbox(app: &App) -> Task<Message> {
+    if app.placement.kind != micold_core::sandbox::placement::PlacementKind::LocalSandbox {
+        return Task::none();
+    }
+    match (app.sandbox.state.container(), app.sandbox_boot.as_ref()) {
+        (Some(held), Some(plan)) => crate::shell::sandbox::reread_container(plan, held.clone()),
+        _ => Task::none(),
+    }
 }
 
 /// Adopt the daemon's settings, which it owns, and re-source env-include under them: every cached
@@ -1315,7 +1327,7 @@ pub fn on_connected(
         // Feature 582 (FR-012): the start-up offer, asked once the attach is on the wire.
         request_attach_offer(app, &offer_for);
     }
-    Task::none()
+    reread_sandbox(app)
 }
 
 /// Tell the daemon the window's resolved colour scheme when this connection has not been told it yet

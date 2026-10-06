@@ -182,6 +182,9 @@ pub struct ProjectMount {
   `projects.json`, per-project state and logs.
 - M-4 (R9): the set is fixed at creation. Changing the registered projects marks the sandbox stale
   and surfaces an explicit restart; nothing restarts on its own.
+  *(BUG-574, FR-036c)*: "stale" is measured, not remembered. The mount set is out of date while the
+  running container's projects and the registered projects differ as sets, and stops being so when
+  they match again, with no restart.
 
 ## 7. `SandboxState` — the lifecycle (FR-034 – FR-036b, SC-004)
 
@@ -206,6 +209,8 @@ pub struct ProjectMount {
              ┌──────▼───────┐   projects changed (R9)   ┌──────────┐
              │  Running     │──────────────────────────>│  Stale   │
              └──────────────┘<── user restarts ─────────└──────────┘
+                    ▲    no reason left (FR-036c)          │
+                    └──────────────────────────────────────┘
 
   Failed ──── service found absent, attempts remain (S-6) ────> Probing
   Failed ──── attempts exhausted ────> Failed, standing, manual restart only (S-2, FR-034)
@@ -232,6 +237,10 @@ pub struct ProjectMount {
   leaves `Failed` standing, which is where S-2 and FR-034's manual remedy take over. The edge needs
   a witness of its own; `RestartRequested` is not it, because that marker exists to say a person
   asked, and the whole point of this edge is that nobody has to.
+- S-8 (FR-036c, BUG-574): `Stale` carries its reasons beside it, the mount set and the keep-running
+  answer (feature 028, FR-022a). A catalog whose projects match the running container's clears the
+  mount-set reason only; `Stale` returns to `Running` when no reason is left. The keep-running
+  reason clears only with a new container.
 - S-7 (R9): R9's *"nothing restarts on its own"* is about a sandbox that **is running** — restarting
   it to service a settings change would end the user's live sessions, which is the trade R9 refuses.
   It says nothing about a sandbox that is not running, where there are no sessions to protect and

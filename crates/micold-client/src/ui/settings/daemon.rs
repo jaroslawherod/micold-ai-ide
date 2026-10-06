@@ -363,7 +363,7 @@ pub fn view<'a>(
     // with nothing connected, and this opt-in is the one thing that suppresses that too — so the
     // label has to name both, before the choice is made rather than after it (FR-022).
     let survive = Checkbox::new(
-        "Keep the service running when I'm signed out or away",
+        crate::features::sandbox::KEEP_RUNNING_SETTING,
         draft.daemon.profile.survive_logout,
         roles,
     )

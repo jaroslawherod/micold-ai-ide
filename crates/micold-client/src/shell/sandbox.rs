@@ -294,17 +294,7 @@ pub fn start<R: CommandRunner>(
         )));
     }
 
-    let mounts = MountSet::build(
-        projects,
-        profile,
-        &facts.layout,
-        facts.state_dir.clone(),
-        &facts.home,
-        SecretMount {
-            host: token_path,
-            container: PathBuf::from(CONTAINER_TOKEN_PATH),
-        },
-    );
+    let mounts = mount_set(profile, projects, facts);
 
     // A credential mounted into a directory of that home — the AI CLI's sign-in, in `~/.claude` —
     // needs the directory too, for the same reason: left to the runtime it comes out root-owned,
@@ -368,29 +358,111 @@ pub fn start<R: CommandRunner>(
         build_spec,
         observe,
     )?;
+    let locations = locations_for(&mounts, facts, started.mounted.as_deref());
+    let shared = profile
+        .credentials
+        .contains(&micold_core::sandbox::CredentialShare::AiCliAuth);
+    if let Some(path) = locations.unshared_sign_in.as_ref().filter(|_| shared) {
+        eprintln!(
+            "sandbox: the AI CLI sign-in is shared, but the running sandbox has no token from {path}. \
+             Sign in inside a session, or put the token there and recreate the container."
+        );
+    }
+    Ok(Ready { started, locations })
+}
+
+/// The mount set this client creates its container from. No side effects: [`start`] prepares the
+/// host paths it names, and [`reread`] only reads what a running container shares through it.
+fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) -> MountSet {
+    MountSet::build(
+        projects,
+        profile,
+        &facts.layout,
+        facts.state_dir.clone(),
+        &facts.home,
+        SecretMount {
+            host: host_token_path(&facts.state_dir),
+            container: PathBuf::from(CONTAINER_TOKEN_PATH),
+        },
+    )
+}
+
+/// What the running container shares with this machine, through `mounts`. `mounted` is
+/// `Started::mounted`: `None` for a container made from `mounts`, its destinations for one adopted.
+fn locations_for(
+    mounts: &MountSet,
+    facts: &HostFacts,
+    mounted: Option<&[String]>,
+) -> SandboxLocations {
     // Asked of the container that ended up running, not of the host file: an adopted container
     // keeps the mounts it was created with (FR-004g, BUG-008).
     // The path is named from the home rather than from `facts.layout`, which has already dropped a
     // token this host does not have.
     let unshared_sign_in = CredentialLayout::conventional(&facts.home, None)
         .ai_cli_auth
-        .and_then(|looked_for| mounts.unshared_sign_in(started.mounted.as_deref(), &looked_for));
-    let shared = profile
-        .credentials
-        .contains(&micold_core::sandbox::CredentialShare::AiCliAuth);
-    if let Some(path) = unshared_sign_in.as_ref().filter(|_| shared) {
-        eprintln!(
-            "sandbox: the AI CLI sign-in is shared, but the running sandbox has no token from {}. \
-             Sign in inside a session, or put the token there and recreate the container.",
-            path.display()
-        );
-    }
-    let locations = SandboxLocations {
-        shared: mounts.shared_locations(started.mounted.as_deref()),
+        .and_then(|looked_for| mounts.unshared_sign_in(mounted, &looked_for));
+    SandboxLocations {
+        shared: mounts.shared_locations(mounted),
         denied: mounts.denied_host_paths(),
         unshared_sign_in: unshared_sign_in.map(|p| p.to_string_lossy().into_owned()),
-    };
-    Ok(Ready { started, locations })
+        projects: mounts.container_projects(
+            mounted,
+            &CredentialLayout::conventional(&facts.home, facts.layout.ssh_agent.as_deref()),
+        ),
+    }
+}
+
+/// Find the container under the sandbox's name, and report it when it runs under an id other than
+/// `held`: another window replaced it (FR-036c, BUG-574).
+///
+/// Read-only: one `inspect`, and never a `create`, `start`, `stop` or `rm` (R9: nothing restarts on
+/// its own). `None` for the container already held, a stopped or absent one, and a runtime that
+/// cannot be asked. What it shares is read as [`start`] reads an adopted container's.
+pub fn reread<R: CommandRunner>(
+    plan: &BootPlan,
+    facts: &HostFacts,
+    held: &micold_core::sandbox::runtime::ContainerId,
+    runner: R,
+) -> Option<(micold_core::sandbox::runtime::ContainerId, SandboxLocations)> {
+    use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime};
+    let found = CliRuntime::new(plan.profile.runtime, runner)
+        .find(CONTAINER_NAME)
+        .ok()??;
+    if !found.running || found.id == held.0 {
+        return None;
+    }
+    let mounts = mount_set(&plan.profile, &plan.projects, facts);
+    let locations = locations_for(&mounts, facts, Some(&found.mount_destinations));
+    Some((ContainerId(found.id), locations))
+}
+
+/// [`reread`] off the render thread, yielding [`SandboxMsg::Replaced`] when it finds another
+/// container, and nothing otherwise.
+pub fn reread_container(
+    plan: &BootPlan,
+    held: micold_core::sandbox::runtime::ContainerId,
+) -> iced::Task<micold_client::app::Message> {
+    let plan = plan.clone();
+    iced::Task::future(async move {
+        let found = tokio::task::spawn_blocking(move || {
+            let facts = HostFacts::gather(plan.state_dir.clone());
+            // A test runs the work an update returns, and must never reach the host's runtime.
+            #[cfg(not(test))]
+            let runner = SystemRunner;
+            #[cfg(test)]
+            let runner = micold_core::sandbox::exec::RecordingRunner::new();
+            reread(&plan, &facts, &held, runner)
+        })
+        .await
+        .ok()
+        .flatten();
+        match found {
+            Some(found) => {
+                micold_client::app::Message::Sandbox(SandboxMsg::Replaced(Box::new(found)))
+            }
+            None => micold_client::app::Message::NoOp,
+        }
+    })
 }
 
 /// Everything a bring-up needs that the application has to remember in order to run it *again*.
@@ -754,7 +826,7 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         // subscription is already retrying against the loopback port.
         // A bring-up reports into the sandbox only while the sandbox is the placement: one that
         // outlived a move to the host describes a container nobody is running (FR-036b).
-        Msg::Progress(_) | Msg::Started(_) | Msg::Failed(_)
+        Msg::Progress(_) | Msg::Started(_) | Msg::Failed(_) | Msg::Replaced(_)
             if app.placement.kind
                 != micold_core::sandbox::placement::PlacementKind::LocalSandbox =>
         {
@@ -763,6 +835,17 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         Msg::Started(ready) => {
             let (started, locations) = *ready;
             app.sandbox.started(started, locations);
+            iced::Task::none()
+        }
+        // Another window replaced the container (FR-036c, BUG-574): adopt it, and measure it
+        // against the last catalog. Nothing restarts (R9).
+        Msg::Replaced(found) => {
+            let (id, locations) = *found;
+            let registered: Option<Vec<PathBuf>> = app
+                .daemon_catalog
+                .as_ref()
+                .map(|c| c.projects.iter().map(|p| p.path.clone()).collect());
+            app.sandbox.replaced(id, locations, registered.as_deref());
             iced::Task::none()
         }
         Msg::Failed(failure) => {
@@ -1582,5 +1665,116 @@ mod tests {
             Some(looked_for.to_string_lossy().into_owned()),
             "a container made without the share was not reported as lacking the sign-in"
         );
+    }
+
+    /// What `inspect` prints for the container: its id, whether it runs, where its mounts land.
+    fn inspected(id: &str, running: bool, destinations: &[&str]) -> String {
+        let mounts: Vec<String> = destinations
+            .iter()
+            .map(|d| format!(r#"{{"Destination":"{d}"}}"#))
+            .collect();
+        format!(
+            r#"{{"Id":"{id}","State":{{"Running":{running}}},"Config":{{"Image":"i"}},"Mounts":[{}]}}"#,
+            mounts.join(",")
+        )
+    }
+
+    fn plan_in(state_dir: &std::path::Path) -> BootPlan {
+        BootPlan {
+            profile: SandboxProfile::default(),
+            state_dir: state_dir.to_path_buf(),
+            projects: vec![PathBuf::from("/proj/P")],
+        }
+    }
+
+    /// The re-read asked the runtime about the container and did nothing to it (R9).
+    fn only_inspected(runner: &micold_core::sandbox::exec::RecordingRunner) {
+        let calls = runner.calls();
+        assert!(!calls.is_empty(), "setup: the runtime was asked");
+        for call in calls {
+            let args = call.args_lossy();
+            assert_eq!(
+                args.first().map(String::as_str),
+                Some("inspect"),
+                "a re-read never creates, starts, stops or removes (R9): {args:?}"
+            );
+        }
+    }
+
+    /// U55, T231: a container under another id is adopted with its projects and locations,
+    /// computed as `start` computes them for a container it adopted.
+    #[test]
+    fn a_reread_finding_another_container_reports_it_and_only_inspects() {
+        use micold_core::sandbox::exec::RecordingRunner;
+        use micold_core::sandbox::runtime::ContainerId;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let plan = plan_in(state_dir.path());
+        let facts = HostFacts::gather(plan.state_dir.clone());
+        let runner = RecordingRunner::new();
+        runner.push_ok(inspected(
+            "new",
+            true,
+            &["/proj/P", "/proj/Q", CONTAINER_TOKEN_PATH],
+        ));
+
+        let (id, locations) = reread(&plan, &facts, &ContainerId("old".into()), &runner)
+            .expect("a running container under another id is reported");
+
+        assert_eq!(id, ContainerId("new".into()));
+        assert_eq!(
+            locations.projects,
+            vec!["/proj/P".to_string(), "/proj/Q".to_string()],
+            "its projects, including one this client never registered, and not its token"
+        );
+        assert!(
+            locations.shared.iter().any(|l| l.container == "/proj/P"),
+            "its links resolve against what it mounts: {:?}",
+            locations.shared
+        );
+        only_inspected(&runner);
+    }
+
+    /// U55, T231: the same container, a stopped or absent one, or a runtime that cannot be asked:
+    /// nothing to adopt.
+    #[test]
+    fn a_reread_that_finds_nothing_new_reports_nothing() {
+        use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
+        use micold_core::sandbox::runtime::ContainerId;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let plan = plan_in(state_dir.path());
+        let facts = HostFacts::gather(plan.state_dir.clone());
+        let answers: Vec<(&str, std::io::Result<CommandOutput>)> = vec![
+            (
+                "the container already held",
+                Ok(CommandOutput::ok(inspected("old", true, &["/proj/P"]))),
+            ),
+            (
+                "a stopped container",
+                Ok(CommandOutput::ok(inspected("new", false, &["/proj/P"]))),
+            ),
+            (
+                "no container",
+                Ok(CommandOutput::err(
+                    1,
+                    "Error: No such object: micold-sandbox",
+                )),
+            ),
+            (
+                "no runtime to ask",
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
+            ),
+        ];
+        for (what, answer) in answers {
+            let runner = RecordingRunner::new();
+            runner.push(answer);
+            assert_eq!(
+                reread(&plan, &facts, &ContainerId("old".into()), &runner),
+                None,
+                "{what}"
+            );
+            only_inspected(&runner);
+        }
     }
 }
