@@ -80,7 +80,7 @@ side-by-side diffs with syntax colouring, binary and large files handled.
 - [x] T023 [US1] Compose the view in `crates/micold-client/src/ui/changes.rs` (new): header with the entry, `Compared with <branch> at <short sha>` or the base reason, and a close action (V2); `LabelledToggle`s **Committed**/**Uncommitted** with the Default note (L1); the file list in `VirtualRows` with path, kind `Tag`, `+a −r` counts (L2); the empty state `features::changes` selects (L3); a "Select a file" placeholder in the diff pane. Show it in place of the terminal pane in `crates/micold-client/src/ui/mod.rs`
 - [x] T024 [P] [US1] Add a `VirtualRows` long-list pose (2,000 rows) to `crates/micold-client/src/showcase/sections/review.rs` (new; registered in `crates/micold-client/src/showcase/sections/mod.rs`) with its entry in `crates/micold-client/src/showcase/catalogue.rs`
 - [x] T025 [P] [US1] Write `docs/user-guide/reviewing-changes.md` (new): opening the Changes view from a worktree or the Default row, what the list shows, the base line, the two toggles and the Default entry's uncommitted-only list; link it from `docs/SUMMARY.md`, `docs/README.md` and `docs/user-guide/worktrees-and-sessions.md` § Managing a worktree
-- [ ] T026 [US1] Visual pass (visual-pass skill) of quickstart B1, B2 and B15 (list part), light and dark; save the evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T026 [US1] Visual pass (visual-pass skill) of quickstart B1, B2 and B15 (list part), light and dark; save the evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 ### Part B — the unified diff (scenarios 3, 5, 7, 8)
 
