@@ -164,6 +164,7 @@ pub(crate) fn surface_opened(open: bool, id: crate::overlay::SurfaceId) -> Vec<O
 pub mod agent_confirm;
 pub mod attach;
 pub mod attention;
+pub mod changes;
 pub mod connection;
 pub mod help;
 pub mod notifications;

@@ -58,7 +58,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. (M1 unit 3: core and daemon done, T001–T013 and T016–T018 ticked; client T014/T015/T019–T024, docs T025, visual T026 in progress.)
+M1 unit 3 handed over at 150k. Pushed nothing (no green gate yet).
+- **Done, ticked:** T001–T013, T016–T018 (commit `2606df4e`: postcard fix — `ReviewComment`
+  serialises via a private `StoredComment` repr, no `flatten`; T009 `diff_layout_setting` 3 passed,
+  test-after; cycle-log rows added).
+- **T014/T015 red written (uncommitted → in the handover commit):** `crates/micold-client/src/features/changes.rs`
+  (types, `Msg`, `Effect::ReadList { seq, entry, toggles }`, `Load::Loading { seq, again, last }`,
+  `pending: Option<Effect>`, view-model `list_body`/`base_line`/`committed_available`/`shown_list`,
+  consts `DEFAULT_ENTRY_NOTE`, `BOTH_HIDDEN`) with **stub bodies**; `tests/features_changes.rs`
+  (14 tests); `ui/material/virtual_rows.rs` (`visible_range`/`spacers` stubbed, 6 tests;
+  registered in `material/mod.rs`; `features/mod.rs` declares `changes`). Red recorded in cycle-log (13/13 and 4/6 failing on the stubs).
+- **Next:** implement T019 (`visible_range`: start = offset/row_h − overscan, end = ceil((offset+viewport)/row_h) + overscan, clamp; offset past end → tail of `viewport/row_h + overscan` rows — see tests) and T020 (reducer per the tests; base line `Compared with <branch> at <7-char sha>`, NoCommonHistory text must contain "no history in common" and "only uncommitted changes"; empty "No changes against <branch>"; both off → `BOTH_HIDDEN`).
+  Wiring plan (keeps `tests/feature_registration_cost.rs` rules: a feature names no other feature; only `app.rs`/features call reducers; shape B = `pub fn update(&mut App, Msg) -> Task<Message>` in `src/shell/changes.rs`):
+  `Message::Changes(changes::Msg)` declined by `State::update` like `PrStatus`; `State.changes` field; `State::update_changes(msg) -> Effect` and `State::take_changes_effect()`; main.rs routes `Message::Changes` to `shell::changes::update`.
+  Sidebar `Msg::ReviewChangesRequested(SessionLocation)` → `Outcome::ChangesRequested(loc)` (new in `features/mod.rs`); `app::interpret` opens the view and stores the read in `state.changes.pending`; main.rs intercepts `Message::Sidebar(msg @ SidebarMsg::ReviewChangesRequested(_))` (as it does `ShowAgentWorktreesToggled`) then runs the pending read.
+  V2: `Message::Session(SessionMsg::Selected(_))` arm in app.rs also sends `Msg::SessionSelected`; V3: `Outcome::WorktreesReplaced(names)` in `interpret` also sends `Msg::WorktreesListed(names)`.
+  Default row has no menu: reuse `WorktreeMenu` with `dir_name == ""` for the Default row (the wire's convention), `on_right_press` on the Default row in `ui/sidebar.rs`, `worktree_menu_items` gives only "Review changes" for `""`.
+  Toggles: use `ToggleChip` (`.active().disabled()`), not `LabelledToggle` (it has no on/off state) — record as a Decision.
+  `tests/settings_sections.rs` `DEFERRED` likely needs `("diff_layout", "482 T041")`.
+  Then T021 shell read (`GitCli.review_base` + `change_list` in `spawn_blocking`), T022–T024, docs T025, visual T026, then verify.md (gate: raw mise.toml `gate` commands; 6 root-only permission tests fail locally).
 
 ## Open escalation
 
