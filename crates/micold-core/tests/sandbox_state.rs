@@ -11,8 +11,9 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
 use micold_core::sandbox::lifecycle::{
-    bring_up, container_lost, mount_set_changed, restart, service_absent, survive_logout_changed,
-    RestartRequested, SandboxState, Stage, UnattendedBringUps, UNATTENDED_BRING_UP_DELAYS,
+    bring_up, container_lost, mount_set_changed, mount_set_out_of_date, restart, service_absent,
+    survive_logout_changed, with_reasons, OutOfDate, RestartRequested, SandboxState, Stage,
+    UnattendedBringUps, UNATTENDED_BRING_UP_DELAYS,
 };
 use micold_core::sandbox::runtime::{ContainerId, Progress, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
@@ -340,7 +341,12 @@ fn every_state() -> Vec<SandboxState> {
 fn registering_a_project_marks_a_running_sandbox_stale() {
     let id = ContainerId("9f2b".into());
     assert_eq!(
-        mount_set_changed(&SandboxState::Running(id.clone())),
+        mount_set_changed(
+            &SandboxState::Running(id.clone()),
+            OutOfDate::default(),
+            true
+        )
+        .0,
         SandboxState::Stale(id)
     );
 }
@@ -353,7 +359,7 @@ fn registering_a_project_marks_a_running_sandbox_stale() {
 #[test]
 fn a_change_to_the_mount_set_never_restarts_anything() {
     for before in every_state() {
-        let after = mount_set_changed(&before);
+        let (after, _) = mount_set_changed(&before, OutOfDate::default(), true);
 
         let restarting = |s: &SandboxState| {
             matches!(
@@ -383,7 +389,7 @@ fn a_change_to_the_mount_set_never_restarts_anything() {
 fn toggling_the_keep_running_opt_in_marks_a_running_sandbox_stale() {
     let id = ContainerId("9f2b".into());
     assert_eq!(
-        survive_logout_changed(&SandboxState::Running(id.clone())),
+        survive_logout_changed(&SandboxState::Running(id.clone()), OutOfDate::default()).0,
         SandboxState::Stale(id)
     );
 }
@@ -393,7 +399,7 @@ fn toggling_the_keep_running_opt_in_marks_a_running_sandbox_stale() {
 #[test]
 fn a_change_to_the_keep_running_opt_in_never_restarts_anything() {
     for before in every_state() {
-        let after = survive_logout_changed(&before);
+        let (after, _) = survive_logout_changed(&before, OutOfDate::default());
 
         let restarting = |s: &SandboxState| {
             matches!(
@@ -419,7 +425,11 @@ fn a_change_to_the_keep_running_opt_in_never_restarts_anything() {
 /// running in the container, which is the same failure as restarting, arrived at more slowly.
 #[test]
 fn a_stale_sandbox_still_serves_the_sessions_already_in_it() {
-    let stale = mount_set_changed(&SandboxState::Running(ContainerId("9f2b".into())));
+    let (stale, _) = mount_set_changed(
+        &SandboxState::Running(ContainerId("9f2b".into())),
+        OutOfDate::default(),
+        true,
+    );
     assert!(stale.accepts_sessions());
     assert!(
         stale.is_persistent(),
@@ -638,5 +648,93 @@ fn unattended_bring_ups_never_wait_less_than_the_one_before() {
             "attempt {} waits less than the one before it: {waits:?}",
             i + 1
         );
+    }
+}
+
+/// U52, FR-036c (BUG-574): the mount set is out of date while the container's projects and the
+/// registered ones differ as sets, in either direction, and not because of order or repetition.
+#[test]
+fn the_mount_set_is_out_of_date_exactly_while_the_sets_differ() {
+    let p = || PathBuf::from("/proj/P");
+    let q = || PathBuf::from("/proj/Q");
+    let shared = |paths: &[&str]| paths.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+    assert!(
+        !mount_set_out_of_date(&shared(&["/proj/P", "/proj/Q"]), &[q(), p()]),
+        "the same two projects listed in another order are not a difference (R1)"
+    );
+    assert!(
+        !mount_set_out_of_date(
+            &shared(&["/proj/P", "/proj/Q", "/proj/P"]),
+            &[p(), q(), q()]
+        ),
+        "a project listed twice is still one project"
+    );
+    assert!(
+        !mount_set_out_of_date(&[], &[]),
+        "a container sharing no project matches a service with none registered"
+    );
+    assert!(
+        mount_set_out_of_date(&shared(&["/proj/P"]), &[p(), q()]),
+        "a registered project the container does not share is out of date"
+    );
+    assert!(
+        mount_set_out_of_date(&shared(&["/proj/P", "/proj/Q"]), &[p()]),
+        "a shared project that is no longer registered is out of date (FR-004)"
+    );
+}
+
+/// U52, FR-036c: staleness carries its reasons, so one clears without the other.
+#[test]
+fn stale_reasons_set_and_clear_independently() {
+    let id = ContainerId("9f2b".into());
+    let running = SandboxState::Running(id.clone());
+
+    let (stale, reasons) = mount_set_changed(&running, OutOfDate::default(), true);
+    assert_eq!(
+        stale,
+        SandboxState::Stale(id.clone()),
+        "setting a reason on Running"
+    );
+    assert!(reasons.mount_set && !reasons.keep_running);
+
+    let (back, reasons) = mount_set_changed(&stale, reasons, false);
+    assert_eq!(
+        back,
+        SandboxState::Running(id.clone()),
+        "clearing the last reason returns to Running, with no restart (R3)"
+    );
+    assert_eq!(reasons, OutOfDate::default());
+
+    let (stale, reasons) = survive_logout_changed(&running, OutOfDate::default());
+    let (stale, reasons) = mount_set_changed(&stale, reasons, true);
+    let (after, reasons) = mount_set_changed(&stale, reasons, false);
+    assert_eq!(
+        after,
+        SandboxState::Stale(id.clone()),
+        "a matching mount set leaves a keep-running change standing"
+    );
+    assert!(reasons.keep_running && !reasons.mount_set);
+    assert_eq!(
+        with_reasons(&after, OutOfDate::default()),
+        SandboxState::Running(id),
+        "with no reason left the sandbox is running"
+    );
+}
+
+/// U52: a state without a container has nothing to be out of date; it is returned unchanged.
+#[test]
+fn stale_reasons_leave_every_other_state_unchanged() {
+    let both = OutOfDate {
+        mount_set: true,
+        keep_running: true,
+    };
+    for before in every_state() {
+        if before.container().is_some() {
+            continue;
+        }
+        assert_eq!(with_reasons(&before, both), before);
+        assert_eq!(mount_set_changed(&before, both, true).0, before);
+        assert_eq!(survive_logout_changed(&before, both).0, before);
     }
 }

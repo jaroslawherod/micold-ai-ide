@@ -1609,7 +1609,7 @@ when neither holds. A container another window replaced is followed. Each reason
 Each test is written against a stub that compiles, so it fails on its assertion rather than on the
 build.
 
-- [ ] T228 [BUG-574] [U52] *(test)* `crates/micold-core/tests/sandbox_state.rs` and
+- [x] T228 [BUG-574] [U52] *(test)* `crates/micold-core/tests/sandbox_state.rs` and
       `crates/micold-core/tests/sandbox_argv.rs`. The pure decisions. The mount set is out of date
       when a registered project is missing from the container's projects, or the container shares
       one no longer registered; not when the two match in another order or with duplicates. The
@@ -1638,7 +1638,7 @@ build.
 
 ### Implementation for BUG-574
 
-- [ ] T232 [BUG-574] [U52] `crates/micold-core/src/sandbox/mod.rs` (`MountSet`, the container's
+- [x] T232 [BUG-574] [U52] `crates/micold-core/src/sandbox/mod.rs` (`MountSet`, the container's
       projects beside `shared_locations`) and `crates/micold-core/src/sandbox/lifecycle.rs` (the
       set decision, the stale reasons and their transitions). `SandboxState::Stale(id)` keeps its
       shape. `mount_set_changed` and `survive_logout_changed` become, or call, the reason setters.

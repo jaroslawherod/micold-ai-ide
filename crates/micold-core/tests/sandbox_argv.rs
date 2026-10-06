@@ -304,3 +304,49 @@ fn only_the_ai_cli_sign_in_is_mounted_writable() {
         assert_eq!(mode, expected, "credential mount {host} has the wrong mode");
     }
 }
+
+/// U52, FR-036c (BUG-574): which projects a container shares. One this bring-up created shares its
+/// mount set's projects; an adopted one shares its destinations less this set's own non-project
+/// mounts, including a project this client never registered.
+#[test]
+fn a_containers_projects_are_its_project_mounts() {
+    let mounts = MountSet::build_for(
+        &[PathBuf::from("/proj/P")],
+        &SandboxProfile {
+            credentials: BTreeSet::from([CredentialShare::GitConfig]),
+            ..SandboxProfile::default()
+        },
+        &CredentialLayout::conventional(Path::new("/home/u"), None),
+        PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
+        SecretMount {
+            host: PathBuf::from("/home/u/.local/share/micold-ai-ide/sandbox.token"),
+            container: PathBuf::from("/run/micold/token"),
+        },
+        false,
+    );
+    assert_eq!(mounts.container_projects(None), vec!["/proj/P".to_string()]);
+
+    let mut destinations: Vec<String> = [
+        &mounts.state.container,
+        &mounts.home.container,
+        &mounts.secret.container,
+    ]
+    .iter()
+    .map(|p| p.to_string_lossy().into_owned())
+    .collect();
+    destinations.extend(
+        mounts
+            .credentials
+            .iter()
+            .map(|c| c.container.to_string_lossy().into_owned()),
+    );
+    destinations.push("/proj/Q".into());
+    destinations.push("/proj/P".into());
+    assert_eq!(
+        mounts.container_projects(Some(&destinations)),
+        vec!["/proj/Q".to_string(), "/proj/P".to_string()],
+        "an adopted container's projects are what it mounts besides state, home, token and \
+         credentials, whoever registered them"
+    );
+}

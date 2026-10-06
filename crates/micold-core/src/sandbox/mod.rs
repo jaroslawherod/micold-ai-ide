@@ -770,6 +770,32 @@ impl MountSet {
         locations
     }
 
+    /// The projects the *running* container shares, as container paths (FR-036c, BUG-574).
+    ///
+    /// `mounted` has the meaning it has in [`Self::shared_locations`]. `None`, a container created
+    /// from this very set: its projects. `Some`, one this bring-up adopted: its destinations less
+    /// this set's own non-project mounts (state, home, token, credentials), so a project another
+    /// window registered and this client never did is still counted as shared.
+    pub fn container_projects(&self, mounted: Option<&[String]>) -> Vec<String> {
+        let path = |p: &Path| p.to_string_lossy().into_owned();
+        match mounted {
+            None => self.projects.iter().map(|m| path(&m.container)).collect(),
+            Some(mounted) => {
+                let others: Vec<String> = [&self.state.container, &self.home.container]
+                    .into_iter()
+                    .chain(std::iter::once(&self.secret.container))
+                    .chain(self.credentials.iter().map(|c| &c.container))
+                    .map(|p| path(p))
+                    .collect();
+                mounted
+                    .iter()
+                    .filter(|m| !others.contains(m))
+                    .cloned()
+                    .collect()
+            }
+        }
+    }
+
     /// The AI CLI sign-in the *running* container does not mount, as the host path it is shared
     /// from (FR-004g, BUG-008). `None` when that container mounts it.
     ///
