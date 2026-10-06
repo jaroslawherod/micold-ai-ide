@@ -198,6 +198,12 @@ pub struct State {
     /// FR-026). Service-owned and mirrored like [`Self::tool_server_enabled`]: the service is what
     /// refuses a claim while it is off, this copy is what the Settings page opens with.
     pub desktop_notifications: bool,
+    /// Which notification kinds are on (feature 613). Service-owned and mirrored like
+    /// [`Self::desktop_notifications`].
+    pub notification_kinds: micold_core::attention::NotificationKinds,
+    /// The long-task threshold in seconds (feature 613, FR-025). Service-owned and mirrored like
+    /// [`Self::desktop_notifications`]; `0` only before the first settings arrive.
+    pub long_task_threshold_secs: u64,
     /// Whether agents may read and type into other sessions (feature 034, FR-016). Service-owned
     /// and mirrored like [`Self::tool_server_enabled`]; the service reads its own copy on every
     /// tool request.

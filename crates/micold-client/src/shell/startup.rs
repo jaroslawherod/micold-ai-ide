@@ -223,6 +223,8 @@ fn boot() -> (App, Task<Message>) {
     core.session.pi_activity_component = loaded.settings.pi_activity_component;
     core.session.tool_server_enabled = loaded.settings.tool_server_enabled;
     core.session.desktop_notifications = loaded.settings.desktop_notifications;
+    core.session.notification_kinds = loaded.settings.notification_kinds;
+    core.session.long_task_threshold_secs = loaded.settings.long_task_threshold_secs;
     core.session.cross_session_access = loaded.settings.cross_session_access;
     // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions

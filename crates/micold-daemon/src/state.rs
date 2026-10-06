@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use micold_core::attention::{NotificationKind, TurnClock, LONG_TASK_THRESHOLD};
+use micold_core::attention::{NotificationKind, NotificationKinds, TurnClock};
 use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
@@ -234,10 +234,20 @@ struct Inner {
     /// An attention event was counted in memory and is not written yet (feature 039, FR-008a);
     /// [`DaemonState::persist_attention`] writes it off the async runtime.
     attention_unsaved: bool,
-    /// The turn duration from which a finished turn is **Long task finished** (feature 613, C2).
-    /// [`LONG_TASK_THRESHOLD`] outside tests; [`DaemonState::set_long_task_threshold`] is the test
-    /// seam.
-    long_task_threshold: std::time::Duration,
+    /// A test's override of the long-task threshold (feature 613, C2), set by
+    /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
+    /// decides ([`Inner::effective_long_task_threshold`]).
+    long_task_threshold_override: Option<std::time::Duration>,
+}
+
+impl Inner {
+    /// The turn duration from which a finished turn is **Long task finished**: a test's override,
+    /// else the stored setting (feature 613, C2, FR-025). Read on every event, so a change applies
+    /// to the next turn end, one already running included (FR-013).
+    fn effective_long_task_threshold(&self) -> std::time::Duration {
+        self.long_task_threshold_override
+            .unwrap_or_else(|| self.catalog.long_task_threshold())
+    }
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -539,7 +549,7 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
-                long_task_threshold: LONG_TASK_THRESHOLD,
+                long_task_threshold_override: None,
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -622,10 +632,17 @@ impl DaemonState {
             .expect("first-prompt bound poisoned") = bound;
     }
 
-    /// Set the turn duration from which a finished turn is **Long task finished**, so a test need
-    /// not wait a minute for a long turn (feature 613, C2). Nothing else calls it.
+    /// Override the turn duration from which a finished turn is **Long task finished**, so a test
+    /// need not wait a minute for a long turn (feature 613, C2). It wins over the stored setting.
+    /// Nothing else calls it.
     pub fn set_long_task_threshold(&self, threshold: std::time::Duration) {
-        self.lock().long_task_threshold = threshold;
+        self.lock().long_task_threshold_override = Some(threshold);
+    }
+
+    /// The long-task threshold the next turn end is judged by: a test's override, else the stored
+    /// setting (feature 613, C2, FR-013). This is what the turn-end paths read.
+    pub fn effective_long_task_threshold(&self) -> std::time::Duration {
+        self.lock().effective_long_task_threshold()
     }
 
     /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
@@ -1567,6 +1584,44 @@ impl DaemonState {
                 }
             }
             inner.catalog.set_desktop_notifications(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Set every notification kind's switch (feature 613, T038, W5.4) and push `SettingsChanged`
+    /// to every client. Applies to the next claim with nothing restarted (FR-013); unread state is
+    /// not touched (SC-003).
+    pub fn set_notification_kinds(&self, kinds: NotificationKinds) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            let before = inner.catalog.notification_kinds();
+            let turned_on = NotificationKind::ALL
+                .into_iter()
+                .any(|kind| kinds.is_on(kind) && !before.is_on(kind));
+            if turned_on {
+                // As for the master switch (C15): an event made while its kind was off is never
+                // notified after the kind is turned on. Every event made so far is used up.
+                for (session, seq) in inner.catalog.attention_seqs() {
+                    inner
+                        .views
+                        .note_event(session, seq, NotificationKind::TurnFinished, false);
+                }
+            }
+            inner.catalog.set_notification_kinds(kinds)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Set the long-task threshold in seconds, clamped into 10–3600 (feature 613, T063, W5.6, FR-026), and
+    /// push `SettingsChanged` to every client. The next turn end reads it (FR-013).
+    pub fn set_long_task_threshold_secs(&self, secs: u64) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_long_task_threshold(secs)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
@@ -3376,6 +3431,7 @@ impl DaemonState {
         let mut guard = self.lock();
         // Reborrowed so the live sessions, the views and the catalog borrow apart.
         let inner = &mut *guard;
+        let threshold = inner.effective_long_task_threshold();
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
@@ -3390,7 +3446,7 @@ impl DaemonState {
         // C2); its kind is used only if the session began waiting just now.
         let kind = turn_change(&event_for_turn, changed).and_then(|change| {
             live.turn
-                .change(change, micold_core::clock::now(), inner.long_task_threshold)
+                .change(change, micold_core::clock::now(), threshold)
         });
         // An attention event (feature 039, FR-001, FR-004): the session came to await input from
         // another signal while no window had it in view. Counted here, by the service, so it is
@@ -3547,7 +3603,7 @@ impl DaemonState {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let workspace = inner.catalog.workspace();
-        let threshold = inner.long_task_threshold;
+        let threshold = inner.effective_long_task_threshold();
         for (id, live) in inner.sessions.iter_mut() {
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the

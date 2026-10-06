@@ -176,8 +176,7 @@ impl NotificationKind {
             }
             NotificationKind::SessionError => "A session stopped because of an error.".to_string(),
             NotificationKind::LongTaskFinished => {
-                "A session finished a turn at least as long as the long-task threshold."
-                    .to_string()
+                "A session finished a turn at least as long as the long-task threshold.".to_string()
             }
             NotificationKind::TurnFinished => "A session finished a shorter turn.".to_string(),
         }

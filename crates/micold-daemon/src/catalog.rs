@@ -30,7 +30,8 @@ use micold_core::session::{
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{
-    clamp_env_include_timeout, clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore,
+    clamp_env_include_timeout, clamp_long_task_threshold, clamp_scrollback, JsonFileSettingsStore,
+    Settings, SettingsStore,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -162,6 +163,8 @@ impl Catalog {
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
             desktop_notifications: self.settings.desktop_notifications,
+            notification_kinds: self.settings.notification_kinds,
+            long_task_threshold_secs: self.settings.long_task_threshold_secs,
         }
     }
 
@@ -305,6 +308,7 @@ impl Catalog {
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
                 on_disk.notification_kinds = self.settings.notification_kinds;
+                on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -422,6 +426,25 @@ impl Catalog {
     /// Turn desktop notifications on or off, persisting atomically (feature 039, FR-026).
     pub fn set_desktop_notifications(&mut self, on: bool) -> io::Result<()> {
         self.settings.desktop_notifications = on;
+        self.persist_service_settings()
+    }
+
+    /// Set every notification kind's switch at once, persisting atomically (feature 613, T038).
+    pub fn set_notification_kinds(&mut self, kinds: NotificationKinds) -> io::Result<()> {
+        self.settings.notification_kinds = kinds;
+        self.persist_service_settings()
+    }
+
+    /// The long-task threshold: how long a turn must last to finish as **Long task finished**
+    /// (feature 613, FR-025). Read on every turn end, so a change applies to the next one (C2).
+    pub fn long_task_threshold(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.settings.long_task_threshold_secs)
+    }
+
+    /// Set the long-task threshold in seconds, clamped into 10–3600 (FR-026), persisting
+    /// atomically (feature 613, T063).
+    pub fn set_long_task_threshold(&mut self, secs: u64) -> io::Result<()> {
+        self.settings.long_task_threshold_secs = clamp_long_task_threshold(secs);
         self.persist_service_settings()
     }
 

@@ -151,6 +151,8 @@ pub enum FieldId {
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
     SettingsEnvIncludeTimeout,
+    /// Settings: the long-task threshold (feature 613, S5).
+    SettingsLongTaskThreshold,
     /// Settings → GitHub issues: the label of the mapping entry at this index (feature 034).
     IssueMappingLabel(usize),
     /// The attach dialog's checkbox for the row at this index (feature 582).
