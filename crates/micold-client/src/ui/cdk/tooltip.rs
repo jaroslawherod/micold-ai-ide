@@ -265,17 +265,15 @@ where
                         }
                         // A show delay counts from entering; pointer-following opening on hover is
                         // the same rule with no delay, for its press rule (430 research R5).
-                        Wait::Delay(delay) => {
+                        Wait::Delay(_) | Wait::Hover => {
+                            let delay = match wait {
+                                Wait::Delay(delay) => delay,
+                                _ => Duration::ZERO,
+                            };
                             if pressed {
                                 state.show.press();
                             }
                             state.show.observe(over.is_some(), now, delay)
-                        }
-                        Wait::Hover => {
-                            if pressed {
-                                state.show.press();
-                            }
-                            state.show.observe(over.is_some(), now, Duration::ZERO)
                         }
                     };
                     if follow && state.pointer != over {
@@ -645,7 +643,7 @@ mod placement_tests {
     /// 430 research R1: the two waits are alternatives and the one set last wins.
     #[test]
     fn the_wait_set_last_wins() {
-        let d = Duration::from_millis(300);
+        let d = Duration::from_secs(1);
         assert_eq!(tip().after_rest(d).show_delay(d).wait, Wait::Delay(d));
         assert_eq!(tip().show_delay(d).after_rest(d).wait, Wait::Rest(d));
         assert_eq!(tip().wait, Wait::Hover);
