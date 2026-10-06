@@ -1,4 +1,5 @@
-//! The GitHub issues section — which worktree type an issue's labels choose (feature 034, US3;
+//! The GitHub section: whether pull request status is read (feature 040, FR-029; contract
+//! `pull-request-ui.md` §5), and which worktree type an issue's labels choose (feature 034, US3;
 //! contracts/issue-picker-ui.md §4).
 //!
 //! One row per mapping entry, in the order that decides which entry wins (FR-017): the label as
@@ -12,8 +13,8 @@ use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, IconButton, Select, TextField, Tooltip};
-use crate::ui::settings::{note, page};
+use crate::ui::material::{Button, Checkbox, IconButton, Select, TextField, Tooltip};
+use crate::ui::settings::{field_note, note, page};
 use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::ConventionalType;
@@ -24,9 +25,12 @@ use micold_core::typeahead::Direction;
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("issue_label_types", "IssueMappingLabelChanged")];
+pub const SETTINGS: &[(&str, &str)] = &[
+    ("pr_status_enabled", "PrStatusToggled"),
+    ("issue_label_types", "IssueMappingLabelChanged"),
+];
 
-/// The GitHub issues page.
+/// The GitHub page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     focused: Option<FieldId>,
@@ -35,7 +39,22 @@ pub fn view<'a>(
     let entries = &draft.github.entries;
     let last = entries.len().saturating_sub(1);
 
-    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(entries.len() + 2);
+    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(entries.len() + 3);
+    // Consent, not capability: always enabled, whether or not `gh` is installed (FR-025, FR-030).
+    controls.push(field_note(
+        Checkbox::new(
+            "Show pull request status on worktrees",
+            draft.github.pr_status_enabled,
+            roles,
+        )
+        .on_toggle(|v| Message::Settings(SettingsMsg::PrStatusToggled(v))),
+        Some(
+            "Reads the pull requests of the open project's GitHub repository with your GitHub CLI \
+             sign-in: when the project opens, every 5 minutes, and when you refresh the worktree \
+             list. Only the repository's name and your worktrees' branch names are sent.",
+        ),
+        roles,
+    ));
     if entries.is_empty() {
         controls.push(note(
             "No labels are mapped — picking an issue leaves the type for you to choose.",
@@ -112,8 +131,8 @@ pub fn view<'a>(
     );
 
     page(
-        "GitHub issues",
-        "When you create a worktree from a GitHub issue, the first entry whose label the issue \
+        "GitHub",
+        "Pull request status on worktree rows. When you create a worktree from a GitHub issue, the first entry whose label the issue \
          carries sets the worktree's type. Applies to every project.",
         controls,
         roles,

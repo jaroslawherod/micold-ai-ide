@@ -2237,7 +2237,11 @@ fn the_open_draft_follows_a_pr_status_change_from_the_service() {
                 },
             },
         );
-        assert_eq!(shown(&app), reported, "the page shows what the service says");
+        assert_eq!(
+            shown(&app),
+            reported,
+            "the page shows what the service says"
+        );
     }
 }
 

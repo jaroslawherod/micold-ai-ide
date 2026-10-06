@@ -802,7 +802,10 @@ fn the_pull_request_indicator_poses_its_twelve_states() {
         "open, checks passing, stale",
         "merged, stale",
     ] {
-        assert!(entry.posed.contains(&pose), "the pose \"{pose}\" is missing");
+        assert!(
+            entry.posed.contains(&pose),
+            "the pose \"{pose}\" is missing"
+        );
     }
     assert!(!entry.interactive, "the indicator answers no press");
 }

@@ -339,9 +339,9 @@ Tests: `crates/micold-client/tests/features_sidebar.rs` (extended, T030). A1–A
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U98 | A worktree row whose branch is in `statuses` projects `Some(RowPullRequest)` with that status and `age_secs` equal to `now − read_at` | FR-001, DM §4 | example | PENDING | |
-| U99 | A detached worktree, the "Default" entry (whatever branch the root has checked out) and session rows project `None` | FR-007 | example | PENDING | |
-| U100 | With empty statuses every row's projection equals today's | FR-001, FR-011 | example | PENDING | |
+| U98 | A worktree row whose branch is in `statuses` projects `Some(RowPullRequest)` with that status and `age_secs` equal to `now − read_at` | FR-001, DM §4 | example | GREEN | |
+| U99 | A detached worktree, the "Default" entry (whatever branch the root has checked out) and session rows project `None` | FR-007 | example | GREEN | |
+| U100 | With empty statuses every row's projection equals today's | FR-001, FR-011 | example | GREEN | |
 
 ### `crates/micold-client/src/icons.rs`: the indicator glyphs
 
@@ -349,7 +349,7 @@ Tests: `crates/micold-client/tests/icons_font.rs` and `icons.rs` (extended, T031
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U101 | `PrOpen`, `PrDraft`, `PrMerged`, `PrClosed`, `ChecksPassing`, `ChecksPending` and `ChecksFailing` each have a codepoint in the shipped font | FR-009, FR-033 | example | PENDING | |
+| U101 | `PrOpen`, `PrDraft`, `PrMerged`, `PrClosed`, `ChecksPassing`, `ChecksPending` and `ChecksFailing` each have a codepoint in the shipped font | FR-009, FR-033 | example | GREEN | |
 
 ### `crates/micold-client/src/ui/material/pull_request_indicator.rs` and the showcase
 
@@ -358,8 +358,8 @@ Tests: `crates/micold-client/tests/showcase_completeness.rs` and `material_build
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U102 | `PullRequestIndicator` passes the builder-form gate | FR-033 | example | PENDING | |
-| U103 | The catalogue holds a "Pull request indicator" entry with 12 poses: 4 states without checks, open and draft with each of 3 check statuses, and 2 stale forms | FR-033, FR-009 | example | PENDING | |
+| U102 | `PullRequestIndicator` passes the builder-form gate | FR-033 | example | GREEN | |
+| U103 | The catalogue holds a "Pull request indicator" entry with 12 poses: 4 states without checks, open and draft with each of 3 check statuses, and 2 stale forms | FR-033, FR-009 | example | GREEN | |
 
 ### `crates/micold-client/src/features/settings.rs`: the switch
 
@@ -368,10 +368,10 @@ T033).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U104 | `Msg::PrStatusToggled(v)` sets the draft to `v` | FR-029 | example | PENDING | |
-| U105 | Applying a changed draft sends `SettingsSet { pr_status_enabled: Some(v) }`; an unchanged draft sends `None` | FR-029, FR-030 | example | PENDING | |
-| U106 | The draft follows a `SettingsChanged` from the daemon | FR-029 | example | PENDING | |
-| U107 | The section's title is "GitHub" | FR-029, UI §5 | example | PENDING | |
+| U104 | `Msg::PrStatusToggled(v)` sets the draft to `v` | FR-029 | example | GREEN | |
+| U105 | Applying a changed draft sends `SettingsSet { pr_status_enabled: Some(v) }`; an unchanged draft sends `None` | FR-029, FR-030 | example | GREEN | |
+| U106 | The draft follows a `SettingsChanged` from the daemon | FR-029 | example | GREEN | |
+| U107 | The section's title is "GitHub" | FR-029, UI §5 | example | GREEN | |
 
 ### Layout: the row with an indicator and the Settings section
 
@@ -380,9 +380,9 @@ over `tests/fixtures/layout_snapshot.txt` (regenerated in T039).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U108 | In the row with an indicator (open, failing) the indicator is inside the row, left of the action cluster, and the name does not overlap it; at the narrowest sidebar width the indicator's width is the same and the name is what shrank | FR-009, UI §6 | approval | PENDING | |
-| U109 | The geometry of a row without a pull request with the switch on equals that row's with the switch off | FR-001 | approval | PENDING | |
-| U110 | In Settings → GitHub the checkbox, its note and the issue mapping are not clipped, and in the showcase entry none of the 12 poses is clipped | FR-029, FR-033 | approval | PENDING | |
+| U108 | In the row with an indicator (open, failing) the indicator is inside the row, left of the action cluster, and the name does not overlap it; at the narrowest sidebar width the indicator's width is the same and the name is what shrank | FR-009, UI §6 | approval | GREEN | |
+| U109 | The geometry of a row without a pull request with the switch on equals that row's with the switch off | FR-001 | approval | GREEN | |
+| U110 | In Settings → GitHub the checkbox, its note and the issue mapping are not clipped, and in the showcase entry none of the 12 poses is clipped | FR-029, FR-033 | approval | GREEN | |
 
 ### `crates/micold-client/src/features/sidebar.rs`: `worktree_tooltip`
 

@@ -275,7 +275,7 @@ impl SettingsSection {
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
             SettingsSection::Daemon => "Session service",
-            SettingsSection::GithubIssues => "GitHub issues",
+            SettingsSection::GithubIssues => "GitHub",
         }
     }
 
@@ -375,6 +375,9 @@ pub struct EnvironmentDraft {
 pub struct GithubDraft {
     /// The mapping, in order.
     pub entries: Vec<LabelTypeEntry>,
+    /// The switch **Show pull request status on worktrees** (feature 040, FR-029). Off until the
+    /// user turns it on (FR-030).
+    pub pr_status_enabled: bool,
 }
 
 impl Default for GithubDraft {
@@ -382,6 +385,7 @@ impl Default for GithubDraft {
     fn default() -> Self {
         Self {
             entries: default_mapping(),
+            pr_status_enabled: false,
         }
     }
 }
@@ -479,6 +483,8 @@ pub struct ValidSettings {
     pub daemon: DaemonConfig,
     /// GitHub issues: the label-to-type mapping (feature 034).
     pub issue_label_types: Vec<LabelTypeEntry>,
+    /// GitHub: whether pull request status is read (feature 040, FR-029).
+    pub pr_status_enabled: bool,
 }
 
 impl ValidSettings {
@@ -497,8 +503,7 @@ impl ValidSettings {
             cross_session_access: self.cross_session_access,
             daemon: self.daemon,
             issue_label_types: self.issue_label_types,
-            // Not in the form yet (feature 040, M4): the save keeps the stored value.
-            pr_status_enabled: false,
+            pr_status_enabled: self.pr_status_enabled,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
@@ -632,6 +637,7 @@ impl SettingsDraft {
                     type_: entry.type_,
                 })
                 .collect(),
+            pr_status_enabled: self.github.pr_status_enabled,
         })
     }
 
@@ -893,6 +899,7 @@ impl SettingsDraft {
             },
             github: GithubDraft {
                 entries: settings.issue_label_types.clone(),
+                pr_status_enabled: settings.pr_status_enabled,
             },
             error: None,
             baseline: Some(settings.clone()),
@@ -1043,6 +1050,8 @@ pub enum Msg {
     IssueMappingMoved(usize, Direction),
     /// **Restore defaults** (feature 034, FR-018, FR-021).
     IssueMappingDefaultsRestored,
+    /// The pull request status switch was toggled (feature 040, FR-029).
+    PrStatusToggled(bool),
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -1137,6 +1146,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::IssueMappingDefaultsRestored => {
             edit_mapping(state, |entries| *entries = default_mapping())
         }
+        Msg::PrStatusToggled(on) => edit(state, |draft| draft.github.pr_status_enabled = on),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted {

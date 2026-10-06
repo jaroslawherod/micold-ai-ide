@@ -14,12 +14,12 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
-    DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
+    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter,
+    WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
-use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -906,23 +906,45 @@ fn statuses(of: &[(&str, u64)]) -> BTreeMap<String, PullRequestStatus> {
 #[test]
 fn a_worktree_row_whose_branch_has_a_status_projects_it_with_its_age() {
     let held = statuses(&[("feat/a", 7), ("feat/b", 8)]);
-    let row = row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(1_000), 1_090)
-        .expect("feat/a has a pull request");
+    let row = row_pull_request(
+        &worktree_entry("a", vec![], vec![]),
+        &held,
+        Some(1_000),
+        1_090,
+    )
+    .expect("feat/a has a pull request");
 
-    assert_eq!(row.status, &pull_request(7), "the status of the row's own branch");
+    assert_eq!(
+        row.status,
+        &pull_request(7),
+        "the status of the row's own branch"
+    );
     assert_eq!(row.age_secs, 90, "now minus the time the reading started");
 
-    let other = row_pull_request(&worktree_entry("b", vec![], vec![]), &held, Some(1_000), 1_000)
-        .expect("feat/b has one too");
-    assert_eq!(other.status.number, 8, "each row takes its own branch's entry");
+    let other = row_pull_request(
+        &worktree_entry("b", vec![], vec![]),
+        &held,
+        Some(1_000),
+        1_000,
+    )
+    .expect("feat/b has one too");
+    assert_eq!(
+        other.status.number, 8,
+        "each row takes its own branch's entry"
+    );
 }
 
 /// U98: a clock that reads earlier than the reading has no negative age.
 #[test]
 fn a_clock_before_the_reading_gives_age_zero() {
     let held = statuses(&[("feat/a", 7)]);
-    let row = row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(2_000), 1_000)
-        .expect("listed");
+    let row = row_pull_request(
+        &worktree_entry("a", vec![], vec![]),
+        &held,
+        Some(2_000),
+        1_000,
+    )
+    .expect("listed");
     assert_eq!(row.age_secs, 0);
 }
 

@@ -20,7 +20,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Terminal](#terminal) | The embedded terminal's scrollback limit |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
-| [GitHub issues](#github-issues) | Which worktree type an issue's labels choose |
+| [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
 
 <!-- media: settings-view-light -->
 
@@ -439,7 +439,28 @@ something is being shared.
   control says so rather than accepting a choice it cannot keep. Your sessions are still kept and
   come back resumable; only the running processes inside them stop.
 
-## GitHub issues
+## GitHub
+
+### Show pull request status on worktrees
+
+Off until you turn it on. Checked, each worktree row whose branch has a pull request shows a small
+indicator of that pull request (see [Pull request
+status](worktrees-and-sessions.md#pull-request-status)); unchecked, no row shows one and nothing is
+sent to GitHub for this. It applies to every project and every open window, and is kept in
+`settings.json` with your other settings.
+
+- **What is read:** the pull requests of the open project's own GitHub repository, with your GitHub
+  CLI sign-in (`gh`). Only the repository's name and your worktrees' branch names are sent.
+- **When:** when a project opens, and when you turn the switch on.
+- **Needs:** `gh` installed and signed in (`gh auth login`). Without them the switch can still be
+  checked, but nothing is shown and no error appears. Turning it on is your consent; having `gh`
+  does not turn it on.
+- Turning it off removes every indicator at once.
+
+Save applies it, like every other setting here; another window's change to it shows here without
+waiting for you.
+
+### GitHub issues
 
 When you create a worktree from a GitHub issue, the issue's labels choose its **Type** (see [The
 issue's labels choose the type](worktrees-and-sessions.md#the-issues-labels-choose-the-type)). This

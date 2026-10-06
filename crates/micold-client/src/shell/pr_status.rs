@@ -82,6 +82,10 @@ pub fn listing_arrived(app: &mut App) -> Task<Message> {
 
 /// The live value of the switch, from `Welcome` or `SettingsChanged`.
 pub fn enabled_changed(app: &mut App, enabled: bool) -> Task<Message> {
+    // An open Settings page follows the service's value (feature 040, FR-029).
+    if let Some(draft) = &mut app.core.settings.settings_draft {
+        draft.github.pr_status_enabled = enabled;
+    }
     update(
         app,
         Msg::EnabledChanged {
