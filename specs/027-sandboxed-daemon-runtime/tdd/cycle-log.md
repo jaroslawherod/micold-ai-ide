@@ -934,3 +934,8 @@ compiling stub, so red is an assertion failure, not a build failure.
   asserts nothing else), `SandboxMsg::Replaced`, fired from `on_connected`; 5 passed
 - refactor: `start` builds its mount set and locations through `mount_set` / `locations_for`,
   shared with the re-read. Client lib 525, binary 375 passed
+- U52 (review A, MAJOR): `sandbox_argv::an_adopted_containers_credential_mounts_are_not_projects`.
+  red: an adopted container mounting the AI CLI sign-in and `~/.gitconfig` under a profile sharing
+  neither counted both as projects (left had 3 entries, 1 expected). green:
+  `MountSet::container_projects` takes the `CredentialLayout` and subtracts every credential it
+  names; 3 passed

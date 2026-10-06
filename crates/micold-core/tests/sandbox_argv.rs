@@ -325,7 +325,13 @@ fn a_containers_projects_are_its_project_mounts() {
         },
         false,
     );
-    assert_eq!(mounts.container_projects(None), vec!["/proj/P".to_string()]);
+    assert_eq!(
+        mounts.container_projects(
+            None,
+            &CredentialLayout::conventional(Path::new("/home/u"), None)
+        ),
+        vec!["/proj/P".to_string()]
+    );
 
     let mut destinations: Vec<String> = [
         &mounts.state.container,
@@ -344,9 +350,46 @@ fn a_containers_projects_are_its_project_mounts() {
     destinations.push("/proj/Q".into());
     destinations.push("/proj/P".into());
     assert_eq!(
-        mounts.container_projects(Some(&destinations)),
+        mounts.container_projects(
+            Some(&destinations),
+            &CredentialLayout::conventional(Path::new("/home/u"), None)
+        ),
         vec!["/proj/Q".to_string(), "/proj/P".to_string()],
         "an adopted container's projects are what it mounts besides state, home, token and \
          credentials, whoever registered them"
+    );
+}
+
+/// U52, FR-036c (BUG-574, review A): a credential an adopted container mounts is not a project,
+/// even when this client's profile does not share it. Another window may have created the
+/// container with the AI CLI sign-in shared, or the share was turned off after bring-up.
+#[test]
+fn an_adopted_containers_credential_mounts_are_not_projects() {
+    let layout = CredentialLayout::conventional(Path::new("/home/u"), None);
+    let mounts = MountSet::build_for(
+        &[PathBuf::from("/proj/P")],
+        &SandboxProfile::default(),
+        &layout,
+        PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
+        SecretMount {
+            host: PathBuf::from("/home/u/.local/share/micold-ai-ide/sandbox.token"),
+            container: PathBuf::from("/run/micold/token"),
+        },
+        false,
+    );
+    let destinations: Vec<String> = [
+        mounts.state.container.to_string_lossy().into_owned(),
+        mounts.home.container.to_string_lossy().into_owned(),
+        mounts.secret.container.to_string_lossy().into_owned(),
+        "/home/u/.claude/.credentials.json".into(),
+        "/home/u/.gitconfig".into(),
+        "/proj/P".into(),
+    ]
+    .into();
+    assert_eq!(
+        mounts.container_projects(Some(&destinations), &layout),
+        vec!["/proj/P".to_string()],
+        "a credential this profile does not share is still a credential, not a project"
     );
 }

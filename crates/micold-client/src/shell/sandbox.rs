@@ -405,7 +405,10 @@ fn locations_for(
         shared: mounts.shared_locations(mounted),
         denied: mounts.denied_host_paths(),
         unshared_sign_in: unshared_sign_in.map(|p| p.to_string_lossy().into_owned()),
-        projects: mounts.container_projects(mounted),
+        projects: mounts.container_projects(
+            mounted,
+            &CredentialLayout::conventional(&facts.home, facts.layout.ssh_agent.as_deref()),
+        ),
     }
 }
 

@@ -342,7 +342,8 @@ impl Sandbox {
     /// Reports whether anything changed. Nothing does unless the sandbox has a container and this
     /// one is under another id: one still coming up adopts its container from its own bring-up.
     /// Nothing restarts either way (R9). A new container was made under the current keep-running
-    /// answer, so that reason goes with the old one.
+    /// answer, so that reason goes with the old one. A `Failed` sandbox holds no container and so
+    /// adopts nothing here: leaving `Failed` is the user's restart, never a background re-read.
     pub fn replaced(
         &mut self,
         id: ContainerId,

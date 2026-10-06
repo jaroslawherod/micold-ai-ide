@@ -775,8 +775,14 @@ impl MountSet {
     /// `mounted` has the meaning it has in [`Self::shared_locations`]. `None`, a container created
     /// from this very set: its projects. `Some`, one this bring-up adopted: its destinations less
     /// this set's own non-project mounts (state, home, token, credentials), so a project another
-    /// window registered and this client never did is still counted as shared.
-    pub fn container_projects(&self, mounted: Option<&[String]>) -> Vec<String> {
+    /// window registered and this client never did is still counted as shared. Every credential
+    /// `layout` names is subtracted too, shared by this set or not, so a container created with a
+    /// share this profile lacks is not read as sharing an extra project.
+    pub fn container_projects(
+        &self,
+        mounted: Option<&[String]>,
+        layout: &CredentialLayout,
+    ) -> Vec<String> {
         let path = |p: &Path| p.to_string_lossy().into_owned();
         match mounted {
             None => self.projects.iter().map(|m| path(&m.container)).collect(),
@@ -786,6 +792,12 @@ impl MountSet {
                     .chain(std::iter::once(&self.secret.container))
                     .chain(self.credentials.iter().map(|c| &c.container))
                     .map(|p| path(p))
+                    // Every credential the layout could mount, shared by this profile or not: the
+                    // container may come from another window, or from before a share was turned off.
+                    .chain(CredentialShare::ALL.into_iter().filter_map(|share| {
+                        let host = layout.path_for(share)?;
+                        Some(path(&pathmap::map_for(host, cfg!(windows))))
+                    }))
                     .collect();
                 mounted
                     .iter()
