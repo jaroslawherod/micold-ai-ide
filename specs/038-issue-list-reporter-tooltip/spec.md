@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Closed 2026-10-06 — shipped in PRs #525, #534, #538, #543, #549, #576, #603, #605, and the close PR
+**Status**: Closed 2026-10-06 — shipped in PRs #525, #534, #538, #543, #549, #576, #603, #605, #606
 
 **Input**: User description: "Implement GitHub issue #518 (https://github.com/jaroslawherod/micold-ai-ide/issues/518): in the new-worktree form's issue list, show the reporter and labels on a second, wrapping line, and show a truncated description in a tooltip after the cursor rests on a row for 3 seconds. Read the issue with `gh issue view 518` for the acceptance criteria and code pointers."
 
