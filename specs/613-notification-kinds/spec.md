@@ -20,7 +20,7 @@ This feature sorts attention events into **kinds**, notifies by default only for
 
 ### Session 2026-10-06
 
-- Q: Is the long-task threshold fixed at 60 seconds, or user-configurable in Settings? → A: Fixed at 60 seconds; no setting. _(orchestrator default, option A recommended; user asked, answer pending — may switch to adjustable before plan)_
+- Q: Is the long-task threshold fixed at 60 seconds, or user-configurable in Settings? → A: User-adjustable in Settings, in whole seconds, 60 by default, shown next to the **Long task finished** switch. _(decided by the user, 2026-10-06, D4 = B; replaces the earlier provisional answer "fixed at 60 seconds")_
 
 ## Terms
 
@@ -32,7 +32,7 @@ This feature sorts attention events into **kinds**, notifies by default only for
   - **Long task finished**: the session finished a turn whose turn duration was at least the long-task threshold.
   - **Turn finished**: the session finished a turn whose turn duration was below the long-task threshold.
   - **Session error**: the session ended because of an error: its AI CLI reported an error and stopped, or its process exited abnormally and the session service did not bring it back (it gave up restarting it after repeated crashes, or could not restart it). An abnormal exit that the session service recovers from by restarting the session is not an ending.
-- **Long-task threshold**: the turn duration from which a finished turn counts as a long task. Fixed at 60 seconds; the user cannot change it.
+- **Long-task threshold**: the turn duration from which a finished turn counts as a long task. A setting, in whole seconds from 10 to 3600, 60 by default (FR-025).
 - **Kind icon**: the icon that stands for one notification kind, distinct in shape from the other three.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -63,11 +63,11 @@ A developer runs five sessions across two projects. Today every turn of every se
 
 ### User Story 2 - Choose which kinds of notifications I get (Priority: P2)
 
-A developer wants to hear about every finished turn while they pair with an agent on one task; another only cares about permissions and errors. In Settings, under **Desktop notifications**, each kind has its own switch with its icon, its name and one line saying when it fires. The master switch still turns everything off at once.
+A developer wants to hear about every finished turn while they pair with an agent on one task; another only cares about permissions and errors; a third finds a minute too short to call a task long. In Settings, under **Desktop notifications**, each kind has its own switch with its icon, its name and one line saying when it fires, and next to **Long task finished** a field sets, in seconds, how long a turn must last to count as a long task. The master switch still turns everything off at once.
 
 **Why this priority**: The issue asks for it, and it is what lets users who want the old behaviour have it back. Story 1 delivers the value with the defaults; this story makes it adjustable.
 
-**Independent Test**: Turn **Turn finished** on and **Long task finished** off, have a session not in view finish a short turn and then a long one, and confirm one notification for the short turn and none for the long one. Restart and confirm the switches kept their positions.
+**Independent Test**: Turn **Turn finished** on and **Long task finished** off, have a session not in view finish a short turn and then a long one, and confirm one notification for the short turn and none for the long one. Turn **Long task finished** back on, set the long-task threshold to 20 seconds, and confirm a 30-second turn raises **Long task finished**. Restart and confirm the switches and the threshold kept their values.
 
 **Acceptance Scenarios**:
 
@@ -80,6 +80,10 @@ A developer wants to hear about every finished turn while they pair with an agen
 7. **Given** the user changed kind switches and restarted the application (or the computer), **When** they open Settings, **Then** every switch is as they left it.
 8. **Given** a settings file written before this feature, with **Desktop notifications** on or off, **When** the application starts, **Then** **Desktop notifications** keeps its value and the kind switches take their defaults.
 9. **Given** the kind switches, **When** the user looks at Settings, **Then** there is no switch per AI CLI; each kind switch applies alike to sessions of every AI CLI (039 FR-028).
+10. **Given** a fresh installation, **When** the user opens Settings, **Then** next to the **Long task finished** switch there is a long-task threshold field showing 60, in seconds, with its allowed range stated.
+11. **Given** the user sets the long-task threshold to 20 seconds and saves, **When** a session not in view finishes a 30-second turn, **Then** one **Long task finished** notification appears; a 15-second turn is **Turn finished**. Nothing needs restarting, and a turn already running when the value was saved is classified by the new value when it finishes.
+12. **Given** the user types a value below 10, above 3600, or not a whole number into the threshold field, **When** they save, **Then** the save is refused with a message naming the allowed range, the field is marked, and the stored threshold is unchanged.
+13. **Given** a settings file written before this feature, or one whose threshold is outside 10–3600 seconds, **When** the application starts, **Then** the threshold is 60 seconds for the first, and the nearest bound (10 or 3600) for the second.
 
 ---
 
@@ -107,6 +111,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **A helper agent finishing inside a turn** (for example Claude Code's subagent stop): the session goes on with its turn and is not waiting for the user, so this is not a change to awaiting input. It raises no notification, does not make the session unread, and neither ends nor pauses the turn (FR-024).
 - **Several permission requests in one turn**: each stop in the middle of the turn, after the session worked again, is a new **Needs permission** event and is notified (when the kind is on and the session not in view).
 - **Turn duration exactly at the threshold**: counts as a long task.
+- **Threshold changed while a turn is running**: the turn is classified by the threshold in force when it finishes. Turns that already finished keep their kind; nothing is notified again or withdrawn.
 - **A turn whose start the application did not see** (the application or the session service started while the session was already working, or the connection was lost before the turn began and was restored after it ended): the turn duration is measured from the earliest moment the application knew the session was working; a turn whose start is unknown is **Turn finished** unless the known part already reaches the threshold.
 - **A session that ends while waiting for a permission**: if the ending is an error, it is **Session error**; otherwise nothing.
 - **A permission refused, and the turn ends there**: the session was already awaiting input since it asked, so the end of the turn is no new change: no notification and no new unread mark (039 FR-003).
@@ -119,7 +124,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **Several windows**: one event raises one notification (039 FR-006a), of the same kind whichever window shows it.
 - **Reconnection**: a session found awaiting input after a reconnection is treated as a change at the moment of reconnection (039 FR-006); its kind is the one the session service decided when the session changed, and is **Turn finished** when the application cannot tell. An event the session service counted before it was itself restarted is not notified afterwards, whatever its kind (039 H3: activity does not survive a restart of the session service).
 - **Clicking a notification**: does what 039 FR-011 to FR-015a say, for every kind. Clicking a **Session error** notification shows the ended session as the sidebar shows any ended session.
-- **Settings file unreadable**: the application runs on default settings, so the three default kinds are on and **Turn finished** is off.
+- **Settings file unreadable**: the application runs on default settings, so the three default kinds are on, **Turn finished** is off and the long-task threshold is 60 seconds.
 - **Operating system refuses notifications**: as 039 FR-010, for every kind.
 - **Sessions in a container** (sandbox): behave the same as sessions run directly on the computer (039 FR-007).
 - **Cross-platform** (Principle VI): the kinds, defaults and switches behave the same on Linux, macOS and Windows; only whether the icon is shown depends on the system's notification facility (FR-016).
@@ -149,9 +154,11 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **FR-009**: Settings MUST keep the **Desktop notifications** switch (039 FR-026) and MUST offer, below it, one switch per notification kind, in the order **Needs permission**, **Session error**, **Long task finished**, **Turn finished**, each with its kind icon, its name and a one-line description of when it fires.
 - **FR-010**: On a fresh installation, with a settings file written before this feature, and when the settings file cannot be read, **Needs permission**, **Session error** and **Long task finished** MUST be on and **Turn finished** MUST be off. A settings file written before this feature MUST keep its **Desktop notifications** value.
 - **FR-011**: The kind switches MUST be stored with the application's other settings, on the user's computer only (Principle IV), and kept across restarts.
-- **FR-012**: While **Desktop notifications** is off, the kind switches MUST be shown with their stored positions and MUST NOT be changeable, and no notification of any kind may be raised. Turning it on again MUST restore the kinds as they were.
-- **FR-013**: A change to any switch MUST take effect for the next event, for sessions already running, without a restart. Events that happened while their kind or the master switch was off MUST NOT be notified afterwards.
-- **FR-014**: Each kind switch MUST apply alike to sessions of every AI CLI. The application MUST NOT offer switches per AI CLI (039 FR-028).
+- **FR-012**: While **Desktop notifications** is off, the kind switches and the long-task threshold MUST be shown with their stored values and MUST NOT be changeable, and no notification of any kind may be raised. Turning it on again MUST restore the kinds and the threshold as they were.
+- **FR-013**: A change to any switch, or to the long-task threshold, MUST take effect for the next event, for sessions already running, without a restart; a turn running when the threshold changes is classified by the threshold in force when it finishes. Events that happened while their kind or the master switch was off MUST NOT be notified afterwards.
+- **FR-014**: Each kind switch, and the long-task threshold, MUST apply alike to sessions of every AI CLI. The application MUST NOT offer switches or thresholds per AI CLI (039 FR-028).
+- **FR-025**: Settings MUST offer the long-task threshold next to the **Long task finished** switch, as a whole number of seconds from 10 to 3600, 60 by default, stated in seconds with its allowed range. It MUST be stored with the application's other settings, on the user's computer only, and kept across restarts. A settings file written before this feature, or that cannot be read, MUST give 60. It MUST stay changeable while **Long task finished** is off (it still divides **Turn finished** from **Long task finished**).
+- **FR-026**: A threshold typed into Settings that is not a whole number, or lies outside 10–3600, MUST be refused on save with a message naming the allowed range, and the stored value MUST stay unchanged. A threshold outside 10–3600 found in the settings file, or sent to the session service, MUST be clamped to the nearest bound.
 
 **Icons**
 
@@ -165,8 +172,8 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **FR-019**: Clicking a notification of any kind MUST do what 039 FR-011 to FR-015a say.
 - **FR-020**: When the operating system does not show a notification, 039 FR-010 applies, for every kind.
 - **FR-021**: Everything above MUST behave the same on Linux, macOS and Windows (Principle VI), and with the session service running directly on the computer or in a container (039 FR-007).
-- **FR-022**: The kind icons and the Settings row that pairs a kind icon with its switch MUST come from the shared component library (Principle VIII); the component showcase MUST show the four kind icons and the kind switches, in the light and the dark theme, with **Desktop notifications** on and off.
-- **FR-023**: The user guide MUST describe the four kinds, when each fires, their defaults, their icons, the switches and how they combine with **Desktop notifications**, and that unread marks do not depend on them, in the same change that ships each (Principle VII). The user guide's icon reference MUST list the four kind icons.
+- **FR-022**: The kind icons, the Settings row that pairs a kind icon with its switch, and the long-task threshold field MUST come from the shared component library (Principle VIII); the component showcase MUST show the four kind icons, the kind switches and the threshold field (with a value, and refused with its message), in the light and the dark theme, with **Desktop notifications** on and off.
+- **FR-023**: The user guide MUST describe the four kinds, when each fires, their defaults, their icons, the switches and how they combine with **Desktop notifications**, the long-task threshold (its default, range and when a change applies), and that unread marks do not depend on them, in the same change that ships each (Principle VII). The user guide's icon reference MUST list the four kind icons.
 
 ### Key Entities
 
@@ -174,7 +181,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **Error ending** (new): one session ending because of an error. Its kind is **Session error**. It is notified but does not make the session unread.
 - **Notification kind**: one of four reasons to notify, each with a name, a one-line description, a kind icon and a default (on for three, off for **Turn finished**).
 - **Turn**: a stretch of a session's work from its start to its finish, with a duration; known to the application only while it observes the session.
-- **Notification kind settings**: one on/off choice per kind, stored with the application's settings beside the existing **Desktop notifications** switch, which stays the master switch.
+- **Notification kind settings**: one on/off choice per kind and the long-task threshold in seconds, stored with the application's settings beside the existing **Desktop notifications** switch, which stays the master switch.
 
 ## Success Criteria *(mandatory)*
 
@@ -185,7 +192,8 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **SC-003**: The unread marks and counts after the trials of SC-001 and SC-002 are the same as they would be with every switch on, in 20 of 20 trials.
 - **SC-004**: Shown one notification of each kind in random order, a user names its kind from the icon alone, without reading the text, in at least 9 of 10 trials, on every system that shows the application's icon.
 - **SC-005**: A user who wants to stop **Long task finished** notifications finds and turns off its switch in Settings within 30 seconds, in 5 of 5 trials.
-- **SC-006**: After changing kind switches and restarting the application, every switch keeps its position in 20 of 20 trials.
+- **SC-006**: After changing kind switches and the long-task threshold and restarting the application, every switch keeps its position and the threshold its value in 20 of 20 trials.
+- **SC-008**: With the long-task threshold set to T seconds, for T of 10, 60 and 3600, a turn of T seconds or more is **Long task finished** and a turn of less than T is **Turn finished**, in 20 of 20 trials each.
 - **SC-007**: Every trial above gives the same result with the session service running directly on the computer and in a container.
 
 ## Out of Scope
@@ -204,7 +212,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - "Every session state change" in the issue is 039's notification at the end of every turn. Short turn ends are what bury the important notifications, so **Turn finished** is off by default; users who want 039's behaviour back turn it on.
 - "Errored" means an error ending as defined under **Session error**. Closing or stopping a session yourself is not an error.
 - AI CLIs differ in whether they report an error before stopping: today only GitHub Copilot does (`session.error`). For the others, an error is seen only as an abnormal exit that the session service cannot recover from. This is accepted, not worked around.
-- The long-task threshold is fixed at 60 seconds, not a setting (the issue asks only for per-kind on/off): long enough that a quick exchange stays quiet, short enough that a user who switched away is told when a real task is done.
+- The long-task threshold defaults to 60 seconds: long enough that a quick exchange stays quiet, short enough that a user who switched away is told when a real task is done. The user adjusts it in Settings (D4). The range 10–3600 seconds follows the clamp-on-read, refuse-on-save rule of the existing environment-include timeout: below 10 seconds nearly every turn would be "long", and above an hour **Long task finished** would hardly ever fire, which turning the kind off already expresses.
 - AI CLIs differ in what they report: a CLI that does not report a stop in the middle of a turn cannot raise **Needs permission**; its stops are classified by turn duration. This is accepted, not worked around.
 - The four kinds are fixed. Adding further kinds is a later request.
 - The **Desktop notifications** switch stays as the master switch so that 039's one-switch behaviour and its stored value carry over unchanged.

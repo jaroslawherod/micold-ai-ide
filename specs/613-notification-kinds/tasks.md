@@ -23,7 +23,8 @@ core and service logic; only icon delivery differs, inside the existing
 
 **Wire versions**: each milestone that changes the wire takes the next `PROTOCOL_VERSION` (contract
 [wire.md](./contracts/wire.md), 039 R10): M1 29 → 30 (`AttentionGranted.kind`), M2 30 → 31
-(`SessionErrorNotice`), M3 31 → 32 (`notification_kinds` in `DaemonSettings` and `SettingsSet`). If
+(`SessionErrorNotice`), M3 31 → 32 (`notification_kinds` and `long_task_threshold_secs` in
+`DaemonSettings` and `SettingsSet`). If
 an earlier milestone has not merged when a later one is cut, the later one still bumps once from
 whatever `main` has. No `#[serde(default)]` on wire types.
 
@@ -31,7 +32,11 @@ whatever `main` has. No `#[serde(default)]` on wire types.
 `DaemonState` holds `long_task_threshold: Duration`, initialised from
 `micold_core::attention::LONG_TASK_THRESHOLD` and set by a `pub fn set_long_task_threshold(&self,
 Duration)` that only tests call. `note_activity` passes that field to `TurnClock::change`. The
-constant stays the only definition of 60 s (contract C6).
+constant stays the only definition of 60 s (contract C6). From M3 (D4 = B) the threshold is the
+setting `Settings::long_task_threshold_secs` (10–3600 s, default `LONG_TASK_THRESHOLD`), read live
+from the catalog; the field becomes `long_task_threshold_override: Option<Duration>`, still set
+only by `set_long_task_threshold`, and wins over the setting when set (T063, data-model
+"Long-task threshold").
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -134,12 +139,16 @@ windows; `crates/micold-client/tests/attention_notify.rs` for the notice's notif
 ## Phase 5: User Story 2 — choose which kinds I get (Priority: P2)
 
 **Goal**: Settings shows, under **Desktop notifications**, one row per kind in `NotificationKind::ALL`
-order, each the shared `Checkbox` with the kind's icon, name and one-line note; the rows are
-disabled while the master switch is off. Saving sends the four values to the service, which stores
-them, pushes them to every window and applies them to the next event without a restart.
+order, each the shared `Checkbox` with the kind's icon, name and one-line note, and under **Long
+task finished** the long-task threshold field (seconds, 10–3600, default 60, D4 = B); the rows and
+the field are disabled while the master switch is off. Saving sends the four values and the
+threshold to the service, which stores them, pushes them to every window and applies them to the
+next event without a restart.
 
 **Independent Test**: `crates/micold-daemon/tests/settings_notification_kinds.rs` (NEW);
-`crates/micold-client/tests/features_settings.rs`; quickstart §B5–B6 and §B8.
+`crates/micold-daemon/tests/settings_long_task_threshold.rs` (NEW);
+`crates/micold-core/tests/settings_long_task_threshold.rs` (NEW);
+`crates/micold-client/tests/features_settings.rs`; quickstart §B5–B6, §B8 and §B9.
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
@@ -147,6 +156,11 @@ them, pushes them to every window and applies them to the next event without a r
 - [ ] T033 [P] [US2] Integration tests in `crates/micold-daemon/tests/settings_notification_kinds.rs` (NEW), modelled on `settings_desktop_notifications.rs`, two windows, test threshold 200 ms: `SettingsSet { notification_kinds: Some(k) }` stores all four values, persists them to `settings.json` and pushes `SettingsChanged` with them to both windows (W5.3, W5.4); `notification_kinds: None` leaves them unchanged; after a service restart on the same settings directory they are as set (SC-006, US2.7); with **Turn finished** on and **Long task finished** off, a short turn's claim is granted `TurnFinished` and a long turn's is refused (US2 Independent Test); for each kind with only that kind on, events of that kind are granted and events of the other kinds are not (SC-002; Session error through the give-up path); `attention_seq` and unread are the same with every switch off as with every switch on (SC-003, US2.3); an event while a kind is off is not granted after the kind is turned on, and an event while the master switch is off is not granted after it is turned on (C15, FR-013, US2.4, US2.6)
 - [ ] T034 [P] [US2] Client tests in `crates/micold-client/tests/icons_font.rs` and `crates/micold-client/tests/icons.rs`: `Icon::{NeedsPermission, SessionError, LongTaskFinished, TurnFinished}` are in `Icon::ALL` with the codepoints of Material Symbols `pan_tool`, `error`, `task_alt`, `chat_bubble`, each present in the bundled font (I1); the four are distinct. In `crates/micold-client/tests/notification_icon.rs` (NEW): `notification_icon::icon(kind)` maps each kind to its variant, one-to-one (I2, FR-015). Add `--test notification_icon` to the enumerated `cargo test -p micold-client` list in `.github/workflows/ci.yml`
 - [ ] T035 [P] [US2] Client tests in `crates/micold-client/tests/features_settings.rs`: the draft opened from `DaemonSettings` holds its `notification_kinds`; `SettingsMsg::NotificationKindToggled(kind, on)` changes only that kind in the draft; saving sends `SettingsSet { notification_kinds: Some(<whole draft>) }` (S3, W5.4); with the draft's `desktop_notifications` false the kind values are kept unchanged and the view model marks the rows not toggleable (S2, FR-012, US2.5); turning the master switch back on leaves the kind values as they were (US2.6); a `SettingsChanged` from another window updates the stored values
+- [ ] T056 [P] [US2] Settings tests in `crates/micold-core/tests/settings_long_task_threshold.rs` (NEW), modelled on `settings_env_include.rs`: `Settings::default().long_task_threshold_secs == LONG_TASK_THRESHOLD.as_secs()` (60, FR-025); `MIN_LONG_TASK_THRESHOLD_SECS == 10`, `MAX_LONG_TASK_THRESHOLD_SECS == 3600`; `clamp_long_task_threshold` maps 0 → 10, 9 → 10, 10 → 10, 600 → 600, 3600 → 3600, 3601 → 3600, `u64::MAX` → 3600; a settings file written before this feature loads 60 (US2.13); a file with 5 loads 10 and one with 99999 loads 3600 (clamp on read, FR-026, US2.13); a round trip keeps 120; an unreadable file gives 60 (Edge Cases "Settings file unreadable"). In `crates/micold-daemon/src/catalog.rs` tests: `set_long_task_threshold(5)` stores 10, `(99999)` stores 3600, `(120)` stores 120, `long_task_threshold()` returns it as a `Duration`, and `persist_service_settings` writes the field into the file it writes
+- [ ] T057 [P] [US2] Protocol tests in `crates/micold-core/tests/protocol_roundtrip.rs` and `crates/micold-core/tests/schema_hash.rs`, beside T032's: `DaemonSettings.long_task_threshold_secs` and `ClientMsg::SettingsSet.long_task_threshold_secs: Option<u64>` round-trip, `None` included, in the same version 32 schema hash (W5.6). Update `crates/micold-core/tests/settings_contract_examples.rs` if it lists the settings file's fields
+- [ ] T058 [P] [US2] Integration tests in `crates/micold-daemon/tests/settings_long_task_threshold.rs` (NEW), modelled on `settings_desktop_notifications.rs`, two windows, no test override: `SettingsSet { long_task_threshold_secs: Some(20) }` stores 20, persists it to `settings.json` and pushes `SettingsChanged` with it to both windows (W5.6); `None` leaves it unchanged; `Some(5)` stores 10 and `Some(99999)` stores 3600 (FR-026); after a service restart on the same settings directory it is as set (SC-006, US2.7); `DaemonState`'s effective threshold follows the setting after each `SettingsSet` with no restart, and a turn begun before the change is classified with the value in force at its `Stop` (assert through `DaemonState::effective_long_task_threshold()`, the accessor the `Stop` path reads (T063), FR-013, US2.11, Edge Cases "Threshold changed while a turn is running"); with `set_long_task_threshold(200 ms)` the override wins over the setting; `attention_seq` and unread are unchanged by any threshold value (FR-018)
+- [ ] T059 [P] [US2] `TurnClock` and kind tests in `crates/micold-core/src/attention.rs`: for a threshold T of 10 s, 60 s and 3600 s, a finish at `since + T` is `LongTaskFinished` and at `since + T − 1 ms` is `TurnFinished` (SC-008); a turn started under one threshold and finished with another passed to `change` is classified by the one passed at the finish (FR-013); `NotificationKind::LongTaskFinished.description()` is "A session finished a turn at least as long as the long-task threshold." and contains no duration (data-model; replaces T001's "a minute" check, which the implementation task updates)
+- [ ] T060 [P] [US2] Client tests in `crates/micold-client/tests/features_settings.rs`: the draft opened from `DaemonSettings` shows `long_task_threshold_secs` as text ("60" by default, US2.10); `SettingsMsg::LongTaskThresholdChanged(text)` edits only that text; saving "20" sends `SettingsSet { long_task_threshold_secs: Some(20) }` (S6, US2.11); saving "9", "3601", "abc" or "" refuses the save with the S6 message on `FieldId::SettingsLongTaskThreshold` and sends nothing (US2.12, FR-026); with the draft's `desktop_notifications` false the field is not editable and keeps its value (FR-012); with **Long task finished** off it stays editable (FR-025); a `SettingsChanged` from another window updates the stored value. In `crates/micold-client/tests/settings_sections.rs`: the Desktop notifications section shows the threshold field directly after the **Long task finished** row, indented as the kind rows, labelled "Long-task threshold" with supporting text "Seconds, 10–3600" (S5, US2.10)
 - [ ] T036 [P] [US2] Component tests in `crates/micold-client/src/ui/material/checkbox.rs` (`#[cfg(test)]`) and `crates/micold-client/tests/icon_roles.rs`: `Checkbox::new(…).icon(Icon)` is chainable and keeps label, checked state and toggle; the glyph is drawn in the label's colour role, so it holds ≥3:1 against the row's background in the light and the dark theme for an enabled row (S4, FR-017); a disabled row (no `on_toggle`) shows the glyph in the disabled role as the label is, exempt from the 3:1 gate (FR-017). In `crates/micold-client/tests/settings_sections.rs`: the Desktop notifications section lists, after the master switch, four kind rows in `NotificationKind::ALL` order, each with the kind's name and `description()` as its note, indented one spacing step (S1, FR-009, US2.1, US2.9: no per-CLI rows)
 
 ### Implementation for User Story 2
@@ -159,10 +173,16 @@ them, pushes them to every window and applies them to the next event without a r
 - [ ] T042 [US2] Settings draft: `notification_kinds` in the draft, `SettingsMsg::NotificationKindToggled(NotificationKind, bool)`, the save path sending the whole value, and the `SettingsChanged` update, in `crates/micold-client/src/features/settings.rs` (T035)
 - [ ] T043 [US2] Settings view in `crates/micold-client/src/ui/settings/environment.rs`: below **Desktop notifications**, for each `NotificationKind::ALL`, `field_note(Checkbox::new(kind.name(), on, roles).icon(notification_icon::icon(kind)), Some(kind.description()))` indented one spacing step, with `on_toggle` only while the draft's `desktop_notifications` is true (S1, S2) (T036)
 - [ ] T044 [US2] Showcase: the Checkbox section in `crates/micold-client/src/showcase/sections/controls.rs` shows the four kind rows (icon, name, note), checked and unchecked, enabled and disabled, in the light and the dark theme (I8, FR-022)
+- [ ] T061 [US2] In `crates/micold-core/src/settings.rs`: `MIN_LONG_TASK_THRESHOLD_SECS`, `MAX_LONG_TASK_THRESHOLD_SECS`, `clamp_long_task_threshold`, `default_long_task_threshold_secs()` returning `LONG_TASK_THRESHOLD.as_secs()` (C6), and `long_task_threshold_secs` on `Settings` and its file form with that serde default, clamped in `into_settings`, exactly as `env_include_timeout_secs` (lines ~50–90, ~126, ~410, ~501); in `crates/micold-core/src/attention.rs`, `LongTaskFinished.description()` becomes the threshold-free text and T001's description test is updated to it (T056, T059)
+- [ ] T062 [US2] `DaemonSettings.long_task_threshold_secs: u64` and `ClientMsg::SettingsSet.long_task_threshold_secs: Option<u64>` in `crates/micold-core/src/protocol/messages.rs`, in T037's 31 → 32 bump and schema-hash refresh; fill every `SettingsSet` and `DaemonSettings` construction site in the workspace (T057)
+- [ ] T063 [US2] Service: `Catalog::set_long_task_threshold(secs)` (clamped), `long_task_threshold() -> Duration`, `DaemonSettings` carrying the value and `persist_service_settings` carrying it over, in `crates/micold-daemon/src/catalog.rs`; in `crates/micold-daemon/src/state.rs`, `long_task_threshold` becomes `long_task_threshold_override: Option<Duration>` set by `set_long_task_threshold`, and `pub fn effective_long_task_threshold(&self) -> Duration` (the override, else `catalog.long_task_threshold()`) is what both readers (`note_activity`, line ~3351, and line ~3493) call, on every event (C2); handle `SettingsSet.long_task_threshold_secs` in `crates/micold-daemon/src/server.rs` beside `env_include_timeout_secs`, then push `SettingsChanged` (T058)
+- [ ] T064 [US2] Client: in `crates/micold-client/src/features/settings.rs`, the draft's threshold text seeded from `DaemonSettings`, `SettingsMsg::LongTaskThresholdChanged(String)`, a `long_task_threshold()` check modelled on `timeout()` (S6) on the save path, the `SettingsChanged` update; `FieldId::SettingsLongTaskThreshold` in `crates/micold-client/src/features/window.rs`; in `crates/micold-client/src/ui/settings/environment.rs`, the `TextField` of S5 under the **Long task finished** row, with `on_input` only while the draft's `desktop_notifications` is true, and its message pair in the file's field/message table (T060)
+- [ ] T065 [US2] Showcase: under a Long task finished kind row in `crates/micold-client/src/showcase/sections/controls.rs`, the threshold field valid (60), refused (5, with the S6 message) and disabled, in the light and the dark theme (S7, FR-022)
+- [ ] T066 [US2] User guide `docs/user-guide/settings.md` §Desktop notifications: the long-task threshold next to **Long task finished**, in seconds, 10–3600, 60 by default; it decides between **Long task finished** and **Turn finished** even while the former is off; a change applies to the next turn end, one already running included; out-of-range input is refused, an out-of-range value in the file is clamped; the settings file key `long_task_threshold_secs`. Reword M1's fixed wording (line ~157, "a turn that took a minute or more", and any other fixed-60 s wording in that section) to "at least as long as the long-task threshold (60 seconds by default)" (FR-023, FR-025, FR-026)
 - [ ] T045 [US2] User guide `docs/user-guide/settings.md` §Desktop notifications: the four kind switches, their order, defaults and notes; the master switch turns all off and greys the rows, which keep their positions; changes apply to the next event without a restart, and events while off are never notified later; the switches apply to every AI CLI; unread marks do not depend on them; the settings file key `notification_kinds` and its four fields (FR-023)
 
 **Checkpoint**: `mise run gate` green; visual pass of Settings and the showcase (quickstart §B5,
-§B8) recorded in `specs/613-notification-kinds/visual-pass/`.
+§B8, §B9) recorded in `specs/613-notification-kinds/visual-pass/`.
 
 ---
 
@@ -226,6 +246,9 @@ dark (quickstart §B2–B4, §B7) recorded in `specs/613-notification-kinds/visu
 
 - T001 and T002; within each phase every test task marked [P].
 - In Phase 5, T039, T040 and T041 touch different files and can run together.
+- In Phase 5, the threshold tasks T056–T066 (D4 = B) sit beside the switch tasks: T056–T060 are
+  tests, written before T061–T066; T062 shares T037's protocol bump, and T064 and T043 both edit
+  `environment.rs` (not [P] with each other).
 
 ---
 
@@ -286,13 +309,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Per-kind switches in Settings
 
-- **Tasks**: T032–T045
+- **Tasks**: T032–T045, T056–T066 (T056–T066: the adjustable long-task threshold, D4 = B)
 - **Deliverable**: On `main`, Settings shows four kind switches with their icons and notes under
-  **Desktop notifications**, greyed while it is off; changes apply to the next event without a
+  **Desktop notifications**, and next to **Long task finished** a long-task threshold in seconds
+  (10–3600, default 60), all greyed while it is off; changes apply to the next event without a
   restart and survive a restart; the showcase and the user guide (settings and icons) show them.
-- **Satisfies**: US2 acceptance scenarios 1–9; FR-009, FR-011–FR-014, FR-015 (Settings side),
-  FR-017 (Settings contrast), FR-022, FR-023; SC-002, SC-003, SC-005, SC-006; wire W5.3, W5.4
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib checkbox`; `scripts/build-lock.sh cargo test -p micold-daemon --test settings_notification_kinds --test settings_desktop_notifications`; `scripts/build-lock.sh cargo test -p micold-client --test features_settings --test icons_font --test icons --test icon_roles --test settings_sections --test notification_icon`; quickstart §B5, §B6, §B8 via the `visual-pass` skill
+- **Satisfies**: US2 acceptance scenarios 1–13; FR-009, FR-011–FR-014, FR-015 (Settings side),
+  FR-017 (Settings contrast), FR-022, FR-023, FR-025, FR-026; SC-002, SC-003, SC-005, SC-006,
+  SC-008; wire W5.3, W5.4, W5.6
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib checkbox`; `scripts/build-lock.sh cargo test -p micold-daemon --lib catalog`; `scripts/build-lock.sh cargo test -p micold-daemon --test settings_notification_kinds --test settings_long_task_threshold --test settings_desktop_notifications`; `scripts/build-lock.sh cargo test -p micold-client --test features_settings --test icons_font --test icons --test icon_roles --test settings_sections --test notification_icon`; quickstart §B5, §B6, §B8, §B9 via the `visual-pass` skill
 - **Depends on**: M2
 - **Tier**: full
 

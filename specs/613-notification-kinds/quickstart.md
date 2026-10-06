@@ -12,6 +12,7 @@ Run CI's gate (`mise run gate`). The feature's own checks:
 | `mise run test-core` | `TurnClock` (C1–C6), kinds and defaults, settings load cases (FR-010), `notification_text` (T1), wire round-trip and schema hash |
 | `cargo test -p micold-daemon --lib attention activity` | kind-aware note/grant, pending pruning, error-notice target, Copilot error flag, `SubagentStop` ignored and unregistered (FR-024) |
 | `cargo test -p micold-daemon --test attention_events --test attention_claims --test settings_desktop_notifications` | per-kind notification over a real connection: SC-001 sequence, one-kind-on trials (SC-002), unread unchanged (SC-003), switches across a service restart (SC-006), Session error on give-up and on Copilot `session.error`, none with no window |
+| `cargo test -p micold-daemon --test settings_long_task_threshold` and `mise run test-core` (`settings_long_task_threshold`) | threshold setting: default 60, clamp on read and on `SettingsSet`, persistence, read live at each turn end (FR-025, FR-026, SC-008) |
 | `cargo test -p micold-client --test icons_font --test notification_icon` | codepoints in the font (I1), tile contrast and distinctness (I3, I4) |
 | `cargo test -p micold-client` (backend request tests) | Linux `image-data`, Windows image entry, macOS image path (I5–I7) |
 
@@ -37,7 +38,11 @@ one project; Settings at defaults.
 7. Switch the desktop between light and dark theme and repeat 2–4 → each icon is recognisable on
    both. Compare each with its Settings row icon.
 8. Open the component showcase → Checkbox section shows the kind rows in both themes, enabled and
-   disabled.
+   disabled, and the long-task threshold field valid, refused and disabled.
+9. In Settings, next to **Long task finished**, the long-task threshold shows 60 (seconds, 10–3600).
+   Type 5 and save → refused with the range message, the field marked, the value unchanged. Set 20
+   and save; have B run a 30 s turn → one **Long task finished** notification; a 10 s turn → none.
+   Turn **Desktop notifications** off → the field greys out with its value. Restart → it shows 20.
 
 Repeat 2–4 on macOS and Windows (icon may be absent where the OS does not show app images; the
 title must still name the kind).

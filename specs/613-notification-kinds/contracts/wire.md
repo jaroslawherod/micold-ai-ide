@@ -18,6 +18,10 @@ SessionErrorNotice { project: PathBuf, session: SessionId },
 pub notification_kinds: NotificationKinds,
 // ClientMsg::SettingsSet — new field (`None` leaves it unchanged)
 notification_kinds: Option<NotificationKinds>,
+// DaemonSettings — new field (M3, same bump as notification_kinds)
+pub long_task_threshold_secs: u64,
+// ClientMsg::SettingsSet — new field (`None` leaves it unchanged)
+long_task_threshold_secs: Option<u64>,
 ```
 
 | # | Rule |
@@ -27,3 +31,4 @@ notification_kinds: Option<NotificationKinds>,
 | W5.3 | `notification_kinds` is stored as `Settings::notification_kinds`, written by `persist_service_settings` and pushed with `SettingsChanged` to every window, as `desktop_notifications` is (039 W4.1). |
 | W5.4 | `SettingsSet.notification_kinds` replaces all four values at once; the client sends its whole draft value. |
 | W5.5 | `AttentionClaim`, `WindowView`, `SessionReveal`/`RevealSession`, `attention_seq` and `unread` are unchanged (039 W1–W3). |
+| W5.6 | `long_task_threshold_secs` is stored as `Settings::long_task_threshold_secs`, written by `persist_service_settings` and pushed with `SettingsChanged` to every window. The service clamps a `SettingsSet` value to 10–3600 (FR-026); the client sends only values it validated. It ships in the same milestone and `PROTOCOL_VERSION` bump as `notification_kinds` (M3, 31 → 32). |

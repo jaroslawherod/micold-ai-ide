@@ -36,19 +36,25 @@ permission**; a `Stop` ends it and is **Long task finished** when `now − since
 finished** otherwise, waits included. A change into awaiting input with no turn known (`Unknown →
 AwaitingInput`) is **Turn finished**. The threshold is
 `pub const LONG_TASK_THRESHOLD: Duration = Duration::from_secs(60)` in `micold_core::attention`,
-the only place the number appears; `TurnClock::change` takes the threshold as an argument, and the
-service passes the constant.
+the only place the number appears; `TurnClock::change` takes the threshold as an argument. M1's
+service passes the constant; from M3 the service passes the setting
+`Settings::long_task_threshold_secs`, whose default is the constant (D4 = B, decided by the user
+2026-10-06; data-model "Long-task threshold").
 
 **Rationale.** Matches the spec's Terms (turn, turn duration) and Edge Cases (unknown start,
-exactly at the threshold counts as long). Taking the threshold as an argument means a later
-adjustable threshold (D4 is provisional) is a new `Settings` field read where the constant is
-passed today, with no change to the classification or its tests. A monotonic clock is immune to
+exactly at the threshold counts as long). Taking the threshold as an argument means the
+adjustable threshold (D4 = B) is a new `Settings` field read where the constant is passed in M1,
+with no change to the classification or its tests. Its bounds, 10–3600 s, and its handling follow
+`env_include_timeout_secs` (clamp on read and in the service, refuse on save in the client): under
+10 s nearly every turn would be long; over an hour the kind would hardly fire, which its switch
+already expresses. A monotonic clock is immune to
 wall-clock changes.
 
 **Alternatives rejected.**
 - *Measure from the last `Working` signal*: excludes the waiting time FR-003 requires.
-- *Store the threshold in `Settings` now*: the clarified spec (D4) fixes it; a setting with no UI
-  is dead configuration.
+- *A fixed threshold, no setting* (D4 option A): rejected by the user's D4 decision.
+- *Threshold per AI CLI*: FR-014; one value applies to every CLI.
+- *Minutes instead of seconds*: seconds match the existing timeout field and allow 10–59 s.
 - *Wall-clock timestamps*: jump with NTP or a manual clock change.
 
 ## R3 — Which signal is "in the middle of a turn"

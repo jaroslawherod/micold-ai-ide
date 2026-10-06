@@ -10,13 +10,14 @@ Closed enum, `Copy`, serde as snake-case strings on the wire.
 |---|---|---|---|---|
 | `NeedsPermission` | Needs permission | A session stopped to ask for a permission or an answer. | on | `Icon::NeedsPermission` |
 | `SessionError` | Session error | A session stopped because of an error. | on | `Icon::SessionError` |
-| `LongTaskFinished` | Long task finished | A session finished a turn that took a minute or more. | on | `Icon::LongTaskFinished` |
+| `LongTaskFinished` | Long task finished | A session finished a turn at least as long as the long-task threshold. | on | `Icon::LongTaskFinished` |
 | `TurnFinished` | Turn finished | A session finished a shorter turn. | off | `Icon::TurnFinished` |
 
 - `NotificationKind::ALL: [NotificationKind; 4]` in the order above (FR-009).
 - `default_on(self) -> bool`.
-- The description of **Long task finished** is derived from `LONG_TASK_THRESHOLD` (one minute), not
-  a second literal.
+- The description of **Long task finished** names the long-task threshold, not a duration: the
+  threshold is a setting (D4 = B) shown in the field beside it. (M1 built it from
+  `LONG_TASK_THRESHOLD` as "a minute or more"; M3 changes it, T061.)
 - The `Icon` mapping lives in the client (`notification_icon::icon(kind)`), since `Icon` is a client
   type.
 
@@ -37,6 +38,35 @@ pub struct NotificationKinds {
   `Settings::default()`.
 - Validation: none beyond serde; a non-boolean value fails that field's parse the way other
   settings fields do (settings load falls back per its existing rules).
+
+## Long-task threshold (new setting, `micold_core::settings`)
+
+```rust
+pub const MIN_LONG_TASK_THRESHOLD_SECS: u64 = 10;
+pub const MAX_LONG_TASK_THRESHOLD_SECS: u64 = 3600;
+pub fn clamp_long_task_threshold(secs: u64) -> u64; // secs.clamp(MIN, MAX)
+fn default_long_task_threshold_secs() -> u64 { LONG_TASK_THRESHOLD.as_secs() } // 60
+// Settings and its file form:
+#[serde(default = "default_long_task_threshold_secs")]
+pub long_task_threshold_secs: u64,
+```
+
+- Follows `env_include_timeout_secs` (same file): default function, MIN/MAX constants, clamp.
+- **Load**: a missing field (pre-feature file) is 60; an unreadable file uses `Settings::default()`
+  (60); a value outside 10–3600 is clamped to the nearest bound in `into_settings` (clamp on read,
+  rule S-7) (FR-025, FR-026).
+- **Service set**: `Catalog::set_long_task_threshold(secs)` stores `clamp_long_task_threshold(secs)`
+  and persists through `persist_service_settings`, which carries the field into the file it writes.
+- **Client save**: the draft holds the text; saving parses a whole number and refuses anything
+  outside MIN..=MAX with "Enter a threshold between 10 and 3600 seconds." (not a number: "Enter a
+  whole number of seconds."), marking `FieldId::SettingsLongTaskThreshold` (refuse on save, S-7).
+- **Use**: the service reads `catalog.long_task_threshold()` (`Duration::from_secs(secs)`) at every
+  `TurnClock::change`, so a change applies to the next turn end, a running turn included (FR-013).
+  `LONG_TASK_THRESHOLD` stays the only definition of 60 s, as the default (C6). The integration
+  tests' sub-second threshold is a test-only override on `DaemonState`
+  (`set_long_task_threshold(Duration)` sets `Some(override)`, which wins over the setting; both
+  readers call `effective_long_task_threshold()`, the override else the setting); it is
+  below MIN and never reaches `Settings`.
 
 ## Effective switch
 

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: orchestrator updates PR #618 body with the M1 section and waits on CI; then milestone M2
+- **Next step**: orchestrator updates PR #618 body (M1 section; D4 amendment) and waits on CI; then milestone M2
 
 ## Pull requests
 
@@ -24,10 +24,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | — | todo |
-| M3 | T032–T045 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
+| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 
-M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
+M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
 
 ## Decisions
 
@@ -37,7 +37,7 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | D2 | spec | Defaults per kind | Needs permission, Session error, Long task finished on; Turn finished off | agent-resolved | issue #613 "Expected" bullet 1 |
 | D3 | spec | Keep 039's Desktop notifications switch? | Yes, as master switch above per-kind switches | agent-resolved | 039 FR-026; stored value carries over |
 | D5 | plan | Claude's `SubagentStop` (mapped to `Stop` by 010): keep, or stop treating it as a turn end? | Ignore it (`HookClass::Ignored`, no longer registered); spec FR-024 + edge case, FR-018 exception | agent-resolved (plan review round 1 F1–F4) | it marked working sessions waiting/unread mid-turn and lost the real turn end; mapping was incidental (010 BUG-001) |
-| D4 | clarify | Long-task threshold fixed at 60 s or adjustable in Settings? | B: adjustable in Settings, default 60 s — decided by user (2026-10-06); spec/plan/tasks to be amended before M3. M1 keeps `LONG_TASK_THRESHOLD` as the default, passed to `TurnClock::change` as an argument so a setting can feed it | user | orchestrator relay 2026-10-06 |
+| D4 | clarify | Long-task threshold fixed at 60 s or adjustable in Settings? | B: adjustable in Settings, whole seconds, default 60 s, next to the Long task finished switch — decided by user (2026-10-06). Amended: spec (Clarifications, Terms, US2.10–13, FR-012–FR-014, FR-022, FR-023, new FR-025/FR-026, SC-006, new SC-008, Assumptions), plan, research R2, data-model "Long-task threshold", contracts C2/C6, W5.6, S5–S7, quickstart §B9, tasks T056–T066 in M3. Bounds 10–3600 s, clamp on read/service, refuse on save, after `env_include_timeout_secs`. M1 code untouched; `LONG_TASK_THRESHOLD` stays the default | user | orchestrator relay 2026-10-06 |
 | D6 | tasks | speckit-analyze F1–F15: spec/plan fixes | Spec: FR-024 carve-out in intro and Out of Scope, US1.11 (subagent stop), FR-004/Terms (abnormal exit counts only when not restarted), FR-015 same glyph, FR-017 enabled rows only, edge cases (refused permission; event noted before a service restart is not notified), assumption (only Copilot reports errors). Contract C2 threshold field (test seam), C3 TurnFinished fallback. Plan wire 30–32. F11 (FR numbering), F12 declined as taste/accepted | agent-resolved | analyze report; data-model pending-kind rule; state.rs note_activity |
 
 ## Review rounds
@@ -52,6 +52,7 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | M1 A (code-review high) | 1 | not taken (tree before 3a651085; HEAD 6a9d2397 + T010/T020 work) | 10 findings: F2 spinner-lifted turn never started the clock (MAJOR, fixed + test); F1, F3–F10 declined (below) |
 | M1 A (code-review, sonnet, fix diff) | 2 | 6a9d2397..b67fb7b7 | CLEAN after triage: 7 findings, none holds as BLOCKER/MAJOR (declined below) |
 | M1 B (conformance, sonnet) | 1 | 89404f970ba2ec63f2c289d34bcb7bd0b433a7ef:b67fb7b7987edfecaa9cb8ac3db962a33c9d5acf | CHANGES: 1 MAJOR (no red runs for cycles 4–7): fixed with stub red runs logged in cycle-log; MINOR (010 hooks.md edit, required by T015) noted. Verify output all green. Fix touches only the TDD log: no re-run |
+| D4 amendment (spec+plan+tasks) | 1 | 4bd5df0c073ae15298790294ebe96cd38024d535:ec36c53871c732e3d4854660c23eee980c818a81 | CHANGES: 1 MAJOR (T066 must reword M1's "a minute or more" in settings.md:157), 2 MINOR (plan supporting text; name `effective_long_task_threshold()`) — all fixed, prose only (task/plan wording); review done |
 
 ## Declined review findings
 

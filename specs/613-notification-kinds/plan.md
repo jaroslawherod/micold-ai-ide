@@ -15,9 +15,11 @@ on.
 - **Classification** (service). A render-free `TurnClock` in `micold_core::attention` follows each
   live session's turn from the activity events the service already receives (Claude Code hooks,
   Copilot's event log, Pi's activity log): a `Notification` while the session works is **Needs
-  permission**; a `Stop` is **Long task finished** when the turn lasted at least
-  `LONG_TASK_THRESHOLD` (60 s, one named constant, research R2) and **Turn finished** otherwise. The
-  kind travels with 039's grant (`AttentionGranted { kind }`).
+  permission**; a `Stop` is **Long task finished** when the turn lasted at least the long-task
+  threshold and **Turn finished** otherwise. The threshold is the setting
+  `Settings::long_task_threshold_secs` (D4 = B, FR-025), 10–3600 s, whose default is
+  `LONG_TASK_THRESHOLD` (60 s, the one named constant, research R2); the service reads it live from
+  the catalog at every turn end. The kind travels with 039's grant (`AttentionGranted { kind }`).
 - **Error endings** (service). A crash-loop give-up (where every unrecovered abnormal exit ends,
   a failed respawn included) and a CLI-reported error (Copilot `session.error`) are **Session
   error**. The service sends one `SessionErrorNotice` to one
@@ -26,6 +28,12 @@ on.
 - **Settings** (service-owned). `Settings::notification_kinds`, one boolean per kind with its own
   serde default, beside 039's `desktop_notifications`, which stays the master switch. Applied where
   039 applies the master switch: when the event is noted and when it is claimed.
+  `Settings::long_task_threshold_secs: u64` beside them, following the `env_include_timeout_secs`
+  precedent in `crates/micold-core/src/settings.rs` exactly: `MIN_LONG_TASK_THRESHOLD_SECS = 10`,
+  `MAX_LONG_TASK_THRESHOLD_SECS = 3600`, `clamp_long_task_threshold`, a serde default function,
+  clamped on read and in the catalog setter, refused on save by the client draft (rule S-7 of
+  027's sandbox-settings-schema contract). Shown as the shared `TextField` (supporting text
+  "Seconds, 10–3600", range also in its error message) under the **Long task finished** row.
 - **Text and icons** (client). The title states the kind (`notification_text(kind, …)`). Four new
   `Icon` variants from the bundled Material Symbols font. The client rasterises each one from that
   same font as a white glyph on a tile whose colour holds 3:1 against white and black, and hands it
@@ -106,10 +114,12 @@ specs/613-notification-kinds/
 crates/micold-core/src/
 ├── attention.rs            # + NotificationKind, NotificationKinds, LONG_TASK_THRESHOLD,
 │                           #   TurnClock, TurnChange; notification_text gains `kind`
-├── settings.rs             # + Settings::notification_kinds (per-field serde defaults)
+├── settings.rs             # + Settings::notification_kinds (per-field serde defaults),
+│                           #   long_task_threshold_secs + MIN/MAX + clamp_long_task_threshold
 └── protocol/
     ├── messages.rs         # AttentionGranted.kind, DaemonMsg::SessionErrorNotice,
-    │                       #   DaemonSettings.notification_kinds, SettingsSet.notification_kinds
+    │                       #   DaemonSettings.{notification_kinds, long_task_threshold_secs},
+    │                       #   SettingsSet.{notification_kinds, long_task_threshold_secs}
     └── version.rs          # PROTOCOL_VERSION 29 → 30 → 31 → 32 (M1, M2, M3)
 
 crates/micold-daemon/src/
@@ -118,26 +128,32 @@ crates/micold-daemon/src/
 ├── attention.rs            # Views: pending kind per (session, seq), kind-aware grant/note,
 │                           #   error_notice_target
 ├── state.rs                # LiveSession.turn; note_activity classifies; the give-up path and
-│                           #   an error `Ended` send SessionErrorNotice; set_notification_kinds
-├── catalog.rs              # settings accessors and persistence of notification_kinds
+│                           #   an error `Ended` send SessionErrorNotice; set_notification_kinds;
+│                           #   threshold from catalog.long_task_threshold() (test override kept)
+├── catalog.rs              # settings accessors and persistence of notification_kinds and
+│                           #   long_task_threshold_secs (clamped)
 ├── hooks.rs                # classify_hook: "SubagentStop" → Ignored; settings_json drops
 │                           #   SubagentStop: HooksMap.subagent_stop field and its doc comment
 │                           #   (FR-024, research R3)
-└── server.rs               # SettingsSet.notification_kinds
+└── server.rs               # SettingsSet.{notification_kinds, long_task_threshold_secs}
 
 crates/micold-client/src/
 ├── icons.rs                # + Icon::{NeedsPermission, SessionError, LongTaskFinished, TurnFinished}
 ├── notification_icon.rs    # new, render-free: kind → icon, rasterise (tiny-skia + ttf-parser),
 │                           #   tile colours, contrast/distinctness helpers
 ├── features/attention.rs   # DesktopNotification.kind; error notice → notification
-├── features/settings.rs    # draft + Msg::NotificationKindToggled(kind, bool)
+├── features/settings.rs    # draft + Msg::NotificationKindToggled(kind, bool),
+│                           #   Msg::LongTaskThresholdChanged(String), range check on save
 ├── app.rs                  # attention_notification(session, kind)
 ├── shell/daemon_sync.rs    # AttentionGranted{kind}, SessionErrorNotice
 ├── shell/desktop_notify/   # mod.rs writes icon files once per run; linux.rs image-data hint;
 │                           #   windows.rs Toast::icon; macos.rs image_path
 ├── ui/material/checkbox.rs # + .icon(Icon) builder method
-├── ui/settings/environment.rs # four kind rows under Desktop notifications
-└── showcase/sections/controls.rs # Checkbox with icon, enabled/disabled, both themes
+├── ui/settings/environment.rs # four kind rows under Desktop notifications; threshold
+│                           #   TextField under the Long task finished row
+├── features/window.rs      # + FieldId::SettingsLongTaskThreshold
+└── showcase/sections/controls.rs # Checkbox with icon, enabled/disabled, both themes;
+                            #   the threshold field: valid, refused, disabled
 
 docs/user-guide/settings.md, docs/user-guide/icons.md
 specs/010-daemon-session-persistence/contracts/hooks.md  # SubagentStop no longer registered/ignored
@@ -159,11 +175,12 @@ render-free so `tests/` reach it.
 | FR-008 | [notification.md](./contracts/notification.md) T1–T3: `notification_text(kind, …)` |
 | FR-009, FR-012 | notification.md S1–S4: Settings rows, disabled under the master switch |
 | FR-010, FR-011 | data-model `NotificationKinds`; `settings.rs` serde defaults; wire W5 |
-| FR-013 | C10–C12 (decided at note and claim time, read live from the catalog); C15 (turning on) |
+| FR-013 | C10–C12 (decided at note and claim time, read live from the catalog); C15 (turning on); C2 (threshold read at each turn end) |
 | FR-014 | `NotificationKinds` has no provider dimension |
 | FR-015, FR-016, FR-017 | notification.md I1–I8: `Icon` variants, rasteriser, backends |
 | FR-018 | C10: unread and `attention_seq` set before and independent of the kind |
 | FR-024 | C17: `classify_hook` ignores `SubagentStop`; research R3 consumer table |
+| FR-025, FR-026 | data-model "Long-task threshold"; C2, C6 (setting read live, constant is its default); wire W5.6; notification.md S5–S7 |
 | FR-019, FR-020 | 039's reveal and N4 apply unchanged; `SessionErrorNotice` reuses the same seam |
 | FR-021 | platform-free classification; backends only differ in icon delivery |
 | FR-022 | `Checkbox::icon`, showcase Checkbox section, `Icon` vocabulary |
@@ -173,9 +190,9 @@ render-free so `tests/` reach it.
 
 | Layer | Covers |
 |---|---|
-| Core unit (`micold-core`, `mise run test-core`) | `TurnClock` rules C1–C6 incl. threshold boundary, pause inclusion, unknown start; `NotificationKind::ALL` order, names, descriptions, defaults; `NotificationKinds::is_on`; settings load: fresh, pre-feature file, unreadable file (FR-010); `notification_text` per kind (FR-008); wire round-trip and schema hash |
+| Core unit (`micold-core`, `mise run test-core`) | `TurnClock` rules C1–C6 incl. threshold boundary, pause inclusion, unknown start; `NotificationKind::ALL` order, names, descriptions, defaults; `NotificationKinds::is_on`; settings load: fresh, pre-feature file, unreadable file (FR-010); threshold default, clamp on read, round trip (FR-025, FR-026); `notification_text` per kind (FR-008); wire round-trip and schema hash |
 | Daemon unit (`attention.rs`, `activity.rs`, `hooks.rs`) | kind-aware `note_event`/`grant`, pending-kind pruning, `error_notice_target`; `copilot_event` error flag; `classifies_hook_event_names` asserts `SubagentStop` → `Ignored`, the settings test asserts it is not registered (FR-024) |
-| Daemon integration (`crates/micold-daemon/tests/`) | over a real connection: kinds per hook sequence (SC-001 shape), a `SubagentStop` POST mid-turn and while paused changes no signal, unread or kind and a long turn across it is still **Long task finished** (FR-024), switches off/on (SC-002, FR-013), master off, unread unchanged by switches (SC-003), error notice on give-up and Copilot `session.error`, none on clean exit/close, none with no window, settings persistence across service restart (SC-006) |
-| Client `tests/` | rasteriser: tile contrast ≥3:1 vs white and black, glyph vs tile, pairwise distinctness of the four masks at 16×16; `Icon` codepoints present in the font; settings reducer toggles and master-off disabling; backend request mapping carries the icon (Linux hint, Windows image entry, macOS image path); the granted/error notification carries its kind |
+| Daemon integration (`crates/micold-daemon/tests/`) | over a real connection: kinds per hook sequence (SC-001 shape), a `SubagentStop` POST mid-turn and while paused changes no signal, unread or kind and a long turn across it is still **Long task finished** (FR-024), switches off/on (SC-002, FR-013), threshold setting classifies turns and applies to a running turn (SC-008, FR-013, FR-025), out-of-range `SettingsSet` clamped (FR-026), master off, unread unchanged by switches (SC-003), error notice on give-up and Copilot `session.error`, none on clean exit/close, none with no window, settings persistence across service restart (SC-006) |
+| Client `tests/` | rasteriser: tile contrast ≥3:1 vs white and black, glyph vs tile, pairwise distinctness of the four masks at 16×16; `Icon` codepoints present in the font; settings reducer toggles and master-off disabling; threshold field: refused outside 10–3600 or not a number, sent on save (FR-026); backend request mapping carries the icon (Linux hint, Windows image entry, macOS image path); the granted/error notification carries its kind |
 | Geometry/contrast gates | the Settings kind row: icon role contrast ≥3:1 in light and dark (`composition_contrast`), row anatomy |
 | Quickstart §B (visual pass) | the four notifications on a real desktop, icons recognisable in light and dark desktop themes, Settings rows and showcase |
