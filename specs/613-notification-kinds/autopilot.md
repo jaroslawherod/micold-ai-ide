@@ -57,6 +57,10 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M2 A (code-review, sonnet, fix diff) | 2 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 | M2 B (conformance, sonnet) | 1 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 
+## CI fixes
+
+- 4969e821 CI red: `activity_pipeline::a_copilot_session_is_watched_by_its_event_log_and_scanned_for_spinners_like_any_other` (Unknown ≠ Working). Root cause, pre-existing race not an M2 change: `drain_signals` took the spinner edge before reading the title, while the PTY thread stores the spinner before the title; a title landing in between was reported without its spinner. Reproduced every run with a 30 ms probe between the two reads; fixed by reading the title first (state.rs). Daemon fmt/clippy/tests green but for the root-only tests.
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |

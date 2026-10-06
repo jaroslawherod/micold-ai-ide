@@ -3549,6 +3549,31 @@ impl DaemonState {
         let workspace = inner.catalog.workspace();
         let threshold = inner.long_task_threshold;
         for (id, live) in inner.sessions.iter_mut() {
+            // The name comes from the conversation, so from the AI CLI and nothing else (feature
+            // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
+            // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
+            // primary *is* a shell — neither has a conversation to name. And only the part of the
+            // title the CLI means as the name counts: not its product name, not its decoration
+            // (FR-004). Nor the title a Windows console gives itself, its executable's path.
+            let title = workspace
+                .find_session(*id)
+                .filter(|(_, session)| session.mode == TerminalMode::AiCli)
+                .and_then(|(project, session)| {
+                    let proc = live.procs.get(&SessionProcess::Primary)?;
+                    let title = proc.pty.signals().title()?;
+                    if crate::activity::is_console_default_title(&title) {
+                        return None;
+                    }
+                    session
+                        .provider
+                        .provider()
+                        .name_in_terminal_title(&title, &session.location.cwd(project))
+                });
+            // The title is read before the spinner is taken, not after: the terminal stores a
+            // title's spinner edge before the title itself, so a drain that sees a title also
+            // takes the spinner that came with it. Taken first, a title landing in between was
+            // reported here while its spinner waited for the next drain (feature 613 CI flake on
+            // `a_copilot_session_is_watched_by_its_event_log…`).
             // A spinner glyph seen since the last drain is positive `Working` evidence.
             if let Some(proc) = live.procs.get(&live.attached) {
                 if proc.pty.signals().take_spinner() {
@@ -3572,26 +3597,6 @@ impl DaemonState {
                     }
                 }
             }
-            // The name comes from the conversation, so from the AI CLI and nothing else (feature
-            // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
-            // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
-            // primary *is* a shell — neither has a conversation to name. And only the part of the
-            // title the CLI means as the name counts: not its product name, not its decoration
-            // (FR-004). Nor the title a Windows console gives itself, its executable's path.
-            let title = workspace
-                .find_session(*id)
-                .filter(|(_, session)| session.mode == TerminalMode::AiCli)
-                .and_then(|(project, session)| {
-                    let proc = live.procs.get(&SessionProcess::Primary)?;
-                    let title = proc.pty.signals().title()?;
-                    if crate::activity::is_console_default_title(&title) {
-                        return None;
-                    }
-                    session
-                        .provider
-                        .provider()
-                        .name_in_terminal_title(&title, &session.location.cwd(project))
-                });
             // Debounced: only a real change is a push — and only a real change is a durable
             // write. A spinner cycling through glyph frames on an otherwise stable title produces
             // one change here, not thirty, because the glyph was stripped before the title
