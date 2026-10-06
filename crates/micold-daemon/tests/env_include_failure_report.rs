@@ -208,5 +208,8 @@ fn the_log_names_the_failed_directory_without_the_scripts_output() {
         log.contains(&dirs.failing.display().to_string()),
         "the failure is logged with its directory: {log}"
     );
-    assert!(!log.contains(OUTPUT), "the script's output reached the log: {log}");
+    assert!(
+        !log.contains(OUTPUT),
+        "the script's output reached the log: {log}"
+    );
 }

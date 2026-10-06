@@ -52,3 +52,16 @@ existed and failed before the implementation.
 - refactor: none needed
 - notes: A1 and A2 share one implementation step (T044). Workspace not yet compiled with the new
   field: other `CatalogSnapshot` literals still to update (T044 remainder, handover).
+
+## Cycle 5: U4 the client keeps the latest snapshot's failure list
+
+- test: `crates/micold-client/src/catalog_sync.rs::tests::a_catalog_snapshots_env_include_failures_replace_the_clients_list` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib a_catalog_snapshots_env_include_failures`
+  -> `left: []` / `right: [EnvIncludeFailure { dir: "/a", .. }, EnvIncludeFailure { dir: "/b", .. }]`
+  at catalog_sync.rs:450 (state field present, never set)
+- green: `reconcile_catalog` replaces `settings.env_include_failures` from every snapshot it
+  applies; the list is passed through `settings_view::view` to `environment::view`, which chains
+  `directory_failure_lines(..)` after `script_path_notice(..)`; 1 passed
+- refactor: none needed
+- notes: T044 finished first (`env_include_failures: Vec::new()` in the remaining
+  `CatalogSnapshot` literals); T046 docs in `docs/user-guide/settings.md` and `spawn_env_for`.

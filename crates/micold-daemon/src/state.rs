@@ -23,8 +23,8 @@ use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
-    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle, WorktreeSnapshot,
-    WorktreeStatus,
+    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle,
+    WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ToolServerSupport};
 use micold_core::session::{
@@ -929,6 +929,12 @@ impl DaemonState {
     ///
     /// The state costs no run of the script (FR-014): it is the outcome of the one attempt the
     /// cell already holds, or it follows from the settings alone, in which case no cell is taken.
+    ///
+    /// A failed attempt is reported, not only logged (011 FR-022, BUG-454): its outcome stays in
+    /// the cell, [`Self::snapshot_locked`] projects it into the catalog snapshot's
+    /// `env_include_failures`, and the catalog is broadcast once the cell is filled, so an open
+    /// Environment page lists the directory with what the script printed. The log line names the
+    /// directory and the outcome's kind only, never the script's output.
     fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
         let (script_path, timeout_secs, cell) = {
             let mut inner = self.lock();

@@ -119,6 +119,7 @@ fn catalog(sessions: Vec<SessionSummary>) -> CatalogSnapshot {
             worktrees: Vec::new(),
             sessions,
         }],
+        env_include_failures: Vec::new(),
     }
 }
 

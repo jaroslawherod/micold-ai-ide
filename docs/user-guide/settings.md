@@ -352,7 +352,9 @@ A missing, broken, or hanging script never blocks or fails opening a session —
 normally with whatever environment is otherwise available. The most recent attempt's outcome is
 shown at the bottom of this section whenever it didn't succeed — since resolution runs per project
 directory, this reflects whichever directory was most recently (re-)resolved (typically your active
-project, or the one you just restarted a session in), not necessarily every project you have open:
+project, or the one you just restarted a session in), not necessarily every project you have open.
+When the script fails only in some project folders, the page also lists each such folder after
+that line — for example **Exited with an error in `<folder>`** — with what the script printed there:
 
 - **Script not found: `<path>`** — the configured path doesn't exist. It is the same line the
   path check shows, and it appears once, not twice. It reads the same with the feature on or off

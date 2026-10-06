@@ -334,6 +334,7 @@ pub fn view_with<'a>(
                 draft,
                 env_include_outcome,
                 &state.settings.script_check,
+                &state.settings.env_include_failures,
                 state.settings.placement_in_force,
                 state.session.availability.home(),
                 state.window.focused_field,

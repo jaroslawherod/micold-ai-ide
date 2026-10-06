@@ -29,6 +29,7 @@ use crate::ui::settings::{appearance, daemon, environment, github, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::protocol::messages::EnvIncludeFailure;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -41,13 +42,15 @@ const SHARING: &str = "Sharing";
 
 /// The whole Settings surface: the rail, the current section, and the two actions.
 // Each argument is a separate piece of state the pages read, as in `ui::view`; the script path
-// check (spec 035) made it eight.
+// check (spec 035) made it eight, and the per-directory failures (BUG-454) nine.
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
     // The latest check of the stored script path (spec 035), shown beside the outcome above.
     script_check: &'a ScriptCheck,
+    // Each session directory where the service's resolution failed (011 FR-022, BUG-454).
+    env_include_failures: &'a [EnvIncludeFailure],
     // Where sessions run **now**, which is not always what the draft or the file says — the
     // Session service section reports it (FR-035b, BUG-003).
     in_force: PlacementKind,
@@ -90,6 +93,7 @@ pub fn view<'a>(
             draft,
             env_include_outcome,
             script_check,
+            env_include_failures,
             availability,
             focused,
             r,

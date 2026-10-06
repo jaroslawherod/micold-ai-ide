@@ -64,6 +64,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
                 unread: false,
             }],
         }],
+        env_include_failures: Vec::new(),
     }
 }
 

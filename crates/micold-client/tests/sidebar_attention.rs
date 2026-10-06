@@ -429,6 +429,7 @@ fn catalog(sessions: &[(SessionId, Option<&str>, bool)]) -> CatalogSnapshot {
                 })
                 .collect(),
         }],
+        env_include_failures: Vec::new(),
     }
 }
 

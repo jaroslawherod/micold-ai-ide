@@ -117,6 +117,11 @@ pub struct State {
     /// [`Self::script_check_seq`], which gates only what is shown: a save's result must still be
     /// reported after a newer check has replaced it on the page (spec 035 S5).
     pub script_check_save_seq: Option<u64>,
+    /// Every session directory whose environment-include resolution by the service failed, as the
+    /// latest catalog snapshot the client applied reported it (011 FR-022, BUG-454). Replaced, not
+    /// merged, on each snapshot, so a directory the service stopped reporting disappears here too.
+    /// The Environment page lists them after the note on the last resolution.
+    pub env_include_failures: Vec<micold_core::protocol::messages::EnvIncludeFailure>,
 }
 
 /// Why a script path check was started (spec 035, contracts/settings-indication.md §1).

@@ -11,7 +11,8 @@ use crate::app::Message;
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{
-    missing_cli_notice, script_path_notice, NoticeLine, ScriptCheck, SettingsDraft, SettingsSection,
+    directory_failure_lines, missing_cli_notice, script_path_notice, NoticeLine, ScriptCheck,
+    SettingsDraft, SettingsSection,
 };
 use crate::features::window::FieldId;
 use crate::notification_icon;
@@ -24,6 +25,7 @@ use micold_core::attention::NotificationKind;
 use micold_core::cli_reason;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::mcp::policy::CrossSessionAccess;
+use micold_core::protocol::messages::EnvIncludeFailure;
 use micold_core::session::AiCli;
 use micold_core::tokens::{spacing, Roles};
 
@@ -49,6 +51,7 @@ pub fn view<'a>(
     draft: &'a SettingsDraft,
     outcome: &'a EnvIncludeOutcome,
     script_check: &'a ScriptCheck,
+    failures: &'a [EnvIncludeFailure],
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     roles: Roles,
@@ -232,11 +235,13 @@ pub fn view<'a>(
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,
-    // contracts/settings-indication.md §2). The wording is decided in the reducer's module; this
-    // only picks the tone for each line.
+    // contracts/settings-indication.md §2), then each session directory where the service's own
+    // run failed (011 FR-022, BUG-454). The wording is decided in the reducer's module; this only
+    // picks the tone for each line.
     controls.extend(
         script_path_notice(script_check, outcome)
             .into_iter()
+            .chain(directory_failure_lines(failures, outcome))
             .map(|line| match line {
                 NoticeLine::Caution(text) => caution(text, roles),
                 NoticeLine::Note(text) => note(text, roles),
