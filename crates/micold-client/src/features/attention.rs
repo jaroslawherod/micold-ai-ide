@@ -297,8 +297,11 @@ pub fn in_view(state: &State) -> Option<SessionId> {
 ///
 /// The session in view is read at once: the window does not wait for the catalog in which the
 /// service has cleared `unread` (FR-019, SC-006).
+///
+/// The same rule a location row counts by (feature 575), so a collapsed row's number and its
+/// session rows' marks cannot disagree; a closed session has no row to mark.
 pub fn row_unread(session: &Session, in_view: Option<SessionId>) -> bool {
-    session.unread && in_view != Some(session.id)
+    micold_core::attention::counts_as_unread(session, in_view)
 }
 
 /// A new connection has been told nothing: forget what the previous one was sent (FR-006).

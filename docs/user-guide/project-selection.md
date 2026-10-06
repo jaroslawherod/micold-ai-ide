@@ -80,15 +80,15 @@ listing your known projects. Each row shows:
 - an **unread** count when the project has sessions that finished a turn you have not looked at
   yet: a filled dot, the number and the word, for example "● 2 unread". It stands under the
   running count, and on the active project's row as on the others. It counts every unread session
-  of the project, including sessions of worktrees the sidebar's filter is hiding. A project with
-  no unread session shows no count;
+  of the project, including sessions of worktrees the sidebar's filter is hiding, but not a session
+  you have closed. A project with no unread session shows no count;
 - an **unavailable** badge for folders that are missing on disk (these cannot be selected).
 
 The switcher's button itself shows a filled dot and a number after the project's name, for
 example "● 3", when sessions in your **other** projects are unread. You see it without opening the
 panel, and it stays while the panel is open. Unread sessions of the active project are not in that
-number: the sidebar already marks them. Hover over the button to read what the number counts
-("3 unread sessions in other projects"). When no other project has an unread session, the button
+number: the sidebar already marks them. A session you have closed is not in it either. Hover over
+the button to read what the number counts ("3 unread sessions in other projects"). When no other project has an unread session, the button
 shows its name alone.
 
 A row's count falls as soon as you open one of its unread sessions. The button's number changes

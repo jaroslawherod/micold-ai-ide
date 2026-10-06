@@ -1127,6 +1127,28 @@ right-hand end of the row, with the session's name set in a heavier weight.
   window is still unread, also after a restart of the computer. A session you had read, and that
   has done nothing since, stays read.
 
+#### Which worktrees have unread sessions
+
+Each worktree row, and the **Default** row, that holds unread sessions carries the unread mark
+followed by their number — `● 2` — at the right-hand end of the row, so you can see which worktrees
+need you without expanding them.
+
+- **What it counts.** The sessions of that worktree (or of the project root, on the **Default**
+  row) that are unread, not closed, and not the session you are looking at. A row with none shows
+  nothing.
+- **Collapsed or expanded.** The number is there whether the row is collapsed or expanded; when it
+  is expanded, each unread session row below it still carries its own mark. Expanding, collapsing
+  or hovering a row reads nothing.
+- **Looking at a session lowers it.** When an unread session comes into view, its row's number
+  drops by one within a second, and the mark goes with the last one. A session that becomes unread
+  raises it the same way.
+- **In words.** Hover the row: its tooltip ends with the count in words, for example *2 unread
+  sessions*.
+- **Hidden worktrees.** A worktree the sidebar hides — by a tag filter, or an agent's worktree
+  while **Show agent worktrees** is off — has no row to carry the number. Its unread sessions are
+  counted only on the project switcher. The one exception is the worktree of the session you are
+  in: its row stays listed, and carries its number like any other.
+
 Unread state is kept on your computer with the rest of the session list and is sent nowhere.
 
 ### Being told when a session needs you
