@@ -50,6 +50,7 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | Spec | 2 | 4e5c412acfa49fdd6f0f43625e21fd7c3ebc035a:f613369477c59a5fef3b3b56f9085d05eb440ff2 | CLEAN (1 MINOR, fixed: FR-017 3:1 vs white and black) |
 | Tasks | 1 | 9a5fcef479387b7f6b0609e566bbd79d671c39aa:14028ac91c0fbb74f7f5b7af762b1d64d48359b8 | CHANGES: 1 MAJOR (T006 [P] on a shared file), 2 MINOR — all fixed, prose only (task markers, Verify line, checklist tick); review done |
 | M1 A (code-review high) | 1 | not taken (tree before 3a651085; HEAD 6a9d2397 + T010/T020 work) | 10 findings: F2 spinner-lifted turn never started the clock (MAJOR, fixed + test); F1, F3–F10 declined (below) |
+| M1 A (code-review, sonnet, fix diff) | 2 | 6a9d2397..b67fb7b7 | CLEAN after triage: 7 findings, none holds as BLOCKER/MAJOR (declined below) |
 
 ## Declined review findings
 
@@ -64,6 +65,12 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | M1 | A1 | F8 `pub set_long_task_threshold` | plan C2 test seam; D4=B turns it into a setting (M3) |
 | M1 | A1 | F9 docs describe kinds without switches | text describes behaviour, names no switch; switches and Session error documented by T045/T031 |
 | M1 | A1 | F10 test re-implements description formatting | MINOR |
+| M1 | A2 | F1 a startup spinner starts the clock | every CLI's prompt event (UserPromptSubmit, Copilot `user.message`, Pi `turn_start`) is PromptSubmitted and resets `since`; timing from a spinner applies only when no prompt was seen (restart mid-turn), the case the fix is for |
+| M1 | A2 | F2 `turn_change(SpinnerObserved, true)` is constant | kept: one mapping source (data-model "Mapping"); MINOR |
+| M1 | A2 | F3 attention_support duplicates attention_claims harness | MINOR; attention_claims left as 039 wrote it |
+| M1 | A2 | F4 short-turn tests weak / 200 ms margin | MINOR; same margin as attention_claims' US1.1 test, the turn is two in-memory calls |
+| M1 | A2 | F5 Copilot multi-round `assistant.turn_end` | the CLI mapping is 010's, checked against the captured fixture (`a_whole_captured_turn_ends_awaiting_input`); 613 changes no CLI mapping |
+| M1 | A2 | F6 spinner test has no short counterpart; F7 fmt churn in the diff | MINOR |
 
 ## Handover
 
