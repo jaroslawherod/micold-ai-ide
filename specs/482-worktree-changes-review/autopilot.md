@@ -43,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - speckit-analyze (0 CRITICAL, 2 HIGH, 6 MEDIUM, 5 LOW): fixed in tasks.md (D1 watch::Debouncer + cap_spans as tested pure functions, D2 two-session test moved to T066, D3–D7, D12); spec.md edits (D8 no-bracketed-paste edge, D3 worktree removed outside the app, D10 FR-016 wording, D13 toggles reset on open) and plan.md Constitution row I (D1). D9, D11 left: wording only.
 - M1 L1 deviation: the Committed/Uncommitted toggles are `ToggleChip`s (`.active().disabled()`), not `LabelledToggle` as contracts/changes-view.md L1 says — `LabelledToggle` has no on/off state to show. Same behaviour, the library's stateful control.
 - M1 V1 deviation: the Default row has no menu of its own; it reuses the worktree `WorktreeMenu` with `dir_name == ""` (the wire's name for the project root), right-press added in `ui/sidebar.rs`, and `ui/mod.rs` offers only **Review changes** for `""`. Avoids a second context-menu surface.
+- M1 part 5: the review reads go through the `Git` seam (`Git::review_base`/`change_list`, delegating to `GitCli`'s inherent methods; `FakeGit` answers no base / no files) and `Capabilities::shared_git()`, because `no_concrete_implementations` allows `GitCli` to be chosen only in `shell/capabilities.rs`. With no local git (daemon elsewhere) the view says the files cannot be read here.
+- M1 part 5: `settings_sections` DEFERRED gains `("diff_layout", "482 T041")`; the root vocabulary guard moves to 15 feature wrappers (`Changes`); the layout snapshot's worktree-menu state grows by the **Review changes** row (regenerated deliberately).
 - M1 part 4: the orchestrator waived the part-4 escalation limit for M1 (steady progress on a 26-task milestone) and continued.
 
 ## Review rounds
@@ -52,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | c5e15968c86ce0c17544cde68a31ff74e2fb1e8b:107ab7ed3aa9b067a4dca5c02aca6e6709d4d158 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec | 2 | c960571fb7bed1fa440f89fe3b9720fd30c8d897:c74e2d4a9e09412fc66dd4915e3c7e105b785552 | CLEAN: 2 MINOR (both fixed) |
 | Plan | 1 | 76b23838a33fc28d5c9f6db389cc15f46acd39a1:3a5ac98c80a82e8c74fb02606f5bee99309eaeeb | CLEAN: 3 MINOR (all fixed, prose only) |
+| Gate M1 | full | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | green except the 6 root-only permission tests (container runs as root; pass in CI) |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
 
 ## Declined review findings
@@ -61,11 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 4 handed over at 150k (part-4 limit waived by the orchestrator). Pushed nothing (no green gate yet).
-- **Done, ticked:** T001–T020. T014 13/13 and T015 6/6 green (`cargo test -p micold-client --test features_changes`, `--lib virtual_rows`).
-- **Written, not yet green-verified (in the handover commit):** T021 `src/shell/changes.rs` (+ `shell/mod.rs`; `GitCli::review_base`/`change_list` in `spawn_blocking`; worktree dir from the listed worktree's own path); T022 `SidebarMsg::ReviewChangesRequested(loc)` + pure `sidebar::review_changes(loc)`, `Outcome::ChangesRequested` (root dismisses the worktree menu, opens the view, leaves the read in `changes.pending`), main.rs intercepts the sidebar msg then `shell::changes::run_pending`; `Message::Changes` declined by `State::update`, routed to `shell::changes::update`; V2 close in main.rs's `SessionMsg::Selected` arm via `update_changes(SessionSelected)`; V3 in `interpret`'s `WorktreesReplaced`; tests `features_sidebar::review_changes_asks_for_the_changes_view_of_that_entry` and `app_state::review_changes_opens_the_changes_view_of_that_entry` (red recorded); T023 `src/ui/changes.rs` (header, base line, Close, ToggleChips + Default note, `VirtualRows` file rows with kind `Tag`, `+a −r`, "Select a file" pane), shown before the terminal in `ui/mod.rs`; `main_content_key` gets `u64::MAX - 1` for the view; Default row right-press + menu.
-- **Last build:** lib compiled; the bin had one non-exhaustive match (`shell/clipboard.rs`, fixed, not rebuilt); then the disk filled during linking. Freed by deleting linked test executables in `target-shared/debug/deps` (26G free). **Grep build logs for `^error\[|^error:` only — a link failure dumps megabytes.**
-- **Next:** build `cargo build -p micold-client --all-targets`; run `features_sidebar`, `app_state`, `feature_registration_cost`, `root_vocabulary_is_cross_cutting`, `root_is_routing_only`, `material_boundary`, `no_concrete_implementations`; tick T021–T023 when green. Then T024 (showcase `sections/review.rs` VirtualRows 2,000 rows + catalogue entry), T025 docs, T026 visual pass, check `tests/settings_sections.rs` `DEFERRED` for `("diff_layout", "482 T041")`, then verify.md (gate as raw mise.toml `gate` commands; 6 root-only permission tests fail locally).
+None.
 
 ## Open escalation
 
