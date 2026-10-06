@@ -360,7 +360,7 @@ the connection and `notify_error` stay as they are (issue #569 changes them).
 
 ### Tests for BUG-566 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T124 [BUG-566] [U179] [U180] [U181] *(test)* `crates/micold-client/src/shell/desktop_notify/linux.rs`
+- [x] T124 [BUG-566] [U179] [U180] [U181] *(test)* `crates/micold-client/src/shell/desktop_notify/linux.rs`
       tests, against stubs that compile so each fails on its assertion. U179: an entry recorded
       for service `:1.5`, then `ActionInvoked(id, "default")` from `:1.9` is no event and the entry
       stays (a later one from `:1.5` is `Activated`); an `ActivationToken` or `NotificationClosed`
