@@ -217,13 +217,13 @@ impl Shown {
 
     /// What `signal`, sent by the connection whose unique name is `sender`, means for this window.
     /// A signal about a notification counts only from the service that showed it (N9a): the
-    /// `default` action of a notification it holds is
-    /// a click on that notification's session, reported once, with the activation token that
-    /// preceded it when one did; a closed notification is forgotten, and its token with it;
-    /// another action is no click, and takes the token that preceded it; anything else is nothing
-    /// (N9). When the bus says the service's name left `old_owner`, that owner's notifications
-    /// are forgotten: it can no longer report a click. Only the bus can say so, and a new
-    /// owner's notifications stay, even one recorded before the change was read.
+    /// `default` action of a notification it holds is a click on that notification's session,
+    /// reported once, with the activation token that preceded it when one did; a closed
+    /// notification is forgotten, and its token with it; another action is no click, and takes
+    /// the token that preceded it; anything else is nothing (N9). When the bus says the service's
+    /// name left `old_owner`, that owner's notifications are forgotten: it can no longer report a
+    /// click. Only the bus can say so, and a new owner's notifications stay, even one recorded
+    /// before the change was read.
     ///
     /// GNOME Shell sends every signal twice, from two bus names (research R7); the copy from the
     /// name that did not answer `Notify` is nothing. A click reported twice by the service itself
@@ -345,8 +345,9 @@ impl Notifier {
 
     /// Read the notification service's signals, and the bus's word of a new owner of its name,
     /// from `connection` on threads of their own, and report what [`Shown::on_signal`] makes of
-    /// each. A thread ends with the connection, or when nobody reads the events any more. A connection that cannot be listened on still
-    /// shows notifications (contract N7), so every failure here is passed over.
+    /// each. A thread ends with the connection, or when nobody reads the events any more. A
+    /// connection that cannot be listened on still shows notifications (contract N7), so every
+    /// failure here is passed over.
     fn listen(&self, connection: &zbus::blocking::Connection) {
         // One thread per rule: the service's signals, and the bus's word that its name changed
         // owner (N9a).
@@ -714,7 +715,8 @@ mod tests {
         // service that answered `Notify` and the shell's own connection. In either order the
         // click is reported once, with the token, and nothing is left behind (U179: the shell's
         // copies are not the service's, and are passed over).
-        let orders: [[(&str, fn() -> Signal); 4]; 2] = [
+        type Sent = (&'static str, fn() -> Signal);
+        let orders: [[Sent; 4]; 2] = [
             [
                 (SHELL, || token(SHOWN, TOKEN)),
                 (SERVICE, || token(SHOWN, TOKEN)),
