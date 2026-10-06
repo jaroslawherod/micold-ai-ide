@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 in progress (T031–T036). M3 merged; its Windows CI failure was a lost runner, fixed by a rerun, no code change.
+- **Next step**: M4: PR merged, then M5. M3 merged; its Windows CI failure was a lost runner, fixed by a rerun, no code change.
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
-| M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
+| M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | in review |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
@@ -63,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- M4: snapshot 52ae438a8a349de92e6c65fb769ecd195f718eed:b0960146a03179eb01a293e0461591c1709e99c2. A: 1 round, fixed. B: 1 round, one BLOCKER (the same Windows duplicate), fixed; Verify 7 passed.
+
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | e6ca334adfe00961d2b378af7e552c08264ae279:71ea3df9093d57217ceee3caed91301dd78382cf | CHANGES: 6 MAJOR, 2 MINOR; all 8 fixed |
@@ -84,6 +86,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M3 | 2 | 611fea62d521c3d6f132b95f3b34fd09102e4a61:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (no case for an idle terminal started from a restored seed; the code holds, the seed never raises the output count), not fixed. Verify: `history_periodic_save` 9 passed, `terminal_history_schedule` 8 passed |
 
 ## Declined review findings
+
+- M4 review A (code-review high): repeated signals ignored during the unwind: declined, SR §1 says a second signal changes nothing; the 3 s bound and `shutdown_timeout(5 s)` bound the stop. Output after the capture during the save window: declined, inherent to saving before teardown; the capture is the last step before it. Lib-test SIGTERM broadcast: declined, no other lib test runs a serve loop. Gate-held save abandoned at 3 s: by design (previous file stays). Fixed: duplicate Windows `stop_requested` (also review B F1), runtime-drop hang (`main.rs` `shutdown_timeout`), eager signal registration, `save_final` records its save.
 
 - `speckit-analyze` F1 (MEDIUM): a stopped session's `carried` snapshot that is not on disk is not saved by the saver, the unwind or a turn-on. Declined: that is the design. Saving it later would bring back a history the setting deleted (story 2 scenario 7; contracts/setting.md, the off → on rows). data-model §6 now says so.
 

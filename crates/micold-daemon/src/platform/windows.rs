@@ -154,10 +154,3 @@ impl Drop for Job {
 pub async fn stop_requested() {
     std::future::pending().await
 }
-
-/// Completes when the process is asked to stop. Nothing asks yet: the stop request arrives with
-/// the Windows milestone (M8, T063), so until then this never completes and only the idle stop
-/// stops the service.
-pub async fn stop_requested() {
-    std::future::pending().await
-}
