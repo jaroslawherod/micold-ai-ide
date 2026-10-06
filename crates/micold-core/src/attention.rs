@@ -691,10 +691,22 @@ mod tests {
     // --- notification_text (U28–U31; 613 T1, T2) ---
 
     const KIND_TITLES: [(NotificationKind, &str); 4] = [
-        (NotificationKind::NeedsPermission, "Fix the parser needs permission"),
-        (NotificationKind::SessionError, "Fix the parser stopped with an error"),
-        (NotificationKind::LongTaskFinished, "Fix the parser finished a long task"),
-        (NotificationKind::TurnFinished, "Fix the parser finished its turn"),
+        (
+            NotificationKind::NeedsPermission,
+            "Fix the parser needs permission",
+        ),
+        (
+            NotificationKind::SessionError,
+            "Fix the parser stopped with an error",
+        ),
+        (
+            NotificationKind::LongTaskFinished,
+            "Fix the parser finished a long task",
+        ),
+        (
+            NotificationKind::TurnFinished,
+            "Fix the parser finished its turn",
+        ),
     ];
 
     #[test]
@@ -709,7 +721,10 @@ mod tests {
     fn u28_the_body_names_the_project_and_worktree_for_every_kind() {
         for kind in NotificationKind::ALL {
             let text = notification_text(kind, "micold", "feat-x", "Fix the parser");
-            assert_eq!(text.body, "micold \u{2014} feat-x", "the body is the same for {kind:?}");
+            assert_eq!(
+                text.body, "micold \u{2014} feat-x",
+                "the body is the same for {kind:?}"
+            );
         }
     }
 
@@ -1057,7 +1072,11 @@ mod notification_kind_tests {
             .iter()
             .map(|k| kinds.is_on(*k))
             .collect();
-        assert_eq!(on, [false, true, false, true], "each kind reads its own field");
+        assert_eq!(
+            on,
+            [false, true, false, true],
+            "each kind reads its own field"
+        );
     }
 
     #[test]
@@ -1124,7 +1143,10 @@ mod turn_clock_tests {
         );
         let mut clock = not_in_turn();
         clock.change(TurnChange::Working, at(10), THRESHOLD);
-        assert_eq!(finish_at(clock, 70), Some(NotificationKind::LongTaskFinished));
+        assert_eq!(
+            finish_at(clock, 70),
+            Some(NotificationKind::LongTaskFinished)
+        );
     }
 
     #[test]
@@ -1166,7 +1188,10 @@ mod turn_clock_tests {
     fn working_working_keeps_the_start() {
         let mut clock = working_since(0);
         assert_eq!(clock.change(TurnChange::Working, at(50), THRESHOLD), None);
-        assert_eq!(finish_at(clock, 60), Some(NotificationKind::LongTaskFinished));
+        assert_eq!(
+            finish_at(clock, 60),
+            Some(NotificationKind::LongTaskFinished)
+        );
     }
 
     #[test]
@@ -1252,6 +1277,9 @@ mod turn_clock_tests {
             Some(NotificationKind::LongTaskFinished)
         );
         assert_eq!(clock, not_in_turn());
-        assert_eq!(finish_at(paused_since(0), 30), Some(NotificationKind::TurnFinished));
+        assert_eq!(
+            finish_at(paused_since(0), 30),
+            Some(NotificationKind::TurnFinished)
+        );
     }
 }

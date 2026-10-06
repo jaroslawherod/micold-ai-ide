@@ -121,7 +121,6 @@ impl Service {
     }
 }
 
-
 /// A service on `store` where every finished turn is a long task (feature 613): these tests are
 /// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
 /// **Turn finished** is off by default.
@@ -130,6 +129,7 @@ fn state_on(store: &Path) -> DaemonState {
     state.set_long_task_threshold(std::time::Duration::ZERO);
     state
 }
+
 fn catalog_on(store: &Path) -> Catalog {
     Catalog::load(
         Box::new(JsonFileStore::at(store.join("projects.json"))),
@@ -507,7 +507,11 @@ async fn a_refused_permission_ending_the_turn_adds_nothing() {
     tokio::time::sleep(PAST_THRESHOLD).await;
     service.signal(b, HookKind::Stop);
 
-    assert_eq!(service.attention_seq(b), 1, "only the permission is counted");
+    assert_eq!(
+        service.attention_seq(b),
+        1,
+        "only the permission is counted"
+    );
     assert_eq!(
         kinds(&claims(&mut window, b, 1).await),
         vec![(b, 1, NotificationKind::NeedsPermission)]
@@ -539,7 +543,9 @@ async fn a_helper_agent_finishing_changes_nothing() {
     ));
     let subagent_stop = || async {
         let body = r#"{"hook_event_name":"SubagentStop"}"#;
-        let mut stream = tokio::net::TcpStream::connect(&addr).await.expect("connect");
+        let mut stream = tokio::net::TcpStream::connect(&addr)
+            .await
+            .expect("connect");
         let request = format!(
             "POST /hook/{} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             b.0,
@@ -563,7 +569,11 @@ async fn a_helper_agent_finishing_changes_nothing() {
     service.signal(b, HookKind::PreToolUse);
     tokio::time::sleep(PAST_THRESHOLD).await;
     subagent_stop().await;
-    assert_eq!(service.attention_seq(b), 1, "only the permission was counted");
+    assert_eq!(
+        service.attention_seq(b),
+        1,
+        "only the permission was counted"
+    );
 
     service.signal(b, HookKind::Stop);
     assert_eq!(
@@ -722,4 +732,53 @@ async fn after_a_restart_an_event_noted_before_it_is_not_granted() {
         "precondition: the event was stored"
     );
     assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}
+
+/// A process that shows a braille spinner in its title, then idles: `Working` evidence with no
+/// hook, as after a service restart that missed the turn's prompt.
+#[cfg(unix)]
+fn spinner_process(id: SessionId) -> PtySession {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg(r"printf '\033]0;\342\240\213 Working\007'; cat");
+    cmd.cwd(std::env::temp_dir());
+    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("a spinner process starts")
+}
+
+/// Data-model "Mapping": a spinner that lifts the signal to `Working` starts the turn clock as
+/// work does, so a turn seen only by its spinner ends as **Long task finished** when it lasted
+/// past the threshold (feature 613, C2).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_turn_seen_only_by_its_spinner_is_timed_from_the_spinner() {
+    let b = session_id(0xB);
+    let service = Service::with_processes(&[b], spinner_process);
+    service.state.set_long_task_threshold(THRESHOLD);
+    let mut window = connect(&service.state, "window").await;
+
+    let deadline = std::time::Instant::now() + OWED;
+    while service
+        .state
+        .catalog_snapshot()
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == b)
+        .map(|s| s.activity.clone())
+        != Some(micold_core::protocol::messages::ActivitySignal::Working)
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the spinner lifts the signal"
+        );
+        service.state.drain_signals();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.signal(b, HookKind::Stop);
+
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::LongTaskFinished)]
+    );
 }

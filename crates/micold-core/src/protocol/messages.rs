@@ -20,8 +20,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::attention::NotificationKind;
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
+use crate::attention::NotificationKind;
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};

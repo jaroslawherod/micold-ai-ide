@@ -118,7 +118,13 @@ impl Views {
 
     /// Note attention event `seq` of `session`, of `kind` (C10): kept pending for a claim while
     /// `notify` is true, else recorded as granted so no later claim of it wins.
-    pub fn note_event(&mut self, session: SessionId, seq: u64, kind: NotificationKind, notify: bool) {
+    pub fn note_event(
+        &mut self,
+        session: SessionId,
+        seq: u64,
+        kind: NotificationKind,
+        notify: bool,
+    ) {
         if self.granted.get(&session).is_some_and(|g| seq <= *g) {
             return;
         }

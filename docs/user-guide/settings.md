@@ -145,10 +145,21 @@ every open window shows the same value.
 
 ### Desktop notifications
 
-On by default. When a session you are not looking at finishes its turn or stops to ask for a
-permission, the app shows one desktop notification for it
+On by default. When a session you are not looking at needs you, the app shows one desktop
+notification for it
 ([Being told when a session needs you](worktrees-and-sessions.md#being-told-when-a-session-needs-you)).
 Turn **Desktop notifications** off and save, and the app shows none.
+
+Out of the box the app notifies only for what needs you:
+
+- **Needs permission**: the session stopped mid-turn to ask for a permission or an answer. The
+  notification's title is the session's name followed by *needs permission*.
+- **Long task finished**: the session finished a turn that took a minute or more, counted from your
+  prompt, any wait for you inside it included. The title ends in *finished a long task*.
+- **Turn finished**: a shorter turn raises no notification, but still marks the session unread.
+
+Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they
+neither notify you nor mark the session unread.
 
 - **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot and Pi sessions.
   There is no switch per CLI.

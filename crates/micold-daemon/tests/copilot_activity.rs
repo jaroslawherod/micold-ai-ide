@@ -382,3 +382,56 @@ fn a_quiet_session_costs_nothing_between_appends() {
         "opening a watch delivered nothing on its own"
     );
 }
+
+#[path = "attention_support/mod.rs"]
+mod attention_support;
+
+/// A Copilot turn that runs past the long-task threshold ends as a granted **Long task finished**
+/// (Feature 613 US1.9).
+#[tokio::test]
+async fn a_long_copilot_turn_is_granted_as_long_task_finished() {
+    use attention_support::{claims, connect, kinds, session_id, Service};
+    use micold_core::attention::NotificationKind;
+    use micold_core::session::AiCli;
+
+    let b = session_id(0xB);
+    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_millis(200));
+    let mut window = connect(&service.state, "window").await;
+
+    service.note(
+        b,
+        copilot_event(r#"{"type":"user.message","data":{}}"#).expect("mapped"),
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    service.note(
+        b,
+        copilot_event(r#"{"type":"assistant.turn_end","data":{}}"#).expect("mapped"),
+    );
+
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::LongTaskFinished)]
+    );
+}
+
+/// A short Copilot turn is not granted (Feature 613 US1.9).
+#[tokio::test]
+async fn a_short_copilot_turn_is_not_granted() {
+    use attention_support::{claims, connect, kinds, session_id, Service};
+    use micold_core::session::AiCli;
+
+    let b = session_id(0xB);
+    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_millis(200));
+    let mut window = connect(&service.state, "window").await;
+
+    service.note(
+        b,
+        copilot_event(r#"{"type":"user.message","data":{}}"#).expect("mapped"),
+    );
+    service.note(
+        b,
+        copilot_event(r#"{"type":"assistant.turn_end","data":{}}"#).expect("mapped"),
+    );
+
+    assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}

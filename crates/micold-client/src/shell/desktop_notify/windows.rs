@@ -98,8 +98,8 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::attention::NotificationKind;
     use iced::futures::channel::mpsc;
+    use micold_core::attention::NotificationKind;
     use tauri_winrt_notification::Error;
 
     fn notification(title: &str, body: &str) -> DesktopNotification {

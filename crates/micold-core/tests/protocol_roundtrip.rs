@@ -6,12 +6,12 @@
 
 use std::path::PathBuf;
 
-use micold_core::attention::NotificationKind;
 use micold_core::attach::{
     AttachItem, AttachOutcome, AttachResult, AttachTarget, AttachableWorktree, Availability,
     DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
     Unavailable, UnresumableReason,
 };
+use micold_core::attention::NotificationKind;
 use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;

@@ -42,3 +42,53 @@ assertion's failure; where only a field or variant was missing, the red is the c
   (`settings_refuses_save_over_failed_read`, fails identically on the unchanged tree: the container
   runs as root, so the unreadable-file permission is ignored; passes in CI).
 - **Refactor**: none needed.
+
+## Cycle 4 — T002/T004 (daemon part: catalog)
+
+- **Tests**: `crates/micold-daemon/src/catalog.rs` — `notify_tests::*`: `notify(kind)` is the master
+  switch AND the kind's own switch; `persist_service_settings` keeps the stored `notification_kinds`.
+- **Red**: written with the code in commit 6a9d2397 (unit 2, WIP); the red run was not logged.
+- **Green**: `cargo test -p micold-daemon --lib` attention/activity/hooks/catalog → 47 passed.
+- **Refactor**: none needed.
+
+## Cycle 5 — T008/T015, T008/T016 (SubagentStop ignored; `turn_change`)
+
+- **Tests**: `activity.rs::turn_change_maps_each_event`,
+  `a_spinner_is_work_only_when_it_lifted_the_signal`; `hooks.rs` SubagentStop → `Ignored`, not
+  registered; `tests/hooks_receiver.rs`.
+- **Red**: written with the code in commit 6a9d2397; the red run was not logged.
+- **Green**: daemon lib 47 passed; `--test hooks_receiver` 5 passed.
+- **Refactor**: none needed.
+
+## Cycle 6 — T009/T017, T010/T018 (pending kinds, `note_activity`, claim grants kind)
+
+- **Tests**: `attention.rs` `Views::grant`/`note_event` unit tests;
+  `tests/attention_claims.rs` 613 block (US1.1–US1.3, US1.6–US1.8, FR-024, SC-001, FR-018,
+  Principle II, refused permission, reconnection, restart), threshold 200 ms; 039 harnesses
+  (`attention_claims`, `settings_desktop_notifications`, `unread_state`) moved to threshold zero.
+- **Red**: in unit 3 before the last fixes, `attention_claims` had two failures (the supervision
+  test expected a grant, now refused per C12; SC-001 claimed only at the end and lost the
+  overwritten kinds). Earlier reds not logged.
+- **Green**: `cargo test -p micold-daemon --test attention_claims --test settings_desktop_notifications
+  --test unread_state --test hooks_receiver --test attention_events --test copilot_activity
+  --test pi_activity` → 18, 14, 11, 5, 8, 10, 16 passed.
+- **Refactor**: none needed.
+
+## Cycle 7 — T011/T019 (client: title by kind; save keeps stored kinds)
+
+- **Tests**: `crates/micold-client/tests/attention_notify.rs` (grant's kind titles the
+  notification); bin `desktop_notify`, `persist`.
+- **Red**: written with the code in commit 6a9d2397; the red run was not logged.
+- **Green**: `attention_notify` 14 passed; bin tests passed.
+- **Refactor**: none needed.
+
+## Cycle 8 — T010/T018 (review A F2: a spinner-lifted turn starts the clock)
+
+- **Tests**: `tests/attention_claims.rs::a_turn_seen_only_by_its_spinner_is_timed_from_the_spinner`
+  (unix); `tests/copilot_activity.rs`, `tests/pi_activity.rs` long/short turn grants (US1.9) through
+  the shared `tests/attention_support/mod.rs`.
+- **Red**: `cargo test -p micold-daemon --test attention_claims spinner` → `left: []`,
+  `right: [(…0b, 1, LongTaskFinished)]`: `drain_signals` lifted the signal without the clock.
+- **Green**: `drain_signals` feeds `turn_change(SpinnerObserved, true)` to the clock →
+  `attention_claims` 19 passed, `activity_pipeline` 14 passed.
+- **Refactor**: none needed.

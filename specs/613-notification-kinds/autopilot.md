@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #613
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
-- **Phase**: implement
-- **Next step**: milestone M1 continue from *Handover*
+- **Phase**: verify
+- **Next step**: M1 scoped gate + review A round 2 on the fix diff, then review B, full gate, push
 
 ## Pull requests
 
@@ -49,35 +49,25 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 | Plan | 2 | 56cef6625431cd768db0299b038eb5ab912f5dd0:6db8b02a59ca25fb6b5d67f0be14a3bdd497bf16 | CLEAN (1 MINOR, fixed, prose only: plan names HooksMap.subagent_stop) |
 | Spec | 2 | 4e5c412acfa49fdd6f0f43625e21fd7c3ebc035a:f613369477c59a5fef3b3b56f9085d05eb440ff2 | CLEAN (1 MINOR, fixed: FR-017 3:1 vs white and black) |
 | Tasks | 1 | 9a5fcef479387b7f6b0609e566bbd79d671c39aa:14028ac91c0fbb74f7f5b7af762b1d64d48359b8 | CHANGES: 1 MAJOR (T006 [P] on a shared file), 2 MINOR — all fixed, prose only (task markers, Verify line, checklist tick); review done |
+| M1 A (code-review high) | 1 | not taken (tree before 3a651085; HEAD 6a9d2397 + T010/T020 work) | 10 findings: F2 spinner-lifted turn never started the clock (MAJOR, fixed + test); F1, F3–F10 declined (below) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A1 | F1 activity.rs:96 turn resumed after a permission with only PostToolUse ends silently | data-model "Mapping" sets PostToolUse → no change and US1.7 defines the resume by PreToolUse; the FSM (010) is unchanged by 613. Recorded under Follow-ups |
+| M1 | A1 | F3 state.rs fallback to TurnFinished | contract C3 names that fallback |
+| M1 | A1 | F4 attention.rs pending grows with unclaimed events | bounded by events per session, pruned by any grant or forget; MINOR |
+| M1 | A1 | F5 per-kind off then on delivers a pending event | per-kind switches and C15 are M3 (T033, T038–T040) |
+| M1 | A1 | F6 serde defaults beside `default_on()` | MINOR, taste; defaults covered by core settings tests |
+| M1 | A1 | F7 SessionError never produced | M2 (T021–T031) |
+| M1 | A1 | F8 `pub set_long_task_threshold` | plan C2 test seam; D4=B turns it into a setting (M3) |
+| M1 | A1 | F9 docs describe kinds without switches | text describes behaviour, names no switch; switches and Session error documented by T045/T031 |
+| M1 | A1 | F10 test re-implements description formatting | MINOR |
 
 ## Handover
 
-M1 unit 2 handed over at 150k context (commit "feat(613): M1 daemon and client kinds (WIP)").
-
-- **Done since unit 1** (ticked): T002/T004 (catalog `notification_kinds()`, `notify(kind)`,
-  `persist_service_settings` carries kinds; `catalog.rs` `notify_tests`), T008/T015 (SubagentStop
-  ignored + unregistered; 010 contracts/hooks.md updated), T008/T016 (`turn_change`), T009/T017
-  (`Views::grant/note_event`, pending pruning), T011/T013/T019 (client kind, title by kind; client
-  save keeps stored `notification_kinds` like `pr_status_enabled`). T018 code done in state.rs
-  (threshold lives in `Inner.long_task_threshold`, setter `set_long_task_threshold`).
-- **Green**: workspace builds all targets, no warnings; daemon lib attention/activity/hooks/catalog
-  47 ok; client attention_notify 14 ok; client bin desktop_notify/persist ok. The 039 harnesses
-  (`attention_claims`, `settings_desktop_notifications`, `unread_state`) use `state_on()` =
-  threshold ZERO so every finished turn is a long task.
-- **Not yet re-run**: `attention_claims.rs` after fixing its two failures (supervision test now
-  expects refusal per C12; SC-001 test claims after each turn as a window does — it uses an async
-  closure, may need reworking to compile). Then run `--test settings_desktop_notifications
-  --test unread_state --test hooks_receiver --test attention_events` (cargo stopped before them).
-- **Next**: re-run those; T010 copilot/pi long-turn tests (`copilot_activity.rs`, `pi_activity.rs`:
-  set threshold, long turn → claim granted `LongTaskFinished`), tick T010/T018; T020 user guide;
-  record cycles 4+ in `tdd/cycle-log.md`; then verify.md (scoped gate + review A high, review B,
-  full gate, push, `$SCRATCHPAD/pr-613-body-M1.md`).
-- Open findings: none. PR: #618 (draft, open). D4 = B (user).
+None.
 
 ## Open escalation
 
@@ -85,4 +75,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- M1 review A F1: Claude Code turn that, after a granted permission, ends with PostToolUse then Stop (no further PreToolUse) stays `AwaitingInput` from the Notification, so its end is no attention event (010 FSM; pre-dates 613). Candidate: PostToolUse after AwaitingInput → Working.

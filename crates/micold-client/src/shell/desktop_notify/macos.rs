@@ -217,8 +217,8 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::attention::NotificationKind;
     use mac_usernotifications::{CloseReason, Error};
+    use micold_core::attention::NotificationKind;
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
         DesktopNotification {

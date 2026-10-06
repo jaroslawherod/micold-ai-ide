@@ -156,3 +156,44 @@ fn a_turn_that_never_ended_is_resolved_by_supervision_not_by_the_log() {
     });
     assert!(matches!(activity.signal(), ActivitySignal::Ended { .. }));
 }
+
+#[path = "attention_support/mod.rs"]
+mod attention_support;
+
+/// A Pi turn that runs past the long-task threshold ends as a granted **Long task finished**
+/// (Feature 613 US1.9).
+#[tokio::test]
+async fn a_long_pi_turn_is_granted_as_long_task_finished() {
+    use attention_support::{claims, connect, kinds, session_id, Service};
+    use micold_core::attention::NotificationKind;
+    use micold_core::session::AiCli;
+
+    let b = session_id(0xB);
+    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_millis(200));
+    let mut window = connect(&service.state, "window").await;
+
+    service.note(b, pi_event(&line("turn_start")).expect("mapped"));
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    service.note(b, pi_event(&line("turn_end")).expect("mapped"));
+
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::LongTaskFinished)]
+    );
+}
+
+/// A short Pi turn is not granted (Feature 613 US1.9).
+#[tokio::test]
+async fn a_short_pi_turn_is_not_granted() {
+    use attention_support::{claims, connect, kinds, session_id, Service};
+    use micold_core::session::AiCli;
+
+    let b = session_id(0xB);
+    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_millis(200));
+    let mut window = connect(&service.state, "window").await;
+
+    service.note(b, pi_event(&line("turn_start")).expect("mapped"));
+    service.note(b, pi_event(&line("turn_end")).expect("mapped"));
+
+    assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}

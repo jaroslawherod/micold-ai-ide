@@ -3490,6 +3490,7 @@ impl DaemonState {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let workspace = inner.catalog.workspace();
+        let threshold = inner.long_task_threshold;
         for (id, live) in inner.sessions.iter_mut() {
             // A spinner glyph seen since the last drain is positive `Working` evidence.
             if let Some(proc) = live.procs.get(&live.attached) {
@@ -3498,6 +3499,12 @@ impl DaemonState {
                     live.activity.apply(ActivityEvent::SpinnerObserved);
                     if live.activity.signal() != &before {
                         out.changed = true;
+                        // A spinner that lifted the signal is the turn's work (feature 613,
+                        // data-model "Mapping"): the turn clock starts here when no hook did.
+                        if let Some(change) = turn_change(&ActivityEvent::SpinnerObserved, true) {
+                            live.turn
+                                .change(change, micold_core::clock::now(), threshold);
+                        }
                         // An activity change here re-arms the live name lookup, exactly as
                         // `note_activity` does for a hook (feature 032, FR-010, C6.3b, research
                         // R9). Without it, a spinner drained *before* the `UserPromptSubmit` hook

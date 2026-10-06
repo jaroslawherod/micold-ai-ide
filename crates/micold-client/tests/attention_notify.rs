@@ -6,8 +6,8 @@
 //! `DaemonMsg::AttentionGranted`. The notifier is a recording one, so no system is asked anything.
 
 use micold_client::app::State;
-use micold_core::attention::{notification_text, NotificationKind};
 use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
+use micold_core::attention::{notification_text, NotificationKind};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientMsg, ProjectSnapshot, SessionSummary, WireLifecycle,
@@ -374,7 +374,9 @@ fn a_notification_is_of_the_granted_kind_and_titled_by_it() {
     let mut state = repo_state();
     let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
     for kind in NotificationKind::ALL {
-        let notification = state.attention_notification(b, kind).expect("a known session");
+        let notification = state
+            .attention_notification(b, kind)
+            .expect("a known session");
         let text = notification_text(kind, "repo", "Default", "B");
         assert_eq!(notification.kind, kind);
         assert_eq!(notification.title, text.title);
@@ -404,7 +406,11 @@ fn a_grant_for_an_unknown_session_shows_nothing() {
     let notifier = Recording::accepting();
 
     assert_eq!(
-        state.attention_granted(SessionId::new(), NotificationKind::NeedsPermission, &notifier),
+        state.attention_granted(
+            SessionId::new(),
+            NotificationKind::NeedsPermission,
+            &notifier
+        ),
         None
     );
     assert!(notifier.shown().is_empty());

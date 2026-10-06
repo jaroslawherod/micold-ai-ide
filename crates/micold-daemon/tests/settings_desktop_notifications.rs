@@ -155,8 +155,6 @@ impl Service {
     }
 }
 
-/// The catalog the service loads from `store`: what a start of the service on that directory reads.
-
 /// A service on `store` where every finished turn is a long task (feature 613): these tests are
 /// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
 /// **Turn finished** is off by default.
@@ -165,6 +163,8 @@ fn state_on(store: &Path) -> DaemonState {
     state.set_long_task_threshold(std::time::Duration::ZERO);
     state
 }
+
+/// The catalog the service loads from `store`: what a start of the service on that directory reads.
 fn catalog_on(store: &Path) -> Catalog {
     Catalog::load(
         Box::new(JsonFileStore::at(store.join("projects.json"))),
