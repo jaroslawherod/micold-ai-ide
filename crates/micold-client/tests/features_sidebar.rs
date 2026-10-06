@@ -860,3 +860,21 @@ fn a_location_holding_a_long_history_costs_no_more_per_row() {
     assert_eq!(row, 250);
     assert!(scroll_target(&heights, row, 400.0, 0.0).is_some());
 }
+
+/// Feature 482, V1: **Review changes** on a worktree row or the Default row asks the root to open
+/// the Changes view of that entry; the view is not the sidebar's to open.
+#[test]
+fn review_changes_asks_for_the_changes_view_of_that_entry() {
+    use micold_client::features::sidebar::review_changes;
+    use micold_client::features::Outcome;
+
+    for entry in [
+        SessionLocation::Worktree("feat-a".into()),
+        SessionLocation::Default,
+    ] {
+        assert_eq!(
+            review_changes(entry.clone()),
+            vec![Outcome::ChangesRequested(entry)]
+        );
+    }
+}

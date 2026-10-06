@@ -36,15 +36,22 @@ pub fn visible_range(
     len: usize,
     overscan: usize,
 ) -> Range<usize> {
-    let _ = (offset, viewport, row_height, overscan);
-    0..len
+    if len == 0 || row_height <= 0.0 {
+        return 0..0;
+    }
+    let first = (offset as f32 / row_height).floor() as usize;
+    let last = ((offset + viewport) as f32 / row_height).ceil() as usize;
+    let start = first.min(len).saturating_sub(overscan);
+    let end = last.saturating_add(overscan).min(len);
+    start..end.max(start)
 }
 
 /// The spacer heights above and below the built `rows` of a list of `len` rows, so the content is
 /// `len * row_height` tall in total.
 pub fn spacers(rows: &Range<usize>, row_height: f32, len: usize) -> (f32, f32) {
-    let _ = (rows, row_height, len);
-    (0.0, 0.0)
+    let above = rows.start as f32 * row_height;
+    let below = len.saturating_sub(rows.end) as f32 * row_height;
+    (above, below)
 }
 
 /// Builds one row by its index.
@@ -123,7 +130,8 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
             .height(Length::Fill)
             .width(Length::Fill);
         if let Some(f) = list.on_scroll {
-            scroll = scroll.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport));
+            scroll =
+                scroll.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport));
         }
         scroll.into()
     }
@@ -191,6 +199,10 @@ mod tests {
         let expected = list.rows().len();
         let _element: Element<'_, ()> = list.into();
         assert_eq!(expected, 26);
-        assert_eq!(built.get(), expected, "only the visible rows and the overscan");
+        assert_eq!(
+            built.get(),
+            expected,
+            "only the visible rows and the overscan"
+        );
     }
 }

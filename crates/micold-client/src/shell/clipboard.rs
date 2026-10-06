@@ -43,6 +43,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::OverlayDismissed(_)
         | Outcome::NotificationRaised(_)
         | Outcome::WorktreesReplaced(_)
+        | Outcome::ChangesRequested(_)
         | Outcome::WorktreeCreated(_)
         | Outcome::LocationOpened(_)
         | Outcome::RevealScrollArmed

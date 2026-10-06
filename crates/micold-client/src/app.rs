@@ -140,6 +140,14 @@ pub enum Message {
     /// [`State::update_pr_status`]. `State::update` declines it.
     PrStatus(crate::features::pr_status::Msg),
 
+    // ---- Feature 482: the Changes view of a worktree or the project root ----
+    /// The Changes view's messages (feature 482); see [`crate::features::changes::Msg`].
+    ///
+    /// Shape B, like `PrStatus`: the reducer answers with a git read only the shell can run, so
+    /// the entry is `shell/changes.rs`, which reaches the reducer through
+    /// [`State::update_changes`]. `State::update` declines it.
+    Changes(crate::features::changes::Msg),
+
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
     /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
@@ -213,6 +221,8 @@ pub struct State {
     pub attach: crate::features::attach::State,
     /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
     pub pr_status: crate::features::pr_status::State,
+    /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
+    pub changes: crate::features::changes::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -571,6 +581,23 @@ impl State {
         crate::features::pr_status::update(&mut self.pr_status, msg)
     }
 
+    /// Apply a Changes view message and hand back the read the shell must run (feature 482).
+    ///
+    /// The read is the shell's (`shell/changes.rs`); it asks here so the root stays the only caller
+    /// of the reducer (SC-002).
+    pub fn update_changes(
+        &mut self,
+        msg: crate::features::changes::Msg,
+    ) -> crate::features::changes::Effect {
+        crate::features::changes::update(&mut self.changes, msg)
+    }
+
+    /// The read an outcome started while the root interpreted it (opening the view from the
+    /// sidebar), taken once by the shell right after the message that caused it.
+    pub fn take_changes_effect(&mut self) -> Option<crate::features::changes::Effect> {
+        self.changes.pending.take()
+    }
+
     /// Apply a session message and hand back the effect requests it made (feature 031).
     ///
     /// [`Self::update`] drains every outcome through [`interpret`], which drops the two that only
@@ -633,6 +660,7 @@ impl State {
             Message::Connection(_)
             | Message::Sandbox(_)
             | Message::PrStatus(_)
+            | Message::Changes(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
@@ -854,6 +882,22 @@ pub fn interpret(
         Outcome::WorktreesReplaced(names) => {
             crate::features::sidebar::worktrees_replaced(state, &names);
             crate::features::worktree_form::worktree_list_changed(state);
+            // V3: a view of a worktree that is gone closes. Nothing to read, so no effect.
+            let _ = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::WorktreesListed(names),
+            );
+        }
+        Outcome::ChangesRequested(entry) => {
+            crate::overlay::registry::dismiss(
+                state,
+                crate::features::worktree::WorktreeContextMenu::ID,
+            );
+            let effect = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::Opened { entry },
+            );
+            state.changes.pending = Some(effect);
         }
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)

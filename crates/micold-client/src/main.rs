@@ -18,6 +18,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::attach::Msg as AttachMsg;
+use micold_client::features::changes::Msg as ChangesMsg;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -604,6 +605,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // `shell/sandbox.rs` now (contract M2).
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
+        Message::Changes(msg) => shell::changes::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
@@ -652,6 +654,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 033, contract C1 A5b: revealing agent worktrees puts rows on screen that have no
         // answer yet, and hiding them takes rows away. The reducer flips the filter; the sync asks
         // about the revealed rows or drops the hidden ones' answers.
+        // Feature 482, V1: opening the Changes view starts its list read, which only the shell can
+        // run; the root left it in `changes.pending` while it interpreted the outcome.
+        Message::Sidebar(msg @ SidebarMsg::ReviewChangesRequested(_)) => {
+            app.core.update(Message::Sidebar(msg));
+            shell::changes::run_pending(app)
+        }
         Message::Sidebar(msg @ SidebarMsg::ShowAgentWorktreesToggled) => {
             app.core.update(Message::Sidebar(msg));
             shell::daemon_sync::sync_cli_availability(app);
@@ -736,6 +744,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::Session(SessionMsg::Selected(id)) => {
+            // Feature 482, V2: the terminal takes the main area back. Closing reads nothing.
+            let _ = app.core.update_changes(ChangesMsg::SessionSelected);
             shell::daemon_sync::on_session_selected(app, id)
         }
         Message::Session(SessionMsg::CloseRequested(id)) => {

@@ -121,10 +121,7 @@ fn a_toggle_change_rereads_the_list() {
         }
     );
     let effect = changes::update(&mut state, Msg::CommittedToggled);
-    assert!(matches!(
-        effect,
-        Effect::None | Effect::ReadList { .. }
-    ));
+    assert!(matches!(effect, Effect::None | Effect::ReadList { .. }));
 }
 
 /// An answer to a read that is no longer the current one is dropped.
@@ -231,7 +228,10 @@ fn the_entry_leaving_the_catalog_closes_the_view() {
     let mut state = State::default();
     open(&mut state, SessionLocation::Default);
     changes::update(&mut state, Msg::WorktreesListed(BTreeSet::new()));
-    assert!(state.open.is_some(), "the Default entry never leaves the catalog");
+    assert!(
+        state.open.is_some(),
+        "the Default entry never leaves the catalog"
+    );
 }
 
 /// L1, US1 s9. The Default entry's Committed toggle is unavailable, with the note saying why.
