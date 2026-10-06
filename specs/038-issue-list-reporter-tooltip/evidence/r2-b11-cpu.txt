@@ -1,0 +1,10 @@
+round1 (a) 625 (b) 631
+round2 (a) 645 (b) 670
+round3 (a) 635 (b) 660
+c-round1 (c) 686
+c-round2 (c) 791
+c-round3 (c) 691
+DONE
+a-narrowed-round1 663
+a-narrowed-round2 676
+a-narrowed-round3 655

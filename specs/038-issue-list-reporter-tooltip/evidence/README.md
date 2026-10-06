@@ -82,3 +82,7 @@ Ran on Linux under Xvfb + lavapipe (private display `:138`, not a real display),
 Seen, though no step asks: in the dark theme the panel is a slightly darker rounded surface with no visible outline, low in contrast against the list, so over rows its text can read as printed on them (b6-dark-open-row1.png); the light panel has an outline. The panel starts about 40 px right of the row's text and cuts the next row's title in two (`#1459` left of it, `…nheritance` right of it). A heading's word stays as text (`Description See #9136`, `What happens In the…`).
 
 Not covered: light theme for B7, B9–B11 and the 720-high window; a stopwatch by a human (B6 is frame polling, ~35 ms a frame); the tooltip's fade or appearance animation; an issue with a truly blank body (none open in `cli/cli`); comment text on a template issue in `small`; `pgrep` during the dark B6–B8 trials; B10 against the M3 pair and on a real display. The B10 failure is the finding to act on.
+
+## Second pass (rework, two-pass build)
+
+HEAD 9eb56cf6 (crates identical to the measured 7d77db4f), dark theme, Xvfb :142 with lavapipe. Data and screenshots: `r2-*`; numbers in `r2-observations.txt`, `r2-b10-times.txt`, `r2-b6-trials.txt`, `r2-b11-cpu.txt`. B10 1.03 (PASS), B6 3.045-3.087 s over 23 trials, B7 PASS, B8 and B9 PASS with the stand-ins noted there, B11 PASS (one (c) run at +17 %, unexplained). Not confirmed: light theme for B7-B11, typing while pages land.
