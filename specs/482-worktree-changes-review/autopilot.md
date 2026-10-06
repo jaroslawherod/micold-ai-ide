@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #482
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers in spec.md (US3 scenario 4, FR-003)
+- **Phase**: plan
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify round 1: US3 scenario 4 and FR-003 answered by the orchestrator as defaults (user away); recorded in spec.md Clarifications. No further ambiguities, no second round.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

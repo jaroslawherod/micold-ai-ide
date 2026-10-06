@@ -37,6 +37,13 @@ formatting live in the render-free core and are unit-tested."
 - **Entry**: a worktree or the project's "Default" entry (the project root), as listed in the
   sidebar.
 
+## Clarifications
+
+### Session 2026-10-06
+
+- Q: Which session gets the prompt when several run, and what when none runs? → A: The most recently active running session; if none runs, start a new session with the project's default AI CLI and send once ready; never resume an ended session. _(decided by orchestrator as a default while the user was away)_
+- Q: FR-003 base branch when the app does not know where the worktree came from? → A: Merge-base with the default branch (origin/HEAD, then main, then master), shown in the view; nothing persisted per worktree. _(decided by orchestrator as a default while the user was away)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See what changed in a worktree (Priority: P1)
@@ -144,9 +151,9 @@ a session is now running in that worktree and that its first input is the review
    the same or a second window, **Then** the action is unavailable and each comment reaches the
    session exactly once.
 4. **Given** a worktree with more than one running session, **When** the user chooses Send to
-   session, **Then** [NEEDS CLARIFICATION: which session receives the prompt when several run, and
-   whether a stopped session is resumed or a new one started when none runs: ask each time, the
-   most recently active one, or always a new session?].
+   session, **Then** the prompt goes to the running session that was most recently active, and no
+   ended session is resumed. When none is running, a new session starts with the project's default
+   AI CLI and receives the prompt once it is ready (scenario 1).
 
 ---
 
@@ -225,10 +232,9 @@ check the list and the diff update; then clear the sent comments and check only 
   current state, with the change kind (added, modified, deleted, renamed, mode change, binary) and
   the number of lines added and removed.
 - **FR-003**: For a worktree, the base MUST be the point where the entry's branch diverged from its base branch.
-  The base branch is the branch the worktree was created from when the app knows it, otherwise
-  [NEEDS CLARIFICATION: fallback base branch when the app does not know where the worktree came
-  from: the repository's default branch (remote HEAD), the project root's checked-out branch, or a
-  user choice?]. The "Default" entry MUST list uncommitted changes only.
+  The base is the merge-base of the entry's HEAD and the repository's default branch, resolved
+  as `origin/HEAD`, falling back to local `main`, then `master`. The view MUST show which base is
+  used. No per-worktree base is persisted by this feature. The "Default" entry MUST list uncommitted changes only.
 - **FR-004**: The view MUST have two independent toggles, committed and uncommitted, both on by
   default (the "Default" entry has only uncommitted, per FR-003); the list and diffs MUST show only the kinds switched on, and a file changed in both
   appears once with the combined change.
