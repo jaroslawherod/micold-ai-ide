@@ -201,6 +201,12 @@ impl Capabilities {
         self.git.as_ref().map(|g| &**g as &dyn Git)
     }
 
+    /// The same git as [`Self::git`], shareable with a read that runs off the update thread
+    /// (feature 482, research R2): the Changes view lists files in `spawn_blocking`.
+    pub fn shared_git(&self) -> Option<Arc<dyn Git + Send + Sync>> {
+        self.git.clone()
+    }
+
     /// The same capabilities, minus git (feature 027, research R2 part 2).
     ///
     /// A **narrowing**, not a second assembly point: nothing new is constructed here, so

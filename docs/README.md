@@ -39,6 +39,9 @@ follows describes the version you are reading it from (constitution, Principle V
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
   its worktree, switchable and individually closeable/restartable).
+- [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Changes view: opening it
+  from a worktree or the Default entry, the changed-file list, the base line, and the
+  Committed/Uncommitted toggles.
 - [Settings](user-guide/settings.md) — the Settings view: appearance, the terminal scrollback
   limit, environment-include (auto-picking up your shell environment for sessions, configuring or
   disabling it, and recovering from a failed script), and **Session service** — where sessions run,
