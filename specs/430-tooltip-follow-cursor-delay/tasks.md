@@ -34,12 +34,12 @@ Paths: `core` = `crates/micold-core`, `client` = `crates/micold-client`, `cdk` =
 
 ## Phase 3: User Story 2 - show delay (P2)
 
-- [ ] T013 [US2] Test (red): `client/tests/tooltip_show_glue.rs`: `show_delay` driven by events: nothing before D, panel at D, leave cancels, movement during the wait does not restart, no delay opens at once, delay with follow opens at the pointer's current position then tracks it; follow with a delay at each window edge never covers the pointer; a `subject()` change mid-delay restarts it (US2.1 to US2.4, SC-002, SC-003, edge cases)
-- [ ] T014 [US2] Test (red): `cdk` and `material` unit tests that `after_rest` then `show_delay` yields `Delay`, and `show_delay` then `after_rest` yields `Rest` (last call wins; research R1)
-- [ ] T015 [US2] Test (red): `idle_requests_no_frames.rs` and `material_builder_api.rs`: a waiting delay requests exactly one timed wake and no frame; none without a waiting or open tooltip; `show_delay` is a builder step (US2.5, FR-007)
-- [ ] T016 [US2] Implement `Wait::Delay`, `Tooltip::show_delay` in `cdk`, `State.show`, reset in `describe`; the delay's wake through `motion::wake_at`; `material::Tooltip::show_delay` (T013 to T015 green)
-- [ ] T017 [P] [US2] Add the "show delay" and "show delay and follow" poses to the showcase `floating.rs`
-- [ ] T018 [US2] Run quickstart §B steps 4, 5 and 7 through the `visual-pass` skill; append the evidence to `specs/430-tooltip-follow-cursor-delay/visual-pass.md`
+- [x] T013 [US2] Test (red): `client/tests/tooltip_show_glue.rs`: `show_delay` driven by events: nothing before D, panel at D, leave cancels, movement during the wait does not restart, no delay opens at once, delay with follow opens at the pointer's current position then tracks it; follow with a delay at each window edge never covers the pointer; a `subject()` change mid-delay restarts it (US2.1 to US2.4, SC-002, SC-003, edge cases)
+- [x] T014 [US2] Test (red): `cdk` and `material` unit tests that `after_rest` then `show_delay` yields `Delay`, and `show_delay` then `after_rest` yields `Rest` (last call wins; research R1)
+- [x] T015 [US2] Test (red): `idle_requests_no_frames.rs` and `material_builder_api.rs`: a waiting delay requests exactly one timed wake and no frame; none without a waiting or open tooltip; `show_delay` is a builder step (US2.5, FR-007)
+- [x] T016 [US2] Implement `Wait::Delay`, `Tooltip::show_delay` in `cdk`, `State.show`, reset in `describe`; the delay's wake through `motion::wake_at`; `material::Tooltip::show_delay` (T013 to T015 green)
+- [x] T017 [P] [US2] Add the "show delay" and "show delay and follow" poses to the showcase `floating.rs`
+- [x] T018 [US2] Run quickstart §B steps 4, 5 and 7 through the `visual-pass` skill; append the evidence to `specs/430-tooltip-follow-cursor-delay/visual-pass.md` (NOT RUN: no Xvfb/xdotool; recorded in visual-pass.md)
 
 ## Dependencies
 

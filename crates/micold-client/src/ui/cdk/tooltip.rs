@@ -56,6 +56,9 @@ pub(crate) enum Wait {
     /// Open while the pointer is over the trigger.
     #[default]
     Hover,
+    /// Open once the pointer has been over the trigger for the delay, counted from entering and not
+    /// restarted by movement (feature 430).
+    Delay(Duration),
     /// Open once the pointer has rested on the trigger for the delay (feature 038).
     Rest(Duration),
 }
@@ -110,6 +113,18 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
         self
     }
 
+    /// Open only once the pointer has been over the trigger for `delay`, counted from entering
+    /// (feature 430, FR-003).
+    ///
+    /// Unlike [`Tooltip::after_rest`] movement does not restart it; only leaving does. It works
+    /// with [`Position::FollowCursor`]: the panel then opens beside the pointer's place at that
+    /// moment. An alternative to `after_rest`: the one called last wins. The wait costs one timed
+    /// frame request, not a frame loop.
+    pub fn show_delay(mut self, delay: Duration) -> Self {
+        self.wait = Wait::Delay(delay);
+        self
+    }
+
     /// What the trigger describes (FR-017).
     ///
     /// A list reuses its rows: the widget at one place in the tree describes one issue now and
@@ -133,7 +148,8 @@ struct State {
     shown: Progress,
     /// Where a rest-delay tooltip is in its wait. Unused without `after_rest`.
     rest: RestTimer,
-    /// The press rule of a pointer-following tooltip that opens on hover. Unused otherwise.
+    /// Where a show-delay tooltip is in its wait, and the press rule of a pointer-following one that
+    /// opens on hover. Unused otherwise.
     show: ShowTimer,
     /// The pointer over the trigger, in the trigger's own coordinate space; read by `overlay()`.
     /// Recorded only for [`Position::FollowCursor`].
@@ -247,8 +263,14 @@ where
                             let at = over.map(|point| (point.x, point.y));
                             state.rest.observe(at, now, delay)
                         }
-                        // Pointer-following, opening on hover: the delay rule with no delay, for
-                        // its press rule (430 research R5).
+                        // A show delay counts from entering; pointer-following opening on hover is
+                        // the same rule with no delay, for its press rule (430 research R5).
+                        Wait::Delay(delay) => {
+                            if pressed {
+                                state.show.press();
+                            }
+                            state.show.observe(over.is_some(), now, delay)
+                        }
                         Wait::Hover => {
                             if pressed {
                                 state.show.press();
@@ -611,6 +633,23 @@ where
 #[cfg(test)]
 mod placement_tests {
     use super::*;
+
+    fn tip() -> Tooltip<'static, ()> {
+        Tooltip::new(
+            iced::widget::text("a"),
+            iced::widget::text("b"),
+            Position::Bottom,
+        )
+    }
+
+    /// 430 research R1: the two waits are alternatives and the one set last wins.
+    #[test]
+    fn the_wait_set_last_wins() {
+        let d = Duration::from_millis(300);
+        assert_eq!(tip().after_rest(d).show_delay(d).wait, Wait::Delay(d));
+        assert_eq!(tip().show_delay(d).after_rest(d).wait, Wait::Rest(d));
+        assert_eq!(tip().wait, Wait::Hover);
+    }
 
     const GAP: f32 = 4.0;
 

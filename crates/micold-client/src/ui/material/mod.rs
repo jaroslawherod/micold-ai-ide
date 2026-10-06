@@ -272,6 +272,15 @@ impl<'a, M: 'a> Tooltip<'a, M> {
         self
     }
 
+    /// Open only once the pointer has been over the content for `delay`, counted from entering and
+    /// not restarted by movement (feature 430, FR-003). Works with
+    /// [`TooltipPosition::FollowCursor`]. An alternative to [`Tooltip::after_rest`]: the one called
+    /// last wins.
+    pub fn show_delay(mut self, delay: std::time::Duration) -> Self {
+        self.wait = tooltip::Wait::Delay(delay);
+        self
+    }
+
     /// Show at most `lines` lines of the label; a label that takes more is cut after a whole word
     /// and ends in an ellipsis, and one that fits is shown whole (FR-021).
     pub fn max_lines(mut self, lines: usize) -> Self {
@@ -315,8 +324,10 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         // room on its side back over the trigger, and this one opens it on the other side
         // (029 BUG-001, FR-013).
         let mut floated = tooltip::Tooltip::new(t.content, tip, t.position).gap(spacing::XS);
-        if let tooltip::Wait::Rest(delay) = t.wait {
-            floated = floated.after_rest(delay);
+        match t.wait {
+            tooltip::Wait::Hover => {}
+            tooltip::Wait::Delay(delay) => floated = floated.show_delay(delay),
+            tooltip::Wait::Rest(delay) => floated = floated.after_rest(delay),
         }
         if let Some(key) = t.subject {
             floated = floated.subject(key);
@@ -357,4 +368,34 @@ pub fn menu_panel<'a, M: 'a>(
             panel_style
         })
         .into()
+}
+
+#[cfg(test)]
+mod tooltip_wait_tests {
+    use super::*;
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens;
+    use std::time::Duration;
+
+    fn tip() -> Tooltip<'static, ()> {
+        Tooltip::new(
+            Text::new("a", TypeRole::Label, tokens::roles(ColorScheme::Dark)),
+            "label",
+            tokens::roles(ColorScheme::Dark),
+        )
+    }
+
+    /// 430 research R1: `after_rest` and `show_delay` are alternatives; the one called last wins.
+    #[test]
+    fn the_wait_set_last_wins() {
+        let d = Duration::from_millis(300);
+        assert_eq!(
+            tip().after_rest(d).show_delay(d).wait,
+            tooltip::Wait::Delay(d)
+        );
+        assert_eq!(
+            tip().show_delay(d).after_rest(d).wait,
+            tooltip::Wait::Rest(d)
+        );
+    }
 }

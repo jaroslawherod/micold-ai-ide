@@ -368,6 +368,39 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                 .position(material::TooltipPosition::FollowCursor),
                 roles,
             ),
+            // The show delay (feature 430): counted from entering, not restarted by movement.
+            posed(
+                "show delay 1 s: nothing before it",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Settings, roles).on_press(Message::NoOp),
+                    "Shown one second after the pointer entered",
+                    roles,
+                )
+                .show_delay(std::time::Duration::from_secs(1)),
+                roles,
+            ),
+            posed(
+                "show delay 1 s and follows: move over the area",
+                material::Tooltip::new(
+                    material::Surface::new(
+                        material::Text::new(
+                            "Wait a second, then the panel appears beside the pointer",
+                            TypeRole::Caption,
+                            roles,
+                        ),
+                        material::SurfaceKind::Plain,
+                        roles,
+                    )
+                    .width(Length::Fixed(420.0))
+                    .height(Length::Fixed(160.0))
+                    .padding(spacing::MD),
+                    "Beside the pointer once the delay has run",
+                    roles,
+                )
+                .show_delay(std::time::Duration::from_secs(1))
+                .position(material::TooltipPosition::FollowCursor),
+                roles,
+            ),
         ],
         Layout::Inline,
     )
