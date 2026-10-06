@@ -16,6 +16,12 @@ Feature 575 (`specs/575-workspace-attention-list`) counts unread sessions on the
 
 This feature sorts attention events into **kinds**, notifies by default only for the kinds that need the user, lets the user choose per kind, and gives each kind its own icon.
 
+## Clarifications
+
+### Session 2026-10-06
+
+- Q: Is the long-task threshold fixed at 60 seconds, or user-configurable in Settings? → A: Fixed at 60 seconds; no setting. _(orchestrator default, option A recommended; user asked, answer pending — may switch to adjustable before plan)_
+
 ## Terms
 
 - **Awaiting input**, **in view**, **desktop notification**, **in-app notice**, **session service**, **unread**: as defined by feature 039 (Terms and Key Entities).
@@ -26,7 +32,7 @@ This feature sorts attention events into **kinds**, notifies by default only for
   - **Long task finished**: the session finished a turn whose turn duration was at least the long-task threshold.
   - **Turn finished**: the session finished a turn whose turn duration was below the long-task threshold.
   - **Session error**: the session ended because of an error: its AI CLI reported an error and stopped, its process exited abnormally, or the session service gave up restarting it after repeated crashes.
-- **Long-task threshold**: the turn duration from which a finished turn counts as a long task. Default: 60 seconds [NEEDS CLARIFICATION: Is the long-task threshold fixed at 60 seconds, or must the user be able to change it in Settings?].
+- **Long-task threshold**: the turn duration from which a finished turn counts as a long task. Fixed at 60 seconds; the user cannot change it.
 - **Kind icon**: the icon that stands for one notification kind, distinct in shape from the other three.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -192,7 +198,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - "Waiting for input or permission" in the issue is the session stopping in the middle of a turn for the user (**Needs permission**). A session at an idle prompt after its turn has finished has already been classified by that turn; idle reminders raise nothing (039 FR-003).
 - "Every session state change" in the issue is 039's notification at the end of every turn. Short turn ends are what bury the important notifications, so **Turn finished** is off by default; users who want 039's behaviour back turn it on.
 - "Errored" means an error ending as defined under **Session error**. Closing or stopping a session yourself is not an error.
-- The long-task threshold defaults to 60 seconds: long enough that a quick exchange stays quiet, short enough that a user who switched away is told when a real task is done.
+- The long-task threshold is fixed at 60 seconds, not a setting (the issue asks only for per-kind on/off): long enough that a quick exchange stays quiet, short enough that a user who switched away is told when a real task is done.
 - AI CLIs differ in what they report: a CLI that does not report a stop in the middle of a turn cannot raise **Needs permission**; its stops are classified by turn duration. This is accepted, not worked around.
 - The four kinds are fixed. Adding further kinds is a later request.
 - The **Desktop notifications** switch stays as the master switch so that 039's one-switch behaviour and its stored value carry over unchanged.

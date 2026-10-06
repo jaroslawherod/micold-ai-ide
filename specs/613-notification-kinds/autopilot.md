@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #613
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
-- **Phase**: clarify
-- **Next step**: clarify unit — awaiting user answer on long-task threshold (Open escalation), then apply to spec.md and run the next clarify round
+- **Phase**: plan
+- **Next step**: plan unit (if the user answers B before plan: make the threshold a Settings value, default 60 s, and update D4)
 
 ## Pull requests
 
@@ -29,6 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Do disabled kinds change unread marks? | No: unread stays as 039 (FR-018) | agent-resolved | issue #613 asks about notifications only; 039 FR-017 |
 | D2 | spec | Defaults per kind | Needs permission, Session error, Long task finished on; Turn finished off | agent-resolved | issue #613 "Expected" bullet 1 |
 | D3 | spec | Keep 039's Desktop notifications switch? | Yes, as master switch above per-kind switches | agent-resolved | 039 FR-026; stored value carries over |
+| D4 | clarify | Long-task threshold fixed at 60 s or adjustable in Settings? | Fixed at 60 s (A) | orchestrator default (A, recommended); user asked, answer pending — may switch to B before plan | issue #613 asks only per-kind on/off |
 
 ## Review rounds
 
@@ -48,10 +49,7 @@ None.
 
 ## Open escalation
 
-- **Clarify round 1, Q1 (category 1, product/scope)**: Is the long-task threshold fixed at 60 s, or user-configurable in Settings?
-  - A (Recommended) fixed at 60 s: issue #613 asks only for per-kind on/off; keeps FR-009 to FR-014 unchanged; a setting can be a later request.
-  - B adjustable in Settings (seconds field, default 60, beside **Long task finished**): precedent of a numeric seconds field with clamped range in `crates/micold-core/src/settings.rs` (`env_include_timeout_secs`, 1 to 60) and `docs/user-guide/settings.md` "Timeout (seconds)"; adds requirements, validation and showcase states.
-  - Repo checked: issue #613 body, spec.md Assumptions, specs/039 and 575 specs, constitution: none settles it.
+None.
 
 ## Follow-ups not done
 
