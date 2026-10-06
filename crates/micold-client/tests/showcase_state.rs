@@ -242,6 +242,38 @@ fn typing_into_the_typeahead_narrows_the_sample_rows() {
     );
 }
 
+/// The sample rows are of differing height (spec 038, FR-028; TDD verification, finding 4): some
+/// carry a second line and some do not, and the first two-line rows differ in the length of their
+/// title, so the open list is a pose of two-line and one-line rows rather than of rows of one
+/// height.
+#[test]
+fn the_typeahead_sample_rows_differ_in_height() {
+    let s = showcase();
+    let rows = s.typeahead_rows();
+    let two_line = rows.iter().filter(|r| r.details.is_some()).count();
+    let one_line = rows.iter().filter(|r| r.details.is_none()).count();
+    assert!(
+        two_line >= 2,
+        "at least two sample rows carry a second line; {two_line} do"
+    );
+    assert!(
+        one_line >= 1,
+        "at least one sample row stays a single line beside them; {one_line} do"
+    );
+    let longest_title = rows.iter().map(|r| r.label.len()).max().unwrap_or(0);
+    let shortest_two_line = rows
+        .iter()
+        .filter(|r| r.details.is_some())
+        .map(|r| r.label.len())
+        .min()
+        .unwrap_or(0);
+    assert!(
+        longest_title > 2 * shortest_two_line,
+        "a title long enough to wrap sits beside a short one: {longest_title} against \
+         {shortest_two_line} bytes"
+    );
+}
+
 /// The highlight moves the same way the picker's does, because it is the same rule — the gallery
 /// example would be worth little if its keyboard behaved differently from the real one.
 #[test]

@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 28 # US1 1-9, US2 1-6, US3 1-13
 planned_at: d9deabff
-updated_at: d9deabff
+updated_at: 89408097 # A16-A28 recorded DONE, deviations and guard changes noted (verification.md findings 1-3, 8)
 suite_baseline: green # 2629 passed, 0 failed, 2 ignored per the profile at cdc473ab; not re-run for this design PR
 ---
 
@@ -39,23 +39,23 @@ before the story is complete.
 | A13 | Typing the login in a different letter case still matches the reporter's issues | US2-4, FR-009 | example | DONE (U18, U45) | T024 | T031 |
 | A14 | The empty search field's hint names the reporter alongside number, title and label | US2-5, FR-011 | example | DONE (U38) | T026 | T031 |
 | A15 | With more issues than the cap, typing a login makes the same one search request (typed text, no author filter) and shows loaded matches plus returned issues matching by number, title, label or reporter | US2-6, FR-012, FR-013 | example | DONE (U46, U47; T001's request half) | T001, T025 | T031 |
-| A16 | A tooltip for a row opens when the cursor stays still on a row with a description for 3 seconds | US3-1, FR-015, SC-003 | example | PENDING | T032, T035, T047 | T055 |
-| A17 | No tooltip is open when the cursor has been still for less than 3 seconds | US3-2, FR-015, SC-003 | example | PENDING | T032, T035 | T055 |
-| A18 | While the cursor keeps moving over the list no tooltip opens; each move beyond the tolerance restarts the 3 seconds | US3-3, FR-016, SC-004 | example | PENDING | T032, T035 | T055 |
-| A19 | An open tooltip closes when the cursor moves to another row, and that row's tooltip opens only after 3 seconds of rest on it | US3-4, FR-017 | example | PENDING | T032, T035 | T055 |
-| A20 | An open tooltip closes when the cursor leaves the list | US3-5, FR-017 | example | PENDING | T032 | T055 |
-| A21 | The tooltip holds the description text and nothing else | US3-6, FR-019 | example | PENDING | T046 | T055 |
-| A22 | An empty or whitespace-only description opens no tooltip however long the cursor rests | US3-7, FR-020 | example | PENDING | T044, T046 | T055 |
-| A23 | A description longer than three tooltip lines shows its start, at most three lines tall, ending in an ellipsis | US3-8, FR-021, SC-005 | example | PENDING | T033, T035, T047 | T055 |
-| A24 | A description that fits three lines is shown whole with no ellipsis | US3-9, FR-021 | example | PENDING | T033, T035 | T055 |
-| A25 | Clicking a row under an open tooltip picks the issue as without a tooltip and closes the tooltip | US3-10, FR-017, FR-023 | example | PENDING | T035, T047 | T055 |
-| A26 | A searched or typed-number issue gets its tooltip on rest exactly like a listed row | US3-11, FR-006, FR-015 | example | PENDING | T046 | T055 |
-| A27 | A body with a hidden comment, `## Problem` and a Markdown link yields the tooltip text `Problem The list cuts long titles off.` | US3-12, FR-022 | example | PENDING | T044 | T055 |
-| A28 | A body holding only an HTML comment or only Markdown markers opens no tooltip | US3-13, FR-020, FR-022 | example | PENDING | T044, T046 | T055 |
+| A16 | A tooltip for a row opens when the cursor stays still on a row with a description for 3 seconds | US3-1, FR-015, SC-003 | example | DONE (`a_cursor_still_for_the_delay_opens_it`, `the_panel_shows_only_after_the_delay_at_rest`, `a_row_with_a_tooltip_opens_its_panel_after_the_rest_delay`, `the_first_row_shows_one_panel_clear_of_itself`) | T032, T035, T047 | T055 |
+| A17 | No tooltip is open when the cursor has been still for less than 3 seconds | US3-2, FR-015, SC-003 | example | DONE (`a_cursor_still_for_a_millisecond_less_leaves_it_closed`, `the_panel_shows_only_after_the_delay_at_rest`) | T032, T035 | T055 |
+| A18 | While the cursor keeps moving over the list no tooltip opens; each move beyond the tolerance restarts the 3 seconds | US3-3, FR-016, SC-004 | example | DONE (`a_move_beyond_the_tolerance_restarts_the_wait`, `a_cursor_that_keeps_moving_never_opens_it`, `the_panel_does_not_show_while_the_cursor_moves`) | T032, T035 | T055 |
+| A19 | An open tooltip closes when the cursor moves to another row, and that row's tooltip opens only after 3 seconds of rest on it | US3-4, FR-017 | example | DONE (`a_changed_subject_closes_the_panel_and_starts_the_wait_again`, `another_key_at_the_same_place_closes_the_panel_and_waits_again`, `the_adjacent_row_opens_its_panel_only_after_its_own_full_delay`) | T032, T035 | T055 |
+| A20 | An open tooltip closes when the cursor leaves the list | US3-5, FR-017 | example | DONE (`leaving_closes_it_and_the_next_entry_waits_the_full_delay`) | T032 | T055 |
+| A21 | The tooltip holds the description text and nothing else | US3-6, FR-019 | example | DONE (`a_row_holds_exactly_the_tooltip_text_it_was_given`, `a_described_issues_row_carries_the_description_and_the_number`) | T046 | T055 |
+| A22 | An empty or whitespace-only description opens no tooltip however long the cursor rests | US3-7, FR-020 | example | DONE (`a_blank_text_gives_no_description`, `an_issue_without_a_description_gets_no_tooltip`, `a_row_without_a_tooltip_floats_nothing`) | T044, T046 | T055 |
+| A23 | A description longer than three tooltip lines shows its start, at most three lines tall, ending in an ellipsis | US3-8, FR-021, SC-005 | example | DONE (`a_long_text_is_cut_to_three_lines_and_ends_in_an_ellipsis`, `overflowing_words_are_cut_after_a_whole_word_and_end_in_one_ellipsis`, `a_rows_panel_is_at_most_three_lines_tall`) | T033, T035, T047 | T055 |
+| A24 | A description that fits three lines is shown whole with no ellipsis | US3-9, FR-021 | example | DONE (`a_text_that_fits_is_shown_whole`, `a_text_that_fits_is_returned_borrowed_and_unchanged`) | T033, T035 | T055 |
+| A25 | Clicking a row under an open tooltip picks the issue as without a tooltip and closes the tooltip | US3-10, FR-017, FR-023 | example | DONE (`a_click_on_the_row_under_an_open_panel_picks_its_issue`, `a_press_closes_the_panel_and_still_reaches_the_trigger`) | T035, T047 | T055 |
+| A26 | A searched or typed-number issue gets its tooltip on rest exactly like a listed row | US3-11, FR-006, FR-015 | example | DONE (`a_described_issues_row_carries_the_description_and_the_number`, `describe_listed_matches_by_number`) | T046 | T055 |
+| A27 | A body with a hidden comment, `## Problem` and a Markdown link yields the tooltip text `Problem The list cuts long titles off.` | US3-12, FR-022 | example | DONE (`the_scenario_body_parses_to_one_plain_paragraph`, `the_two_passes_give_the_scenarios_description`) | T044 | T055 |
+| A28 | A body holding only an HTML comment or only Markdown markers opens no tooltip | US3-13, FR-020, FR-022 | example | DONE (`a_comment_only_body_parses_to_no_description`, `an_issue_without_a_description_gets_no_tooltip`) | T044, T046 | T055 |
 
 ## Inner loop: unit behaviors
 
-States are `PENDING`, `DONE` or `BASELINE`; the test is named when the cycle writes it. The `tasks` column
+States are `DONE` or `BASELINE` (a row not yet written is marked to-do); the test is named when the cycle writes it. The `tasks` column
 gives the test task first, then the implementation task(s).
 
 ### `crates/micold-core/src/github.rs`: reporter and shared node selection
@@ -126,7 +126,7 @@ gives the test task first, then the implementation task(s).
 | U41 | An already wholly visible highlighted row causes no scroll | FR-007 | example | DONE | T018 / T020 |
 | U42 | A highlighted row taller than the viewport is aligned to its top | FR-007 | example | DONE | T018 / T020 |
 | U43 | Only `FormMsg::IssueHighlightMoved` chains `picker_highlight_into_view()`; no other picker's message does | FR-029 | example | DONE | T018 / T021 |
-| U44 | The issue form states (256-character title, 20 labels, none, rows of one to five lines; default and narrow window) show every row's whole title, reporter and labels inside the list | SC-001, FR-004 | example | DONE | T006 / T012, T014 |
+| U44 | The issue form states (256-character title, 20 labels, none, rows of one to five lines; default and narrow window) show every row's whole title, reporter and labels inside the list | SC-001, FR-004 | example | DONE (test-after; red by mutant, cycle 6 and 21) | T006 / T012, T014 |
 
 ### `crates/micold-client` reducer: issue search by reporter
 
@@ -183,7 +183,7 @@ gives the test task first, then the implementation task(s).
 | U75 | With a hover held past the rest delay on the first, last and lower-edge row exactly one panel opens, inside the window, not over its row, at most three `Caption` lines plus padding | US3-8, FR-021, FR-023 | example | DONE | T047 / T050, T051 |
 | U76 | A click on the row under an open panel picks the issue | US3-10, FR-023 | example | DONE | T047 / T050, T051 |
 | U77 | No code under `src/ui/` calls the issue source, so a resting cursor causes no request | FR-024, SC-006 | characterization | BASELINE | T048 / (none) |
-| U82 | The view of a form on another source, or whose list is `IssueList::Loading` after a newer load, builds no row and no row tooltip | FR-017, Edge: source switched | example | DONE | T046 / T051 |
+| U82 | The view of a form on another source, or whose list is `IssueList::Loading` after a newer load, builds no row and no row tooltip | FR-017, Edge: source switched | example | DONE (loading half red in cycle 20; source half test-after, red by mutant, cycle 21) | T046 / T051 |
 | U83 | A highlighted row the cursor is not over shows no panel: the highlight passes nothing to the row's tooltip | FR-015, FR-007 | example | DONE | T046 / T051 |
 | U85 | With a panel open, the search field keeps keyboard focus and Up, Down and Enter move the highlight and pick as without it | FR-023 | example | DONE | T047 / T050, T051 |
 | U84 | With a panel open on one row, moving onto the adjacent row by less than `REST_TOLERANCE` closes it, and the adjacent row's panel opens only after the full delay | FR-016 | example | DONE | T047 / T050, T051 |
@@ -230,3 +230,11 @@ Copied verbatim from `.specify/memory/tdd-profile.md`:
 - Fast subset: `scripts/build-lock.sh cargo test -p micold-core --all-targets`
 - Acceptance: `scripts/build-lock.sh cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1` (container runtime; not the feature's outer loop)
 - Coverage, mutation, property, watch: none installed; deliberate-mutant spot checks by hand.
+
+## Deviations and loosened guards (verification.md findings 8, 10, 11)
+
+- U44 and the U82 source half were written after the implementation (cycles 6 and 21); their red comes from deliberate mutants, not from a failing first run.
+- Scan guards narrowed in M5: `crates/micold-client/tests/one_overlay_implementation.rs:160` and `crates/micold-client/tests/material_boundary.rs:189` no longer count a method call named `tooltip(` as the widget. Positive controls: `a_helper_ending_in_the_widget_name_is_not_a_use_of_it`, `a_method_with_a_widgets_name_is_not_a_widget_call`.
+- Renamed frame-door test: `the_frame_request_sits_behind_the_animating_guard` is now `the_frame_requests_are_the_guarded_one_and_the_timed_one` in `idle_requests_no_frames.rs` (cycle 16, U63); `the_scan_actually_finds_the_rendering_layer` expects 2 call sites instead of 1.
+- `crates/micold-client/src/main_tests.rs`: the `constructed` expectations went from `[FAKE_GH]` to `[FAKE_GH; 2]` and from `; 2` to `; 3` because the description pass builds one more source (cycle 26). They pin how many sources are built, which no requirement states.
+- Suite baseline now 5071 passed, 0 failed, 9 ignored, 429 binaries (verification.md at 89408097).

@@ -207,7 +207,7 @@ crates/micold-core/
 │   ├── lib.rs               # + pub mod tooltip
 │   ├── github.rs            # Issue: reporter, description, title_line, details_line, emphasis,
 │   │                        #   RowEmphasis, GHOST_LOGIN, DESCRIPTION_MAX_CHARS, description_from,
-│   │                        #   redacting Debug; queries + issue_from_node read author, bodyText
+│   │                        #   redacting Debug; list query reads author; search queries author + bodyText; the descriptions pass bodyText
 │   └── tooltip.rs           # NEW — RestTimer, REST_TOLERANCE, clamp_to_lines
 └── tests/
     ├── github_parse.rs      # extended

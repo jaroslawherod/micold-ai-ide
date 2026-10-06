@@ -138,7 +138,11 @@ fn a_blank_text_gives_no_description() {
 #[test]
 fn the_scenario_body_parses_to_one_plain_paragraph() {
     let issue = listed(&fixture("issue_node_description.json"));
-    assert_eq!(issue.number(), 519, "the captured node is issue 519");
+    assert_eq!(
+        issue.number(),
+        519,
+        "the hand-written fixture node is issue 519"
+    );
     assert_eq!(
         issue.description(),
         "Problem The list cuts long titles off.",
@@ -387,10 +391,15 @@ fn a_text_of_invisible_characters_gives_no_description() {
 fn invisible_characters_are_dropped_from_a_description() {
     assert_eq!(
         description_from("The \u{202E}list\u{202C} cuts \u{200B} long\u{FEFF} titles\u{0000} off."),
-        "The list cuts long titles off."
+        "The list cuts long titles off.",
+        "invisible marks are dropped and the words kept with single spaces"
     );
     let padded = format!("{}{}", "\u{200B}".repeat(700), "Short.");
-    assert_eq!(description_from(&padded), "Short.");
+    assert_eq!(
+        description_from(&padded),
+        "Short.",
+        "dropped marks do not count toward the limit"
+    );
 }
 
 /// U89 (FR-022) — the joiners that shape text stay where they join: a zero-width non-joiner inside
