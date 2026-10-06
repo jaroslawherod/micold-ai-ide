@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3 PR #611 open; orchestrator waits on CI and merges, then M4.
+- **Next step**: M4 in progress (T030–T040).
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
 | #547 | M2 | merged | 2e688bf3d01bed2c3ae63681ecd05be8e6db3648 |
-| #611 | M3 | open | |
+| #611 | M3 | merged | ef56a970339f2a77a0f8642a6c4dcc848a00b1ce |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | merged |
 | M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | merged |
-| M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | #611 | in review |
+| M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | #611 | merged |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
 | M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | pending |
@@ -89,7 +89,17 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 ## Handover
 
-None.
+M4 unit 1 stopped at 136k context. Branch is `feat/worktree-pr-ci-status` reset to `origin/main` (M3 merged, #611 recorded). Nothing pushed, no PR yet.
+
+**Done (committed as one WIP commit `test(040): M4 red tests (T030-T033 part)`)**: tests only, all RED (do not compile until the code exists):
+- `tests/icons.rs`, `tests/icons_font.rs` (T031): seven new `Icon` variants `PrOpen e0b6`, `PrDraft e745` (`edit_note`; contract says `edit` but `edit` is `Rename`'s codepoint f097 family and no two icons share one), `PrMerged e0b3`, `PrClosed e14b`, `ChecksPassing e5ca`, `ChecksPending e8b5`, `ChecksFailing e5c9` (`cancel`; contract says `close`, which is `Icon::Close`'s). All these codepoints were checked present in the shipped font's cmap (`e14b`/`e8b5` alias f08c/efd6, same glyph). `Icon::ALL.len()` expected 42. Update `contracts/pull-request-ui.md` §1 table for the two glyph changes (and record as a decision D13 in this ledger).
+- `tests/features_sidebar.rs` (T030): expects `micold_client::features::sidebar::{row_pull_request, RowPullRequest}`: `pub struct RowPullRequest<'a> { pub status: &'a PullRequestStatus, pub age_secs: u64 }` (no `stale`/`removable` yet; M5/M6/M7 add them) and `pub fn row_pull_request<'a>(entry: &SidebarEntry, statuses: &'a BTreeMap<String, PullRequestStatus>, read_at: Option<u64>, now: u64) -> Option<RowPullRequest<'a>>` (Worktree with `branch: Some(b)` -> lookup; detached, Default -> None; age = now.saturating_sub(read_at.unwrap_or(now))).
+- `tests/features_settings.rs` (T033): `SettingsSection::GithubIssues.label() == "GitHub"`; `GithubDraft { entries, pr_status_enabled: bool }` (Default false, seeded from `Settings.pr_status_enabled` in `from_settings`); `Msg::PrStatusToggled(bool)` via `edit(...)`; `ValidSettings.pr_status_enabled` written by `validate()` and `into_settings()` (drop the `pr_status_enabled: false` stub in `into_settings`).
+- `tests/settings_sections.rs`: `DEFERRED` now empty; `ui/settings/github.rs` must declare `SETTINGS` with `("pr_status_enabled", "PrStatusToggled")` and call `page(\n        "GitHub",` (title "GitHub"; keep the issue-mapping intro text sensible).
+- `src/main_tests.rs` (U105/U106): `PrStatusToggled(true)` + `Saved` sends `SettingsSet { pr_status_enabled: Some(true) }`; unchanged draft vs the live `app.core.pr_status.enabled` sends `Some(None)`... i.e. `pr_status_enabled: None`; off from on sends `Some(false)`; an open draft follows `SettingsChanged` (do it in `shell/pr_status.rs::enabled_changed`: if `app.core.settings.settings_draft` is Some set `draft.github.pr_status_enabled = enabled`). In `shell/persist.rs`: the open path (line ~269) keeps `pr_status_enabled: stored.pr_status_enabled`; replace the "keeps the document's value" closure (~line 401) with plain `*stored = settings.clone()`; send `pr_status_enabled: (valid.pr_status_enabled != app.core.pr_status.enabled).then_some(valid.pr_status_enabled)` in `SettingsSet` (~line 433). Update `crates/micold-client/src/shell/persist.rs` `ValidSettings` use accordingly.
+- `tests/showcase_completeness.rs` (T032): catalogue entry `component: "PullRequestIndicator"`, `module: "material/pull_request_indicator.rs"`, `interactive: false`, 12 `posed` names exactly: "open", "draft", "merged", "closed", "open, checks passing", "open, checks pending", "open, checks failing", "draft, checks passing", "draft, checks pending", "draft, checks failing", "open, checks passing, stale", "merged, stale"; `variants: &[]` (check whether the inventory's enum scan wants `PrMark`/`CheckMark` variants posed; run `cargo test -p micold-client --test showcase_completeness`).
+
+**Next (in order)**: (1) T034: add covered states in `tests/support/covered_states.rs` (registry; patterns: `with_project()`, `state.pr_status.statuses.insert("feat/short".into(), PullRequestStatus{..})`, `read_at`, `enabled`, `held`; Settings state `settings-view-github-issues` needs the new `GithubDraft.pr_status_enabled` field and a new state for the switch; narrowest sidebar width via `state.sidebar.width`; showcase entry state if a showcase state kind exists); (2) T035 icons; (3) T036 `PullRequestIndicator` (model on `ui/material/unread_mark.rs`: builder `new(PrMark, &Roles)`, `.checks(CheckMark)`, `.stale(bool)`, `Into<Element>`; 16 px glyphs, 2 px apart, 16 wide / 34 wide with check, fixed height; roles per contract §1; stale = `outline` role; export in `ui/material/mod.rs`; catalogue entry in `src/showcase/catalogue.rs` + render fn in `src/showcase/sections/atoms.rs`; add a unit test for width 16/34 like `unread_mark.rs` tests; `docs/development/component-library.md` section); (4) T037: in `ui/sidebar.rs::build_items` pass `state.pr_status.statuses`, `read_at`, `now` (a local `now()` helper in the view glue, `SystemTime`, like `shell/pr_status.rs:45`) and put the indicator first in the row's trailing element before `row_actions_cluster` (a `row![indicator, cluster]` only when `Some`; `None` must build exactly today's tree); map `PrState`/`CheckStatus` to `PrMark`/`CheckMark` in the sidebar; (5) T038 as above plus the `Checkbox` + `field_note` in `ui/settings/github.rs` with the contract §5 wording (see `ui/settings/environment.rs` for `Checkbox::new(...).on_toggle(...)` and `field_note`); (6) T039 regenerate `tests/fixtures/layout_snapshot.txt` (see `tests/layout_snapshot_regeneration.rs` for the command); (7) T040 docs: `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/settings.md` (rename "GitHub issues" heading to "GitHub" too), `docs/development/component-library.md`; (8) tick T030-T040 in tasks.md, append cycle-log entries to `tdd/cycle-log.md` and U98-U110 states in `tdd/test-list.md`; (9) verify.md: scoped gate + review A (high) + review B + visual pass (quickstart §B1-§B3; also ask it to confirm the seven glyphs look right in the rendered showcase), full gate with `MICOLD_SKIP_GH_LAUNCH_TEST=1`, PR titled `feat(040): the pull request indicator and its Settings switch (#486)`, body ends `Refs #486`.
 
 ## Open escalation
 

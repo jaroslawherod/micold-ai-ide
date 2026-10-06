@@ -47,6 +47,13 @@ fn expected(icon: Icon) -> char {
         Icon::SessionError => '\u{e000}',
         Icon::LongTaskFinished => '\u{e2e6}',
         Icon::TurnFinished => '\u{e0cb}',
+        Icon::PrOpen => '\u{e0b6}',
+        Icon::PrDraft => '\u{e745}',
+        Icon::PrMerged => '\u{e0b3}',
+        Icon::PrClosed => '\u{e14b}',
+        Icon::ChecksPassing => '\u{e5ca}',
+        Icon::ChecksPending => '\u{e8b5}',
+        Icon::ChecksFailing => '\u{e5c9}',
     }
 }
 
@@ -77,8 +84,9 @@ fn all_covers_every_variant_without_duplicates() {
     // "there is a remote" and "this happens by itself", and neither is true here), +3 for
     // IssueMapping/MoveUp/MoveDown (feature 034's GitHub issues settings section — `label`,
     // `keyboard_arrow_up`, `keyboard_arrow_down`; `arrow_upward` is already `NavigateUp`), +4 for the notification kinds' icons (feature 613, I1 —
-    // `pan_tool`, `error`, `task_alt`, `chat_bubble`).
-    assert_eq!(Icon::ALL.len(), 39, "curated set size");
+    // `pan_tool`, `error`, `task_alt`, `chat_bubble`), +7 for feature 040's pull request indicator (`call_split`, `edit_note`, `call_merge`,
+    // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s).
+    assert_eq!(Icon::ALL.len(), 46, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

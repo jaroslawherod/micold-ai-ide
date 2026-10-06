@@ -23,6 +23,42 @@ fn every_icon_codepoint_has_a_glyph() {
     }
 }
 
+/// The pull request indicator's seven glyphs (feature 040, FR-009): each is in the shipped font, and
+/// no two share a codepoint, so the shape alone tells them apart. `Icon::Close` is not one of them:
+/// the failing mark is `cancel`, because `close` is already that variant's codepoint.
+#[test]
+fn the_seven_pull_request_glyphs_are_in_the_font_and_distinct() {
+    let seven = [
+        Icon::PrOpen,
+        Icon::PrDraft,
+        Icon::PrMerged,
+        Icon::PrClosed,
+        Icon::ChecksPassing,
+        Icon::ChecksPending,
+        Icon::ChecksFailing,
+    ];
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let mut glyphs = std::collections::BTreeSet::new();
+    for icon in seven {
+        let id = face
+            .glyph_index(icon.glyph())
+            .unwrap_or_else(|| panic!("{icon:?} has no glyph in the shipped font"));
+        assert!(
+            glyphs.insert(id),
+            "{icon:?} draws the same glyph as another of the seven"
+        );
+    }
+    assert_eq!(glyphs.len(), 7);
+    assert!(
+        !glyphs.contains(&face.glyph_index(Icon::Close.glyph()).unwrap()),
+        "no pull request glyph may be the close glyph"
+    );
+    assert!(
+        !glyphs.contains(&face.glyph_index(Icon::Rename.glyph()).unwrap()),
+        "no pull request glyph may be the rename glyph"
+    );
+}
+
 #[test]
 fn font_advertises_the_pinned_family_name() {
     let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");

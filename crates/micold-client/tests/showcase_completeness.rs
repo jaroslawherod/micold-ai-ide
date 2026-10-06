@@ -771,3 +771,38 @@ fn the_toggle_chip_is_posed_disabled() {
         chip.posed
     );
 }
+
+/// The gallery poses the pull request indicator in every state it has (feature 040, T032 — U102,
+/// U103, FR-033): the four states without checks, open and draft with each of the three check
+/// statuses, and the stale form of open-passing and of merged — twelve poses, each named.
+#[test]
+fn the_pull_request_indicator_poses_its_twelve_states() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.component == "PullRequestIndicator")
+        .expect("PullRequestIndicator has a gallery entry");
+    assert_eq!(entry.module, "material/pull_request_indicator.rs");
+    assert_eq!(
+        entry.posed.len(),
+        12,
+        "PullRequestIndicator poses {:?}",
+        entry.posed
+    );
+    for pose in [
+        "open",
+        "draft",
+        "merged",
+        "closed",
+        "open, checks passing",
+        "open, checks pending",
+        "open, checks failing",
+        "draft, checks passing",
+        "draft, checks pending",
+        "draft, checks failing",
+        "open, checks passing, stale",
+        "merged, stale",
+    ] {
+        assert!(entry.posed.contains(&pose), "the pose \"{pose}\" is missing");
+    }
+    assert!(!entry.interactive, "the indicator answers no press");
+}

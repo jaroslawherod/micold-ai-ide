@@ -43,9 +43,9 @@ use std::path::{Path, PathBuf};
 /// than an oversight. Feature 034's label-to-type mapping, stored from its milestone M4, left it
 /// the same way when M5's GitHub issues section claimed it.
 ///
-/// Feature 040's pull request switch is stored from its milestone M2 (protocol 22) and gets its
-/// checkbox in the GitHub section with M4.
-const DEFERRED: &[(&str, &str)] = &[("pr_status_enabled", "040 T038")];
+/// Feature 040's pull request switch was stored from its milestone M2 (protocol 22) and got its
+/// checkbox in the GitHub section with M4 (T038), so it left this list the same way.
+const DEFERRED: &[(&str, &str)] = &[];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client
 /// source that holds its control and the message that control sends. No Settings section will ever
@@ -701,5 +701,20 @@ fn the_threshold_field_sits_under_the_long_task_row() {
             "LongTaskThresholdChanged".to_string()
         )),
         "environment.rs declares the threshold with its message"
+    );
+}
+
+/// Feature 040 (FR-029, UI §5; U107): the section that carries the pull request switch is titled
+/// "GitHub" on its own page as well as in the rail, and the page claims the switch.
+#[test]
+fn the_github_page_is_titled_github_and_claims_the_pull_request_switch() {
+    let src = read(&client_dir().join("src/ui/settings/github.rs"));
+    assert!(
+        src.contains("page(\n        \"GitHub\","),
+        "the page's title is \"GitHub\""
+    );
+    assert!(
+        src.contains("(\"pr_status_enabled\", \"PrStatusToggled\")"),
+        "the page declares the switch it renders"
     );
 }

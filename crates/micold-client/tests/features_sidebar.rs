@@ -14,13 +14,14 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
+    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
     DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::session::{AiCli, Session, SessionLocation};
+use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::worktree::{Worktree, WorktreeStatus};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 fn worktree(dir_name: &str) -> Worktree {
@@ -876,5 +877,96 @@ fn review_changes_asks_for_the_changes_view_of_that_entry() {
             review_changes(entry.clone()),
             vec![Outcome::ChangesRequested(entry)]
         );
+    }
+}
+
+// --- Feature 040 US1: the row's pull request (data-model §4; U98–U100) ----------------------------
+
+fn pull_request(number: u64) -> PullRequestStatus {
+    PullRequestStatus {
+        number,
+        title: format!("Pull request {number}"),
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state: PrState::Open {
+            checks: CheckStatus::Failing,
+        },
+        review: ReviewState::None,
+        head: "abc".into(),
+    }
+}
+
+fn statuses(of: &[(&str, u64)]) -> BTreeMap<String, PullRequestStatus> {
+    of.iter()
+        .map(|(branch, number)| ((*branch).to_string(), pull_request(*number)))
+        .collect()
+}
+
+/// U98 (A1–A8): a worktree row whose branch has an entry projects it, with the age of the reading
+/// worked out from the `now` it is given.
+#[test]
+fn a_worktree_row_whose_branch_has_a_status_projects_it_with_its_age() {
+    let held = statuses(&[("feat/a", 7), ("feat/b", 8)]);
+    let row = row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(1_000), 1_090)
+        .expect("feat/a has a pull request");
+
+    assert_eq!(row.status, &pull_request(7), "the status of the row's own branch");
+    assert_eq!(row.age_secs, 90, "now minus the time the reading started");
+
+    let other = row_pull_request(&worktree_entry("b", vec![], vec![]), &held, Some(1_000), 1_000)
+        .expect("feat/b has one too");
+    assert_eq!(other.status.number, 8, "each row takes its own branch's entry");
+}
+
+/// U98: a clock that reads earlier than the reading has no negative age.
+#[test]
+fn a_clock_before_the_reading_gives_age_zero() {
+    let held = statuses(&[("feat/a", 7)]);
+    let row = row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(2_000), 1_000)
+        .expect("listed");
+    assert_eq!(row.age_secs, 0);
+}
+
+/// U98 (A9): the join is by branch name alone; a branch with no entry has no indicator.
+#[test]
+fn a_branch_without_an_entry_projects_none() {
+    let held = statuses(&[("feat/other", 7)]);
+    assert!(row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(1), 2).is_none());
+}
+
+/// U99 (FR-007): a detached worktree has no branch to look up, whatever the map holds.
+#[test]
+fn a_detached_worktree_projects_none() {
+    let mut node = worktree("a");
+    node.branch = None;
+    let entry = SidebarEntry::Worktree(WorktreeNode {
+        worktree: node,
+        display_name: "a".into(),
+        tags: vec![],
+        expanded: false,
+        sessions: vec![],
+        shown_for_current_session: false,
+    });
+    let held = statuses(&[("feat/a", 7), ("", 9)]);
+    assert!(row_pull_request(&entry, &held, Some(1), 2).is_none());
+}
+
+/// U99 (FR-007): the "Default" entry never has one, whichever branch the project root has checked
+/// out and however many branches the map holds.
+#[test]
+fn the_default_entry_projects_none() {
+    let held = statuses(&[("main", 1), ("master", 2), ("Default", 3), ("feat/a", 4)]);
+    assert!(row_pull_request(&default_entry(vec![]), &held, Some(1), 2).is_none());
+}
+
+/// U100 (FR-001, FR-011): with nothing held every row projects as it did before the feature.
+#[test]
+fn with_no_statuses_every_row_projects_none() {
+    let none = BTreeMap::new();
+    for entry in [
+        default_entry(vec![]),
+        worktree_entry("a", vec![], vec![]),
+        worktree_entry("b", vec![Tag::Type(ConventionalType::Feat)], vec![]),
+    ] {
+        assert!(row_pull_request(&entry, &none, None, 5).is_none());
     }
 }
