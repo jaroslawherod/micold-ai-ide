@@ -47,6 +47,7 @@ pub fn view<'a>(
             draft.github.pr_status_enabled,
             roles,
         )
+        .track_focus(FieldId::SettingsPrStatus, focused)
         .on_toggle(|v| Message::Settings(SettingsMsg::PrStatusToggled(v))),
         Some(
             "Reads the pull requests of the open project's GitHub repository with your GitHub CLI \
