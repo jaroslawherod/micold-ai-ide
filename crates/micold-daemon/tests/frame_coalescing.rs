@@ -64,17 +64,43 @@ fn flood(marker: &str, count: usize) -> CommandBuilder {
     cmd
 }
 
+/// Like [`flood`] but never stops: the coalescing test measures a fixed window of sustained output,
+/// so it cannot depend on how long a counted flood happens to outlast the first tick.
+fn endless_flood(marker: &str) -> CommandBuilder {
+    #[cfg(unix)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg(format!(
+            "i=1; while :; do echo {marker}_$i; i=$((i+1)); done"
+        ));
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/c");
+        cmd.arg(format!(
+            "for /l %i in (1,1,2147483647) do @echo {marker}_%i"
+        ));
+        cmd
+    };
+    cmd.cwd(std::env::temp_dir());
+    cmd
+}
+
 #[tokio::test]
 async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
     let (server_io, client_io) = tokio::io::duplex(1024 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
 
-    // 20k lines: far more writes than ticks, whatever the machine. An uncoalesced stream would
-    // frame per write and land in the thousands.
-    const LINES: usize = 20_000;
+    // Output that never pauses, measured over a fixed window: far more writes than ticks, whatever
+    // the machine. An uncoalesced stream would frame per write and land in the thousands. A counted
+    // flood could finish before the first tick on a fast machine and arrive as a single frame.
+    const WINDOW: Duration = Duration::from_secs(1);
     let sid = SessionId::new();
     let session =
-        PtySession::spawn(sid, flood("flood", LINES), 1_000, Some((COLS, ROWS))).expect("spawn");
+        PtySession::spawn(sid, endless_flood("flood"), 1_000, Some((COLS, ROWS))).expect("spawn");
     state.register_session(session);
 
     let _server = tokio::spawn(micold_daemon::server::serve_connection(
@@ -112,23 +138,19 @@ async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
         .await
         .unwrap();
 
-    // Count grid frames from the first one until the flood's last line is on screen. The clock
-    // starts at the first frame, not at the request, so connection setup is not counted against
-    // the budget.
+    // Count grid frames from the first one until the window has elapsed. The clock starts at the
+    // first frame, not at the request, so connection setup is not counted against the budget.
     let mut frames = 0usize;
     let mut started: Option<Instant> = None;
-    let mut saw_last = false;
+    let mut saw_flood = false;
     let deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < deadline {
         match tokio::time::timeout(Duration::from_millis(500), client.next()).await {
             Ok(Some(Ok(Frame::Grid(f)))) => {
                 frames += 1;
-                started.get_or_insert_with(Instant::now);
-                if f.lines
-                    .iter()
-                    .any(|l| l.text.contains(&format!("flood_{LINES}")))
-                {
-                    saw_last = true;
+                let t0 = *started.get_or_insert_with(Instant::now);
+                saw_flood |= f.lines.iter().any(|l| l.text.contains("flood_"));
+                if t0.elapsed() >= WINDOW {
                     break;
                 }
             }
@@ -142,7 +164,7 @@ async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
 
     // Non-vacuity: the flood really ran and really streamed, so a low frame count means coalescing
     // and not a stalled child.
-    assert!(saw_last, "the flood's last line ({LINES}) never arrived");
+    assert!(saw_flood, "the flood's output never arrived");
     assert!(frames >= 2, "only {frames} frame(s) — nothing was streamed");
 
     // The budget. `MissedTickBehavior::Delay` means a tick can slip late but never early, so the
@@ -150,9 +172,7 @@ async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
     let budget = elapsed.as_nanos() / FRAME_INTERVAL.as_nanos() + 2;
     // Printed so the evidence note quotes measurements rather than the assertion's mere absence.
     println!(
-        "coalescing: {LINES} lines streamed in {frames} frames over {elapsed:?} \
-         (budget {budget} @ {FRAME_INTERVAL:?}/frame; {:.1} lines per frame)",
-        LINES as f64 / frames as f64
+        "coalescing: {frames} frames over {elapsed:?} (budget {budget} @ {FRAME_INTERVAL:?}/frame)"
     );
     assert!(
         frames as u128 <= budget,
