@@ -259,8 +259,22 @@ critical section that persists the settings (`invalidate_env_include_all` is gon
 clear it after the fact). `OnceLock` leaves the cell empty if its initializer unwinds, and the next
 waiter runs the script itself — the drop guard the fix calls for, from the standard library.
 
+**Design correction (BUG-442)**: R5's restart trigger (FR-007(b)) was wired in the client's
+`TerminalRestartRequested` handler against the client's own cache (T024/T035). Feature 010 moved
+spawning and the cache into the service (its T098) and carried only the Settings-save trigger across
+(its T100, `SettingsSet`); the restart reached the service as a plain `SessionStart`, and the later
+`SessionRestartShell` arm respawns from the cache. Fix, in the service: the `SessionRestartShell`
+arm drops the restarted session's directory from the cache (`invalidate_env_include`, which already
+wins over a resolve in progress, FR-021) before `open_shell`; a new `ClientMsg::SessionRestart
+{ session }` does the same and then what `SessionStart` does, and the client's AI CLI restart sends
+it instead of `SessionStart` (wire change: `PROTOCOL_VERSION` 29 → 30, feature 010's
+`contracts/messages.md`). `SessionStart` and supervision's `respawn_primary` keep reading the cache
+(FR-007's BUG-442 clarification). See `bugs/BUG-442.md`.
+
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
 
 **Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.
+
+**Bugfix**: 2026-10-06 — BUG-442 Updated from bugfix patch.
