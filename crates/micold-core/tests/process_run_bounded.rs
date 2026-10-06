@@ -45,6 +45,26 @@ fn child_helper() {
             }
             std::process::exit(0);
         }
+        "hold" => {
+            std::thread::sleep(Duration::from_secs(20));
+            std::process::exit(0);
+        }
+        "escape" => {
+            // Leaves a daemon in a new session holding the inherited pipes, then exits.
+            use std::os::unix::process::CommandExt;
+            let mut daemon = child("hold");
+            // Safety: `setsid` is async-signal-safe.
+            unsafe {
+                daemon.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+            daemon.spawn().expect("spawn daemon");
+            out.write_all(b"before").unwrap();
+            out.flush().unwrap();
+            std::process::exit(0);
+        }
         "brief" => {
             std::thread::sleep(Duration::from_millis(300));
             std::process::exit(0);
@@ -184,5 +204,32 @@ fn a_failing_child_reports_status_and_output() {
             );
         }
         other => panic!("a non-zero exit is still an exit, got {other:?}"),
+    }
+}
+
+/// A descendant that leaves the process group escapes the group kill and keeps the pipes open;
+/// the runner must not wait for its EOF (#440).
+#[cfg(unix)]
+#[test]
+fn a_descendant_outside_the_group_holding_the_pipes_does_not_hang_the_read() {
+    let bound = Duration::from_secs(2);
+    let started = Instant::now();
+    let outcome = run_bounded(child("escape"), bound);
+    let took = started.elapsed();
+
+    assert!(
+        took < bound + Duration::from_secs(1),
+        "the runner returns within bound + 1 s even with a pipe held open, took {took:?}"
+    );
+    match outcome {
+        RunOutcome::Exited {
+            code: 0, stdout, ..
+        } => {
+            assert!(
+                count(&stdout, b'b') >= 1,
+                "output read before the deadline is kept"
+            );
+        }
+        other => panic!("the child itself exited 0, got {other:?}"),
     }
 }
