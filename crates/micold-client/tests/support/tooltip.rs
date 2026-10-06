@@ -148,6 +148,18 @@ pub fn delayed_tooltip(
     tip
 }
 
+/// A tooltip over the probe that was given a show delay and then a rest wait of `rest`: the rest
+/// wait is the one that holds (feature 430, research R1).
+pub fn rest_after_delay_tooltip(delay: Duration, rest: Duration) -> Tooltip<'static, Msg> {
+    Tooltip::new(
+        Element::new(Probe),
+        container(text("panel")),
+        Position::Bottom,
+    )
+    .show_delay(delay)
+    .after_rest(rest)
+}
+
 /// What one event made the tooltip ask for.
 #[derive(Debug)]
 pub struct Seen {
@@ -155,6 +167,9 @@ pub struct Seen {
     pub messages: Vec<Msg>,
     /// The frame request left on the shell: `Wait` is none at all.
     pub redraw: window::RedrawRequest,
+    /// Whether the event left the layout invalidated: what makes the runtime lay the panel out
+    /// again and paint it somewhere new.
+    pub layout_invalidated: bool,
 }
 
 /// A tooltip and the widget tree it keeps its state in.
@@ -219,9 +234,14 @@ impl Driven {
                 &mut shell,
                 &Rectangle::with_size(WINDOW),
             );
-            shell.redraw_request()
+            (shell.redraw_request(), shell.is_layout_invalid())
         };
-        Seen { messages, redraw }
+        let (redraw, layout_invalidated) = redraw;
+        Seen {
+            messages,
+            redraw,
+            layout_invalidated,
+        }
     }
 
     /// A redraw at `now` with the cursor at `cursor`.

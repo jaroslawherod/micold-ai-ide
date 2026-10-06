@@ -70,3 +70,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test tooltip_show_glue --test idle_requests_no_frames --test material_builder_api`; quickstart §B steps 4, 5 and 7
 - **Depends on**: M1
 - **Tier**: full
+
+## Phase 4: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL at `cddd3ce5`). Cleared in the close unit.
+
+- [x] T020 [US1] Finding 2 (HIGH): make the follow tests observe the relayout request: add a layout-invalidated flag to `Seen` in `client/tests/support/tooltip.rs:153` and assert it in `a_pointer_move_while_open_moves_the_panel` (`client/tests/tooltip_show_glue.rs:60`) and that a still pointer does not set it; prove it by replacing `if state.open && rest.open` with `if false && ...` at `client/src/ui/cdk/tooltip.rs:284` (test fails, then restore); `scripts/build-lock.sh cargo test -p micold-client --test tooltip_show_glue --test idle_requests_no_frames`
+- [x] T021 Finding 1 (HIGH): the red evidence cannot be recovered; `tdd/cycle-log.md` records T020's red and an explicit "no red recorded" note for the rest; `tdd/test-list.md` deliberately not written (finding accepted, see autopilot.md); `ls specs/430-tooltip-follow-cursor-delay/tdd`
+- [x] T022 Finding 3 (MED): share `EDGE_PADDING` and `visible()` between `client/tests/tooltip_show_glue.rs:19-40` and `client/src/ui/cdk/tooltip.rs:698` (export the constant or expose a test helper) instead of a copied literal; `scripts/build-lock.sh cargo test -p micold-client --test tooltip_show_glue --lib tooltip`
+- [x] T023 Finding 7 (LOW): add a follow-panel case to `leaving_cancels_the_delay` (`client/tests/tooltip_show_glue.rs:186`) and a `Wait::Rest` tooltip case after `show_delay`; `scripts/build-lock.sh cargo test -p micold-client --test tooltip_show_glue`
+- [x] T024 Finding 6 (LOW): test the `checked_add` overflow branch of `ShowTimer::observe` (`core/src/tooltip.rs:128`) with `Duration::MAX`; `scripts/build-lock.sh cargo test -p micold-core --test tooltip_show`

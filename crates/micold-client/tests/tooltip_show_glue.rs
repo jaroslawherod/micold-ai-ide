@@ -12,12 +12,12 @@ use std::time::{Duration, Instant};
 
 use iced::mouse::Cursor;
 use iced::window::RedrawRequest;
-use iced::{Point, Rectangle};
+use iced::Point;
+use micold_client::ui::cdk::tooltip::visible_part as visible;
 
-use support::tooltip::{delayed_tooltip, follow_tooltip, Driven, FOLLOW_GAP, TRIGGER, WINDOW};
-
-/// The padding drawn as nothing around the panel's content (`cdk::tooltip::EDGE_PADDING`).
-const EDGE_PADDING: f32 = 5.0;
+use support::tooltip::{
+    delayed_tooltip, follow_tooltip, rest_after_delay_tooltip, Driven, FOLLOW_GAP, TRIGGER, WINDOW,
+};
 
 const FRAME: Duration = Duration::from_millis(16);
 
@@ -27,16 +27,6 @@ fn following() -> Driven {
 
 fn at(x: f32, y: f32) -> Cursor {
     Cursor::Available(Point::new(x, y))
-}
-
-/// The drawn part of `panel`: inside its padding.
-fn visible(panel: Rectangle) -> Rectangle {
-    Rectangle {
-        x: panel.x + EDGE_PADDING,
-        y: panel.y + EDGE_PADDING,
-        width: panel.width - EDGE_PADDING * 2.0,
-        height: panel.height - EDGE_PADDING * 2.0,
-    }
 }
 
 /// US1.1: the panel opens beside the pointer, `gap` from it, not under it.
@@ -63,8 +53,12 @@ fn a_pointer_move_while_open_moves_the_panel() {
     let start = Instant::now();
     tip.frame(start, at(80.0, 60.0));
 
-    tip.frame(start + FRAME, at(120.0, 70.0));
+    let seen = tip.frame(start + FRAME, at(120.0, 70.0));
 
+    assert!(
+        seen.layout_invalidated,
+        "the move asks the runtime to lay the panel out again, or it stays where it was"
+    );
     let v = visible(tip.panel().expect("still open"));
     assert_eq!((v.x, v.y), (120.0 + FOLLOW_GAP, 70.0 + FOLLOW_GAP));
 }
@@ -83,6 +77,10 @@ fn a_still_pointer_requests_nothing() {
             seen.redraw,
             RedrawRequest::Wait,
             "frame {n} with a still pointer"
+        );
+        assert!(
+            !seen.layout_invalidated,
+            "frame {n} with a still pointer asks for no relayout"
         );
     }
 }
@@ -184,18 +182,46 @@ fn nothing_shows_before_the_delay_and_the_panel_shows_at_it() {
 /// US2.2: leaving cancels the wait, and coming back starts it again from entering.
 #[test]
 fn leaving_cancels_the_delay() {
-    let mut tip = delayed(false);
+    for follow in [false, true] {
+        let mut tip = delayed(follow);
+        let start = Instant::now();
+        let cursor = tip.over(20.0);
+        tip.frame(start, cursor);
+
+        tip.frame(start + D / 2, at(300.0, 300.0));
+        tip.frame(start + D / 2 + FRAME, cursor);
+        tip.frame(start + D, cursor);
+        assert!(
+            !tip.is_open(),
+            "follow={follow}: the first entry's wait was cancelled"
+        );
+
+        tip.frame(start + D / 2 + FRAME + D, cursor);
+        assert!(
+            tip.is_open(),
+            "follow={follow}: the second entry's own delay has run"
+        );
+    }
+}
+
+/// Research R1: a rest wait set after a show delay is the wait that holds, so the pointer
+/// resting restarts it on movement where the delay would not.
+#[test]
+fn a_rest_wait_set_after_a_delay_restarts_on_movement() {
+    let mut tip = Driven::new(rest_after_delay_tooltip(D, D));
     let start = Instant::now();
-    let cursor = tip.over(20.0);
-    tip.frame(start, cursor);
+    tip.frame(start, tip.over(20.0));
 
-    tip.frame(start + D / 2, at(300.0, 300.0));
-    tip.frame(start + D / 2 + FRAME, cursor);
-    tip.frame(start + D, cursor);
-    assert!(!tip.is_open(), "the first entry's wait was cancelled");
+    tip.frame(start + D / 2, tip.over(60.0));
+    tip.frame(start + D, tip.over(60.0));
+    assert!(
+        !tip.is_open(),
+        "the move at {:?} restarted the rest, so {D:?} after entering is too soon",
+        D / 2
+    );
 
-    tip.frame(start + D / 2 + FRAME + D, cursor);
-    assert!(tip.is_open(), "the second entry's own delay has run");
+    tip.frame(start + D / 2 + D, tip.over(60.0));
+    assert!(tip.is_open(), "{D:?} after the pointer came to rest");
 }
 
 /// FR-003: the delay counts from entering; movement over the trigger does not restart it.

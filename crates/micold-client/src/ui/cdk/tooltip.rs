@@ -65,7 +65,19 @@ pub(crate) enum Wait {
 
 /// The space kept between the panel and the window's edge, and around the panel's content — the
 /// figure the rendering stack's tooltip uses, kept so that nothing that already fits moves.
-const EDGE_PADDING: f32 = 5.0;
+pub const EDGE_PADDING: f32 = 5.0;
+
+/// The part of a laid-out `panel` that is drawn: inside its [`EDGE_PADDING`]. Shared with the
+/// tests, which place the pointer against what the user sees.
+pub fn visible_part(panel: Rectangle) -> Rectangle {
+    Rectangle::new(
+        Point::new(panel.x + EDGE_PADDING, panel.y + EDGE_PADDING),
+        Size::new(
+            panel.width - EDGE_PADDING * 2.0,
+            panel.height - EDGE_PADDING * 2.0,
+        ),
+    )
+}
 
 /// A trigger with a hover label floated beside it.
 pub struct Tooltip<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
@@ -694,16 +706,7 @@ mod placement_tests {
     const WINDOW: Size = Size::new(400.0, 300.0);
     const CONTENT: Size = Size::new(120.0, 30.0);
 
-    /// The part of `panel` that is drawn: inside its padding.
-    fn visible(panel: Rectangle) -> Rectangle {
-        Rectangle::new(
-            Point::new(panel.x + EDGE_PADDING, panel.y + EDGE_PADDING),
-            Size::new(
-                panel.width - EDGE_PADDING * 2.0,
-                panel.height - EDGE_PADDING * 2.0,
-            ),
-        )
-    }
+    use super::visible_part as visible;
 
     fn contains_pointer(panel: Rectangle, pointer: Point) -> bool {
         let v = visible(panel);

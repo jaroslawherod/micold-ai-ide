@@ -189,3 +189,17 @@ fn a_wake_is_only_asked_for_while_waiting() {
         "spent"
     );
 }
+
+#[test]
+fn a_delay_too_long_for_the_clock_waits_without_a_wake() {
+    let start = Instant::now();
+    let mut timer = ShowTimer::default();
+
+    let entering = timer.observe(true, start, Duration::MAX);
+    let later = timer.observe(true, start + DELAY, Duration::MAX);
+
+    assert!(!entering.open, "entering: {entering:?}");
+    assert_eq!(entering.wake_at, None, "no instant can hold the wake");
+    assert!(!later.open, "still waiting: {later:?}");
+    assert_eq!(later.wake_at, None, "still no wake");
+}
