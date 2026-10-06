@@ -2131,6 +2131,116 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
     );
 }
 
+/// What a save told the service about the pull request switch: `None` when no `SettingsSet` went
+/// out, `Some(None)` when one went out without the field, `Some(Some(v))` when it carried `v`.
+fn pr_status_told(
+    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) -> Option<Option<bool>> {
+    std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            pr_status_enabled, ..
+        } => Some(pr_status_enabled),
+        _ => None,
+    })
+}
+
+/// U105 (feature 040, FR-029, FR-030): turning **Show pull request status on worktrees** on and
+/// saving tells the connected service, which stores it and tells every window.
+#[test]
+fn turning_the_pr_status_switch_on_and_saving_tells_the_service() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::PrStatusToggled(true)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    assert_eq!(pr_status_told(&mut rx), Some(Some(true)));
+}
+
+/// U105: a save that leaves the switch where the service has it does not name it, so a save never
+/// writes over another window's change to it.
+#[test]
+fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    assert_eq!(pr_status_told(&mut rx), Some(None));
+}
+
+/// U105: turning it off when the service has it on is a change, and is sent as `Some(false)`.
+#[test]
+fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                pr_status_enabled: true,
+                ..quiet_settings()
+            },
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::PrStatusToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    assert_eq!(pr_status_told(&mut rx), Some(Some(false)));
+}
+
+/// U106: an open Settings page follows the service's value when another window changes it.
+#[test]
+fn the_open_draft_follows_a_pr_status_change_from_the_service() {
+    let mut app = base_app();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let shown = |app: &App| {
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .github
+            .pr_status_enabled
+    };
+    assert!(!shown(&app), "off on a first start");
+
+    for reported in [true, false] {
+        feed(
+            &mut app,
+            DaemonMsg::SettingsChanged {
+                settings: DaemonSettings {
+                    pr_status_enabled: reported,
+                    ..quiet_settings()
+                },
+            },
+        );
+        assert_eq!(shown(&app), reported, "the page shows what the service says");
+    }
+}
+
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
 /// sessions" and saving tells the connected service, which reads it on every tool request.
 #[test]
@@ -4841,8 +4951,8 @@ mod script_path_report {
         }
     }
 
-    /// U48 (review B). The form holds no pull request switch yet (040 M4), so a Settings save keeps
-    /// the stored `pr_status_enabled` rather than writing it off (FR-030).
+    /// U48 (review B). The form seeds its pull request switch from the stored value, so a Settings
+    /// save that does not touch it keeps `pr_status_enabled` rather than writing it off (FR-030).
     #[test]
     fn a_settings_save_keeps_the_stored_pr_status_switch() {
         let path = stored_path();
@@ -4858,7 +4968,7 @@ mod script_path_report {
         assert_eq!(
             store.saves().last().map(|s| s.pr_status_enabled),
             Some(true),
-            "a save from the form leaves the switch as stored"
+            "a save that does not touch the switch leaves it as stored"
         );
     }
 

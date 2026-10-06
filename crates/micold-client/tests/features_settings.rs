@@ -707,10 +707,11 @@ mod issue_mapping {
         assert_eq!(
             SettingsSection::ALL.get(4),
             Some(&SettingsSection::GithubIssues),
-            "GitHub issues is the fifth section in the rail (AS1)"
+            "GitHub is the fifth section in the rail (AS1)"
         );
         assert_eq!(SettingsSection::ALL.len(), 5);
-        assert_eq!(SettingsSection::GithubIssues.label(), "GitHub issues");
+        // Feature 040 (FR-029): the page also holds the pull request switch, so it is "GitHub".
+        assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
         assert_eq!(
             SettingsSection::GithubIssues.icon(),
             micold_client::icons::Icon::IssueMapping
@@ -1854,4 +1855,85 @@ fn the_layout_in_force_comes_from_the_service_and_outlives_the_view() {
         DiffLayout::Unified,
         "another window's choice applies"
     );
+}
+
+// --- Feature 040 US1: the pull request switch (U104–U107) ---------------------------------------
+
+mod pr_status_switch {
+    use micold_client::app::State;
+    use micold_client::features::settings::{
+        update, Msg, SettingsDraft, SettingsSection, ValidSettings,
+    };
+    use micold_core::settings::Settings;
+
+    fn open(stored: bool) -> State {
+        let settings = Settings {
+            pr_status_enabled: stored,
+            ..Settings::default()
+        };
+        let mut state = State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&settings));
+        state
+    }
+
+    fn shown(state: &State) -> bool {
+        state
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("Settings is open")
+            .github
+            .pr_status_enabled
+    }
+
+    /// FR-030: off until the user turns it on; a draft seeded from the stored value shows it.
+    #[test]
+    fn the_draft_is_seeded_from_the_stored_value_and_off_by_default() {
+        assert!(!shown(&open(false)));
+        assert!(shown(&open(true)));
+        assert!(
+            !SettingsDraft::default().github.pr_status_enabled,
+            "a never-seeded draft shows the switch off"
+        );
+    }
+
+    /// U104.
+    #[test]
+    fn toggling_sets_the_draft_to_the_value_given() {
+        let mut state = open(false);
+        update(&mut state, Msg::PrStatusToggled(true));
+        assert!(shown(&state));
+        update(&mut state, Msg::PrStatusToggled(false));
+        assert!(!shown(&state));
+    }
+
+    /// U104: it is an edit like any other, so a rejection shown earlier no longer describes the form.
+    #[test]
+    fn toggling_clears_a_shown_error() {
+        let mut state = open(false);
+        let draft = state.settings.settings_draft.as_mut().unwrap();
+        draft.terminal.scrollback_lines = "x".into();
+        let error = draft.validate().expect_err("not a number");
+        draft.report(error);
+        update(&mut state, Msg::PrStatusToggled(true));
+        assert!(state.settings.settings_draft.unwrap().error.is_none());
+    }
+
+    /// U105 (the draft half): what Save writes carries the switch.
+    #[test]
+    fn save_writes_the_switch() {
+        for chosen in [false, true] {
+            let mut state = open(!chosen);
+            update(&mut state, Msg::PrStatusToggled(chosen));
+            let valid: ValidSettings = state.settings.settings_draft.unwrap().validate().unwrap();
+            assert_eq!(valid.pr_status_enabled, chosen);
+            assert_eq!(valid.into_settings().pr_status_enabled, chosen);
+        }
+    }
+
+    /// U107.
+    #[test]
+    fn the_section_is_titled_github() {
+        assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
+    }
 }
