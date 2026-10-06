@@ -40,6 +40,8 @@ queries (`OSC 10/11/12`) from it (protocol.md §8, `006` FR-003a); it is never a
 SessionInput   { session: SessionId, serial: u64, bytes: Vec<u8> }
 SessionResize  { session: SessionId, cols: u16, rows: u16 }
 SessionStart   { session: SessionId }          // Idle | Failed | InterruptedResumable -> Starting
+SessionRestart { session: SessionId }          // the user's manual AI CLI restart: SessionStart, after
+                                               // re-sourcing the session's directory (011 FR-007(b))
 SessionStop    { session: SessionId }          // graceful; -> Idle, no restart
 SessionKill    { session: SessionId }          // escalation ladder, force
 SessionInterrupt { session: SessionId }        // writes 0x03 to the PTY master
@@ -48,7 +50,10 @@ SessionInterrupt { session: SessionId }        // writes 0x03 to the PTY master
 `SessionInput.serial` is monotonic per session and **exists to detect loss, not to enable
 coalescing**. Input is an append-only log: never coalesced, dropped or reordered, including across
 detach/reattach (G2). `SessionStart` on an `InterruptedResumable` session is the single explicit
-user action that resumes the prior conversation (FR-006a).
+user action that resumes the prior conversation (FR-006a). `SessionRestart` (protocol 30, 011
+BUG-442) is that same start sent by the AI CLI tab's restart control: the service first drops the
+environment-include resolution cached for the session's directory, so the restarted process gets a
+fresh one. `SessionStart` and supervision's automatic respawn keep the cached resolution.
 
 ### View commands
 

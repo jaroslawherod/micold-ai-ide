@@ -563,7 +563,7 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
 
 > Written FIRST; confirmed to FAIL on `origin/main` for the reported reason before T043–T045.
 
-- [ ] T041 [BUG-442] Regression test, new file
+- [X] T041 [BUG-442] Regression test, new file
   `crates/micold-daemon/tests/env_include_restart_refresh.rs`, driven over a real connection (the
   `connect`/`answers_to` harness of `shell_open_refused_reported.rs`): environment-include on with
   a script that appends one line to a run log (a PowerShell body beside the bash one, as
@@ -572,7 +572,7 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
   runs (`origin/main`: one; the reproduction in `bugs/BUG-442.md`). Case 2: `SessionOpenShell`
   instance 1, then `SessionOpenShell` instance 2 — assert one run (an open that is not a restart
   stays cached, FR-020). FR-007(b).
-- [ ] T042 [BUG-442] Regression test, same file: the AI CLI restart. Start a session with
+- [X] T042 [BUG-442] Regression test, same file: the AI CLI restart. Start a session with
   `SessionStart`, wait until it is live, stop it (`SessionStop`) and wait for `Idle`, then send
   `ClientMsg::SessionRestart` — assert the script ran twice; the same sequence with a plain
   `SessionStart` in place of the restart — assert it ran once (FR-007's BUG-442 clarification).
@@ -583,13 +583,13 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
 
 ### Implementation for BUG-442
 
-- [ ] T043 [BUG-442] Add `ClientMsg::SessionRestart { session: SessionId }` in
+- [X] T043 [BUG-442] Add `ClientMsg::SessionRestart { session: SessionId }` in
   `crates/micold-core/src/protocol/messages.rs` (doc: a user's manual restart of the session's AI
   CLI; as `SessionStart`, after re-sourcing the session's directory — 011 FR-007(b)); bump
   `PROTOCOL_VERSION` 29 → 30 in `crates/micold-core/src/protocol/version.rs` with its history line;
   add the message under *Session commands* in
   `specs/010-daemon-session-persistence/contracts/messages.md`. Depends on T041, T042.
-- [ ] T044 [BUG-442] In the service (`crates/micold-daemon/src/server.rs`, `state.rs`): the
+- [X] T044 [BUG-442] In the service (`crates/micold-daemon/src/server.rs`, `state.rs`): the
   `SessionRestartShell` arm, and a new `SessionRestart` arm, drop the session's own directory
   (`SessionLocation::cwd` of its catalog entry — the directory `open_shell` and `start_session`
   resolve in) with `invalidate_env_include` before respawning; `SessionRestart` then does exactly
@@ -598,7 +598,7 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
   invalidates it serves both arms; no subprocess under the state lock. `SessionStart`,
   `SessionOpenShell` and `respawn_primary` are unchanged. Makes T041 and T042 pass;
   `env_include_cache_coherence.rs` stays green. Depends on T043.
-- [ ] T045 [BUG-442] In the client
+- [X] T045 [BUG-442] In the client
   (`crates/micold-client/src/shell/daemon_sync.rs::on_terminal_restart_requested`): send
   `ClientMsg::SessionRestart` in place of the `SessionStart` that `view_and_start` sends for this
   path only (every other `view_and_start` caller keeps `SessionStart`); keep the existing
@@ -606,7 +606,7 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
   beside the existing restart tests in `crates/micold-client/src/main_tests.rs` asserting the
   restart sends `SessionRestart` and a plain session selection sends `SessionStart`. Depends on
   T043.
-- [ ] T046 [BUG-442] Docs (Principle VII): update the doc comments on `invalidate_env_include`
+- [X] T046 [BUG-442] Docs (Principle VII): update the doc comments on `invalidate_env_include`
   (its callers now include the two restart arms) and `on_terminal_restart_requested` (the refresh
   reaches the service through `SessionRestart`); check that `docs/user-guide/settings.md`'s
   restart-control recovery path (T026) is now true for both restart controls and say so if it

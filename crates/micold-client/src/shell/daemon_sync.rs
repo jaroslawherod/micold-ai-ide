@@ -1913,9 +1913,12 @@ pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message
 /// Manually restart the active session's currently-attached, not-running process
 /// (FR-013) — the shell never auto-restarts, so this is its only path back; also covers
 /// an Idle/Failed AI CLI, which previously had no explicit affordance. Also re-sources the
-/// environment-include script fresh (feature 011, FR-007) — the spec's Clarifications name
+/// environment-include script fresh (feature 011, FR-007(b)) — the spec's Clarifications name
 /// this restart control as a manual-retry path for a previously-failed script, alongside
-/// the Settings-save refresh trigger. Unlike the passive reattach callers below, this is
+/// the Settings-save refresh trigger. The process is spawned by the service, so the refresh
+/// that reaches it is the service's: this sends `SessionRestart` rather than `SessionStart`
+/// (BUG-442). The client's own `refresh_env_include` only updates the outcome it displays.
+/// Unlike the passive reattach callers below, this is
 /// also a direct user restart request, so it must cover a Regular Terminal instance that
 /// has already `Exited` — `explicit_restart = true` lets `ensure_attached_process`'s
 /// `Regular` branch spawn it, the same case `Message::Session(SessionMsg::ShellInstanceRestartRequested)`
@@ -1927,7 +1930,7 @@ pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
         if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(&app.core, id) {
             refresh_env_include(app, &cwd);
         }
-        view_and_start(app, id);
+        view_and_restart(app, id);
     }
     Task::none()
 }
@@ -2363,11 +2366,24 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
 /// View a session on the daemon — start/resume it and stream its grid — resetting the local
 /// selection and scroll for the newly-displayed session.
 pub fn view_and_start(app: &mut App, id: SessionId) {
+    view_and_send(app, id, ClientMsg::SessionStart { session: id });
+}
+
+/// [`view_and_start`] for the user's manual restart of the AI CLI: sends `SessionRestart`, which
+/// the service handles as `SessionStart` after re-sourcing the session's directory (011 FR-007(b),
+/// BUG-442). Only the restart control sends it; every passive start stays a `SessionStart`.
+pub fn view_and_restart(app: &mut App, id: SessionId) {
+    view_and_send(app, id, ClientMsg::SessionRestart { session: id });
+}
+
+/// The shared body of [`view_and_start`] and [`view_and_restart`]: `start` is the message that
+/// starts the session.
+fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
     app.selection = None;
     app.display_offset = 0;
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), &app.daemon) {
         send_pane_size(app, id);
-        d.send(ClientMsg::SessionStart { session: id });
+        d.send(start);
         d.send(ClientMsg::SetViewedSession {
             project,
             session: Some(id),

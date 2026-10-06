@@ -478,7 +478,7 @@ cannot answer for it", and the filesystem permission is still what enforces it. 
 protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
 repository-root query the container placement also needed (below), version 9 after a window became
 nameable on the wire so it could stop displacing itself, and version 10 after Pi joined the AI CLIs
-a frame can name. It is version 27 today: the later bumps are listed beside `PROTOCOL_VERSION` in
+a frame can name. It is version 30 today: the later bumps are listed beside `PROTOCOL_VERSION` in
 `crates/micold-core/src/protocol/version.rs`. Version 21 lets a window report the session it
 has in view (`WindowView`) and gives every session summary its count of attention events
 (`attention_seq`); version 22 adds the pull request switch (`pr_status_enabled`) and the
@@ -488,7 +488,9 @@ session summary whether it is unread (`unread`); version 25 lets a window ask fo
 shown after a click on its notification (`SessionReveal`), which the service forwards to one
 window (`RevealSession`); version 26 adds the Wayland activation token of the click
 (`activation`) to both, which the service forwards unread; version 27 adds the Desktop notifications switch
-(`desktop_notifications`) to the service's settings.
+(`desktop_notifications`) to the service's settings. Version 30 adds `SessionRestart`, the AI CLI's
+manual restart, which the service handles as `SessionStart` after re-sourcing the session's
+environment-include script.
 
 ### The lifecycle
 
