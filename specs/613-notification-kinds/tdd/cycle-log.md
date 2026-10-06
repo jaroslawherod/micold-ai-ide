@@ -162,10 +162,27 @@ assertion's failure; where only a field or variant was missing, the red is the c
   before the setters existed — red as E0599 (no method `set_notification_kinds` / `set_long_task_threshold` /
   `long_task_threshold` on `Catalog`). The client and UI tests (features_settings, main_tests, icons*, settings_sections,
   notification_icon, checkbox) were written by delegated workers in the same pass as their code: no separate red run
-  recorded for them (honest gap).
+  recorded for them (honest gap; closed retroactively by mutation below).
 - **Green**: `Catalog::{set_notification_kinds, long_task_threshold, set_long_task_threshold}` and the wire/persist
   fields; `DaemonState::{set_notification_kinds (C15), set_long_task_threshold_secs, effective_long_task_threshold}` with
   the test override; `server.rs` `SettingsSet` arms; client draft, save, mirror; Settings rows, threshold field, icons,
   showcase. `settings_notification_kinds` 9/9, `settings_long_task_threshold` 7/7, `features_settings` 70/70, icon and
   section tests green.
+- **Red (retroactive, mutation, 2026-10-06)**: one mutant per behaviour against the finished code,
+  covering targets `--lib`, `features_settings`, `settings_sections`, `notification_icon`, `icons`,
+  `icon_roles`; each file restored with `git checkout` after the run.
+  - Save writes the kinds — `settings.rs` save → `notification_kinds: Default::default()` →
+    `save_writes_the_whole_kinds_value_and_the_parsed_threshold` and
+    `the_master_switch_never_changes_the_kinds_or_the_threshold` failed (`left != right` on the kinds).
+  - A kind toggle edits the draft — `notification_kind_toggled` made a no-op → the same two tests failed.
+  - Threshold range refusal — `long_task_threshold` accepts any `t >= 1` →
+    `a_bad_threshold_refuses_the_save_with_the_s6_message` failed (`"9"` validated).
+  - Kind → icon mapping — `SessionError => Icon::NeedsPermission` → `notification_icon::{each_kind_maps_to_its_icon,
+    the_mapping_is_one_to_one}` failed.
+  - `Checkbox::icon` — the setter drops the icon → `checkbox::tests::icon_is_chainable_and_keeps_label_state_and_toggle` failed.
+  - **Survived** (no unit test can see them; covered by the visual pass only, visual-pass.md §B5): the
+    component's label `disabled_tint` → `tint`, and the kind rows' `if master_on` gate → `if true`. The
+    style path's disabled label colour is unit-tested (`a_disabled_checkbox_label_takes_the_disabled_colour`).
+  - Disabled checked box keeps its mark (visual-pass finding) — test-first: `a_disabled_checked_checkbox_keeps_a_visible_mark`
+    red (`assertion left != right failed: Light`) before the `style::checkbox` change, green after.
 - **Refactor**: none.

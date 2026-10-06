@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
-| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | implemented; gate, reviews B/A2, visual pass pending |
+| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | gate 1 red (style/layout baselines, kind-row focus, draft tests) fixed; visual pass done (visual-pass.md); full gate 2 and review B round 2 running |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 
 M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
@@ -57,6 +57,9 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M2 A (code-review, sonnet, fix diff) | 2 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 | M2 B (conformance, sonnet) | 1 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 | M3 A (code-review high) | 1 | c094ddd08c97045143ec3db066a19d8628a04c3c:905e9a64353ae30472a8442952a047e35993e20c | CHANGES: F1 MAJOR (disabled kind row: glyph dimmed, label not, FR-017) fixed + test; F2 MINOR (threshold validated while master off) not fixed |
+| M3 A (code-review, sonnet, fix diff) | 2 | 3a6676f37bcd08d58963710634afc8c00978f696:4d33c7d194f63c72d725f95c90e14591bcae45f4 (fix diff from c094ddd0:905e9a64) | CLEAN (1 MINOR fixed in 1102688f: doc comment back on its own test) |
+| M3 B (conformance, sonnet) | 1 | 1101f063f429302e86ec24f655cda678dda09680:1102688f75d350cb72b6d6dc05307398bd8b1445 | CHANGES: F1 MAJOR (no red run for client/UI tests, cycle 12) fixed by retroactive mutation in the cycle log (2 survivors, visual-only); F2 MAJOR (no visual-pass evidence) fixed: pass run, found disabled checked box lost its mark, fixed + test; F3 MINOR (gate not recorded) recorded below |
+| M3 B (conformance, sonnet, fix diff) | 2 | (fix diff from 1101f063:1102688f) | running |
 
 ## CI fixes
 
@@ -84,19 +87,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-M3 unit 2 handed over near 150k. **Done (committed, not pushed)**: every M3 task T032–T045, T056–T066 implemented and
-ticked (905e9a64 + the review-A fix commit): service setters/C15/effective threshold, server `SettingsSet` arms, client
-draft/save/mirror, Settings rows + threshold field, icons, `notification_icon`, `Checkbox::icon`, showcase, user guide,
-CI `--test notification_icon`; daemon tests `settings_notification_kinds` 9/9, `settings_long_task_threshold` 7/7.
-Full gate 1 (at 905e9a64) stopped at clippy: a constant `assert!` in `schema_hash.rs` (removed; workspace clippy clean
-after). Review A round 1: F1 MAJOR fixed (disabled checkbox label now dims on both paths: `Text::disabled_tint`,
-`style::checkbox` disabled `text_color`, test `a_disabled_checkbox_label_takes_the_disabled_colour`); F2 MINOR not fixed
-(threshold validated while the master switch is off — FR-026 refusal stands).
-**Next**: (1) full gate (raw commands, `--no-fail-fast`; expect only the 6 root-only permission failures); (2) review A
-round 2 (sonnet, fix diff from snapshot c094ddd0:905e9a64), review B (conformance, sonnet) and the visual pass
-(quickstart §B5, §B6, §B8, §B9; evidence into the spec dir) together; (3) push, PR-body section to
-`$SCRATCHPAD/pr-613-body-M3.md`, return `PR: #618 (pushed, orchestrator updates body)`. Note from a worker: client
-tests were written in the same pass as the code (cycle 12 records the gap).
+None.
 
 ## Open escalation
 
