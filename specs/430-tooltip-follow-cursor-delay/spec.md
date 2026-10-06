@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-05
 
-**Status**: Draft
+**Status**: Closed 2026-10-06 — shipped in PRs #594, #596, #600, #607 and the close PR (visual passes T018, T019 not run: no Xvfb/xdotool)
 
 **Input**: User description: "#430 Tooltip: restore FollowCursor and show delay in the cdk overlay. Follow-up from BUG-001 (spec 029, PR #425). The shared tooltip no longer offers a follow-the-cursor placement or a show delay, because no current caller uses them. Add them when a caller needs them, and keep the flip behaviour (FR-013) for every position."
 

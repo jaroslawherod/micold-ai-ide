@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #430
 - **Worktree branch**: fix/issue-430
 - **Started**: 2026-10-05
-- **Phase**: milestone M2
-- **Next step**: CI and merge of the M2 PR, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,14 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #594 | Spec | merged | 5ae41ab8c09440cc64a73f0fb24317185bce43af |
 | #596 | Design (clarify, plan, tasks) | merged | 47ae6297d5e472d802897310d574e25d53bea3d3 |
 | #600 | M1 pointer-following placement, ShowTimer | merged | cad1101cd8535898c1ab2f783d34fa00b8aaffca |
-| #607 | M2 show delay | open | |
+| #607 | M2 show delay | merged | cddd3ce50d9570221a78f23bdb0464563d705dec |
+| close | Close the spec | not pushed | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012, T019 | full | Pointer-following placement (FollowCursor), ShowTimer in core | #600 | merged |
-| M2 | T013–T018 | full | show_delay, working alone and with FollowCursor | #607 | in review |
+| M2 | T013–T018 | full | show_delay, working alone and with FollowCursor | #607 | merged |
 
 ## Decisions
 
@@ -50,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 430 | 1 | 269bde8a:81c36f8b | CLEAN (1 MINOR: no tdd cycle-log) |
 | Review A M2 430 | 1 | b4e929c5:0d2b33df | 7 findings: fixed T018 tick, test name, after_rest doc, duplicated press arm, red scoped gate (duration literal); declined: ShowTimer core tests exist in micold-core/tests/tooltip_show.rs; wait mode never changes at one call site; fixture duplication (MINOR) |
 | Review B M2 430 | 1 | 818f1e03:68995b5e | CLEAN (1 MINOR: redundant re-match in Delay/Hover arm, not applied) |
+| Review A close 430 | 1 | 01b889a6:cddd3ce5 | CLEAN (1 MINOR: T021 wording, fixed, prose only) |
 
 ## Declined review findings
 
@@ -69,3 +71,7 @@ None. (Answered: kill pid 228600; done.)
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
 
 - T018 (M2 visual pass) NOT RUN, like T019: no Xvfb/xdotool; left unticked, recorded in visual-pass.md.
+- Close: tdd-verify FAIL at cddd3ce5, no missing behaviour. Fixed T020 (relayout mutant killed), T022, T023, T024; T021 cycle-log written, test-list.md not written (finding 1 accepted: red evidence unrecoverable, both milestones wrote tests with code).
+- T018 and T019 visual passes still NOT RUN (no Xvfb/xdotool); needs a machine with them, rerun quickstart §B. Not unbuilt behaviour, so no new milestone.
+- A `subject()` change on a zero-delay follow tooltip reopens on the next observation (spec only requires the delay to restart, which holds for non-zero delays); left as is, not a regression.
+- Machine-only: `github_locate_desktop_launch` fails here (gh not on PATH); CI runs it.
