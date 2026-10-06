@@ -54,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | c5e15968c86ce0c17544cde68a31ff74e2fb1e8b:107ab7ed3aa9b067a4dca5c02aca6e6709d4d158 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec | 2 | c960571fb7bed1fa440f89fe3b9720fd30c8d897:c74e2d4a9e09412fc66dd4915e3c7e105b785552 | CLEAN: 2 MINOR (both fixed) |
 | Plan | 1 | 76b23838a33fc28d5c9f6db389cc15f46acd39a1:3a5ac98c80a82e8c74fb02606f5bee99309eaeeb | CLEAN: 3 MINOR (all fixed, prose only) |
-| Review A M1 (code-review high) | 1 | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | returned, not yet triaged: /tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/review-A-r1.out |
+| Review A M1 (code-review high) | 1 | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | CLEAN: 2 MINOR (untracked files read whole to count lines; lossy UTF-8 of non-UTF-8 paths), not fixed |
 | Gate M1 | full | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | green except the 6 root-only permission tests (container runs as root; pass in CI) |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
 
@@ -67,7 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 M1 unit 5 handed over at 150k. Pushed 64271ac3 (full gate green at tree c30e1678 except the 6 root-only permission tests; snapshot recorded in autopilot-gate-ok).
 - **Done, ticked:** T001–T026 (all of M1). T024 showcase `sections/review.rs` (VirtualRows 2,000 rows, scroll held in `Showcase::rows_scroll`); T025 `docs/user-guide/reviewing-changes.md` + SUMMARY/README/worktrees links; T026 visual pass B1/B2/B15 light+dark passed, evidence `specs/482-worktree-changes-review/visual-pass/m1.md`. DEFERRED `("diff_layout", "482 T041")` added.
-- **Next:** triage review A round 1 (`/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/review-A-r1.out`, read its `VERDICT`/`F` lines; fix BLOCKER/MAJOR, scoped round 2 on sonnet against snapshot c30e1678…:1ed08645); then review B (conformance rubric, sonnet) via `run-review.sh`; full gate once more if code changed (raw mise.toml gate commands, `CARGO_INCREMENTAL=0`; delete exec files in target-shared/debug/deps first when disk < 15G); push; write the PR-body section to `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/pr-body-482-M1.md` (pr.md template); return `PR: #624`.
+- **Next:** review A is done (CLEAN, 2 MINOR). Run review B (conformance rubric, sonnet) via `run-review.sh`; full gate once more if code changed (raw mise.toml gate commands, `CARGO_INCREMENTAL=0`; delete exec files in target-shared/debug/deps first when disk < 15G); push; write the PR-body section to `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/pr-body-482-M1.md` (pr.md template); return `PR: #624`.
 
 ## Open escalation
 
