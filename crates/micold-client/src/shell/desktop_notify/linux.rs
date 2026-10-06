@@ -39,6 +39,10 @@ const SIGNALS: &str = "type='signal',interface='org.freedesktop.Notifications',\
 /// How long the notification service has to answer a call. A service that does not answer in
 /// that time is treated as one that is not there.
 const METHOD_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long opening the session-bus connection (the socket connect and the handshake) may take.
+/// `method_timeout` covers neither, so a bus that accepts the socket and never answers would
+/// otherwise block the first notification, and with it the connection lock, for ever.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The arguments of one `Notify` call, in the order of the specification.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -266,6 +270,10 @@ pub(super) fn notify_error(error: &zbus::Error) -> NotifyError {
 /// Each connection has a thread that reads the service's signals from it ([`Self::listen`]).
 pub(super) struct Notifier {
     connection: Mutex<Option<zbus::blocking::Connection>>,
+    /// The bus to open: `None` is the session bus, as the environment names it.
+    address: Option<String>,
+    /// How long opening it may take ([`CONNECT_TIMEOUT`]).
+    connect_timeout: Duration,
     /// What this window has on screen. Shared with the listening threads.
     shown: Arc<Mutex<Shown>>,
     /// Where a click is reported.
@@ -276,6 +284,8 @@ impl Notifier {
     pub(super) fn new(events: super::Events) -> Self {
         Self {
             connection: Mutex::new(None),
+            address: None,
+            connect_timeout: CONNECT_TIMEOUT,
             shown: Arc::new(Mutex::new(Shown::default())),
             events,
         }
@@ -322,13 +332,40 @@ impl Notifier {
         if let Some(connection) = held.as_ref() {
             return Ok(connection.clone());
         }
-        let connection = zbus::blocking::connection::Builder::session()
-            .map(|builder| builder.method_timeout(METHOD_TIMEOUT))
-            .and_then(zbus::blocking::connection::Builder::build)
-            .map_err(|error| notify_error(&error))?;
+        let connection = self.open().map_err(|error| notify_error(&error))?;
         self.listen(&connection);
         *held = Some(connection.clone());
         Ok(connection)
+    }
+
+    /// Open a connection, giving up after `connect_timeout`. The open runs on a thread of its own,
+    /// because `zbus` has no timeout on the connect or the handshake; a bus that never answers
+    /// leaves that thread behind, blocked, and nothing else.
+    fn open(&self) -> zbus::Result<zbus::blocking::Connection> {
+        let address = self.address.clone();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("desktop-notify-connect".to_string())
+            .spawn(move || {
+                let builder = match address {
+                    Some(address) => zbus::blocking::connection::Builder::address(address.as_str()),
+                    None => zbus::blocking::connection::Builder::session(),
+                };
+                let _ = sender.send(
+                    builder
+                        .map(|builder| builder.method_timeout(METHOD_TIMEOUT))
+                        .and_then(zbus::blocking::connection::Builder::build),
+                );
+            })
+            .map_err(|error| zbus::Error::InputOutput(Arc::new(error)))?;
+        receiver
+            .recv_timeout(self.connect_timeout)
+            .unwrap_or_else(|_| {
+                Err(zbus::Error::InputOutput(Arc::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "the session bus did not answer the connection",
+                ))))
+            })
     }
 
     /// Drop the kept connection, so the next notification opens a new one.
@@ -712,6 +749,42 @@ mod tests {
             NotifyError::NoService(why) => assert!(why.contains("timed out"), "{why}"),
             other => panic!("expected no service, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_session_bus_that_never_answers_does_not_hold_the_connection_for_ever() {
+        // Issue 569: the bus accepts the socket and says nothing. The first notification must give
+        // up, and the next must not queue behind a lock the first still holds.
+        let dir = std::env::temp_dir().join(format!("micold-silent-bus-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a directory");
+        let path = dir.join("bus");
+        let listener = std::os::unix::net::UnixListener::bind(&path).expect("a socket");
+        let _silent = std::thread::spawn(move || {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept() {
+                held.push(stream);
+            }
+        });
+        let (events, _receiver) = iced::futures::channel::mpsc::unbounded();
+        let mut notifier = Notifier::new(events);
+        notifier.address = Some(format!("unix:path={}", path.display()));
+        notifier.connect_timeout = Duration::from_millis(200);
+        let notifier = Arc::new(notifier);
+        let (done, finished) = std::sync::mpsc::channel();
+        for _ in 0..2 {
+            let notifier = Arc::clone(&notifier);
+            let done = done.clone();
+            std::thread::spawn(move || {
+                let _ = done.send(notifier.connection().map(|_| ()));
+            });
+        }
+        for _ in 0..2 {
+            match finished.recv_timeout(Duration::from_secs(5)) {
+                Ok(Err(NotifyError::NoService(_))) => {}
+                other => panic!("expected no service within the bound, got {other:?}"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
