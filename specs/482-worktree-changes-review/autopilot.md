@@ -58,29 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 handed over at 150k. Commits on the branch (not pushed; no gate yet): `092451fe`
-(review core) and the `wip(482)` commit after it (wire delta).
-- **Done, green, not yet ticked in tasks.md:** T001–T006, T011–T013, T016–T018
-  (`cargo test -p micold-core --lib --test review_git` ok; reds recorded in
-  `tdd/cycle-log.md`). T001's `cargo tree -p micold-client -i onig_sys` still to run.
-- **T007/T008 nearly done:** tests written (red recorded as compile errors: no `ReviewEdit`,
-  `DiffLayout` …; add the row to cycle-log), wire delta made (messages.rs, settings.rs
-  `DiffLayout`, version 30, schema pin 30), every literal across crates fixed, workspace
-  `cargo check --all-targets` clean. **One failure left:**
-  `protocol_roundtrip::the_review_messages_and_the_diff_layout_round_trip_on_both_wires` —
-  almost certainly postcard refusing `#[serde(flatten)] range` on `ReviewComment` (postcard has
-  no `deserialize_any`). Fix: drop `flatten`, give `ReviewComment` a hand-written
-  Serialize/Deserialize via a `Stored { id, path, side, start, end, quote, text, state, created }`
-  repr (`#[serde(try_from/into)]`), keeping comment.rs's JSON-shape tests green.
-  `settings_roundtrip` and `schema_hash` pass.
-- **T010 half done:** daemon serves `diff_layout` (catalog `set_diff_layout`, state, server
-  `SettingsSet` arm) and `ReviewEdit`/`ReviewSend` answer the Refused placeholder; client
-  persist keeps the stored `diff_layout`. **T009 test not written yet** (write it modelled on
-  `crates/micold-daemon/tests/pr_status_setting.rs`; it will pass at once: record as test-after).
-- **Next:** fix the postcard failure, T009, then client T014/T015/T019–T024, docs T025,
-  visual T026, then verify.md. Scratchpad helpers: `run.sh <log> <cmd…>` (detached, build
-  lock, CARGO_INCREMENTAL=0) + `hold.sh`; `fixlit.py` fixes missing-field literals from a
-  `--message-format=short` check log.
+None. (M1 unit 3: core and daemon done, T001–T013 and T016–T018 ticked; client T014/T015/T019–T024, docs T025, visual T026 in progress.)
 
 ## Open escalation
 
