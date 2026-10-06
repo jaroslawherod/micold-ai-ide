@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #482
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
-- **Phase**: spec
-- **Next step**: review spec.md with a fresh reviewer (rubrics/spec.md)
+- **Phase**: clarify
+- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers in spec.md (US3 scenario 4, FR-003)
 
 ## Pull requests
 
@@ -31,7 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | c5e15968c86ce0c17544cde68a31ff74e2fb1e8b:107ab7ed3aa9b067a4dca5c02aca6e6709d4d158 | pending |
+| Spec | 1 | c5e15968c86ce0c17544cde68a31ff74e2fb1e8b:107ab7ed3aa9b067a4dca5c02aca6e6709d4d158 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
+| Spec | 2 | c960571fb7bed1fa440f89fe3b9720fd30c8d897:c74e2d4a9e09412fc66dd4915e3c7e105b785552 | CLEAN: 2 MINOR (both fixed) |
 
 ## Declined review findings
 

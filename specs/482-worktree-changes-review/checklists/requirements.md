@@ -32,4 +32,4 @@
 ## Notes
 
 - Two [NEEDS CLARIFICATION] markers remain for the clarify unit: the target session when several
-  run or none runs (User Story 3, scenario 3), and the fallback base branch (FR-003).
+  run or none runs (User Story 3, scenario 4), and the fallback base branch (FR-003).
