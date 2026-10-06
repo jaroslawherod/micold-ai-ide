@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: orchestrator updates PR #618 body (M1 section; D4 amendment) and waits on CI; then milestone M2
+- **Next step**: M2 review A + scoped gate, review B, full gate, push
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
-| M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | — | todo |
+| M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | implemented (reviews pending) |
 | M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 

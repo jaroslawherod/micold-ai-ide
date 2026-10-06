@@ -499,6 +499,34 @@ impl State {
         crate::features::attention::show_granted(&mut self.attention, notification, notifier)
     }
 
+    /// `DaemonMsg::SessionErrorNotice`: the **Session error** notification for `session` of
+    /// `project` (feature 613, W5.2, T3), or `None` for a project or session this window does not
+    /// know.
+    pub fn session_error_notification(
+        &self,
+        project: &std::path::Path,
+        session: micold_core::session::SessionId,
+    ) -> Option<crate::features::attention::DesktopNotification> {
+        let notification = self.attention_notification(
+            session,
+            micold_core::attention::NotificationKind::SessionError,
+        )?;
+        (notification.project == project).then_some(notification)
+    }
+
+    /// `DaemonMsg::SessionErrorNotice`: show the **Session error** notification for `session` of
+    /// `project` (feature 613, W5.2), through the same path as a grant. Returns the line to log
+    /// when the system did not accept it, once per run (N4).
+    pub fn session_error_notice(
+        &mut self,
+        project: &std::path::Path,
+        session: micold_core::session::SessionId,
+        notifier: &dyn crate::features::attention::DesktopNotifier,
+    ) -> Option<String> {
+        let notification = self.session_error_notification(project, session)?;
+        crate::features::attention::show_granted(&mut self.attention, notification, notifier)
+    }
+
     /// What showing a granted notification came to, when the shell showed it off the update
     /// thread. Returns the line to log for a failure, once per run (N4).
     pub fn attention_shown(

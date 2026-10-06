@@ -76,6 +76,7 @@ fn each_event_type_maps_to_the_signal_the_contract_names() {
             r#"{"type":"session.shutdown","data":{"shutdownType":"routine"}}"#,
             Some(ActivityEvent::Ended {
                 reason: "routine".to_string(),
+                error: false,
             }),
         ),
     ];
@@ -89,7 +90,8 @@ fn each_event_type_maps_to_the_signal_the_contract_names() {
     assert_eq!(
         copilot_event(r#"{"type":"session.error","data":{"message":"upstream request failed"}}"#),
         Some(ActivityEvent::Ended {
-            reason: "upstream request failed".to_string()
+            reason: "upstream request failed".to_string(),
+            error: true,
         })
     );
 }
@@ -189,6 +191,7 @@ fn a_turn_that_never_ended_does_not_leave_the_badge_working_forever() {
 
     activity.apply(ActivityEvent::Ended {
         reason: "process exited".to_string(),
+        error: false,
     });
     assert!(
         matches!(activity.signal(), ActivitySignal::Ended { .. }),

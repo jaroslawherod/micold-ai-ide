@@ -704,6 +704,13 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 follow_up = show_attention_notification(app, notification);
             }
         }
+        // Feature 613 (W5.2): a session ended because of an error and the service chose this
+        // window to say so. Shown as a grant is; a click on it reveals the session (FR-019).
+        DaemonMsg::SessionErrorNotice { project, session } => {
+            if let Some(notification) = app.core.session_error_notification(&project, session) {
+                follow_up = show_attention_notification(app, notification);
+            }
+        }
         // Feature 039 (contract N5): a notification for this session was clicked, in this window
         // or another, and the service chose this window to show it. The window comes to the
         // front first, with the activation token of the click when the service sent one (N6);

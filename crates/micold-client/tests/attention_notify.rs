@@ -415,3 +415,34 @@ fn a_grant_for_an_unknown_session_shows_nothing() {
     );
     assert!(notifier.shown().is_empty());
 }
+
+#[test]
+fn a_session_error_notice_shows_one_session_error_notification() {
+    // Feature 613, T025 (W5.2, T3): built as `attention_notification(session, SessionError)` is.
+    let mut state = repo_state();
+    let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
+    let notifier = Recording::accepting();
+
+    let _ = state.session_error_notice(Path::new(REPO), b, &notifier);
+
+    let expected = state
+        .attention_notification(b, NotificationKind::SessionError)
+        .expect("a known session");
+    let shown = notifier.shown();
+    assert_eq!(shown, [expected]);
+    assert_eq!(shown[0].kind, NotificationKind::SessionError);
+    assert_eq!(shown[0].title, "B stopped with an error");
+}
+
+#[test]
+fn a_session_error_notice_for_an_unknown_project_or_session_shows_nothing() {
+    // Feature 613, T025 (N2): this window does not know the session, or not in that project.
+    let mut state = repo_state();
+    let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
+    let notifier = Recording::accepting();
+
+    let _ = state.session_error_notice(Path::new(REPO), SessionId::new(), &notifier);
+    let _ = state.session_error_notice(Path::new("/elsewhere"), b, &notifier);
+
+    assert!(notifier.shown().is_empty());
+}

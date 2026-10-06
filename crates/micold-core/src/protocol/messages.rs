@@ -714,6 +714,15 @@ pub enum DaemonMsg {
         /// The activation token of the click, as the sender wrote it (W3.4).
         activation: Option<String>,
     },
+    /// A session not in view ended because of an error: this window raises its **Session error**
+    /// notification (feature 613, W5.2). Sent to one window only, once per error ending, and
+    /// never answered.
+    SessionErrorNotice {
+        /// The project the session belongs to.
+        project: PathBuf,
+        /// The session that ended.
+        session: SessionId,
+    },
     /// Handshake or attach refused.
     Refused {
         /// Why.

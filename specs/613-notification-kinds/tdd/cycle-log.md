@@ -103,3 +103,24 @@ assertion's failure; where only a field or variant was missing, the red is the c
 - **Green**: `drain_signals` feeds `turn_change(SpinnerObserved, true)` to the clock →
   `attention_claims` 19 passed, `activity_pipeline` 14 passed.
 - **Refactor**: none needed.
+
+## Cycle 9 — M2: T021/T026, T022/T027, T023/T028, T024/T029, T025/T030 (Session error)
+
+- **Tests**: `activity.rs` (`copilot_marks_only_session_error_as_an_error_ending`,
+  `pi_shutdown_is_not_an_error_ending`, `an_error_ending_ends_the_signal_as_any_ending_does`);
+  `attention.rs` `error_notice_target` (3); `tests/attention_error_notice.rs` (NEW, 9: give-up to
+  the focused window only, restart/clean exit/no-error/stop/close/in view/no window/kind off/master
+  off send none, unfocused fallback, unread and `attention_seq` unchanged);
+  `tests/copilot_activity.rs` (`session.error` → `error: true`); `micold-client` `attention_notify`
+  (2); `micold-core` `protocol_roundtrip` (`a_session_error_notice_round_trips_without_a_req`),
+  `schema_hash` (`the_session_error_notice_is_in_the_hashed_source`, version constant 31).
+- **Red** (stubs: `error_notice_target` → `None`, `session_error_notification` → `None`,
+  `session.error` → `error: false`, version constant 30): `attention_error_notice` →
+  `FAILED. 6 passed; 3 failed`; client `attention_notify` → `FAILED. 15 passed; 1 failed`
+  (`a_session_error_notice_shows_one_session_error_notification`); core `schema_hash` →
+  `FAILED. 18 passed; 1 failed` (`left: 31, right: 30`).
+- **Green**: daemon `--lib -- activity attention` 45 passed; `attention_error_notice` 9,
+  `copilot_activity` 13, `pi_activity` 10, `supervision_giveup` 1, `attention_events` 14,
+  `attention_claims` 19, `activity_ended` 2 passed; client `attention_notify` 16 passed;
+  `micold-core --all-targets` green but for the root-only permission tests.
+- **Refactor**: none needed.

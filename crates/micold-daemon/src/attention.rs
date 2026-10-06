@@ -74,6 +74,16 @@ impl Views {
             .unwrap_or(sender)
     }
 
+    /// The one connection a **Session error** notice is sent to (feature 613, C14): the one that
+    /// last reported keyboard focus; else the lowest-numbered connection that reported a view;
+    /// else `None`, when no window is connected.
+    pub fn error_notice_target(&self) -> Option<ClientId> {
+        self.focus_order
+            .last()
+            .copied()
+            .or_else(|| self.views.keys().min().copied())
+    }
+
     /// Forget what was granted and what is pending for `session`: the session was removed, and
     /// its id is not used again (C12).
     pub fn forget_session(&mut self, session: SessionId) {
@@ -634,5 +644,40 @@ mod tests {
         let views = Views::default();
 
         assert_eq!(views.reveal_target(None, SENDER), SENDER);
+    }
+
+    /// Feature 613, T022 (C14): the window that last reported focus gets the notice.
+    #[test]
+    fn the_error_notice_goes_to_the_window_last_focused() {
+        let mut views = Views::default();
+        views.set_view(FIRST_WINDOW, focused());
+        views.set_view(SECOND_WINDOW, focused());
+        assert_eq!(views.error_notice_target(), Some(SECOND_WINDOW));
+        views.set_view(FIRST_WINDOW, focused());
+        assert_eq!(views.error_notice_target(), Some(FIRST_WINDOW));
+    }
+
+    /// Feature 613, T022 (C14): with no focus reported, the lowest-numbered window that reported a
+    /// view gets it.
+    #[test]
+    fn without_focus_the_error_notice_goes_to_the_lowest_reporting_window() {
+        let unfocused = WindowView {
+            focused: false,
+            in_view: None,
+        };
+        let mut views = Views::default();
+        views.set_view(SECOND_WINDOW, unfocused);
+        views.set_view(FIRST_WINDOW, unfocused);
+        assert_eq!(views.error_notice_target(), Some(FIRST_WINDOW));
+    }
+
+    /// Feature 613, T022 (C14, FR-007): with no window, there is no target.
+    #[test]
+    fn with_no_window_there_is_no_error_notice_target() {
+        let mut views = Views::default();
+        assert_eq!(views.error_notice_target(), None);
+        views.set_view(FIRST_WINDOW, focused());
+        views.remove(FIRST_WINDOW);
+        assert_eq!(views.error_notice_target(), None);
     }
 }

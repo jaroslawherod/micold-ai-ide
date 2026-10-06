@@ -3155,6 +3155,8 @@ impl DaemonState {
         // Each with the dead process the policy was applied to.
         let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Arc<PtySession>)> =
             Vec::new();
+        // The Session error notices of this tick's give-ups, sent off the lock (feature 613, C13).
+        let mut notices: Vec<(ClientId, DaemonMsg)> = Vec::new();
         // Phase 0: the gate of every session whose primary has exited, tried off the state lock.
         let dead: Vec<(SessionId, Arc<tokio::sync::Mutex<()>>)> = {
             let mut inner = self.lock();
@@ -3216,6 +3218,10 @@ impl DaemonState {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
                         Self::note_ended(&mut inner, id, "crash loop");
+                        // An error ending (feature 613, C7).
+                        if let Some(notice) = Self::error_notice(&inner, &project, id) {
+                            notices.push(notice);
+                        }
                         to_drop.push((id, mode == TerminalMode::AiCli));
                     }
                     Some((project, SupervisionAction::Stop, _, mode, _)) => {
@@ -3271,6 +3277,9 @@ impl DaemonState {
                 }
             }
         }
+        for (target, notice) in notices {
+            self.send(target, notice);
+        }
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
         for (id, covered) in to_drop {
             let removed = {
@@ -3309,9 +3318,33 @@ impl DaemonState {
         };
         live.activity.apply(ActivityEvent::Ended {
             reason: reason.to_string(),
+            error: false,
         });
         let signal = live.activity.signal().clone();
         inner.ended.insert(id, signal);
+    }
+
+    /// The **Session error** notice for an error ending of `session` of `project` (feature 613,
+    /// C13), and the one window it goes to: `Views::error_notice_target`, as a reveal reaches one
+    /// window. `None`, and nothing kept, when the kind does not notify, the session is in view in
+    /// a window, or no window is connected (FR-007). Neither `attention_seq` nor unread changes.
+    fn error_notice(
+        inner: &Inner,
+        project: &Path,
+        session: SessionId,
+    ) -> Option<(ClientId, DaemonMsg)> {
+        if !inner.catalog.notify(NotificationKind::SessionError) || inner.views.is_in_view(session)
+        {
+            return None;
+        }
+        let target = inner.views.error_notice_target()?;
+        Some((
+            target,
+            DaemonMsg::SessionErrorNotice {
+                project: project.to_path_buf(),
+                session,
+            },
+        ))
     }
 
     /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
@@ -3332,13 +3365,14 @@ impl DaemonState {
             self.mark_ready_for_input(session);
             return false;
         }
-        let mut inner = self.lock();
+        let mut guard = self.lock();
         // Reborrowed so the live sessions, the views and the catalog borrow apart.
-        let inner = &mut *inner;
+        let inner = &mut *guard;
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
         let first_turn_evidence = matches!(event, ActivityEvent::Hook(HookKind::UserPromptSubmit));
+        let reported_error = matches!(event, ActivityEvent::Ended { error: true, .. });
         let before = live.activity.signal().clone();
         let event_for_turn = event.clone();
         live.activity.apply(event);
@@ -3369,6 +3403,21 @@ impl DaemonState {
                 let notify = inner.catalog.notify(kind);
                 inner.views.note_event(session, seq, kind, notify);
             }
+        }
+        // An error ending (feature 613, C8): the CLI reported an error, and the session had not
+        // already ended. Sent to one window under the lock, as the grant above is decided.
+        let notice = if reported_error && !matches!(before, ActivitySignal::Ended { .. }) {
+            inner
+                .catalog
+                .workspace()
+                .find_session(session)
+                .and_then(|(project, _)| Self::error_notice(inner, project, session))
+        } else {
+            None
+        };
+        drop(guard);
+        if let Some((target, notice)) = notice {
+            self.send(target, notice);
         }
         changed
     }

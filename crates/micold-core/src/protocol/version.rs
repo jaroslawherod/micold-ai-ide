@@ -104,7 +104,9 @@
 /// reported to the client that asked. An older client would fail to decode it.
 /// And 29 → 30 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
 /// says which kind of event the window notifies for. An older peer would fail to decode it.
-pub const PROTOCOL_VERSION: u32 = 30;
+/// And 30 → 31 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
+/// one window that a session ended because of an error. An older client would fail to decode it.
+pub const PROTOCOL_VERSION: u32 = 31;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

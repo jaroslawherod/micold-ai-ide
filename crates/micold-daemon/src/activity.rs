@@ -51,6 +51,10 @@ pub enum ActivityEvent {
     Ended {
         /// Why it ended — mirrors [`ActivitySignal::Ended`]'s `reason` field.
         reason: String,
+        /// Whether the CLI reported the ending as an error (feature 613, C8): Copilot's
+        /// `session.error`. It is not part of the signal: the FSM ends the same either way, and
+        /// the service reads it to raise a **Session error** notification.
+        error: bool,
     },
 }
 
@@ -97,7 +101,7 @@ impl Activity {
             ActivityEvent::Hook(HookKind::Stop) | ActivityEvent::Hook(HookKind::Notification) => {
                 self.current = ActivitySignal::AwaitingInput;
             }
-            ActivityEvent::Ended { reason } => {
+            ActivityEvent::Ended { reason, .. } => {
                 self.current = ActivitySignal::Ended { reason };
             }
             // Terminal-derived evidence is monotone toward `Working` only (H1a/A1a): it may lift
@@ -203,7 +207,7 @@ pub fn copilot_event(line: &str) -> Option<ActivityEvent> {
         "permission.requested" => Some(ActivityEvent::Hook(HookKind::Notification)),
         // Terminal. `shutdownType` is Copilot's own word for how it went ("routine"); the error
         // form carries a message. Either way the reason is best-effort — a missing one is not a
-        // reason to miss the ending.
+        // reason to miss the ending. Only the error form is an error ending (feature 613, C8).
         "session.shutdown" => Some(ActivityEvent::Ended {
             reason: value
                 .get("data")
@@ -211,6 +215,7 @@ pub fn copilot_event(line: &str) -> Option<ActivityEvent> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("session ended")
                 .to_string(),
+            error: false,
         }),
         "session.error" => Some(ActivityEvent::Ended {
             reason: value
@@ -219,6 +224,7 @@ pub fn copilot_event(line: &str) -> Option<ActivityEvent> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("session error")
                 .to_string(),
+            error: true,
         }),
         _ => None,
     }
@@ -254,6 +260,7 @@ pub fn pi_event(line: &str) -> Option<ActivityEvent> {
         "agent_settled" | "turn_end" => Some(ActivityEvent::Hook(HookKind::Stop)),
         "session_shutdown" => Some(ActivityEvent::Ended {
             reason: "session ended".to_string(),
+            error: false,
         }),
         _ => None,
     }
@@ -305,6 +312,7 @@ mod tests {
             (
                 ActivityEvent::Ended {
                     reason: "exit".into(),
+                    error: false,
                 },
                 None,
             ),
@@ -369,6 +377,7 @@ mod tests {
         a.apply(hook(HookKind::UserPromptSubmit));
         a.apply(ActivityEvent::Ended {
             reason: "process exited".into(),
+            error: false,
         });
         assert_eq!(
             *a.signal(),
@@ -420,6 +429,7 @@ mod tests {
         let mut a = Activity::new();
         a.apply(ActivityEvent::Ended {
             reason: "gave up".into(),
+            error: false,
         });
         a.apply(ActivityEvent::SpinnerObserved);
         assert_eq!(
@@ -436,6 +446,7 @@ mod tests {
         let mut a = Activity::new();
         a.apply(ActivityEvent::Ended {
             reason: "exit 0".into(),
+            error: false,
         });
         let ended = ActivitySignal::Ended {
             reason: "exit 0".into(),
@@ -453,8 +464,66 @@ mod tests {
         // A second Ended does not overwrite the first reason.
         a.apply(ActivityEvent::Ended {
             reason: "exit 1".into(),
+            error: false,
         });
         assert_eq!(*a.signal(), ended);
+    }
+
+    /// Feature 613, T021 (C8): Copilot's `session.error` is an error ending, its
+    /// `session.shutdown` is not.
+    #[test]
+    fn copilot_marks_only_session_error_as_an_error_ending() {
+        let error = copilot_event(r#"{"type":"session.error","data":{"message":"boom"}}"#);
+        assert_eq!(
+            error,
+            Some(ActivityEvent::Ended {
+                reason: "boom".into(),
+                error: true,
+            })
+        );
+        let shutdown =
+            copilot_event(r#"{"type":"session.shutdown","data":{"shutdownType":"routine"}}"#);
+        assert_eq!(
+            shutdown,
+            Some(ActivityEvent::Ended {
+                reason: "routine".into(),
+                error: false,
+            })
+        );
+    }
+
+    /// Feature 613, T021 (C9): Pi's ending is never an error ending.
+    #[test]
+    fn pi_shutdown_is_not_an_error_ending() {
+        assert!(matches!(
+            pi_event(r#"{"type":"session_shutdown"}"#),
+            Some(ActivityEvent::Ended { error: false, .. })
+        ));
+    }
+
+    /// Feature 613, T021: `error` does not reach the signal; the FSM ends the same way.
+    #[test]
+    fn an_error_ending_ends_the_signal_as_any_ending_does() {
+        for prior in [None, Some(HookKind::UserPromptSubmit), Some(HookKind::Stop)] {
+            let ended = |error| {
+                let mut a = Activity::new();
+                if let Some(kind) = prior {
+                    a.apply(hook(kind));
+                }
+                a.apply(ActivityEvent::Ended {
+                    reason: "gone".into(),
+                    error,
+                });
+                a.signal().clone()
+            };
+            assert_eq!(ended(true), ended(false), "{prior:?}");
+            assert_eq!(
+                ended(true),
+                ActivitySignal::Ended {
+                    reason: "gone".into()
+                }
+            );
+        }
     }
 
     #[test]

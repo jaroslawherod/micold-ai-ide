@@ -661,6 +661,10 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             expires_in_ms: 30_000,
         },
         DaemonMsg::ConfirmationWithdrawn { id: 1 },
+        DaemonMsg::SessionErrorNotice {
+            project: PathBuf::from("/a"),
+            session: sid(),
+        },
         DaemonMsg::LogLocation {
             req: 10,
             path: Some(PathBuf::from("/var/log/micold/daemon.log")),
@@ -773,6 +777,25 @@ fn an_attention_grant_carries_its_kind_as_a_snake_case_string() {
         json_roundtrip(&grant);
         postcard_roundtrip(&grant);
     }
+}
+
+/// Feature 613, wire W5.2: the error notice names the project and the session, carries no `req`
+/// (it is not an operation and is never answered), and survives both wires.
+#[test]
+fn a_session_error_notice_round_trips_without_a_req() {
+    let notice = DaemonMsg::SessionErrorNotice {
+        project: PathBuf::from("/repo"),
+        session: sid(),
+    };
+    let json = serde_json::to_value(&notice).expect("json encode");
+    let fields = json["SessionErrorNotice"]
+        .as_object()
+        .expect("a struct variant");
+    let mut names: Vec<&str> = fields.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["project", "session"], "no `req` (W5.2)");
+    json_roundtrip(&notice);
+    postcard_roundtrip(&notice);
 }
 
 /// U79 (feature 034, FR-016): every value of the cross-session option survives both directions,

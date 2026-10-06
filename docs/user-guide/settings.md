@@ -156,6 +156,11 @@ Out of the box the app notifies only for what needs you:
   notification's title is the session's name followed by *needs permission*.
 - **Long task finished**: the session finished a turn that took a minute or more, counted from your
   prompt, any wait for you inside it included. The title ends in *finished a long task*.
+- **Session error**: the session ended because of an error: it kept crashing until the app gave up
+  restarting it, or its AI CLI reported an error and stopped. The title ends in *stopped with an
+  error*. One window shows it, the one you used last. Closing or stopping a session, a CLI that
+  exits normally, and a crash the app restarts raise none. An error does not mark the session
+  unread.
 - **Turn finished**: a shorter turn raises no notification, but still marks the session unread.
 
 Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they

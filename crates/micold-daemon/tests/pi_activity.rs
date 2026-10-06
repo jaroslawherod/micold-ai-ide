@@ -153,6 +153,7 @@ fn a_turn_that_never_ended_is_resolved_by_supervision_not_by_the_log() {
     assert_eq!(activity.signal(), &ActivitySignal::Working);
     activity.apply(ActivityEvent::Ended {
         reason: "process exited".to_string(),
+        error: false,
     });
     assert!(matches!(activity.signal(), ActivitySignal::Ended { .. }));
 }
