@@ -1376,4 +1376,54 @@ mod notify_tests {
         assert!(!on_disk.desktop_notifications);
         assert_eq!(on_disk.notification_kinds, kinds);
     }
+
+    fn stored(dir: &tempfile::TempDir) -> Settings {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .load()
+            .settings
+    }
+
+    /// T038: the kinds are stored whole, in memory and in the file.
+    #[test]
+    fn set_notification_kinds_stores_and_persists_them() {
+        let (dir, mut catalog) = catalog_with(Settings::default());
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::LongTaskFinished, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        catalog.set_notification_kinds(kinds).unwrap();
+        assert_eq!(catalog.notification_kinds(), kinds);
+        assert_eq!(catalog.settings_wire().notification_kinds, kinds);
+        assert_eq!(stored(&dir).notification_kinds, kinds);
+    }
+
+    /// T056: the service clamps the threshold into 10–3600 s (FR-026) and reads it as a duration.
+    #[test]
+    fn set_long_task_threshold_clamps_and_stores_the_value() {
+        let (_dir, mut catalog) = catalog_with(Settings::default());
+        for (given, kept) in [(5, 10), (99999, 3600), (120, 120)] {
+            catalog.set_long_task_threshold(given).unwrap();
+            assert_eq!(
+                catalog.long_task_threshold(),
+                std::time::Duration::from_secs(kept),
+                "set_long_task_threshold({given})"
+            );
+            assert_eq!(catalog.settings_wire().long_task_threshold_secs, kept);
+        }
+    }
+
+    /// T056: the service's settings write carries the threshold into the file, from its own
+    /// setter and from an unrelated one.
+    #[test]
+    fn the_service_write_keeps_the_long_task_threshold() {
+        let (dir, mut catalog) = catalog_with(Settings::default());
+        catalog.set_long_task_threshold(45).unwrap();
+        assert_eq!(stored(&dir).long_task_threshold_secs, 45);
+
+        let (dir, mut catalog) = catalog_with(Settings {
+            long_task_threshold_secs: 300,
+            ..Settings::default()
+        });
+        catalog.set_desktop_notifications(false).unwrap();
+        assert_eq!(stored(&dir).long_task_threshold_secs, 300);
+    }
 }

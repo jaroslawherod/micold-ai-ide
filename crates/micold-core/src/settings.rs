@@ -7,7 +7,7 @@
 //! FR-019). On-disk format is the durable contract in
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
-use crate::attention::NotificationKinds;
+use crate::attention::{NotificationKinds, LONG_TASK_THRESHOLD};
 use crate::issue_types::{default_mapping, LabelTypeEntry};
 use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
@@ -86,6 +86,23 @@ fn default_env_include_script_path_string() -> String {
 /// Clamp a requested environment-include timeout into the supported range.
 pub fn clamp_env_include_timeout(secs: u64) -> u64 {
     secs.clamp(MIN_ENV_INCLUDE_TIMEOUT_SECS, MAX_ENV_INCLUDE_TIMEOUT_SECS)
+}
+
+/// Shortest accepted long-task threshold, in seconds (feature 613, FR-026).
+pub const MIN_LONG_TASK_THRESHOLD_SECS: u64 = 10;
+/// Longest accepted long-task threshold, in seconds (FR-026).
+pub const MAX_LONG_TASK_THRESHOLD_SECS: u64 = 3600;
+
+/// The long-task threshold when a file predates it or cannot be read: [`LONG_TASK_THRESHOLD`],
+/// the one definition of the default (FR-025, contract C6).
+fn default_long_task_threshold_secs() -> u64 {
+    LONG_TASK_THRESHOLD.as_secs()
+}
+
+/// Clamp a long-task threshold into 10–3600 seconds (FR-026): read from the file, or sent to the
+/// service. Settings refuses an out-of-range value on save instead.
+pub fn clamp_long_task_threshold(secs: u64) -> u64 {
+    secs.clamp(MIN_LONG_TASK_THRESHOLD_SECS, MAX_LONG_TASK_THRESHOLD_SECS)
 }
 
 /// Everything about the session daemon: where it runs, and how the sandbox is configured when it
@@ -173,6 +190,11 @@ pub struct Settings {
     /// FR-011). Service-owned like the master switch.
     #[serde(default)]
     pub notification_kinds: NotificationKinds,
+    /// How long, in seconds, a turn must last for its end to be **Long task finished** rather
+    /// than **Turn finished** (feature 613, FR-025). 10–3600, 60 by default. Service-owned like
+    /// the switches, and read at every turn end, so a change applies without a restart (FR-013).
+    #[serde(default = "default_long_task_threshold_secs")]
+    pub long_task_threshold_secs: u64,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -219,6 +241,7 @@ impl Default for Settings {
             pr_status_enabled: false,
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
+            long_task_threshold_secs: default_long_task_threshold_secs(),
         }
     }
 }
@@ -453,6 +476,10 @@ struct StoredSettings {
     /// move for it either.
     #[serde(default)]
     notification_kinds: NotificationKinds,
+    /// Missing in files written before feature 613's threshold → 60 (FR-025); out of 10–3600 →
+    /// clamped on read (FR-026). Additive and defaulted, so `settings_version` does not move.
+    #[serde(default = "default_long_task_threshold_secs")]
+    long_task_threshold_secs: u64,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -489,6 +516,7 @@ impl StoredSettings {
             pr_status_enabled: settings.pr_status_enabled,
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
+            long_task_threshold_secs: settings.long_task_threshold_secs,
         }
     }
 
@@ -523,6 +551,7 @@ impl StoredSettings {
             pr_status_enabled: self.pr_status_enabled,
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,
+            long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),
         }
     }
 }

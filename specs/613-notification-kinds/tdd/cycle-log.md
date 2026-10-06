@@ -134,3 +134,23 @@ assertion's failure; where only a field or variant was missing, the red is the c
 - **Green**: the GiveUp arm reads whether the session had already ended before `note_ended`, and
   sends no notice if it had; `attention_error_notice` 10 passed.
 - **Refactor**: none needed.
+
+## Cycle 11 — M3: T059/T061 (threshold-free note; SC-008), T056/T061 (core settings), T032+T057/T037+T062 (wire, core part)
+
+- **Tests**: `crates/micold-core/src/attention.rs` — `notification_kind_tests::the_long_task_description_names_the_threshold_not_a_duration`
+  (replaces T001's "a minute" check), `turn_clock_tests::the_threshold_passed_decides_long_from_short_for_each_allowed_value`,
+  `turn_clock_tests::a_turn_is_classified_by_the_threshold_passed_at_its_finish`;
+  `crates/micold-core/tests/settings_long_task_threshold.rs` (NEW, 7); `protocol_roundtrip.rs` fields filled with
+  `Some`/`None`; `schema_hash.rs::the_notification_kinds_and_the_threshold_are_in_the_hashed_source`, version constant 32;
+  `settings_issue_mapping.rs` key list gains `long_task_threshold_secs` (a new field on purpose, as Cycle 2).
+- **Red**: `scripts/build-lock.sh cargo test -p micold-core --lib attention` → `left: "A session finished a turn that took a
+  minute or more." right: "A session finished a turn at least as long as the long-task threshold."` (65 passed; 1 failed).
+  The two SC-008/FR-013 clock tests passed at once (`TurnClock::change` already takes the threshold); deliberate mutant
+  `>= LONG_TASK_THRESHOLD` in `change` → both FAILED, restored. `cargo test -p micold-core --test settings_long_task_threshold`
+  → `error[E0432]: unresolved imports micold_core::settings::clamp_long_task_threshold …`. `cargo test -p micold-core --test
+  protocol_roundtrip --test schema_hash` → `error[E0559]: variant ClientMsg::SettingsSet has no field named notification_kinds`.
+- **Green**: description text; `MIN/MAX_LONG_TASK_THRESHOLD_SECS`, `clamp_long_task_threshold`,
+  `default_long_task_threshold_secs()` (= `LONG_TASK_THRESHOLD`), the field on `Settings`/`StoredSettings`, clamped in
+  `into_settings`; `DaemonSettings.{notification_kinds, long_task_threshold_secs}`, `SettingsSet.{…: Option<…>}`,
+  `PROTOCOL_VERSION` 32 → `cargo test -p micold-core --no-fail-fast`: all green but the known root-only permission tests.
+- **Refactor**: none needed.

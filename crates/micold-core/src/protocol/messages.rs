@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
-use crate::attention::NotificationKind;
+use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
@@ -603,6 +603,12 @@ pub enum ClientMsg {
         pr_status_enabled: Option<bool>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
+        /// The per-kind switches, all four at once, or `None` to leave them unchanged
+        /// (feature 613, W5.4).
+        notification_kinds: Option<NotificationKinds>,
+        /// The long-task threshold in seconds, or `None` to leave it unchanged (feature 613,
+        /// W5.6). The service clamps it into 10–3600 (FR-026).
+        long_task_threshold_secs: Option<u64>,
     },
 
     // --- AI CLIs ---
@@ -1256,6 +1262,10 @@ pub struct DaemonSettings {
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
     /// switch, and because the service is what grants a claim.
     pub desktop_notifications: bool,
+    /// Which kinds of event notify while `desktop_notifications` is on (feature 613, W5.3).
+    pub notification_kinds: NotificationKinds,
+    /// How long, in seconds, a turn must last to be **Long task finished** (feature 613, W5.6).
+    pub long_task_threshold_secs: u64,
 }
 
 /// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond
@@ -1598,6 +1608,8 @@ mod desktop_notifications_wire_tests {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
             desktop_notifications,
+            notification_kinds: NotificationKinds::default(),
+            long_task_threshold_secs: 60,
         }
     }
 
@@ -1634,6 +1646,8 @@ mod desktop_notifications_wire_tests {
                 cross_session_access: None,
                 pr_status_enabled: None,
                 desktop_notifications: chosen,
+                notification_kinds: None,
+                long_task_threshold_secs: None,
             };
             match through_json(&asked) {
                 ClientMsg::SettingsSet {

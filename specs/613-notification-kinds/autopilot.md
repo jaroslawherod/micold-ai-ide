@@ -83,7 +83,24 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-None.
+M3 unit 1 handed over at 150k (it also fixed and pushed the CI flake, c5b950c2, see *CI fixes*).
+**Done, in the local WIP commit after c5b950c2 (not pushed; workspace does not compile yet)**:
+micold-core complete for M3 — T059/T061 (threshold-free `LongTaskFinished.description()`, SC-008/FR-013 clock
+tests), T056 core part + T061 (`settings_long_task_threshold.rs`, constants, clamp, field), T032/T057 + T037/T062
+core part (wire fields, version 32, schema-hash test); daemon test sites `daemon_lifecycle.rs`, `pr_status_setting.rs`
+filled with `None`. Cycle log has Cycle 11. No task ticked yet (T032/T037/T056/T057/T059/T061/T062 need their daemon
+and client parts).
+**Next**: (1) client compile site `crates/micold-client/src/features/settings.rs:471` (client `Settings` literal: carry
+`long_task_threshold_secs`); (2) red already written for T056 daemon part in `catalog.rs` `notify_tests`
+(`set_notification_kinds_stores_and_persists_them`, `set_long_task_threshold_clamps_and_stores_the_value`,
+`the_service_write_keeps_the_long_task_threshold`) — record its red, then T038/T063 catalog (settings_wire fields at
+~164, persist at ~306, setters), state.rs (`long_task_threshold` → override + `effective_long_task_threshold()`, read in
+`note_activity` ~3351, ~3493 and `drain_signals` ~3550; `set_notification_kinds` with C15), server.rs ~1063
+`SettingsSet` handling; (3) remaining construction sites: `settings_desktop_notifications.rs:278`, client
+`features/settings.rs` (~480, ~593, ~794), `shell/persist.rs` (~266, ~434, ~876), `main_tests.rs`, `covered_states.rs`;
+(4) T033/T058 daemon integration tests, T034–T036/T060 client tests, T039–T044, T064–T066, T045, CI `--test
+notification_icon`; then verify.md. Disk: the container's disk filled (ld Bus error); stale test binaries in
+`target-shared/debug/deps` were pruned (keep the newest per name) — prune again if it fills.
 
 ## Open escalation
 

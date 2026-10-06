@@ -106,7 +106,11 @@
 /// says which kind of event the window notifies for. An older peer would fail to decode it.
 /// And 30 → 31 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
 /// one window that a session ended because of an error. An older client would fail to decode it.
-pub const PROTOCOL_VERSION: u32 = 31;
+/// And 31 → 32 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
+/// `DaemonSettings` and `ClientMsg::SettingsSet` (wire W5.3, W5.4, W5.6): the per-kind switches and
+/// the long-task threshold, held by the service for every window. An older peer would fail to
+/// decode either.
+pub const PROTOCOL_VERSION: u32 = 32;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -11,7 +11,7 @@ use micold_core::attach::{
     DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
     Unavailable, UnresumableReason,
 };
-use micold_core::attention::NotificationKind;
+use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;
@@ -280,6 +280,14 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             pr_status_enabled: Some(true),
             desktop_notifications: Some(false),
+            // Feature 613 (W5.4, W5.6): the whole set of kinds, and the threshold in seconds.
+            notification_kinds: Some(NotificationKinds {
+                needs_permission: false,
+                session_error: true,
+                long_task_finished: false,
+                turn_finished: true,
+            }),
+            long_task_threshold_secs: Some(20),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -295,6 +303,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -423,6 +433,11 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Auto,
                 pr_status_enabled: true,
                 desktop_notifications: true,
+                notification_kinds: NotificationKinds {
+                    turn_finished: true,
+                    ..NotificationKinds::default()
+                },
+                long_task_threshold_secs: 120,
             },
         },
         DaemonMsg::Refused {
@@ -484,6 +499,11 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Off,
                 pr_status_enabled: false,
                 desktop_notifications: true,
+                notification_kinds: NotificationKinds {
+                    turn_finished: true,
+                    ..NotificationKinds::default()
+                },
+                long_task_threshold_secs: 120,
             },
         },
         DaemonMsg::SessionTitleChanged {
@@ -814,6 +834,11 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: access,
             pr_status_enabled: false,
             desktop_notifications: true,
+            notification_kinds: NotificationKinds {
+                turn_finished: true,
+                ..NotificationKinds::default()
+            },
+            long_task_threshold_secs: 120,
         };
         json_roundtrip(&DaemonMsg::SettingsChanged {
             settings: settings.clone(),
@@ -830,6 +855,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: Some(access),
             pr_status_enabled: None,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
         };
         json_roundtrip(&set);
         let bytes = serde_json::to_vec(&set).unwrap();
@@ -869,6 +896,11 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: on,
             desktop_notifications: true,
+            notification_kinds: NotificationKinds {
+                turn_finished: true,
+                ..NotificationKinds::default()
+            },
+            long_task_threshold_secs: 120,
         };
         let bytes = serde_json::to_vec(&DaemonMsg::SettingsChanged { settings }).unwrap();
         match serde_json::from_slice::<DaemonMsg>(&bytes).unwrap() {
@@ -889,6 +921,8 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: None,
             pr_status_enabled: chosen,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
         };
         let bytes = serde_json::to_vec(&set).unwrap();
         match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {

@@ -130,8 +130,9 @@ impl AttentionTracker {
     }
 }
 
-/// How long a turn must last for its end to be **Long task finished** (FR-002, D4). The only
-/// definition of this duration (contract C6).
+/// How long a turn must last for its end to be **Long task finished** by default (FR-002, FR-025).
+/// The only definition of this default (contract C6); the setting
+/// `Settings::long_task_threshold_secs` overrides it.
 pub const LONG_TASK_THRESHOLD: Duration = Duration::from_secs(60);
 
 /// What kind of event a desktop notification is for (feature 613, FR-001).
@@ -175,13 +176,8 @@ impl NotificationKind {
             }
             NotificationKind::SessionError => "A session stopped because of an error.".to_string(),
             NotificationKind::LongTaskFinished => {
-                let minutes = LONG_TASK_THRESHOLD.as_secs() / 60;
-                let length = if minutes == 1 {
-                    "a minute".to_string()
-                } else {
-                    format!("{minutes} minutes")
-                };
-                format!("A session finished a turn that took {length} or more.")
+                "A session finished a turn at least as long as the long-task threshold."
+                    .to_string()
             }
             NotificationKind::TurnFinished => "A session finished a shorter turn.".to_string(),
         }
@@ -983,17 +979,15 @@ mod notification_kind_tests {
     }
 
     #[test]
-    fn the_long_task_description_is_built_from_the_threshold() {
-        let minutes = LONG_TASK_THRESHOLD.as_secs() / 60;
-        let length = if minutes == 1 {
-            "a minute".to_string()
-        } else {
-            format!("{minutes} minutes")
-        };
+    fn the_long_task_description_names_the_threshold_not_a_duration() {
+        let note = NotificationKind::LongTaskFinished.description();
         assert_eq!(
-            NotificationKind::LongTaskFinished.description(),
-            format!("A session finished a turn that took {length} or more."),
-            "the note follows the threshold, not a second literal (C6)"
+            note, "A session finished a turn at least as long as the long-task threshold.",
+            "the threshold is a setting (D4 = B), so the note names it rather than a duration"
+        );
+        assert!(
+            !note.chars().any(|c| c.is_ascii_digit()) && !note.contains("minute"),
+            "no duration in the note: {note}"
         );
     }
 
@@ -1237,6 +1231,54 @@ mod turn_clock_tests {
             clock.change(TurnChange::Finished, short, THRESHOLD),
             Some(NotificationKind::TurnFinished),
             "below the threshold is not long (C4)"
+        );
+    }
+
+    /// SC-008: for T of 10 s, 60 s and 3600 s, a finish at `since + T` is long and one at
+    /// `since + T - 1 ms` is not.
+    #[test]
+    fn the_threshold_passed_decides_long_from_short_for_each_allowed_value() {
+        for secs in [10, 60, 3600] {
+            let threshold = Duration::from_secs(secs);
+            let start = Uptime::from_nanos(1_000_000);
+            let finish = |elapsed: Duration| {
+                let mut clock = TurnClock::new();
+                clock.change(TurnChange::PromptSubmitted, start, threshold);
+                let now = Uptime::from_nanos(1_000_000 + elapsed.as_nanos() as u64);
+                clock.change(TurnChange::Finished, now, threshold)
+            };
+            assert_eq!(
+                finish(threshold),
+                Some(NotificationKind::LongTaskFinished),
+                "a turn of exactly {secs} s under a {secs} s threshold is long (SC-008)"
+            );
+            assert_eq!(
+                finish(threshold - Duration::from_millis(1)),
+                Some(NotificationKind::TurnFinished),
+                "a turn 1 ms short of {secs} s is not long (SC-008)"
+            );
+        }
+    }
+
+    /// FR-013: a turn begun under one threshold is classified by the one in force at its finish.
+    #[test]
+    fn a_turn_is_classified_by_the_threshold_passed_at_its_finish() {
+        let begun_under = Duration::from_secs(60);
+        let in_force_at_finish = Duration::from_secs(20);
+        let mut clock = TurnClock::new();
+        clock.change(TurnChange::PromptSubmitted, at(0), begun_under);
+        assert_eq!(
+            clock.change(TurnChange::Finished, at(30), in_force_at_finish),
+            Some(NotificationKind::LongTaskFinished),
+            "30 s is long under the 20 s threshold in force at the finish (FR-013)"
+        );
+
+        let mut clock = TurnClock::new();
+        clock.change(TurnChange::PromptSubmitted, at(0), in_force_at_finish);
+        assert_eq!(
+            clock.change(TurnChange::Finished, at(30), begun_under),
+            Some(NotificationKind::TurnFinished),
+            "30 s is short under the 60 s threshold in force at the finish (FR-013)"
         );
     }
 
