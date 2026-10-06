@@ -1072,6 +1072,7 @@ where
                 cross_session_access,
                 pr_status_enabled,
                 desktop_notifications,
+                diff_layout,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -1114,6 +1115,10 @@ where
                 .and_then(|()| match desktop_notifications {
                     Some(on) => state.set_desktop_notifications(on),
                     None => Ok(()),
+                })
+                .and_then(|()| match diff_layout {
+                    Some(layout) => state.set_diff_layout(layout),
+                    None => Ok(()),
                 });
                 match result {
                     Ok(()) => state.send(
@@ -1134,6 +1139,17 @@ where
                     ),
                 }
             }
+            // Feature 482: placeholders until the review store (T057 retires `ReviewEdit`'s, T072
+            // `ReviewSend`'s, each with its `diff_layout_setting` assertion).
+            ClientMsg::ReviewEdit { req, .. } | ClientMsg::ReviewSend { req, .. } => state.send(
+                id,
+                DaemonMsg::OperationError {
+                    req,
+                    kind: micold_core::protocol::messages::ErrorKind::Refused,
+                    message: "review comments are not available in this build".into(),
+                    detail: None,
+                },
+            ),
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,

@@ -483,6 +483,8 @@ impl ValidSettings {
             issue_label_types: self.issue_label_types,
             // Not in the form yet (feature 040, M4): the save keeps the stored value.
             pr_status_enabled: false,
+            // Not in the form (feature 482): service-owned; the save keeps the stored value.
+            diff_layout: micold_core::settings::DiffLayout::Unified,
         }
     }
 }

@@ -58,42 +58,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 handed over at 155k context (it spent its budget reading the design). State, all in the
-WIP commit `wip(482): M1 …` on this branch (not pushed; no gate has seen it, nothing compiled yet):
-
-- **Done (not ticked, not built):** T001 (iced `highlighter` feature in workspace `Cargo.toml`,
-  `notify` in `crates/micold-client/Cargo.toml`; there is **no `deny.toml`** in the repo, so the
-  licence check is moot; `cargo tree -p micold-client -i onig_sys` still to run once Cargo.lock
-  updates). T002 (module tree `crates/micold-core/src/review/`, `pub mod review;`, `local_only` /
-  `run_git` now `pub(crate)`).
-- **Red tests written against compiling-by-intent stubs (red not yet run/recorded):** T003
-  (`review/mod.rs`: `RelPath`, `Side`, `LineRange`, `limits` — stubs return wrong answers),
-  T005 (`review/comment.rs`: stub derives lack `rename_all`, `#[serde(flatten)]` on `range`, and
-  the `{"pending": null}` shape — implement via a `Pending(())` repr enum with `#[serde(from/into)]`;
-  `CommentId::new` stub returns nil), T011 (`review/base.rs`), T012 (`review/changes.rs`), T013
-  (`crates/micold-core/tests/review_git.rs`, `review/git.rs` stub `GitCli::review_base` /
-  `change_list(dir, scope, toggles)`).
-- **Design decisions taken in the stubs:** `ChangeList { files, scope: ReviewScope }` (scope, not
-  `base`, so the Default entry has no base); kinds parsed from `git diff -z -M --raw`, not
-  `--name-status --summary` (git 2.43 prints no summary beside `--name-status`; `--raw` carries
-  both modes, so mode-only = modes differ and numstat `0 0`) — the parser keeps the task's name
-  `parse_name_status`; pure helpers `assemble(names, stats, committed_set, uncommitted_set,
-  fallback_origin)`, `merge_untracked(files, Vec<Untracked>)`, `content_of(bytes)`,
-  `classify(&mut ChangedFile, VersionSizes)`; `default_branch_from` returns `origin/<b>`, `main`
-  or `master`; `DiffRange::for_view` with no base and uncommitted off gives `None` (committed only
-  without a base lists nothing; the view shows the reason). Origin with both toggles = membership
-  in the separate committed (`base..HEAD`) and uncommitted (`HEAD`→worktree + untracked) path sets.
-- **TDD log:** no `tdd/test-list.md` (as 575/582): the test-first task pairs are the list; record
-  reds in `tdd/cycle-log.md` as `specs/575-workspace-attention-list/tdd/cycle-log.md` does.
-- **Next step:** build `cargo test -p micold-core --lib review` + `--test review_git`, record the
-  reds, implement T004/T006/T016/T017/T018 to green; then T007–T010 (protocol v30 + daemon
-  `diff_layout`; every `DaemonSettings`/`SettingsSet` literal across crates needs the new field —
-  `grep -rn pr_status_enabled crates`), then client T014/T015/T019–T024, docs T025, visual T026,
-  then verify.md. A baseline `cargo test --workspace` was started detached at handover
-  (log in the session scratchpad `baseline.log`) to warm `target-shared/`.
-- **Container:** no `mise` (run the gate's raw commands), `gh` unauthenticated, PR #624 is the one
-  branch PR; review via the scratchpad `run-review.sh`.
-
+M1 unit 2 handed over at 150k. Commits on the branch (not pushed; no gate yet): `092451fe`
+(review core) and the `wip(482)` commit after it (wire delta).
+- **Done, green, not yet ticked in tasks.md:** T001–T006, T011–T013, T016–T018
+  (`cargo test -p micold-core --lib --test review_git` ok; reds recorded in
+  `tdd/cycle-log.md`). T001's `cargo tree -p micold-client -i onig_sys` still to run.
+- **T007/T008 nearly done:** tests written (red recorded as compile errors: no `ReviewEdit`,
+  `DiffLayout` …; add the row to cycle-log), wire delta made (messages.rs, settings.rs
+  `DiffLayout`, version 30, schema pin 30), every literal across crates fixed, workspace
+  `cargo check --all-targets` clean. **One failure left:**
+  `protocol_roundtrip::the_review_messages_and_the_diff_layout_round_trip_on_both_wires` —
+  almost certainly postcard refusing `#[serde(flatten)] range` on `ReviewComment` (postcard has
+  no `deserialize_any`). Fix: drop `flatten`, give `ReviewComment` a hand-written
+  Serialize/Deserialize via a `Stored { id, path, side, start, end, quote, text, state, created }`
+  repr (`#[serde(try_from/into)]`), keeping comment.rs's JSON-shape tests green.
+  `settings_roundtrip` and `schema_hash` pass.
+- **T010 half done:** daemon serves `diff_layout` (catalog `set_diff_layout`, state, server
+  `SettingsSet` arm) and `ReviewEdit`/`ReviewSend` answer the Refused placeholder; client
+  persist keeps the stored `diff_layout`. **T009 test not written yet** (write it modelled on
+  `crates/micold-daemon/tests/pr_status_setting.rs`; it will pass at once: record as test-after).
+- **Next:** fix the postcard failure, T009, then client T014/T015/T019–T024, docs T025,
+  visual T026, then verify.md. Scratchpad helpers: `run.sh <log> <cmd…>` (detached, build
+  lock, CARGO_INCREMENTAL=0) + `hold.sh`; `fixlit.py` fixes missing-field literals from a
+  `--message-format=short` check log.
 
 ## Open escalation
 

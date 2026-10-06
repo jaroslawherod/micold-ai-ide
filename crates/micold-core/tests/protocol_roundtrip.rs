@@ -280,6 +280,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             pr_status_enabled: Some(true),
             desktop_notifications: Some(false),
+            diff_layout: None,
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -295,6 +296,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications: None,
+            diff_layout: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -423,6 +425,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Auto,
                 pr_status_enabled: true,
                 desktop_notifications: true,
+                diff_layout: Default::default(),
             },
         },
         DaemonMsg::Refused {
@@ -484,6 +487,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Off,
                 pr_status_enabled: false,
                 desktop_notifications: true,
+                diff_layout: Default::default(),
             },
         },
         DaemonMsg::SessionTitleChanged {
@@ -766,6 +770,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: access,
             pr_status_enabled: false,
             desktop_notifications: true,
+            diff_layout: Default::default(),
         };
         json_roundtrip(&DaemonMsg::SettingsChanged {
             settings: settings.clone(),
@@ -782,6 +787,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: Some(access),
             pr_status_enabled: None,
             desktop_notifications: None,
+            diff_layout: None,
         };
         json_roundtrip(&set);
         let bytes = serde_json::to_vec(&set).unwrap();
@@ -821,6 +827,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: on,
             desktop_notifications: true,
+            diff_layout: Default::default(),
         };
         let bytes = serde_json::to_vec(&DaemonMsg::SettingsChanged { settings }).unwrap();
         match serde_json::from_slice::<DaemonMsg>(&bytes).unwrap() {
@@ -841,6 +848,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: None,
             pr_status_enabled: chosen,
             desktop_notifications: None,
+            diff_layout: None,
         };
         let bytes = serde_json::to_vec(&set).unwrap();
         match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
@@ -1014,4 +1022,119 @@ fn a_send_input_confirmation_has_no_field_that_can_carry_the_input_text() {
         serde_json::from_str::<ConfirmOperation>(with_text).is_err(),
         "a SendInput carrying text must not decode"
     );
+}
+
+/// Feature 482 (T007, contracts/review-wire.md): every review message and the diff layout setting
+/// survive both wires.
+#[test]
+fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
+    use micold_core::protocol::messages::ReviewEditOp;
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    use micold_core::review::{LineRange, RelPath, Side};
+    use micold_core::settings::DiffLayout;
+
+    let id = CommentId(Uuid::from_u128(0x0123_4567_89ab_4def_8123_4567_89ab_cdef));
+    let edits = [
+        ReviewEditOp::Add {
+            path: "src/a b é.rs".into(),
+            side: Side::Old,
+            start: 3,
+            end: 4,
+            quote: vec!["x".into(), "y".into()],
+            text: "why?".into(),
+        },
+        ReviewEditOp::SetText {
+            id,
+            text: "changed".into(),
+        },
+        ReviewEditOp::Delete { id },
+        ReviewEditOp::ClearSent,
+        ReviewEditOp::DiscardPending,
+    ];
+    for edit in edits {
+        let msg = ClientMsg::ReviewEdit {
+            req: 7,
+            project: PathBuf::from("/p"),
+            worktree_dir: "feature".into(),
+            edit,
+        };
+        json_roundtrip(&msg);
+        postcard_roundtrip(&msg);
+    }
+    let send = ClientMsg::ReviewSend {
+        req: 8,
+        project: PathBuf::from("/p"),
+        worktree_dir: String::new(),
+        outdated: vec![id],
+    };
+    json_roundtrip(&send);
+    postcard_roundtrip(&send);
+
+    let comment = ReviewComment {
+        id,
+        path: RelPath::from_native("src/a.rs").unwrap(),
+        side: Side::New,
+        range: LineRange::new(1, 2).unwrap(),
+        quote: vec!["a".into(), "b".into()],
+        text: "t".into(),
+        state: CommentState::Sent { at: 9 },
+        created: 1,
+    };
+    let changed = DaemonMsg::ReviewChanged {
+        project: PathBuf::from("/p"),
+        worktree_dir: "feature".into(),
+        comments: vec![comment],
+        sending: true,
+    };
+    json_roundtrip(&changed);
+    postcard_roundtrip(&changed);
+    for started in [true, false] {
+        let sent = OperationResult::ReviewSent {
+            session: sid(),
+            started,
+        };
+        json_roundtrip(&sent);
+        postcard_roundtrip(&sent);
+    }
+
+    for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+        let settings = DaemonSettings {
+            scrollback_lines: 10_000,
+            env_include_enabled: true,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: 10,
+            default_ai_cli: AiCli::ClaudeCode,
+            pi_activity_component: true,
+            tool_server_enabled: true,
+            cross_session_access: CrossSessionAccess::Auto,
+            pr_status_enabled: false,
+            desktop_notifications: true,
+            diff_layout: layout,
+        };
+        let pushed = DaemonMsg::SettingsChanged { settings };
+        json_roundtrip(&pushed);
+        postcard_roundtrip(&pushed);
+    }
+    for chosen in [
+        Some(DiffLayout::SideBySide),
+        Some(DiffLayout::Unified),
+        None,
+    ] {
+        let set = ClientMsg::SettingsSet {
+            req: 3,
+            scrollback_lines: None,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            tool_server_enabled: None,
+            cross_session_access: None,
+            pr_status_enabled: None,
+            desktop_notifications: None,
+            diff_layout: chosen,
+        };
+        json_roundtrip(&set);
+        postcard_roundtrip(&set);
+    }
 }

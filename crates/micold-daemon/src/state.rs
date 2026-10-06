@@ -1557,6 +1557,21 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Set the Changes view's diff layout (feature 482, R12). Pushes `SettingsChanged` to every
+    /// client, so every window shows the next diff in it.
+    pub fn set_diff_layout(
+        &self,
+        layout: micold_core::settings::DiffLayout,
+    ) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_diff_layout(layout)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
     /// Turn desktop notifications on or off (feature 039, FR-026, W4.1). Pushes `SettingsChanged`
     /// to every client. It applies to the next claim, from any window, with nothing restarted
     /// (FR-027); unread state is not touched (FR-017).

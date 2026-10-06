@@ -267,6 +267,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         cross_session_access: app.core.session.cross_session_access,
         issue_label_types: stored.issue_label_types,
         pr_status_enabled: stored.pr_status_enabled,
+        diff_layout: stored.diff_layout,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -398,9 +399,12 @@ pub(crate) fn save_and_prepare_check(
         let write = store.update_reporting(&mut |stored| {
             // The form does not hold the pull request switch yet (feature 040, M4), so the
             // document keeps the value it has.
+            // Nor the diff layout (feature 482), which the service owns.
             let pr_status_enabled = stored.pr_status_enabled;
+            let diff_layout = stored.diff_layout;
             *stored = settings.clone();
             stored.pr_status_enabled = pr_status_enabled;
+            stored.diff_layout = diff_layout;
         });
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
@@ -429,6 +433,7 @@ pub(crate) fn save_and_prepare_check(
             pi_activity_component: Some(settings.pi_activity_component),
             tool_server_enabled: Some(settings.tool_server_enabled),
             desktop_notifications: Some(settings.desktop_notifications),
+            diff_layout: None,
             cross_session_access: Some(settings.cross_session_access),
             pr_status_enabled: None,
         });
@@ -871,6 +876,7 @@ mod tests {
             pi_activity_component: false,
             tool_server_enabled: true,
             desktop_notifications: true,
+            diff_layout: Default::default(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::ConfirmEachSend,
             issue_label_types: vec![micold_core::issue_types::LabelTypeEntry {
                 label: "perf".to_string(),
