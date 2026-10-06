@@ -15,6 +15,12 @@ Data model: [../data-model.md](../data-model.md).
 | C5 | A turn whose start was not seen starts at the first `Working` change the service saw (spec Edge Cases). |
 | C6 | `LONG_TASK_THRESHOLD` is the only definition of 60 s. Nothing else compares a duration with a literal 60. |
 
+## Helper agent stop (FR-024)
+
+| # | Rule |
+|---|---|
+| C17 | `hooks.rs::classify_hook` returns `HookClass::Ignored` for `"SubagentStop"`: no `ActivityEvent`, no FSM transition, no `TurnChange`, no attention event. `settings_json` does not register `SubagentStop`. |
+
 ## Error endings (FR-004)
 
 | # | Rule |

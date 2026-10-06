@@ -64,16 +64,46 @@ while paused resumes the old one.
 a `Notification` mapping, without depending on a payload field one CLI added recently. Pi has no
 such event: its sessions never raise **Needs permission**, which the spec accepts (Assumptions).
 
-**`SubagentStop` stops being a `Stop`.** `hooks.rs::classify_hook` maps Claude's `"SubagentStop"`
-to `HookKind::Stop` today, so a Task subagent finishing in the middle of a turn moves the session to
-awaiting input and would end the turn clock early, splitting one long task into short ones. It is
-mapped to `HookKind::PostToolUse` instead (the turn goes on; no signal change). This also removes a
-mid-turn "waiting" badge and unread mark that never meant the user was needed; recorded here because
-it changes 010/039 behaviour for Claude Code sessions that use subagents.
+**`SubagentStop` is ignored (FR-024).** `hooks.rs::classify_hook` maps Claude's `"SubagentStop"`
+to `HookKind::Stop` today (`hooks.rs:239`). A Task subagent finishing in the middle of a turn
+therefore moves the session to `AwaitingInput` (`activity.rs` Stop arm) while the main agent works
+on; the following `PostToolUse` is a no-op, so the session shows as waiting until the next
+`PreToolUse`, and when the main agent ends without another tool call the real `Stop` changes nothing
+and the turn's real end is never notified. Under this feature it would also end the turn clock early
+and split one long task into short ones. The mapping was never a deliberate behaviour: 010 BUG-001
+registered the hook only because the `"Stop" | "SubagentStop"` arm already existed
+(010 `contracts/hooks.md` lines 98–100).
+
+From this feature on `classify_hook("SubagentStop")` is `HookClass::Ignored` (answered 200, no
+`ActivityEvent`), and `settings_json` stops registering it, so `claude` no longer sends it. The
+arm stays explicit so a session still running under an older settings file is ignored too.
+
+Consumers of the old mapping, and what each sees now:
+
+| Consumer | Old (`SubagentStop` = `Stop`) | New (ignored) |
+|---|---|---|
+| Activity FSM (`activity.rs`, 010 H4) | `Working → AwaitingInput` mid-turn | unchanged state |
+| 039 `began_waiting` → `mark_attention` (`attention_seq`, unread) | a mid-turn attention event, session unread | none (FR-024, FR-018's exception) |
+| 039 desktop notification claim | a "waiting" notification mid-turn | none |
+| Sidebar/status badge (activity signal) | "waiting" while the agent works | stays working |
+| `TurnClock` (new) | would end the turn: `Finished` | no `TurnChange`; a `Paused` turn stays paused (the user is still needed) |
+| `SubagentStop` after the main `Stop` (background subagent) | no change (already `AwaitingInput`) | no change |
+| Tests | `hooks.rs::classifies_hook_event_names` (no `SubagentStop` case today); `settings_json_embeds_the_url_and_bearer_token` lists `"SubagentStop"` | assert `ev("SubagentStop") == Ignored`; drop it from the settings list and assert it is absent |
+| Docs | 010 `contracts/hooks.md`: settings example (line 85) and the BUG-001 note (lines 98–100) | example without `SubagentStop`; note says it is ignored since 613 |
+
+No other code names `SubagentStop` (`grep -rn SubagentStop crates` hits only `hooks.rs`).
 
 **Alternatives rejected.**
 - *Keep `SubagentStop` as `Stop` and ignore it only in the clock*: the signal would still change
   into awaiting input, which is an attention event that FR-001 must classify, with no kind that fits.
+- *Map it to `PostToolUse`*: no FSM change, but the clock treats it as work, so a subagent finishing
+  while the main turn waits on a permission would resume a `Paused` turn although the user is still
+  needed.
+- *Leave 010/039 behaviour untouched and accept the split*: keeps the spurious mid-turn waiting
+  mark and unread, loses the real turn end's notification, and makes FR-002/FR-003 wrong for every
+  Claude session that uses subagents.
+- *A new `HookKind::SubagentStop` that the FSM and clock ignore*: the same behaviour as `Ignored`
+  with a variant every match must handle; nothing consumes it.
 - *Parse Claude's `notification_type`*: Claude-only, version-dependent, and adds nothing the turn
   state does not already say.
 

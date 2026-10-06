@@ -10,7 +10,7 @@ Run CI's gate (`mise run gate`). The feature's own checks:
 | Command | Proves |
 |---|---|
 | `mise run test-core` | `TurnClock` (C1–C6), kinds and defaults, settings load cases (FR-010), `notification_text` (T1), wire round-trip and schema hash |
-| `cargo test -p micold-daemon --lib attention activity` | kind-aware note/grant, pending pruning, error-notice target, Copilot error flag, `SubagentStop` mapping |
+| `cargo test -p micold-daemon --lib attention activity` | kind-aware note/grant, pending pruning, error-notice target, Copilot error flag, `SubagentStop` ignored and unregistered (FR-024) |
 | `cargo test -p micold-daemon --test attention_events --test attention_claims --test settings_desktop_notifications` | per-kind notification over a real connection: SC-001 sequence, one-kind-on trials (SC-002), unread unchanged (SC-003), switches across a service restart (SC-006), Session error on give-up and on Copilot `session.error`, none with no window |
 | `cargo test -p micold-client --test icons_font --test notification_icon` | codepoints in the font (I1), tile contrast and distinctness (I3, I4) |
 | `cargo test -p micold-client` (backend request tests) | Linux `image-data`, Windows image entry, macOS image path (I5–I7) |

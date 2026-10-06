@@ -103,6 +103,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 ### Edge Cases
 
 - **A permission asked at the end of a turn**: a session that has already finished its turn and then reports a permission or idle prompt does not change state, so it raises nothing new (039 FR-003). Only a stop in the middle of a turn is **Needs permission**.
+- **A helper agent finishing inside a turn** (for example Claude Code's subagent stop): the session goes on with its turn and is not waiting for the user, so this is not a change to awaiting input. It raises no notification, does not make the session unread, and neither ends nor pauses the turn (FR-024).
 - **Several permission requests in one turn**: each stop in the middle of the turn, after the session worked again, is a new **Needs permission** event and is notified (when the kind is on and the session not in view).
 - **Turn duration exactly at the threshold**: counts as a long task.
 - **A turn whose start the application did not see** (the application or the session service started while the session was already working, or the connection was lost before the turn began and was restored after it ended): the turn duration is measured from the earliest moment the application knew the session was working; a turn whose start is unknown is **Turn finished** unless the known part already reaches the threshold.
@@ -134,6 +135,8 @@ A developer glances at a notification in the corner of the screen. Without readi
 
 **When to notify**
 
+- **FR-024**: A helper agent that an AI CLI runs inside a turn finishing its work MUST NOT count as a change to awaiting input, and MUST NOT end or pause the turn. This replaces 010/039's treatment of Claude Code's subagent stop as the end of a turn, which marked a working session as waiting and unread, and could end a long task's turn early.
+
 - **FR-005**: The application MUST raise exactly one desktop notification for an event when all of these hold: desktop notifications are on, the event's kind is on, the session is not in view at that moment, and a window of the application is open. In every other case it MUST raise none.
 - **FR-006**: For **Needs permission**, **Long task finished** and **Turn finished**, the rules of 039 for awaiting input apply unchanged: one notification per change into awaiting input (039 FR-003), none for a session found already awaiting input at start (039 FR-005), the reconnection rule (039 FR-006), one per event across windows (039 FR-006a), none while no window is open (039 FR-008), each event its own notification (039 FR-009).
 - **FR-007**: For **Session error**, the application MUST raise at most one notification per ending, the same across windows, and none for a session it finds already ended when it starts or reconnects, nor for an ending that happened while no window was open.
@@ -156,7 +159,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 
 **Unchanged behaviour, components, documentation**
 
-- **FR-018**: What makes a session unread, what clears it, the unread marks, the switcher's counts and the location rows' indicators MUST behave as they do today (039 FR-016 to FR-025; 575). No notification kind or switch changes them.
+- **FR-018**: What makes a session unread, what clears it, the unread marks, the switcher's counts and the location rows' indicators MUST behave as they do today (039 FR-016 to FR-025; 575), except that a helper agent finishing inside a turn no longer makes a session unread (FR-024). No notification kind or switch changes them.
 - **FR-019**: Clicking a notification of any kind MUST do what 039 FR-011 to FR-015a say.
 - **FR-020**: When the operating system does not show a notification, 039 FR-010 applies, for every kind.
 - **FR-021**: Everything above MUST behave the same on Linux, macOS and Windows (Principle VI), and with the session service running directly on the computer or in a container (039 FR-007).

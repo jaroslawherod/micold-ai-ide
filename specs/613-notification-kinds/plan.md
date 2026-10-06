@@ -120,6 +120,8 @@ crates/micold-daemon/src/
 ├── state.rs                # LiveSession.turn; note_activity classifies; the give-up path and
 │                           #   an error `Ended` send SessionErrorNotice; set_notification_kinds
 ├── catalog.rs              # settings accessors and persistence of notification_kinds
+├── hooks.rs                # classify_hook: "SubagentStop" → Ignored; settings_json drops
+│                           #   SubagentStop (FR-024, research R3)
 └── server.rs               # SettingsSet.notification_kinds
 
 crates/micold-client/src/
@@ -137,6 +139,7 @@ crates/micold-client/src/
 └── showcase/sections/controls.rs # Checkbox with icon, enabled/disabled, both themes
 
 docs/user-guide/settings.md, docs/user-guide/icons.md
+specs/010-daemon-session-persistence/contracts/hooks.md  # SubagentStop no longer registered/ignored
 ```
 
 **Structure Decision**: the existing three-crate split. Pure decisions in `micold-core`
@@ -159,6 +162,7 @@ render-free so `tests/` reach it.
 | FR-014 | `NotificationKinds` has no provider dimension |
 | FR-015, FR-016, FR-017 | notification.md I1–I8: `Icon` variants, rasteriser, backends |
 | FR-018 | C10: unread and `attention_seq` set before and independent of the kind |
+| FR-024 | C17: `classify_hook` ignores `SubagentStop`; research R3 consumer table |
 | FR-019, FR-020 | 039's reveal and N4 apply unchanged; `SessionErrorNotice` reuses the same seam |
 | FR-021 | platform-free classification; backends only differ in icon delivery |
 | FR-022 | `Checkbox::icon`, showcase Checkbox section, `Icon` vocabulary |
@@ -169,8 +173,8 @@ render-free so `tests/` reach it.
 | Layer | Covers |
 |---|---|
 | Core unit (`micold-core`, `mise run test-core`) | `TurnClock` rules C1–C6 incl. threshold boundary, pause inclusion, unknown start; `NotificationKind::ALL` order, names, descriptions, defaults; `NotificationKinds::is_on`; settings load: fresh, pre-feature file, unreadable file (FR-010); `notification_text` per kind (FR-008); wire round-trip and schema hash |
-| Daemon unit (`attention.rs`, `activity.rs`) | kind-aware `note_event`/`grant`, pending-kind pruning, `error_notice_target`; `copilot_event` error flag |
-| Daemon integration (`crates/micold-daemon/tests/`) | over a real connection: kinds per hook sequence (SC-001 shape), switches off/on (SC-002, FR-013), master off, unread unchanged by switches (SC-003), error notice on give-up and Copilot `session.error`, none on clean exit/close, none with no window, settings persistence across service restart (SC-006) |
+| Daemon unit (`attention.rs`, `activity.rs`, `hooks.rs`) | kind-aware `note_event`/`grant`, pending-kind pruning, `error_notice_target`; `copilot_event` error flag; `classifies_hook_event_names` asserts `SubagentStop` → `Ignored`, the settings test asserts it is not registered (FR-024) |
+| Daemon integration (`crates/micold-daemon/tests/`) | over a real connection: kinds per hook sequence (SC-001 shape), a `SubagentStop` POST mid-turn and while paused changes no signal, unread or kind and a long turn across it is still **Long task finished** (FR-024), switches off/on (SC-002, FR-013), master off, unread unchanged by switches (SC-003), error notice on give-up and Copilot `session.error`, none on clean exit/close, none with no window, settings persistence across service restart (SC-006) |
 | Client `tests/` | rasteriser: tile contrast ≥3:1 vs white and black, glyph vs tile, pairwise distinctness of the four masks at 16×16; `Icon` codepoints present in the font; settings reducer toggles and master-off disabling; backend request mapping carries the icon (Linux hint, Windows image entry, macOS image path); the granted/error notification carries its kind |
 | Geometry/contrast gates | the Settings kind row: icon role contrast ≥3:1 in light and dark (`composition_contrast`), row anatomy |
 | Quickstart §B (visual pass) | the four notifications on a real desktop, icons recognisable in light and dark desktop themes, Settings rows and showcase |

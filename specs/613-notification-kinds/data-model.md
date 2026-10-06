@@ -75,7 +75,8 @@ the clock still ends the turn.
 Mapping in the service (`activity.rs`): `Hook(UserPromptSubmit)` → `PromptSubmitted`;
 `Hook(PreToolUse)`, and `SpinnerObserved` when it lifted the signal → `Working`;
 `Hook(Notification)` → `AskedUser`; `Hook(Stop)` → `Finished` (Claude's `SubagentStop` is
-classified as `PostToolUse` from this feature on, research R3); `Hook(PostToolUse)`,
+`HookClass::Ignored` from this feature on and never reaches the FSM or the clock, FR-024, research
+R3); `Hook(PostToolUse)`,
 `ReadyForInput`, `Ended` → no change.
 
 ## Attention event (039, extended)
