@@ -382,7 +382,7 @@ the connection and `notify_error` stay as they are (issue #569 changes them).
       `type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='org.freedesktop.Notifications'`
       (one iterator per rule, or one thread reading both). Module and type docs say why the
       sender rule is not the check (BUG-566 *Mechanism*). Turns T124 green.
-- [ ] T126 [BUG-566] Verify on a private `dbus-daemon --session` with a stand-in service, as the
+- [x] T126 [BUG-566] Verify on a private `dbus-daemon --session` with a stand-in service, as the
       M6 visual pass did (`visual-pass/M6/`): a click from the service still opens the session; a
       forged `ActionInvoked` from another peer, broadcast and unicast to the client's unique name,
       opens nothing; after the service is restarted, its id 1 does not open the old notification's
