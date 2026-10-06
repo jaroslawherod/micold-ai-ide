@@ -296,12 +296,12 @@ fn a_rename_and_a_binary_file_are_listed_with_their_kind() {
 #[test]
 fn the_default_entry_lists_only_the_roots_uncommitted_changes() {
     let f = fixture();
-    write(&f.root, "README.md", "hello\n");
+    write(&f.root, "a.md", "hello\n");
     write(&f.root, "b.rs", "fn b() { root(); }\n");
     let list = list(&f.root, ReviewScope::RootUncommitted, on());
     assert_eq!(
         paths(&list),
-        ["README.md", "b.rs"],
+        ["a.md", "b.rs"],
         "the root's own uncommitted changes, nothing of the worktree's commit (US1 s9)"
     );
     assert_eq!(list.scope, ReviewScope::RootUncommitted);

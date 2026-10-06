@@ -24,7 +24,8 @@ const DIFF: [&str; 5] = ["--no-ext-diff", "--no-textconv", "--no-color", "-z", "
 /// Run a read-only git command in `dir`, kept to local objects, with `stdin` written to it.
 fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
     let mut command = Command::new("git");
-    no_window(local_only(&mut command))
+    local_only(&mut command);
+    no_window(&mut command)
         .arg("-C")
         .arg(dir)
         .args(GLOBAL)

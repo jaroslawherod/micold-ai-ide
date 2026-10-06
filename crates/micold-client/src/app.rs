@@ -889,10 +889,7 @@ pub fn interpret(
             );
         }
         Outcome::ChangesRequested(entry) => {
-            crate::overlay::registry::dismiss(
-                state,
-                crate::features::worktree::WorktreeContextMenu::ID,
-            );
+            crate::features::worktree::close_menu(state);
             let effect = crate::features::changes::update(
                 &mut state.changes,
                 crate::features::changes::Msg::Opened { entry },

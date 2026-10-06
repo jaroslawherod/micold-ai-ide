@@ -120,8 +120,10 @@ fn a_settings_file_without_the_diff_layout_loads_as_unified() {
         micold_core::settings::DiffLayout::Unified
     );
 
-    let mut side = Settings::default();
-    side.diff_layout = micold_core::settings::DiffLayout::SideBySide;
+    let side = Settings {
+        diff_layout: micold_core::settings::DiffLayout::SideBySide,
+        ..Settings::default()
+    };
     JsonFileSettingsStore::at(path.clone()).save(&side).unwrap();
     let back = JsonFileSettingsStore::at(path).load().settings;
     assert_eq!(

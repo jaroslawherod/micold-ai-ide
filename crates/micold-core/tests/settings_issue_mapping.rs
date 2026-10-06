@@ -182,6 +182,7 @@ fn other_writers_preserve_the_mapping() {
             "daemon",
             "default_ai_cli",
             "desktop_notifications",
+            "diff_layout",
             "env_include_enabled",
             "env_include_script_path",
             "env_include_timeout_secs",
