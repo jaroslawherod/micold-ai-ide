@@ -776,8 +776,16 @@ pub fn checkbox(
             _ if focused => color(r.primary),
             _ => color(r.outline),
         };
+        // A disabled box keeps its mark (feature 613, §B5): checked, it fills with on-surface at
+        // the disabled opacity and draws the mark in surface, Material's disabled-selected tone.
+        let disabled_checked = matches!(
+            status,
+            checkbox_widget::Status::Disabled { is_checked: true }
+        );
         let base = if is_checked {
             color(r.primary)
+        } else if disabled_checked {
+            over(disabled_color(r.on_surface), color(r.surface))
         } else {
             color(r.surface)
         };
@@ -805,7 +813,11 @@ pub fn checkbox(
         };
         checkbox_widget::Style {
             background: Background::Color(background),
-            icon_color: color(r.on_primary),
+            icon_color: if disabled_checked {
+                color(r.surface)
+            } else {
+                color(r.on_primary)
+            },
             border: Border {
                 color: border_color,
                 width: 1.0,
@@ -961,6 +973,30 @@ mod tests {
             );
             assert_eq!(disabled.text_color, Some(disabled_color(r.on_surface)));
             assert_eq!(active.text_color, Some(color(r.on_surface)));
+        }
+    }
+
+    #[test]
+    fn a_disabled_checked_checkbox_keeps_a_visible_mark() {
+        // Feature 613, quickstart §B5: with Desktop notifications off the kind rows grey out and
+        // keep their marks. A checked box must still read as checked when disabled.
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let style = checkbox(r, false);
+            let checked = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: true },
+            );
+            let unchecked = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: false },
+            );
+            assert_ne!(checked.background, unchecked.background, "{scheme:?}");
+            assert_ne!(
+                checked.background,
+                Background::Color(checked.icon_color),
+                "{scheme:?}: the mark is drawn in its own box's colour"
+            );
         }
     }
 
