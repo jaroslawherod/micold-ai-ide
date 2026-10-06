@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M5 PR open (see *Pull requests*); orchestrator waits on CI and merges, then M6 (T056–T057).
+- **Next step**: M6 PR open; orchestrator waits on CI and merges, then the close unit.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #543 | M2: Up and Down keep the highlighted issue row wholly in view | merged | c0cc58c7860cc3f164084cb953097f5f204934eb |
 | #549 | M3: typing a login narrows the issue list, the reporter emphasised | merged | a3a57925c7b931ea1e887f7cf8d044512c19c46e |
 | #576 | M4: a rest-delay, three-line tooltip in the component library | merged | 01cc704d9119af8caed874c9585f5767a95a11c1 |
-| #603 | M5: description tooltip on issue rows, second pass | open | |
+| #603 | M5: description tooltip on issue rows, second pass | merged | 2b367040d63ee74151687f2fb47dd7fd4b63671f |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T023 | full | Up and Down keep the highlighted issue row wholly in view | #543 | merged |
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | merged |
-| M5 | T044–T055, T058–T063 | full | Resting on an issue row for 3 s shows its description; guide | #603 | in review |
-| M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | | drafted |
+| M5 | T044–T055, T058–T063 | full | Resting on an issue row for 3 s shows its description; guide | #603 | merged |
+| M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | pending | in review |
 
 ## Decisions
 

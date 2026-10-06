@@ -264,8 +264,8 @@ of the listed issues follow the list in a second pass (FR-024, ledger D13).
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T056 Repeat quickstart §B10 on the merged result, five runs each, alternating: "before" is the commit on `main` just before M1's merge (record its SHA), "after" is `main` after M5; and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
-- [ ] T057 Run quickstart §A (`mise run test-core`, `mise run gate`, the release rank budget) and §B1–B9 and §B11 (light and dark themes; §B10 is T056) with the `visual-pass` skill on the merged result, and record each step's outcome in `specs/038-issue-list-reporter-tooltip/evidence/README.md`.
+- [x] T056 Repeat quickstart §B10 on the merged result, five runs each, alternating: "before" is the commit on `main` just before M1's merge (record its SHA), "after" is `main` after M5; and record the medians and the ratio in `specs/038-issue-list-reporter-tooltip/evidence/README.md`; above 1.5×, stop and escalate (research R14).
+- [x] T057 Run quickstart §A (`mise run test-core`, `mise run gate`, the release rank budget) and §B1–B9 and §B11 (light and dark themes; §B10 is T056) with the `visual-pass` skill on the merged result, and record each step's outcome in `specs/038-issue-list-reporter-tooltip/evidence/README.md`.
 
 ---
 

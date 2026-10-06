@@ -1,0 +1,20 @@
+# set S1 started 08:47:00
+S1 run1 before0 10.999 first_black=0.031  calls=10 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run1 after2 11.583 first_black=0.000  calls=12 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run2 before0 10.213 first_black=0.001  calls=10 failed=1 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run2 after2 11.453 first_black=0.001  calls=11 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run3 before0 11.875 first_black=0.001  calls=10 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run3 after2 10.884 first_black=0.000  calls=12 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run4 before0 11.447 first_black=0.001  calls=10 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run4 after2 10.231 first_black=0.032  calls=11 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run5 before0 10.384 first_black=0.031  calls=10 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+S1 run5 after2 11.378 first_black=0.000  calls=12 failed=0 [attach: connected projects=1 sessions=0 active=/home/jaro/vp]
+SET-S1-DONE
+# header: set S1; before = a357479f (commit before M1's merge; git archive export, release client+daemon built from it, bin-before0);
+#   after = 2b367040 (HEAD, built from the worktree, bin-after2); 2026-10-06; dark theme, Xvfb :142 + lavapipe, cli/cli, pass-through gh shim first on PATH.
+# Time = click on "GitHub issue" -> first frame where the loading box is gone and the list is shown (pixel polling ~30 ms, includes ~60 ms margin).
+# Every run: all 10 list pages (10 x 100 = 1,000 issues) returned rc=0; list on screen in the final screenshot; client/daemon attached ("attach: connected").
+# (run2 before0's lone "END rc=141" at the head of its shim log is the previous run's killed gh, not part of the run; no error shown, list shown.)
+#  before0: 10.999 10.213 11.875 11.447 10.384 s  median 10.999  (gh calls/run 10; longest single call 1.36 1.4x 1.62 1.48 1.20 s)
+#  after2 : 11.583 11.453 10.884 10.231 11.378 s  median 11.378  (gh calls/run 11-12; longest single call 2.22 1.30 2.02 1.16 2.44 s)
+#  ratio after/before = 11.378 / 10.999 = 1.03 (<= 1.5)   no request over 10 s (longest 2.44 s)   => PASS
