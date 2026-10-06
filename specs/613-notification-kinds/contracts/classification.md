@@ -9,8 +9,8 @@ Data model: [../data-model.md](../data-model.md).
 | # | Rule |
 |---|---|
 | C1 | Each live session has one `TurnClock`, created `NotInTurn` with the live entry and dropped with it. |
-| C2 | `note_activity` maps the event to a `TurnChange` (data-model, "Mapping") and calls `turn.change(change, clock::now(), LONG_TASK_THRESHOLD)` on every event, before deciding `began_waiting`. |
-| C3 | When `began_waiting` holds (039), the attention event's kind is the kind `change` returned. Every path into `AwaitingInput` is a `Notification` or a `Stop`, both of which return a kind, so every event has one (FR-001). |
+| C2 | `note_activity` maps the event to a `TurnChange` (data-model, "Mapping") and calls `turn.change(change, clock::now(), threshold)` on every event, before deciding `began_waiting`. `threshold` is `DaemonState.long_task_threshold`, initialised from `LONG_TASK_THRESHOLD`; its setter exists only as a test seam for the integration tests. |
+| C3 | When `began_waiting` holds (039), the attention event's kind is the kind `change` returned. Every path into `AwaitingInput` is a `Notification` or a `Stop`, both of which return a kind, so every event has one (FR-001). Should a path into `AwaitingInput` ever yield no kind, the event is `TurnFinished` (the spec's "cannot tell" rule). |
 | C4 | Finished with `now − since ≥ threshold` is `LongTaskFinished`; `<` is `TurnFinished`. `since` is the turn's start, kept through pauses (FR-003). |
 | C5 | A turn whose start was not seen starts at the first `Working` change the service saw (spec Edge Cases). |
 | C6 | `LONG_TASK_THRESHOLD` is the only definition of 60 s. Nothing else compares a duration with a literal 60. |

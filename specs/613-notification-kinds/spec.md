@@ -12,7 +12,7 @@
 
 Feature 039 (`specs/039-session-attention-notifications`) raises one desktop notification each time a session not in view changes to **awaiting input** (039 FR-001), with one **Desktop notifications** switch for all of them (039 FR-026). Awaiting input covers every way an AI CLI stops for the user: the end of every turn, however short, and a stop in the middle of a turn to ask for a permission. So a user who drives several sessions gets a notification at the end of every turn of every session they are not looking at, and the few that need them — a permission that blocks the work, a long task that is done — look exactly like the many that do not. A session that ends with an error raises nothing at all (039 Out of Scope).
 
-Feature 575 (`specs/575-workspace-attention-list`) counts unread sessions on the sidebar's location rows. Neither feature is changed by this one in what makes a session unread.
+Feature 575 (`specs/575-workspace-attention-list`) counts unread sessions on the sidebar's location rows. Neither feature is changed by this one in what makes a session unread, with one exception: a helper agent finishing inside a turn no longer counts as the end of the turn (FR-024).
 
 This feature sorts attention events into **kinds**, notifies by default only for the kinds that need the user, lets the user choose per kind, and gives each kind its own icon.
 
@@ -31,7 +31,7 @@ This feature sorts attention events into **kinds**, notifies by default only for
   - **Needs permission**: the session stopped in the middle of a turn to ask for a permission or for an answer, and cannot continue until the user responds.
   - **Long task finished**: the session finished a turn whose turn duration was at least the long-task threshold.
   - **Turn finished**: the session finished a turn whose turn duration was below the long-task threshold.
-  - **Session error**: the session ended because of an error: its AI CLI reported an error and stopped, its process exited abnormally, or the session service gave up restarting it after repeated crashes.
+  - **Session error**: the session ended because of an error: its AI CLI reported an error and stopped, or its process exited abnormally and the session service did not bring it back (it gave up restarting it after repeated crashes, or could not restart it). An abnormal exit that the session service recovers from by restarting the session is not an ending.
 - **Long-task threshold**: the turn duration from which a finished turn counts as a long task. Fixed at 60 seconds; the user cannot change it.
 - **Kind icon**: the icon that stands for one notification kind, distinct in shape from the other three.
 
@@ -57,6 +57,7 @@ A developer runs five sessions across two projects. Today every turn of every se
 8. **Given** session B finished a turn and was notified, **When** its AI CLI reports again that it is waiting without having worked in between, **Then** no further notification appears (039 FR-003).
 9. **Given** sessions of Claude Code, GitHub Copilot and Pi Coding Agent, **When** each finishes a long turn while not in view, **Then** each raises one **Long task finished** notification.
 10. **Given** no window of the application is open, **When** a session asks for a permission, finishes a turn or ends with an error, **Then** no desktop notification appears, neither then nor when the application is next opened (039 FR-008).
+11. **Given** a Claude Code session B not in view and working, **When** a helper agent it runs finishes inside the turn, **Then** no desktop notification appears, B does not become unread, and when B later finishes the turn its kind is decided by the whole turn's duration (FR-024).
 
 ---
 
@@ -93,7 +94,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 **Acceptance Scenarios**:
 
 1. **Given** one notification of each of the four kinds, **When** the user looks at them, **Then** each shows its kind's icon, and no two kinds share an icon.
-2. **Given** a notification of a kind, **When** the user compares its icon with Settings, **Then** it is the icon shown beside that kind's switch.
+2. **Given** a notification of a kind, **When** the user compares its icon with Settings, **Then** it shows the same glyph as the icon beside that kind's switch.
 3. **Given** a notification of each kind, **When** the user reads it, **Then** its title says the kind in words — for example "<session> needs permission", "<session> stopped with an error", "<session> finished a long task", "<session> finished its turn" — so the kind is clear where an icon is not shown.
 4. **Given** an operating system whose notification facility does not show an icon supplied by the application, **When** a notification appears, **Then** it still appears, and its title alone tells the kind.
 5. **Given** the light and the dark theme of the desktop, **When** a notification of each kind appears, **Then** its icon is recognisable in both.
@@ -108,6 +109,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **Turn duration exactly at the threshold**: counts as a long task.
 - **A turn whose start the application did not see** (the application or the session service started while the session was already working, or the connection was lost before the turn began and was restored after it ended): the turn duration is measured from the earliest moment the application knew the session was working; a turn whose start is unknown is **Turn finished** unless the known part already reaches the threshold.
 - **A session that ends while waiting for a permission**: if the ending is an error, it is **Session error**; otherwise nothing.
+- **A permission refused, and the turn ends there**: the session was already awaiting input since it asked, so the end of the turn is no new change: no notification and no new unread mark (039 FR-003).
 - **An error ending after an earlier error ending was notified**: a session that is restarted and ends with an error again raises a new **Session error** notification; repeated crashes the session service handles by restarting the session raise nothing until it gives up, which raises one.
 - **A session the user stops or closes**: not an error; no notification.
 - **AI CLIs that cannot report a stop in the middle of a turn**: a session whose AI CLI does not report permission requests never raises **Needs permission**; its turns are still classified by their duration.
@@ -115,7 +117,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **Unread is unchanged**: every change to awaiting input while not in view still makes the session unread, whatever its kind and whatever the switches say (039 FR-016, FR-017). A **Session error** ending does not make a session unread (039 Edge Cases, "Session ended or crashed").
 - **Many sessions at once** (Principle II): events of different kinds in different sessions at the same moment each produce their own notification, of their own kind, with their own icon; none is lost or attributed to another session.
 - **Several windows**: one event raises one notification (039 FR-006a), of the same kind whichever window shows it.
-- **Reconnection**: a session found awaiting input after a reconnection is treated as a change at the moment of reconnection (039 FR-006); its kind is decided from what the application knows of the turn, and is **Turn finished** when the application cannot tell.
+- **Reconnection**: a session found awaiting input after a reconnection is treated as a change at the moment of reconnection (039 FR-006); its kind is the one the session service decided when the session changed, and is **Turn finished** when the application cannot tell. An event the session service counted before it was itself restarted is not notified afterwards, whatever its kind (039 H3: activity does not survive a restart of the session service).
 - **Clicking a notification**: does what 039 FR-011 to FR-015a say, for every kind. Clicking a **Session error** notification shows the ended session as the sidebar shows any ended session.
 - **Settings file unreadable**: the application runs on default settings, so the three default kinds are on and **Turn finished** is off.
 - **Operating system refuses notifications**: as 039 FR-010, for every kind.
@@ -131,7 +133,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - **FR-001**: The application MUST assign every change of a session into awaiting input, and every error ending, exactly one notification kind, whether or not that kind is on: **Needs permission**, **Long task finished**, **Turn finished** or **Session error**, as defined under Terms.
 - **FR-002**: A change to awaiting input in the middle of a turn — the session stopped to ask for a permission or an answer — MUST be **Needs permission**. A change to awaiting input because the session finished its turn MUST be **Long task finished** when the turn duration is at least the long-task threshold, and **Turn finished** otherwise.
 - **FR-003**: The turn duration MUST include time the session spent waiting for a permission or an answer during the turn, and MUST be measured from the start of the turn as the application observed it (Edge Cases, "A turn whose start the application did not see").
-- **FR-004**: A session that ends because of an error — its AI CLI reported an error and stopped, its process exited abnormally, or the session service gave up restarting it — MUST be **Session error**. A session that ends because the user closed or stopped it, or whose AI CLI exited normally, MUST raise no notification.
+- **FR-004**: A session that ends because of an error — its AI CLI reported an error and stopped, or its process exited abnormally and the session service did not bring it back (it gave up restarting it, or could not restart it) — MUST be **Session error**. An abnormal exit followed by a successful restart MUST raise no notification. A session that ends because the user closed or stopped it, or whose AI CLI exited normally, MUST raise no notification.
 
 **When to notify**
 
@@ -153,9 +155,9 @@ A developer glances at a notification in the corner of the screen. Without readi
 
 **Icons**
 
-- **FR-015**: Each notification kind MUST have its own kind icon, distinct from the other three in shape, not by colour alone. The same icon MUST be shown beside the kind's switch in Settings and in the kind's desktop notifications.
+- **FR-015**: Each notification kind MUST have its own kind icon, distinct from the other three in shape, not by colour alone. The same glyph MUST be shown beside the kind's switch in Settings and in the kind's desktop notifications (in a notification it may sit on a coloured tile, FR-017).
 - **FR-016**: The application MUST supply the kind icon to the operating system's notification facility on every system where that facility shows an icon supplied by the application. Where it does not, the notification MUST still be shown, and the title (FR-008) carries the kind.
-- **FR-017**: The four kind icons MUST stay distinct from one another when drawn in a single colour at 16 by 16 pixels, MUST be supplied to the notification facility in a form with a contrast ratio of at least 3:1 against both a white and a black background, and MUST show in Settings, in the application's light and dark theme, with a contrast ratio of at least 3:1 against their background.
+- **FR-017**: The four kind icons MUST stay distinct from one another when drawn in a single colour at 16 by 16 pixels, MUST be supplied to the notification facility in a form with a contrast ratio of at least 3:1 against both a white and a black background, and MUST show beside an enabled switch in Settings, in the application's light and dark theme, with a contrast ratio of at least 3:1 against their background (beside a disabled switch they take the disabled colour, as its label does).
 
 **Unchanged behaviour, components, documentation**
 
@@ -188,7 +190,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 
 ## Out of Scope
 
-- Changing what makes a session unread or what clears it, or limiting unread marks to the enabled kinds.
+- Changing what makes a session unread or what clears it (FR-024 aside), or limiting unread marks to the enabled kinds.
 - Notifications for sessions that end without an error, sessions whose activity is unknown, or sessions that work for a long time without finishing.
 - Switches per AI CLI, per project or per session.
 - Sound per kind, a taskbar or dock badge, a tray icon.
@@ -201,6 +203,7 @@ A developer glances at a notification in the corner of the screen. Without readi
 - "Waiting for input or permission" in the issue is the session stopping in the middle of a turn for the user (**Needs permission**). A session at an idle prompt after its turn has finished has already been classified by that turn; idle reminders raise nothing (039 FR-003).
 - "Every session state change" in the issue is 039's notification at the end of every turn. Short turn ends are what bury the important notifications, so **Turn finished** is off by default; users who want 039's behaviour back turn it on.
 - "Errored" means an error ending as defined under **Session error**. Closing or stopping a session yourself is not an error.
+- AI CLIs differ in whether they report an error before stopping: today only GitHub Copilot does (`session.error`). For the others, an error is seen only as an abnormal exit that the session service cannot recover from. This is accepted, not worked around.
 - The long-task threshold is fixed at 60 seconds, not a setting (the issue asks only for per-kind on/off): long enough that a quick exchange stays quiet, short enough that a user who switched away is told when a real task is done.
 - AI CLIs differ in what they report: a CLI that does not report a stop in the middle of a turn cannot raise **Needs permission**; its stops are classified by turn duration. This is accepted, not worked around.
 - The four kinds are fixed. Adding further kinds is a later request.

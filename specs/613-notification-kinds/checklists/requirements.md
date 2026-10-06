@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (Terms, long-task threshold: fixed or user-adjustable). Left for the clarify unit, per the autopilot spec task.
+- The `[NEEDS CLARIFICATION]` marker (long-task threshold) was resolved by clarify (fixed at 60 s, D4, provisional); a tasks-unit reviewer confirmed none remains.

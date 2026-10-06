@@ -94,7 +94,7 @@ specs/613-notification-kinds/
 ├── data-model.md        # Phase 1 entities
 ├── quickstart.md        # Phase 1 validation guide (Part A automated, Part B visual)
 ├── contracts/
-│   ├── wire.md          # protocol additions (version 30)
+│   ├── wire.md          # protocol additions (versions 30–32, one per milestone)
 │   ├── classification.md# TurnClock rules, error endings, service note/claim/notice rules
 │   └── notification.md  # text, icons, backends, Settings row
 └── tasks.md             # Phase 2 (tasks unit)
@@ -110,7 +110,7 @@ crates/micold-core/src/
 └── protocol/
     ├── messages.rs         # AttentionGranted.kind, DaemonMsg::SessionErrorNotice,
     │                       #   DaemonSettings.notification_kinds, SettingsSet.notification_kinds
-    └── version.rs          # PROTOCOL_VERSION 29 → 30
+    └── version.rs          # PROTOCOL_VERSION 29 → 30 → 31 → 32 (M1, M2, M3)
 
 crates/micold-daemon/src/
 ├── activity.rs             # ActivityEvent::Ended gains `error: bool`; copilot_event marks
