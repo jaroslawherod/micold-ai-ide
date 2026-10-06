@@ -174,10 +174,17 @@ fn deliver(
         .title(banner.title)
         .message(banner.message)
         .timeout(CLICK_WAIT);
-    if let Some(path) = image.and_then(|path| attachable_copy(&path, &std::env::temp_dir())) {
-        request = request.image_path(path);
+    let copy = image.and_then(|path| attachable_copy(&path, &std::env::temp_dir()));
+    if let Some(path) = &copy {
+        request = request.image_path(path.clone());
     }
-    mac_usernotifications::block_on(request.send()).map_err(|error| notify_error(&error))
+    mac_usernotifications::block_on(request.send()).map_err(|error| {
+        // A refused banner never takes the copy: drop it rather than leave it in the temp dir.
+        if let Some(path) = &copy {
+            let _ = std::fs::remove_file(path);
+        }
+        notify_error(&error)
+    })
 }
 
 /// The macOS notifier: the channel a click is reported on, the notifications that can still be

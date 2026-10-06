@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
 | M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | done (pushed; full gate 2 at 312578d0 green but for the 6 root-only permission tests; reviews A and B clean; visual pass §B5/B6/B8/B9 PASS) |
-| M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | #618 | implemented (T046–T052 ticked); gate and reviews A/B next |
+| M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | #618 | implemented (T046–T052 ticked); reviews A (2 rounds) and B clean, visual pass recorded; full gate blocked on disk space |
 
 M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
 
@@ -64,6 +64,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M3 B (conformance, sonnet, fix diff) | 2 | 2fb93c3c00eead68f9d66492ed7be7962b6bad79:8872c8f330605106182f3c19dbb6f744987183a6 (fix diff from 1101f063:1102688f) | CLEAN (3 MINOR: §B8 crops predate the disabled-checked fix; ledger gate result; Verify not run by reviewer — gate 2 ran it) |
 | M4 A (code-review high, claude -p) | 1 | 91e5bd7cfaa7f8100f9a4993640b60a0c5b3719a:2cb52cc722e2ccc8c7a103bd044f58379dacece6 | CHANGES: F1 MAJOR (macOS UNNotificationAttachment moves the attached file, so the run's shared icon is gone after the first banner) fixed: per-banner copy in temp dir (`attachable_copy`) + 2 tests; F2 MINOR (`png` swallowed encode errors) fixed: returns io::Result; F3 MINOR (premultiply round trip) fixed: shared `draw`; F4 MINOR (render per Linux notification) not fixed |
 | M4 B (conformance, sonnet, claude -p) | 1 | 91e5bd7cfaa7f8100f9a4993640b60a0c5b3719a:2cb52cc722e2ccc8c7a103bd044f58379dacece6 | CLEAN (F1 MINOR distinctness mask span: kept, see Decisions; F2 MINOR guide block detached the bullet list: moved; F3 MINOR = A F2, fixed). Reviewer could not run Verify (sandbox) |
+| M4 A (code-review high, sonnet, claude -p) | 2 | 442821189a78a1aa4e2a8974cc00c28da1ac68b8:3725f4361ffb1102e600cb62ac4592f4b2d70cca | CLEAN (F1 MINOR: a refused macOS banner left its per-banner copy in the temp dir; fixed: removed on send error) |
 
 ## CI fixes
 
@@ -91,14 +92,16 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-- **Done**: M4 T046–T052 implemented and ticked (2cb52cc7); review A round 1 fixes (macOS per-banner copy, `png` Result, shared `draw`) and review B MINOR (guide block moved) in the next commit; Linux tests green before the fixes (30 desktop_notify bin, 11 notification_icon); mac/win clippy --all-targets clean before the fixes.
-- **Incident**: the first full gate ran with the disk full; `scripts/tests/autopilot.test.sh` then ran its git fixtures in this worktree: it checked out local `main`, committed `e1fd3291 ledger` onto local `main` (was 98f41a61 = origin/main at creation), wrote junk files, and tried (failed) pushes to origin. Restored by `git stash push -u` (stash@{0}, junk only) and checking the branch out again; local `main` still points at e1fd3291 (moving it back was refused by the permission classifier) — the orchestrator/user should `git branch -f main 98f41a61` and drop stash@{0}. Disk: stale test binaries pruned (~5 GB free).
-- **Next**: (1) run the test suites at the fixes: `cargo test -p micold-client --test notification_icon --bin micold-ai-ide desktop_notify`, and `cargo clippy -p micold-client --all-targets --target aarch64-apple-darwin -- -D warnings` (+ `x86_64-pc-windows-msvc`, target installed) for the macOS change; (2) review A round 2 (sonnet) on the fix diff from 91e5bd7c:2cb52cc7; (3) full gate (CARGO_INCREMENTAL=0; check `df -h /` first: >10 GB free, or prune `target-shared/debug/deps` — never let scripts/tests run on a full disk); (4) visual pass: §B2–B4/B7 need a notification server and live AI sessions this container lacks — at most look at the four rendered icons on white and black; (5) push, write $SCRATCHPAD/pr-613-body-M4.md, return `PR: #618`.
+- **Done**: M4 T046–T052 (2cb52cc7) and review A round 1 fixes (3725f436). At the fixes: `notification_icon` 11/11, `desktop_notify` 30/30, clippy `--all-targets -D warnings` clean for aarch64-apple-darwin and x86_64-pc-windows-msvc. Review A round 2 CLEAN; its MINOR (a refused macOS banner left its per-banner copy in the temp dir) fixed: the copy is removed on a send error (mac clippy clean after). Review B round 1 CLEAN (no re-run: no B BLOCKER/MAJOR). Visual pass: icon sheet PASS, §B2–B4/B7 NOT RUN (visual-pass.md, M4).
+- **Blocked**: full gate not run. Disk has 4.4 GB free; the brief asked for ~20 GB first. All of `target-shared/debug/deps` is current (no stale test binary duplicates: 432 test executables, 19 GB, one per test). Deleting them was refused by the permission classifier (shared build dir sweep), so freeing space needs the user.
+- **Next**: (1) user frees disk (e.g. `mise run sweep`, or deletes `target-shared/debug/deps` test executables) to ≥20 GB; (2) confirm branch claude/project-thread-8kdqkn, clean tree, `mktemp -d` works; full gate with CARGO_INCREMENTAL=0 (6 root-only permission tests expected red); afterwards confirm branch and HEAD unchanged; (3) push, write $SCRATCHPAD/pr-613-body-M4.md, return `PR: #618`.
+- **Local main / stash@{0}**: from the earlier incident, left for the user (`git branch -f main 98f41a61`, drop stash@{0}).
 
 ## Open escalation
 
-None.
+- Category 4 (missing access): the full gate needs ~20 GB free disk; 4.4 GB free and freeing `target-shared/debug/deps` was refused by the permission classifier. User to free disk, then a fresh unit continues from Handover.
 
 ## Follow-ups not done
 
 - M1 review A F1: Claude Code turn that, after a granted permission, ends with PostToolUse then Stop (no further PreToolUse) stays `AwaitingInput` from the Notification, so its end is no attention event (010 FSM; pre-dates 613). Candidate: PostToolUse after AwaitingInput → Working.
+- `scripts/tests/autopilot.test.sh` on a full disk (mktemp fails) falls back to running its git fixtures in the real repo (checked out and committed onto local `main` during the M4 gate). The script should abort when `mktemp -d` fails. Not this milestone's to fix.

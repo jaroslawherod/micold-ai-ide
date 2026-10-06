@@ -14,3 +14,13 @@ the daemon tests.
 | §B9 threshold refusal | PASS | visual-pass/b9-refused.png | 5 + Save: refused, "Enter a threshold between 10 and 3600 seconds.", field marked, form stays open; master off greys the field keeping 20 (b5-master-off.png); 20 persists across restart |
 
 No glyph/label collision or clipping seen at 3× in the kind rows.
+
+## M4 — kind icons in desktop notifications
+
+2026-10-06, in-session. The four 256 px icon files `write_files` produces, composited on white and
+on black (visual-pass/m4-kind-icons.png).
+
+| Item | Verdict | Evidence | Note |
+|---|---|---|---|
+| Icon files, look | PASS | visual-pass/m4-kind-icons.png | Long task finished (green, task_alt), Needs permission (amber, hand), Session error (red, error), Turn finished (blue, chat bubble): white glyph centred on a rounded tile, distinct shapes, tile edge reads on white and on black |
+| §B2–B4, §B7 banners show the kind's icon | NOT RUN | — | Need a notification server (Linux), a macOS/Windows desktop and live AI sessions; this container has none. Covered by the desktop_notify tests (image-data hint, PNG path) |
