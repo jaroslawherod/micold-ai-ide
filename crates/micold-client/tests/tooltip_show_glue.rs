@@ -211,7 +211,10 @@ fn movement_during_the_wait_does_not_restart_it() {
     assert!(!tip.is_open(), "precondition: still waiting");
     tip.frame(start + D, tip.over(170.0));
 
-    assert!(tip.is_open(), "{D:?} after entering, however the pointer moved");
+    assert!(
+        tip.is_open(),
+        "{D:?} after entering, however the pointer moved"
+    );
 }
 
 /// US2.3, FR-004: no delay opens at once.
@@ -249,10 +252,7 @@ fn a_delayed_follow_panel_never_covers_the_pointer_at_a_window_edge() {
         Point::new(0.0, 0.0),
         Point::new(WINDOW.width - TRIGGER.width, 0.0),
         Point::new(0.0, WINDOW.height - TRIGGER.height),
-        Point::new(
-            WINDOW.width - TRIGGER.width,
-            WINDOW.height - TRIGGER.height,
-        ),
+        Point::new(WINDOW.width - TRIGGER.width, WINDOW.height - TRIGGER.height),
     ];
     for corner in corners {
         for (dx, dy) in [(2.0, 2.0), (TRIGGER.width - 2.0, TRIGGER.height - 2.0)] {
@@ -283,7 +283,11 @@ fn a_subject_change_during_the_delay_restarts_it() {
     tip.rebuild(delayed_tooltip(D, false, Some(2)));
     tip.frame(start + D / 2, cursor);
     tip.frame(start + D, cursor);
-    assert!(!tip.is_open(), "the new subject's wait began at {:?}", D / 2);
+    assert!(
+        !tip.is_open(),
+        "the new subject's wait began at {:?}",
+        D / 2
+    );
 
     tip.frame(start + D / 2 + D, cursor);
     assert!(tip.is_open());
