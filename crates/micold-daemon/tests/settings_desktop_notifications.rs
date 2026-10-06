@@ -94,7 +94,7 @@ impl Service {
             .save(&workspace)
             .expect("the catalog saves");
 
-        let state = Arc::new(DaemonState::new(catalog_on(store.path())));
+        let state = Arc::new(state_on(store.path()));
         let live = sessions
             .iter()
             .map(|(id, _cli)| state.register_session(idle_process(*id)))
@@ -143,7 +143,7 @@ impl Service {
 
     /// A service started on the same store directory.
     fn restarted(&self) -> Arc<DaemonState> {
-        Arc::new(DaemonState::new(catalog_on(self.store.path())))
+        Arc::new(state_on(self.store.path()))
     }
 
     /// What the settings file holds now.
@@ -156,6 +156,15 @@ impl Service {
 }
 
 /// The catalog the service loads from `store`: what a start of the service on that directory reads.
+
+/// A service on `store` where every finished turn is a long task (feature 613): these tests are
+/// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
+/// **Turn finished** is off by default.
+fn state_on(store: &Path) -> DaemonState {
+    let state = DaemonState::new(catalog_on(store));
+    state.set_long_task_threshold(std::time::Duration::ZERO);
+    state
+}
 fn catalog_on(store: &Path) -> Catalog {
     Catalog::load(
         Box::new(JsonFileStore::at(store.join("projects.json"))),
@@ -313,7 +322,7 @@ async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<(Sessi
         .await
         .iter()
         .filter_map(|msg| match msg {
-            DaemonMsg::AttentionGranted { session, seq } => Some((*session, *seq)),
+            DaemonMsg::AttentionGranted { session, seq, .. } => Some((*session, *seq)),
             _ => None,
         })
         .collect()

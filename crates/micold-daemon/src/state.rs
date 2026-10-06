@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use micold_core::attention::{NotificationKind, TurnClock, LONG_TASK_THRESHOLD};
 use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
@@ -35,7 +36,7 @@ use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::activity::{Activity, ActivityEvent, HookKind};
+use crate::activity::{turn_change, Activity, ActivityEvent, HookKind};
 use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
@@ -233,6 +234,10 @@ struct Inner {
     /// An attention event was counted in memory and is not written yet (feature 039, FR-008a);
     /// [`DaemonState::persist_attention`] writes it off the async runtime.
     attention_unsaved: bool,
+    /// The turn duration from which a finished turn is **Long task finished** (feature 613, C2).
+    /// [`LONG_TASK_THRESHOLD`] outside tests; [`DaemonState::set_long_task_threshold`] is the test
+    /// seam.
+    long_task_threshold: std::time::Duration,
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -279,6 +284,9 @@ struct LiveSession {
     /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
     /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
     activity: Activity,
+    /// The turn clock that tells a finished turn's kind (feature 613, C1). Created `NotInTurn`
+    /// with the live entry and dropped with it; not persisted.
+    turn: TurnClock,
     /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
     /// the CLI's own startup title excluded), used to project a live session title and to
     /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
@@ -531,6 +539,7 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
+                long_task_threshold: LONG_TASK_THRESHOLD,
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -611,6 +620,12 @@ impl DaemonState {
             .first_prompt_bound
             .lock()
             .expect("first-prompt bound poisoned") = bound;
+    }
+
+    /// Set the turn duration from which a finished turn is **Long task finished**, so a test need
+    /// not wait a minute for a long turn (feature 613, C2). Nothing else calls it.
+    pub fn set_long_task_threshold(&self, threshold: std::time::Duration) {
+        self.lock().long_task_threshold = threshold;
     }
 
     /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
@@ -1232,19 +1247,23 @@ impl DaemonState {
 
     /// Answer window `id`'s claim of attention event `seq` of `session` (feature 039, W1.4): send
     /// it `AttentionGranted` when no window has claimed that event before, and nothing otherwise.
-    /// An unknown session, or a sequence the session has not reached, is not answered. Nor is any
-    /// claim while the **Desktop notifications** setting is off (W4.2, FR-027).
+    /// An unknown session, or a sequence the session has not reached, is not answered. Nor is a
+    /// claim whose event's kind does not notify now: the **Desktop notifications** setting or the
+    /// kind's own switch is off (W4.2, FR-027; feature 613, C11). The grant names the kind.
     pub fn claim_attention(&self, id: ClientId, session: SessionId, seq: u64) {
         let granted = {
             let mut inner = self.lock();
+            let inner = &mut *inner;
             let Some(current) = inner.catalog.attention_seq(session) else {
                 return;
             };
-            let enabled = inner.catalog.desktop_notifications();
-            inner.views.grant(session, seq, current, enabled)
+            let catalog = &inner.catalog;
+            inner
+                .views
+                .grant(session, seq, current, |kind| catalog.notify(kind))
         };
-        if granted {
-            self.send(id, DaemonMsg::AttentionGranted { session, seq });
+        if let Some(kind) = granted {
+            self.send(id, DaemonMsg::AttentionGranted { session, seq, kind });
         }
     }
 
@@ -1541,7 +1560,10 @@ impl DaemonState {
                 // Done before the write, which sets the switch in memory even when it fails. An
                 // event made while the switch was on and not claimed yet is used up with the rest.
                 for (session, seq) in inner.catalog.attention_seqs() {
-                    inner.views.note_event(session, seq, false);
+                    // Recorded as granted, so the kind is not consulted.
+                    inner
+                        .views
+                        .note_event(session, seq, NotificationKind::TurnFinished, false);
                 }
             }
             inner.catalog.set_desktop_notifications(on)?;
@@ -2979,6 +3001,7 @@ impl DaemonState {
                 attached: SessionProcess::Primary,
                 input: InputReceiver::new(),
                 activity: Activity::new(),
+                turn: TurnClock::default(),
                 last_title: None,
                 name_stale: true,
                 event_log: None,
@@ -3317,9 +3340,16 @@ impl DaemonState {
         };
         let first_turn_evidence = matches!(event, ActivityEvent::Hook(HookKind::UserPromptSubmit));
         let before = live.activity.signal().clone();
+        let event_for_turn = event.clone();
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
         live.name_stale |= changed || first_turn_evidence;
+        // The turn clock sees every event, before the attention event is decided (feature 613,
+        // C2); its kind is used only if the session began waiting just now.
+        let kind = turn_change(&event_for_turn, changed).and_then(|change| {
+            live.turn
+                .change(change, micold_core::clock::now(), inner.long_task_threshold)
+        });
         // An attention event (feature 039, FR-001, FR-004): the session came to await input from
         // another signal while no window had it in view. Counted here, by the service, so it is
         // counted with no window open as well (FR-008).
@@ -3330,12 +3360,14 @@ impl DaemonState {
             && inner.catalog.mark_attention(session)
         {
             inner.attention_unsaved = true;
-            // While desktop notifications are off the event is used up here, so that no window
-            // is granted it after they are turned on (W4.2, FR-027). `unread` was set above
-            // either way (FR-017).
+            // While the event's kind does not notify the event is used up here, so that no
+            // window is granted it after it is turned on (W4.2, FR-027; feature 613, C10).
+            // `unread` was set above either way (FR-017, FR-018). Every path into awaiting input
+            // returns a kind; should one not, the event is `TurnFinished` (C3).
             if let Some(seq) = inner.catalog.attention_seq(session) {
-                let enabled = inner.catalog.desktop_notifications();
-                inner.views.note_event(session, seq, enabled);
+                let kind = kind.unwrap_or(NotificationKind::TurnFinished);
+                let notify = inner.catalog.notify(kind);
+                inner.views.note_event(session, seq, kind, notify);
             }
         }
         changed
@@ -4032,6 +4064,7 @@ impl DaemonState {
                         attached: key,
                         input: InputReceiver::new(),
                         activity: Activity::new(),
+                        turn: TurnClock::default(),
                         last_title: None,
                         // A shell-only session has no conversation to name.
                         name_stale: false,

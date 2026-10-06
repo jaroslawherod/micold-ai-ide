@@ -32,7 +32,7 @@
 //! process last saw of each session, kept across connections; and `failure_logged`, whether a
 //! failure to show has been logged in this run (FR-010).
 
-use micold_core::attention::{AttentionTracker, Phase, Reveal, ViewFacts};
+use micold_core::attention::{AttentionTracker, NotificationKind, Phase, Reveal, ViewFacts};
 use micold_core::protocol::messages::{ClientMsg, SessionSummary, WindowView};
 use micold_core::session::{Session, SessionId};
 use std::path::{Path, PathBuf};
@@ -53,7 +53,9 @@ pub struct State {
 /// One desktop notification, as the backend is asked to show it (contract, "The seam").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopNotification {
-    /// `<session label> is waiting for input`.
+    /// What happened to the session (feature 613): it names the title, and the backend's icon.
+    pub kind: NotificationKind,
+    /// `<session label> <what happened>`, by kind (feature 613, contract T1).
     pub title: String,
     /// `<project> — <worktree>`.
     pub body: String,

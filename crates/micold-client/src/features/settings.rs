@@ -483,6 +483,8 @@ impl ValidSettings {
             issue_label_types: self.issue_label_types,
             // Not in the form yet (feature 040, M4): the save keeps the stored value.
             pr_status_enabled: false,
+            // Not in the form yet (feature 613, M3): the save keeps the stored value.
+            notification_kinds: Default::default(),
         }
     }
 }

@@ -89,7 +89,7 @@ impl Service {
             .save(&workspace)
             .expect("the catalog saves");
 
-        let state = Arc::new(DaemonState::new(catalog_on(store.path())));
+        let state = Arc::new(state_on(store.path()));
         let live = sessions
             .iter()
             .map(|id| state.register_session(idle_process(*id)))
@@ -146,11 +146,20 @@ impl Service {
         // The supervisor tick's write: unread state changes under the state lock, the write is off
         // it.
         self.state.persist_attention();
-        DaemonState::new(catalog_on(self.store.path()))
+        state_on(self.store.path())
     }
 }
 
 /// The catalog the service loads from `store`: what a start of the service on that directory reads.
+
+/// A service on `store` where every finished turn is a long task (feature 613): these tests are
+/// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
+/// **Turn finished** is off by default.
+fn state_on(store: &Path) -> DaemonState {
+    let state = DaemonState::new(catalog_on(store));
+    state.set_long_task_threshold(std::time::Duration::ZERO);
+    state
+}
 fn catalog_on(store: &Path) -> Catalog {
     Catalog::load(
         Box::new(JsonFileStore::at(store.join("projects.json"))),
@@ -528,7 +537,7 @@ async fn a_read_is_written_by_persist_attention() {
     service.state.persist_attention();
     assert!(
         summary(
-            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            &state_on(service.store.path()).catalog_snapshot(),
             a
         )
         .unread,
@@ -542,7 +551,7 @@ async fn a_read_is_written_by_persist_attention() {
 
     assert!(
         !summary(
-            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            &state_on(service.store.path()).catalog_snapshot(),
             a
         )
         .unread,
@@ -567,7 +576,7 @@ async fn stopping_the_service_writes_an_unsaved_event_and_a_read() {
 
     micold_daemon::server::unwind(&service.state, micold_daemon::idle::StopReason::Requested).await;
 
-    let stored = DaemonState::new(catalog_on(service.store.path())).catalog_snapshot();
+    let stored = state_on(service.store.path()).catalog_snapshot();
     assert!(
         !summary(&stored, a).unread,
         "the read was stored by the stop"

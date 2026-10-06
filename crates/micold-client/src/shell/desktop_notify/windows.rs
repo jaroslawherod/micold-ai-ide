@@ -98,11 +98,13 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::attention::NotificationKind;
     use iced::futures::channel::mpsc;
     use tauri_winrt_notification::Error;
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
         DesktopNotification {
+            kind: NotificationKind::NeedsPermission,
             title: title.to_string(),
             body: body.to_string(),
             project: PathBuf::from("/repo"),

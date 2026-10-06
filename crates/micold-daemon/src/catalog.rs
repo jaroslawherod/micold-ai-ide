@@ -13,6 +13,7 @@
 //! External-modification detection is out of scope (spec Out of Scope).
 
 use micold_core::attach::{AttachOutcome, RefuseReason};
+use micold_core::attention::{NotificationKind, NotificationKinds};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -303,6 +304,7 @@ impl Catalog {
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
+                on_disk.notification_kinds = self.settings.notification_kinds;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -404,6 +406,17 @@ impl Catalog {
     /// already running (FR-027).
     pub fn desktop_notifications(&self) -> bool {
         self.settings.desktop_notifications
+    }
+
+    /// Which notification kinds are on (feature 613). Read live on every call (C16).
+    pub fn notification_kinds(&self) -> NotificationKinds {
+        self.settings.notification_kinds
+    }
+
+    /// Whether an event of `kind` raises a desktop notification now: the master switch and the
+    /// kind's own switch are both on (feature 613, data-model "Effective switch", C16).
+    pub fn notify(&self, kind: NotificationKind) -> bool {
+        self.settings.desktop_notifications && self.settings.notification_kinds.is_on(kind)
     }
 
     /// Turn desktop notifications on or off, persisting atomically (feature 039, FR-026).
@@ -1293,5 +1306,74 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
         SessionLifecycle::Restarting { attempts } => WireLifecycle::Restarting { attempts },
         SessionLifecycle::Failed { reason, attempts } => WireLifecycle::Failed { reason, attempts },
         SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
+    }
+}
+
+#[cfg(test)]
+mod notify_tests {
+    //! Feature 613, T002: the effective switch per kind, and the service write keeping the kinds.
+
+    use super::*;
+    use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+    use micold_core::store::JsonFileStore;
+
+    fn catalog_with(settings: Settings) -> (tempfile::TempDir, Catalog) {
+        let dir = tempfile::tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        JsonFileSettingsStore::at(settings_path.clone())
+            .save(&settings)
+            .unwrap();
+        let catalog = Catalog::load(
+            Box::new(JsonFileStore::at(dir.path().join("catalog.json"))),
+            Box::new(JsonFileSettingsStore::at(settings_path)),
+        );
+        (dir, catalog)
+    }
+
+    /// Data-model "Effective switch": off for every kind while the master switch is off.
+    #[test]
+    fn notify_is_off_for_every_kind_while_the_master_switch_is_off() {
+        let (_dir, catalog) = catalog_with(Settings {
+            desktop_notifications: false,
+            ..Settings::default()
+        });
+        for kind in NotificationKind::ALL {
+            assert!(!catalog.notify(kind), "{kind:?}");
+        }
+    }
+
+    /// Data-model "Effective switch": with the master switch on, each kind follows its own switch.
+    #[test]
+    fn notify_follows_each_kind_while_the_master_switch_is_on() {
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::NeedsPermission, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        let (_dir, catalog) = catalog_with(Settings {
+            desktop_notifications: true,
+            notification_kinds: kinds,
+            ..Settings::default()
+        });
+        assert_eq!(catalog.notification_kinds(), kinds);
+        for kind in NotificationKind::ALL {
+            assert_eq!(catalog.notify(kind), kinds.is_on(kind), "{kind:?}");
+        }
+    }
+
+    /// The service's own settings write carries the kinds into the file it writes.
+    #[test]
+    fn the_service_write_keeps_the_notification_kinds() {
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::SessionError, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        let (dir, mut catalog) = catalog_with(Settings {
+            notification_kinds: kinds,
+            ..Settings::default()
+        });
+        catalog.set_desktop_notifications(false).unwrap();
+        let on_disk = JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .load()
+            .settings;
+        assert!(!on_disk.desktop_notifications);
+        assert_eq!(on_disk.notification_kinds, kinds);
     }
 }

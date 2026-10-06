@@ -217,10 +217,12 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::attention::NotificationKind;
     use mac_usernotifications::{CloseReason, Error};
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
         DesktopNotification {
+            kind: NotificationKind::NeedsPermission,
             title: title.to_string(),
             body: body.to_string(),
             project: PathBuf::from("/repo"),

@@ -267,6 +267,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         cross_session_access: app.core.session.cross_session_access,
         issue_label_types: stored.issue_label_types,
         pr_status_enabled: stored.pr_status_enabled,
+        notification_kinds: stored.notification_kinds,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -396,11 +397,13 @@ pub(crate) fn save_and_prepare_check(
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
         // through the `notify_error` below, which is T160.
         let write = store.update_reporting(&mut |stored| {
-            // The form does not hold the pull request switch yet (feature 040, M4), so the
-            // document keeps the value it has.
+            // The form does not hold the pull request switch (feature 040, M4) or the
+            // notification kinds (feature 613, M3) yet, so the document keeps the values it has.
             let pr_status_enabled = stored.pr_status_enabled;
+            let notification_kinds = stored.notification_kinds;
             *stored = settings.clone();
             stored.pr_status_enabled = pr_status_enabled;
+            stored.notification_kinds = notification_kinds;
         });
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
@@ -877,6 +880,11 @@ mod tests {
                 type_: micold_core::naming::ConventionalType::Perf,
             }],
             pr_status_enabled: true,
+            notification_kinds: micold_core::attention::NotificationKinds {
+                needs_permission: false,
+                turn_finished: true,
+                ..Default::default()
+            },
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

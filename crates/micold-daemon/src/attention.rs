@@ -78,6 +78,7 @@ impl Views {
     /// its id is not used again (C12).
     pub fn forget_session(&mut self, session: SessionId) {
         self.granted.remove(&session);
+        self.pending.remove(&session);
     }
 
     /// Whether any connection reports `session` in view.
@@ -88,6 +89,10 @@ impl Views {
     }
 
     /// The kind granted to the claim of `seq` for `session` (W1.4, FR-006a, C11).
+    ///
+    /// `Some(kind)` only for the first claim of a sequence that is not above `current_seq`, was
+    /// noted with a pending kind, and whose kind `notify` says notifies now. A refused claim
+    /// records nothing; a granted one drops the session's pending kinds at or below `seq` (C12).
     pub fn grant(
         &mut self,
         session: SessionId,
@@ -95,14 +100,46 @@ impl Views {
         current_seq: u64,
         notify: impl Fn(NotificationKind) -> bool,
     ) -> Option<NotificationKind> {
-        let _ = (session, seq, current_seq, &notify);
-        todo!()
+        if seq > current_seq || self.granted.get(&session).is_some_and(|g| seq <= *g) {
+            return None;
+        }
+        let kind = self
+            .pending
+            .get(&session)?
+            .iter()
+            .find(|(noted, _)| *noted == seq)
+            .map(|(_, kind)| *kind)?;
+        if !notify(kind) {
+            return None;
+        }
+        self.record_granted(session, seq);
+        Some(kind)
     }
 
-    /// Note attention event `seq` of `session`, of `kind` (C10).
+    /// Note attention event `seq` of `session`, of `kind` (C10): kept pending for a claim while
+    /// `notify` is true, else recorded as granted so no later claim of it wins.
     pub fn note_event(&mut self, session: SessionId, seq: u64, kind: NotificationKind, notify: bool) {
-        let _ = (session, seq, kind, notify);
-        todo!()
+        if self.granted.get(&session).is_some_and(|g| seq <= *g) {
+            return;
+        }
+        if notify {
+            self.pending.entry(session).or_default().push((seq, kind));
+        } else {
+            self.record_granted(session, seq);
+        }
+    }
+
+    /// Raise the session's granted sequence to `seq` and drop its pending kinds at or below it.
+    fn record_granted(&mut self, session: SessionId, seq: u64) {
+        let granted = self.granted.entry(session).or_insert(0);
+        *granted = (*granted).max(seq);
+        let granted = *granted;
+        if let Some(pending) = self.pending.get_mut(&session) {
+            pending.retain(|(noted, _)| *noted > granted);
+            if pending.is_empty() {
+                self.pending.remove(&session);
+            }
+        }
     }
 }
 

@@ -699,8 +699,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Feature 039 (contract N1): this window's claim was the one granted, so it raises the
         // notification. Showing it waits on the system, so it leaves the update thread; the
         // result comes back as `ConnectionMsg::AttentionShown`.
-        DaemonMsg::AttentionGranted { session, .. } => {
-            if let Some(notification) = app.core.attention_notification(session) {
+        DaemonMsg::AttentionGranted { session, kind, .. } => {
+            if let Some(notification) = app.core.attention_notification(session, kind) {
                 follow_up = show_attention_notification(app, notification);
             }
         }

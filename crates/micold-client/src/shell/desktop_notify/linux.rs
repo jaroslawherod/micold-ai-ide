@@ -387,9 +387,11 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::attention::NotificationKind;
 
     fn notification() -> DesktopNotification {
         DesktopNotification {
+            kind: NotificationKind::NeedsPermission,
             title: "Fix the parser is waiting for input".to_string(),
             body: "repo \u{2014} Parser work".to_string(),
             project: PathBuf::from("/repo"),
@@ -691,6 +693,7 @@ mod tests {
         // Review A F2 (FR-004): the body is markup on a server with `body-markup`; the summary
         // is plain text by the specification.
         let request = notify_request(&DesktopNotification {
+            kind: NotificationKind::NeedsPermission,
             title: "R&D <x> is waiting for input".to_string(),
             body: "R&D \u{2014} <x>".to_string(),
             project: PathBuf::from("/repo"),

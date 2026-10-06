@@ -57,32 +57,27 @@ M1 (16 story tasks) and M3 (14) exceed ~10 tasks: kept whole. M1's TurnClock, Vi
 
 ## Handover
 
-M1 unit 1 handed over at 150k context (commit "feat(613): M1 core kinds, turn clock, grant kind (WIP)").
+M1 unit 2 handed over at 150k context (commit "feat(613): M1 daemon and client kinds (WIP)").
 
-- **Done, micold-core green** (`cargo test -p micold-core --all-targets`: 1441 passed, 1 failed =
-  `settings_refuses_save_over_failed_read`, root-only, fails on the unchanged tree too): T001, T003,
-  T005, T006, T007, T012, T014 ticked. `NotificationKind`, `NotificationKinds`,
-  `LONG_TASK_THRESHOLD`, `TurnChange`, `TurnClock::change(change, now, threshold)` (threshold is an
-  argument, ready for D4=B), `notification_text(kind, …)`, `Settings::notification_kinds` (both
-  forms + conversions), `AttentionGranted.kind`, `PROTOCOL_VERSION` 30. Cycle evidence:
-  `tdd/cycle-log.md` cycles 1–3 (no `tdd/test-list.md`: driven from tasks.md order, noted there).
-- **The workspace does not build yet**: daemon `state.rs` (grant/AttentionGranted) and client
-  `app.rs:471` (`notification_text` without kind) are the callers left for T013/T018/T019.
-- **In progress, T009/T017**: `crates/micold-daemon/src/attention.rs` has the new `Views` tests
-  (U54–U68 rewritten to note a kind before a claim, plus C10–C12 and Principle II tests) and
-  `todo!()` stubs for `grant(session, seq, current, notify: impl Fn(kind)->bool) -> Option<kind>`
-  and `note_event(session, seq, kind, notify)`; field `pending` added. Red not yet run (daemon does
-  not compile until state.rs is updated). Implement: note_event → notify ? push pending : granted =
-  max(seq) and prune pending ≤ granted; grant → None if seq > current or ≤ granted, or no pending
-  kind for seq, or !notify(k) (record nothing); else granted = seq, prune ≤ seq, Some(k);
-  forget_session also clears pending.
-- **Next**: T002/T004 catalog part (`persist_service_settings` carries `notification_kinds`;
-  `notification_kinds()`, `notify(kind)`; tests: load a Catalog from a temp settings file —
-  `JsonFileStore::at`, `JsonFileSettingsStore::at`), T008/T015 (hooks.rs: SubagentStop → Ignored,
-  drop `HooksMap.subagent_stop`; update `classifies_hook_event_names` and `settings_json` tests;
-  010 contracts/hooks.md), T008/T016 (`turn_change` in activity.rs), T010/T018 (state.rs),
-  T011/T019 (client), T020 (guide). Then T013 can be ticked. Then verify.md (gate, review A/B).
-- Open findings: none. PR: #618 (draft, open). D4 updated to B (user).
+- **Done since unit 1** (ticked): T002/T004 (catalog `notification_kinds()`, `notify(kind)`,
+  `persist_service_settings` carries kinds; `catalog.rs` `notify_tests`), T008/T015 (SubagentStop
+  ignored + unregistered; 010 contracts/hooks.md updated), T008/T016 (`turn_change`), T009/T017
+  (`Views::grant/note_event`, pending pruning), T011/T013/T019 (client kind, title by kind; client
+  save keeps stored `notification_kinds` like `pr_status_enabled`). T018 code done in state.rs
+  (threshold lives in `Inner.long_task_threshold`, setter `set_long_task_threshold`).
+- **Green**: workspace builds all targets, no warnings; daemon lib attention/activity/hooks/catalog
+  47 ok; client attention_notify 14 ok; client bin desktop_notify/persist ok. The 039 harnesses
+  (`attention_claims`, `settings_desktop_notifications`, `unread_state`) use `state_on()` =
+  threshold ZERO so every finished turn is a long task.
+- **Not yet re-run**: `attention_claims.rs` after fixing its two failures (supervision test now
+  expects refusal per C12; SC-001 test claims after each turn as a window does — it uses an async
+  closure, may need reworking to compile). Then run `--test settings_desktop_notifications
+  --test unread_state --test hooks_receiver --test attention_events` (cargo stopped before them).
+- **Next**: re-run those; T010 copilot/pi long-turn tests (`copilot_activity.rs`, `pi_activity.rs`:
+  set threshold, long turn → claim granted `LongTaskFinished`), tick T010/T018; T020 user guide;
+  record cycles 4+ in `tdd/cycle-log.md`; then verify.md (scoped gate + review A high, review B,
+  full gate, push, `$SCRATCHPAD/pr-613-body-M1.md`).
+- Open findings: none. PR: #618 (draft, open). D4 = B (user).
 
 ## Open escalation
 

@@ -18,6 +18,7 @@
 //!   revive an `Ended` session.
 //! - `Ended` is absorbing — once ended, later events do not resurrect it.
 
+use micold_core::attention::TurnChange;
 use micold_core::protocol::messages::ActivitySignal;
 
 /// Which claude-CLI lifecycle hook fired (contracts/hooks.md state-transition table).
@@ -268,9 +269,62 @@ pub fn pi_tail_event(line: &str) -> Option<ActivityEvent> {
     pi_event(line)
 }
 
+/// The change `event` makes to its session's turn clock (feature 613, data-model "Mapping"), or
+/// `None` when it makes none. `lifted` says whether the event moved the session's signal: a spinner
+/// starts the turn's work only when it lifted the signal to `Working`. Claude Code's `SubagentStop`
+/// never reaches here: it is ignored by the hook receiver (FR-024).
+pub fn turn_change(event: &ActivityEvent, lifted: bool) -> Option<TurnChange> {
+    match event {
+        ActivityEvent::Hook(HookKind::UserPromptSubmit) => Some(TurnChange::PromptSubmitted),
+        ActivityEvent::Hook(HookKind::PreToolUse) => Some(TurnChange::Working),
+        ActivityEvent::SpinnerObserved if lifted => Some(TurnChange::Working),
+        ActivityEvent::Hook(HookKind::Notification) => Some(TurnChange::AskedUser),
+        ActivityEvent::Hook(HookKind::Stop) => Some(TurnChange::Finished),
+        ActivityEvent::Hook(HookKind::PostToolUse)
+        | ActivityEvent::SpinnerObserved
+        | ActivityEvent::ReadyForInput
+        | ActivityEvent::Ended { .. } => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Feature 613, data-model "Mapping": each event's change to the turn clock.
+    #[test]
+    fn turn_change_maps_each_event() {
+        use HookKind::*;
+        let cases = [
+            (hook(UserPromptSubmit), Some(TurnChange::PromptSubmitted)),
+            (hook(PreToolUse), Some(TurnChange::Working)),
+            (hook(Notification), Some(TurnChange::AskedUser)),
+            (hook(Stop), Some(TurnChange::Finished)),
+            (hook(PostToolUse), None),
+            (ActivityEvent::ReadyForInput, None),
+            (
+                ActivityEvent::Ended {
+                    reason: "exit".into(),
+                },
+                None,
+            ),
+        ];
+        for (event, expected) in cases {
+            for lifted in [false, true] {
+                assert_eq!(turn_change(&event, lifted), expected, "{event:?}, {lifted}");
+            }
+        }
+    }
+
+    /// A spinner is the turn's work only when it lifted the signal (data-model "Mapping").
+    #[test]
+    fn a_spinner_is_work_only_when_it_lifted_the_signal() {
+        assert_eq!(
+            turn_change(&ActivityEvent::SpinnerObserved, true),
+            Some(TurnChange::Working)
+        );
+        assert_eq!(turn_change(&ActivityEvent::SpinnerObserved, false), None);
+    }
 
     fn hook(kind: HookKind) -> ActivityEvent {
         ActivityEvent::Hook(kind)

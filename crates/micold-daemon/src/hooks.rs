@@ -236,10 +236,13 @@ fn classify_hook(body: &str) -> HookClass {
         "UserPromptSubmit" => HookClass::Event(HookKind::UserPromptSubmit),
         "PreToolUse" => HookClass::Event(HookKind::PreToolUse),
         "PostToolUse" => HookClass::Event(HookKind::PostToolUse),
-        "Stop" | "SubagentStop" => HookClass::Event(HookKind::Stop),
+        "Stop" => HookClass::Event(HookKind::Stop),
         "Notification" => HookClass::Event(HookKind::Notification),
         // SessionStart is well-formed but carries no FSM transition (the session starts Unknown).
         "SessionStart" => HookClass::Ignored,
+        // A helper agent finishing inside a turn neither ends nor pauses it (feature 613, FR-024,
+        // C17). No longer registered; ignored should an older settings file still send it.
+        "SubagentStop" => HookClass::Ignored,
         // An unrecognised but structurally valid hook: accept it without inventing a transition.
         _ => HookClass::Ignored,
     }
@@ -270,9 +273,10 @@ struct MatcherGroup<'a> {
 }
 
 /// The `hooks` map of the per-session `--settings` file: one matcher-group array per lifecycle
-/// event this daemon's activity FSM (`activity.rs::classify_hook`) understands, including
-/// `SubagentStop` (grouped with `Stop` there) — omitting an event here means `claude` never POSTs
-/// it at all, regardless of what `classify_hook` is prepared to handle.
+/// event this daemon's activity FSM (`classify_hook`) understands — omitting an event here means
+/// `claude` never POSTs it at all, regardless of what `classify_hook` is prepared to handle.
+/// `SubagentStop` is not registered: a helper agent finishing is not the end of a turn (feature
+/// 613, FR-024).
 #[derive(serde::Serialize)]
 struct HooksMap<'a> {
     #[serde(rename = "SessionStart")]
@@ -285,8 +289,6 @@ struct HooksMap<'a> {
     post_tool_use: [MatcherGroup<'a>; 1],
     #[serde(rename = "Stop")]
     stop: [MatcherGroup<'a>; 1],
-    #[serde(rename = "SubagentStop")]
-    subagent_stop: [MatcherGroup<'a>; 1],
     #[serde(rename = "Notification")]
     notification: [MatcherGroup<'a>; 1],
 }
@@ -319,7 +321,6 @@ pub fn settings_json(url: &str, token: &str) -> String {
             pre_tool_use: [group()],
             post_tool_use: [group()],
             stop: [group()],
-            subagent_stop: [group()],
             notification: [group()],
         },
     };
@@ -369,6 +370,8 @@ mod tests {
         assert_eq!(ev("PostToolUse"), HookClass::Event(HookKind::PostToolUse));
         assert_eq!(ev("Stop"), HookClass::Event(HookKind::Stop));
         assert_eq!(ev("Notification"), HookClass::Event(HookKind::Notification));
+        // C17 (feature 613, FR-024): a helper agent finishing is not the end of the turn.
+        assert_eq!(ev("SubagentStop"), HookClass::Ignored);
         // SessionStart and unknown-but-valid hooks are accepted without a transition.
         assert_eq!(ev("SessionStart"), HookClass::Ignored);
         assert_eq!(ev("SomethingNew"), HookClass::Ignored);
@@ -400,7 +403,6 @@ mod tests {
             "PreToolUse",
             "PostToolUse",
             "Stop",
-            "SubagentStop",
             "Notification",
         ] {
             assert!(
@@ -417,5 +419,10 @@ mod tests {
                 "{hook}'s matcher-group must have a non-empty nested hooks array"
             );
         }
+        // FR-024: a helper agent finishing is not registered, so `claude` never POSTs it.
+        assert!(
+            parsed["hooks"].get("SubagentStop").is_none(),
+            "SubagentStop must not be configured"
+        );
     }
 }

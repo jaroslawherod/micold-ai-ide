@@ -6,6 +6,7 @@
 //! `DaemonMsg::AttentionGranted`. The notifier is a recording one, so no system is asked anything.
 
 use micold_client::app::State;
+use micold_core::attention::{notification_text, NotificationKind};
 use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{
@@ -16,6 +17,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// A notifier that records every notification it is asked to show, and answers with `answer`.
+/// The kind the tests that are not about kinds are granted (feature 613).
+const KIND: NotificationKind = NotificationKind::LongTaskFinished;
+
 struct Recording {
     shown: Mutex<Vec<DesktopNotification>>,
     answer: Result<(), NotifyError>,
@@ -183,12 +187,13 @@ fn a_grant_shows_one_notification_named_as_the_sidebar_names_the_session() {
         .unwrap();
     let notifier = Recording::accepting();
 
-    assert_eq!(state.attention_granted(b, &notifier), None);
+    assert_eq!(state.attention_granted(b, KIND, &notifier), None);
 
     assert_eq!(
         notifier.shown(),
         vec![DesktopNotification {
-            title: "Fix the parser is waiting for input".to_string(),
+            kind: KIND,
+            title: "Fix the parser finished a long task".to_string(),
             body: "repo \u{2014} Parser work".to_string(),
             project: PathBuf::from(REPO),
             session: b,
@@ -208,7 +213,7 @@ fn a_worktree_with_no_rename_is_named_by_its_derived_name() {
     );
     let notifier = Recording::accepting();
 
-    let _ = state.attention_granted(b, &notifier);
+    let _ = state.attention_granted(b, KIND, &notifier);
 
     assert_eq!(notifier.shown()[0].body, "repo \u{2014} X");
 }
@@ -220,7 +225,7 @@ fn a_session_of_the_default_entry_is_named_by_the_default_entrys_name() {
     let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
     let notifier = Recording::accepting();
 
-    let _ = state.attention_granted(b, &notifier);
+    let _ = state.attention_granted(b, KIND, &notifier);
 
     assert_eq!(notifier.shown()[0].body, "repo \u{2014} Default");
 }
@@ -249,7 +254,7 @@ fn a_session_of_a_project_that_is_not_the_active_one_is_named_by_its_own_project
         .insert("feat-x".to_string(), "Other's name".to_string());
     let notifier = Recording::accepting();
 
-    let _ = state.attention_granted(b, &notifier);
+    let _ = state.attention_granted(b, KIND, &notifier);
 
     let shown = notifier.shown();
     assert_eq!(shown.len(), 1);
@@ -265,7 +270,7 @@ fn a_failure_to_show_is_logged_once_per_run_and_pushes_no_notice() {
     let notifier = Recording::refusing();
     let notices = state.notifications.clone();
 
-    let first = state.attention_granted(b, &notifier);
+    let first = state.attention_granted(b, KIND, &notifier);
     assert!(
         first
             .as_deref()
@@ -278,7 +283,7 @@ fn a_failure_to_show_is_logged_once_per_run_and_pushes_no_notice() {
     );
 
     assert_eq!(
-        state.attention_granted(b, &notifier),
+        state.attention_granted(b, KIND, &notifier),
         None,
         "a second failure in the same run is not logged"
     );
@@ -360,4 +365,47 @@ fn the_first_snapshot_after_a_reconnect_is_observed_as_a_reconnect() {
         vec![],
         "the snapshot of a `Welcome` is observed with `Phase::Reconnected`"
     );
+}
+
+#[test]
+fn a_notification_is_of_the_granted_kind_and_titled_by_it() {
+    // Feature 613, T011 (FR-008, contract T1): each kind's notification carries the kind, and its
+    // title and body are `notification_text`'s for that kind.
+    let mut state = repo_state();
+    let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
+    for kind in NotificationKind::ALL {
+        let notification = state.attention_notification(b, kind).expect("a known session");
+        let text = notification_text(kind, "repo", "Default", "B");
+        assert_eq!(notification.kind, kind);
+        assert_eq!(notification.title, text.title);
+        assert_eq!(notification.body, text.body);
+    }
+}
+
+#[test]
+fn a_needs_permission_grant_shows_the_needs_permission_title() {
+    // Feature 613, T011 (US1 scenario 3): the grant's kind names the notification.
+    let mut state = repo_state();
+    let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
+    let notifier = Recording::accepting();
+
+    let _ = state.attention_granted(b, NotificationKind::NeedsPermission, &notifier);
+
+    let shown = notifier.shown();
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].kind, NotificationKind::NeedsPermission);
+    assert_eq!(shown[0].title, "B needs permission");
+}
+
+#[test]
+fn a_grant_for_an_unknown_session_shows_nothing() {
+    // Feature 613, T011 (N2): a session this window does not know is not shown.
+    let mut state = repo_state();
+    let notifier = Recording::accepting();
+
+    assert_eq!(
+        state.attention_granted(SessionId::new(), NotificationKind::NeedsPermission, &notifier),
+        None
+    );
+    assert!(notifier.shown().is_empty());
 }

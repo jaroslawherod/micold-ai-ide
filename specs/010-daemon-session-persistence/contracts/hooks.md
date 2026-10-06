@@ -82,7 +82,6 @@ configuration is never modified**.
     "PreToolUse":        [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
     "PostToolUse":       [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
     "Stop":              [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
-    "SubagentStop":      [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
     "Notification":      [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }]
   }
 }
@@ -98,6 +97,11 @@ reached the daemon. Corrected here; see `bugs/BUG-001.md` and `tasks.md` Phase 1
 also added the previously-missing `SubagentStop` entry: `activity.rs::classify_hook` already
 grouped `"Stop" | "SubagentStop"` into the same transition, but nothing configured `claude` to ever
 send a `SubagentStop` hook in the first place — found by code review of the BUG-001 fix.
+
+**Superseded by feature 613 (FR-024, research R3)**: `SubagentStop` is no longer registered, and
+`classify_hook` ignores it if received. A helper agent finishing inside a turn is not the end of the
+turn: treating it as `Stop` marked a working session as awaiting input and unread, and could end a
+long task's turn early.
 
 ⚠️ ~~**Unverified**: that `type: "http"` hooks accept a custom `headers` map. If they do not, the
 token moves into the URL path — still per-session and unguessable, but it would then appear in any
@@ -181,6 +185,7 @@ constrained tightly (see plan.md Complexity Tracking):
 | `PreToolUse` | → `Working` |
 | `PostToolUse` | no change (still `Working` until `Stop`) |
 | `Stop` | → `AwaitingInput` |
+| `SubagentStop` | ignored, not registered (feature 613, FR-024) |
 | `Notification` (`permission_prompt`, `idle_prompt`, `agent_needs_input`) | → `AwaitingInput` ⚠️ subtypes unverified |
 | Process exit / give-up | → `Ended { reason }` |
 | OSC 0 title with a braille spinner glyph | `Unknown` → `Working`. **Never** any transition *out* of `Working`. |
