@@ -4845,6 +4845,62 @@ mod script_path_report {
     }
 
     #[test]
+    fn a_reconnect_rechecks_the_stored_path_while_settings_is_open() {
+        let (mut app, _probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+        let _ = open_and_check(&mut app);
+        let new_path = std::env::temp_dir()
+            .join("changed-while-away.sh")
+            .to_str()
+            .expect("utf-8 temp dir")
+            .to_string();
+
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let _ = crate::shell::daemon_sync::on_connected(
+            &mut app,
+            micold_client::daemon::Outbox::new(tx),
+            micold_core::protocol::messages::CatalogSnapshot::default(),
+            settings_saved_elsewhere(&new_path),
+        );
+
+        assert!(
+            matches!(
+                &app.core.settings.script_check,
+                micold_client::features::settings::ScriptCheck::Pending { .. }
+            ),
+            "the reconnect re-checks the path it now holds, got {:?}",
+            app.core.settings.script_check
+        );
+    }
+
+    #[test]
+    fn a_reconnect_checks_nothing_while_settings_is_closed() {
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        app.caps = app
+            .caps
+            .clone()
+            .with_env_include(Arc::new(FakeEnvIncludeResolver::default()));
+
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let _ = crate::shell::daemon_sync::on_connected(
+            &mut app,
+            micold_client::daemon::Outbox::new(tx),
+            micold_core::protocol::messages::CatalogSnapshot::default(),
+            settings_saved_elsewhere(&stored_path()),
+        );
+
+        assert_eq!(
+            app.core.settings.script_check,
+            micold_client::features::settings::ScriptCheck::Idle,
+            "no page, no check (FR-006)"
+        );
+        assert!(probe.calls().is_empty());
+    }
+
+    #[test]
     fn another_windows_save_checks_nothing_while_settings_is_closed() {
         let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
         app.caps = app
