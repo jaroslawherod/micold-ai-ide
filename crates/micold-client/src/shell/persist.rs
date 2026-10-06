@@ -298,6 +298,12 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         cross_session_access: app.core.session.cross_session_access,
         notification_kinds: app.core.session.notification_kinds,
         long_task_threshold_secs: app.core.session.long_task_threshold_secs,
+        // Connected, the service's value is the truth; the file may lag another window's change.
+        pr_status_enabled: if app.daemon.is_some() {
+            app.core.pr_status.enabled
+        } else {
+            stored.pr_status_enabled
+        },
         ..stored
     }
 }

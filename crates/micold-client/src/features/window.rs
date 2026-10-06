@@ -135,6 +135,8 @@ pub enum FieldId {
     SettingsSurviveLogout,
     /// Settings: the "report Pi activity" checkbox (feature 029, FR-012e).
     SettingsPiActivityComponent,
+    /// The Settings → GitHub pull request status switch (feature 040).
+    SettingsPrStatus,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
     SettingsToolServer,
     /// Settings: the "Desktop notifications" checkbox (feature 039, FR-026).

@@ -251,7 +251,9 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/pull_request_indicator.rs",
         component: "PullRequestIndicator",
-        variants: &[],
+        variants: &[
+            "Open", "Draft", "Merged", "Closed", "Pending", "Passing", "Failing",
+        ],
         density: &[],
         posed: &[
             "open",
