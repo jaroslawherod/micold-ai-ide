@@ -618,6 +618,83 @@ use the AI CLI restart: the script runs again. A second plain `SessionStart` run
 plan.md gained a design correction; data-model.md's lifecycle annotated. No task reopened: T024
 and T035 still describe the client code they built; the missing trigger is the service's. Feature
 010's `contracts/messages.md` gains `SessionRestart` in T043. See `bugs/BUG-442.md`.
+## Phase 11: Bugfix BUG-454 — a session directory's failed resolution in the service is only logged, never reported
+
+**Goal**: A failed resolution for a session's own directory, made by the service, reaches the
+Settings Environment page with its directory, category and captured output, and its captured
+output no longer reaches the service's log (FR-022, FR-013, FR-020, SC-006).
+
+**Independent Test**: With a script that fails only in a directory holding a marker file, start a
+session there and one in a directory without it: the catalog snapshot lists exactly the first
+directory with `NonZeroExit` and the script's output, the Environment page shows it, and nothing the
+service logs contains that output.
+
+### Tests for BUG-454 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL on `origin/main` for the reported reason before T050. Where the
+> wire field does not exist yet, add it (T049) as an always-empty field first, so the red run is an
+> assertion failure, not a compile error.
+
+- [X] T047 [BUG-454] Regression test, new file
+  `crates/micold-daemon/tests/env_include_failure_report.rs`: a directory-dependent include script
+  (bash: `[ -f .fail-here ] && { echo "BUG454-OUTPUT"; exit 3; }; export BUG454_OK=1`, with a
+  PowerShell body beside it as `ai_cli_availability.rs`'s `include_script` does) and a `DaemonState`
+  with environment-include on. Resolve for dir A (has the marker) and dir B (does not) through a
+  public path (`availability_in`). Assert `catalog_snapshot().env_include_failures` is exactly
+  `[A]` with a `NonZeroExit` outcome whose diagnostic contains `BUG454-OUTPUT`; B is absent. Then
+  `invalidate_env_include(A)` → the list is empty; resolve A again → it is back; `set_env_include`
+  with a changed field → empty. Register a client (as `activity_pipeline.rs` does) and assert each
+  of those changes reaches it as a `CatalogChanged` carrying the new list: the failed resolve, the
+  invalidation, the settings change. Fails on `origin/main` (the list is always empty). FR-022.
+- [X] T048 [BUG-454] Regression test, same file: the captured output stays off the log. Install a
+  capturing `tracing` subscriber for the test thread (`tracing::subscriber::with_default` with a
+  `fmt` layer writing to an in-memory buffer), resolve for dir A, assert the buffer names A and
+  holds no `BUG454-OUTPUT`. Fails on `origin/main` (`?outcome` prints the diagnostic). FR-013,
+  FR-022.
+- [X] T049 [BUG-454] Wire and client tests (do this one first: T047 and T048 read its field). In `micold-core`: `EnvIncludeOutcome` gains
+  `Serialize`/`Deserialize`; `CatalogSnapshot` gains `env_include_failures:
+  Vec<EnvIncludeFailure { dir: PathBuf, outcome: EnvIncludeOutcome }>` with
+  `#[serde(default, skip_serializing_if = "Vec::is_empty")]`; a round-trip test, and a test that a
+  snapshot serialized without the field reads back with it empty. Bump `PROTOCOL_VERSION`
+  (`protocol/version.rs`, 34 → 35 after the merge with main, which carries 30–34, with its doc line) and regenerate whatever `SCHEMA_HASH` is
+  built from: the handshake rejects a schema mismatch, so `serde(default)` does not make an older
+  peer compatible; it only keeps the field optional in the encoding. In `micold-client`
+  (`features/settings.rs`, beside `script_path_notice`): a pure `directory_failure_lines(failures,
+  last) -> Vec<NoticeLine>` tested for one caution per failing directory naming the directory and
+  the category label FR-013 uses, followed by a note holding the captured output (none when it is
+  empty); an entry whose outcome equals `last` folded away; empty in, empty out.
+
+### Implementation for BUG-454
+
+- [X] T050 [BUG-454] Service (`crates/micold-daemon/src/state.rs`): `ResolvedEnv` keeps the
+  attempt's `EnvIncludeOutcome` (filled in `spawn_env_for`; the settings short-circuit has none);
+  the `tracing::warn!` logs `env = ?attempted(&outcome)` and the directory, not `?outcome`;
+  `snapshot_locked` adds one `EnvIncludeFailure` per filled cell in `env_include_cache` whose
+  outcome is not `Success`, sorted by directory. The list must reach clients when it changes, not
+  only on the next unrelated catalog change: `spawn_env_for` calls `broadcast_catalog()` (off the
+  lock) after it fills a cell with a failure, and `set_env_include`, `invalidate_env_include` and
+  `refuse_and_forget_env` broadcast when they removed a cell holding one (unless their caller
+  already broadcasts the catalog right after). An open Environment page then updates in place. Projected only into what is sent to clients, never
+  into the catalog store's file (the same rule as `start_failures`). Update the `ResolvedEnv` and
+  `env_include_cache` doc comments. Every `CatalogSnapshot` literal in the workspace gets the field
+  or `..Default::default()`. Makes T047 and T048 pass. Depends on T047, T048, T049.
+- [X] T051 [BUG-454] Client: keep the latest snapshot's `env_include_failures` in client state,
+  replaced on every catalog snapshot the client applies (welcome and `CatalogChanged`, in
+  `catalog_sync.rs`); pass it through `settings_view.rs` to `ui/settings/environment.rs::view`,
+  which renders `directory_failure_lines(..)` right after `script_path_notice(..)` with the same
+  caution/note tones. Makes T049's client test pass and its lines visible. Depends on T049.
+- [X] T052 [BUG-454] Docs (Principle VII): `docs/user-guide/settings.md`'s environment-include
+  section gains one sentence: when the script fails only in some project folders, the Environment
+  page lists each such folder with what the script printed. Update the doc comment of
+  `spawn_env_for` (failure is reported, not only logged). Depends on T050, T051.
+
+**Checkpoint**: T047–T049 pass; the gate is green.
+
+**Bugfix**: 2026-10-06 — BUG-454 Added Phase 11 (T047–T052). FR-022 added to spec.md;
+contracts/settings-ui.md step 4 and the Interaction contract annotated; plan.md gained a design
+correction. No task is reopened: T024/T025/T034 are correct for the one outcome they were given,
+and the service-side cache (feature 010's T098, rebuilt by T039) never claimed FR-013. See
+`bugs/BUG-454.md`.
 
 ---
 
@@ -730,6 +807,8 @@ With multiple developers:
   Phase 8 built. Within it, T037 → T038 → T039 → T040.
 - Phase 10 (BUG-442) depends on Phase 9's coherent cache (T039: `invalidate_env_include` wins
   over a resolve in progress). Within it, T041/T042 → T043 → T044 and T045 → T046.
+- Phase 11 (BUG-454) depends on Phase 9's cache cells (T039): it reads them to report failures.
+  Within it, T049 (adds the wire field, always empty) → T047, T048 → T050 → T051 → T052.
 
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
@@ -738,3 +817,5 @@ With multiple developers:
 **Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.
 
 **Bugfix**: 2026-10-06 — BUG-442 Updated from bugfix patch.
+
+**Bugfix**: 2026-10-06 — BUG-454 Updated from bugfix patch.

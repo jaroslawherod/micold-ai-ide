@@ -271,6 +271,8 @@ it instead of `SessionStart` (wire change: `PROTOCOL_VERSION` 29 → 30, feature
 `contracts/messages.md`). `SessionStart` and supervision's `respawn_primary` keep reading the cache
 (FR-007's BUG-442 clarification). See `bugs/BUG-442.md`.
 
+**Design correction (BUG-454)**: since feature 010 the per-directory resolutions that feed sessions run in the service (`DaemonState::spawn_env_for`), which on failure only logged `?outcome` — dropping the captured output for the user and writing it to the detached service's log file — while the Settings note still came from the client's own resolution for one representative directory. Fix: `ResolvedEnv` keeps the attempt's `EnvIncludeOutcome`; `snapshot_locked` projects every filled cache cell whose outcome is a failure into a runtime-only `env_include_failures` list on `CatalogSnapshot` (directory, outcome; sorted by directory; a new top-level field, so `PROTOCOL_VERSION` is bumped; never in the persisted catalog), overlaid at send time as `start_failures` and live activity are overlaid onto session summaries; the catalog is broadcast when a failure is cached and when an invalidation removes one, so open windows update; the client keeps the latest list and the Environment page renders it under the existing note (FR-022, contracts/settings-ui.md step 4). The log line keeps the category (`SpawnEnv`) and the directory only. An entry lives exactly as long as its cache cell, so the existing invalidations (Settings save, worktree deletion, refused AI-CLI start) clear it; no new trigger. See `bugs/BUG-454.md`.
+
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
@@ -278,3 +280,5 @@ it instead of `SessionStart` (wire change: `PROTOCOL_VERSION` 29 → 30, feature
 **Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.
 
 **Bugfix**: 2026-10-06 — BUG-442 Updated from bugfix patch.
+
+**Bugfix**: 2026-10-06 — BUG-454 Updated from bugfix patch.

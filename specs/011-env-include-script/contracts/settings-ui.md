@@ -67,6 +67,10 @@ Order, top to bottom, inside the existing `fields` column:
    block: the failure category as a short label ("Script not found" / "Exited with an error" /
    "Timed out") followed by the diagnostic text in a scrollable/monospace-ish text block. Rendered
    only on failure — nothing is shown here on `Success`/`Disabled` (SC-006).
+   *(BUG-454, FR-022)*: below it, one entry per session directory whose own resolution by the
+   service failed (the catalog snapshot's runtime-only failure list): the directory, the failure
+   category label, and that attempt's captured output. An entry whose outcome equals the note
+   above is folded into it, not repeated. Same block, same tone; no new surface.
 5. Existing error text (unchanged — shared by scrollback *and* the new timeout field's parse
    failure, same as today's single `draft.error` slot).
 6. Existing Save/Cancel `row` (unchanged).
@@ -80,3 +84,5 @@ Order, top to bottom, inside the existing `fields` column:
   step 3 above) — not just on the next app run.
 - The failure block (step 4) is the sole mechanism satisfying FR-012/FR-013/SC-006 — no toast,
   banner, or other new notification surface is introduced (spec Assumptions).
+  *(BUG-454)*: that includes the per-directory failures FR-022 adds; they are not reported on the
+  session itself.
