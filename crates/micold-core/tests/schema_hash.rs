@@ -221,7 +221,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 28 → 29 for feature 010 BUG-592's `DaemonMsg::ShellOpenFailed`: a refused shell open is
 /// reported to the client that asked. A new variant an older client cannot decode.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 29;
+///
+/// And 29 → 30 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
+/// says which kind of event the window notifies for. An older peer would fail to decode it.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 30;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -341,6 +344,17 @@ fn the_claim_and_the_grant_are_in_the_hashed_source() {
              message set that claims and grants attention events"
         );
     }
+}
+
+#[test]
+fn the_grants_kind_is_in_the_hashed_source() {
+    // Feature 613, wire W5.1 (version 30). Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    assert!(
+        canonicalize(&messages).contains("kind: NotificationKind,"),
+        "`kind: NotificationKind,` is not in messages.rs, so version 30's hash is not the hash of \
+         the message set whose grant carries the notification kind"
+    );
 }
 
 #[test]

@@ -6,7 +6,11 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
+use crate::clock::Uptime;
 use crate::project::Availability;
 use crate::protocol::messages::{ActivitySignal, SessionSummary};
 use crate::session::{Session, SessionId};
@@ -126,6 +130,202 @@ impl AttentionTracker {
     }
 }
 
+/// How long a turn must last for its end to be **Long task finished** (FR-002, D4). The only
+/// definition of this duration (contract C6).
+pub const LONG_TASK_THRESHOLD: Duration = Duration::from_secs(60);
+
+/// What kind of event a desktop notification is for (feature 613, FR-001).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationKind {
+    /// The session stopped mid-turn to ask for a permission or an answer.
+    NeedsPermission,
+    /// The session stopped because of an error.
+    SessionError,
+    /// The session finished a turn of at least [`LONG_TASK_THRESHOLD`].
+    LongTaskFinished,
+    /// The session finished a shorter turn.
+    TurnFinished,
+}
+
+impl NotificationKind {
+    /// Every kind, in the order Settings lists them (FR-009).
+    pub const ALL: [NotificationKind; 4] = [
+        NotificationKind::NeedsPermission,
+        NotificationKind::SessionError,
+        NotificationKind::LongTaskFinished,
+        NotificationKind::TurnFinished,
+    ];
+
+    /// The kind's name, as Settings shows it.
+    pub fn name(self) -> &'static str {
+        match self {
+            NotificationKind::NeedsPermission => "Needs permission",
+            NotificationKind::SessionError => "Session error",
+            NotificationKind::LongTaskFinished => "Long task finished",
+            NotificationKind::TurnFinished => "Turn finished",
+        }
+    }
+
+    /// The kind's note in Settings.
+    pub fn description(self) -> String {
+        match self {
+            NotificationKind::NeedsPermission => {
+                "A session stopped to ask for a permission or an answer.".to_string()
+            }
+            NotificationKind::SessionError => "A session stopped because of an error.".to_string(),
+            NotificationKind::LongTaskFinished => {
+                let minutes = LONG_TASK_THRESHOLD.as_secs() / 60;
+                let length = if minutes == 1 {
+                    "a minute".to_string()
+                } else {
+                    format!("{minutes} minutes")
+                };
+                format!("A session finished a turn that took {length} or more.")
+            }
+            NotificationKind::TurnFinished => "A session finished a shorter turn.".to_string(),
+        }
+    }
+
+    /// Whether the kind is on in a fresh installation (FR-010).
+    pub fn default_on(self) -> bool {
+        self != NotificationKind::TurnFinished
+    }
+}
+
+/// Which kinds notify (FR-010, FR-011). A field per kind, so a settings file that lacks one gets
+/// that one's default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationKinds {
+    /// **Needs permission**.
+    #[serde(default = "on")]
+    pub needs_permission: bool,
+    /// **Session error**.
+    #[serde(default = "on")]
+    pub session_error: bool,
+    /// **Long task finished**.
+    #[serde(default = "on")]
+    pub long_task_finished: bool,
+    /// **Turn finished**.
+    #[serde(default)]
+    pub turn_finished: bool,
+}
+
+fn on() -> bool {
+    true
+}
+
+impl Default for NotificationKinds {
+    fn default() -> Self {
+        Self {
+            needs_permission: NotificationKind::NeedsPermission.default_on(),
+            session_error: NotificationKind::SessionError.default_on(),
+            long_task_finished: NotificationKind::LongTaskFinished.default_on(),
+            turn_finished: NotificationKind::TurnFinished.default_on(),
+        }
+    }
+}
+
+impl NotificationKinds {
+    /// Whether `kind` is on.
+    pub fn is_on(&self, kind: NotificationKind) -> bool {
+        match kind {
+            NotificationKind::NeedsPermission => self.needs_permission,
+            NotificationKind::SessionError => self.session_error,
+            NotificationKind::LongTaskFinished => self.long_task_finished,
+            NotificationKind::TurnFinished => self.turn_finished,
+        }
+    }
+
+    /// Turn `kind` on or off, leaving the others as they are.
+    pub fn set(&mut self, kind: NotificationKind, on: bool) {
+        let field = match kind {
+            NotificationKind::NeedsPermission => &mut self.needs_permission,
+            NotificationKind::SessionError => &mut self.session_error,
+            NotificationKind::LongTaskFinished => &mut self.long_task_finished,
+            NotificationKind::TurnFinished => &mut self.turn_finished,
+        };
+        *field = on;
+    }
+}
+
+/// What the service saw a session do, as far as its turn is concerned (data-model "TurnClock").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnChange {
+    /// The user sent a prompt: a turn starts.
+    PromptSubmitted,
+    /// The session worked.
+    Working,
+    /// The session stopped mid-turn to ask for a permission or an answer.
+    AskedUser,
+    /// The session finished its turn.
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum TurnState {
+    #[default]
+    NotInTurn,
+    Working {
+        since: Uptime,
+    },
+    Paused {
+        since: Uptime,
+    },
+}
+
+/// One live session's turn: when it started, and whether it is paused on the user (FR-002, FR-003).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TurnClock {
+    state: TurnState,
+}
+
+impl TurnClock {
+    /// A clock not in a turn.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Apply `change` at `now` (data-model transition table); the kind an attention event at this
+    /// change would have. The caller uses it only when the change counts as an attention event.
+    pub fn change(
+        &mut self,
+        change: TurnChange,
+        now: Uptime,
+        threshold: Duration,
+    ) -> Option<NotificationKind> {
+        let (next, kind) = match (self.state, change) {
+            (_, TurnChange::PromptSubmitted) => (TurnState::Working { since: now }, None),
+            (TurnState::NotInTurn, TurnChange::Working) => {
+                (TurnState::Working { since: now }, None)
+            }
+            (TurnState::Working { since } | TurnState::Paused { since }, TurnChange::Working) => {
+                (TurnState::Working { since }, None)
+            }
+            (TurnState::NotInTurn, TurnChange::AskedUser | TurnChange::Finished) => {
+                (TurnState::NotInTurn, Some(NotificationKind::TurnFinished))
+            }
+            (TurnState::Working { since }, TurnChange::AskedUser) => (
+                TurnState::Paused { since },
+                Some(NotificationKind::NeedsPermission),
+            ),
+            (TurnState::Paused { since }, TurnChange::AskedUser) => {
+                (TurnState::Paused { since }, None)
+            }
+            (TurnState::Working { since } | TurnState::Paused { since }, TurnChange::Finished) => {
+                let kind = if now.saturating_sub(since) >= threshold {
+                    NotificationKind::LongTaskFinished
+                } else {
+                    NotificationKind::TurnFinished
+                };
+                (TurnState::NotInTurn, Some(kind))
+            }
+        };
+        self.state = next;
+        kind
+    }
+}
+
 /// The text of a desktop notification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationText {
@@ -135,10 +335,22 @@ pub struct NotificationText {
     pub body: String,
 }
 
-/// The text for a session waiting for input: the three names and the fixed words, nothing else.
-pub fn notification_text(project: &str, worktree: &str, session: &str) -> NotificationText {
+/// The text of a notification of `kind`: the three names and the fixed words, nothing else
+/// (FR-008, contract T1, T2).
+pub fn notification_text(
+    kind: NotificationKind,
+    project: &str,
+    worktree: &str,
+    session: &str,
+) -> NotificationText {
+    let what = match kind {
+        NotificationKind::NeedsPermission => "needs permission",
+        NotificationKind::SessionError => "stopped with an error",
+        NotificationKind::LongTaskFinished => "finished a long task",
+        NotificationKind::TurnFinished => "finished its turn",
+    };
     NotificationText {
-        title: format!("{session} is waiting for input"),
+        title: format!("{session} {what}"),
         body: format!("{project} \u{2014} {worktree}"),
     }
 }
@@ -476,40 +688,74 @@ mod tests {
         assert_eq!(tracker.len(), 1, "only the present session remains");
     }
 
-    // --- notification_text (U28–U31) ---
+    // --- notification_text (U28–U31; 613 T1, T2) ---
+
+    const KIND_TITLES: [(NotificationKind, &str); 4] = [
+        (NotificationKind::NeedsPermission, "Fix the parser needs permission"),
+        (NotificationKind::SessionError, "Fix the parser stopped with an error"),
+        (NotificationKind::LongTaskFinished, "Fix the parser finished a long task"),
+        (NotificationKind::TurnFinished, "Fix the parser finished its turn"),
+    ];
 
     #[test]
-    fn u28_the_title_names_the_session_and_the_body_the_project_and_worktree() {
-        let text = notification_text("micold", "feat-x", "Fix the parser");
-        assert_eq!(text.title, "Fix the parser is waiting for input");
-        assert_eq!(text.body, "micold \u{2014} feat-x");
+    fn the_title_names_the_session_and_states_the_kind() {
+        for (kind, title) in KIND_TITLES {
+            let text = notification_text(kind, "micold", "feat-x", "Fix the parser");
+            assert_eq!(text.title, title, "the title states {kind:?} in words (T1)");
+        }
+    }
+
+    #[test]
+    fn u28_the_body_names_the_project_and_worktree_for_every_kind() {
+        for kind in NotificationKind::ALL {
+            let text = notification_text(kind, "micold", "feat-x", "Fix the parser");
+            assert_eq!(text.body, "micold \u{2014} feat-x", "the body is the same for {kind:?}");
+        }
     }
 
     #[test]
     fn u29_the_default_entry_name_is_passed_through_unchanged() {
-        let text = notification_text("micold", "Default", "Fix the parser");
+        let text = notification_text(
+            NotificationKind::LongTaskFinished,
+            "micold",
+            "Default",
+            "Fix the parser",
+        );
         assert_eq!(text.body, "micold \u{2014} Default");
     }
 
     #[test]
     fn u30_a_placeholder_session_label_is_passed_through_unchanged() {
-        let text = notification_text("micold", "feat-x", "New session");
-        assert_eq!(text.title, "New session is waiting for input");
+        let text = notification_text(
+            NotificationKind::NeedsPermission,
+            "micold",
+            "feat-x",
+            "New session",
+        );
+        assert_eq!(text.title, "New session needs permission");
     }
 
     #[test]
     fn u31_neither_string_holds_text_besides_the_three_names_and_the_fixed_words() {
-        let text = notification_text("PROJ", "TREE", "SESS");
-        assert_eq!(
-            text.title.replace("SESS", ""),
-            " is waiting for input",
-            "the title is the session name and fixed words only"
-        );
-        assert_eq!(
-            text.body.replace("PROJ", "").replace("TREE", ""),
-            " \u{2014} ",
-            "the body is the project, the worktree and a dash only"
-        );
+        let fixed = [
+            (NotificationKind::NeedsPermission, " needs permission"),
+            (NotificationKind::SessionError, " stopped with an error"),
+            (NotificationKind::LongTaskFinished, " finished a long task"),
+            (NotificationKind::TurnFinished, " finished its turn"),
+        ];
+        for (kind, words) in fixed {
+            let text = notification_text(kind, "PROJ", "TREE", "SESS");
+            assert_eq!(
+                text.title.replace("SESS", ""),
+                words,
+                "the title is the session name and fixed words only (T2)"
+            );
+            assert_eq!(
+                text.body.replace("PROJ", "").replace("TREE", ""),
+                " \u{2014} ",
+                "the body is the project, the worktree and a dash only (T2)"
+            );
+        }
     }
 
     // --- resolve_reveal (U32–U35) ---
@@ -667,5 +913,345 @@ mod counted_session_tests {
             counts_as_unread(&session, Some(SessionId::new())),
             "another session in view leaves this one counted (575 FR-002)"
         );
+    }
+}
+
+#[cfg(test)]
+mod notification_kind_tests {
+    //! Feature 613: the kinds and their switches (FR-009, FR-010, data-model).
+
+    use super::*;
+
+    #[test]
+    fn the_kinds_are_listed_in_settings_order() {
+        assert_eq!(
+            NotificationKind::ALL,
+            [
+                NotificationKind::NeedsPermission,
+                NotificationKind::SessionError,
+                NotificationKind::LongTaskFinished,
+                NotificationKind::TurnFinished,
+            ],
+            "Settings lists the kinds in this order (FR-009)"
+        );
+    }
+
+    #[test]
+    fn each_kind_has_its_name() {
+        let names: Vec<&str> = NotificationKind::ALL.iter().map(|k| k.name()).collect();
+        assert_eq!(
+            names,
+            [
+                "Needs permission",
+                "Session error",
+                "Long task finished",
+                "Turn finished"
+            ],
+            "the names are the data-model's"
+        );
+    }
+
+    #[test]
+    fn each_kind_has_its_description() {
+        assert_eq!(
+            NotificationKind::NeedsPermission.description(),
+            "A session stopped to ask for a permission or an answer."
+        );
+        assert_eq!(
+            NotificationKind::SessionError.description(),
+            "A session stopped because of an error."
+        );
+        assert_eq!(
+            NotificationKind::TurnFinished.description(),
+            "A session finished a shorter turn."
+        );
+    }
+
+    #[test]
+    fn the_long_task_description_is_built_from_the_threshold() {
+        let minutes = LONG_TASK_THRESHOLD.as_secs() / 60;
+        let length = if minutes == 1 {
+            "a minute".to_string()
+        } else {
+            format!("{minutes} minutes")
+        };
+        assert_eq!(
+            NotificationKind::LongTaskFinished.description(),
+            format!("A session finished a turn that took {length} or more."),
+            "the note follows the threshold, not a second literal (C6)"
+        );
+    }
+
+    #[test]
+    fn only_turn_finished_is_off_by_default() {
+        let defaults: Vec<bool> = NotificationKind::ALL
+            .iter()
+            .map(|k| k.default_on())
+            .collect();
+        assert_eq!(
+            defaults,
+            [true, true, true, false],
+            "out of the box everything but a short turn notifies (FR-010)"
+        );
+    }
+
+    #[test]
+    fn the_kinds_are_snake_case_on_the_wire() {
+        let encoded: Vec<String> = NotificationKind::ALL
+            .iter()
+            .map(|k| serde_json::to_string(k).unwrap())
+            .collect();
+        assert_eq!(
+            encoded,
+            [
+                "\"needs_permission\"",
+                "\"session_error\"",
+                "\"long_task_finished\"",
+                "\"turn_finished\""
+            ],
+            "the kinds travel as snake-case strings (W5)"
+        );
+    }
+
+    #[test]
+    fn the_default_switches_are_the_kinds_defaults() {
+        let kinds = NotificationKinds::default();
+        for kind in NotificationKind::ALL {
+            assert_eq!(
+                kinds.is_on(kind),
+                kind.default_on(),
+                "{kind:?} starts at its default (FR-010)"
+            );
+        }
+    }
+
+    #[test]
+    fn set_changes_only_the_named_kind() {
+        for kind in NotificationKind::ALL {
+            let mut kinds = NotificationKinds::default();
+            kinds.set(kind, !kind.default_on());
+            for other in NotificationKind::ALL {
+                let expected = if other == kind {
+                    !other.default_on()
+                } else {
+                    other.default_on()
+                };
+                assert_eq!(
+                    kinds.is_on(other),
+                    expected,
+                    "setting {kind:?} leaves {other:?} as it was"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_on_reads_each_kinds_own_field() {
+        let kinds = NotificationKinds {
+            needs_permission: false,
+            session_error: true,
+            long_task_finished: false,
+            turn_finished: true,
+        };
+        let on: Vec<bool> = NotificationKind::ALL
+            .iter()
+            .map(|k| kinds.is_on(*k))
+            .collect();
+        assert_eq!(on, [false, true, false, true], "each kind reads its own field");
+    }
+
+    #[test]
+    fn the_threshold_is_one_minute() {
+        assert_eq!(LONG_TASK_THRESHOLD, Duration::from_secs(60), "D4");
+    }
+}
+
+#[cfg(test)]
+mod turn_clock_tests {
+    //! Feature 613: the turn clock's transition table (data-model "TurnClock", C4, C5).
+
+    use super::*;
+
+    const THRESHOLD: Duration = Duration::from_secs(60);
+
+    fn at(secs: u64) -> Uptime {
+        Uptime::from_nanos(secs * 1_000_000_000)
+    }
+
+    fn not_in_turn() -> TurnClock {
+        TurnClock::new()
+    }
+
+    fn working_since(secs: u64) -> TurnClock {
+        let mut clock = TurnClock::new();
+        clock.change(TurnChange::PromptSubmitted, at(secs), THRESHOLD);
+        clock
+    }
+
+    fn paused_since(secs: u64) -> TurnClock {
+        let mut clock = working_since(secs);
+        clock.change(TurnChange::AskedUser, at(secs + 1), THRESHOLD);
+        clock
+    }
+
+    /// The kind a `Finished` at `secs` returns: shows when the clock thinks the turn started.
+    fn finish_at(mut clock: TurnClock, secs: u64) -> Option<NotificationKind> {
+        clock.change(TurnChange::Finished, at(secs), THRESHOLD)
+    }
+
+    #[test]
+    fn not_in_turn_prompt_starts_the_turn_at_now() {
+        let mut clock = not_in_turn();
+        assert_eq!(
+            clock.change(TurnChange::PromptSubmitted, at(10), THRESHOLD),
+            None
+        );
+        assert_eq!(
+            finish_at(clock, 70),
+            Some(NotificationKind::LongTaskFinished),
+            "the turn counts from the prompt"
+        );
+    }
+
+    #[test]
+    fn not_in_turn_working_starts_the_turn_at_now() {
+        let mut clock = not_in_turn();
+        assert_eq!(clock.change(TurnChange::Working, at(10), THRESHOLD), None);
+        assert_eq!(
+            finish_at(clock, 69),
+            Some(NotificationKind::TurnFinished),
+            "an unseen start counts from the first work seen (C5)"
+        );
+        let mut clock = not_in_turn();
+        clock.change(TurnChange::Working, at(10), THRESHOLD);
+        assert_eq!(finish_at(clock, 70), Some(NotificationKind::LongTaskFinished));
+    }
+
+    #[test]
+    fn not_in_turn_asked_user_is_turn_finished_and_stays_out_of_turn() {
+        let mut clock = not_in_turn();
+        assert_eq!(
+            clock.change(TurnChange::AskedUser, at(10), THRESHOLD),
+            Some(NotificationKind::TurnFinished)
+        );
+        assert_eq!(clock, not_in_turn(), "no turn starts on a question");
+    }
+
+    #[test]
+    fn not_in_turn_finished_is_turn_finished() {
+        let mut clock = not_in_turn();
+        assert_eq!(
+            clock.change(TurnChange::Finished, at(1_000), THRESHOLD),
+            Some(NotificationKind::TurnFinished),
+            "a turn whose start was not seen is not long (C5)"
+        );
+        assert_eq!(clock, not_in_turn());
+    }
+
+    #[test]
+    fn working_prompt_restarts_the_turn_at_now() {
+        let mut clock = working_since(0);
+        assert_eq!(
+            clock.change(TurnChange::PromptSubmitted, at(50), THRESHOLD),
+            None
+        );
+        assert_eq!(
+            finish_at(clock, 100),
+            Some(NotificationKind::TurnFinished),
+            "the new turn counts from the second prompt"
+        );
+    }
+
+    #[test]
+    fn working_working_keeps_the_start() {
+        let mut clock = working_since(0);
+        assert_eq!(clock.change(TurnChange::Working, at(50), THRESHOLD), None);
+        assert_eq!(finish_at(clock, 60), Some(NotificationKind::LongTaskFinished));
+    }
+
+    #[test]
+    fn working_asked_user_is_needs_permission_and_pauses() {
+        let mut clock = working_since(0);
+        assert_eq!(
+            clock.change(TurnChange::AskedUser, at(5), THRESHOLD),
+            Some(NotificationKind::NeedsPermission)
+        );
+        assert_eq!(clock, paused_since(0), "the turn pauses, keeping its start");
+    }
+
+    #[test]
+    fn working_finished_ends_the_turn() {
+        let mut clock = working_since(0);
+        assert_eq!(
+            clock.change(TurnChange::Finished, at(5), THRESHOLD),
+            Some(NotificationKind::TurnFinished)
+        );
+        assert_eq!(clock, not_in_turn());
+    }
+
+    #[test]
+    fn a_finish_at_exactly_the_threshold_is_long() {
+        let start = Uptime::from_nanos(1_000_000);
+        let mut clock = TurnClock::new();
+        clock.change(TurnChange::PromptSubmitted, start, THRESHOLD);
+        let exactly = Uptime::from_nanos(1_000_000 + THRESHOLD.as_nanos() as u64);
+        assert_eq!(
+            clock.change(TurnChange::Finished, exactly, THRESHOLD),
+            Some(NotificationKind::LongTaskFinished),
+            "at the threshold is long (C4)"
+        );
+    }
+
+    #[test]
+    fn a_finish_one_millisecond_short_of_the_threshold_is_not_long() {
+        let start = Uptime::from_nanos(1_000_000);
+        let mut clock = TurnClock::new();
+        clock.change(TurnChange::PromptSubmitted, start, THRESHOLD);
+        let short = Uptime::from_nanos(THRESHOLD.as_nanos() as u64);
+        assert_eq!(
+            clock.change(TurnChange::Finished, short, THRESHOLD),
+            Some(NotificationKind::TurnFinished),
+            "below the threshold is not long (C4)"
+        );
+    }
+
+    #[test]
+    fn paused_prompt_restarts_the_turn_at_now() {
+        let mut clock = paused_since(0);
+        assert_eq!(
+            clock.change(TurnChange::PromptSubmitted, at(50), THRESHOLD),
+            None
+        );
+        assert_eq!(finish_at(clock, 100), Some(NotificationKind::TurnFinished));
+    }
+
+    #[test]
+    fn paused_working_resumes_keeping_the_start_so_the_wait_counts() {
+        let mut clock = paused_since(0);
+        assert_eq!(clock.change(TurnChange::Working, at(55), THRESHOLD), None);
+        assert_eq!(clock, working_since(0), "the turn resumes from its start");
+        assert_eq!(
+            finish_at(clock, 61),
+            Some(NotificationKind::LongTaskFinished),
+            "the wait for the answer counts (FR-003, US1.7)"
+        );
+    }
+
+    #[test]
+    fn paused_asked_user_returns_nothing() {
+        let mut clock = paused_since(0);
+        assert_eq!(clock.change(TurnChange::AskedUser, at(5), THRESHOLD), None);
+        assert_eq!(clock, paused_since(0), "still paused from the same start");
+    }
+
+    #[test]
+    fn paused_finished_ends_the_turn_by_its_whole_length() {
+        let mut clock = paused_since(0);
+        assert_eq!(
+            clock.change(TurnChange::Finished, at(60), THRESHOLD),
+            Some(NotificationKind::LongTaskFinished)
+        );
+        assert_eq!(clock, not_in_turn());
+        assert_eq!(finish_at(paused_since(0), 30), Some(NotificationKind::TurnFinished));
     }
 }

@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 
+use micold_core::attention::NotificationKind;
 use micold_core::attach::{
     AttachItem, AttachOutcome, AttachResult, AttachTarget, AttachableWorktree, Availability,
     DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
@@ -746,6 +747,31 @@ fn every_client_message_json_round_trips() {
 fn every_daemon_message_json_round_trips() {
     for msg in sample_daemon_msgs() {
         json_roundtrip(&msg);
+    }
+}
+
+/// Feature 613, wire W5.1: the grant carries the kind the service decided, as a snake-case string,
+/// and every awaiting-input kind survives both wires.
+#[test]
+fn an_attention_grant_carries_its_kind_as_a_snake_case_string() {
+    for (kind, encoded) in [
+        (NotificationKind::NeedsPermission, "needs_permission"),
+        (NotificationKind::LongTaskFinished, "long_task_finished"),
+        (NotificationKind::TurnFinished, "turn_finished"),
+    ] {
+        let grant = DaemonMsg::AttentionGranted {
+            session: sid(),
+            seq: 7,
+            kind,
+        };
+        let json = serde_json::to_value(&grant).expect("json encode");
+        assert_eq!(
+            json["AttentionGranted"]["kind"],
+            serde_json::Value::String(encoded.into()),
+            "the kind travels as its snake-case name (W5.1)"
+        );
+        json_roundtrip(&grant);
+        postcard_roundtrip(&grant);
     }
 }
 

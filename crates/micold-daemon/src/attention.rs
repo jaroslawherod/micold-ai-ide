@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use micold_core::attention::NotificationKind;
 use micold_core::protocol::messages::WindowView;
 use micold_core::session::SessionId;
 
@@ -17,6 +18,9 @@ pub struct Views {
     views: HashMap<ClientId, WindowView>,
     /// The highest sequence granted for each session (W1.4). Kept in memory only.
     granted: HashMap<SessionId, u64>,
+    /// The kind of each event noted while it notified and not yet granted, per session (feature
+    /// 613, C10–C12). Kept in memory only.
+    pending: HashMap<SessionId, Vec<(u64, NotificationKind)>>,
     /// The connections that reported `focused: true`, in the order they last did, most recent
     /// last (FR-012). A connection is listed once, and leaves when it ends.
     focus_order: Vec<ClientId>,
@@ -70,8 +74,8 @@ impl Views {
             .unwrap_or(sender)
     }
 
-    /// Forget what was granted for `session`: the session was removed, and its id is not used
-    /// again.
+    /// Forget what was granted and what is pending for `session`: the session was removed, and
+    /// its id is not used again (C12).
     pub fn forget_session(&mut self, session: SessionId) {
         self.granted.remove(&session);
     }
@@ -83,30 +87,22 @@ impl Views {
             .any(|view| view.in_view == Some(session))
     }
 
-    /// Whether the claim of `seq` for `session` is granted (W1.4, FR-006a): only when `seq` is
-    /// above every sequence already granted for the session and not above `current_seq`.
-    ///
-    /// `enabled` is the **Desktop notifications** setting (W4.2, FR-027): while it is off nothing
-    /// is granted, and the refusal records nothing.
-    pub fn grant(&mut self, session: SessionId, seq: u64, current_seq: u64, enabled: bool) -> bool {
-        if !enabled || seq > current_seq || seq <= self.granted.get(&session).copied().unwrap_or(0)
-        {
-            return false;
-        }
-        self.granted.insert(session, seq);
-        true
+    /// The kind granted to the claim of `seq` for `session` (W1.4, FR-006a, C11).
+    pub fn grant(
+        &mut self,
+        session: SessionId,
+        seq: u64,
+        current_seq: u64,
+        notify: impl Fn(NotificationKind) -> bool,
+    ) -> Option<NotificationKind> {
+        let _ = (session, seq, current_seq, &notify);
+        todo!()
     }
 
-    /// Note attention event `seq` of `session` (W4.2, FR-027). While the **Desktop notifications**
-    /// setting is off (`enabled: false`) the event is recorded as granted, so that no window can
-    /// claim it after the setting is turned on, also not one that reconnects. While it is on,
-    /// nothing is recorded: the event waits for its claim.
-    pub fn note_event(&mut self, session: SessionId, seq: u64, enabled: bool) {
-        if enabled {
-            return;
-        }
-        let granted = self.granted.entry(session).or_insert(0);
-        *granted = (*granted).max(seq);
+    /// Note attention event `seq` of `session`, of `kind` (C10).
+    pub fn note_event(&mut self, session: SessionId, seq: u64, kind: NotificationKind, notify: bool) {
+        let _ = (session, seq, kind, notify);
+        todo!()
     }
 }
 
@@ -268,20 +264,38 @@ mod tests {
         );
     }
 
-    /// U54 (FR-006a): the first claim of a sequence is granted.
+    const KIND: NotificationKind = NotificationKind::LongTaskFinished;
+
+    fn on(_: NotificationKind) -> bool {
+        true
+    }
+
+    fn off(_: NotificationKind) -> bool {
+        false
+    }
+
+    /// Note event `seq` of `session` with `KIND` while it notifies: its kind is kept pending.
+    fn noted(views: &mut Views, session: SessionId, seq: u64) {
+        views.note_event(session, seq, KIND, true);
+    }
+
+    /// U54 (FR-006a): the first claim of a sequence is granted, with the kind noted for it.
     #[test]
     fn the_first_claim_of_a_sequence_is_granted() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1, true));
+        noted(&mut views, session(1), 1);
+        assert_eq!(views.grant(session(1), 1, 1, on), Some(KIND));
     }
 
     /// U55 (FR-006a): the same sequence is not granted twice.
     #[test]
     fn the_same_sequence_is_not_granted_again() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1, true));
-        assert!(
-            !views.grant(session(1), 1, 1, true),
+        noted(&mut views, session(1), 1);
+        assert_eq!(views.grant(session(1), 1, 1, on), Some(KIND));
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            None,
             "a second claim of 1 loses"
         );
     }
@@ -291,9 +305,12 @@ mod tests {
     #[test]
     fn a_sequence_above_the_current_one_is_not_granted() {
         let mut views = Views::default();
-        assert!(!views.grant(session(1), 2, 1, true));
-        assert!(
-            views.grant(session(1), 1, 1, true),
+        noted(&mut views, session(1), 1);
+        noted(&mut views, session(1), 2);
+        assert_eq!(views.grant(session(1), 2, 1, on), None);
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            Some(KIND),
             "the refused claim left the session's sequence 1 ungranted"
         );
     }
@@ -302,10 +319,13 @@ mod tests {
     #[test]
     fn a_later_sequence_of_the_same_session_is_granted() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 2, true));
-        assert!(views.grant(session(1), 2, 2, true));
-        assert!(
-            !views.grant(session(1), 1, 2, true),
+        noted(&mut views, session(1), 1);
+        noted(&mut views, session(1), 2);
+        assert_eq!(views.grant(session(1), 1, 2, on), Some(KIND));
+        assert_eq!(views.grant(session(1), 2, 2, on), Some(KIND));
+        assert_eq!(
+            views.grant(session(1), 1, 2, on),
+            None,
             "an earlier sequence stays used"
         );
     }
@@ -314,60 +334,142 @@ mod tests {
     #[test]
     fn a_grant_for_one_session_does_not_use_up_another_s() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1, true));
-        assert!(views.grant(session(2), 1, 1, true));
+        noted(&mut views, session(1), 1);
+        noted(&mut views, session(2), 1);
+        assert_eq!(views.grant(session(1), 1, 1, on), Some(KIND));
+        assert_eq!(views.grant(session(2), 1, 1, on), Some(KIND));
     }
 
-    /// Review A F4: a removed session's grant is forgotten, so nothing is kept for a session
-    /// that no longer exists.
+    /// Review A F4 (039), C12 (613): a removed session's grants and pending kinds are forgotten.
     #[test]
-    fn after_a_session_is_forgotten_the_same_sequence_is_granted_again() {
+    fn forgetting_a_session_drops_its_grants_and_pending_kinds() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 1, 1, true));
-        assert!(views.grant(session(2), 1, 1, true));
+        noted(&mut views, session(1), 1);
+        noted(&mut views, session(1), 2);
+        noted(&mut views, session(2), 1);
+        assert_eq!(views.grant(session(1), 1, 2, on), Some(KIND));
 
         views.forget_session(session(1));
 
-        assert!(
-            views.grant(session(1), 1, 1, true),
-            "nothing is remembered of the forgotten session"
+        assert_eq!(
+            views.grant(session(1), 2, 2, on),
+            None,
+            "the forgotten session's pending kind is gone"
         );
-        assert!(
-            !views.grant(session(2), 1, 1, true),
-            "another session's grant stands"
+        noted(&mut views, session(1), 1);
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            Some(KIND),
+            "nothing is remembered of what was granted to the forgotten session"
+        );
+        assert_eq!(
+            views.grant(session(2), 1, 1, on),
+            Some(KIND),
+            "another session's pending kind stands"
         );
     }
 
-    /// U66 (FR-027): with the setting off a claim is refused, and the refusal records nothing.
+    /// U66 (FR-027), C11: with the kind off now, a claim is refused, and the refusal records
+    /// nothing.
     #[test]
-    fn with_the_setting_off_a_claim_is_refused_and_records_nothing() {
+    fn with_the_kind_off_now_a_claim_is_refused_and_records_nothing() {
         let mut views = Views::default();
-        assert!(
-            !views.grant(session(1), 1, 1, false),
-            "nothing is granted while desktop notifications are off"
+        noted(&mut views, session(1), 1);
+        assert_eq!(
+            views.grant(session(1), 1, 1, off),
+            None,
+            "nothing is granted while the kind does not notify"
         );
-        assert!(
-            views.grant(session(1), 1, 1, true),
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            Some(KIND),
             "the refused claim did not use the sequence up"
         );
     }
 
-    /// U67 (FR-027, US4-5): an event noted while the setting is off is never granted afterwards.
+    /// C11: the predicate is asked about the kind noted for the claimed sequence.
     #[test]
-    fn an_event_noted_with_the_setting_off_is_not_granted_later() {
+    fn the_claim_asks_about_the_kind_noted_for_its_sequence() {
         let mut views = Views::default();
-        views.note_event(session(1), 1, false);
-        assert!(
-            !views.grant(session(1), 1, 1, true),
-            "the event happened while desktop notifications were off"
+        views.note_event(session(1), 1, NotificationKind::NeedsPermission, true);
+        views.note_event(session(1), 2, NotificationKind::TurnFinished, true);
+        let only_permission = |k: NotificationKind| k == NotificationKind::NeedsPermission;
+        assert_eq!(
+            views.grant(session(1), 1, 2, only_permission),
+            Some(NotificationKind::NeedsPermission)
         );
-        assert!(
-            views.grant(session(1), 2, 2, true),
+        assert_eq!(
+            views.grant(session(1), 2, 2, only_permission),
+            None,
+            "Turn finished is off now"
+        );
+    }
+
+    /// C10, C11: a claim of a sequence that has no pending kind is refused.
+    #[test]
+    fn a_claim_of_a_sequence_with_no_pending_kind_is_refused() {
+        let mut views = Views::default();
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            None,
+            "nothing was noted (a service restart, or noted while off)"
+        );
+    }
+
+    /// U67 (FR-027, US4-5), C10: an event noted while it does not notify is never granted
+    /// afterwards.
+    #[test]
+    fn an_event_noted_while_it_does_not_notify_is_not_granted_later() {
+        let mut views = Views::default();
+        views.note_event(session(1), 1, KIND, false);
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            None,
+            "the event happened while its kind did not notify"
+        );
+        noted(&mut views, session(1), 2);
+        noted(&mut views, session(2), 1);
+        assert_eq!(
+            views.grant(session(1), 2, 2, on),
+            Some(KIND),
             "the next event of the same session is granted"
         );
-        assert!(
-            views.grant(session(2), 1, 1, true),
+        assert_eq!(
+            views.grant(session(2), 1, 1, on),
+            Some(KIND),
             "another session's event is not used up"
+        );
+    }
+
+    /// C12: an event recorded as granted drops the pending kinds at or below it.
+    #[test]
+    fn recording_an_event_as_granted_drops_the_pending_kinds_below_it() {
+        let mut views = Views::default();
+        noted(&mut views, session(1), 1);
+        views.note_event(session(1), 2, KIND, false);
+        assert_eq!(
+            views.grant(session(1), 1, 2, on),
+            None,
+            "sequence 1 is at or below one recorded as granted"
+        );
+        assert!(
+            views.pending.get(&session(1)).is_none_or(|p| p.is_empty()),
+            "nothing is kept for it"
+        );
+    }
+
+    /// C12: a grant drops the pending kinds at or below it.
+    #[test]
+    fn a_grant_drops_the_pending_kinds_at_or_below_it() {
+        let mut views = Views::default();
+        noted(&mut views, session(1), 1);
+        noted(&mut views, session(1), 2);
+        noted(&mut views, session(1), 3);
+        assert_eq!(views.grant(session(1), 2, 3, on), Some(KIND));
+        assert_eq!(
+            views.pending.get(&session(1)).map(|p| p.as_slice()),
+            Some([(3, KIND)].as_slice()),
+            "only the event above the grant waits"
         );
     }
 
@@ -375,22 +477,30 @@ mod tests {
     #[test]
     fn noting_an_earlier_event_does_not_lower_what_was_granted() {
         let mut views = Views::default();
-        assert!(views.grant(session(1), 2, 2, true));
-        views.note_event(session(1), 1, false);
-        assert!(
-            !views.grant(session(1), 2, 2, true),
+        noted(&mut views, session(1), 2);
+        assert_eq!(views.grant(session(1), 2, 2, on), Some(KIND));
+        views.note_event(session(1), 1, KIND, false);
+        noted(&mut views, session(1), 2);
+        assert_eq!(
+            views.grant(session(1), 2, 2, on),
+            None,
             "sequence 2 stays granted"
         );
     }
 
-    /// U68 (FR-027): with the setting on, noting an event records nothing.
+    /// Principle II: two sessions' pending kinds never mix.
     #[test]
-    fn an_event_noted_with_the_setting_on_is_still_granted() {
+    fn two_sessions_pending_kinds_do_not_mix() {
         let mut views = Views::default();
-        views.note_event(session(1), 1, true);
-        assert!(
-            views.grant(session(1), 1, 1, true),
-            "the event waits for its claim"
+        views.note_event(session(1), 1, NotificationKind::NeedsPermission, true);
+        views.note_event(session(2), 1, NotificationKind::LongTaskFinished, true);
+        assert_eq!(
+            views.grant(session(2), 1, 1, on),
+            Some(NotificationKind::LongTaskFinished)
+        );
+        assert_eq!(
+            views.grant(session(1), 1, 1, on),
+            Some(NotificationKind::NeedsPermission)
         );
     }
 

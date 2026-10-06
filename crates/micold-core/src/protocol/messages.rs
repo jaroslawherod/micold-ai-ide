@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::attention::NotificationKind;
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
@@ -698,6 +699,9 @@ pub enum DaemonMsg {
         session: SessionId,
         /// The granted `attention_seq`.
         seq: u64,
+        /// The kind the service decided when it noted event `seq` (feature 613, W5.1). Never
+        /// `SessionError`.
+        kind: NotificationKind,
     },
     /// Show this session: a notification for it was clicked, in this window or another
     /// (feature 039, W3). Sent to one window only; that window decides whether the session can
@@ -1451,6 +1455,7 @@ mod attention_wire_tests {
         let grant = DaemonMsg::AttentionGranted {
             session: session(),
             seq: SEQ,
+            kind: NotificationKind::LongTaskFinished,
         };
         assert_eq!(
             through_json(&claim),
