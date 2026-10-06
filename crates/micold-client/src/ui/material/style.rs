@@ -945,10 +945,6 @@ mod tests {
     use super::*;
     use iced::widget::button::Status;
 
-    /// A glyph that colors itself does not inherit a disabled button's `text_color`, so
-    /// `IconButton` greys it via `disabled_color`. That must match what the button style fn
-    /// applies to its own label, or a disabled icon button and a disabled text button would
-    /// disagree about how faded "disabled" looks.
     #[test]
     fn a_disabled_checkbox_label_takes_the_disabled_colour() {
         // Feature 613, FR-017: a disabled kind row's label dims as its glyph does.
@@ -968,6 +964,10 @@ mod tests {
         }
     }
 
+    /// A glyph that colors itself does not inherit a disabled button's `text_color`, so
+    /// `IconButton` greys it via `disabled_color`. That must match what the button style fn
+    /// applies to its own label, or a disabled icon button and a disabled text button would
+    /// disagree about how faded "disabled" looks.
     #[test]
     fn disabled_color_matches_the_button_styles_disabled_label() {
         let r = tokens::roles(ColorScheme::Dark);
