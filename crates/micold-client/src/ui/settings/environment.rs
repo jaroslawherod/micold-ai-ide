@@ -180,7 +180,8 @@ pub fn view<'a>(
             draft.environment.notification_kinds.is_on(kind),
             roles,
         )
-        .icon(notification_icon::icon(kind));
+        .icon(notification_icon::icon(kind))
+        .track_focus(FieldId::SettingsNotificationKind(kind), focused);
         if master_on {
             row = row.on_toggle(move |v| {
                 Message::Settings(SettingsMsg::NotificationKindToggled(kind, v))

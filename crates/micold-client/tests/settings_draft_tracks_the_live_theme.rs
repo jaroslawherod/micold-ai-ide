@@ -35,6 +35,7 @@ fn open_on(theme: ThemePreference) -> State {
     draft.appearance.theme = theme;
     draft.terminal.scrollback_lines = "5000".into();
     draft.environment.timeout_secs = "5".into();
+    draft.environment.long_task_threshold_secs = "60".into();
     let mut state = State::default();
     state.settings.theme_pref = theme;
     state.settings.settings_draft = Some(draft);
