@@ -76,8 +76,10 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
     // daemon is PID 1 there, returning from here is what makes the container exit.
     let idle = idle_watch(Arc::clone(&state));
     tokio::pin!(idle);
+    let stop = crate::platform::stop_requested();
+    tokio::pin!(stop);
 
-    loop {
+    let reason = loop {
         tokio::select! {
             accepted = listener.accept() => {
                 let (conn, _peer) = accepted?;
@@ -91,13 +93,14 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
                     }
                 });
             }
-            _ = &mut idle => break,
+            _ = &mut idle => break StopReason::Idle,
+            _ = &mut stop => break StopReason::Requested,
         }
-    }
+    };
 
     // Stop accepting first (we are out of the loop), then unwind (G5 steps 1, 3, 4). The listener
     // drops as this function returns.
-    unwind(&state, StopReason::Idle).await;
+    unwind(&state, reason).await;
     Ok(())
 }
 
@@ -376,7 +379,10 @@ async fn serve_interprocess(
     use interprocess::local_socket::traits::tokio::Listener as _;
     let idle = idle_watch(Arc::clone(&state));
     tokio::pin!(idle);
-    loop {
+    // Created once, outside the loop: a signal that lands between two turns of it is not lost.
+    let stop = crate::platform::stop_requested();
+    tokio::pin!(stop);
+    let reason = loop {
         tokio::select! {
             accepted = bound.listener.accept() => {
                 let conn = accepted?;
@@ -387,13 +393,14 @@ async fn serve_interprocess(
                     }
                 });
             }
-            _ = &mut idle => break,
+            _ = &mut idle => break StopReason::Idle,
+            _ = &mut stop => break StopReason::Requested,
         }
-    }
+    };
 
     // Out of the loop: nothing is being accepted any more (G5 step 2). Steps 1, 3 and 4 follow;
     // step 5 is `bound` dropping as this returns, and step 6 is the return itself.
-    unwind(&state, StopReason::Idle).await;
+    unwind(&state, reason).await;
     Ok(())
 }
 
@@ -476,6 +483,11 @@ pub async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
     // 002 BUG-007: the last chance to put a list that only this process still holds back on disk
     // — a launch moved a damaged `projects.json` aside and never connected.
     state.restore_missing_catalog_file();
+
+    // Feature 041, FR-002: every covered running terminal is saved first, while its `Term` is still
+    // there and before the endpoint is released, so a service started after this one loads
+    // whole files. Bounded, so a stuck disk cannot keep the service from stopping.
+    crate::history::save_all_live(state, crate::history::STOP_SAVE_BOUND).await;
 
     let worker = Arc::clone(state);
     let (marked, dropped) = tokio::task::spawn_blocking(move || {

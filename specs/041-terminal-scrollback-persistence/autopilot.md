@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3: PR merged, then M4.
+- **Next step**: M4 in progress (T031–T036). M3 merged; its Windows CI failure was a lost runner, fixed by a rerun, no code change.
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #540 | Design | merged | 34cd2c85309171eef68ccce20ff4f709544e5cee |
 | #577 | M1 | merged | 75fe78b8cda4a3332911eaf184548abd018fcab0 |
 | #578 | M2 | merged | b0100eab588663563b14cee5756e3e511b7f8014 |
-| #601 | M3 | open | |
+| #601 | M3 | merged | 7681c0f4a9644a988dd2fa3aaa8818acbae5c4e3 |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
-| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | in review |
+| M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | | pending |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |

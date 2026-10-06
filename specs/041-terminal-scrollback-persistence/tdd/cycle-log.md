@@ -837,3 +837,10 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - green: a terminal not yet tracked starts with `SaveSchedule::new(0)`: a process's output count starts at 0, so what it printed before the first look is due. `test result: ok. 9 passed; 0 failed`
 - refactor: the other cases' `running` helper now looks 30 s before `t0`, which saves the banner and leaves a quiet schedule at `t0`; U75 and U78 assert on their own lines instead of on the file's absence
 - notes: found by review B (MAJOR). A restored seed does not move the output count, so an idle restored terminal still causes no write (FR-004).
+
+## Cycles 78-80 (M4): an orderly stop saves every terminal first (U79-U85)
+
+- test: `crates/micold-daemon/tests/history_stop_request.rs` (new: idle unwind restores 200 lines, nothing rewritten, refusing store, blocked save bounded at 3 s, unwind waits for saves, ten busy sessions, a real service sent `SIGTERM`/`SIGINT`/`SIGHUP`); `stop_requested` unit test in `platform/unix.rs`; `needs_save` in `terminal_history_schedule.rs`
+- red: `cargo test -p micold-daemon --test history_stop_request` before the save step and the signal future: `test result: FAILED. 2 passed; 5 failed` (`no saved history` in the idle, bounded, waits and ten-session cases; the real service did not save its file on `SIGTERM`). The refusing-store and not-rewritten cases pass against an unwind that saves nothing, as they would
+- green: `history::save_all_live` (parallel `spawn_blocking`, 3 s bound) called by `unwind`, `DaemonState::save_final` (gate, `Saver::unsaved`), `platform::stop_requested` (Unix: three signals; Windows: pending until T063) and the `select!` arms in both accept loops. Same command: `test result: ok. 7 passed`
+- refactor: none

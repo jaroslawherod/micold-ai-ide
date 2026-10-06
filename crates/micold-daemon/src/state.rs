@@ -3597,7 +3597,7 @@ impl DaemonState {
     }
 
     /// The covered live terminals: the AI CLI of each live `AiCli` session (FR-014).
-    fn covered_live_terminals(&self) -> Vec<(SessionId, Arc<PtySession>)> {
+    pub(crate) fn covered_live_terminals(&self) -> Vec<(SessionId, Arc<PtySession>)> {
         let inner = self.lock();
         inner
             .sessions
@@ -3652,6 +3652,43 @@ impl DaemonState {
                         tracing::warn!(session = %id.0, %reason, "terminal history was not saved");
                     }
                 }
+            }
+        }
+    }
+
+    /// Save `pty`'s terminal for the orderly stop (FR-002), unless the last save already holds all of
+    /// its output (FR-004). **Blocking**, under the session's gate like [`Self::save_due_at`], so a
+    /// periodic save never lands after it. A failure is one warning, once per reason (FR-007).
+    pub(crate) fn save_final(&self, id: SessionId, pty: &Arc<PtySession>) {
+        let Some(store) = self.history_store.get() else {
+            return;
+        };
+        let _gate = self.hold_gate(id);
+        if !self
+            .primary_pty(id)
+            .is_some_and(|live| Arc::ptr_eq(&live, pty))
+        {
+            return;
+        }
+        let count = pty.signals().output_count();
+        if !self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unsaved(id, pty, count)
+        {
+            return;
+        }
+        let snapshot = history::capture(&pty.term().lock());
+        if let Err(err) = store.save(id, &snapshot) {
+            let reason = err.to_string();
+            let first = self
+                .saver
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .failed(id, Instant::now(), &reason);
+            if first {
+                tracing::warn!(session = %id.0, %reason, "terminal history was not saved");
             }
         }
     }

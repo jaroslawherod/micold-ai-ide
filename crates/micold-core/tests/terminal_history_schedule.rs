@@ -112,3 +112,15 @@ fn u71_mark_due_makes_it_due_with_an_unchanged_count_spaced_from_the_last_attemp
     assert!(!saved.due(start + Duration::from_millis(29_999), STARTED_AT));
     assert!(saved.due(start + secs(30), STARTED_AT));
 }
+
+/// FR-004: the orderly stop needs a save exactly when output came since the last one, whatever
+/// the spacing.
+#[test]
+fn needs_save_is_true_only_when_the_count_moved_since_the_last_save() {
+    let start = Instant::now();
+    let mut schedule = SaveSchedule::new(STARTED_AT);
+    assert!(!schedule.needs_save(STARTED_AT));
+    assert!(schedule.needs_save(STARTED_AT + 1));
+    schedule.saved(start, STARTED_AT + 1);
+    assert!(!schedule.needs_save(STARTED_AT + 1));
+}

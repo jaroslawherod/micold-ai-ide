@@ -60,6 +60,19 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
 
+## How it stops, and what it saves first
+
+The service stops in an orderly way in two cases: when it stops itself after 30 minutes with no
+window connected, and when the process is sent `SIGTERM`, `SIGINT` or `SIGHUP` (**Restart service**,
+logout and a reboot on Linux and macOS). Both run the same unwind: it stops accepting connections,
+**saves the terminal history of every running AI CLI terminal** (one file each, written in parallel,
+all of it bounded at 3 seconds so a stuck disk cannot keep the service from stopping), marks the
+sessions interrupted-resumable, ends their processes, and only then releases the endpoint. A terminal
+with no output since its last save is not written again. After the restart, starting a session shows
+everything it held above the "session restarted at" line. A kill without warning (`SIGKILL`, a crash,
+a power loss) runs none of this; the periodic save bounds that loss to the last minute. On Windows
+the stop request arrives with a later milestone; until then only the idle stop saves.
+
 ## It stops itself when nobody has used it for 30 minutes
 
 The service outlives your windows, but not indefinitely. **If no window has been connected for 30

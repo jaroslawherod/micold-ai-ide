@@ -90,6 +90,7 @@ tokio = { version = "1.53", features = [
     "macros",
     "sync",
     "time",
+    "signal",
 ] }
 tokio-util = { version = "0.7.19", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }

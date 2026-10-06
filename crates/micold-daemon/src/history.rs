@@ -293,6 +293,34 @@ fn term_color(color: HistoryColor) -> Option<Color> {
     }
 }
 
+/// How long the orderly stop waits for the saves of the running terminals, together (stop-request
+/// contract §4). A save that has not finished by then is left behind and the previous file stays.
+pub const STOP_SAVE_BOUND: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Save every covered running terminal, for the orderly stop (FR-002): each one is captured from
+/// its live `Term` and written on the blocking pool, all at once, and the whole step is over after
+/// `bound` whatever is left. A save that does not finish is abandoned, never cancelled half way:
+/// the file is written through a temporary one, so the previous file is still whole.
+pub async fn save_all_live(state: &Arc<crate::state::DaemonState>, bound: std::time::Duration) {
+    let terminals = state.covered_live_terminals();
+    if terminals.is_empty() {
+        return;
+    }
+    let mut saves = tokio::task::JoinSet::new();
+    for (id, pty) in terminals {
+        let state = Arc::clone(state);
+        saves.spawn_blocking(move || state.save_final(id, &pty));
+    }
+    let all = async { while saves.join_next().await.is_some() {} };
+    if tokio::time::timeout(bound, all).await.is_err() {
+        tracing::warn!(
+            bound = ?bound,
+            "terminal history saves did not finish before the stop; the earlier files stay"
+        );
+        // Dropping the set detaches the tasks that are still blocked: the stop goes on without them.
+    }
+}
+
 /// The periodic saver's memory (feature 041, research R6): one [`SaveSchedule`] per covered live
 /// terminal, and the failures already logged in this service run. It does no I/O and takes no lock
 /// of the session state; [`crate::state::DaemonState::save_due_at`] does the saving.
@@ -338,6 +366,18 @@ impl Saver {
             }
         }
         due
+    }
+
+    /// Whether the orderly stop has to save `id`'s terminal, whose process is `pty` and whose output
+    /// count is `count`: not when the last save already holds all of its output (FR-004). A
+    /// terminal the saver has not looked at yet counts as unsaved.
+    pub fn unsaved(&self, id: SessionId, pty: &Arc<PtySession>, count: u64) -> bool {
+        match self.schedules.get(&id) {
+            Some(tracked) if Weak::ptr_eq(&tracked.pty, &Arc::downgrade(pty)) => {
+                tracked.schedule.needs_save(count)
+            }
+            _ => true,
+        }
     }
 
     /// `id` was saved at `now` as of `output_count`.
