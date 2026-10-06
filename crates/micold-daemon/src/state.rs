@@ -988,18 +988,18 @@ impl DaemonState {
     /// `SessionLocation::cwd` of the catalog entry. A session the catalog does not hold drops
     /// nothing. Two short locks, no subprocess.
     pub fn forget_session_env(&self, session: SessionId) {
-        let cwd = self
-            .lock()
-            .catalog
-            .workspace()
-            .sessions
-            .iter()
-            .find_map(|(project, sessions)| {
-                sessions
-                    .iter()
-                    .find(|s| s.id == session)
-                    .map(|s| s.location.cwd(project))
-            });
+        let cwd =
+            self.lock()
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == session)
+                        .map(|s| s.location.cwd(project))
+                });
         if let Some(cwd) = cwd {
             self.invalidate_env_include(&cwd);
         }

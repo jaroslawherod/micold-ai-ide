@@ -107,7 +107,12 @@ fn write_cli_stand_in(dir: &Path, command: &str) {
 
 /// A service with environment-include on and `script` configured, holding one session in `mode`
 /// at the root of `project_dir`.
-fn service(project_dir: &Path, store: &Path, script: &Path, mode: TerminalMode) -> Arc<DaemonState> {
+fn service(
+    project_dir: &Path,
+    store: &Path,
+    script: &Path,
+    mode: TerminalMode,
+) -> Arc<DaemonState> {
     JsonFileSettingsStore::at(store.join("settings.json"))
         .save(&Settings {
             env_include_enabled: true,
@@ -248,7 +253,11 @@ async fn restarting_a_shell_instance_re_sources_its_directory() {
         },
     )
     .await;
-    assert_eq!(runs(&include.runs), 1, "fixture check: the open ran the script");
+    assert_eq!(
+        runs(&include.runs),
+        1,
+        "fixture check: the open ran the script"
+    );
 
     send_and_settle(
         &mut client,
@@ -329,7 +338,11 @@ async fn start_stop_then(again: ClientMsg) -> usize {
         state.live_session(session_id()).is_some()
     })
     .await;
-    assert_eq!(runs(&include.runs), 1, "fixture check: the start ran the script");
+    assert_eq!(
+        runs(&include.runs),
+        1,
+        "fixture check: the start ran the script"
+    );
 
     send_and_settle(
         &mut client,
