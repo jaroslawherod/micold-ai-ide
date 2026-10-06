@@ -52,8 +52,8 @@ pub struct Toggles {
 impl Default for Toggles {
     fn default() -> Self {
         Self {
-            committed: false,
-            uncommitted: false,
+            committed: true,
+            uncommitted: true,
         }
     }
 }
@@ -74,8 +74,20 @@ impl DiffRange {
     /// listed is switched on. The Default entry reads only `toggles.uncommitted`, and a worktree
     /// without a base lists its uncommitted changes only, since committed ones have nothing to be
     /// compared with.
-    pub fn for_view(_scope: &ReviewScope, _toggles: Toggles) -> Option<DiffRange> {
-        None
+    pub fn for_view(scope: &ReviewScope, toggles: Toggles) -> Option<DiffRange> {
+        let committed = toggles.committed
+            && matches!(
+                scope,
+                ReviewScope::Worktree {
+                    base: Base::MergeBase { .. }
+                }
+            );
+        match (committed, toggles.uncommitted) {
+            (true, true) => Some(DiffRange::BaseToWorktree),
+            (true, false) => Some(DiffRange::BaseToHead),
+            (false, true) => Some(DiffRange::HeadToWorktree),
+            (false, false) => None,
+        }
     }
 }
 
@@ -83,11 +95,24 @@ impl DiffRange {
 /// `git symbolic-ref refs/remotes/origin/HEAD`, e.g. `refs/remotes/origin/main`), else local
 /// `main`, else local `master`, else `None`.
 pub fn default_branch_from(
-    _origin_head: Option<&str>,
-    _has_main: bool,
-    _has_master: bool,
+    origin_head: Option<&str>,
+    has_main: bool,
+    has_master: bool,
 ) -> Option<String> {
-    None
+    let origin = origin_head
+        .map(str::trim)
+        .and_then(|target| target.strip_prefix("refs/remotes/"))
+        .filter(|branch| !branch.is_empty());
+    if let Some(branch) = origin {
+        return Some(branch.to_owned());
+    }
+    if has_main {
+        Some("main".to_owned())
+    } else if has_master {
+        Some("master".to_owned())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -158,7 +183,10 @@ mod tests {
 
     #[test]
     fn a_worktree_without_a_base_lists_only_uncommitted_changes() {
-        for reason in [BaseUnavailable::NoDefaultBranch, BaseUnavailable::NoCommonHistory] {
+        for reason in [
+            BaseUnavailable::NoDefaultBranch,
+            BaseUnavailable::NoCommonHistory,
+        ] {
             let scope = ReviewScope::Worktree {
                 base: Base::Unavailable(reason),
             };

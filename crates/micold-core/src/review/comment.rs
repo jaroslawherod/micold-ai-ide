@@ -8,12 +8,13 @@ use super::{LineRange, RelPath, Side};
 
 /// A comment's identity: a v4 UUID the daemon assigns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct CommentId(pub Uuid);
 
 impl CommentId {
     /// A fresh random id.
     pub fn new() -> Self {
-        Self(Uuid::nil())
+        Self(Uuid::new_v4())
     }
 }
 
@@ -24,8 +25,10 @@ impl Default for CommentId {
 }
 
 /// Whether a comment has reached its session. `Pending → Sent` only on delivery (FR-017), and
-/// never back.
+/// never back. Stored as `{ "pending": null }` or `{ "sent": { "at": … } }` (data-model § Core:
+/// persistence).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "StateRepr", into = "StateRepr")]
 pub enum CommentState {
     /// Not yet delivered.
     Pending,
@@ -34,6 +37,33 @@ pub enum CommentState {
         /// When the prompt was written.
         at: u64,
     },
+}
+
+/// The stored shape of [`CommentState`]: a newtype `Pending(())` writes `{ "pending": null }`
+/// where a unit variant would write a bare string.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum StateRepr {
+    Pending(()),
+    Sent { at: u64 },
+}
+
+impl From<StateRepr> for CommentState {
+    fn from(repr: StateRepr) -> Self {
+        match repr {
+            StateRepr::Pending(()) => Self::Pending,
+            StateRepr::Sent { at } => Self::Sent { at },
+        }
+    }
+}
+
+impl From<CommentState> for StateRepr {
+    fn from(state: CommentState) -> Self {
+        match state {
+            CommentState::Pending => Self::Pending(()),
+            CommentState::Sent { at } => Self::Sent { at },
+        }
+    }
 }
 
 /// One comment on a line range of one side of one file (FR-011, FR-012).
@@ -45,7 +75,8 @@ pub struct ReviewComment {
     pub path: RelPath,
     /// Which version the lines are numbered in.
     pub side: Side,
-    /// The lines it is about.
+    /// The lines it is about, stored as top-level `start` and `end`.
+    #[serde(flatten)]
     pub range: LineRange,
     /// Those lines' text when the comment was made, one entry per line.
     pub quote: Vec<String>,
@@ -97,12 +128,18 @@ mod tests {
 
     #[test]
     fn comments_round_trip_in_both_states_and_on_the_old_side() {
-        for state in [CommentState::Pending, CommentState::Sent { at: 1_790_000_100 }] {
+        for state in [
+            CommentState::Pending,
+            CommentState::Sent { at: 1_790_000_100 },
+        ] {
             let mut comment = sample(state);
             comment.side = Side::Old;
             let text = serde_json::to_string(&comment).expect("serialises");
             let back: ReviewComment = serde_json::from_str(&text).expect("deserialises");
-            assert_eq!(back, comment, "a comment survives a JSON round trip: {text}");
+            assert_eq!(
+                back, comment,
+                "a comment survives a JSON round trip: {text}"
+            );
         }
         let sent = serde_json::to_value(sample(CommentState::Sent { at: 5 })).expect("serialises");
         assert_eq!(sent["state"], json!({ "sent": { "at": 5 } }));

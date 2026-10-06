@@ -28,7 +28,12 @@ impl RelPath {
     /// A path as the platform writes it: `\` separators become `/`. `None` for an absolute path
     /// (a leading `/` or `\`, or a drive letter) or an empty one.
     pub fn from_native(path: &str) -> Option<Self> {
-        Some(Self(path.to_owned()))
+        let bytes = path.as_bytes();
+        let drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+        if path.is_empty() || path.starts_with(['/', '\\']) || drive {
+            return None;
+        }
+        Some(Self(path.replace('\\', "/")))
     }
 
     /// A path exactly as git printed it (`-z` output, `core.quotepath=false`): already
@@ -94,9 +99,12 @@ impl From<LineRange> for RawRange {
 impl LineRange {
     /// `None` when `start` is 0 or after `end`.
     pub fn new(start: u32, end: u32) -> Option<Self> {
+        if start > end {
+            return None;
+        }
         Some(Self {
-            start: NonZeroU32::new(start.max(1))?,
-            end: NonZeroU32::new(end.max(1))?,
+            start: NonZeroU32::new(start)?,
+            end: NonZeroU32::new(end)?,
         })
     }
 
@@ -112,7 +120,7 @@ impl LineRange {
 
     /// How many lines the range covers.
     pub fn len(self) -> u32 {
-        0
+        self.end.get() - self.start.get() + 1
     }
 
     /// Never true: a range holds at least one line. Present for clippy's `len_without_is_empty`.
@@ -124,11 +132,11 @@ impl LineRange {
 /// The size limits of research R8.
 pub mod limits {
     /// Above this many added + removed lines a file's diff waits for "Show diff".
-    pub const MAX_CHANGED_LINES: u32 = 0;
+    pub const MAX_CHANGED_LINES: u32 = 5_000;
     /// Above this many bytes in either version a file's diff waits for "Show diff".
-    pub const MAX_VERSION_BYTES: u64 = 0;
+    pub const MAX_VERSION_BYTES: u64 = 2 * 1024 * 1024;
     /// At most this many lines of a range are quoted in the review prompt.
-    pub const MAX_QUOTED_LINES: usize = 0;
+    pub const MAX_QUOTED_LINES: usize = 50;
 }
 
 #[cfg(test)]

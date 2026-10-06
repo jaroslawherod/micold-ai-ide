@@ -59,10 +59,24 @@ fn fixture_on(branch: &str) -> Fixture {
     write(&root, ".gitignore", "*.log\n");
     commit_all(&root, "base");
     let wt = dir.path().join("wt");
-    git(&root, &["worktree", "add", "-q", "-b", "feature", wt.to_str().unwrap()]);
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feature",
+            wt.to_str().unwrap(),
+        ],
+    );
     write(&wt, "a.rs", "fn a() { committed(); }\n");
     commit_all(&wt, "feature work");
-    Fixture { _dir: dir, root, wt }
+    Fixture {
+        _dir: dir,
+        root,
+        wt,
+    }
 }
 
 fn fixture() -> Fixture {
@@ -70,11 +84,16 @@ fn fixture() -> Fixture {
 }
 
 fn on() -> Toggles {
-    Toggles { committed: true, uncommitted: true }
+    Toggles {
+        committed: true,
+        uncommitted: true,
+    }
 }
 
 fn list(dir: &Path, scope: ReviewScope, toggles: Toggles) -> ChangeList {
-    GitCli::new().change_list(dir, scope, toggles).expect("the list reads")
+    GitCli::new()
+        .change_list(dir, scope, toggles)
+        .expect("the list reads")
 }
 
 fn worktree_list(dir: &Path, toggles: Toggles) -> ChangeList {
@@ -87,7 +106,10 @@ fn paths(list: &ChangeList) -> Vec<&str> {
 }
 
 fn row<'a>(list: &'a ChangeList, path: &str) -> &'a micold_core::review::changes::ChangedFile {
-    list.files.iter().find(|file| file.path.as_str() == path).unwrap_or_else(|| panic!("{path} is listed"))
+    list.files
+        .iter()
+        .find(|file| file.path.as_str() == path)
+        .unwrap_or_else(|| panic!("{path} is listed"))
 }
 
 #[test]
@@ -96,7 +118,10 @@ fn the_base_is_the_merge_base_with_local_main() {
     let main = git(&f.root, &["rev-parse", "main"]);
     assert_eq!(
         GitCli::new().review_base(&f.wt),
-        Base::MergeBase { branch: "main".into(), commit: main },
+        Base::MergeBase {
+            branch: "main".into(),
+            commit: main
+        },
         "without origin/HEAD, the base is the merge-base with local main"
     );
 }
@@ -106,10 +131,20 @@ fn origin_head_is_preferred_over_main_and_master_is_the_last_fallback() {
     let f = fixture();
     let tip = git(&f.root, &["rev-parse", "main"]);
     git(&f.root, &["update-ref", "refs/remotes/origin/trunk", &tip]);
-    git(&f.root, &["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"]);
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
     assert_eq!(
         GitCli::new().review_base(&f.wt),
-        Base::MergeBase { branch: "origin/trunk".into(), commit: tip },
+        Base::MergeBase {
+            branch: "origin/trunk".into(),
+            commit: tip
+        },
         "origin/HEAD's target is the default branch when it is set"
     );
 
@@ -117,7 +152,10 @@ fn origin_head_is_preferred_over_main_and_master_is_the_last_fallback() {
     let tip = git(&m.root, &["rev-parse", "master"]);
     assert_eq!(
         GitCli::new().review_base(&m.wt),
-        Base::MergeBase { branch: "master".into(), commit: tip },
+        Base::MergeBase {
+            branch: "master".into(),
+            commit: tip
+        },
         "with neither origin/HEAD nor main, master"
     );
 }
@@ -144,20 +182,41 @@ fn committed_uncommitted_and_both_lists_follow_the_toggles() {
     let f = fixture();
     write(&f.wt, "b.rs", "fn b() { uncommitted(); }\n");
 
-    let committed = worktree_list(&f.wt, Toggles { committed: true, uncommitted: false });
+    let committed = worktree_list(
+        &f.wt,
+        Toggles {
+            committed: true,
+            uncommitted: false,
+        },
+    );
     assert_eq!(paths(&committed), ["a.rs"], "committed only (US1 s2)");
     assert_eq!(row(&committed, "a.rs").origin, Origin::Committed);
 
-    let uncommitted = worktree_list(&f.wt, Toggles { committed: false, uncommitted: true });
+    let uncommitted = worktree_list(
+        &f.wt,
+        Toggles {
+            committed: false,
+            uncommitted: true,
+        },
+    );
     assert_eq!(paths(&uncommitted), ["b.rs"], "uncommitted only (US1 s2)");
     assert_eq!(row(&uncommitted, "b.rs").origin, Origin::Uncommitted);
 
     let both = worktree_list(&f.wt, on());
     assert_eq!(paths(&both), ["a.rs", "b.rs"], "both (US1 s1)");
     let a = row(&both, "a.rs");
-    assert_eq!((a.kind.clone(), a.added, a.removed), (ChangeKind::Modified, 1, 1));
+    assert_eq!(
+        (a.kind.clone(), a.added, a.removed),
+        (ChangeKind::Modified, 1, 1)
+    );
 
-    let none = worktree_list(&f.wt, Toggles { committed: false, uncommitted: false });
+    let none = worktree_list(
+        &f.wt,
+        Toggles {
+            committed: false,
+            uncommitted: false,
+        },
+    );
     assert!(none.files.is_empty(), "both off lists nothing");
 }
 
@@ -169,7 +228,11 @@ fn a_file_changed_in_a_commit_and_on_disk_is_listed_once_with_the_combined_chang
     assert_eq!(paths(&both), ["a.rs"], "listed once (US1 s3)");
     let a = row(&both, "a.rs");
     assert_eq!(a.origin, Origin::Both);
-    assert_eq!((a.added, a.removed), (2, 1), "counted from the base to the file on disk");
+    assert_eq!(
+        (a.added, a.removed),
+        (2, 1),
+        "counted from the base to the file on disk"
+    );
 }
 
 #[test]
@@ -180,26 +243,54 @@ fn staged_unstaged_and_untracked_count_as_uncommitted_and_ignored_files_do_not()
     write(&f.wt, "old.rs", "one\ntwo\nthree\nfour\nfive\n");
     write(&f.wt, "notes dir/new é.md", "x\ny\n");
     write(&f.wt, "debug.log", "noise\n");
-    let list = worktree_list(&f.wt, Toggles { committed: false, uncommitted: true });
-    assert_eq!(paths(&list), ["b.rs", "notes dir/new é.md", "old.rs"], "FR-005");
+    let list = worktree_list(
+        &f.wt,
+        Toggles {
+            committed: false,
+            uncommitted: true,
+        },
+    );
+    assert_eq!(
+        paths(&list),
+        ["b.rs", "notes dir/new é.md", "old.rs"],
+        "FR-005"
+    );
     let new = row(&list, "notes dir/new é.md");
-    assert_eq!((new.kind.clone(), new.added, new.removed), (ChangeKind::Untracked, 2, 0));
+    assert_eq!(
+        (new.kind.clone(), new.added, new.removed),
+        (ChangeKind::Untracked, 2, 0)
+    );
 }
 
 #[test]
 fn a_rename_and_a_binary_file_are_listed_with_their_kind() {
     let f = fixture();
     git(&f.wt, &["mv", "old.rs", "renamed.rs"]);
-    fs::write(f.wt.join("logo.png"), [0x89u8, b'P', b'N', b'G', 0, 1, 2, 3]).unwrap();
+    fs::write(
+        f.wt.join("logo.png"),
+        [0x89u8, b'P', b'N', b'G', 0, 1, 2, 3],
+    )
+    .unwrap();
     commit_all(&f.wt, "rename and binary");
-    let list = worktree_list(&f.wt, Toggles { committed: true, uncommitted: false });
+    let list = worktree_list(
+        &f.wt,
+        Toggles {
+            committed: true,
+            uncommitted: false,
+        },
+    );
     assert_eq!(paths(&list), ["a.rs", "logo.png", "renamed.rs"]);
     assert_eq!(
         row(&list, "renamed.rs").kind,
-        ChangeKind::Renamed { from: micold_core::review::RelPath::from_native("old.rs").unwrap() }
+        ChangeKind::Renamed {
+            from: micold_core::review::RelPath::from_native("old.rs").unwrap()
+        }
     );
     let png = row(&list, "logo.png");
-    assert_eq!((png.kind.clone(), png.content), (ChangeKind::Added, Content::Binary));
+    assert_eq!(
+        (png.kind.clone(), png.content),
+        (ChangeKind::Added, Content::Binary)
+    );
 }
 
 #[test]
