@@ -67,7 +67,12 @@ impl From<CommentState> for StateRepr {
 }
 
 /// One comment on a line range of one side of one file (FR-011, FR-012).
+///
+/// Serialised through [`StoredComment`], which spells the range as top-level `start` and `end`
+/// without `#[serde(flatten)]`: flatten needs a self-describing format, and the comment also
+/// travels on the postcard wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "StoredComment", into = "StoredComment")]
 pub struct ReviewComment {
     /// Its identity.
     pub id: CommentId,
@@ -76,7 +81,6 @@ pub struct ReviewComment {
     /// Which version the lines are numbered in.
     pub side: Side,
     /// The lines it is about, stored as top-level `start` and `end`.
-    #[serde(flatten)]
     pub range: LineRange,
     /// Those lines' text when the comment was made, one entry per line.
     pub quote: Vec<String>,
@@ -86,6 +90,59 @@ pub struct ReviewComment {
     pub state: CommentState,
     /// When it was made (Unix seconds).
     pub created: u64,
+}
+
+/// The stored and wire shape of [`ReviewComment`].
+#[derive(Serialize, Deserialize)]
+struct StoredComment {
+    id: CommentId,
+    path: RelPath,
+    side: Side,
+    start: u32,
+    end: u32,
+    quote: Vec<String>,
+    text: String,
+    state: CommentState,
+    created: u64,
+}
+
+impl TryFrom<StoredComment> for ReviewComment {
+    type Error = String;
+
+    fn try_from(stored: StoredComment) -> Result<Self, Self::Error> {
+        let range = LineRange::new(stored.start, stored.end).ok_or_else(|| {
+            format!(
+                "invalid line range {}..={}: lines start at 1 and start <= end",
+                stored.start, stored.end
+            )
+        })?;
+        Ok(Self {
+            id: stored.id,
+            path: stored.path,
+            side: stored.side,
+            range,
+            quote: stored.quote,
+            text: stored.text,
+            state: stored.state,
+            created: stored.created,
+        })
+    }
+}
+
+impl From<ReviewComment> for StoredComment {
+    fn from(comment: ReviewComment) -> Self {
+        Self {
+            id: comment.id,
+            path: comment.path,
+            side: comment.side,
+            start: comment.range.start(),
+            end: comment.range.end(),
+            quote: comment.quote,
+            text: comment.text,
+            state: comment.state,
+            created: comment.created,
+        }
+    }
 }
 
 #[cfg(test)]
