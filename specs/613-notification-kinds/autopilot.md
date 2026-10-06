@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M4 (T046–T052)
+- **Next step**: M4 gate, review A (high) and B, visual pass §B2–B4/B7, push
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
 | M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | done (pushed; full gate 2 at 312578d0 green but for the 6 root-only permission tests; reviews A and B clean; visual pass §B5/B6/B8/B9 PASS) |
-| M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
+| M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | #618 | implemented (T046–T052 ticked); gate and reviews A/B next |
 
 M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
 

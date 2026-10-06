@@ -186,3 +186,26 @@ assertion's failure; where only a field or variant was missing, the red is the c
   - Disabled checked box keeps its mark (visual-pass finding) — test-first: `a_disabled_checked_checkbox_keeps_a_visible_mark`
     red (`assertion left != right failed: Light`) before the `style::checkbox` change, green after.
 - **Refactor**: none.
+
+## Cycle 13 — M4: T046/T048/T049 (rasteriser), T047/T050/T051 (backends, icon files), T052 (guide)
+
+- **Red**: `tests/notification_icon.rs` rasteriser tests (size, tile luminance in [0.10, 0.30], tile
+  and white glyph pixels, ink centred within 1 px at 64, pairwise mask distinctness at 16) written
+  before `render`/`tile_colour`/`glyph_mask` existed — E0432 unresolved imports. Then the I5/I6
+  tests: `linux.rs` (`image-data` per kind, `(iiibiiay)` signature), `mod.rs`
+  (`icon_files_in`: writable, unwritable, none), `tests/notification_icon.rs` (`write_files`: four
+  256 px PNGs, overwrite, refusal), `windows.rs` (`toast_icon`, `ICON_CROP`), `macos.rs`
+  (`banner_image`) — E0432/E0422/E0425 (no `write_files`, `Hint`, `ImageData`, `image_data`,
+  `hint_value`, `icon_files_in`).
+- **Green**: `notification_icon::{Rgba, tile_colour, file_stem, render, glyph_mask, png,
+  IconFiles, write_files}`; Linux request hint; `mod.rs` once-per-run files under the data dir
+  with one log line on failure; Windows `Toast::icon(path, IconCrop::Square, kind.name())`; macOS
+  `Notification::image_path`. First green run failed the distinctness gate honestly:
+  `SessionError and LongTaskFinished differ in only 13 of 256 pixels` with the glyph at the tile's
+  62.5 % span; the gate's masks are now the glyph drawn *at* 16×16 (ink box spanning the square,
+  FR-017's wording), which passes; the tile render keeps 62.5 %. Linux: 30 `desktop_notify` bin
+  tests and 11 `notification_icon` tests green. Windows and macOS tests compile only:
+  `cargo clippy -p micold-client --all-targets -D warnings` for `aarch64-apple-darwin` and
+  `x86_64-pc-windows-msvc` clean, `cargo check --workspace --target aarch64-apple-darwin` clean;
+  this container cannot run them.
+- **Refactor**: none.

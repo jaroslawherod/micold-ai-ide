@@ -18,6 +18,7 @@ use std::time::Duration;
 use micold_client::features::attention::{
     DesktopNotification, DesktopNotifier, NotifierEvent, NotifyError,
 };
+use micold_client::notification_icon::{render, Rgba};
 use micold_core::session::SessionId;
 use std::path::PathBuf;
 
@@ -49,8 +50,60 @@ pub(super) struct NotifyRequest {
     pub summary: String,
     pub body: String,
     pub actions: Vec<String>,
-    pub hints: Vec<(&'static str, String)>,
+    pub hints: Vec<(&'static str, Hint)>,
     pub expire_timeout: i32,
+}
+
+/// The value of one hint of the request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Hint {
+    Text(String),
+    Image(ImageData),
+}
+
+/// The `image-data` hint's structure, `(iiibiiay)`, field for field (feature 613, I5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ImageData {
+    pub width: i32,
+    pub height: i32,
+    pub rowstride: i32,
+    pub has_alpha: bool,
+    pub bits_per_sample: i32,
+    pub channels: i32,
+    pub data: Vec<u8>,
+}
+
+/// The side, in pixels, of the icon the request carries.
+const ICON_PX: u32 = 64;
+
+/// `image` as the `image-data` hint: straight RGBA, 8 bits a sample, rows with no padding.
+pub(super) fn image_data(image: &Rgba) -> ImageData {
+    let side = |px: u32| i32::try_from(px).unwrap_or(i32::MAX);
+    ImageData {
+        width: side(image.width),
+        height: side(image.height),
+        rowstride: side(image.width.saturating_mul(4)),
+        has_alpha: true,
+        bits_per_sample: 8,
+        channels: 4,
+        data: image.pixels.clone(),
+    }
+}
+
+/// `hint` as the bus carries it.
+pub(super) fn hint_value(hint: &Hint) -> zbus::zvariant::Value<'_> {
+    match hint {
+        Hint::Text(text) => zbus::zvariant::Value::from(text.as_str()),
+        Hint::Image(image) => zbus::zvariant::Value::from((
+            image.width,
+            image.height,
+            image.rowstride,
+            image.has_alpha,
+            image.bits_per_sample,
+            image.channels,
+            image.data.clone(),
+        )),
+    }
 }
 
 /// `text` as notification body markup: a server with the `body-markup` capability reads `&`, `<`
@@ -68,8 +121,10 @@ fn escape_markup(text: &str) -> String {
     escaped
 }
 
-/// The `Notify` call for `notification`: the title as the summary, the body, the `default` action
-/// and the `desktop-entry` hint; nothing else (contract N2). The action is offered whatever the
+/// The `Notify` call for `notification`: the title as the summary, the body, the `default` action,
+/// the `desktop-entry` hint and the kind's icon as the `image-data` hint (feature 613, I5);
+/// nothing else (contract N2). `image-data` comes first among the specification's image sources,
+/// and needs no file the service must be able to read. The action is offered whatever the
 /// service can do (N7). Never replaces an earlier one (N3). The
 /// summary is plain text by the specification; the body is markup, so it is escaped.
 pub(super) fn notify_request(notification: &DesktopNotification) -> NotifyRequest {
@@ -80,7 +135,13 @@ pub(super) fn notify_request(notification: &DesktopNotification) -> NotifyReques
         summary: notification.title.clone(),
         body: escape_markup(&notification.body),
         actions: vec![DEFAULT_ACTION.to_string(), DEFAULT_ACTION_LABEL.to_string()],
-        hints: vec![("desktop-entry", DESKTOP_ENTRY.to_string())],
+        hints: vec![
+            ("desktop-entry", Hint::Text(DESKTOP_ENTRY.to_string())),
+            (
+                "image-data",
+                Hint::Image(image_data(&render(notification.kind, ICON_PX))),
+            ),
+        ],
         // The server's own default.
         expire_timeout: -1,
     }
@@ -346,7 +407,7 @@ impl DesktopNotifier for Notifier {
         let hints: HashMap<&str, zbus::zvariant::Value<'_>> = request
             .hints
             .iter()
-            .map(|(key, value)| (*key, zbus::zvariant::Value::from(value.as_str())))
+            .map(|(key, hint)| (*key, hint_value(hint)))
             .collect();
         let reply = self
             .connection()?
@@ -387,6 +448,7 @@ impl DesktopNotifier for Notifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_client::notification_icon::render;
     use micold_core::attention::NotificationKind;
 
     fn notification() -> DesktopNotification {
@@ -400,8 +462,9 @@ mod tests {
     }
 
     #[test]
-    fn notify_request_carries_the_app_name_the_text_and_the_desktop_entry_and_nothing_else() {
-        // U159 (FR-004, N2, N3).
+    fn notify_request_carries_the_app_name_the_text_the_desktop_entry_and_the_icon_and_nothing_else(
+    ) {
+        // U159 (FR-004, N2, N3); feature 613 I5 adds the kind's icon.
         assert_eq!(
             notify_request(&notification()),
             NotifyRequest {
@@ -411,10 +474,60 @@ mod tests {
                 summary: "Fix the parser is waiting for input".to_string(),
                 body: "repo \u{2014} Parser work".to_string(),
                 actions: vec!["default".to_string(), "Open".to_string()],
-                hints: vec![("desktop-entry", "micold-ai-ide".to_string())],
+                hints: vec![
+                    ("desktop-entry", Hint::Text("micold-ai-ide".to_string())),
+                    (
+                        "image-data",
+                        Hint::Image(ImageData {
+                            width: 64,
+                            height: 64,
+                            rowstride: 256,
+                            has_alpha: true,
+                            bits_per_sample: 8,
+                            channels: 4,
+                            data: render(NotificationKind::NeedsPermission, 64).pixels,
+                        })
+                    ),
+                ],
                 expire_timeout: -1,
             }
         );
+    }
+
+    #[test]
+    fn the_request_for_each_kind_carries_that_kinds_icon_as_image_data() {
+        // Feature 613, I5 (FR-016): the pixels themselves, so the service needs no file.
+        for kind in NotificationKind::ALL {
+            let request = notify_request(&DesktopNotification {
+                kind,
+                ..notification()
+            });
+            let image = request
+                .hints
+                .iter()
+                .find_map(|(key, hint)| match (key, hint) {
+                    (&"image-data", Hint::Image(image)) => Some(image.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{kind:?}: no image-data hint"));
+            let rendered = render(kind, 64);
+            assert_eq!(
+                (image.width, image.height, image.rowstride),
+                (64, 64, 4 * 64),
+                "{kind:?}"
+            );
+            assert!(image.has_alpha, "{kind:?}");
+            assert_eq!((image.bits_per_sample, image.channels), (8, 4), "{kind:?}");
+            assert_eq!(image.data, rendered.pixels, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn the_image_data_hint_has_the_signature_the_specification_gives() {
+        // I5: `(iiibiiay)`.
+        let hint = Hint::Image(image_data(&render(NotificationKind::TurnFinished, 64)));
+        let value = hint_value(&hint);
+        assert_eq!(value.value_signature().to_string(), "(iiibiiay)");
     }
 
     #[test]

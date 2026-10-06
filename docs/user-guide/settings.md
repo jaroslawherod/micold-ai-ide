@@ -180,6 +180,23 @@ their values; turn it on again and they are as you left them.
 Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they
 neither notify you nor mark the session unread.
 
+**Each kind has its own icon.** The icon beside a kind's switch is the one its desktop
+notifications carry: a raised hand for **Needs permission**, a circled exclamation mark for
+**Session error**, a circled tick for **Long task finished** and a speech bubble for **Turn
+finished**. In a notification the icon is drawn in white on a coloured rounded square, so it stands
+out on a light and a dark desktop alike.
+
+- **Linux**: the notification shows the icon in place of the app's, on desktops whose notification
+  service shows images (GNOME, KDE Plasma and most others do).
+- **Windows**: the toast shows the icon in place of the app's logo.
+- **macOS**: the notification always shows the app's own icon; the kind's icon is attached to it
+  and shows on its right side, or larger when you expand the notification.
+
+Where a system shows no icon from the app, the notification is still shown, and its title names
+the kind: *needs permission*, *stopped with an error*, *finished a long task* or *finished its
+turn*. Windows and macOS need the icons as files: the app writes them to `notification-icons/`
+beside the settings file ([Where settings are stored](#where-settings-are-stored)) once each time
+it runs. If it cannot, it notes that once and shows the notifications without icons.
 
 - **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot and Pi sessions.
   There is no switch per CLI.

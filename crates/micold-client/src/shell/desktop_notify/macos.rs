@@ -26,6 +26,8 @@ use mac_usernotifications::{NotificationHandle, NotificationResponse};
 use micold_client::features::attention::{
     DesktopNotification, DesktopNotifier, NotifierEvent, NotifyError,
 };
+use micold_client::notification_icon::IconFiles;
+use micold_core::attention::NotificationKind;
 use micold_core::session::SessionId;
 
 /// How long [`Notifier::show`] waits for the system to answer. The request for authorisation is
@@ -57,6 +59,13 @@ pub(super) fn banner(notification: &DesktopNotification) -> Banner {
         title: notification.title.clone(),
         message: notification.body.clone(),
     }
+}
+
+/// The image a banner of `kind` carries (feature 613, I6, I7): the path of its icon file, as the
+/// notification's attachment; none when no file was written, and the banner is shown without one
+/// (FR-016). macOS always shows the application's own icon beside it.
+pub(super) fn banner_image(kind: NotificationKind, icons: &IconFiles) -> Option<String> {
+    icons.path(kind).map(|path| path.display().to_string())
 }
 
 /// What a failure of `mac-usernotifications` means for the user (FR-010): a binary outside a
@@ -138,7 +147,11 @@ fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// the system's own prompt and returns when the user answers it; later ones return at once. A
 /// binary outside a bundle is refused by the crate's `check_bundle` before the system is touched.
 /// The handle is what the user's response arrives on.
-fn deliver(banner: Banner, asking: &Asking) -> Result<NotificationHandle, NotifyError> {
+fn deliver(
+    banner: Banner,
+    image: Option<String>,
+    asking: &Asking,
+) -> Result<NotificationHandle, NotifyError> {
     locked(asking).get_or_insert_with(Instant::now);
     let answer = mac_usernotifications::blocking::request_auth();
     *locked(asking) = None;
@@ -146,14 +159,14 @@ fn deliver(banner: Banner, asking: &Asking) -> Result<NotificationHandle, Notify
     // Not `send_blocking`: it refuses with `MainThreadNotRunning` whenever the main run loop is
     // busy at that instant. The request is completed on a queue of the system's, as
     // `blocking::send` relies on too.
-    mac_usernotifications::block_on(
-        mac_usernotifications::Notification::new()
-            .title(banner.title)
-            .message(banner.message)
-            .timeout(CLICK_WAIT)
-            .send(),
-    )
-    .map_err(|error| notify_error(&error))
+    let mut request = mac_usernotifications::Notification::new()
+        .title(banner.title)
+        .message(banner.message)
+        .timeout(CLICK_WAIT);
+    if let Some(path) = image {
+        request = request.image_path(path);
+    }
+    mac_usernotifications::block_on(request.send()).map_err(|error| notify_error(&error))
 }
 
 /// The macOS notifier: the channel a click is reported on, the notifications that can still be
@@ -162,14 +175,16 @@ pub(super) struct Notifier {
     events: super::Events,
     shown: Arc<Mutex<Shown>>,
     asking: Asking,
+    icons: &'static IconFiles,
 }
 
 impl Notifier {
-    pub(super) fn new(events: super::Events) -> Self {
+    pub(super) fn new(events: super::Events, icons: &'static IconFiles) -> Self {
         Self {
             events,
             shown: Arc::default(),
             asking: Arc::default(),
+            icons,
         }
     }
 }
@@ -183,6 +198,7 @@ impl DesktopNotifier for Notifier {
             return outcome(None);
         }
         let banner = banner(&notification);
+        let image = banner_image(notification.kind, self.icons);
         let DesktopNotification {
             project, session, ..
         } = notification;
@@ -195,7 +211,7 @@ impl DesktopNotifier for Notifier {
         std::thread::Builder::new()
             .name("desktop-notify".to_string())
             .spawn(move || {
-                let delivered = deliver(banner, &asking);
+                let delivered = deliver(banner, image, &asking);
                 // Nobody listens once `show` has stopped waiting.
                 let _ = answer.send(delivered.as_ref().map(drop).map_err(Clone::clone));
                 let Ok(handle) = delivered else { return };
@@ -218,6 +234,7 @@ impl DesktopNotifier for Notifier {
 mod tests {
     use super::*;
     use mac_usernotifications::{CloseReason, Error};
+    use micold_client::notification_icon::{write_files, IconFiles};
     use micold_core::attention::NotificationKind;
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
@@ -442,5 +459,27 @@ mod tests {
         assert!(!prompt_is_open(Some(Duration::from_millis(50))));
         assert!(prompt_is_open(Some(ANSWER_WAIT)));
         assert!(prompt_is_open(Some(ANSWER_WAIT * 30)));
+    }
+
+    #[test]
+    fn the_banner_for_a_kind_with_an_icon_file_carries_its_path() {
+        // Feature 613, I6, I7 (FR-016): the kind's icon as the notification's attachment.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let files = write_files(dir.path()).expect("a writable directory");
+        for kind in NotificationKind::ALL {
+            assert_eq!(
+                banner_image(kind, &files),
+                Some(files.path(kind).expect("written").display().to_string()),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn without_an_icon_file_the_banner_carries_no_image() {
+        // I6 (FR-016): the banner is still shown; its title names the kind.
+        for kind in NotificationKind::ALL {
+            assert_eq!(banner_image(kind, &IconFiles::default()), None, "{kind:?}");
+        }
     }
 }

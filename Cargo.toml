@@ -114,6 +114,9 @@ alacritty_terminal = "0.26"
 # --- shared dev deps ---
 tempfile = "3.27.0"
 ttf-parser = "0.25.1"
+# Feature 613 (research R7): the kind icons rasterised for the OS notification. Already in the build
+# through `iced_tiny_skia`; `png-format` adds the `png` encoder for the Windows and macOS icon files.
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd", "png-format"] }
 # Feature 019 only, and dev-only. Reading back *drawn* text needs the concrete CPU renderer:
 # `iced::Renderer` is `fallback::Renderer<wgpu, tiny_skia>`, so naming its variants needs
 # `iced_renderer` and calling `layers()` needs `iced_tiny_skia`. These are iced's internal crates

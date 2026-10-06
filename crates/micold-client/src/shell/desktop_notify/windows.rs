@@ -11,7 +11,10 @@ use std::path::PathBuf;
 use micold_client::features::attention::{
     DesktopNotification, DesktopNotifier, NotifierEvent, NotifyError,
 };
+use micold_client::notification_icon::IconFiles;
+use micold_core::attention::NotificationKind;
 use micold_core::session::SessionId;
+use tauri_winrt_notification::IconCrop;
 
 /// The Application User Model ID the toast is shown under. Windows shows a toast only for an ID
 /// that a Start-menu shortcut carries: the installer puts this same string on its shortcut
@@ -33,6 +36,26 @@ pub(super) fn toast_text(notification: &DesktopNotification) -> ToastText {
         title: notification.title.clone(),
         line: notification.body.clone(),
     }
+}
+
+/// The kind's icon on the toast (feature 613, I6): its file in the app logo's place, named for the
+/// kind for a screen reader.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ToastIcon {
+    pub path: PathBuf,
+    pub alt: &'static str,
+}
+
+/// How the toast crops the icon: the tile is a rounded square already.
+pub(super) const ICON_CROP: IconCrop = IconCrop::Square;
+
+/// The icon of a toast of `kind`: its file, when one was written; else none, and the toast is
+/// shown without one (FR-016).
+pub(super) fn toast_icon(kind: NotificationKind, icons: &IconFiles) -> Option<ToastIcon> {
+    icons.path(kind).map(|path| ToastIcon {
+        path: path.to_path_buf(),
+        alt: kind.name(),
+    })
 }
 
 /// What a failure of `tauri-winrt-notification` means for the user (FR-010): the system was asked
@@ -64,15 +87,16 @@ pub(super) fn on_activated(
     }
 }
 
-/// The Windows notifier: the channel a click is reported on. Each toast is built and handed to
+/// The Windows notifier: the channel a click is reported on, and the kind icons' files. Each toast is built and handed to
 /// the system.
 pub(super) struct Notifier {
     events: super::Events,
+    icons: &'static IconFiles,
 }
 
 impl Notifier {
-    pub(super) fn new(events: super::Events) -> Self {
-        Self { events }
+    pub(super) fn new(events: super::Events, icons: &'static IconFiles) -> Self {
+        Self { events, icons }
     }
 }
 
@@ -82,9 +106,13 @@ impl DesktopNotifier for Notifier {
     /// (research R4), so an `Ok` here does not promise a toast on screen.
     fn show(&self, notification: DesktopNotification) -> Result<(), NotifyError> {
         let text = toast_text(&notification);
-        tauri_winrt_notification::Toast::new(APP_USER_MODEL_ID)
+        let mut toast = tauri_winrt_notification::Toast::new(APP_USER_MODEL_ID)
             .title(&text.title)
-            .text1(&text.line)
+            .text1(&text.line);
+        if let Some(icon) = toast_icon(notification.kind, self.icons) {
+            toast = toast.icon(&icon.path, ICON_CROP, icon.alt);
+        }
+        toast
             .on_activated(on_activated(
                 self.events.clone(),
                 notification.project,
@@ -99,8 +127,9 @@ impl DesktopNotifier for Notifier {
 mod tests {
     use super::*;
     use iced::futures::channel::mpsc;
+    use micold_client::notification_icon::{write_files, IconFiles};
     use micold_core::attention::NotificationKind;
-    use tauri_winrt_notification::Error;
+    use tauri_winrt_notification::{Error, IconCrop};
 
     fn notification(title: &str, body: &str) -> DesktopNotification {
         DesktopNotification {
@@ -224,5 +253,31 @@ mod tests {
         drop(received);
         let handler = on_activated(events, PathBuf::from("/repo"), SessionId::new());
         assert!(handler(None).is_ok());
+    }
+
+    #[test]
+    fn the_toast_for_a_kind_with_an_icon_file_carries_it_square_with_the_kinds_name() {
+        // Feature 613, I6 (FR-016): the app logo override, cropped square, named for the kind.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let files = write_files(dir.path()).expect("a writable directory");
+        for kind in NotificationKind::ALL {
+            assert_eq!(
+                toast_icon(kind, &files),
+                Some(ToastIcon {
+                    path: files.path(kind).expect("written").to_path_buf(),
+                    alt: kind.name(),
+                }),
+                "{kind:?}"
+            );
+        }
+        assert!(ICON_CROP == IconCrop::Square);
+    }
+
+    #[test]
+    fn without_an_icon_file_the_toast_carries_no_image() {
+        // I6 (FR-016): the toast is still shown; its title names the kind.
+        for kind in NotificationKind::ALL {
+            assert_eq!(toast_icon(kind, &IconFiles::default()), None, "{kind:?}");
+        }
     }
 }
