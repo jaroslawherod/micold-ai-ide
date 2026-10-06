@@ -33,7 +33,7 @@ use iced::{window, Event};
 
 use micold_client::ui::cdk::motion::{Progress, FRAME};
 
-use support::tooltip::{follow_tooltip, tooltip, Driven, DELAY};
+use support::tooltip::{delayed_tooltip, follow_tooltip, tooltip, Driven, DELAY};
 
 /// The duration a component would state in its own motion spec. Any value works; this one is a
 /// realistic transition rather than a degenerate one.
@@ -427,7 +427,7 @@ fn wake_at_has_one_caller() {
     /// Who may ask for a timed wake, and why it ends.
     const CALLERS: &[(&str, &str)] = &[(
         "ui/cdk/tooltip.rs",
-        "asks only while its `RestTimer` is waiting, for the instant the wait ends",
+        "asks only while its `RestTimer` or `ShowTimer` is waiting, for the instant the wait ends",
     )];
 
     let mut sites = Vec::new();
@@ -689,5 +689,44 @@ fn a_follow_tooltip_that_is_open_with_a_still_pointer_or_closed_requests_no_fram
             RedrawRequest::Wait,
             "open and still, frame {n}"
         );
+    }
+}
+
+/// A waiting show delay costs one timed wake and no frame; none once open, away or without one
+/// (feature 430, FR-007, SC-005).
+#[test]
+fn a_waiting_show_delay_asks_for_one_timed_wake_and_no_frame() {
+    for follow in [false, true] {
+        let mut tip = Driven::new(delayed_tooltip(DELAY, follow, None));
+        let start = Instant::now();
+        let away = iced::mouse::Cursor::Available(iced::Point::ORIGIN);
+        assert_eq!(
+            tip.frame(start, away).redraw,
+            RedrawRequest::Wait,
+            "follow={follow}: away asks for nothing"
+        );
+
+        let cursor = tip.over(20.0);
+        assert_eq!(
+            tip.frame(start + FRAME, cursor).redraw,
+            RedrawRequest::At(start + FRAME + DELAY),
+            "follow={follow}: entering asks for the end of the wait"
+        );
+        let moved = tip.over(60.0);
+        assert_eq!(
+            tip.frame(start + FRAME * 2, moved).redraw,
+            RedrawRequest::At(start + FRAME + DELAY),
+            "follow={follow}: movement neither restarts it nor asks for a frame"
+        );
+
+        tip.frame(start + FRAME + DELAY, moved);
+        assert!(tip.is_open(), "precondition: the delay opened it");
+        for n in 1..=10 {
+            assert_eq!(
+                tip.frame(start + FRAME + DELAY + FRAME * n, moved).redraw,
+                RedrawRequest::Wait,
+                "follow={follow}: open and still, frame {n}"
+            );
+        }
     }
 }

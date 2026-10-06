@@ -127,6 +127,27 @@ pub fn follow_tooltip(subject: Option<u64>) -> Tooltip<'static, Msg> {
     tip
 }
 
+/// A tooltip over the probe with a show delay of `delay`, following the pointer when `follow`
+/// (feature 430).
+pub fn delayed_tooltip(
+    delay: Duration,
+    follow: bool,
+    subject: Option<u64>,
+) -> Tooltip<'static, Msg> {
+    let position = if follow {
+        Position::FollowCursor
+    } else {
+        Position::Bottom
+    };
+    let mut tip = Tooltip::new(Element::new(Probe), container(text("panel")), position)
+        .gap(FOLLOW_GAP)
+        .show_delay(delay);
+    if let Some(key) = subject {
+        tip = tip.subject(key);
+    }
+    tip
+}
+
 /// What one event made the tooltip ask for.
 #[derive(Debug)]
 pub struct Seen {

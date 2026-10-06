@@ -133,7 +133,7 @@ fn the_tooltips_rest_mode_is_three_chainable_steps() {
             .expect("the conversion that ends the builder");
     let builder = &code[start..end];
 
-    for step in ["after_rest", "max_lines", "subject"] {
+    for step in ["after_rest", "show_delay", "max_lines", "subject"] {
         let Some(at) = builder.find(&format!("pub fn {step}(")) else {
             panic!("`material::Tooltip::{step}` is missing");
         };
