@@ -143,7 +143,11 @@ async fn setting_the_diff_layout_is_persisted_and_reported_in_welcome_after_a_re
     let store = tempfile::tempdir().unwrap();
     let state = service(store.path());
     let (mut client, welcomed) = connect(&state).await;
-    assert_eq!(welcomed.diff_layout, DiffLayout::Unified, "unified until changed");
+    assert_eq!(
+        welcomed.diff_layout,
+        DiffLayout::Unified,
+        "unified until changed"
+    );
 
     client
         .send(Frame::Control(set_layout(1, DiffLayout::SideBySide)))
@@ -202,7 +206,9 @@ async fn review_edit_and_review_send_are_refused_until_served() {
         }))
         .await
         .unwrap();
-    let (kind, message) = answer(&mut client, 1).await.expect_err("ReviewEdit is refused");
+    let (kind, message) = answer(&mut client, 1)
+        .await
+        .expect_err("ReviewEdit is refused");
     assert_eq!(kind, ErrorKind::Refused);
     assert!(message.contains("not available"), "{message}");
 
@@ -216,6 +222,8 @@ async fn review_edit_and_review_send_are_refused_until_served() {
         }))
         .await
         .unwrap();
-    let (kind, _) = answer(&mut client, 2).await.expect_err("ReviewSend is refused");
+    let (kind, _) = answer(&mut client, 2)
+        .await
+        .expect_err("ReviewSend is refused");
     assert_eq!(kind, ErrorKind::Refused);
 }

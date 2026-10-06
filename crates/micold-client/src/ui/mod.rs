@@ -3,6 +3,8 @@
 pub(crate) mod about;
 pub(crate) mod attach_dialog;
 pub mod cdk;
+/// The Changes view (feature 482): shown in place of the terminal pane while open.
+mod changes;
 pub(crate) mod confirm_agent_request;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_forget;
@@ -313,7 +315,10 @@ pub fn view<'a>(
         .showing(main_content_key(state))
         .into()
     } else if state.workspace.active_project().is_some() {
-        let main_inner: Element<'a, Message> = if state.session.active.is_some() {
+        let main_inner: Element<'a, Message> = if let Some(view) = state.changes.open.as_ref() {
+            // Feature 482, V1: the Changes view takes the terminal pane's place while open.
+            changes::view(state, view, scheme)
+        } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
             terminal::pane(state, grid, selection, display_offset, scheme, link_context)
         } else {
@@ -480,6 +485,25 @@ pub fn view<'a>(
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.worktree.menu_open.as_ref().map(|menu| {
             let dir = &menu.dir_name;
+            // Feature 482: the Default row's menu reuses this one with the wire's name for the
+            // project root, `""`, and offers only **Review changes** (V1).
+            if dir.is_empty() {
+                let items = vec![review_changes_item(
+                    micold_core::session::SessionLocation::Default,
+                )];
+                let (x, y) = crate::features::project::clamp_menu_anchor(
+                    menu.anchor,
+                    material::menu_panel_size(items.len()),
+                    state.window.window_size,
+                );
+                return material::MenuOverlay::new(
+                    items,
+                    Message::Worktree(WorktreeMsg::MenuDismissed),
+                    roles,
+                )
+                .anchor(iced::Point::new(x as f32, y as f32))
+                .into();
+            }
             let included = state
                 .worktree
                 .worktrees
@@ -694,6 +718,9 @@ fn worktree_menu_items(
     claimable: bool,
 ) -> Vec<material::MenuItem<Message>> {
     let mut items = vec![
+        review_changes_item(micold_core::session::SessionLocation::Worktree(
+            dir.to_string(),
+        )),
         material::MenuItem::new(
             Icon::Copy,
             "Copy name",
@@ -735,6 +762,18 @@ fn worktree_menu_items(
         Message::Worktree(WorktreeMsg::DeleteRequested(dir.to_string())),
     ));
     items
+}
+
+/// **Review changes** for `entry` (feature 482, V1): first in a worktree row's menu, alone in the
+/// Default row's.
+fn review_changes_item(
+    entry: micold_core::session::SessionLocation,
+) -> material::MenuItem<Message> {
+    material::MenuItem::new(
+        Icon::Git,
+        "Review changes",
+        Message::Sidebar(SidebarMsg::ReviewChangesRequested(entry)),
+    )
 }
 
 /// The items in a terminal tab's right-click context menu (feature 012, BUG-005, FR-010b).
@@ -868,6 +907,10 @@ fn main_content_key(state: &State) -> u64 {
     // suppress the fade on exactly the transition it is for.
     if state.settings.settings_draft.is_some() {
         return u64::MAX;
+    }
+    // Feature 482: opening and closing the Changes view crossfades like any other content switch.
+    if state.changes.open.is_some() {
+        return u64::MAX - 1;
     }
     match (state.workspace.active_project(), state.session.active) {
         (None, _) => 0,

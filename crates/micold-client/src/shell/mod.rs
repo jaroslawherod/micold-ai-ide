@@ -17,6 +17,7 @@
 //! one message.
 
 pub mod capabilities;
+pub mod changes;
 pub mod clipboard;
 pub mod connection;
 pub mod daemon_sync;
