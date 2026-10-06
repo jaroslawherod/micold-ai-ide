@@ -121,7 +121,8 @@ crates/micold-daemon/src/
 │                           #   an error `Ended` send SessionErrorNotice; set_notification_kinds
 ├── catalog.rs              # settings accessors and persistence of notification_kinds
 ├── hooks.rs                # classify_hook: "SubagentStop" → Ignored; settings_json drops
-│                           #   SubagentStop (FR-024, research R3)
+│                           #   SubagentStop: HooksMap.subagent_stop field and its doc comment
+│                           #   (FR-024, research R3)
 └── server.rs               # SettingsSet.notification_kinds
 
 crates/micold-client/src/

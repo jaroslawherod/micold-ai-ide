@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #613
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
-- **Phase**: plan
-- **Next step**: plan unit (continue from Handover: plan review round 1)
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | c48e430ee5881189ede316fafd185dd594ab7342:f613369477c59a5fef3b3b56f9085d05eb440ff2 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
 | Plan | 1 | 50bb81b82acbb6a541a083394cf52b15c2fc0de0:718bb460f44042a7afb6a55cba3acd2e0b94dc62 | CHANGES: 4 MAJOR, 1 MINOR (all fixed: R3 rewritten, SubagentStop → Ignored, FR-024, C17) |
+| Plan | 2 | 56cef6625431cd768db0299b038eb5ab912f5dd0:6db8b02a59ca25fb6b5d67f0be14a3bdd497bf16 | CLEAN (1 MINOR, fixed, prose only: plan names HooksMap.subagent_stop) |
 | Spec | 2 | 4e5c412acfa49fdd6f0f43625e21fd7c3ebc035a:f613369477c59a5fef3b3b56f9085d05eb440ff2 | CLEAN (1 MINOR, fixed: FR-017 3:1 vs white and black) |
 
 ## Declined review findings
@@ -47,14 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit, step 1 (`speckit-plan`) done: plan.md, research.md (R1–R10), data-model.md,
-contracts/{wire,classification,notification}.md, quickstart.md committed. D4 threshold kept as the
-single constant `micold_core::attention::LONG_TASK_THRESHOLD`, passed as an argument to
-`TurnClock::change` (research R2), so a later setting replaces only the call site.
-Next: step 2 — round 1 plan review by a fresh reviewer (tasks/review.md with rubrics/plan.md, session
-model), then act on it (review-rounds.md), then step 3 (set Next step to `tasks unit`, return DONE).
-Note for the reviewer's attention: research R3 changes `SubagentStop` from `Stop` to `PostToolUse`
-(a 010/039 behaviour change, justified there). No open findings.
+None.
 
 ## Open escalation
 
