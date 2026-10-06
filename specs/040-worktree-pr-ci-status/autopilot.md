@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3 unit: T023–T029 implemented and ticked (rebased onto origin/main at protocol 27; #547 merged as 2e688bf3). Reviews A and B done; full gate, open the PR.
+- **Next step**: M3 PR #611 open; orchestrator waits on CI and merges, then M4.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #536 | Design | merged | 47f73eb184695cfcd1fb5cdc6129ee4c36dd8f4a |
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
 | #547 | M2 | merged | 2e688bf3d01bed2c3ae63681ecd05be8e6db3648 |
+| #611 | M3 | open | |
 
 ## Milestones
 
