@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+       "Bash(echo * >> .git/autopilot-gate-ok)"
+    ]
+  },
   "extraKnownMarketplaces": {
     "caveman": {
       "source": {
