@@ -35,7 +35,7 @@ stacks:
       - crates/micold-core/src/os_theme.rs
       - crates/micold-core/src/env_include.rs
 verified: [single, file, suite, fast_subset, acceptance]
-suite_baseline: green # 2629 passed, 0 failed, 2 ignored, 268 binaries
+suite_baseline: green # 5071 passed, 0 failed, 9 ignored, 429 binaries
 suite_seconds: 343
 ---
 

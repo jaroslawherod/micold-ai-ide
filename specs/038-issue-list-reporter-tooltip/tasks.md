@@ -381,3 +381,17 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: read `specs/038-issue-list-reporter-tooltip/evidence/README.md` (every §B step has an outcome; the SC-008 ratio is at most 1.5); `mise run gate`
 - **Depends on**: M1–M5
 - **Tier**: light
+
+---
+
+## Phase 9: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL at 89408097). The feature is not done until T064-T066 are cleared. T064-T066 need no code; T067-T070 are test changes.
+
+- [x] T064 [US3] Finding 1: set A16-A28 in `tdd/test-list.md` to `DONE (<test names>)` from the cycle log (cycles 14-26), and bring `planned_at`/`updated_at` up to date. Verify: `grep -c PENDING specs/038-issue-list-reporter-tooltip/tdd/test-list.md` prints 0.
+- [x] T065 [US1] Findings 2, 3: record U44 and the U82 source half in `tdd/test-list.md` as `DONE (test-after; red by mutant, cycle 6 and 21)`, so the deviation is on the list and not only in the log. Verify: both rows name the deviation.
+- [x] T066 Findings 8, 10, 11: note on the list the narrowed scan guards (`one_overlay_implementation.rs:160`, `material_boundary.rs:189`), the renamed frame-door test and the `constructed` counts in `main_tests.rs`; refresh the suite baseline in `.specify/memory/tdd-profile.md` (5071 passed, 429 binaries). Verify: re-read both files.
+- [x] T067 [US1] Finding 4: assert in `crates/micold-client/tests/showcase_state.rs` (or a layout gate over the showcase `Typeahead` pose) that its rows have differing heights. Verify: `scripts/build-lock.sh cargo test -p micold-client --test showcase_state`, and a mutant that gives the sample rows no second line fails it.
+- [x] T068 [US3] Finding 5: capture a real `bodyText` for a body with a hidden comment, a heading and a link into `crates/micold-core/tests/fixtures/gh/issue_node_description.json` (or correct the "captured" wording at `github_description.rs:141` and `github_description_pass.rs:174`). Verify: `scripts/build-lock.sh cargo test -p micold-core --test github_description --test github_description_pass`. (Done the cheap way: the "captured" wording corrected to hand-written fixture.)
+- [x] T069 [US1] Finding 6: in `crates/micold-client/tests/issue_picker_rows.rs:123-138` compare the rows with literal expected labels, details and spans instead of values computed by `Issue::title_line()`/`emphasis()`. Verify: `scripts/build-lock.sh cargo test -p micold-client --test issue_picker_rows`; a mutant in `issue_rows` that swaps label and details fails it.
+- [x] T070 [US2] Findings 7, 9: replace the `include_str!` scan at `issue_picker_rows.rs:174-179` with an assertion on the rendered view's placeholder; add messages to `github_description.rs:389-393`. Verify: `scripts/build-lock.sh cargo test -p micold-client --test issue_picker_rows` and `-p micold-core --test github_description`.

@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #518
 - **Worktree branch**: feat/issue-list-reporter-labels-tooltip
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone
-- **Next step**: M6 PR open; orchestrator waits on CI and merges, then the close unit.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #549 | M3: typing a login narrows the issue list, the reporter emphasised | merged | a3a57925c7b931ea1e887f7cf8d044512c19c46e |
 | #576 | M4: a rest-delay, three-line tooltip in the component library | merged | 01cc704d9119af8caed874c9585f5767a95a11c1 |
 | #603 | M5: description tooltip on issue rows, second pass | merged | 2b367040d63ee74151687f2fb47dd7fd4b63671f |
-| #605 | M6: quickstart B recorded, SC-008 measured | open | |
+| #605 | M6: quickstart B recorded, SC-008 measured | merged | 89408097dbb2052a2915d7dbca74ad4799be4fa9 |
+| #PR | Close: tdd-verify remediation (T064-T070), spec closed | open | |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T024–T031 | full | Typing a login narrows the list; reporter emphasised; hint; guide | #549 | merged |
 | M4 | T032–T043 | full | The showcase's Tooltip has a rest-delay instance, at most three lines; existing tooltips unchanged | #576 | merged |
 | M5 | T044–T055, T058–T063 | full | Resting on an issue row for 3 s shows its description; guide | #603 | merged |
-| M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | #605 | in review |
+| M6 | T056–T057 | light | Quickstart §B recorded, SC-008 measured | #605 | merged |
 
 ## Decisions
 
@@ -87,6 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 rework code A | 1 | 925e0c7730a1ae21ea1d027de011f1521f092cf7:b05b30685902e7c2a89394499f7ce6ab2de5e69e | CLEAN (full round, session model, `code-review` at `high`, diff 3181b467..b05b3068, read not built; 16 tool calls). 3 MINOR, none fixed, all in *Follow-ups not done*: F1 a row's widget changes from a bare row to `Tooltip(row)` when its page lands, so a press held at that moment may be lost (inferred by reading); F2 `merge_searched` drops a searched duplicate of a listed issue and its description with it; F3 the pass goes on after a pick, and stays `Loading` with no request if the repository became unknown under a loaded list. Scoped gate beside it: GATE_EXIT=0 |
 | M5 rework code B | 1 | 2c533f6ec79aa2b1484008393c0f975f7ea37202:af1d8355d55e22096a8da2eee3669cf736104b48 | CLEAN, no findings (sonnet; a short round: 6 tool calls, 22 s, so the diff was not read file by file and the rubric's scope, acceptance and constitution items rest on little reading). Verify as it reported: core `github_description` 17 passed, `github_description_pass` 10 passed; client `issue_source_state` 49 passed, `issues_are_requested_only_on_named_events` 3 passed; bin `issue_source::` 36 passed. The counts agree with the unit's own runs of the same targets (49 and 36 after cycle 26). Checked by the unit beside it, mechanically: no `todo!`, `dbg!`, `unimplemented!` or `cfg(target_os)` in the rework's added lines; every changed file is M5's (038's spec directory, `github.rs` and its two test files, the client crate, the user guide) |
 | M5 visual pass | 2 (rework, HEAD 9eb56cf6; crates identical to the measured build 7d77db4f) | 7d77db4f | PASS (dark). B10 ratio 1.03 (before median 10.576 s, after 10.936 s, longest request 2.22 s; set A invalid, `gh` resolved to the mise shim). B6 20 dark trials 3.045–3.068 s, 3 light 3.057–3.087 s. B7 PASS. B8 PASS except empty body (stand-in #9085 seen only in the M5 pass 1) and typing-while-open (weak, stale repaint). B9 PASS on cli/cli #14593, no comment text. B11 PASS: (b) +1/+4/+4 %, (c) mean +8.7 % against its control, one run +17 % (not explained); no `gh` of the client in 93 samples after the pass. Rework: last page's rows have a tooltip about 20 s after the list; a resting cursor gets the panel 0.2 s after its description lands; 700 wheel steps while pages land undisturbed. Not confirmed: light theme for B7–B11, typing while pages land, 720-high last row. Evidence `evidence/r2-*`. Full gate GATE_EXIT=0 with `MICOLD_SKIP_GH_LAUNCH_TEST=1` (the host's `gh` is under mise only; the test's own documented skip) |
+| Close diff review | 1 | 0dfb0eec06e62739c34dc56cb20ff77bb21e6247:89408097dbb2052a2915d7dbca74ad4799be4fa9 | CLEAN (sonnet; 1 MINOR, the Status line's close PR number, filled in after opening). `speckit-converge`: nothing unbuilt, plan.md:210 fixed. `speckit-tdd-verify`: FAIL (3 HIGH docs, 5 MED, 3 LOW), all cleared by T064-T070 (T068 by correcting the wording, no real capture). Full gate GATE_EXIT=0 with `MICOLD_SKIP_GH_LAUNCH_TEST=1` |
 
 ## Declined review findings
 

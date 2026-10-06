@@ -9,14 +9,19 @@
 // value under test, not a mistyped `(0..4).collect()`.
 #![allow(clippy::single_range_in_vec_init)]
 
+mod support;
+
 use std::path::PathBuf;
 
+use micold_client::app::State;
 use micold_client::features::worktree_form::{
     BranchSource, GithubAvailability, IssueList, SearchState, WorktreeForm,
 };
 use micold_client::ui::{issue_rows, ISSUE_SEARCH_PLACEHOLDER};
 use micold_core::github::{GithubRepo, Issue, IssueListing};
 use micold_core::typeahead::{rank, Query};
+
+use support::layout::{painted_text_settled, renderer, view_of, StateUnderTest};
 
 fn issue(number: u64, title: &str, reporter: &str, labels: &[&str]) -> Issue {
     Issue::new(
@@ -120,19 +125,46 @@ fn listed_searched_and_typed_number_issues_get_the_same_two_lines() {
     numbers.sort_unstable();
     assert_eq!(numbers, vec![17, 1100, 2048]);
 
-    for ((row, issue), (_, matched)) in rows.iter().zip(&issues).zip(&form.issue_matches) {
-        let emphasis = issue.emphasis(&matched.spans);
-        assert_eq!(row.label, issue.title_line(), "#{}", issue.number());
-        assert_eq!(row.spans, emphasis.title, "#{}", issue.number());
+    // Literal expectations, per issue number: label, title emphasis, details and their emphasis.
+    // Written out rather than computed by `Issue::title_line`/`details_line`/`emphasis`, which are
+    // what `issue_rows` calls (TDD verification, finding 6).
+    type Expected = (
+        &'static str,
+        Vec<std::ops::Range<usize>>,
+        &'static str,
+        Vec<std::ops::Range<usize>>,
+    );
+    let expected = |number: u64| -> Expected {
+        match number {
+            17 => (
+                "#17 Follow-up to 1100",
+                vec![17..21],
+                "octocat  ·  bug",
+                vec![],
+            ),
+            1100 => (
+                "#1100 Titles are cut off",
+                vec![1..5],
+                "ghost-writer  ·  ui, 1100-series",
+                vec![],
+            ),
+            2048 => (
+                "#2048 Regression of 1100 on resize",
+                vec![20..24],
+                "hubot",
+                vec![],
+            ),
+            other => panic!("unexpected issue #{other}"),
+        }
+    };
+    for (row, issue) in rows.iter().zip(&issues) {
+        let (label, spans, details, details_spans) = expected(issue.number());
+        assert_eq!(row.label, label, "#{}: label", issue.number());
+        assert_eq!(row.spans, spans, "#{}: title emphasis", issue.number());
         assert_eq!(
             row.details,
-            Some((issue.details_line(), emphasis.details)),
-            "#{}",
-            issue.number()
-        );
-        assert!(
-            !row.spans.is_empty() || !row.details.as_ref().expect("details").1.is_empty(),
-            "#{}: a matched row emphasises its match on one of its lines",
+            Some((details.to_string(), details_spans)),
+            "#{}: details and their emphasis",
             issue.number()
         );
     }
@@ -163,20 +195,44 @@ fn the_picked_issues_row_is_the_selected_one() {
 }
 
 /// U38, A14 (FR-011): the issue search field's hint names the reporter beside number, title and
-/// label, and the view uses that hint.
+/// label, and the rendered field shows that hint.
 #[test]
 fn the_issue_search_hint_names_the_reporter() {
     assert_eq!(
         ISSUE_SEARCH_PLACEHOLDER,
         "Search by number, title, label or reporter"
     );
-    // Compared without whitespace, so a rustfmt wrap of the call does not hide it.
-    let view: String = include_str!("../src/ui/worktree_form.rs")
-        .split_whitespace()
+
+    // What the add-worktree form paints in the empty field: the hint itself, not a scan of the
+    // view's source (TDD verification, finding 7).
+    let mut workspace = support::workspace_with(vec![("/fixture/project", vec![])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = State {
+        workspace,
+        ..State::default()
+    };
+    // The label rests over an empty, unfocused field and the hint is not drawn then; an open list
+    // is the active field, which is when the hint shows.
+    let mut open = form(
+        vec![issue(
+            42,
+            "Crash when opening empty project",
+            "octocat",
+            &[],
+        )],
+        Vec::new(),
+        "",
+    );
+    open.issue_list_open = true;
+    state.worktree_form.form = Some(open);
+    let under = StateUnderTest::new(state);
+    let painted: Vec<String> = painted_text_settled(view_of(&under), &mut renderer())
+        .into_iter()
+        .map(|text| text.content)
         .collect();
     assert!(
-        view.contains(".placeholder(ISSUE_SEARCH_PLACEHOLDER)"),
-        "the issue picker's field shows the hint"
+        painted.iter().any(|t| t == ISSUE_SEARCH_PLACEHOLDER),
+        "the issue picker's empty field paints the hint; painted: {painted:?}"
     );
 }
 

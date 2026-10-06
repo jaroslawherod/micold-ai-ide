@@ -747,3 +747,7 @@ suite runs in the gate.
   `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client`: exit 0, 155 targets `ok`.
 - refactor: none; the reducer's doc counts its answers again (thirty-five).
 - T063: the user guide's "From a GitHub issue" says descriptions arrive after the list, top down.
+
+## Note on recorded hashes (verification.md finding 10)
+
+The commit hashes recorded in this log (for example `069165fa`, `ddb85c37`, `a34b07bc`, `b9ef217d`, `e841c7dd`) predate rebases and a squash and are not in main's history. They are kept as written; none has been replaced. Read the order of tests and implementation from the commits that are in history, and from the red output in each cycle.

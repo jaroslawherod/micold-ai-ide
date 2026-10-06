@@ -171,7 +171,7 @@ fn a_descriptions_page_parses_to_numbers_and_descriptions() {
     assert_eq!(last.next_cursor, None, "no next page");
 }
 
-/// U92 — the scenario's captured node gives, through the two passes, the description it gave when
+/// U92 — the scenario's hand-written fixture node gives, through the two passes, the description it gave when
 /// it rode the list (US3 scenario 12).
 #[test]
 fn the_two_passes_give_the_scenarios_description() {
