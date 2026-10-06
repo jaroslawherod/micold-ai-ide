@@ -86,3 +86,43 @@ Not covered: light theme for B7, B9–B11 and the 720-high window; a stopwatch b
 ## Second pass (rework, two-pass build)
 
 HEAD 9eb56cf6 (crates identical to the measured 7d77db4f), dark theme, Xvfb :142 with lavapipe. Data and screenshots: `r2-*`; numbers in `r2-observations.txt`, `r2-b10-times.txt`, `r2-b6-trials.txt`, `r2-b11-cpu.txt`. B10 1.03 (PASS), B6 3.045-3.087 s over 23 trials, B7 PASS, B8 and B9 PASS with the stand-ins noted there, B11 PASS (one (c) run at +17 %, unexplained). Not confirmed: light theme for B7-B11, typing while pages land.
+
+# Feature 038, milestone M6: recorded pass on the merged result (T056, T057)
+
+Linux under Xvfb + lavapipe (not a real display), 2026-10-06, `main` at 2b367040 (M5 merged). Data: `m6-b10-times.txt`, `m6-observations.txt`, `m6-*.png`.
+
+## T056, B10 / SC-008: load time against the true baseline
+
+M5's second pass compared against 7cbb6c76, which already contains M1-M4 (the author and labels in the list query), so it was not the feature's baseline. Here "before" is **a357479f**, the commit just before M1's merge (parent of e6444615), exported with `git archive` and built release; "after" is 2b367040 built release (client and daemon pair; `attach: connected` in every run). `cli/cli` (1,000 loaded), dark theme, five alternating runs, pass-through `gh` shim in both.
+
+| Build | Runs (s) | Median |
+|---|---|---|
+| before (a357479f) | 10.999, 10.213, 11.875, 11.447, 10.384 | 10.999 |
+| after (2b367040) | 11.583, 11.453, 10.884, 10.231, 11.378 | 11.378 |
+
+**Ratio 1.03 (limit 1.5): PASS.** Every run made ten list calls (1,000 issues), all rc=0, plus one to two description calls after; the longest single request was 1.62 s before and 2.44 s after (limit 10 s). Screenshots: `m6-b10-before-list.png`, `m6-b10-after-list.png`.
+
+## T057, quickstart A
+
+`mise run gate`: fmt, clippy and every test binary green except `micold-core/tests/github_locate_desktop_launch.rs::a_desktop_launch_finds_a_working_gh`, which fails on this host only (`gh` is installed under mise's directory, outside the desktop-launch PATH the test models); it does not touch this feature. `cargo test --workspace --no-fail-fast` shows no other failure. `typeahead_budget` (release): 10 passed. `mise run test-scripts`: 4 cases, 0 failures. CI runs the gate on a host where that test passes.
+
+## T057, quickstart B1-B9, B11
+
+Measured on the same issue-list crates (`worktree_form.rs`, `github.rs`, `picker.rs` unchanged since 7d77db4f; later changes on `main` are the sidebar, attention and daemon), so not redone; see the sections above:
+
+| Step | Outcome | Where |
+|---|---|---|
+| B1 | ok, light and dark | M1 section |
+| B2 | ok, narrow 640 both themes; **wide 1600 light now captured** (`m6-b2-wide-light.png`); **pick in dark now captured** (`m6-b2-picked-dark.png`, `m6-b2-reopened-dark.png`: ticket 14407 and name filled, picked marker on reopen) | M1 section, M6 |
+| B3 | ok, both themes | M2 section |
+| B4 | ok, both themes | M3 section |
+| B5 | ok, both themes | M4 section |
+| B6 | ok, dark 3.045-3.087 s over 23 trials; light 20 trials 3.04-3.09 s | M5 section |
+| B7 | ok dark; **light now ok** (`m6-b7-*-light.png`): sweep 10 s no panel; moved to another row closes, still closed at 2.5 s, open at 3.8 s; leaving closes; click picks and closes | M5 section, M6 |
+| B8 | ok, both themes (720-high window dark only) | M5 section |
+| B9 | ok dark; **light now ok** with the stand-ins `jaroslawherod/micold-ai-ide` #317 and #548 (`m6-b9-*-light.png`): plain text, no markers | M5 section, M6 |
+| B11 | ok dark; **light ok** (ticks per 30 s): list visible rest beside 606, 611, 618, on a row with a description 627, 624, 634 (+2-4 %); list narrowed to 9085 beside 446, 439, 441, on #9085 (no description) 437, 443, 442; 93 one-second `pgrep -xa gh` samples during (b): the client's own `gh` in none | M5 section, M6 |
+
+Caveat: the dialog interior is sometimes captured black after about 1 s of hover or typing, with only redrawn rectangles visible; this also happens in the "before" build, so it is not tied to the feature. Crops are clean frames where one could be had.
+
+Not covered: macOS and Windows (FR-030 rests on the absence of any `cfg` arm and on CI's core suite); a stopwatch by a human; a truly blank-body issue; a template issue in `small`; typing while description pages land.
