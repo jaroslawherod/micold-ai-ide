@@ -47,6 +47,8 @@ serde_json = { workspace = true }
 # Timer for the connection keepalive (US5, FR-026). The client already runs on tokio via iced's
 # tokio executor; this makes the dependency explicit rather than transitive.
 tokio = { workspace = true }
+# Feature 482 (R9): watch an open Changes view's entry for file changes.
+notify = { workspace = true }
 
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]

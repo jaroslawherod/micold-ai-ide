@@ -16,12 +16,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #624 | whole branch (design + every milestone), opened by the orchestrator | draft | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | — | todo |
+| M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | in progress |
 | M2 | T027–T040 | full | Unified diff of the selected file | — | todo |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | — | todo |
 | M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
@@ -57,7 +58,42 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at 155k context (it spent its budget reading the design). State, all in the
+WIP commit `wip(482): M1 …` on this branch (not pushed; no gate has seen it, nothing compiled yet):
+
+- **Done (not ticked, not built):** T001 (iced `highlighter` feature in workspace `Cargo.toml`,
+  `notify` in `crates/micold-client/Cargo.toml`; there is **no `deny.toml`** in the repo, so the
+  licence check is moot; `cargo tree -p micold-client -i onig_sys` still to run once Cargo.lock
+  updates). T002 (module tree `crates/micold-core/src/review/`, `pub mod review;`, `local_only` /
+  `run_git` now `pub(crate)`).
+- **Red tests written against compiling-by-intent stubs (red not yet run/recorded):** T003
+  (`review/mod.rs`: `RelPath`, `Side`, `LineRange`, `limits` — stubs return wrong answers),
+  T005 (`review/comment.rs`: stub derives lack `rename_all`, `#[serde(flatten)]` on `range`, and
+  the `{"pending": null}` shape — implement via a `Pending(())` repr enum with `#[serde(from/into)]`;
+  `CommentId::new` stub returns nil), T011 (`review/base.rs`), T012 (`review/changes.rs`), T013
+  (`crates/micold-core/tests/review_git.rs`, `review/git.rs` stub `GitCli::review_base` /
+  `change_list(dir, scope, toggles)`).
+- **Design decisions taken in the stubs:** `ChangeList { files, scope: ReviewScope }` (scope, not
+  `base`, so the Default entry has no base); kinds parsed from `git diff -z -M --raw`, not
+  `--name-status --summary` (git 2.43 prints no summary beside `--name-status`; `--raw` carries
+  both modes, so mode-only = modes differ and numstat `0 0`) — the parser keeps the task's name
+  `parse_name_status`; pure helpers `assemble(names, stats, committed_set, uncommitted_set,
+  fallback_origin)`, `merge_untracked(files, Vec<Untracked>)`, `content_of(bytes)`,
+  `classify(&mut ChangedFile, VersionSizes)`; `default_branch_from` returns `origin/<b>`, `main`
+  or `master`; `DiffRange::for_view` with no base and uncommitted off gives `None` (committed only
+  without a base lists nothing; the view shows the reason). Origin with both toggles = membership
+  in the separate committed (`base..HEAD`) and uncommitted (`HEAD`→worktree + untracked) path sets.
+- **TDD log:** no `tdd/test-list.md` (as 575/582): the test-first task pairs are the list; record
+  reds in `tdd/cycle-log.md` as `specs/575-workspace-attention-list/tdd/cycle-log.md` does.
+- **Next step:** build `cargo test -p micold-core --lib review` + `--test review_git`, record the
+  reds, implement T004/T006/T016/T017/T018 to green; then T007–T010 (protocol v30 + daemon
+  `diff_layout`; every `DaemonSettings`/`SettingsSet` literal across crates needs the new field —
+  `grep -rn pr_status_enabled crates`), then client T014/T015/T019–T024, docs T025, visual T026,
+  then verify.md. A baseline `cargo test --workspace` was started detached at handover
+  (log in the session scratchpad `baseline.log`) to warm `target-shared/`.
+- **Container:** no `mise` (run the gate's raw commands), `gh` unauthenticated, PR #624 is the one
+  branch PR; review via the scratchpad `run-review.sh`.
+
 
 ## Open escalation
 
