@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: clarify
-- **Next step**: clarify unit — resolve the one [NEEDS CLARIFICATION] marker (long-task threshold fixed or adjustable)
+- **Next step**: clarify unit — awaiting user answer on long-task threshold (Open escalation), then apply to spec.md and run the next clarify round
 
 ## Pull requests
 
@@ -48,7 +48,10 @@ None.
 
 ## Open escalation
 
-None.
+- **Clarify round 1, Q1 (category 1, product/scope)**: Is the long-task threshold fixed at 60 s, or user-configurable in Settings?
+  - A (Recommended) fixed at 60 s: issue #613 asks only for per-kind on/off; keeps FR-009 to FR-014 unchanged; a setting can be a later request.
+  - B adjustable in Settings (seconds field, default 60, beside **Long task finished**): precedent of a numeric seconds field with clamped range in `crates/micold-core/src/settings.rs` (`env_include_timeout_secs`, 1 to 60) and `docs/user-guide/settings.md` "Timeout (seconds)"; adds requirements, validation and showcase states.
+  - Repo checked: issue #613 body, spec.md Assumptions, specs/039 and 575 specs, constitution: none settles it.
 
 ## Follow-ups not done
 
