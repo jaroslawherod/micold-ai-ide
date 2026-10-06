@@ -10,6 +10,18 @@
 //! The request offers the `default` action, which the specification gives a click on the
 //! notification's body. A service without the `actions` capability ignores it and still shows the
 //! notification (contract N7); this window then never hears of a click.
+//!
+//! A signal counts only when the service that showed the notification sent it (FR-015b, contract
+//! N9a, BUG-566). Any peer on the session bus can send the service's signals, and the id in them
+//! is a small number the service counts from 1, so an id alone is anyone's guess, and after the
+//! service restarts it names another notification. The sender the bus stamps on a message is the
+//! sending connection's unique name, which no other connection can have: the table keeps, with each
+//! id, the unique name that answered its `Notify` call, and acts on a signal only from that name.
+//! `sender='org.freedesktop.Notifications'` in the match rule is not that check. It spares the
+//! listener the broadcasts of other peers, but a signal sent to this connection's unique name is
+//! delivered whatever the rules say, and `zbus` does not compare a well-known sender with the
+//! header's unique one. When the name changes owner, the bus says so (`NameOwnerChanged`, from
+//! `org.freedesktop.DBus`) and the old owner's entries go.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -39,9 +51,15 @@ const NOTIFICATIONS: &str = "org.freedesktop.Notifications";
 const BUS: &str = "org.freedesktop.DBus";
 /// The bus's signal that a name changed owner.
 const NAME_OWNER_CHANGED: &str = "NameOwnerChanged";
-/// Every signal of the notification service's interface.
-const SIGNALS: &str = "type='signal',interface='org.freedesktop.Notifications',\
+/// Every signal of the notification service's interface. The sender spares the listener other
+/// peers' broadcasts; it does not keep out a signal sent to this connection (see the module docs).
+const SIGNALS: &str = "type='signal',sender='org.freedesktop.Notifications',\
+                       interface='org.freedesktop.Notifications',\
                        path='/org/freedesktop/Notifications'";
+/// The bus's word that the notification service's name changed owner.
+const OWNER_CHANGES: &str = "type='signal',sender='org.freedesktop.DBus',\
+                             interface='org.freedesktop.DBus',member='NameOwnerChanged',\
+                             arg0='org.freedesktop.Notifications'";
 /// How long the notification service has to answer a call. A service that does not answer in
 /// that time is treated as one that is not there.
 const METHOD_TIMEOUT: Duration = Duration::from_secs(2);
@@ -110,15 +128,26 @@ pub(super) enum Signal {
 /// The unique name of the connection that sent `message`, as the bus stamped it. A message with
 /// none (one that never crossed a bus) has no sender.
 pub(super) fn sender(message: &zbus::Message) -> Option<String> {
-    let _ = message;
-    None
+    message.header().sender().map(ToString::to_string)
 }
 
-/// The signal `message` carries, when it is one of the three this window reads.
+/// The signal `message` carries, when it is one this window reads: the notification service's
+/// three, on its interface, and the bus's `NameOwnerChanged` for the service's name.
 pub(super) fn signal(message: &zbus::Message) -> Option<Signal> {
     let header = message.header();
     let body = message.body();
-    match header.member()?.as_str() {
+    let member = header.member()?.as_str();
+    if header.interface()?.as_str() == BUS {
+        if member != NAME_OWNER_CHANGED {
+            return None;
+        }
+        let (name, old_owner, _new_owner) = body.deserialize::<(String, String, String)>().ok()?;
+        return (name == NOTIFICATIONS).then_some(Signal::ServiceGone { old_owner });
+    }
+    if header.interface()?.as_str() != NOTIFICATIONS {
+        return None;
+    }
+    match member {
         ACTION_INVOKED => {
             let (id, key) = body.deserialize::<(u32, String)>().ok()?;
             Some(Signal::ActionInvoked { id, key })
@@ -135,7 +164,7 @@ pub(super) fn signal(message: &zbus::Message) -> Option<Signal> {
     }
 }
 
-/// One notification this window has on screen.
+/// One notification this window has on screen, under its id and the service that numbered it.
 #[derive(Debug)]
 struct Entry {
     project: PathBuf,
@@ -146,22 +175,26 @@ struct Entry {
 
 /// The notifications this window raised that are still shown: the service's id for each, against
 /// what it named. It is this window's own (contract N9): an id it does not hold is another
-/// window's notification, or one raised before this window started.
+/// window's notification, or one raised before this window started. It is the service's own, too
+/// (N9a): each id is kept with the unique name of the service that answered its `Notify` call,
+/// and a signal from any other sender is nothing — another peer's forgery, the copy GNOME Shell's
+/// own connection sends (research R7), or a restarted service whose ids start again from 1.
 ///
 /// A token lives in its notification's entry and nowhere else, so it goes when the entry goes — at
 /// the click or at the close — or when another action of the notification is invoked, and a token
 /// for an id this window does not hold is not kept.
 #[derive(Debug, Default)]
 pub(super) struct Shown {
-    by_id: HashMap<u32, Entry>,
+    /// By the service's unique name and its id.
+    by_id: HashMap<(String, u32), Entry>,
 }
 
 impl Shown {
-    /// The service showed a notification for `session` of `project` under `id`.
+    /// The service whose unique name is `service` showed a notification for `session` of
+    /// `project` under `id`.
     pub(super) fn record(&mut self, service: &str, id: u32, project: PathBuf, session: SessionId) {
-        let _ = service;
         self.by_id.insert(
-            id,
+            (service.to_string(), id),
             Entry {
                 project,
                 session,
@@ -170,11 +203,10 @@ impl Shown {
         );
     }
 
-    /// Whether `id` is a notification of this window that is still shown.
+    /// Whether `id` of `service` is a notification of this window that is still shown.
     #[cfg(test)]
     pub(super) fn holds(&self, service: &str, id: u32) -> bool {
-        let _ = service;
-        self.by_id.contains_key(&id)
+        self.by_id.contains_key(&(service.to_string(), id))
     }
 
     /// Whether this window holds nothing: no notification, and no token of one.
@@ -183,24 +215,34 @@ impl Shown {
         self.by_id.is_empty()
     }
 
-    /// What `signal` means for this window: the `default` action of a notification it holds is
+    /// What `signal`, sent by the connection whose unique name is `sender`, means for this window.
+    /// A signal about a notification counts only from the service that showed it (N9a): the
+    /// `default` action of a notification it holds is
     /// a click on that notification's session, reported once, with the activation token that
     /// preceded it when one did; a closed notification is forgotten, and its token with it;
     /// another action is no click, and takes the token that preceded it; anything else is nothing
-    /// (N9).
+    /// (N9). When the bus says the service's name left `old_owner`, that owner's notifications
+    /// are forgotten: it can no longer report a click. Only the bus can say so, and a new
+    /// owner's notifications stay, even one recorded before the change was read.
     ///
-    /// GNOME Shell sends every signal twice, from two bus names (research R7). The click removes
-    /// the entry, so the second `ActionInvoked` finds nothing, and so does a second token that
-    /// arrives after it; a second token that arrives before it replaces the first with its equal.
+    /// GNOME Shell sends every signal twice, from two bus names (research R7); the copy from the
+    /// name that did not answer `Notify` is nothing. A click reported twice by the service itself
+    /// finds nothing the second time, as the click removes the entry.
     pub(super) fn on_signal(&mut self, sender: &str, signal: Signal) -> Option<NotifierEvent> {
-        let _ = sender;
+        if let Signal::ServiceGone { old_owner } = signal {
+            if sender == BUS {
+                self.by_id.retain(|(service, _), _| *service != old_owner);
+            }
+            return None;
+        }
+        let key = |id| (sender.to_string(), id);
         match signal {
-            Signal::ActionInvoked { id, key } if key == DEFAULT_ACTION => {
+            Signal::ActionInvoked { id, key: action } if action == DEFAULT_ACTION => {
                 let Entry {
                     project,
                     session,
                     activation,
-                } = self.by_id.remove(&id)?;
+                } = self.by_id.remove(&key(id))?;
                 Some(NotifierEvent::Activated {
                     project,
                     session,
@@ -210,19 +252,19 @@ impl Shown {
             // Another action of the notification: the token was that click's, and is not the
             // token of a later click on the body.
             Signal::ActionInvoked { id, .. } => {
-                if let Some(entry) = self.by_id.get_mut(&id) {
+                if let Some(entry) = self.by_id.get_mut(&key(id)) {
                     entry.activation = None;
                 }
                 None
             }
             Signal::ActivationToken { id, token } => {
-                if let Some(entry) = self.by_id.get_mut(&id) {
+                if let Some(entry) = self.by_id.get_mut(&key(id)) {
                     entry.activation = Some(token);
                 }
                 None
             }
             Signal::NotificationClosed { id } => {
-                self.by_id.remove(&id);
+                self.by_id.remove(&key(id));
                 None
             }
             Signal::ServiceGone { .. } => None,
@@ -301,40 +343,45 @@ impl Notifier {
         }
     }
 
-    /// Read the notification service's signals from `connection` on a thread of their own, and
-    /// report what [`Shown::on_signal`] makes of each. The thread ends with the connection, or
-    /// when nobody reads the events any more. A connection that cannot be listened on still
+    /// Read the notification service's signals, and the bus's word of a new owner of its name,
+    /// from `connection` on threads of their own, and report what [`Shown::on_signal`] makes of
+    /// each. A thread ends with the connection, or when nobody reads the events any more. A connection that cannot be listened on still
     /// shows notifications (contract N7), so every failure here is passed over.
     fn listen(&self, connection: &zbus::blocking::Connection) {
-        let connection = connection.clone();
-        let shown = Arc::clone(&self.shown);
-        let events = self.events.clone();
-        let _ = std::thread::Builder::new()
-            .name("desktop-notify-clicks".to_string())
-            .spawn(move || {
-                let Ok(signals) =
-                    zbus::blocking::MessageIterator::for_match_rule(SIGNALS, &connection, None)
-                else {
-                    return;
-                };
-                for message in signals {
-                    let Ok(message) = message else {
+        // One thread per rule: the service's signals, and the bus's word that its name changed
+        // owner (N9a).
+        for rule in [SIGNALS, OWNER_CHANGES] {
+            let connection = connection.clone();
+            let shown = Arc::clone(&self.shown);
+            let events = self.events.clone();
+            let _ = std::thread::Builder::new()
+                .name("desktop-notify-clicks".to_string())
+                .spawn(move || {
+                    let Ok(signals) =
+                        zbus::blocking::MessageIterator::for_match_rule(rule, &connection, None)
+                    else {
                         return;
                     };
-                    let event =
-                        sender(&message)
-                            .zip(signal(&message))
-                            .and_then(|(sender, signal)| {
-                                shown
-                                    .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                    .on_signal(&sender, signal)
-                            });
-                    if event.is_some_and(|event| events.unbounded_send(event).is_err()) {
-                        return;
+                    for message in signals {
+                        let Ok(message) = message else {
+                            return;
+                        };
+                        // A message with no sender never came from the service.
+                        let event =
+                            sender(&message)
+                                .zip(signal(&message))
+                                .and_then(|(sender, signal)| {
+                                    shown
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                        .on_signal(&sender, signal)
+                                });
+                        if event.is_some_and(|event| events.unbounded_send(event).is_err()) {
+                            return;
+                        }
                     }
-                }
-            });
+                });
+        }
     }
 
     fn connection(&self) -> Result<zbus::blocking::Connection, NotifyError> {

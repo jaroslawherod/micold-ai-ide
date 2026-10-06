@@ -373,7 +373,7 @@ the connection and `notify_error` stay as they are (issue #569 changes them).
 
 ### Implementation for BUG-566
 
-- [ ] T125 [BUG-566] `crates/micold-client/src/shell/desktop_notify/linux.rs`: `Entry` keeps the
+- [x] T125 [BUG-566] `crates/micold-client/src/shell/desktop_notify/linux.rs`: `Entry` keeps the
       service's unique name; `Shown::record` takes it from the `Notify` reply's header sender (no
       sender: nothing recorded, the notification is still shown, N7); `Shown::on_signal` takes the
       signal's sender and acts only on a match; a `NameOwnerChanged` for

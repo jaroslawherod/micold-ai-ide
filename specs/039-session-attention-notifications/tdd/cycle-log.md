@@ -1284,3 +1284,10 @@ integration test carries the `cfg(windows)` arm of `idle_process` that `unread_s
   old session (U180); `NameOwnerChanged` from the bus dropped nothing and was not read (U181); the
   header's sender was not read (U179). `a_change_of_owner_not_sent_by_the_bus_drops_nothing` passed
   against the stub, as a guard for the green step.
+- green: `Shown` keyed by the service's unique name and the id; `record` takes the `Notify`
+  reply's header sender; `on_signal` takes the signal's sender and acts only on its own entries;
+  `ServiceGone` from `org.freedesktop.DBus` drops the old owner's entries; `signal` reads
+  `NameOwnerChanged` for `org.freedesktop.Notifications` and checks each signal's interface;
+  `SIGNALS` names the sender and `listen` also reads `OWNER_CHANGES`. Same command,
+  `32 passed; 0 failed`.
+- refactor: none beyond docs (module, `Shown`, `on_signal`, `listen`).
