@@ -131,7 +131,14 @@ impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
         let control: Element<'a, M> = match beside {
             None => widget.into(),
             Some((glyph, label)) => {
-                let text = Text::new(label, TypeRole::Body, c.roles).tint(tint);
+                // The label dims with the glyph on a disabled row (FR-017), as the stack's own
+                // label does through the style's disabled `text_color`.
+                let text = Text::new(label, TypeRole::Body, c.roles);
+                let text = if disabled {
+                    text.disabled_tint(tint)
+                } else {
+                    text.tint(tint)
+                };
                 let mut words = mouse_area(
                     row![
                         Glyph::new(glyph, TypeRole::Body, c.roles)

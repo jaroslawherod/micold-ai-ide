@@ -811,7 +811,12 @@ pub fn checkbox(
                 width: 1.0,
                 radius: shape::SMALL.into(),
             },
-            text_color: Some(color(r.on_surface)),
+            // A disabled box's label takes the disabled colour, as its glyph does (feature 613,
+            // FR-017).
+            text_color: Some(match status {
+                checkbox_widget::Status::Disabled { .. } => disabled_color(r.on_surface),
+                _ => color(r.on_surface),
+            }),
         }
     }
 }
@@ -944,6 +949,25 @@ mod tests {
     /// `IconButton` greys it via `disabled_color`. That must match what the button style fn
     /// applies to its own label, or a disabled icon button and a disabled text button would
     /// disagree about how faded "disabled" looks.
+    #[test]
+    fn a_disabled_checkbox_label_takes_the_disabled_colour() {
+        // Feature 613, FR-017: a disabled kind row's label dims as its glyph does.
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let style = checkbox(r, false);
+            let disabled = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: true },
+            );
+            let active = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Active { is_checked: true },
+            );
+            assert_eq!(disabled.text_color, Some(disabled_color(r.on_surface)));
+            assert_eq!(active.text_color, Some(color(r.on_surface)));
+        }
+    }
+
     #[test]
     fn disabled_color_matches_the_button_styles_disabled_label() {
         let r = tokens::roles(ColorScheme::Dark);

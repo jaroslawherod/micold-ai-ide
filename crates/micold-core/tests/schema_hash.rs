@@ -374,10 +374,6 @@ fn the_session_error_notice_is_in_the_hashed_source() {
         "`SessionErrorNotice {{` is not in messages.rs, so version 31's hash is not the hash of \
          the message set that tells a window a session ended with an error"
     );
-    assert!(
-        micold_core::protocol::version::PROTOCOL_VERSION >= 31,
-        "W5.2 is version 31"
-    );
 }
 
 #[test]

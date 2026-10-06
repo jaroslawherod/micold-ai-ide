@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
-| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
+| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | implemented; gate, reviews B/A2, visual pass pending |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 
 M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
@@ -56,6 +56,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M2 A (code-review high) | 1 | 39cd0b1ee3295d1f961bdf985a1671a9b4525567:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CHANGES: 1 MAJOR (open point decided: suppress the give-up notice after a reported error, FR-007) — fixed + test (cycle 10), C7 reworded |
 | M2 A (code-review, sonnet, fix diff) | 2 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 | M2 B (conformance, sonnet) | 1 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
+| M3 A (code-review high) | 1 | c094ddd08c97045143ec3db066a19d8628a04c3c:905e9a64353ae30472a8442952a047e35993e20c | CHANGES: F1 MAJOR (disabled kind row: glyph dimmed, label not, FR-017) fixed + test; F2 MINOR (threshold validated while master off) not fixed |
 
 ## CI fixes
 
@@ -83,24 +84,19 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-M3 unit 1 handed over at 150k (it also fixed and pushed the CI flake, c5b950c2, see *CI fixes*).
-**Done, in the local WIP commit after c5b950c2 (not pushed; workspace does not compile yet)**:
-micold-core complete for M3 — T059/T061 (threshold-free `LongTaskFinished.description()`, SC-008/FR-013 clock
-tests), T056 core part + T061 (`settings_long_task_threshold.rs`, constants, clamp, field), T032/T057 + T037/T062
-core part (wire fields, version 32, schema-hash test); daemon test sites `daemon_lifecycle.rs`, `pr_status_setting.rs`
-filled with `None`. Cycle log has Cycle 11. No task ticked yet (T032/T037/T056/T057/T059/T061/T062 need their daemon
-and client parts).
-**Next**: (1) client compile site `crates/micold-client/src/features/settings.rs:471` (client `Settings` literal: carry
-`long_task_threshold_secs`); (2) red already written for T056 daemon part in `catalog.rs` `notify_tests`
-(`set_notification_kinds_stores_and_persists_them`, `set_long_task_threshold_clamps_and_stores_the_value`,
-`the_service_write_keeps_the_long_task_threshold`) — record its red, then T038/T063 catalog (settings_wire fields at
-~164, persist at ~306, setters), state.rs (`long_task_threshold` → override + `effective_long_task_threshold()`, read in
-`note_activity` ~3351, ~3493 and `drain_signals` ~3550; `set_notification_kinds` with C15), server.rs ~1063
-`SettingsSet` handling; (3) remaining construction sites: `settings_desktop_notifications.rs:278`, client
-`features/settings.rs` (~480, ~593, ~794), `shell/persist.rs` (~266, ~434, ~876), `main_tests.rs`, `covered_states.rs`;
-(4) T033/T058 daemon integration tests, T034–T036/T060 client tests, T039–T044, T064–T066, T045, CI `--test
-notification_icon`; then verify.md. Disk: the container's disk filled (ld Bus error); stale test binaries in
-`target-shared/debug/deps` were pruned (keep the newest per name) — prune again if it fills.
+M3 unit 2 handed over near 150k. **Done (committed, not pushed)**: every M3 task T032–T045, T056–T066 implemented and
+ticked (905e9a64 + the review-A fix commit): service setters/C15/effective threshold, server `SettingsSet` arms, client
+draft/save/mirror, Settings rows + threshold field, icons, `notification_icon`, `Checkbox::icon`, showcase, user guide,
+CI `--test notification_icon`; daemon tests `settings_notification_kinds` 9/9, `settings_long_task_threshold` 7/7.
+Full gate 1 (at 905e9a64) stopped at clippy: a constant `assert!` in `schema_hash.rs` (removed; workspace clippy clean
+after). Review A round 1: F1 MAJOR fixed (disabled checkbox label now dims on both paths: `Text::disabled_tint`,
+`style::checkbox` disabled `text_color`, test `a_disabled_checkbox_label_takes_the_disabled_colour`); F2 MINOR not fixed
+(threshold validated while the master switch is off — FR-026 refusal stands).
+**Next**: (1) full gate (raw commands, `--no-fail-fast`; expect only the 6 root-only permission failures); (2) review A
+round 2 (sonnet, fix diff from snapshot c094ddd0:905e9a64), review B (conformance, sonnet) and the visual pass
+(quickstart §B5, §B6, §B8, §B9; evidence into the spec dir) together; (3) push, PR-body section to
+`$SCRATCHPAD/pr-613-body-M3.md`, return `PR: #618 (pushed, orchestrator updates body)`. Note from a worker: client
+tests were written in the same pass as the code (cycle 12 records the gap).
 
 ## Open escalation
 

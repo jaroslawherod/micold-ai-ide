@@ -217,6 +217,8 @@ enum Emphasis {
     Muted,
     /// An explicit role colour.
     Tinted(Rgb),
+    /// An explicit role colour at the disabled opacity.
+    Disabled(Rgb),
 }
 
 /// A piece of text at a type role. Builder form (Principle VIII):
@@ -260,6 +262,13 @@ impl<'a, M: 'a> Text<'a, M> {
     /// an error line or a tag's own accent.
     pub fn tint(mut self, color: Rgb) -> Self {
         self.emphasis = Emphasis::Tinted(color);
+        self
+    }
+
+    /// Colour the text with a role at the disabled opacity — the label of a control that sets its
+    /// own colours and is disabled (feature 613, FR-017).
+    pub fn disabled_tint(mut self, color: Rgb) -> Self {
+        self.emphasis = Emphasis::Disabled(color);
         self
     }
 
@@ -309,6 +318,7 @@ impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
             Emphasis::Inherited => {}
             Emphasis::Muted => widget = widget.style(style::muted(t.roles)),
             Emphasis::Tinted(color) => widget = widget.color(style::color(color)),
+            Emphasis::Disabled(color) => widget = widget.color(style::disabled_color(color)),
         }
         if let Some(width) = t.width {
             widget = widget.width(width);
