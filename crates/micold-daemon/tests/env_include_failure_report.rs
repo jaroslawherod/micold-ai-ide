@@ -29,6 +29,12 @@ use tracing_subscriber::fmt::MakeWriter;
 const OUTPUT: &str = "BUG454-OUTPUT";
 /// The file whose presence makes the script fail in a directory.
 const MARKER: &str = ".fail-here";
+
+/// Held by each test for its whole run. Both tests reach the same `tracing::warn!` callsite, and
+/// when the first test hits it on its own thread, with no subscriber, while the second installs its
+/// scoped one, the callsite's cached interest can leave the second's capture empty (9 runs in 15
+/// failed that way; none run alone or with `--test-threads=1`). One test at a time removes the race.
+static SERIAL: Mutex<()> = Mutex::new(());
 /// The exit status the script fails with.
 const STATUS: i32 = 3;
 
@@ -123,6 +129,7 @@ fn dirs_of(failures: &[EnvIncludeFailure]) -> Vec<PathBuf> {
 /// connected window without anything else happening.
 #[test]
 fn a_directory_whose_resolution_failed_is_reported_while_its_failure_is_cached() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let store = tempfile::tempdir().unwrap();
     let dirs = dirs();
     let script = directory_dependent_script(store.path());
@@ -190,6 +197,7 @@ impl<'a> MakeWriter<'a> for LogBuffer {
 /// script printed: FR-013 keeps that output in memory only, and the service logs to a file.
 #[test]
 fn the_log_names_the_failed_directory_without_the_scripts_output() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let store = tempfile::tempdir().unwrap();
     let dirs = dirs();
     let script = directory_dependent_script(store.path());
