@@ -266,7 +266,8 @@ impl<'a, M: 'a> Tooltip<'a, M> {
 
     /// Open only after the cursor has rested on the content for `delay`, and never while it moves
     /// (feature 038, FR-015, FR-016). A press on the content closes the tooltip until the cursor
-    /// has left. Without this the tooltip opens on hover.
+    /// has left. Without this the tooltip opens on hover. An alternative to
+    /// [`Tooltip::show_delay`]: the one called last wins.
     pub fn after_rest(mut self, delay: std::time::Duration) -> Self {
         self.wait = tooltip::Wait::Rest(delay);
         self
@@ -388,7 +389,7 @@ mod tooltip_wait_tests {
     /// 430 research R1: `after_rest` and `show_delay` are alternatives; the one called last wins.
     #[test]
     fn the_wait_set_last_wins() {
-        let d = Duration::from_millis(300);
+        let d = Duration::from_secs(1);
         assert_eq!(
             tip().after_rest(d).show_delay(d).wait,
             tooltip::Wait::Delay(d)
