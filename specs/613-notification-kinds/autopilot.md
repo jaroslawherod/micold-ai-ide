@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M2 reviews and full gate, then push to #618
+- **Next step**: M3 (T032–T045, T056–T066)
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
-| M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | implemented (reviews pending) |
+| M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
 | M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | — | todo |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 
@@ -54,6 +54,8 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M1 B (conformance, sonnet) | 1 | 89404f970ba2ec63f2c289d34bcb7bd0b433a7ef:b67fb7b7987edfecaa9cb8ac3db962a33c9d5acf | CHANGES: 1 MAJOR (no red runs for cycles 4–7): fixed with stub red runs logged in cycle-log; MINOR (010 hooks.md edit, required by T015) noted. Verify output all green. Fix touches only the TDD log: no re-run |
 | D4 amendment (spec+plan+tasks) | 1 | 4bd5df0c073ae15298790294ebe96cd38024d535:ec36c53871c732e3d4854660c23eee980c818a81 | CHANGES: 1 MAJOR (T066 must reword M1's "a minute or more" in settings.md:157), 2 MINOR (plan supporting text; name `effective_long_task_threshold()`) — all fixed, prose only (task/plan wording); review done |
 | M2 A (code-review high) | 1 | 39cd0b1ee3295d1f961bdf985a1671a9b4525567:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CHANGES: 1 MAJOR (open point decided: suppress the give-up notice after a reported error, FR-007) — fixed + test (cycle 10), C7 reworded |
+| M2 A (code-review, sonnet, fix diff) | 2 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
+| M2 B (conformance, sonnet) | 1 | a469edb7b5007610f3c6c56b9364d75a39bceb16:a65a5f3b7d62e3d93e51040a9950f0a5656a6b25 | CLEAN |
 
 ## Declined review findings
 
