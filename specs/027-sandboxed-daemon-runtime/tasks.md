@@ -1642,7 +1642,7 @@ build.
       projects beside `shared_locations`) and `crates/micold-core/src/sandbox/lifecycle.rs` (the
       set decision, the stale reasons and their transitions). `SandboxState::Stale(id)` keeps its
       shape. `mount_set_changed` and `survive_logout_changed` become, or call, the reason setters.
-      Move the misplaced doc comment of `mount_set_changed` (it sits above `container_lost`).
+      Incidental cleanup in the same file: move the misplaced doc comment of `mount_set_changed` (it sits above `container_lost`).
 - [ ] T233 [BUG-574] [U53] [U54] `crates/micold-client/src/shell/sandbox.rs` (`start`, `Ready`),
       `crates/micold-client/src/features/sandbox.rs` (`Sandbox`: the container's projects at
       `started`, the reasons, `mounts_changed` taking the registered projects,
