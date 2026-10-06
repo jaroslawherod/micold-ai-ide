@@ -541,6 +541,50 @@ control it is about.
 
 **Bugfix**: 2026-09-28 — BUG-008. Section added; nothing above it changed. See `bugs/BUG-008.md`.
 
+### Out of date means the running container differs (FR-036c)
+
+The client marked the sandbox `Stale` when the daemon's project list differed from the previous list
+it had seen (`adopt_mount_set`, `shell/daemon_sync.rs`), compared as an ordered `Vec`, and nothing
+led back to `Running` but a restart. The previous list is not the container: at boot it is this
+client's workspace, and a bring-up that adopts an existing container keeps that container's mounts
+(`Started.mounted`, feature 031). See `bugs/BUG-574.md#mechanism`.
+
+- **Measure against the container.** At `Started` the client records the projects the running
+  container shares. For a container this bring-up created (`mounted` is `None`), the mount set's
+  projects. For an adopted one, its mount destinations less the destinations of this client's own
+  non-project mounts (state, home, secret, credentials). A pure core function on `MountSet`, beside
+  `shared_locations`, answers it, and it travels with the container in what `start` returns, like
+  `SandboxLocations`. On Linux and macOS a container path equals its host path (M-2), so the
+  comparison with the catalog's project paths is direct.
+- **Decide on every catalog, as sets.** A pure core decision takes the container's projects and the
+  registered ones and answers whether the mount set is out of date: a registered project missing, or
+  a shared project no longer registered. Order and duplicates do not count. `adopt_mount_set` asks it
+  on every `Connected` and `CatalogChanged`, and the answer can be "no longer out of date".
+- **Staleness keeps its reasons.** `SandboxState::Stale(id)` keeps its shape, so the matches on
+  `Stale(_)` across the client do not churn. The reasons (mount set, keep-running) sit beside it in
+  a core type with pure transitions: setting a reason on `Running` gives `Stale`, clearing the last
+  one on `Stale` gives `Running`, and every other state is returned unchanged, as
+  `mount_set_changed` does today. `survive_logout_changed` sets the keep-running reason, which only
+  a new container clears (a restart or a bring-up that creates one). A matching mount set never
+  clears it.
+- **One notice per reason.** `persistent_notice` names the reasons that hold: the projects for the
+  mount set, the keep-running setting for the other. Today both read "does not yet share every
+  registered project".
+- **Follow a container another window replaced.** `check_alive` asks only whether a container named
+  `micold-sandbox` runs, so a client keeps the id and mounts of a container another window removed
+  and created again. On each `Connected` under the sandbox placement, while the sandbox has a
+  container, a read-only re-read finds the container by name. When its id differs from the one held,
+  the client adopts the new id with its project mounts and `SandboxLocations`, computed as `start`
+  computes them (the mount set construction is shared, not copied), and decides staleness again.
+  The re-read never creates, starts, removes or replaces a container: R9's "nothing restarts on its
+  own" holds. A runtime that cannot be asked changes nothing, as in `check_alive`.
+- **Not in this increment.** A restart adopts the same container when image and fingerprint match,
+  so it does not apply a changed mount set (`bugs/BUG-008.autopilot.md`, follow-ups). After this
+  increment the notice stays true after such a restart, because it is measured against the
+  container; making the restart apply the change is its own bug.
+
+**Bugfix**: 2026-10-06 — BUG-574. Section added; nothing above it changed. See `bugs/BUG-574.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

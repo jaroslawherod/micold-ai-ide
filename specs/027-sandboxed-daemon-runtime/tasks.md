@@ -1597,6 +1597,84 @@ and the missing report was recorded as a BUG-006 follow-up rather than claimed. 
 
 ---
 
+## Phase 29: Bugfix BUG-574 — a sandbox sharing every project stayed "out of date" (GitHub #574)
+
+**Goal**: The sandbox is reported out of date exactly while its running container differs from the
+registered projects, or a keep-running change is pending, and the report clears without a restart
+when neither holds. A container another window replaced is followed. Each reason has its own notice
+(FR-036c, US6 scenario 7).
+
+### Tests for BUG-574 (MANDATORY — Constitution Principle I) ⚠️
+
+Each test is written against a stub that compiles, so it fails on its assertion rather than on the
+build.
+
+- [ ] T228 [BUG-574] [U52] *(test)* `crates/micold-core/tests/sandbox_state.rs` and
+      `crates/micold-core/tests/sandbox_argv.rs`. The pure decisions. The mount set is out of date
+      when a registered project is missing from the container's projects, or the container shares
+      one no longer registered; not when the two match in another order or with duplicates. The
+      container's projects: a created container's are its mount set's; an adopted one's are its
+      destinations less this mount set's non-project destinations, including a project this client
+      never registered. Reasons: setting one on `Running` gives `Stale`, clearing the last on `Stale`
+      gives `Running`, clearing the mount-set reason leaves a keep-running one standing, and every
+      other state is unchanged.
+- [ ] T229 [BUG-574] [U53] *(test)* `crates/micold-client/src/main_tests.rs`. The regression tests,
+      through `update_inner`, red on `origin/main` (`bugs/BUG-574.md#reproduction`): R1, a plan of
+      `[P, Q]` and a catalog of `[Q, P]` stays `Running`; R2, an empty plan, an adopted container
+      mounting P and Q and a catalog of `[P, Q]` stays `Running`; R3, a catalog of `[P]` over that
+      container goes `Stale` and a following `[P, Q]` returns it to `Running`. A catalog that drops a
+      project the container shares goes `Stale`.
+- [ ] T230 [BUG-574] [U54] *(test)* `crates/micold-client/src/main_tests.rs` and
+      `crates/micold-client/src/features/sandbox.rs` (`mod tests`). A keep-running save marks the
+      sandbox `Stale`, and a catalog matching the container does not clear it. The notice for the
+      mount set names the projects; the notice for the keep-running setting names that setting and
+      not the projects; with both, both are named.
+- [ ] T231 [BUG-574] [U55] *(test)* `crates/micold-client/src/features/sandbox.rs` (`mod tests`)
+      and `crates/micold-client/src/shell/sandbox.rs` (`mod tests`). A re-read that finds a
+      container under a different id adopts its id, its projects and its locations, and decides
+      staleness against the last catalog. One that finds the same id, none, or cannot ask the
+      runtime changes nothing. The re-read issues no `create`, `start`, `stop` or `rm`
+      (`RecordingRunner`).
+
+### Implementation for BUG-574
+
+- [ ] T232 [BUG-574] [U52] `crates/micold-core/src/sandbox/mod.rs` (`MountSet`, the container's
+      projects beside `shared_locations`) and `crates/micold-core/src/sandbox/lifecycle.rs` (the
+      set decision, the stale reasons and their transitions). `SandboxState::Stale(id)` keeps its
+      shape. `mount_set_changed` and `survive_logout_changed` become, or call, the reason setters.
+      Move the misplaced doc comment of `mount_set_changed` (it sits above `container_lost`).
+- [ ] T233 [BUG-574] [U53] [U54] `crates/micold-client/src/shell/sandbox.rs` (`start`, `Ready`),
+      `crates/micold-client/src/features/sandbox.rs` (`Sandbox`: the container's projects at
+      `started`, the reasons, `mounts_changed` taking the registered projects,
+      `persistent_notice`) and `crates/micold-client/src/shell/daemon_sync.rs`
+      (`adopt_mount_set`). Record the container's projects at `Started`, decide on every catalog
+      as sets, and clear when nothing is left. `BootPlan.projects` still follows the catalog, for
+      the next bring-up.
+- [ ] T234 [BUG-574] [U55] `crates/micold-client/src/shell/sandbox.rs` (the re-read, sharing the
+      mount set construction with `start`), `crates/micold-client/src/features/sandbox.rs` and the
+      `Connected` handler in `crates/micold-client/src/shell/daemon_sync.rs`. On each `Connected`
+      under the sandbox placement while the sandbox has a container, find it by name; adopt a
+      different id. Read-only (R9).
+- [ ] T235 [BUG-574] `docs/user-guide/sandboxed-daemon.md`. Where it says changing the keep-running
+      setting marks the sandbox out of date, and where projects are shared: the notice names its
+      reason, and it clears by itself once the running container shares exactly the registered
+      projects (for example after the project is unregistered again, or another window replaced the
+      container).
+
+**Order**: T228–T231 first (T229 and T230 share `main_tests.rs`: one after the other), then T232,
+then T233, then T234, then T235. Then `mise run gate`.
+
+**Verify**: `mise run test-core` passes U52. `scripts/build-lock.sh cargo test -p micold-client
+--bin micold-ai-ide` passes U53, U54 and U55's binary half, and `scripts/build-lock.sh cargo test -p
+micold-client --lib features::sandbox` passes U54's and U55's library halves.
+
+**Bugfix**: 2026-10-06 — BUG-574. **Requirements added**: FR-036c and US6 scenario 7 — see
+`spec.md`. `plan.md` gained the increment, `data-model.md` M-4 and S-8, `research.md` R9 a note.
+**No task reopened**: T101 and T105 did what they say; what they were asked to compare was wrong.
+See `bugs/BUG-574.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

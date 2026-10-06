@@ -121,6 +121,17 @@ Added 2026-09-28. Traces are FR-004g and US1 scenario 8.
 | U50 | The settings page names the path under the share, and the summary stops calling the sign-in shared (none at all when it is the only share) while the badge's answer is unchanged | FR-004g, FR-004b, FR-004c | example | DONE | `ui::settings::daemon::tests::an_unshared_sign_in_is_*`, `a_sign_in_with_no_report_or_no_share_gets_no_notice` (lib) |
 | U51 | Opening Settings seeds the draft from the running sandbox's report, and from no stopped one | FR-004g | example | DONE | `tests::opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only` (binary) |
 
+## BUG-574 — out of date is measured against the running container (`tasks.md` Phase 29)
+
+Added 2026-10-06. Traces are FR-036c and US6 scenario 7.
+
+| id  | behavior                                                                                             | traces          | kind             | state   | test |
+| --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
+| U52 | The mount set is out of date exactly while the container's projects and the registered ones differ as sets; an adopted container's projects are its destinations less the non-project mounts; stale reasons set and clear independently, `Stale` returns to `Running` with none left | FR-036c | example | TODO | `sandbox_state`, `sandbox_argv` (T228) |
+| U53 | Through the app: same set in another order, an adopted container sharing every project, and a catalog that comes to match all leave or return the sandbox `Running`; a dropped project marks it `Stale` | FR-036c, US6 sc. 7 | example | TODO | `main_tests` (T229), red on `origin/main` |
+| U54 | A keep-running staleness survives a matching catalog, and each reason has its own notice | FR-036c | example | TODO | `main_tests`, `features::sandbox` (T230) |
+| U55 | A re-read adopts a container another window replaced, and is read-only | FR-036c, R9 | example | TODO | `features::sandbox`, `shell::sandbox` (T231) |
+
 ## Invariants and edge cases still to place
 
 - none
