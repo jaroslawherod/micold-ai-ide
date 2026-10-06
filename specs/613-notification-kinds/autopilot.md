@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: plan
-- **Next step**: plan unit (if the user answers B before plan: make the threshold a Settings value, default 60 s, and update D4)
+- **Next step**: plan unit (continue from Handover: plan review round 1)
 
 ## Pull requests
 
@@ -45,7 +45,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, step 1 (`speckit-plan`) done: plan.md, research.md (R1–R10), data-model.md,
+contracts/{wire,classification,notification}.md, quickstart.md committed. D4 threshold kept as the
+single constant `micold_core::attention::LONG_TASK_THRESHOLD`, passed as an argument to
+`TurnClock::change` (research R2), so a later setting replaces only the call site.
+Next: step 2 — round 1 plan review by a fresh reviewer (tasks/review.md with rubrics/plan.md, session
+model), then act on it (review-rounds.md), then step 3 (set Next step to `tasks unit`, return DONE).
+Note for the reviewer's attention: research R3 changes `SubagentStop` from `Stop` to `PostToolUse`
+(a 010/039 behaviour change, justified there). No open findings.
 
 ## Open escalation
 
