@@ -49,6 +49,7 @@ fn child_helper() {
             std::thread::sleep(Duration::from_secs(20));
             std::process::exit(0);
         }
+        #[cfg(unix)]
         "escape" => {
             // Leaves a daemon in a new session holding the inherited pipes, then exits.
             use std::os::unix::process::CommandExt;
