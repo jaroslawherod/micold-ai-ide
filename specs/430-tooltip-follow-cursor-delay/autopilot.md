@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #596 | Design (clarify, plan, tasks) | merged | 47ae6297d5e472d802897310d574e25d53bea3d3 |
 | #600 | M1 pointer-following placement, ShowTimer | merged | cad1101cd8535898c1ab2f783d34fa00b8aaffca |
 | #607 | M2 show delay | merged | cddd3ce50d9570221a78f23bdb0464563d705dec |
-| close | Close the spec | not pushed | |
+| #608 | Close the spec | open | |
 
 ## Milestones
 
