@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain for the clarify unit: the target session when several
-  run or none runs (User Story 3, scenario 4), and the fallback base branch (FR-003).
+- Both clarifications are resolved (Clarifications, Session 2026-10-06): the base branch in FR-003
+  and the target session in FR-016 and User Story 3, scenario 4. Confirmed by the tasks reviewer.
