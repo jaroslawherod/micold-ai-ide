@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M3 (T032–T045, T056–T066)
+- **Next step**: M4 (T046–T052)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Awaiting-input kinds, notified by their defaults (short turns silent, permission and long turns titled by kind; SubagentStop ignored) | #618 | done (pushed; full gate green at b67fb7b7) |
 | M2 | T021–T031 | full | Session error notifications (give-up, Copilot session.error) to one window | #618 | done (pushed 4cfe5bcc; gate green but for the 6 root-only permission tests) |
-| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | gate 1 red (style/layout baselines, kind-row focus, draft tests) fixed; visual pass done (visual-pass.md); full gate 2 and review B round 2 running |
+| M3 | T032–T045, T056–T066 | full | Per-kind switches in Settings with icons; service stores and applies them | #618 | done (pushed; full gate 2 at 312578d0 green but for the 6 root-only permission tests; reviews A and B clean; visual pass §B5/B6/B8/B9 PASS) |
 | M4 | T046–T052 | full | Kind icons in desktop notifications (Linux image-data, Windows/macOS PNG) | — | todo |
 
 M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: kept whole. M1's TurnClock, Views pending kinds and the client kind only deliver together; US1 was already split along its scenarios (error endings = M2). M3's service switches without the Settings rows would leave nothing a user can observe. Phase 7 (T053–T055) changes no code: close unit.
@@ -59,7 +59,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M3 A (code-review high) | 1 | c094ddd08c97045143ec3db066a19d8628a04c3c:905e9a64353ae30472a8442952a047e35993e20c | CHANGES: F1 MAJOR (disabled kind row: glyph dimmed, label not, FR-017) fixed + test; F2 MINOR (threshold validated while master off) not fixed |
 | M3 A (code-review, sonnet, fix diff) | 2 | 3a6676f37bcd08d58963710634afc8c00978f696:4d33c7d194f63c72d725f95c90e14591bcae45f4 (fix diff from c094ddd0:905e9a64) | CLEAN (1 MINOR fixed in 1102688f: doc comment back on its own test) |
 | M3 B (conformance, sonnet) | 1 | 1101f063f429302e86ec24f655cda678dda09680:1102688f75d350cb72b6d6dc05307398bd8b1445 | CHANGES: F1 MAJOR (no red run for client/UI tests, cycle 12) fixed by retroactive mutation in the cycle log (2 survivors, visual-only); F2 MAJOR (no visual-pass evidence) fixed: pass run, found disabled checked box lost its mark, fixed + test; F3 MINOR (gate not recorded) recorded below |
-| M3 B (conformance, sonnet, fix diff) | 2 | (fix diff from 1101f063:1102688f) | running |
+| M3 B (conformance, sonnet, fix diff) | 2 | 2fb93c3c00eead68f9d66492ed7be7962b6bad79:8872c8f330605106182f3c19dbb6f744987183a6 (fix diff from 1101f063:1102688f) | CLEAN (3 MINOR: §B8 crops predate the disabled-checked fix; ledger gate result; Verify not run by reviewer — gate 2 ran it) |
 
 ## CI fixes
 
