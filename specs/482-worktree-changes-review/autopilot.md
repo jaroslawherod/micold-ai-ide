@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #482
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
-- **Phase**: plan
-- **Next step**: plan unit
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | c5e15968c86ce0c17544cde68a31ff74e2fb1e8b:107ab7ed3aa9b067a4dca5c02aca6e6709d4d158 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec | 2 | c960571fb7bed1fa440f89fe3b9720fd30c8d897:c74e2d4a9e09412fc66dd4915e3c7e105b785552 | CLEAN: 2 MINOR (both fixed) |
+| Plan | 1 | 76b23838a33fc28d5c9f6db389cc15f46acd39a1:3a5ac98c80a82e8c74fb02606f5bee99309eaeeb | CLEAN: 3 MINOR (all fixed, prose only) |
 
 ## Declined review findings
 
@@ -43,13 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: `speckit-plan` ran; plan.md, research.md (R1-R15), data-model.md, quickstart.md and
-  contracts/{review-wire,review-prompt,changes-view}.md written and committed. No review run yet.
-- Next step: plan review round 1 (tasks/review.md with rubrics/plan.md, session model, fresh
-  reviewer via the scratchpad run-review.sh), then review-rounds.md, then set **Next step** to
-  `tasks unit` and return DONE, PR none.
-- Open findings: none. PR: none.
-- Handed over at the 150k context cap.
+None.
 
 ## Open escalation
 

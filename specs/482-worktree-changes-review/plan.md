@@ -82,10 +82,13 @@ Post-design re-check: unchanged, all PASS.
 - `target.rs` — `pick_target`.
 - `watch.rs` — `relevant_paths(entry_root, git_dirs, &[PathBuf]) -> Vec<PathBuf>`.
 - `git.rs` — the I/O: `impl GitCli { fn review_base, fn change_list, fn file_diff,
-  fn ignored }` running the commands of R1 through `run_git`-style helpers in
-  `crates/micold-core/src/git.rs` (`no_window`, `local_only`), returning the pure types.
+  fn ignored }` running the commands of R1 through the helpers in
+  `crates/micold-core/src/git.rs` (`no_window`, `local_only`, `run_git`; the last two are private
+  today and become `pub(crate)`), returning the pure types.
 - `store.rs` — `ReviewFile` (de)serialisation, path `reviews/<project_id>.json` via a new
-  `JsonFileStore::reviews_dir()` beside `project_state_dir()` in `crates/micold-core/src/store.rs`.
+  `JsonFileStore::reviews_dir()` beside the private `project_state_dir()` in
+  `crates/micold-core/src/store.rs`; `reviews_dir` stays private and the daemon reaches review
+  files only through `JsonFileStore` load/save methods.
 
 ### D2 — Protocol v30 — contracts/review-wire.md
 
@@ -137,7 +140,9 @@ features add `"highlighter"`.
 .on_gutter(..).slot(row, element)`), `review_comment.rs` (`ReviewCommentCard::new(text, state,
 roles).outdated(b).on_edit(..).on_delete(..)`), `text_area.rs` (`TextArea::new(content, roles)
 .on_action(..).placeholder(..)`). Diff row tints: new roles in core `tokens` (`diff_added`,
-`diff_removed` container tints per scheme) checked by `composition_contrast.rs`.
+`diff_removed` container tints per scheme) added to `Roles` in `tokens/mod.rs` and to the role list
+in `tokens/css.rs` (the CSS export and its token tests cover them), checked by
+`composition_contrast.rs`.
 
 ### D7 — Glue and docs
 
@@ -219,7 +224,7 @@ crates/micold-core/src/
 ├── protocol/{messages,version}.rs     # v30 messages
 ├── settings.rs                        # DiffLayout
 ├── store.rs                           # reviews_dir
-└── tokens/                            # diff_added / diff_removed roles
+└── tokens/{mod.rs,css.rs}             # diff_added / diff_removed roles
 crates/micold-core/tests/review_git.rs # new
 crates/micold-daemon/src/
 ├── review.rs                          # new
