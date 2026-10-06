@@ -260,6 +260,57 @@ fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
     );
 }
 
+/// BUG-442 (feature 011, FR-007(b)): the AI CLI tab's restart control tells the service it is a
+/// restart, so the service re-sources the session's directory before relaunching. The service
+/// cannot tell a `SessionStart` sent by the restart from one sent by selecting a session.
+#[test]
+fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
+    let project = std::path::PathBuf::from("/tmp/project");
+    let id = SessionId::new();
+    let mut app = base_app();
+    app.core.workspace.active = Some(project.clone());
+    let _ = connect(
+        &mut app,
+        snapshot_with(
+            project.to_str().unwrap(),
+            vec![summary(id, "s", WireLifecycle::Idle)],
+        ),
+    );
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.core.session.active = Some(id);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Session(SessionMsg::TerminalRestartRequested),
+    );
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, ClientMsg::SessionRestart { session } if *session == id)),
+        "the restart control must send `SessionRestart`, so the service re-sources the \
+         session's directory (FR-007(b)). Sent: {sent:?}"
+    );
+    assert!(
+        !sent
+            .iter()
+            .any(|m| matches!(m, ClientMsg::SessionStart { .. })),
+        "and not a plain `SessionStart` beside it, which would start the session from the cached \
+         environment first. Sent: {sent:?}"
+    );
+
+    let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+            && !sent
+                .iter()
+                .any(|m| matches!(m, ClientMsg::SessionRestart { .. })),
+        "selecting a session is not a restart: it sends `SessionStart`. Sent: {sent:?}"
+    );
+}
+
 // --- BUG-002 (feature 025): the restored session is started, not only viewed ----------------
 //
 // Deciding which session to display and asking the daemon to run it are two halves of one act,

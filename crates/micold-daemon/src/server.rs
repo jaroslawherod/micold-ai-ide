@@ -842,6 +842,14 @@ where
                 state.begin_start(session);
                 spawn_session_start(state, session, LaunchMode::Resume, None);
             }
+            ClientMsg::SessionRestart { session } => {
+                // The user's manual restart of the AI CLI (011 FR-007(b), BUG-442): exactly the
+                // start above, after dropping the session's directory from the environment-include
+                // cache so the relaunch re-sources the script. A plain `SessionStart` stays cached.
+                state.forget_session_env(session);
+                state.begin_start(session);
+                spawn_session_start(state, session, LaunchMode::Resume, None);
+            }
             ClientMsg::ScrollbackRequest {
                 session,
                 req,
@@ -983,6 +991,9 @@ where
                 state.broadcast_catalog();
             }
             ClientMsg::SessionRestartShell { session, instance } => {
+                // A manual restart re-sources the session's directory (011 FR-007(b), BUG-442);
+                // `SessionOpenShell` stays cached.
+                state.forget_session_env(session);
                 // `close_shell` returns the primary it reattached to iff this instance was attached.
                 let reattached_primary = state.close_shell(session, instance);
                 match state.open_shell(session, instance) {

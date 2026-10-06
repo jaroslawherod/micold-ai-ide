@@ -102,7 +102,10 @@
 /// worktrees and sessions. An older peer would fail to decode any of them.
 /// And 28 → 29 for `DaemonMsg::ShellOpenFailed` (feature 010 BUG-592): a refused shell open is
 /// reported to the client that asked. An older client would fail to decode it.
-pub const PROTOCOL_VERSION: u32 = 29;
+/// And 29 → 30 for `ClientMsg::SessionRestart` (feature 011 BUG-442): the AI CLI's manual restart
+/// tells the service to re-source the session's directory first. An older service would fail to
+/// decode it.
+pub const PROTOCOL_VERSION: u32 = 30;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

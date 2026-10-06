@@ -108,6 +108,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             rows: 40,
         },
         ClientMsg::SessionStart { session: sid() },
+        ClientMsg::SessionRestart { session: sid() },
         ClientMsg::SessionStop { session: sid() },
         ClientMsg::SessionKill { session: sid() },
         ClientMsg::SessionInterrupt { session: sid() },

@@ -311,9 +311,12 @@ project, or the one you just restarted a session in), not necessarily every proj
 - **Timed out** — sourcing didn't finish within the configured timeout and was abandoned.
 
 To recover once you've fixed the script: use the existing **restart** control on the affected
-session's terminal (shown whenever that session's process isn't running) — this re-sources the
-script fresh and clears the failure note, without needing to restart the whole app. Saving Settings
-(even without changing any value) also triggers a fresh re-source.
+session's terminal (shown whenever that session's process isn't running). Both restart controls
+work this way — the AI CLI's and a Regular Terminal's: the session service re-sources the script
+fresh for that session's directory before the process starts again, without needing to restart the
+whole app. The AI CLI's restart also clears the failure note. Saving Settings (even without
+changing any value) also triggers a fresh re-source. Selecting a session, reconnecting, or a
+session being started again automatically after a crash does not: those reuse the last result.
 
 ## Session service
 
