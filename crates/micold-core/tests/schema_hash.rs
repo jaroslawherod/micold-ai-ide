@@ -224,7 +224,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 29 → 30 for feature 011 BUG-442's `ClientMsg::SessionRestart`: the AI CLI's manual restart
 /// re-sources the session's directory first. A new variant an older service cannot decode.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 30;
+///
+/// And 30 → 31 for feature 482's review messages (`ReviewEdit`, `ReviewSend`, `ReviewChanged`,
+/// `OperationResult::ReviewSent`) and `diff_layout` on `SettingsSet` and `DaemonSettings`, in one
+/// edit (contracts/review-wire.md).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 31;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

@@ -92,6 +92,7 @@ async fn sets(
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications,
+            diff_layout: None,
         },
     )
     .await;

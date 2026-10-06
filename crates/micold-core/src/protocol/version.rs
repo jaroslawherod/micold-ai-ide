@@ -105,7 +105,11 @@
 /// And 29 → 30 for `ClientMsg::SessionRestart` (feature 011 BUG-442): the AI CLI's manual restart
 /// tells the service to re-source the session's directory first. An older service would fail to
 /// decode it.
-pub const PROTOCOL_VERSION: u32 = 30;
+/// And 30 → 31 for feature 482's review messages in one edit (contracts/review-wire.md):
+/// `ClientMsg::{ReviewEdit, ReviewSend}`, `DaemonMsg::ReviewChanged`,
+/// `OperationResult::ReviewSent` and `diff_layout` on `SettingsSet` and `DaemonSettings`. An older
+/// peer would fail to decode any of them.
+pub const PROTOCOL_VERSION: u32 = 31;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -105,6 +105,18 @@ pub struct DaemonConfig {
     pub sandbox: SandboxProfile,
 }
 
+/// How the Changes view lays out a diff (feature 482, R12). Unified until the user picks
+/// side by side; the choice is kept for the next file and the next start (US1 s4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffLayout {
+    /// One column, removed lines above added ones.
+    #[default]
+    Unified,
+    /// The old version on the left, the new on the right.
+    SideBySide,
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -168,6 +180,10 @@ pub struct Settings {
     /// so every window follows it at once; unread marks do not depend on it (FR-017).
     #[serde(default = "default_desktop_notifications")]
     pub desktop_notifications: bool,
+    /// How the Changes view lays out a diff (feature 482, US1 s4, R12). Service-owned so every
+    /// window and the next start keep the last choice.
+    #[serde(default)]
+    pub diff_layout: DiffLayout,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -213,6 +229,7 @@ impl Default for Settings {
             issue_label_types: default_mapping(),
             pr_status_enabled: false,
             desktop_notifications: default_desktop_notifications(),
+            diff_layout: DiffLayout::default(),
         }
     }
 }
@@ -442,6 +459,10 @@ struct StoredSettings {
     /// Additive and defaulted, so `settings_version` does not move for it either.
     #[serde(default = "default_desktop_notifications")]
     desktop_notifications: bool,
+    /// Missing in files written before feature 482 → unified (R12). Additive and defaulted, so
+    /// `settings_version` does not move for it either.
+    #[serde(default)]
+    diff_layout: DiffLayout,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -477,6 +498,7 @@ impl StoredSettings {
             issue_label_types: settings.issue_label_types.clone(),
             pr_status_enabled: settings.pr_status_enabled,
             desktop_notifications: settings.desktop_notifications,
+            diff_layout: settings.diff_layout,
         }
     }
 
@@ -510,6 +532,7 @@ impl StoredSettings {
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
             desktop_notifications: self.desktop_notifications,
+            diff_layout: self.diff_layout,
         }
     }
 }

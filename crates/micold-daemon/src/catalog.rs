@@ -161,6 +161,7 @@ impl Catalog {
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
             desktop_notifications: self.settings.desktop_notifications,
+            diff_layout: self.settings.diff_layout,
         }
     }
 
@@ -303,6 +304,7 @@ impl Catalog {
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
+                on_disk.diff_layout = self.settings.diff_layout;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -396,6 +398,12 @@ impl Catalog {
     /// service only holds the switch for the clients; it reads no pull request itself.
     pub fn set_pr_status_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.pr_status_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Set the Changes view's diff layout, persisting atomically (feature 482, R12).
+    pub fn set_diff_layout(&mut self, layout: micold_core::settings::DiffLayout) -> io::Result<()> {
+        self.settings.diff_layout = layout;
         self.persist_service_settings()
     }
 

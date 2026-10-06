@@ -86,6 +86,7 @@ async fn set(
             cross_session_access: None,
             pr_status_enabled,
             desktop_notifications: None,
+            diff_layout: None,
         }))
         .await
         .unwrap();
@@ -188,6 +189,7 @@ async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() 
         cross_session_access: None,
         pr_status_enabled: Some(true),
         desktop_notifications: None,
+        diff_layout: None,
     }))
     .await
     .unwrap();
