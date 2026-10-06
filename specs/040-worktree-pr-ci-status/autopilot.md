@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 in progress (T030–T040).
+- **Next step**: M4 committed locally, gate green; push and PR were denied by the permission classifier. Push, open the PR, wait for CI, merge, then M5. Visual pass B1-B3 not run (no Xvfb/xdotool): M8 records it.
 
 ## Pull requests
 
@@ -76,6 +76,8 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M2) | 2 | e3935a77c458a870b9dd33178afd00a054fe746d:64239328d1ceb837f428dd93f1b6950baa3c2163 | CLEAN: F1–F3 fixes hold. Verify: `mise run test-core` exit 0; `merged_branch_check` 9, `pr_status_setting` 3 passed. |
 | Code A (M3) | 1 | aec34873e2ccf720b22ee7bc0510cecd9d26c1fc:7f3b013ddc67b34868efe9154df411bda4671b68 | CLEAN: 1 MINOR (`Held` while a reading runs), not fixed. |
 | Code B (M3) | 1 | aec34873e2ccf720b22ee7bc0510cecd9d26c1fc:7f3b013ddc67b34868efe9154df411bda4671b68 | CHANGES: 2 MAJOR, 1 MINOR. F1 (stray `}` from the rebase merge in main_tests.rs) fixed; F2, F3 declined (see *Declined review findings*). Verify: `pr_status` 16, `features_pr_status` 16, `pr_status_is_read_only_on_named_events` 4 passed. |
+| Code A (M4) | 1 | 864322b2c7c39c65703a4bd2cad9995c350fb468:700e1e891a74a210e1267993caf2ac875a07811d | CLEAN (3 MINOR; F3 fixed, F1/F2 accepted) |
+| Code B (M4) | 1 | adaaf1d297ab989112ff5b2956eb606bab4821c2:2b07f096f7a0aafe7af690ed3225d26f9f65bb5f | CLEAN; Verify exit 0 |
 
 ## Declined review findings
 
