@@ -206,7 +206,9 @@ check the list and the diff update; then clear the sent comments and check only 
 - **File changes while composing**: the diff refreshes under an open comment editor; the text
   being typed is kept.
 - **Session ends during sending**: if delivery fails, an error is shown and every comment stays
-  pending; no comment is marked sent unless the prompt was delivered.
+  pending; no comment is marked sent unless the prompt was delivered. The same holds when the
+  session's terminal cannot take a multi-line prompt as one input (no bracketed paste): nothing is
+  typed.
 - **Isolation (Principle II)**: comments belong to one entry. A prompt goes only to a session of
   the entry it was written in, never to another worktree's session. Two windows showing the same
   entry show the same comments and states.
@@ -221,7 +223,8 @@ check the list and the diff update; then clear the sent comments and check only 
   change that only switches line endings is shown as a change; refresh on change works on Linux,
   macOS and Windows.
 - **Removed worktree**: if the worktree is removed while its Changes view is open, the view closes
-  and its comments are discarded.
+  and its comments are discarded. A worktree removed outside the app loses its comments once the
+  app's worktree list no longer shows it.
 
 ## Requirements *(mandatory)*
 
@@ -236,7 +239,7 @@ check the list and the diff update; then clear the sent comments and check only 
   as `origin/HEAD`, falling back to local `main`, then `master`. The view MUST show which base is
   used. No per-worktree base is persisted by this feature. The "Default" entry MUST list uncommitted changes only.
 - **FR-004**: The view MUST have two independent toggles, committed and uncommitted, both on by
-  default (the "Default" entry has only uncommitted, per FR-003); the list and diffs MUST show only the kinds switched on, and a file changed in both
+  default each time the view opens (the "Default" entry has only uncommitted, per FR-003); the list and diffs MUST show only the kinds switched on, and a file changed in both
   appears once with the combined change.
 - **FR-005**: Uncommitted changes MUST include staged changes, unstaged changes and untracked files
   that are not ignored.
@@ -265,9 +268,10 @@ check the list and the diff update; then clear the sent comments and check only 
   code (elided per Edge Cases when over 50 lines) and the comment text; comments MUST appear
   grouped by file and in line order. The prompt MUST be identical for the same comments on every
   platform.
-- **FR-016**: The review prompt MUST be delivered to a session of the same entry as user input;
-  when no session of that entry runs, the app MUST start one and deliver the prompt as its first
-  input.
+- **FR-016**: The review prompt MUST be delivered to a session of the same entry as user input:
+  the running one most recently active; when no session of that entry runs, the app MUST start one
+  with the project's default AI CLI and deliver the prompt as its first input, never resuming an
+  ended session.
 - **FR-017**: Comments MUST become sent only once their prompt is delivered; on any failure they
   MUST stay pending and the user MUST see an error.
 - **FR-018**: A send in progress MUST make Send to session unavailable for that entry in every
