@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M2 review A + scoped gate, review B, full gate, push
+- **Next step**: M2 handover: review A + scoped gate, review B, full gate, push (see Handover)
 
 ## Pull requests
 
@@ -76,7 +76,18 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-None.
+M2 unit hit the 150k context cap after implementing. **Done**: T021–T031 implemented and ticked
+in dc6ac923 (protocol 31 `SessionErrorNotice`; `ActivityEvent::Ended { error }`;
+`Views::error_notice_target`; `DaemonState::error_notice` called from the GiveUp arm and from
+`note_activity`; client `State::session_error_notice(_ification)` + daemon_sync arm; user guide
+settings.md). TDD cycle 9 logged with red and green runs; targeted Verify tests green (only the
+known root-only permission tests fail locally). **Next**: scoped gate detached with review A
+(`code-review` high on origin/main...HEAD) in its shadow; then review B (conformance, sonnet);
+no visual pass (no GUI change, only a desktop notification through the existing path); full gate
+(raw mise.toml `gate` commands, CARGO_INCREMENTAL=0); push to #618; write
+$SCRATCHPAD/pr-613-body-M2.md. **Open point for review**: C7 is applied literally, so a Copilot
+session whose CLI reported an error and later crash-loops to give-up gets a second notice. Not
+pushed: no green full gate yet.
 
 ## Open escalation
 
