@@ -64,3 +64,20 @@ fn font_size_is_within_the_expected_static_instance_range() {
         FONT.len()
     );
 }
+
+/// Feature 613, I1: the four notification-kind icons (`pan_tool`, `error`, `task_alt`,
+/// `chat_bubble`) are in `Icon::ALL` and each has a glyph in the bundled font.
+#[test]
+fn the_notification_kind_icons_have_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    for (icon, cp) in [
+        (Icon::NeedsPermission, '\u{e925}'),
+        (Icon::SessionError, '\u{e000}'),
+        (Icon::LongTaskFinished, '\u{e2e6}'),
+        (Icon::TurnFinished, '\u{e0cb}'),
+    ] {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), cp);
+        assert!(face.glyph_index(cp).is_some(), "{icon:?} has no glyph");
+    }
+}

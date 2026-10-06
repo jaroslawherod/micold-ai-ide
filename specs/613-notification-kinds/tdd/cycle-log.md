@@ -154,3 +154,18 @@ assertion's failure; where only a field or variant was missing, the red is the c
   `into_settings`; `DaemonSettings.{notification_kinds, long_task_threshold_secs}`, `SettingsSet.{…: Option<…>}`,
   `PROTOCOL_VERSION` 32 → `cargo test -p micold-core --no-fail-fast`: all green but the known root-only permission tests.
 - **Refactor**: none needed.
+
+## Cycle 12 — M3: T038/T063 service, T033/T058 integration, client T035/T042/T060/T064, UI T034/T036/T039–T041/T043/T044/T065
+
+- **Red**: `catalog.rs` `notify_tests::{set_notification_kinds_stores_and_persists_them,
+  set_long_task_threshold_clamps_and_stores_the_value, the_service_write_keeps_the_long_task_threshold}` written by unit 1
+  before the setters existed — red as E0599 (no method `set_notification_kinds` / `set_long_task_threshold` /
+  `long_task_threshold` on `Catalog`). The client and UI tests (features_settings, main_tests, icons*, settings_sections,
+  notification_icon, checkbox) were written by delegated workers in the same pass as their code: no separate red run
+  recorded for them (honest gap).
+- **Green**: `Catalog::{set_notification_kinds, long_task_threshold, set_long_task_threshold}` and the wire/persist
+  fields; `DaemonState::{set_notification_kinds (C15), set_long_task_threshold_secs, effective_long_task_threshold}` with
+  the test override; `server.rs` `SettingsSet` arms; client draft, save, mirror; Settings rows, threshold field, icons,
+  showcase. `settings_notification_kinds` 9/9, `settings_long_task_threshold` 7/7, `features_settings` 70/70, icon and
+  section tests green.
+- **Refactor**: none.

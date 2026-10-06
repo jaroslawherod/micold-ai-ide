@@ -716,7 +716,13 @@ pub(crate) fn base_app() -> App {
                 ),
             ))
             .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
-        core: State::default(),
+        core: {
+            // As startup seeds it from the loaded settings (feature 613): a save validates it.
+            let mut core = State::default();
+            core.session.long_task_threshold_secs =
+                micold_core::attention::LONG_TASK_THRESHOLD.as_secs();
+            core
+        },
         reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
@@ -8046,4 +8052,139 @@ mod pr_status {
             assert!(rig.app.core.worktree_form.worktree_error.is_none());
         }
     }
+}
+
+/// Feature 613, T035 (S3, W5.4): toggling one kind changes only that kind in the draft, and the
+/// save sends the whole draft value.
+#[test]
+fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
+    use micold_core::attention::{NotificationKind, NotificationKinds};
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::NotificationKindToggled(
+            NotificationKind::TurnFinished,
+            true,
+        )),
+    );
+    let mut expected = NotificationKinds::default();
+    expected.set(NotificationKind::TurnFinished, true);
+    assert_eq!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("open")
+            .environment
+            .notification_kinds,
+        expected
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            notification_kinds, ..
+        } => Some(*notification_kinds),
+        _ => None,
+    });
+    assert_eq!(told, Some(Some(expected)), "{sent:?}");
+}
+
+/// Feature 613, T060 (S6, US2.11): editing the threshold touches only its text; saving "20"
+/// sends 20; a bad value sends nothing and names the field.
+#[test]
+fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let draft = |app: &App| {
+        app.core
+            .settings
+            .settings_draft
+            .clone()
+            .expect("the page is open")
+    };
+    let before = draft(&app);
+    assert_eq!(before.environment.long_task_threshold_secs, "60");
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::LongTaskThresholdChanged("9".into())),
+    );
+    let mut expected = before.environment.clone();
+    expected.long_task_threshold_secs = "9".into();
+    assert_eq!(draft(&app).environment, expected);
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(
+        !sent
+            .iter()
+            .any(|m| matches!(m, ClientMsg::SettingsSet { .. })),
+        "a refused save sends nothing: {sent:?}"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::LongTaskThresholdChanged("20".into())),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            long_task_threshold_secs,
+            ..
+        } => Some(*long_task_threshold_secs),
+        _ => None,
+    });
+    assert_eq!(told, Some(Some(20)), "{sent:?}");
+}
+
+/// Feature 613, T035/T060: a `SettingsChanged` from another window updates the stored values.
+#[test]
+fn another_windows_kinds_and_threshold_reach_the_stored_values() {
+    use micold_core::attention::NotificationKinds;
+    let mut app = base_app();
+    let kinds = NotificationKinds {
+        turn_finished: true,
+        needs_permission: false,
+        ..NotificationKinds::default()
+    };
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                notification_kinds: kinds,
+                long_task_threshold_secs: 15,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert_eq!(app.core.session.notification_kinds, kinds);
+    assert_eq!(app.core.session.long_task_threshold_secs, 15);
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let env = &app
+        .core
+        .settings
+        .settings_draft
+        .as_ref()
+        .expect("open")
+        .environment;
+    assert_eq!(env.notification_kinds, kinds);
+    assert_eq!(env.long_task_threshold_secs, "15");
 }

@@ -105,6 +105,15 @@ pub enum Icon {
     MoveUp,
     /// Move a list entry one place down (feature 034's mapping editor).
     MoveDown,
+    /// Notification kind: the session stopped to ask for a permission or an answer — Material's
+    /// `pan_tool` (feature 613, I1).
+    NeedsPermission,
+    /// Notification kind: the session stopped because of an error — `error` (feature 613, I1).
+    SessionError,
+    /// Notification kind: a long turn finished — `task_alt` (feature 613, I1).
+    LongTaskFinished,
+    /// Notification kind: a shorter turn finished — `chat_bubble` (feature 613, I1).
+    TurnFinished,
 }
 
 impl Icon {
@@ -145,6 +154,10 @@ impl Icon {
         Icon::IssueMapping,
         Icon::MoveUp,
         Icon::MoveDown,
+        Icon::NeedsPermission,
+        Icon::SessionError,
+        Icon::LongTaskFinished,
+        Icon::TurnFinished,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -197,6 +210,11 @@ impl Icon {
             // already `NavigateUp`'s, and two icons never share one.
             Icon::MoveUp => '\u{e316}',
             Icon::MoveDown => '\u{e313}',
+            // `pan_tool`, `error`, `task_alt`, `chat_bubble`: the notification kinds (feature 613).
+            Icon::NeedsPermission => '\u{e925}',
+            Icon::SessionError => '\u{e000}',
+            Icon::LongTaskFinished => '\u{e2e6}',
+            Icon::TurnFinished => '\u{e0cb}',
         }
     }
 }
@@ -220,6 +238,9 @@ pub enum IconSurface {
     /// today, and the reasons are not, so a change to what a badge looks like must not silently
     /// restyle every menu in the application.
     MenuItem,
+    /// A checkbox row's glyph (feature 613, S4) — the label's own role, `on_surface`, so it holds
+    /// whatever contrast the label holds in both themes.
+    CheckboxLabel,
 }
 
 impl IconSurface {
@@ -230,6 +251,7 @@ impl IconSurface {
         IconSurface::Badge,
         IconSurface::Unavailable,
         IconSurface::MenuItem,
+        IconSurface::CheckboxLabel,
     ];
 }
 
@@ -246,5 +268,6 @@ pub const fn icon_role(surface: IconSurface, roles: Roles) -> Rgb {
         IconSurface::Badge => roles.on_surface_variant,
         IconSurface::Unavailable => roles.error,
         IconSurface::MenuItem => roles.on_surface_variant,
+        IconSurface::CheckboxLabel => roles.on_surface,
     }
 }

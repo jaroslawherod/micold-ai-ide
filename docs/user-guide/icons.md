@@ -31,6 +31,10 @@ status markers.
 | Search | Search a long list by typing | Branch search in the New worktree form |
 | Project root | The repository's own working directory | Sidebar **Default** entry |
 | Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |
+| Raised hand | A session needs permission or an answer from you | **Needs permission** row in Settings and its notification |
+| Error | A session stopped because of an error | **Session error** row in Settings and its notification |
+| Task done (check in a circle) | A session finished a long task | **Long task finished** row in Settings and its notification |
+| Chat bubble | A session finished a turn | **Turn finished** row in Settings and its notification |
 
 Every icon follows the active theme: it is tinted to match the text around it and is legible
 in both the light and the dark theme. When you switch your system between light and dark, the

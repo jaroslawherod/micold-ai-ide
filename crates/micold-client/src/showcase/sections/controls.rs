@@ -8,16 +8,19 @@
 //! Where a control needs a message it has nowhere to send, it sends [`Message::NoOp`]. That keeps the
 //! instance genuinely interactive without the gallery inventing behaviour the application owns.
 
+use iced::widget::column;
 use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::tokens::{spacing, Roles};
 
 use crate::icons::Icon;
+use crate::notification_icon;
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::samples;
 use crate::showcase::state::{Message, Showcase};
 use crate::ui::material::{self, ButtonVariant, TypeRole};
+use micold_core::attention::NotificationKind;
 
 /// How tall the resize handle's swatch is. A layout dimension, not a text size (see `atoms.rs`).
 const HANDLE_HEIGHT: f32 = 96.0;
@@ -186,33 +189,90 @@ pub fn labelled_toggle<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
 /// one (BUG-003). A gallery that showed every state but that one would still be describing the
 /// checkbox the bug left behind.
 pub fn checkbox<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    arrange(
-        vec![
-            posed(
-                "unchecked",
-                material::Checkbox::new(samples::LABEL, false, roles).on_toggle(|_| Message::NoOp),
-                roles,
-            ),
-            posed(
-                "checked",
-                material::Checkbox::new(samples::LABEL, true, roles).on_toggle(|_| Message::NoOp),
-                roles,
-            ),
-            posed(
-                "focused",
-                material::Checkbox::new(samples::LABEL, false, roles)
-                    .focused(true)
-                    .on_toggle(|_| Message::NoOp),
-                roles,
-            ),
-            posed(
-                "disabled",
-                material::Checkbox::<Message>::new(samples::OTHER_LABEL, false, roles),
-                roles,
-            ),
-        ],
-        Layout::Inline,
-    )
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    rows.extend(vec![
+        posed(
+            "unchecked",
+            material::Checkbox::new(samples::LABEL, false, roles).on_toggle(|_| Message::NoOp),
+            roles,
+        ),
+        posed(
+            "checked",
+            material::Checkbox::new(samples::LABEL, true, roles).on_toggle(|_| Message::NoOp),
+            roles,
+        ),
+        posed(
+            "focused",
+            material::Checkbox::new(samples::LABEL, false, roles)
+                .focused(true)
+                .on_toggle(|_| Message::NoOp),
+            roles,
+        ),
+        posed(
+            "disabled",
+            material::Checkbox::<Message>::new(samples::OTHER_LABEL, false, roles),
+            roles,
+        ),
+    ]);
+    // Feature 613, I8/S7, FR-022: the four notification-kind rows (icon, name, note), checked and
+    // unchecked, enabled and disabled; and the threshold field under the Long task finished row,
+    // valid, refused and disabled. The theme is the showcase's own, so both themes show them.
+    for enabled in [true, false] {
+        for on in [true, false] {
+            for kind in NotificationKind::ALL {
+                let mut row = material::Checkbox::<Message>::new(kind.name(), on, roles)
+                    .icon(notification_icon::icon(kind));
+                if enabled {
+                    row = row.on_toggle(|_| Message::NoOp);
+                }
+                let label = match (on, enabled) {
+                    (true, true) => "checked, enabled",
+                    (false, true) => "unchecked, enabled",
+                    (true, false) => "checked, disabled",
+                    (false, false) => "unchecked, disabled",
+                };
+                rows.push(posed(
+                    label,
+                    column![
+                        row,
+                        material::Text::new(kind.description(), TypeRole::Caption, roles).muted()
+                    ]
+                    .spacing(spacing::XS),
+                    roles,
+                ));
+            }
+        }
+    }
+    let threshold = |value: &'a str, error: Option<&'static str>, enabled: bool| {
+        let mut field = material::TextField::new("", value, roles)
+            .label("Long-task threshold")
+            .supporting("Seconds, 10–3600")
+            .error(error);
+        if enabled {
+            field = field.on_input(|_| Message::NoOp);
+        }
+        field
+    };
+    rows.push(posed(
+        "threshold, valid",
+        threshold("60", None, true),
+        roles,
+    ));
+    rows.push(posed(
+        "threshold, refused",
+        threshold(
+            "5",
+            Some("Enter a threshold between 10 and 3600 seconds."),
+            true,
+        ),
+        roles,
+    ));
+    rows.push(posed(
+        "threshold, disabled",
+        threshold("60", None, false),
+        roles,
+    ));
+    arrange(rows, Layout::Inline)
 }
 
 /// `ToggleChip` — active and inactive, with an explicit accent, and disabled (feature 034).

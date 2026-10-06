@@ -333,6 +333,7 @@ jobs:
             --test features_window \
             --test features_worktree \
             --test features_worktree_form \
+            --test notification_icon \
             --test anatomy_call_sites
       # Feature 039 (T122). The macOS and Windows notification backends are `cfg` modules of the
       # client binary (`shell/desktop_notify/macos.rs`, `windows.rs`), and so are their tests. The
