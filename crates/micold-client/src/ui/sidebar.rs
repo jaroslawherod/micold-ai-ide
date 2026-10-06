@@ -10,13 +10,14 @@ use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
-    self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
-    IconButton, Scrollable, SplitAction, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem,
-    TreeView, TypeRole,
+    self, Accordion, ActivityBadge, Button, ButtonVariant, CheckMark, Divider, FilterTrigger,
+    HoverReveal, IconButton, PrMark, PullRequestIndicator, Scrollable, SplitAction, SurfaceKind,
+    Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
+use micold_core::pull_request::{CheckStatus, PrState};
 use micold_core::session::{SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
@@ -617,8 +618,19 @@ fn build_items(
     let in_view = crate::features::attention::in_view(&state.attention);
     let hovered = state.worktree.hovered.as_deref();
     let project_root = state.workspace.active.as_deref();
+    let now = unix_now();
 
     for entry in entries {
+        // Feature 040 (FR-001): the pull request of this row's branch, as the marks the shared
+        // indicator draws. `None` for every row when nothing is held, and the row is then built
+        // exactly as it was.
+        let pull_request = crate::features::sidebar::row_pull_request(
+            &entry,
+            &state.pr_status.statuses,
+            state.pr_status.read_at,
+            now,
+        )
+        .map(|row| indicator_marks(&row.status.state));
         // The location's attention indicator (feature 575, FR-001/002): its unread sessions, not
         // closed and not the one in view, counted whether the row is expanded or not (FR-003).
         let unread = entry.unread_count(in_view);
@@ -693,7 +705,7 @@ fn build_items(
         // fades its icons in/out independently via its own animation track (feature 008). The
         // hovered row is the pressable one.
         let active = hovered == Some(dir.as_str());
-        item = item.trailing_element(row_actions_cluster(
+        let cluster = row_actions_cluster(
             &dir,
             wt.can_start_session(),
             active,
@@ -707,7 +719,21 @@ fn build_items(
                     .unwrap_or_default(),
             ),
             r,
-        ));
+        );
+        item = item.trailing_element(match pull_request {
+            // The indicator leads the trailing element, before the actions (UI §2).
+            Some((mark, checks)) => {
+                let mut indicator = PullRequestIndicator::<Message>::new(mark, &r);
+                if let Some(checks) = checks {
+                    indicator = indicator.checks(checks);
+                }
+                row![Element::from(indicator), cluster]
+                    .spacing(spacing::XS)
+                    .align_y(Alignment::Center)
+                    .into()
+            }
+            None => cluster,
+        });
         items.push(item);
 
         if node.expanded {
@@ -718,6 +744,32 @@ fn build_items(
     }
 
     items
+}
+
+/// Unix seconds now, for the age of a pull request reading. The view glue owns the clock: the
+/// render-free layer is handed the time, never asks for it.
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+}
+
+/// The indicator's marks for a pull request state: the shared component does not know the pull
+/// request module, so the mapping lives here (contract §1). Only an open or draft one has checks,
+/// and `None` means no checks at all (FR-003).
+fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
+    let checks = |c: &CheckStatus| match c {
+        CheckStatus::None => None,
+        CheckStatus::Pending => Some(CheckMark::Pending),
+        CheckStatus::Passing => Some(CheckMark::Passing),
+        CheckStatus::Failing => Some(CheckMark::Failing),
+    };
+    match state {
+        PrState::Open { checks: c } => (PrMark::Open, checks(c)),
+        PrState::Draft { checks: c } => (PrMark::Draft, checks(c)),
+        PrState::Merged => (PrMark::Merged, None),
+        PrState::Closed => (PrMark::Closed, None),
+    }
 }
 
 /// One session sub-item, depth 1 — shared by worktree rows and the "Default" row (feature 010)

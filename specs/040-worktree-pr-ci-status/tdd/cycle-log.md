@@ -514,3 +514,13 @@ existed and failed before the implementation.
   `issues_are_requested_only_on_named_events.rs`; a gate over the source text, green on the tree it was written
   against (it pins what T028 and T029 built)
 - commit: the commit that adds this entry
+
+### M4 cycle: U98–U110 — the row indicator, the icons, the switch (T030–T039)
+
+- test: red first in the commit before this one (`row_pull_request`, the seven `Icon` variants, `GithubDraft.pr_status_enabled`,
+  `Msg::PrStatusToggled`, `SettingsSet` carrying the switch only when changed, the showcase entry); none compiled until the code existed
+- green: `icons.rs` (D13: `edit_note`, `cancel`), `ui/material/pull_request_indicator.rs` (width 16/34 unit test),
+  `features::sidebar::row_pull_request`, the row's trailing element, the Settings switch and `persist.rs`
+- covered states: `main-shell-sidebar-pull-request-indicator` (+ `-narrowest`) and the checked switch in
+  `settings-view-github-issues`; the showcase is not a covered-state kind, its entry is held by `showcase_completeness`
+- commit: the commit that adds this entry

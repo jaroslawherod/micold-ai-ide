@@ -311,9 +311,8 @@ fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Op
 /// Set on `target` each field of `saved` that differs from `baseline`, the settings the page was
 /// opened with, and leave every other field as `target` has it (BUG-570, FR-026a).
 ///
-/// The pull request switch and the diff layout are never set: the form holds neither (feature
-/// 040, M4; feature 482, which the service owns). The
-/// destructuring is there so that a field added to `Settings` fails to compile here until a save
+/// The diff layout is never set: the form does not hold it (feature 482, which the service owns).
+/// The destructuring is there so that a field added to `Settings` fails to compile here until a save
 /// says what it does with it.
 fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
     let Settings {
@@ -386,6 +385,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(desktop_notifications);
     set!(notification_kinds);
     set!(long_task_threshold_secs);
+    set!(pr_status_enabled);
 }
 
 /// The service-owned fields a save changed: what its `SettingsSet` carries as `Some` (W4.1).
@@ -402,6 +402,7 @@ struct ServiceChanges {
     cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
     notification_kinds: Option<micold_core::attention::NotificationKinds>,
     long_task_threshold_secs: Option<u64>,
+    pr_status_enabled: Option<bool>,
 }
 
 impl ServiceChanges {
@@ -418,7 +419,7 @@ impl ServiceChanges {
             desktop_notifications: self.desktop_notifications,
             diff_layout: None,
             cross_session_access: self.cross_session_access,
-            pr_status_enabled: None,
+            pr_status_enabled: self.pr_status_enabled,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
         }
@@ -445,6 +446,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         cross_session_access: changed!(cross_session_access),
         notification_kinds: changed!(notification_kinds),
         long_task_threshold_secs: changed!(long_task_threshold_secs),
+        pr_status_enabled: changed!(pr_status_enabled),
     };
     (changes != ServiceChanges::default()).then_some(changes)
 }
@@ -569,8 +571,7 @@ pub(crate) fn save_and_prepare_check(
         // Through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
-        // through the `notify_error` below, which is T160. The pull request switch, which the form
-        // does not hold (feature 040, M4), is never set, so the document keeps the value it has.
+        // through the `notify_error` below, which is T160.
         let write = store.update_reporting(&mut |stored| changed(stored));
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {

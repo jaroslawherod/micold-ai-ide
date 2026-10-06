@@ -26,13 +26,16 @@ not depend on the pull request module.
 | Meaning | `Icon` variant | Material Symbol | Role (current) |
 |---|---|---|---|
 | open | `PrOpen` | `call_split` | `primary` |
-| draft | `PrDraft` | `edit` | `on_surface_variant` |
+| draft | `PrDraft` | `edit_note` | `on_surface_variant` |
 | merged | `PrMerged` | `call_merge` | `tertiary` |
 | closed | `PrClosed` | `block` | `on_surface_variant` |
 | checks passing | `ChecksPassing` | `check` | `primary` |
 | checks pending | `ChecksPending` | `schedule` | `on_surface_variant` |
-| checks failing | `ChecksFailing` | `close` | `error` |
+| checks failing | `ChecksFailing` | `cancel` | `error` |
 
+- **Glyph choice** (D13): `edit` and `close` are the codepoints of `Icon::Rename`'s family and
+  `Icon::Close`, and no two icons share one, so the draft mark is `edit_note` (e745) and the failing
+  mark `cancel` (e5c9).
 - **Layout**: the state glyph, then the check glyph when there is one, 16 px each, 2 px apart, in a
   box of fixed height. Width is 16 px without a check status and 34 px with one; it never depends
   on the sidebar's width (FR-009).

@@ -96,6 +96,22 @@ No host draws it by hand. Each of the three places has a host API that builds it
 so the contrast gate measures the colour that is drawn. The showcase has an entry for each place,
 in both schemes.
 
+## `PullRequestIndicator`: a worktree's pull request and its checks
+
+`PullRequestIndicator` (`ui/material/pull_request_indicator.rs`, contract
+`specs/040-worktree-pr-ci-status/contracts/pull-request-ui.md` §1) draws the state of a pull request
+(`PrMark`: open, draft, merged, closed) and, for an open or draft one, the combined check status
+(`CheckMark`: pending, passing, failing). Builder form:
+`PullRequestIndicator::new(PrMark::Open, &roles).checks(CheckMark::Failing).stale(false)`.
+
+Two 16 px glyphs, 2 px apart, in a box of fixed height: 16 px wide alone, 34 px with a check status,
+whatever the sidebar's width. The seven glyphs are seven shapes (`Icon::PrOpen`, `PrDraft`,
+`PrMerged`, `PrClosed`, `ChecksPassing`, `ChecksPending`, `ChecksFailing`), so colour only repeats
+what the shape says. The stale form draws both in the `outline` role. It answers no press and has no
+tooltip of its own: the row's tooltip speaks for it. The sidebar maps `PrState` and `CheckStatus` to
+the component's own enums, so `ui::material` does not depend on the pull request module. The
+showcase poses 12 states.
+
 ## `Tooltip`: the rest mode and the line limit
 
 `material::Tooltip` has three optional builder steps. Without them a tooltip behaves as it always

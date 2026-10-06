@@ -93,6 +93,46 @@ The sidebar is intentionally compact — tight left/right padding and a slightly
 long names and their tags get as much width as possible. It stays legible in both light and dark
 themes.
 
+### Pull request status
+
+With **Show pull request status on worktrees** checked in [Settings →
+GitHub](settings.md#show-pull-request-status-on-worktrees), a worktree whose branch has a pull
+request shows a small indicator at the right of its row, before the row's buttons. It is off until
+you turn it on.
+
+The first glyph is the pull request's state:
+
+| Glyph | State |
+| --- | --- |
+| Branching arrow (`call_split`) | Open |
+| Pencil on lines (`edit_note`) | Draft |
+| Merging arrow (`call_merge`) | Merged |
+| Circle with a bar (`block`) | Closed without merging |
+
+An open or draft pull request that has checks shows a second glyph, the combined result of its
+checks:
+
+| Glyph | Checks |
+| --- | --- |
+| Circled cross (`cancel`) | Failing: at least one check failed |
+| Clock (`schedule`) | Pending: none failed, and at least one is still queued or running |
+| Tick (`check`) | Passing: every check finished without a failure |
+
+A merged or closed pull request, and one with no checks, shows the state alone. Every state and
+status has its own shape, so none depends on colour. The indicator keeps its size however wide the
+sidebar is.
+
+- **Which pull request:** the one for the worktree's branch, in the project's own GitHub
+  repository. When a branch has several, an open or draft one is shown if there is any, otherwise the most
+  recently created; among several open ones, the most recently created.
+- **Which worktrees:** a worktree with no branch (detached) and the **Default** entry never show
+  one, and a row without a pull request looks as it always did.
+- **Only github.com, only the project's own repository:** a repository on another host, or a pull
+  request that exists only in the repository a fork was made from, shows nothing.
+- **A window that does not hold the project** shows none: the status is read by the window that
+  holds the project's sessions.
+- **Without `gh`, or without a sign-in,** no row shows an indicator and no error appears.
+
 ### Filtering worktrees by tag
 
 Tap the **filter** button in the sidebar header to reveal the tag-filter panel — it's hidden
@@ -466,7 +506,7 @@ changing it later does not change the type of an issue you already picked. It is
 from an issue.
 
 To add your own labels, change a type, reorder entries or restore the defaults, use **Settings →
-GitHub issues** (see [GitHub issues](settings.md#github-issues)).
+GitHub** (see [GitHub issues](settings.md#github-issues)).
 
 ### Searching beyond the 1,000 loaded issues
 

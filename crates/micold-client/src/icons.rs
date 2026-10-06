@@ -114,6 +114,22 @@ pub enum Icon {
     LongTaskFinished,
     /// Notification kind: a shorter turn finished — `chat_bubble` (feature 613, I1).
     TurnFinished,
+    /// A worktree's pull request is open (feature 040, FR-001) — `call_split`.
+    PrOpen,
+    /// A worktree's pull request is a draft — `edit_note` (contract §1 said `edit`, which is
+    /// `Rename`'s glyph family; D13).
+    PrDraft,
+    /// A worktree's pull request was merged — `call_merge`.
+    PrMerged,
+    /// A worktree's pull request was closed without merging — `block`.
+    PrClosed,
+    /// The checks of an open or draft pull request all passed — `check`.
+    ChecksPassing,
+    /// A check of the pull request is still queued or running — `schedule`.
+    ChecksPending,
+    /// A check of the pull request failed — `cancel` (contract §1 said `close`, which is
+    /// [`Icon::Close`]'s codepoint; D13).
+    ChecksFailing,
 }
 
 impl Icon {
@@ -158,6 +174,13 @@ impl Icon {
         Icon::SessionError,
         Icon::LongTaskFinished,
         Icon::TurnFinished,
+        Icon::PrOpen,
+        Icon::PrDraft,
+        Icon::PrMerged,
+        Icon::PrClosed,
+        Icon::ChecksPassing,
+        Icon::ChecksPending,
+        Icon::ChecksFailing,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -215,6 +238,13 @@ impl Icon {
             Icon::SessionError => '\u{e000}',
             Icon::LongTaskFinished => '\u{e2e6}',
             Icon::TurnFinished => '\u{e0cb}',
+            Icon::PrOpen => '\u{e0b6}',
+            Icon::PrDraft => '\u{e745}',
+            Icon::PrMerged => '\u{e0b3}',
+            Icon::PrClosed => '\u{e14b}',
+            Icon::ChecksPassing => '\u{e5ca}',
+            Icon::ChecksPending => '\u{e8b5}',
+            Icon::ChecksFailing => '\u{e5c9}',
         }
     }
 }

@@ -12,6 +12,7 @@
 //! worktrees, configuration or session store — a fixture that recorded the author's own workspace
 //! would be unreproducible anywhere else, including on the same machine tomorrow.
 
+use micold_client::app::SIDEBAR_MIN_WIDTH;
 use micold_client::features::sidebar;
 use micold_client::features::worktree;
 use std::path::PathBuf;
@@ -324,6 +325,39 @@ fn with_project() -> State {
         "the covered state must have a project open, or it is not covering what it claims"
     );
     record_every_worktree(state)
+}
+
+/// The project with pull request status on, an open pull request with failing checks on the first
+/// worktree's branch and a merged one on the third's (feature 040).
+fn with_pull_requests(width: u16) -> State {
+    use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+    let status = |number: u64, state| PullRequestStatus {
+        number,
+        title: format!("Pull request {number}"),
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state,
+        review: ReviewState::None,
+        head: "abc".to_string(),
+    };
+    let mut state = with_project();
+    state.sidebar.width = width;
+    state.pr_status.enabled = true;
+    state.pr_status.held = true;
+    state.pr_status.read_at = Some(1_000);
+    state.pr_status.statuses.insert(
+        "feat/short".to_string(),
+        status(
+            7,
+            PrState::Open {
+                checks: CheckStatus::Failing,
+            },
+        ),
+    );
+    state
+        .pr_status
+        .statuses
+        .insert("fix/a-bug".to_string(), status(8, PrState::Merged));
+    state
 }
 
 /// Record every worktree in `state` as one this app created (feature 029, FR-001).
@@ -1540,6 +1574,9 @@ pub fn covered_states() -> &'static [CoveredState] {
                             entry("Bug", ConventionalType::Chore),
                             entry("documentation", ConventionalType::Docs),
                         ],
+                        // On, so the page records the checked switch with its note (feature 040,
+                        // UI §5/§6).
+                        pr_status_enabled: true,
                     },
                     section: SettingsSection::GithubIssues,
                     appearance: AppearanceDraft::default(),
@@ -1561,6 +1598,22 @@ pub fn covered_states() -> &'static [CoveredState] {
                 name: "settings.rail",
                 path: &[0, 0, 1, 0, 0, 0],
             }],
+        },
+        // Feature 040 (UI §2, §6): the pull request indicator on a row, with the switch on. The
+        // first row has an open pull request with failing checks (the widest form), the third a
+        // merged one (the narrowest), and the second none — a row without one beside rows with, so
+        // the fixture records that it keeps today's geometry (FR-001, FR-011).
+        CoveredState {
+            name: "main-shell-sidebar-pull-request-indicator",
+            build: || StateUnderTest::new(with_pull_requests(260)),
+            anchors: &[],
+        },
+        // The same at the narrowest sidebar the application allows: the indicator keeps its size at
+        // every width (FR-009).
+        CoveredState {
+            name: "main-shell-sidebar-pull-request-indicator-narrowest",
+            build: || StateUnderTest::new(with_pull_requests(SIDEBAR_MIN_WIDTH)),
+            anchors: &[],
         },
         // An agent's destructive request (feature 034, FR-014, U213): the confirmation every
         // window shows, over the main shell. The worktree delete with its branch and its sessions

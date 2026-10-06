@@ -327,3 +327,48 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
         Layout::FullWidth,
     )
 }
+
+/// `PullRequestIndicator` — the four states alone, open and draft with each check status, and the
+/// stale form of open-passing and of merged (feature 040, FR-033). What has to be checked by eye is
+/// that the seven glyphs read as seven shapes in both themes, and that the stale form is quieter.
+pub fn pull_request_indicator<'a>(
+    _s: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    use material::{CheckMark, PrMark, PullRequestIndicator};
+    let pose = |label: &'static str,
+                state: PrMark,
+                checks: Option<CheckMark>,
+                stale: bool|
+     -> Element<'a, Message> {
+        let mut indicator = PullRequestIndicator::<Message>::new(state, &roles).stale(stale);
+        if let Some(checks) = checks {
+            indicator = indicator.checks(checks);
+        }
+        posed(label, Element::from(indicator), roles)
+    };
+    let (pending, passing, failing) = (CheckMark::Pending, CheckMark::Passing, CheckMark::Failing);
+    arrange(
+        vec![
+            pose("open", PrMark::Open, None, false),
+            pose("draft", PrMark::Draft, None, false),
+            pose("merged", PrMark::Merged, None, false),
+            pose("closed", PrMark::Closed, None, false),
+            pose("open, checks passing", PrMark::Open, Some(passing), false),
+            pose("open, checks pending", PrMark::Open, Some(pending), false),
+            pose("open, checks failing", PrMark::Open, Some(failing), false),
+            pose("draft, checks passing", PrMark::Draft, Some(passing), false),
+            pose("draft, checks pending", PrMark::Draft, Some(pending), false),
+            pose("draft, checks failing", PrMark::Draft, Some(failing), false),
+            pose(
+                "open, checks passing, stale",
+                PrMark::Open,
+                Some(passing),
+                true,
+            ),
+            pose("merged, stale", PrMark::Merged, None, true),
+        ],
+        Layout::Inline,
+    )
+}

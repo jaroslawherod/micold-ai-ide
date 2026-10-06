@@ -50,10 +50,11 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::overlay::Layer;
+use micold_core::pull_request::PullRequestStatus;
 use micold_core::session::{Session, SessionId, SessionLocation};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// What this feature remembers (feature 028, contract S1).
@@ -473,6 +474,35 @@ pub fn worktree_tooltip(
     }
 
     lines.join("\n")
+}
+
+/// What the row of a worktree shows of its pull request (feature 040, data-model §4): the status
+/// held for its branch and how old the reading is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowPullRequest<'a> {
+    /// The status held for the row's branch.
+    pub status: &'a PullRequestStatus,
+    /// Seconds since the reading that produced it started.
+    pub age_secs: u64,
+}
+
+/// The pull request `entry`'s row shows, if any (FR-001, FR-007). Only a worktree with a branch
+/// can have one: the join is by branch name, and the "Default" entry never does. `now` is passed in:
+/// the reducer has no clock.
+pub fn row_pull_request<'a>(
+    entry: &SidebarEntry,
+    statuses: &'a BTreeMap<String, PullRequestStatus>,
+    read_at: Option<u64>,
+    now: u64,
+) -> Option<RowPullRequest<'a>> {
+    let SidebarEntry::Worktree(node) = entry else {
+        return None;
+    };
+    let status = statuses.get(node.worktree.branch.as_deref()?)?;
+    Some(RowPullRequest {
+        status,
+        age_secs: now.saturating_sub(read_at.unwrap_or(now)),
+    })
 }
 
 /// The tooltip line that states a location's unread count in words (feature 575, FR-005).
