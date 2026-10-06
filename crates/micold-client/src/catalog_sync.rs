@@ -177,6 +177,8 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
         core.note_background_restart(id);
     }
     announce_start_failures(core, snapshot);
+    // Replaced whole on every snapshot applied, the welcome included (011 FR-022, BUG-454).
+    core.settings.env_include_failures = snapshot.env_include_failures.clone();
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
     // (the sidebar reads `core.worktree.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
     // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
@@ -403,6 +405,7 @@ mod tests {
                         .collect(),
                 })
                 .collect(),
+            env_include_failures: Vec::new(),
         }
     }
 
@@ -427,6 +430,40 @@ mod tests {
         let line = attach_log_line(&snapshot(vec![("/a", 0)]), Some(Path::new("/a")));
         assert!(line.starts_with("attach: connected"), "{line}");
         assert!(line.contains("active_sessions=0"), "{line}");
+    }
+
+    /// 011 FR-022, BUG-454 (U4): the client keeps the failure list of the latest snapshot it
+    /// applied, on the welcome and on every `CatalogChanged`, replacing the previous one.
+    #[test]
+    fn a_catalog_snapshots_env_include_failures_replace_the_clients_list() {
+        use micold_core::env_include::EnvIncludeOutcome;
+        use micold_core::protocol::messages::EnvIncludeFailure;
+        let failure = |dir: &str| EnvIncludeFailure {
+            dir: PathBuf::from(dir),
+            outcome: EnvIncludeOutcome::NonZeroExit {
+                code: 1,
+                diagnostic: String::new(),
+            },
+        };
+        let mut core = State::default();
+        let mut welcome = snapshot(vec![("/a", 0)]);
+        welcome.env_include_failures = vec![failure("/a"), failure("/b")];
+        reconcile_catalog(&mut core, &welcome, false);
+        assert_eq!(
+            core.settings.env_include_failures,
+            welcome.env_include_failures
+        );
+
+        let mut changed = snapshot(vec![("/a", 0)]);
+        changed.env_include_failures = vec![failure("/b")];
+        reconcile_catalog(&mut core, &changed, true);
+        assert_eq!(
+            core.settings.env_include_failures, changed.env_include_failures,
+            "a directory the service stopped reporting must leave the list"
+        );
+
+        reconcile_catalog(&mut core, &snapshot(vec![("/a", 0)]), true);
+        assert!(core.settings.env_include_failures.is_empty());
     }
 
     /// Feature 039 (FR-001): the count of attention events a session has raised is the service's,

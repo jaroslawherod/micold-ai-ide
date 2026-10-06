@@ -232,6 +232,7 @@ mod derived_labels {
                     unread: false,
                 }],
             }],
+            env_include_failures: Vec::new(),
         }
     }
 

@@ -3559,6 +3559,7 @@ pub(crate) mod tests {
                 worktrees: Vec::new(),
                 sessions,
             }],
+            env_include_failures: Vec::new(),
         }
     }
 
