@@ -8,5 +8,6 @@ pub mod atoms;
 pub mod controls;
 pub mod floating;
 pub mod motion;
+pub mod review;
 pub mod surfaces;
 pub mod terminal;

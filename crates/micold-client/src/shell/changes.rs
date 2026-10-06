@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::changes::{Effect, Msg};
-use micold_core::git::GitCli;
+use micold_client::features::changes::Effect;
+use micold_client::features::changes::Msg;
+use micold_core::git::Git;
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::changes::ChangeList;
 use micold_core::session::SessionLocation;
@@ -47,9 +48,17 @@ fn run(app: &App, effect: Effect) -> Task<Message> {
             result: Err("No project is open".into()),
         }));
     };
+    // No local git when the daemon's filesystem is not this one (feature 027): the paths the
+    // sidebar lists are the daemon's, so a local read would describe other directories.
+    let Some(git) = app.caps.shared_git() else {
+        return Task::done(Message::Changes(Msg::ListRead {
+            seq,
+            result: Err("This computer cannot read the worktree's files: the session service runs elsewhere".into()),
+        }));
+    };
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || read_list(&dir, &entry, toggles))
+            tokio::task::spawn_blocking(move || read_list(&*git, &dir, &entry, toggles))
                 .await
                 .unwrap_or_else(|joined| Err(joined.to_string()))
         },
@@ -75,8 +84,12 @@ fn entry_dir(app: &App, entry: &SessionLocation) -> Option<PathBuf> {
 }
 
 /// Resolve the base (worktrees only) and list the changed files (R1, R7).
-fn read_list(dir: &Path, entry: &SessionLocation, toggles: Toggles) -> Result<ChangeList, String> {
-    let git = GitCli::new();
+fn read_list(
+    git: &(dyn Git + Send + Sync),
+    dir: &Path,
+    entry: &SessionLocation,
+    toggles: Toggles,
+) -> Result<ChangeList, String> {
     let scope = match entry {
         SessionLocation::Default => ReviewScope::RootUncommitted,
         SessionLocation::Worktree(_) => ReviewScope::Worktree {

@@ -122,6 +122,19 @@ pub trait Git {
     /// Read-only: the local object store, no fetch, nothing written. Both arguments must be
     /// commit ids; the caller checks the one that arrives from outside.
     fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool>;
+
+    /// The review base of the worktree at `dir`: the merge-base of `HEAD` and the default branch,
+    /// or why there is none (feature 482, research R7). Read-only.
+    fn review_base(&self, dir: &Path) -> crate::review::base::Base;
+
+    /// The files changed in `dir` under `scope` and `toggles`, one row per path (feature 482,
+    /// research R1, FR-002, FR-004, FR-005). Read-only.
+    fn change_list(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -528,6 +541,19 @@ impl Git for GitCli {
         } else {
             Err(io::Error::other(failure_message(&retained)))
         }
+    }
+
+    fn review_base(&self, dir: &Path) -> crate::review::base::Base {
+        GitCli::review_base(self, dir)
+    }
+
+    fn change_list(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        GitCli::change_list(self, dir, scope, toggles)
     }
 }
 
@@ -1146,5 +1172,25 @@ impl Git for FakeGit {
         } else {
             Ok(())
         }
+    }
+
+    /// No default branch: a fake repository has no history to compare.
+    fn review_base(&self, _dir: &Path) -> crate::review::base::Base {
+        crate::review::base::Base::Unavailable(
+            crate::review::base::BaseUnavailable::NoDefaultBranch,
+        )
+    }
+
+    /// Nothing changed: a fake repository has no files.
+    fn change_list(
+        &self,
+        _dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        _toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        Ok(crate::review::changes::ChangeList {
+            files: Vec::new(),
+            scope,
+        })
     }
 }

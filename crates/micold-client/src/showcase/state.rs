@@ -97,6 +97,11 @@ pub enum Message {
     /// component. The claim the collapsed state makes — that every destination stays reachable when
     /// the labels go — can only be read off a rail you can actually collapse and then press.
     SectionRailToggled,
+    /// The long-list example scrolled (feature 482, T024): its offset and viewport height, in pixels.
+    ///
+    /// Held rather than swallowed, because `VirtualRows` builds only the rows in view from exactly
+    /// these two numbers — a list that dropped them would show blank space past its first screen.
+    RowsScrolled { offset: u32, viewport: u32 },
 }
 
 /// The showcase's whole state.
@@ -159,6 +164,9 @@ pub struct Showcase {
     /// `WorktreeForm.branch_list_open`'s, not a second one invented here: a gallery whose open rule
     /// differed from the application's would be the same defect in a new place.
     typeahead_open: bool,
+    /// The long-list example's scroll offset and viewport height, as `VirtualRows` last reported
+    /// them. Zero at rest: the top of the list, viewport not yet measured (FR-022).
+    rows_scroll: (u32, u32),
 }
 
 impl Showcase {
@@ -179,6 +187,7 @@ impl Showcase {
             grid: super::samples::grid(),
             select_choice: None,
             section_shown: 0,
+            rows_scroll: (0, 0),
             section_rail_collapsed: false,
             typeahead_query: String::new(),
             // The list opens on a pose, not on a blank: the first row carries the chosen marker and
@@ -231,6 +240,11 @@ impl Showcase {
     /// The select example's current choice, if one has been made.
     pub fn select_choice(&self) -> Option<&str> {
         self.select_choice.as_deref()
+    }
+
+    /// The long-list example's scroll offset and viewport height.
+    pub fn rows_scroll(&self) -> (u32, u32) {
+        self.rows_scroll
     }
 
     /// The section rail's current destination.
@@ -384,6 +398,7 @@ impl Showcase {
             // `open` flag would be a second answer to a question the widget has already answered.
             Message::SelectChosen(choice) => self.select_choice = Some(choice),
             Message::SectionShown(index) => self.section_shown = index,
+            Message::RowsScrolled { offset, viewport } => self.rows_scroll = (offset, viewport),
             // Collapsing does not disturb the destination — that is the point of it, and the
             // showcase would hide the claim if it reset the marker here.
             Message::SectionRailToggled => {

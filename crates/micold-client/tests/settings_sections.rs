@@ -45,7 +45,10 @@ use std::path::{Path, PathBuf};
 ///
 /// Feature 040's pull request switch is stored from its milestone M2 (protocol 22) and gets its
 /// checkbox in the GitHub section with M4.
-const DEFERRED: &[(&str, &str)] = &[("pr_status_enabled", "040 T038")];
+const DEFERRED: &[(&str, &str)] = &[
+    ("pr_status_enabled", "040 T038"),
+    ("diff_layout", "482 T041"),
+];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

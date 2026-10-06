@@ -107,7 +107,7 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
     }
 
     /// The rows this list builds as it stands.
-    pub fn rows(&self) -> Range<usize> {
+    fn rows(&self) -> Range<usize> {
         let viewport = if self.viewport == 0 {
             ASSUMED_VIEWPORT
         } else {

@@ -623,6 +623,19 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::terminal::tab_strip,
     },
+    // ---- the review surfaces (feature 482) ---------------------------------------------------
+    Entry {
+        module: "material/virtual_rows.rs",
+        component: "VirtualRows",
+        variants: &[],
+        density: &[],
+        posed: &["2,000 rows"],
+        live: &["scroll — rows are built as they come into view"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::review::virtual_rows,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate
