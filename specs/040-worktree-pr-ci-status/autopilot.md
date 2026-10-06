@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M3 unit: T023–T029 implemented and ticked (rebased onto origin/main at protocol 27; #547 merged as 2e688bf3). Scoped gate, reviews A and B, full gate, open the PR.
+- **Next step**: M3 unit: T023–T029 implemented and ticked (rebased onto origin/main at protocol 27; #547 merged as 2e688bf3). Reviews A and B done; full gate, open the PR.
 
 ## Pull requests
 
@@ -72,11 +72,16 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code A (M2) | 2 | 45a61c0003058242a677266ac843d5a10759bc5b:2940ceb865da2b715f1304838e7348e45d57a27f | CLEAN: 9 MINOR. F2 (`branch_tip` without the lazy-fetch guard), F4 (guard belonged in `branch_tip`), F5 (duplicate of `naming::is_valid_branch`), F6, F9 fixed; F3 noted in the comment (git before 2.44 ignores `GIT_NO_LAZY_FETCH`); F7 `@{` case added; F1 (no limit on concurrent checks: one trusted local client sends one per reading) and F8 (other arms awaited, outside this flow) not fixed. |
 | Code B (M2) | 1 | e371f2bb8f7a3ad63b23b8a4f5d0873f01a88410:773e98e6d3f7f8ce13e4b78e6db0880903639f91 | CHANGES: 1 MAJOR, 2 MINOR. F1 (the Settings save's preservation of `pr_status_enabled` had no test) fixed with a test shown red; F2 (`local_only` split `run_git` from its doc) fixed; F3 (cycle-log hashes from the preparation branch) fixed. Verify: `mise run test-core` 1618 passed; `merged_branch_check` 9, `pr_status_setting` 3 passed. |
 | Code B (M2) | 2 | e3935a77c458a870b9dd33178afd00a054fe746d:64239328d1ceb837f428dd93f1b6950baa3c2163 | CLEAN: F1–F3 fixes hold. Verify: `mise run test-core` exit 0; `merged_branch_check` 9, `pr_status_setting` 3 passed. |
+| Code A (M3) | 1 | aec34873e2ccf720b22ee7bc0510cecd9d26c1fc:7f3b013ddc67b34868efe9154df411bda4671b68 | CLEAN: 1 MINOR (`Held` while a reading runs), not fixed. |
+| Code B (M3) | 1 | aec34873e2ccf720b22ee7bc0510cecd9d26c1fc:7f3b013ddc67b34868efe9154df411bda4671b68 | CHANGES: 2 MAJOR, 1 MINOR. F1 (stray `}` from the rebase merge in main_tests.rs) fixed; F2, F3 declined (see *Declined review findings*). Verify: `pr_status` 16, `features_pr_status` 16, `pr_status_is_read_only_on_named_events` 4 passed. |
 
 ## Declined review findings
 
 - Code A (M2) F4: `adopt_daemon_settings` ignores `pr_status_enabled` — T022 says the field is accepted and "stored nowhere yet"; holding it in memory is M3/M4 work.
 - Code A (M2) F5: `ValidSettings::into_settings` writes `pr_status_enabled: false` — the one save path restores the stored value; the Settings switch that carries it through the draft is T038 (M4).
+
+- Code B (M3) F2: red before green for T024/T025 behaviours beyond the two mutants — the cycle log already records that these tests were written after the wiring; every behaviour is pinned by a passing test and two were shown red by mutant; a retrofit of ~15 mutants buys no behaviour. Recorded as a known Constitution I deviation for the reviewer of the PR.
+- Code B (M3) F3: `crate::log_line` is the client's only logging facility (no level exists).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

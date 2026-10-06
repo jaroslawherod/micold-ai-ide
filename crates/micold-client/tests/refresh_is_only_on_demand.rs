@@ -82,6 +82,12 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "An inline test reading back what the send above put on the wire. A destructuring pattern, \
          and a test besides.",
     ),
+    (
+        "crates/micold-client/src/main_tests.rs",
+        ".any(|msg| matches!(msg, ClientMsg::WorktreeRefresh { .. })),",
+        "040 FR-018a: a test asserting that a pull request reading never sends a refresh. A \
+         pattern in an assertion, not a sender.",
+    ),
 ];
 
 fn repo_root() -> PathBuf {
