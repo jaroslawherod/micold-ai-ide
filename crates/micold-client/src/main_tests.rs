@@ -7196,3 +7196,206 @@ mod a_rows_cli_list_names_what_is_not_offered {
         );
     }
 }
+
+// --- `027` BUG-574 (T229, T230, FR-036c): out of date is measured against the running container -
+
+mod bug_574_out_of_date_is_measured {
+    use super::*;
+    use micold_client::features::sandbox::{SandboxLocations, KEEP_RUNNING_SETTING};
+    use micold_core::protocol::messages::CatalogSnapshot;
+    use micold_core::sandbox::lifecycle::SandboxState;
+
+    const P: &str = "/proj/P";
+    const Q: &str = "/proj/Q";
+
+    /// A catalog listing `paths`, in that order.
+    fn catalog_of(paths: &[&str]) -> CatalogSnapshot {
+        let mut catalog = CatalogSnapshot::default();
+        for path in paths {
+            catalog
+                .projects
+                .append(&mut snapshot_with(path, Vec::new()).projects);
+        }
+        catalog
+    }
+
+    /// The failed sandbox brought up again by a refused dial, ending in a container that shares
+    /// `projects`. `mounted` is `None` for a container this bring-up created, `Some` for one it
+    /// adopted, as `lifecycle::bring_up` reports them.
+    fn started_sharing(app: &mut App, mounted: Option<&[&str]>, projects: &[&str]) {
+        let _ = connection_failed(app);
+        let mut started = a_started_sandbox();
+        started.mounted = mounted.map(|m| m.iter().map(|p| p.to_string()).collect());
+        let locations = SandboxLocations {
+            projects: projects.iter().map(|p| p.to_string()).collect(),
+            ..SandboxLocations::default()
+        };
+        let _ = update_inner(
+            app,
+            Message::Sandbox(SandboxMsg::Started(Box::new((started, locations)))),
+        );
+    }
+
+    fn running(app: &App) -> bool {
+        matches!(app.sandbox.state, SandboxState::Running(_))
+    }
+
+    fn stale(app: &App) -> bool {
+        matches!(app.sandbox.state, SandboxState::Stale(_))
+    }
+
+    /// R1: created from `[P, Q]`, the service lists the same two in the other order.
+    #[test]
+    fn r1_the_same_projects_in_another_order_are_not_out_of_date() {
+        let mut app = app_with_a_failed_sandbox();
+        app.sandbox_boot.as_mut().expect("a boot plan").projects =
+            vec![PathBuf::from(P), PathBuf::from(Q)];
+        started_sharing(&mut app, None, &[P, Q]);
+
+        the_service_answers_with(&mut app, catalog_of(&[Q, P]));
+
+        assert!(
+            running(&app),
+            "the container shares every registered project; order is not a difference (FR-036c): \
+             {:?}",
+            app.sandbox.state
+        );
+    }
+
+    /// R2: this client registered nothing yet; it adopted a container another window made, which
+    /// shares P and Q, and the service lists P and Q.
+    #[test]
+    fn r2_an_adopted_container_sharing_every_registered_project_is_not_out_of_date() {
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, Some(&[P, Q]), &[P, Q]);
+
+        the_service_answers_with(&mut app, catalog_of(&[P, Q]));
+
+        assert!(
+            running(&app),
+            "measured against the container that is running, not this client's plan (FR-036c): \
+             {:?}",
+            app.sandbox.state
+        );
+    }
+
+    /// R3: out of date while a shared project is unregistered, and no longer once it is back.
+    #[test]
+    fn r3_out_of_date_clears_without_a_restart_once_the_projects_match_again() {
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, Some(&[P, Q]), &[P, Q]);
+
+        the_service_answers_with(&mut app, catalog_of(&[P]));
+        assert!(
+            stale(&app),
+            "the container shares Q, which is no longer registered (FR-036c): {:?}",
+            app.sandbox.state
+        );
+
+        feed(
+            &mut app,
+            DaemonMsg::CatalogChanged {
+                catalog: catalog_of(&[P, Q]),
+            },
+        );
+        assert!(
+            running(&app),
+            "Q is registered again, so nothing is out of date, and nothing restarted (FR-036c): \
+             {:?}",
+            app.sandbox.state
+        );
+        assert!(
+            app.sandbox.persistent_notice().is_none(),
+            "the notice clears with the state: {:?}",
+            app.sandbox.persistent_notice()
+        );
+    }
+
+    /// A project registered that the container does not share is out of date.
+    #[test]
+    fn a_registered_project_the_container_does_not_share_is_out_of_date() {
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, Some(&[P, Q]), &[P, Q]);
+
+        the_service_answers_with(&mut app, catalog_of(&[P, Q, "/proj/R"]));
+
+        assert!(stale(&app), "R is not shared: {:?}", app.sandbox.state);
+        assert_eq!(
+            app.sandbox_boot.as_ref().map(|plan| plan.projects.len()),
+            Some(3),
+            "the plan follows the catalog, for the next bring-up"
+        );
+    }
+
+    /// T230: a keep-running change is its own reason. A catalog that matches the container does not
+    /// clear it, and the notice names the setting rather than the projects.
+    #[test]
+    fn a_keep_running_change_is_not_cleared_by_a_matching_catalog() {
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, None, &[]);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::SurviveLogoutToggled(true)),
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+        assert!(
+            stale(&app),
+            "setup: the save marked the sandbox out of date"
+        );
+
+        the_service_answers_with(&mut app, CatalogSnapshot::default());
+
+        assert!(
+            stale(&app),
+            "only a new container clears a keep-running change (FR-036c): {:?}",
+            app.sandbox.state
+        );
+        let notice = app
+            .sandbox
+            .persistent_notice()
+            .expect("an out-of-date sandbox says so");
+        assert!(
+            notice.contains(KEEP_RUNNING_SETTING) && !notice.contains("project"),
+            "the notice names the setting, not an unshared project (FR-036c): {notice}"
+        );
+    }
+
+    /// T231 through the reducer: a container another window put in place is adopted and measured
+    /// against the last catalog; under the host placement, the report is dropped.
+    #[test]
+    fn a_replaced_container_is_measured_against_the_last_catalog() {
+        use micold_core::sandbox::runtime::ContainerId;
+        let theirs = || {
+            SandboxMsg::Replaced(Box::new((
+                ContainerId("new".into()),
+                SandboxLocations {
+                    projects: vec![P.to_string(), Q.to_string()],
+                    ..SandboxLocations::default()
+                },
+            )))
+        };
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, Some(&[P]), &[P]);
+        the_service_answers_with(&mut app, catalog_of(&[P, Q]));
+        assert!(stale(&app), "setup: the container held shares only P");
+
+        let _ = update_inner(&mut app, Message::Sandbox(theirs()));
+
+        assert_eq!(
+            app.sandbox.state,
+            SandboxState::Running(ContainerId("new".into())),
+            "the replacement shares every registered project (FR-036c)"
+        );
+
+        let mut app = app_with_a_failed_sandbox();
+        started_sharing(&mut app, Some(&[P]), &[P]);
+        app.placement.kind = PlacementKind::HostProcess;
+        let before = app.sandbox.clone();
+        let _ = update_inner(&mut app, Message::Sandbox(theirs()));
+        assert_eq!(
+            app.sandbox, before,
+            "a report outliving a move to the host is dropped"
+        );
+    }
+}

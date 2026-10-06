@@ -908,3 +908,29 @@ compiling stub, so red is an assertion failure, not a build failure.
   `facts.home` (the `HostFacts.sign_in` field is gone). `sandbox_credentials` 22, client
   `shell::sandbox` 22, `ui::settings::daemon` 6 passed. The notice now names the in-app way to a
   new container and the Keychain on macOS only (asserted in `an_unshared_sign_in_is_named_under_its_share`)
+
+### BUG-574 — out of date measured against the running container (U52–U55)
+
+- U52 tests: `sandbox_state` (sets, reasons, transitions), `sandbox_argv`
+  (`container_projects`). red: do not compile on `origin/main` (the API is new). green:
+  `cargo test -p micold-core --test sandbox_state --test sandbox_argv` (commit 80f0eaf3)
+- U53 tests: `tests::bug_574_out_of_date_is_measured::{r1_…, r2_…, r3_…,
+  a_registered_project_the_container_does_not_share_is_out_of_date}`. red: the same three
+  scenarios as a probe on `origin/main` 98f41a61 (`bugs/BUG-574.md#reproduction`) ->
+  `0 passed; 3 failed`, `R1 state=Stale`, `R3b state=Stale`. green: the container's projects are
+  recorded at `Started` (`SandboxLocations.projects`) and every catalog is measured against them
+  as sets; 4 passed
+- U54 tests: `features::sandbox::tests::{the_out_of_date_notice_names_each_reason_it_has,
+  a_matching_mount_set_clears_only_its_own_reason}`,
+  `tests::bug_574_…::a_keep_running_change_is_not_cleared_by_a_matching_catalog`. red: on
+  `origin/main` the one notice text names projects for a keep-running change. green: `Sandbox`
+  keeps `OutOfDate` beside `Stale`; one text per reason; 3 passed
+- U55 tests: `features::sandbox::tests::{a_replaced_container_is_adopted_…,
+  a_reread_of_the_same_container_or_of_none_changes_nothing}`,
+  `shell::sandbox::tests::{a_reread_finding_another_container_reports_it_and_only_inspects,
+  a_reread_that_finds_nothing_new_reports_nothing}`,
+  `tests::bug_574_…::a_replaced_container_is_measured_against_the_last_catalog`. red: no re-read
+  existed (does not compile). green: `shell::sandbox::reread` (one `inspect`, `RecordingRunner`
+  asserts nothing else), `SandboxMsg::Replaced`, fired from `on_connected`; 5 passed
+- refactor: `start` builds its mount set and locations through `mount_set` / `locations_for`,
+  shared with the re-read. Client lib 525, binary 375 passed

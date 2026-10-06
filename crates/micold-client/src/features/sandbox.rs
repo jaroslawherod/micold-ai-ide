@@ -12,7 +12,7 @@
 
 use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::lifecycle::{
-    Failure, RestartRequested, SandboxState, Started, UnattendedBringUps,
+    Failure, OutOfDate, RestartRequested, SandboxState, Started, UnattendedBringUps,
 };
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
 use micold_core::sandbox::runtime::{ContainerId, RuntimeCapabilities, UnsatisfiableLimit};
@@ -61,7 +61,15 @@ pub enum Msg {
     Failed(Box<Failure>),
     /// A bring-up entered a stage.
     Progress(Box<SandboxState>),
+    /// The container under the sandbox's name is not the one this client holds: another window
+    /// replaced it (FR-036c, BUG-574). Carries the new container's id and what it shares, read as
+    /// [`Msg::Started`]'s are. Boxed for the same reason as [`Msg::Started`].
+    Replaced(Box<(ContainerId, SandboxLocations)>),
 }
+
+/// The keep-running setting's own label, exactly as the Settings form prints it, so the notice that
+/// names it sends the user to a control that exists (FR-036c).
+pub const KEEP_RUNNING_SETTING: &str = "Keep the service running when I'm signed out or away";
 
 /// A limit that can stop a session, and the control that governs it (US4 scenario 3).
 ///
@@ -246,6 +254,9 @@ pub struct Sandbox {
     /// one: `bring_up` reports `Running(id)` before it returns what that container shares, and a
     /// replacement reaches `Running` under a new id while this field still holds the old map.
     pub locations: Option<(ContainerId, SandboxLocations)>,
+    /// Why the running container is out of date, beside `Stale` (FR-036c, BUG-574). Meaningful only
+    /// while the state has a container; a new container starts with none.
+    pub out_of_date: OutOfDate,
 }
 
 /// The locations a running sandbox shares with the host, and the host paths it must never reach
@@ -265,6 +276,10 @@ pub struct SandboxLocations {
     /// part in link translation. Here rather than beside `capabilities` because it is a fact about
     /// *this* container, and [`Sandbox::locations`] already answers only for the one that is running.
     pub unshared_sign_in: Option<String>,
+    /// The projects this container shares, as container paths (FR-036c, BUG-574): what the
+    /// registered projects are measured against. Read from the container, never from the boot plan,
+    /// so a container another window created is measured by what it mounts.
+    pub projects: Vec<String>,
 }
 
 /// Refused dials a just-started service may take before it is overdue: one reconnect
@@ -282,6 +297,7 @@ impl Default for Sandbox {
             previous_attempt: None,
             awaiting_service: None,
             locations: None,
+            out_of_date: OutOfDate::default(),
         }
     }
 }
@@ -314,6 +330,36 @@ impl Sandbox {
         // show "running unsandboxed" would be a lie the banner keeps telling.
         self.fallback = None;
         self.awaiting_service = Some(REFUSALS_WHILE_STARTING);
+        // A new container: made from the current settings and the plan's projects. Measured again
+        // on the next catalog.
+        self.out_of_date = OutOfDate::default();
+    }
+
+    /// Adopt a container another window put in place of the one this client holds (FR-036c,
+    /// BUG-574), and measure it against `registered`, the last catalog's projects (`None` before
+    /// any).
+    ///
+    /// Reports whether anything changed. Nothing does unless the sandbox has a container and this
+    /// one is under another id: one still coming up adopts its container from its own bring-up.
+    /// Nothing restarts either way (R9). A new container was made under the current keep-running
+    /// answer, so that reason goes with the old one.
+    pub fn replaced(
+        &mut self,
+        id: ContainerId,
+        locations: SandboxLocations,
+        registered: Option<&[std::path::PathBuf]>,
+    ) -> bool {
+        match self.state.container() {
+            Some(held) if *held != id => {}
+            _ => return false,
+        }
+        self.locations = Some((id.clone(), locations));
+        self.state = SandboxState::Running(id);
+        self.out_of_date = OutOfDate::default();
+        if let Some(registered) = registered {
+            self.mounts_changed(registered);
+        }
+        true
     }
 
     /// What the sandbox shares with this machine, while there is a container to share it
@@ -376,14 +422,25 @@ impl Sandbox {
         self.fallback = None;
     }
 
-    /// Adopt a change to the set of projects the sandbox should be sharing (R9, M-4).
+    /// Measure the running container against the `registered` projects (R9, M-4, FR-036c).
     ///
-    /// Called when a project is registered or unregistered while the sandbox is up. It marks,
-    /// rather than acts: `micold_core::sandbox::lifecycle::mount_set_changed` decides what the
-    /// state becomes, and it never restarts anything — see that function for why ending the user's
-    /// running sessions to service a settings change is the wrong trade.
-    pub fn mounts_changed(&mut self) {
-        self.state = micold_core::sandbox::lifecycle::mount_set_changed(&self.state);
+    /// Called with every catalog. It marks, rather than acts:
+    /// `micold_core::sandbox::lifecycle::mount_set_changed` decides what the state becomes, and it
+    /// never restarts anything — see that function for why ending the user's running sessions to
+    /// service a settings change is the wrong trade. Measured, not remembered (BUG-574): a catalog
+    /// that matches the container's projects again clears the reason. Nothing to measure while no
+    /// container's projects are known ([`Self::locations`] is `None`).
+    pub fn mounts_changed(&mut self, registered: &[std::path::PathBuf]) {
+        let Some(shared) = self.locations().map(|l| l.projects.clone()) else {
+            return;
+        };
+        let out_of_date =
+            micold_core::sandbox::lifecycle::mount_set_out_of_date(&shared, registered);
+        (self.state, self.out_of_date) = micold_core::sandbox::lifecycle::mount_set_changed(
+            &self.state,
+            self.out_of_date,
+            out_of_date,
+        );
     }
 
     /// Adopt a change to the keep-it-running opt-in (feature 028, FR-022a).
@@ -392,7 +449,8 @@ impl Sandbox {
     /// restart policy and the idle rule are both fixed at container creation, so the sandbox that
     /// is up was created under the old answer. See `lifecycle::survive_logout_changed`.
     pub fn survive_logout_changed(&mut self) {
-        self.state = micold_core::sandbox::lifecycle::survive_logout_changed(&self.state);
+        (self.state, self.out_of_date) =
+            micold_core::sandbox::lifecycle::survive_logout_changed(&self.state, self.out_of_date);
     }
 
     /// Restart the sandbox because the user asked for it, reporting whether there was anything to
@@ -499,10 +557,26 @@ impl Sandbox {
         }
         match &self.state {
             SandboxState::Failed(f) => Some(format!("{} {}", f.reason(), f.remedy())),
-            SandboxState::Stale(_) => Some(
-                "The sandbox does not yet share every registered project. Restart it to apply."
+            // Each reason named for what it is (FR-036c).
+            SandboxState::Stale(_) => Some(match self.out_of_date {
+                OutOfDate {
+                    mount_set: false,
+                    keep_running: true,
+                } => format!(
+                    "The sandbox was started before \u{2018}{KEEP_RUNNING_SETTING}\u{2019} \
+                     changed. Restart it to apply."
+                ),
+                OutOfDate {
+                    mount_set: true,
+                    keep_running: true,
+                } => format!(
+                    "The sandbox does not share exactly the registered projects, and was started \
+                     before \u{2018}{KEEP_RUNNING_SETTING}\u{2019} changed. Restart it to apply."
+                ),
+                _ => "The sandbox does not share exactly the registered projects. Restart it to \
+                      apply."
                     .to_string(),
-            ),
+            }),
             _ => None,
         }
     }
@@ -554,7 +628,19 @@ mod tests {
             }],
             denied: vec!["/home/u/.local/share/micold-ai-ide/sandbox.token".into()],
             unshared_sign_in: None,
+            projects: vec!["/work/proj".into()],
         }
+    }
+
+    fn registered(paths: &[&str]) -> Vec<std::path::PathBuf> {
+        paths.iter().map(std::path::PathBuf::from).collect()
+    }
+
+    /// A sandbox whose bring-up created its container, sharing `/work/proj`.
+    fn live() -> Sandbox {
+        let mut s = Sandbox::default();
+        s.started(created(), locations());
+        s
     }
 
     /// U90, T18: a started sandbox carries what it shares, however it came to be running.
@@ -577,7 +663,7 @@ mod tests {
     fn a_stale_sandbox_still_reports_its_locations() {
         let mut s = Sandbox::default();
         s.started(created(), locations());
-        s.mounts_changed();
+        s.mounts_changed(&registered(&["/work/proj", "/work/other"]));
         assert!(
             matches!(s.state, SandboxState::Stale(_)),
             "setup: registering a project marked the running container out of date"
@@ -685,5 +771,125 @@ mod tests {
                 "a placement the user has just selected has no container yet, so it shares nothing"
             );
         }
+    }
+
+    /// U54, T230: each reason is named for what it is (FR-036c).
+    #[test]
+    fn the_out_of_date_notice_names_each_reason_it_has() {
+        let mut mounts = live();
+        mounts.mounts_changed(&registered(&["/work/proj", "/work/other"]));
+        let notice = mounts.persistent_notice().expect("a stale sandbox says so");
+        assert!(
+            notice.contains("registered projects") && !notice.contains(KEEP_RUNNING_SETTING),
+            "the mount set's notice names the projects only: {notice}"
+        );
+
+        let mut keep = live();
+        keep.survive_logout_changed();
+        let notice = keep.persistent_notice().expect("a stale sandbox says so");
+        assert!(
+            notice.contains(KEEP_RUNNING_SETTING) && !notice.contains("project"),
+            "a keep-running change is not an unshared project: {notice}"
+        );
+
+        let mut both = live();
+        both.survive_logout_changed();
+        both.mounts_changed(&registered(&["/work/other"]));
+        let notice = both.persistent_notice().expect("a stale sandbox says so");
+        assert!(
+            notice.contains("registered projects") && notice.contains(KEEP_RUNNING_SETTING),
+            "with both reasons, both are named: {notice}"
+        );
+    }
+
+    /// U54: a matching mount set clears its own reason and leaves a keep-running one standing.
+    #[test]
+    fn a_matching_mount_set_clears_only_its_own_reason() {
+        let mut s = live();
+        s.survive_logout_changed();
+        s.mounts_changed(&registered(&["/work/other"]));
+        s.mounts_changed(&registered(&["/work/proj"]));
+        assert!(matches!(s.state, SandboxState::Stale(_)), "{:?}", s.state);
+        assert_eq!(
+            s.out_of_date,
+            OutOfDate {
+                mount_set: false,
+                keep_running: true
+            }
+        );
+    }
+
+    /// U55, T231: a container another window put in place is adopted with what it shares, and
+    /// measured against the registered projects.
+    #[test]
+    fn a_replaced_container_is_adopted_and_measured_against_the_last_catalog() {
+        let theirs = SandboxLocations {
+            projects: vec!["/work/proj".into(), "/work/other".into()],
+            ..locations()
+        };
+        let new_id = ContainerId("fedcba9876543210".into());
+
+        let mut s = live();
+        s.survive_logout_changed();
+        assert!(s.replaced(
+            new_id.clone(),
+            theirs.clone(),
+            Some(&registered(&["/work/other", "/work/proj"]))
+        ));
+        assert_eq!(
+            s.state,
+            SandboxState::Running(new_id.clone()),
+            "the new container shares every registered project and was made under the current \
+             settings"
+        );
+        assert_eq!(
+            s.locations(),
+            Some(&theirs),
+            "its links resolve against its own mounts"
+        );
+
+        let mut s = live();
+        assert!(s.replaced(
+            new_id.clone(),
+            theirs.clone(),
+            Some(&registered(&["/work/proj"]))
+        ));
+        assert_eq!(
+            s.state,
+            SandboxState::Stale(new_id.clone()),
+            "it shares /work/other, which is not registered"
+        );
+
+        let mut s = live();
+        assert!(s.replaced(new_id.clone(), theirs, None));
+        assert_eq!(
+            s.state,
+            SandboxState::Running(new_id),
+            "with no catalog yet there is nothing to measure against"
+        );
+    }
+
+    /// U55, T231: a re-read that finds the container already held, or a sandbox with no container,
+    /// changes nothing.
+    #[test]
+    fn a_reread_of_the_same_container_or_of_none_changes_nothing() {
+        let other = SandboxLocations {
+            projects: vec!["/elsewhere".into()],
+            ..locations()
+        };
+        let mut s = live();
+        s.mounts_changed(&registered(&["/work/other"]));
+        let before = s.clone();
+        assert!(!s.replaced(created().id, other.clone(), Some(&registered(&["/x"]))));
+        assert_eq!(s, before, "the same id is the container already held");
+
+        let mut s =
+            Sandbox::for_placement(micold_core::sandbox::placement::PlacementKind::LocalSandbox);
+        let before = s.clone();
+        assert!(!s.replaced(ContainerId("new".into()), other, None));
+        assert_eq!(
+            s, before,
+            "a sandbox still coming up adopts its container from its bring-up"
+        );
     }
 }
