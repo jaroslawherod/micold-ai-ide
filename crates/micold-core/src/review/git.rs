@@ -1,29 +1,274 @@
 //! The Changes view's git reads (research R1): the commands, run through the helpers of
 //! [`crate::git`], their output handed to the pure parsers of this module.
 
-use std::io;
+use std::collections::BTreeSet;
+use std::io::{self, Write};
 use std::path::Path;
+use std::process::{Command, Stdio};
 
-use super::base::{Base, BaseUnavailable, ReviewScope, Toggles};
-use super::changes::ChangeList;
-use crate::git::GitCli;
+use super::base::{default_branch_from, Base, BaseUnavailable, DiffRange, ReviewScope, Toggles};
+use super::changes::{
+    assemble, classify, content_of, merge_untracked, parse_name_status, parse_numstat, ChangeKind,
+    ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked, VersionSizes,
+};
+use super::{limits, RelPath};
+use crate::git::{local_only, run_git, GitCli};
+use crate::process::no_window;
+
+/// Options every review read passes before the subcommand (R1).
+const GLOBAL: [&str; 3] = ["-c", "core.quotepath=false", "--no-pager"];
+
+/// The diff options every review read passes after `diff` (R1).
+const DIFF: [&str; 5] = ["--no-ext-diff", "--no-textconv", "--no-color", "-z", "-M"];
+
+/// Run a read-only git command in `dir`, kept to local objects, with `stdin` written to it.
+fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
+    let mut command = Command::new("git");
+    no_window(local_only(&mut command))
+        .arg("-C")
+        .arg(dir)
+        .args(GLOBAL)
+        .args(args)
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn()?;
+    // Write the input on its own thread: git answers as it reads, and a reply that filled its
+    // pipe while we were still writing would stop both sides.
+    let writer = match (stdin, child.stdin.take()) {
+        (Some(text), Some(mut pipe)) => {
+            let text = text.to_owned();
+            Some(std::thread::spawn(move || pipe.write_all(text.as_bytes())))
+        }
+        _ => None,
+    };
+    let output = child.wait_with_output()?;
+    if let Some(writer) = writer {
+        writer
+            .join()
+            .map_err(|_| io::Error::other("the git input writer panicked"))??;
+    }
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        Err(io::Error::other(format!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )))
+    }
+}
+
+/// `git diff` with the R1 options over `revs` and one more `format` option.
+fn diff(dir: &Path, format: &str, revs: &[&str]) -> io::Result<String> {
+    let mut args = vec!["diff"];
+    args.extend(DIFF);
+    args.push(format);
+    args.extend(revs);
+    read(dir, &args, None)
+}
+
+/// The kinds and the counts of one range.
+fn range_rows(
+    dir: &Path,
+    revs: &[&str],
+) -> io::Result<(Vec<NameStatus>, Vec<super::changes::NumStat>)> {
+    let names = parse_name_status(&diff(dir, "--raw", revs)?);
+    let stats = parse_numstat(&diff(dir, "--numstat", revs)?);
+    Ok((names, stats))
+}
+
+/// The paths one range changes.
+fn range_paths(dir: &Path, revs: &[&str]) -> io::Result<BTreeSet<RelPath>> {
+    Ok(parse_name_status(&diff(dir, "--raw", revs)?)
+        .into_iter()
+        .map(|name| name.path)
+        .collect())
+}
+
+/// Untracked, not-ignored files, read from disk (FR-005). A nested repository or worktree that
+/// git lists as `dir/` is not a file and is skipped.
+fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
+    let raw = read(
+        dir,
+        &["ls-files", "-z", "--others", "--exclude-standard"],
+        None,
+    )?;
+    let mut files = Vec::new();
+    for path in raw
+        .split('\0')
+        .filter(|p| !p.is_empty() && !p.ends_with('/'))
+    {
+        let full = dir.join(path);
+        let Ok(meta) = std::fs::symlink_metadata(&full) else {
+            continue;
+        };
+        let bytes = meta.len();
+        let (content, lines) = if meta.is_file() && bytes <= limits::MAX_VERSION_BYTES {
+            std::fs::read(&full).map_or((Content::Text, 0), |data| content_of(&data))
+        } else {
+            (Content::Text, 0)
+        };
+        files.push(Untracked {
+            path: RelPath::from_git(path),
+            lines,
+            content,
+            bytes,
+        });
+    }
+    Ok(files)
+}
+
+/// The sizes of `specs` (`<rev>:<path>`) in one `git cat-file --batch-check`; `None` for one git
+/// does not have.
+fn object_sizes(dir: &Path, specs: &[String]) -> Vec<Option<u64>> {
+    if specs.is_empty() {
+        return Vec::new();
+    }
+    let mut input = String::new();
+    for spec in specs {
+        // A newline in a path would split the request; ask for something that never exists.
+        input.push_str(if spec.contains('\n') { ":" } else { spec });
+        input.push('\n');
+    }
+    let Ok(out) = read(
+        dir,
+        &["cat-file", "--batch-check=%(objectsize)"],
+        Some(&input),
+    ) else {
+        return vec![None; specs.len()];
+    };
+    let mut sizes: Vec<Option<u64>> = out.lines().map(|line| line.trim().parse().ok()).collect();
+    sizes.resize(specs.len(), None);
+    sizes
+}
+
+/// Mark the large rows (R8): the old version's size from git, the new one's from `HEAD` or the
+/// working tree.
+fn classify_all(dir: &Path, files: &mut [ChangedFile], old_rev: &str, new_rev: Option<&str>) {
+    let old_specs: Vec<String> = files
+        .iter()
+        .map(|file| {
+            let path = match &file.kind {
+                ChangeKind::Renamed { from } => from,
+                _ => &file.path,
+            };
+            format!("{old_rev}:{path}")
+        })
+        .collect();
+    let old = object_sizes(dir, &old_specs);
+    let new: Vec<Option<u64>> = match new_rev {
+        Some(rev) => {
+            let specs: Vec<String> = files
+                .iter()
+                .map(|file| format!("{rev}:{}", file.path))
+                .collect();
+            object_sizes(dir, &specs)
+        }
+        None => files
+            .iter()
+            .map(|file| {
+                std::fs::metadata(dir.join(file.path.as_str()))
+                    .ok()
+                    .map(|m| m.len())
+            })
+            .collect(),
+    };
+    for ((file, old), new) in files.iter_mut().zip(old).zip(new) {
+        if file.kind != ChangeKind::Untracked {
+            classify(file, VersionSizes { old, new });
+        }
+    }
+}
 
 impl GitCli {
-    /// The base of the worktree at `dir` (R7).
-    pub fn review_base(&self, _dir: &Path) -> Base {
-        Base::Unavailable(BaseUnavailable::NoDefaultBranch)
+    /// The base of the worktree at `dir` (R7): the merge-base of `HEAD` and the default branch.
+    pub fn review_base(&self, dir: &Path) -> Base {
+        let origin_head = read(
+            dir,
+            &["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+            None,
+        )
+        .ok();
+        let has = |branch: &str| {
+            read(
+                dir,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("refs/heads/{branch}"),
+                ],
+                None,
+            )
+            .is_ok()
+        };
+        let Some(branch) = default_branch_from(origin_head.as_deref(), has("main"), has("master"))
+        else {
+            return Base::Unavailable(BaseUnavailable::NoDefaultBranch);
+        };
+        match run_git(dir, &["merge-base", "HEAD", &branch]) {
+            Ok(commit) if !commit.trim().is_empty() => Base::MergeBase {
+                branch,
+                commit: commit.trim().to_owned(),
+            },
+            _ => Base::Unavailable(BaseUnavailable::NoCommonHistory),
+        }
     }
 
-    /// The files changed in `dir` under `toggles` (R1, FR-002, FR-004, FR-005).
+    /// The files changed in `dir` under `toggles` (R1, FR-002, FR-004, FR-005): one row per path,
+    /// sorted, each classified against the R8 limits.
     pub fn change_list(
         &self,
-        _dir: &Path,
+        dir: &Path,
         scope: ReviewScope,
-        _toggles: Toggles,
+        toggles: Toggles,
     ) -> io::Result<ChangeList> {
-        Ok(ChangeList {
-            files: Vec::new(),
-            scope,
-        })
+        let base = match &scope {
+            ReviewScope::Worktree {
+                base: Base::MergeBase { commit, .. },
+            } => Some(commit.clone()),
+            _ => None,
+        };
+        let files = match (DiffRange::for_view(&scope, toggles), base.as_deref()) {
+            (None, _) => Vec::new(),
+            (Some(DiffRange::BaseToHead), Some(base)) => {
+                let (names, stats) = range_rows(dir, &[base, "HEAD"])?;
+                let mut files = assemble(
+                    names,
+                    stats,
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                    Origin::Committed,
+                );
+                classify_all(dir, &mut files, base, Some("HEAD"));
+                files
+            }
+            (Some(DiffRange::BaseToWorktree), Some(base)) => {
+                let (names, stats) = range_rows(dir, &[base])?;
+                let committed = range_paths(dir, &[base, "HEAD"])?;
+                let uncommitted = range_paths(dir, &["HEAD"])?;
+                let mut files = assemble(names, stats, &committed, &uncommitted, Origin::Both);
+                classify_all(dir, &mut files, base, None);
+                merge_untracked(files, untracked(dir)?)
+            }
+            _ => {
+                let (names, stats) = range_rows(dir, &["HEAD"])?;
+                let mut files = assemble(
+                    names,
+                    stats,
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                    Origin::Uncommitted,
+                );
+                classify_all(dir, &mut files, "HEAD", None);
+                merge_untracked(files, untracked(dir)?)
+            }
+        };
+        Ok(ChangeList { files, scope })
     }
 }
