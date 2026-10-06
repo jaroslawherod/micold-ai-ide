@@ -104,11 +104,14 @@ pub fn surfaces<'a>(
         out.push(
             material::ContextMenu::new(menu_items(), (120, 220), Message::Dismissed, roles).into(),
         );
-        // The same panel on the other anchor: `rising_above` puts its **bottom** edge above the
-        // window's bottom edge instead of its top edge at the cursor. Posed beside the default so
-        // the difference is visible by comparison — a menu opened from a control in a bottom bar
-        // has no room to hang downward, which is how the terminal's tab menu came to be drawn
-        // half outside the window (012 BUG-005, the 2026-08-19 visual pass).
+    }
+
+    // The same panel on the other anchor: `rising_above` puts its **bottom** edge above the
+    // window's bottom edge instead of its top edge at the cursor. It has its own opener so each
+    // press opens one panel — a menu opened from a control in a bottom bar has no room to hang
+    // downward, which is how the terminal's tab menu came to be drawn half outside the window
+    // (012 BUG-005, the 2026-08-19 visual pass).
+    if open == Some(Floating::ContextMenuBottom) {
         out.push(
             material::ContextMenu::new(menu_items(), (420, 220), Message::Dismissed, roles)
                 .rising_above(anatomy::app_bar::HEIGHT)
@@ -238,14 +241,26 @@ pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
     )
 }
 
-/// `ContextMenu` — the cursor-anchored menu a right-click opens.
+/// `ContextMenu` — the cursor-anchored menu a right-click opens, and the same panel rising from
+/// the window's bottom edge. One opener per anchor, so each press opens one panel.
 pub fn context_menu<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
-        vec![posed(
-            "open it",
-            opener("Open a context menu", Floating::ContextMenu, roles),
-            roles,
-        )],
+        vec![
+            posed(
+                "open at a point",
+                opener("Open at a point", Floating::ContextMenu, roles),
+                roles,
+            ),
+            posed(
+                "rising from the bottom edge",
+                opener(
+                    "Open rising from the bottom edge",
+                    Floating::ContextMenuBottom,
+                    roles,
+                ),
+                roles,
+            ),
+        ],
         Layout::Inline,
     )
 }

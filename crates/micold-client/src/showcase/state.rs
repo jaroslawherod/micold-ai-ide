@@ -31,8 +31,10 @@ pub enum Floating {
     Modal,
     /// The overflow menu panel (`material::MenuOverlay`).
     Menu,
-    /// A cursor-anchored context menu (`material::ContextMenu`).
+    /// A cursor-anchored context menu (`material::ContextMenu`, `Anchor::Point`).
     ContextMenu,
+    /// The same context menu rising from the window's bottom edge (`Anchor::BottomStart`).
+    ContextMenuBottom,
     /// The project switcher's list — the same `material::MenuOverlay`, carrying the switcher's
     /// rows (018 FR-029c).
     ProjectSwitcher,
