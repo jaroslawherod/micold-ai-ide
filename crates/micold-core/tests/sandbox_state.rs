@@ -657,7 +657,18 @@ fn unattended_bring_ups_never_wait_less_than_the_one_before() {
 fn the_mount_set_is_out_of_date_exactly_while_the_sets_differ() {
     let p = || PathBuf::from("/proj/P");
     let q = || PathBuf::from("/proj/Q");
-    let shared = |paths: &[&str]| paths.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // Container paths, mapped as a project mount is on this platform (under the Windows mount root
+    // on a Windows host), so the test holds on every CI runner.
+    let shared = |paths: &[&str]| {
+        paths
+            .iter()
+            .map(|s| {
+                micold_core::sandbox::pathmap::map_for(Path::new(s), cfg!(windows))
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>()
+    };
 
     assert!(
         !mount_set_out_of_date(&shared(&["/proj/P", "/proj/Q"]), &[q(), p()]),
