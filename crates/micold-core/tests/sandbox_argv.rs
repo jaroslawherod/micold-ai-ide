@@ -365,7 +365,13 @@ fn a_containers_projects_are_its_project_mounts() {
 /// container with the AI CLI sign-in shared, or the share was turned off after bring-up.
 #[test]
 fn an_adopted_containers_credential_mounts_are_not_projects() {
-    let layout = CredentialLayout::conventional(Path::new("/home/u"), None);
+    let home = Path::new("/home/u");
+    let layout = CredentialLayout::conventional(home, None);
+    let credential = |host: &Path| -> String {
+        pathmap::map_for(host, cfg!(windows))
+            .to_string_lossy()
+            .into_owned()
+    };
     let mounts = MountSet::build_for(
         &[PathBuf::from("/proj/P")],
         &SandboxProfile::default(),
@@ -382,8 +388,10 @@ fn an_adopted_containers_credential_mounts_are_not_projects() {
         mounts.state.container.to_string_lossy().into_owned(),
         mounts.home.container.to_string_lossy().into_owned(),
         mounts.secret.container.to_string_lossy().into_owned(),
-        "/home/u/.claude/.credentials.json".into(),
-        "/home/u/.gitconfig".into(),
+        // Mapped as the bring-up maps a credential on this platform: under the Windows mount root
+        // on a Windows host, so the test holds on every CI runner.
+        credential(&home.join(".claude").join(".credentials.json")),
+        credential(&home.join(".gitconfig")),
         "/proj/P".into(),
     ]
     .into();
