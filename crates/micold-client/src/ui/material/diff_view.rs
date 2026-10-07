@@ -835,7 +835,7 @@ mod tests {
     use micold_core::tokens::{DARK, LIGHT};
     use std::ops::Range;
 
-    use super::super::virtual_rows::{visible_range, ASSUMED_VIEWPORT, OVERSCAN};
+    use super::super::virtual_rows::{visible_range_with, ASSUMED_VIEWPORT, OVERSCAN};
 
     const TOLERANCE: f32 = 0.5;
 
@@ -855,7 +855,7 @@ mod tests {
         } else {
             view.viewport
         };
-        visible_range(view.offset, viewport, ROW_HEIGHT, len, OVERSCAN)
+        visible_range_with(view.offset, viewport, ROW_HEIGHT, len, OVERSCAN, &[])
     }
 
     fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> DiffLine {

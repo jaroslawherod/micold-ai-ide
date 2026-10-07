@@ -26,27 +26,6 @@ pub const OVERSCAN: usize = 8;
 /// The viewport assumed before the first scroll report arrives: tall enough to fill a window.
 pub const ASSUMED_VIEWPORT: u32 = 1_200;
 
-/// The rows to build for a viewport `viewport` pixels tall scrolled `offset` pixels down a list of
-/// `len` rows of `row_height` pixels, widened by `overscan` rows on each side and clamped to the
-/// list. Rows without slots: the tests' reference for [`visible_range_with`].
-#[cfg(test)]
-pub fn visible_range(
-    offset: u32,
-    viewport: u32,
-    row_height: f32,
-    len: usize,
-    overscan: usize,
-) -> Range<usize> {
-    if len == 0 || row_height <= 0.0 {
-        return 0..0;
-    }
-    let first = (offset as f32 / row_height).floor() as usize;
-    let last = ((offset + viewport) as f32 / row_height).ceil() as usize;
-    let start = first.min(len).saturating_sub(overscan);
-    let end = last.saturating_add(overscan).min(len);
-    start..end.max(start)
-}
-
 /// The spacer heights above and below the built `rows` of a list of `len` rows, so the content is
 /// `len * row_height` tall in total.
 pub fn spacers(rows: &Range<usize>, row_height: f32, len: usize) -> (f32, f32) {
@@ -230,6 +209,27 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The rows to build for a viewport `viewport` pixels tall scrolled `offset` pixels down a list of
+    /// `len` rows of `row_height` pixels, widened by `overscan` rows on each side and clamped to the
+    /// list. Rows without slots: the reference [`visible_range_with`] must agree with.
+    fn visible_range(
+        offset: u32,
+        viewport: u32,
+        row_height: f32,
+        len: usize,
+        overscan: usize,
+    ) -> Range<usize> {
+        if len == 0 || row_height <= 0.0 {
+            return 0..0;
+        }
+        let first = (offset as f32 / row_height).floor() as usize;
+        let last = ((offset + viewport) as f32 / row_height).ceil() as usize;
+        let start = first.min(len).saturating_sub(overscan);
+        let end = last.saturating_add(overscan).min(len);
+        start..end.max(start)
+    }
+
     use std::cell::Cell;
     use std::rc::Rc;
 
