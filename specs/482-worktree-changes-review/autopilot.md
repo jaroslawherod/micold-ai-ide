@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M5: verify.md (scoped gate + review A, review B, full gate)
+- **Next step**: milestone M6 (T076–T080); M5 commits are local (push refused by the gate hook: no `mise run gate` record here)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T027–T040 | full | Unified diff of the selected file | #624 | done |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | #624 | done |
 | M4 | T050–T063 | full | Comments on lines and ranges | #624 | done |
-| M5 | T064–T075 | full | Send comments to the running session | — | todo |
+| M5 | T064–T075 | full | Send comments to the running session | #624 | done |
 | M6 | T076–T080 | full | Send when no session is running | — | todo |
 | M7 | T081–T089 | full | Live refresh and outdated comments | — | todo |
 | M8 | T090–T097 | full | Clear, discard, and removal with the worktree | — | todo |
@@ -84,6 +84,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M5 (T075) | 1 | 2473be8a, e2cc6eba | B9, B10 (light) pass; found the composer taking no keys with a session selected (MAJOR), fixed in e2cc6eba (`terminal_focused()` and `view_facts().main_area_taken` count the Changes view); re-run in dark: typing works with a session running, B10 pass |
 | Gate M5 (scoped, workspace) | scoped | 63c21b52..ace6b8b2 | red: clippy `too_many_arguments` on review_send's `add` helper (allowed); a disk-full link (stale test binaries removed); `documentation_is_not_read` ("README.md" fixture path in prompt.rs tests, now `notes.md`); then only the root-only permission test stopping the run — full gate next |
 | Review A M5 (code-review high, 018d55df..HEAD) | 1 | e6497af342fd4835004625d99753fe74d44b76c2:63c21b52f0d70f946f038ce9de7d97fd61020965 | CLEAN, no findings |
+| Review B M5 (conformance, sonnet) | 1 | 74cbb069cdfc59ee86ddfa6f81e310a536652ab8:ace6b8b2dd36d05440a48a13e72326b7e2f3f3a3 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate ran it: review::prompt 11/11, review_send 5/5) |
 
 ## Declined review findings
 
