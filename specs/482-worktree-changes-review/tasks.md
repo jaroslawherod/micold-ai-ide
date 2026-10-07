@@ -196,13 +196,13 @@ comments can be cleared, pending ones discarded, and a removed worktree takes it
 
 ### Part B — tidying and removal (scenarios 3, 5)
 
-- [ ] T090 [P] [US4] Write failing unit tests in `crates/micold-core/src/review/comment.rs`: `clear_sent` removes sent comments only; `discard_pending` removes pending comments not inside an open send (W4)
-- [ ] T091 [P] [US4] Extend `crates/micold-daemon/tests/review_edit.rs` with failing cases: `ClearSent` and `DiscardPending` per W4, persisted and pushed; deleting the worktree through `WorktreeDelete` removes its comments from memory and the file and pushes an empty `ReviewChanged` (W11); a worktree removed outside the app is pruned the same way when a catalog refresh no longer lists it; removing the project from the catalog deletes its `reviews/` file
-- [ ] T092 [P] [US4] Extend `crates/micold-client/tests/features_changes.rs` with failing tests: **Clear sent** is enabled iff a sent comment exists and sends `ClearSent`; **Discard pending…** opens the confirmation and only its confirm sends `DiscardPending` (S3)
-- [ ] T093 [US4] Implement `clear_sent` and `discard_pending` in `crates/micold-core/src/review/comment.rs` until T090 passes
-- [ ] T094 [US4] Serve `ClearSent`/`DiscardPending` in `crates/micold-daemon/src/review.rs`, call `review::forget_worktree` from `ops::delete_worktree` on success in `crates/micold-daemon/src/ops.rs`, prune a worktree that disappears from the catalog on refresh, and `review::forget_project` on project removal, until T091 passes
-- [ ] T095 [US4] Add **Clear sent** and **Discard pending…** with its `Modal` built with `dialog::body` as `crates/micold-client/src/ui/confirm_delete.rs` does ("Discard n pending comments? This cannot be undone.") to `crates/micold-client/src/features/changes.rs` and `crates/micold-client/src/ui/changes.rs`, until T092 passes
-- [ ] T096 [P] [US4] Extend `docs/user-guide/reviewing-changes.md`: clearing sent comments, discarding pending ones, what happens to comments when a worktree is removed
+- [x] T090 [P] [US4] Write failing unit tests in `crates/micold-core/src/review/comment.rs`: `clear_sent` removes sent comments only; `discard_pending` removes pending comments not inside an open send (W4)
+- [x] T091 [P] [US4] Extend `crates/micold-daemon/tests/review_edit.rs` with failing cases: `ClearSent` and `DiscardPending` per W4, persisted and pushed; deleting the worktree through `WorktreeDelete` removes its comments from memory and the file and pushes an empty `ReviewChanged` (W11); a worktree removed outside the app is pruned the same way when a catalog refresh no longer lists it; removing the project from the catalog deletes its `reviews/` file
+- [x] T092 [P] [US4] Extend `crates/micold-client/tests/features_changes.rs` with failing tests: **Clear sent** is enabled iff a sent comment exists and sends `ClearSent`; **Discard pending…** opens the confirmation and only its confirm sends `DiscardPending` (S3)
+- [x] T093 [US4] Implement `clear_sent` and `discard_pending` in `crates/micold-core/src/review/comment.rs` until T090 passes
+- [x] T094 [US4] Serve `ClearSent`/`DiscardPending` in `crates/micold-daemon/src/review.rs`, call `review::forget_worktree` from `ops::delete_worktree` on success in `crates/micold-daemon/src/ops.rs`, prune a worktree that disappears from the catalog on refresh, and `review::forget_project` on project removal, until T091 passes
+- [x] T095 [US4] Add **Clear sent** and **Discard pending…** with its `Modal` built with `dialog::body` as `crates/micold-client/src/ui/confirm_delete.rs` does ("Discard n pending comments? This cannot be undone.") to `crates/micold-client/src/features/changes.rs` and `crates/micold-client/src/ui/changes.rs`, until T092 passes
+- [x] T096 [P] [US4] Extend `docs/user-guide/reviewing-changes.md`: clearing sent comments, discarding pending ones, what happens to comments when a worktree is removed
 - [ ] T097 [US4] Visual pass of quickstart B13 and B17; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 **Checkpoint**: all user stories complete.
