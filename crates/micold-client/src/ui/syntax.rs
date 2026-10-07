@@ -232,12 +232,22 @@ mod tests {
 
     #[test]
     fn every_fill_is_listed_once() {
-        let r = tokens::roles(ColorScheme::Light);
-        assert_eq!(fills(r).len(), 3);
-        let _ = (
-            contrast(r.on_surface, r.surface),
-            AA_TEXT,
-            SchemeSpans::default(),
-        );
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let listed = fills(r);
+            assert_eq!(
+                listed,
+                [r.surface, r.diff_added, r.diff_removed],
+                "a diff line is drawn on the surface or an added or removed tint ({scheme:?})"
+            );
+            for (i, a) in listed.iter().enumerate() {
+                for b in &listed[i + 1..] {
+                    assert_ne!(
+                        a, b,
+                        "each fill is a distinct colour ({scheme:?}): {listed:?}"
+                    );
+                }
+            }
+        }
     }
 }

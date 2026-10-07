@@ -127,7 +127,7 @@ fn reopening_resets_the_toggles() {
 fn a_toggle_change_rereads_the_list() {
     let mut state = ready(&["a.rs", "b.rs"]);
     let effect = changes::update(&mut state, Msg::UncommittedToggled);
-    let Effect::ReadList { toggles, .. } = effect else {
+    let Effect::ReadList { seq, toggles, .. } = effect else {
         panic!("a toggle change re-reads, got {effect:?}");
     };
     assert_eq!(
@@ -137,8 +137,40 @@ fn a_toggle_change_rereads_the_list() {
             uncommitted: false
         }
     );
+    // A second change while that read runs queues one more read instead of starting a second.
     let effect = changes::update(&mut state, Msg::CommittedToggled);
-    assert!(matches!(effect, Effect::None | Effect::ReadList { .. }));
+    assert_eq!(
+        effect,
+        Effect::None,
+        "a toggle change during a read waits for it"
+    );
+    let off = Toggles {
+        committed: false,
+        uncommitted: false,
+    };
+    let view = state.open.as_ref().expect("the view is open");
+    assert_eq!(view.toggles, off, "both toggles are off now");
+    assert!(
+        matches!(view.list, Load::Loading { seq: s, again: true, .. } if s == seq),
+        "the running read is marked to run again: {:?}",
+        view.list
+    );
+    // When the running read answers, the queued one reads under the toggles as they are now.
+    let effect = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Ok(list(&["a.rs"])),
+        },
+    );
+    let Effect::ReadList {
+        seq: next, toggles, ..
+    } = effect
+    else {
+        panic!("the queued read runs once the first answers, got {effect:?}");
+    };
+    assert_ne!(next, seq, "the queued read is a new read");
+    assert_eq!(toggles, off, "it reads with both toggles off");
 }
 
 /// An answer to a read that is no longer the current one is dropped.
@@ -658,15 +690,25 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
     assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
     assert_eq!(view.diff_offset, 120);
 
-    let (seq, _) = select(&mut state, "a.rs");
+    let (failed, _) = select(&mut state, "a.rs");
     changes::update(
         &mut state,
         Msg::DiffRead {
-            seq,
+            seq: failed,
             result: Err("fatal: bad object".into()),
         },
     );
-    select(&mut state, "a.rs");
+    let (retry, _) = select(&mut state, "a.rs");
+    assert_ne!(
+        retry, failed,
+        "a failed diff is read again under a new read"
+    );
+    let view = state.open.as_ref().unwrap();
+    assert!(
+        matches!(view.diff, Load::Loading { seq, .. } if seq == retry),
+        "the body goes back to loading the new read: {:?}",
+        view.diff
+    );
 }
 
 // ---- Syntax spans (M3, T042, research R10) ----
