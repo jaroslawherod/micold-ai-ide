@@ -10,7 +10,8 @@
 //! Three of the six are conditional, and the conditions are the whole point (FR-025, FR-032a,
 //! FR-039a, SC-017): the snackbar's clock is subscribed only while a notification is on screen,
 //! the pointer only while the project switcher is open, and the per-frame clock only during a
-//! measurement run. A timer subscribed unconditionally holds the loop awake for the life of the
+//! measurement run (and, since 482, the Changes view's file watch only while the view is open).
+//! A timer subscribed unconditionally holds the loop awake for the life of the
 //! process, which is the failure this feature's idle guarantees are about — and a `Subscription`
 //! cannot be inspected for what it contains, so a conditional that quietly became unconditional
 //! is invisible to every behavioural test in the workspace. `tests/idle_subscriptions.rs` is what
@@ -117,6 +118,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     //
     // Idle quiescence (SC-017, FR-039a) is unaffected because the branch is unreachable without the
     // environment variable; `tests/frame_probe_glue.rs` is what keeps that true.
+    // The Changes view's file watch (482 R9), **only while the view is open**: a recursive watch
+    // of an entry nobody is looking at would wake the window on every build and agent edit.
+    if let Some(view) = &app.core.changes.open {
+        subs.extend(crate::shell::changes_watch::watch(app, &view.entry));
+    }
     if probe_config().is_some() {
         subs.push(iced::window::frames().map(|_| Message::NoOp));
     }

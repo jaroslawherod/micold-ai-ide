@@ -148,6 +148,18 @@ pub trait Git {
         from: Option<&crate::review::RelPath>,
         force_large: bool,
     ) -> io::Result<crate::review::diff::LoadedDiff>;
+
+    /// Which of `paths` (files of the worktree at `dir`) git ignores (feature 482, research R9).
+    /// A tracked file is never ignored. Read-only.
+    fn ignored(
+        &self,
+        dir: &Path,
+        paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>>;
+
+    /// The git metadata directories of the worktree at `dir`, absolute: its own git dir and the
+    /// common dir (feature 482, research R9). Read-only.
+    fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -579,6 +591,18 @@ impl Git for GitCli {
         force_large: bool,
     ) -> io::Result<crate::review::diff::LoadedDiff> {
         GitCli::file_diff(self, dir, scope, toggles, path, from, force_large)
+    }
+
+    fn ignored(
+        &self,
+        dir: &Path,
+        paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>> {
+        GitCli::ignored(self, dir, paths)
+    }
+
+    fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        GitCli::git_dirs(self, dir)
     }
 }
 
@@ -1235,5 +1259,19 @@ impl Git for FakeGit {
             new: None,
             spans: crate::review::diff::Spans::default(),
         })
+    }
+
+    /// Nothing is ignored in the fake.
+    fn ignored(
+        &self,
+        _dir: &Path,
+        _paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>> {
+        Ok(std::collections::BTreeSet::new())
+    }
+
+    /// The fake has no git metadata on disk.
+    fn git_dirs(&self, _dir: &Path) -> io::Result<Vec<PathBuf>> {
+        Ok(Vec::new())
     }
 }
