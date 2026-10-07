@@ -222,6 +222,10 @@ pub enum Msg {
     },
     /// **Add comment** was pressed (C2).
     AddComment,
+    /// An edit or a cursor move in the composer's text area (C2). The editor's content is the
+    /// binary's (runtime, not state), so the shell performs the action before the reducer sees
+    /// this and reports the new text as [`Msg::ComposerEdited`]; the reducer ignores it.
+    ComposerAction(crate::app::EditorAction),
     /// The composer's text changed.
     ComposerEdited(String),
     /// Save (or Ctrl/Cmd+Enter) in the composer.
@@ -458,6 +462,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
+        Msg::ComposerAction(_) => Effect::None,
         Msg::ComposerEdited(text) => {
             if let Some(composer) = state.open.as_mut().and_then(|v| v.composer.as_mut()) {
                 composer.text = text;
