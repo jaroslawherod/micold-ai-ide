@@ -605,7 +605,12 @@ async fn a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order(
         panic!("the stop saved no readable history");
     };
     assert!(texts(&file).iter().any(|l| l == "first run"));
-    state.stop_session(id);
+    // Off the runtime's one thread: `stop_session` blocks on the session's gate, and the start's
+    // continuation that releases the gate runs on this thread. Called here directly, a stop that
+    // arrives before that continuation has run waits on it forever (#617).
+    tokio::task::spawn_blocking(move || state.stop_session(id))
+        .await
+        .unwrap();
 }
 
 /// Read what the service sends until `done` holds, within 20 s.

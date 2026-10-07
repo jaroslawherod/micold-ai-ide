@@ -137,7 +137,10 @@ async fn a_daemon_with_nobody_connected_exits_by_itself() {
 #[tokio::test]
 async fn a_daemon_with_one_client_connected_never_exits() {
     let dir = tempfile::tempdir().unwrap();
-    let mut daemon = spawn_daemon(dir.path(), "300ms");
+    // A second, not 300 ms: the window is armed at construction, so a daemon whose first probe
+    // connection lands later than the window (a loaded macOS runner) stops before the test ever
+    // reaches it and the wait below reports it never listened (#617).
+    let mut daemon = spawn_daemon(dir.path(), "1s");
     let endpoint = endpoint_in(dir.path());
     wait_until_listening(&endpoint, Duration::from_secs(30)).await;
 
@@ -147,7 +150,7 @@ async fn a_daemon_with_one_client_connected_never_exits() {
         .expect("connect")
         .expect("a daemon is listening");
 
-    let outlived = !exited_within(&mut daemon, Duration::from_secs(3));
+    let outlived = !exited_within(&mut daemon, Duration::from_secs(6));
     let still_there = daemon.try_wait().expect("try_wait").is_none();
     drop(held);
     let _ = daemon.kill();
