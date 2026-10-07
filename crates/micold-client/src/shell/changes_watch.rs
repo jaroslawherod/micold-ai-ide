@@ -105,9 +105,10 @@ fn run(root: PathBuf, git: Arc<dyn Git + Send + Sync>) -> impl Stream<Item = Mes
                 None => Ok(changed.recv().await),
             };
             match next {
-                Ok(Some(paths)) => {
-                    debouncer.push(watch::relevant_paths(&root, &git_dirs, paths), Instant::now())
-                }
+                Ok(Some(paths)) => debouncer.push(
+                    watch::relevant_paths(&root, &git_dirs, paths),
+                    Instant::now(),
+                ),
                 // The watcher is gone: nothing more will come.
                 Ok(None) => return,
                 Err(_quiet) => {}
