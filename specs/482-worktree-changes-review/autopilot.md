@@ -76,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code-review high, scoped 9dbcf9e9..HEAD) | 1 | e64ae19d83f1642c7bdf02e3f2843609f3dc188e:2ada2a4a7c1723fd4dc39e3a3cbd344b1bfc35cf | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (Sensor key carries whether the height is known, so a dropped height re-measures); F4 MINOR fixed (edit composer closes when its comment is gone); F2, F3 MINOR declined |
 | Review A M4 (code-review high, scoped fix diff, sonnet) | 2 | a6006bfc6d7c4efa1b155d6c2a023138d3f1209b:2d659f8afe3ae846e58bcb832f84cb766beb1671 | CLEAN |
 | Gate M4 (scoped, workspace) | scoped | 2d659f8a + review_edit fixture path | red twice then green except the 6 root-only permission tests: clippy `duplicated_attributes` (review_edit's `#[allow(dead_code)]`), `documentation_is_not_read` ("README.md" literal in review_edit's seed, now `src/lib.rs`); one run lost to a full disk |
+| Visual pass M4 (T063) | 1 | a46f1c19 | B7, B8 (dark), B14 (light, after restart) pass; Send to session is M5 |
 
 ## Declined review findings
 
@@ -88,7 +89,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 unit 7 stopped at the context cap. Local commits only (not pushed). Done: the four architecture gates fixed (green); review A M4 round 1 (1 MAJOR + 1 MINOR fixed, 2 MINOR declined) and round 2 CLEAN; scoped gate green except the 6 root-only tests (needed fixes: clippy duplicated_attributes and a "README.md" literal in daemon `review_edit`); T063 visual pass recorded (`visual-pass/m4.md`), T063 ticked — every M4 task done.
+In flight: **Review B M4 round 1** (sonnet, snapshot eecc77bb3f560f5dfed9108b8047f6423c45ad54:a46f1c19c1d7839c0e46269f3e52c3dd7bfceedb) launched detached; its result lands in scratchpad `review-B-M4-r1.out` (ends `REVIEW_EXIT=`; prompt `review-B-M4-r1.txt`). Record its row in *Review rounds*.
+Next: act on review B (verify.md step 2; fixes → scoped gate), then the full gate once (verify.md step 3: fmt, clippy core + workspace `-D warnings`, `cargo test --workspace`, `scripts/tests/*.test.sh`; client clippy has not run since the F1/F4 fixes), try a normal push (do not bypass the hook), write the M4 PR-body section to scratchpad `pr-body-482-M4.md`, set M4 done. Disk: ~5 GB free; delete linked test binaries in `target-shared/debug/deps` before a workspace build (`find target-shared/debug/deps -maxdepth 1 -type f -perm -u+x ! -name "*.so" -delete`) or the link dies with a bus error.
 
 ## Open escalation
 
