@@ -14,8 +14,9 @@
 //!
 //! # What is scanned, and what is not
 //!
-//! The installer script, the macOS plist template, the client's `main.rs` and the daemon's
-//! manifest. Comment lines are skipped, so the files may explain the decision in their own words.
+//! The installer script, the macOS plist template, every Rust file of the client (for the command
+//! line, every one of them: an argument read in a module is as read as one in `main.rs`) and the
+//! daemon's manifest. Comments are skipped, so the files may explain the decision in their own words.
 //! Not `tests/`: this file names the very strings it forbids.
 
 use std::fs;
@@ -26,6 +27,8 @@ const PLIST: &str = "packaging/macos/Info.plist.in";
 const WINDOWS_RS: &str = "crates/micold-client/src/shell/desktop_notify/windows.rs";
 const MAIN_RS: &str = "crates/micold-client/src/main.rs";
 const DAEMON_TOML: &str = "crates/micold-daemon/Cargo.toml";
+
+const CLIENT_SRC: &str = "crates/micold-client/src";
 
 const SCANNED: &[&str] = &[ISS, PLIST, WINDOWS_RS, MAIN_RS, DAEMON_TOML];
 
@@ -58,11 +61,61 @@ fn toml_comment(line: &str) -> bool {
     line.trim_start().starts_with('#')
 }
 
-/// Rust line and block comments (`//`, `/*`, a leading `*`).
+/// A Rust line comment (`//`, which takes in `///` and `//!`). Block comments are removed first,
+/// by [`strip_rust_block_comments`]: a line that starts with `*` may be code, the continuation of
+/// a product.
 fn rust_comment(line: &str) -> bool {
-    let l = line.trim_start();
-    l.starts_with("//") || l.starts_with("/*") || l.starts_with('*')
+    line.trim_start().starts_with("//")
 }
+
+/// Replaces every `/* … */` span, which may cross lines, with nothing but its newlines so that line
+/// numbers stay true.
+fn strip_rust_block_comments(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("/*") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start..];
+        let end = after.find("*/").map_or(after.len(), |e| e + 2);
+        out.extend(after[..end].chars().filter(|c| *c == '\n'));
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The code lines of a Rust file: its comments of both kinds left out.
+fn rust_code_lines(text: &str) -> Vec<(usize, String)> {
+    code_lines(&strip_rust_block_comments(text), rust_comment)
+}
+
+/// Every `.rs` file under `rel`, repo-relative, sorted.
+fn rust_files_under(rel: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut dirs = vec![repo_root().join(rel)];
+    while let Some(dir) = dirs.pop() {
+        let entries =
+            fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
+        for entry in entries {
+            let path = entry.expect("a directory entry").path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let relative = path
+                    .strip_prefix(repo_root())
+                    .expect("under the repository")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push(relative);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// What U48 forbids: the ways a Rust program reads its command line.
+const ARGUMENT_READERS: &[&str] = &["env::args", "args_os", "clap", "pico_args"];
 
 /// Replaces every `<!-- … -->` span, which may cross lines, with nothing but its newlines so
 /// that line numbers stay true.
@@ -111,7 +164,7 @@ fn offending(
 /// The quoted value of `APP_USER_MODEL_ID` in the client's Windows backend.
 fn app_user_model_id_from_source() -> String {
     let source = read(WINDOWS_RS);
-    let (n, line) = code_lines(&source, rust_comment)
+    let (n, line) = rust_code_lines(&source)
         .into_iter()
         .find(|(_, l)| l.contains("const APP_USER_MODEL_ID"))
         .unwrap_or_else(|| panic!("{WINDOWS_RS}: no `const APP_USER_MODEL_ID` line"));
@@ -201,15 +254,18 @@ fn the_packaging_registers_no_activator_and_no_protocol_handler() {
 // U48 (FR-015a, contract N8): the client has no command line to interpret.
 #[test]
 fn the_client_reads_no_command_line_argument() {
-    let found = offending(
-        MAIN_RS,
-        &code_lines(&read(MAIN_RS), rust_comment),
-        &["env::args", "args_os", "clap", "pico_args"],
-        false,
+    let files = rust_files_under(CLIENT_SRC);
+    assert!(
+        files.iter().any(|f| f == MAIN_RS),
+        "the walk of {CLIENT_SRC} does not reach {MAIN_RS}: {files:?}"
     );
+    let found: Vec<String> = files
+        .iter()
+        .flat_map(|rel| offending(rel, &rust_code_lines(&read(rel)), ARGUMENT_READERS, false))
+        .collect();
     assert!(
         found.is_empty(),
-        "the client's main reads a command-line argument:\n  {}\n\n\
+        "the client reads a command-line argument:\n  {}\n\n\
          Contract N8: a notification click carries no instruction, so the client interprets no \
          argument that one could be smuggled in through.",
         found.join("\n  ")
@@ -259,6 +315,14 @@ fn the_scan_reads_what_it_claims_to() {
     assert_eq!(
         offending("x", &lines, &["CFBundleURLTypes"], false).len(),
         1
+    );
+    // A line that starts with `*` is code when it continues an expression, and a block comment
+    // that crosses lines is a comment on every one of them (issue #572).
+    let planted = "fn main() {\n    let n = 2\n        * std::env::args().count();\n    /* env::args\n    args_os */\n}";
+    assert_eq!(
+        offending("x", &rust_code_lines(planted), ARGUMENT_READERS, false),
+        vec!["x:3: names `env::args` — * std::env::args().count();".to_string()],
+        "the continuation line is read as code, and the block comment is not"
     );
     assert!(offending(
         "x",

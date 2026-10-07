@@ -151,6 +151,28 @@ fn the_first_snapshot_yields_no_claim_and_nothing_is_shown() {
 }
 
 #[test]
+fn a_change_made_with_no_window_open_is_shown_neither_then_nor_on_the_next_open() {
+    // US1 scenario 13 (FR-005, A13), issue #572: B changed into awaiting input while no window was
+    // open, so the service holds sequence 1 for it. The window opened next starts from that
+    // sequence: no claim on its `Welcome`, none on a later catalog repeating the same wait, and so
+    // no grant: a notification is shown only for a grant. The service's half is
+    // `a_change_with_no_window_open_reaches_the_next_window_only_as_its_starting_sequence`.
+    let mut state = repo_state();
+    let b = add_session(&mut state, REPO, SessionLocation::Default, "B");
+
+    let on_open = state.attention_on_welcome(&awaiting(b, 1), true);
+    let afterwards = state.attention_on_catalog_changed(&awaiting(b, 1), true);
+
+    assert_eq!(on_open, vec![], "the next open claims nothing");
+    assert_eq!(afterwards, vec![], "nor does the catalog that follows it");
+    assert_eq!(
+        state.attention_on_catalog_changed(&awaiting(b, 2), true),
+        vec![ClientMsg::AttentionClaim { session: b, seq: 2 }],
+        "precondition: a change made with the window open is still claimed"
+    );
+}
+
+#[test]
 fn without_a_grant_nothing_is_shown() {
     // U120 (FR-006a, N1): a claim is a request; only the service's grant raises a notification.
     let mut state = repo_state();

@@ -419,6 +419,22 @@ fn a_switcher_row_with_an_unread_count_keeps_its_height() {
          {}dp for both",
         density::MENU_ITEM_BASE,
     );
+    // The row's height is fixed, so it holds whatever the row holds. What shows a count that does
+    // not fit is the count itself, clamped or pushed out (F10, issue #572).
+    let row = MenuItem {
+        trailing_text: Some("3 running".to_string()),
+        trailing_mark: Some(2),
+        ..switcher_row("micold-ai-ide", true)
+    };
+    let mark: Element<'static, Message> = super::UnreadMark::new(roles())
+        .count(2)
+        .worded(true)
+        .muted()
+        .into();
+    assert!(
+        super::test_support::holds_whole(menu::item_column(vec![row], roles()), mark, ROOM),
+        "the unread count is not laid out whole inside the row"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
