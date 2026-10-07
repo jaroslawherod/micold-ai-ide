@@ -68,13 +68,17 @@ impl<'a, M: Clone + 'a> From<Snackbar<'a, M>> for Element<'a, M> {
             // enforcing silently stops existing. A one-line `body_medium` message plus 14dp of
             // padding comes to 48dp exactly, so this changes nothing today; it is here because a
             // shorter role or tighter padding would drop below it and nothing would look wrong.
+            //
+            // The row has no `spacing`, and must not get one. The spacer lays out 0dp wide but is
+            // still a child, and a row spaces every pair of children whatever their width, so any
+            // gap lands in front of the message, on top of the container's padding (BUG-017). The
+            // gap between the message and the action belongs to `Reflow`, below.
             Space::new().height(anatomy::snackbar::MIN_HEIGHT),
             Text::new(s.notification.message.clone(), TypeRole::Body, r)
                 .tint(r.inverse_on_surface)
                 .width(Length::Fill),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(anatomy::snackbar::PADDING_H);
+        .align_y(iced::Alignment::Center);
 
         let line: Element<'a, M> = match s.on_dismiss {
             // A text button in `inverse_primary`: the only accent that stays legible on the
@@ -121,7 +125,8 @@ impl<'a, M: Clone + 'a> From<Snackbar<'a, M>> for Element<'a, M> {
     }
 }
 
-/// The action keeps its width and its place inside the container, whatever the message (BUG-015).
+/// The action keeps its width and its place inside the container, whatever the message (BUG-015),
+/// and the message starts at the container's padding (BUG-017).
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +192,58 @@ mod tests {
             .expect("a dismissible snackbar lays out an action");
         let offset = content.bounds().position() - Point::ORIGIN;
         (node.bounds(), action.bounds() + offset)
+    }
+
+    /// Lay a snackbar out at `window` width and return how far its message starts from the
+    /// container's left edge.
+    ///
+    /// The message is the **last child** of the line that holds it: the container's content when
+    /// there is no action, and the lead of whatever pairs it with the action when there is. Reading
+    /// it that way leaves the check indifferent to what, if anything, sits before the text.
+    fn message_inset(message: &str, dismissible: bool, window: f32) -> f32 {
+        let notification = Notification::new(Level::Error, message);
+        let snackbar = Snackbar::new(&notification, roles());
+        let element: Element<'_, ()> = if dismissible {
+            snackbar.on_dismiss(()).into()
+        } else {
+            snackbar.into()
+        };
+        let node = layout_of(element, window);
+        let content = &node.children()[0];
+        let (line, line_x) = if dismissible {
+            let lead = &content.children()[0];
+            (lead, content.bounds().x + lead.bounds().x)
+        } else {
+            (content, content.bounds().x)
+        };
+        let text = line
+            .children()
+            .last()
+            .expect("a snackbar's line lays out its message");
+        line_x + text.bounds().x
+    }
+
+    /// §7.8 pads the container 16dp horizontally, so that is where the message starts — with or
+    /// without an action, on one line or wrapped (BUG-017).
+    #[test]
+    fn the_message_starts_at_the_containers_horizontal_padding() {
+        let cases = [
+            ("Created", true, 1200.0),
+            ("Created", false, 1200.0),
+            (LONG, true, 1200.0),
+            (LONG, true, 400.0),
+            (LONG, false, 1200.0),
+        ];
+        for (message, dismissible, window) in cases {
+            let inset = message_inset(message, dismissible, window);
+            assert!(
+                (inset - anatomy::snackbar::PADDING_H).abs() <= TOLERANCE,
+                "the message ({} chars, dismissible: {dismissible}, {window}dp window) starts \
+                 {inset}dp from the container's left edge; §7.8's horizontal padding is {}dp",
+                message.len(),
+                anatomy::snackbar::PADDING_H,
+            );
+        }
     }
 
     #[test]

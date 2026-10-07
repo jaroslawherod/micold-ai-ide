@@ -407,7 +407,7 @@ It is visible without the pointer being over the element and remains distinguish
 element is simultaneously hovered. On a button it is drawn only for focus that arrived by keyboard —
 a traversal, or a key the button answers; a pointer press moves focus without drawing either the
 outline or the layer (FR-022a). A key another element has already captured is not one the button answers
-(BUG-016).
+(BUG-017).
 
 ~~That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
 and chips cannot hold focus in the rendering stack — their status model has no focused state
@@ -854,7 +854,7 @@ surface — not a strip in the layout.
 | Container       | `inverse_surface`, elevation 3            |
 | Shape           | `extra_small` (4)                         |
 | Min height      | 48                                        |
-| Padding         | 16 horizontal, 14 vertical                |
+| Padding         | 16 horizontal, 14 vertical; the message starts at the leading padding, nothing before it (BUG-017) |
 | Message role    | `body_medium`, `inverse_on_surface`       |
 | Action label    | `label_large`, `inverse_primary`          |
 | Max width       | 600                                       |
