@@ -4,7 +4,7 @@ pub(crate) mod about;
 pub(crate) mod attach_dialog;
 pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
-mod changes;
+pub(crate) mod changes;
 pub(crate) mod confirm_agent_request;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_forget;

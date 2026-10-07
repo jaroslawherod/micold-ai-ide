@@ -371,7 +371,7 @@ fn open_discard_pending(state: &mut State) {
             worktree_dir: String::new(),
             comments: vec![ReviewComment {
                 id: CommentId::new(),
-                path: micold_core::review::RelPath::from_git("a.rs"),
+                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
                 side: micold_core::review::Side::New,
                 range: micold_core::review::LineRange::new(1, 1).unwrap(),
                 quote: vec!["a".into()],

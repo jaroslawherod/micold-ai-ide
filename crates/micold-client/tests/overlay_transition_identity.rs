@@ -182,13 +182,13 @@ fn no_two_snapshots_share_an_identity() {
 /// Nine until feature 027 turned Settings into a view (FR-026): a surface that does not float has
 /// no exit transition to remember, so it leaves `DIALOGS` and the count comes down with it. Nine
 /// again with `confirm_link_open`, the question a sandboxed file link asks before it opens
-/// (FR-018a).
+/// (FR-018a). Eleven with the Changes view's discard confirmation (feature 482).
 #[test]
 fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `DIALOGS`.
     assert_eq!(
         every_snapshot().len(),
-        10,
+        11,
         "a dialog was added or removed — update DIALOGS"
     );
 }
@@ -264,7 +264,7 @@ fn open_discard_pending(state: &mut State) {
             worktree_dir: String::new(),
             comments: vec![ReviewComment {
                 id: CommentId::new(),
-                path: micold_core::review::RelPath::from_git("a.rs"),
+                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
                 side: micold_core::review::Side::New,
                 range: micold_core::review::LineRange::new(1, 1).unwrap(),
                 quote: vec!["a".into()],

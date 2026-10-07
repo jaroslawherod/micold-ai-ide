@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M8 (T090–T097); M5–M7 commits are local: the plain push after the green raw gate was refused by the gate hook (no `mise run gate` record) (PR-body section for M7 in the scratchpad `pr-body-482-M7.md`)
+- **Next step**: M8 T097 visual pass (B13, B17), then scoped gate + review A (high) + review B + full gate; T090–T096 green locally
 
 ## Pull requests
 
@@ -110,8 +110,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 unit 1 (context cap). Done: red runs for T090–T092 recorded in the cycle log (all red for the right reason); implementation written but **not yet compiled or run**: core `EntryReview::clear_sent`/`discard_pending`; daemon `Reviews::{forget_worktree, prune_worktrees, forget_project}`, `ClearSent`/`DiscardPending` served in `apply_edit`, `DaemonState::forget_review_worktree` called from `ops::delete_worktree`, pruning in `DaemonState::refresh_worktrees` (only a dir discovery no longer lists *and* whose directory is gone), `forget_project` drops memory and `Catalog::forget_project` calls the new `ProjectStore::remove_reviews` (default `Ok`, `JsonFileStore` and the fake implement it); client `Msg::{ClearSentPressed, DiscardPendingPressed, DiscardConfirmed, DiscardCancelled}`, `OpenView.confirm_discard`, `tidy_actions`/`TidyActions`, `discard_prompt`, `ConfirmDiscardPendingDialog` (surface `confirm_discard_pending`, registered in `overlay/registry.rs` with `ui::changes::discard_dialog`), header buttons in `ui/changes.rs`; the four overlay guard tests (`overlay_registry`, `overlay_dispatch_ordering`, `overlay_dismissal_delta`, `overlay_transition_identity`) got a `confirm_discard_pending` row and an `open_discard_pending` helper. Old test binaries in target-shared/debug/deps were cleared (24G → 3.8G). branch-start.sh skipped: same branch, previous milestones unmerged (orchestrator's instruction).
-Next: build and run core `review::comment`, daemon `review_edit`, client `features_changes` + the four overlay tests + `surface_registration_cost` green (fix compile errors), record greens in the cycle log, tick T090–T095; then T096 (user guide), T097 visual pass B13/B17 (check that deleting a worktree closes its open view: `WorktreesListed` already does), scoped gate + review A (high) + review B (sonnet) + full gate per verify.md; PR-body section to scratchpad `pr-body-482-M8.md`.
+None.
 
 ## Open escalation
 

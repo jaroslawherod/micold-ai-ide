@@ -669,6 +669,12 @@ impl State {
             // The sandbox's state lives on the binary's `App` beside the daemon connection, for
             // the same reason: it is runtime, not pure state.
             // A pull request reading is the shell's to start (feature 040, shape B).
+            // The Changes view's discard confirmation is a registered dialog: the registry closes
+            // it (Escape, another dialog opening) by sending its cancellation here, and closing it
+            // is pure state with no effect to run.
+            Message::Changes(msg @ crate::features::changes::Msg::DiscardCancelled) => {
+                let _ = crate::features::changes::update(&mut self.changes, msg);
+            }
             Message::Connection(_)
             | Message::Sandbox(_)
             | Message::PrStatus(_)

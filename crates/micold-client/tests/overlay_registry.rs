@@ -299,17 +299,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape.
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482).
     assert_eq!(
         dialogs().len(),
-        12,
+        13,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        26,
-        "twelve dialogs plus nothing open, each with the filter panel open and closed"
+        28,
+        "thirteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -853,7 +853,7 @@ fn open_discard_pending(state: &mut State) {
             worktree_dir: String::new(),
             comments: vec![ReviewComment {
                 id: CommentId::new(),
-                path: micold_core::review::RelPath::from_git("a.rs"),
+                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
                 side: micold_core::review::Side::New,
                 range: micold_core::review::LineRange::new(1, 1).unwrap(),
                 quote: vec!["a".into()],

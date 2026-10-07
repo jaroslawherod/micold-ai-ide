@@ -188,6 +188,26 @@ that entry in every window, including while a new session is starting for it. Ea
 delivered once: a second send started meanwhile is refused, and the comments of the first are
 not sent twice.
 
+### Clearing and discarding
+
+Two buttons in the view's header tidy the list once a round of feedback is done:
+
+- **Clear sent** removes every sent comment of the entry at once and keeps the pending ones. It is
+  unavailable while the entry has no sent comments.
+- **Discard pending…** asks "Discard *n* pending comments? This cannot be undone." **Discard**
+  removes every pending comment of the entry; **Cancel** keeps them. It is unavailable while the
+  entry has no pending comments, and while a send of the entry is under way.
+
+Both change the entry's comments in every window open on the project.
+
+### When a worktree is removed
+
+Removing a worktree removes its comments with it: deleting it from the sidebar closes its Changes
+view and deletes its comments, and a worktree removed outside the app (for example with
+`git worktree remove`) loses its comments the next time the project's worktree list is refreshed.
+Its comments do not reappear in any other entry. Removing the project from the app deletes the
+comments of all its entries.
+
 ## The base line
 
 Under the header, **Compared with** `<branch>` **at** `<short commit>` names what the worktree is
