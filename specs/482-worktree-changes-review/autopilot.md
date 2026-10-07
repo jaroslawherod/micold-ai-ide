@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M5 (T064–T075): core done (T064, T065, T068, T069); next T070–T072 daemon send, T066 test
+- **Next step**: milestone M5 (T064–T075): continue from *Handover*
 
 ## Pull requests
 
@@ -91,7 +91,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 unit 1 handed over at the 150k cap (2026-10-07).
+
+- **Done**: T064, T065, T068, T069 (core: `review::prompt::{build, EntryKind}`, `EntryReview::{begin_send, finish_send, abort_send, sending}` + `SendSnapshot`, `ReviewError::{InSend, Busy, NothingPending}` (daemon maps InSend/Busy → `Busy`, NothingPending → `InvalidInput`), `review::target::pick_target`), committed a8ac02cd. T066 written and red (`crates/micold-daemon/tests/review_send.rs`, 4 of 5 fail on the placeholder; cycle log row). Prompt intro is one line (contract's wrap is only the doc's).
+- **Next**: T070–T072, then T067/T073 (client), T074 docs, T075 visual pass, then verify.md (scoped gate + review A high, review B, full gate, PR-body section to the scratchpad `pr-body-482-M5.md`).
+- **Design notes for T070–T072** (not built yet):
+  - `ops.rs`: `pub enum Undelivered { NotRunning, AsksTrust(AiCli), NoBracketedPaste, WriteFailed(io::Error) }` with a user message (W9: `Refused`, write error `Internal`); `pub fn write_submission(pty, text, require_bracketed) -> Result<(), Undelivered>` (bracketed check + `encode_submission` + `write_input`); `pub async fn type_submission(state, session, text)` = primary PTY alive + trust check (`cli_would_ask_trust` in `blocking`, cwd: Default → project path, worktree → discovered worktree path else `<project>/.claude/worktrees/<dir>`, as `mcp/tools.rs::send_session_input` computes it) + `write_submission(.., true)`. MCP keeps its pre-confirm trust check (policy order) and calls `write_submission(.., false)` in `send_session_input` and `deliver_first_prompt`, so its behaviour is unchanged (record as a Decision).
+  - `state.rs`: `LiveSession.last_active: Uptime` = `clock::now()` in both `LiveSession {` constructors (≈3039, ≈4092), in `session_input` (before the held-start return), in `note_activity` when `changed`, in `drain_signals` when the spinner changes it. `running_sessions_in(project, dir) -> Vec<(SessionId, Uptime)>`: workspace records of `project`, not archived, `TerminalMode::AiCli`, location matches (`""` = Default), live with primary `is_alive()`, not in `inner.starting`.
+  - `review.rs` (`Reviews`): `begin_send(catalog, project, dir, kind, outdated) -> Result<(SendSnapshot, DaemonMsg), Refusal>`, `finish_send(catalog, project, dir, &snap, at) -> DaemonMsg` (writes the file; a failed write logs and keeps memory sent), `abort_send(project, dir) -> DaemonMsg`; `changed()` reports `review.sending()`; extract the file-write helper from `apply_edit`. Logs name entry, count, outcome, never the prompt (W12).
+  - `state.rs`: `pub async fn review_send(self: &Arc<Self>, project, dir, outdated) -> Result<OperationResult, Refusal>`: W2 check as `review_edit`; `begin_send` + broadcast under the lock; candidates → `pick_target`; none → `abort_send` + broadcast + `Refused` ("no session is running in this entry", until T077); `ops::type_submission`; Ok → `finish_send` + broadcast + `ReviewSent { session, started: false }`; Err → `abort_send` + broadcast + refusal.
+  - `server.rs` ≈1162: replace the placeholder with a spawned task that awaits `review_send` and `state.send(id, …)` the answer; retire the placeholder assertion in `crates/micold-daemon/tests/diff_layout_setting.rs` (grep `ReviewSend`).
+- **Env**: disk tight — run `$SCRATCHPAD/prune.sh` (keeps the newest linked test binary per crate in `target-shared/debug/deps`) before builds; `$SCRATCHPAD/t.sh <log> cargo …` runs detached, hold on `^T_EXIT=`.
 
 ## Open escalation
 
