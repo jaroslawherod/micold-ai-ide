@@ -87,6 +87,7 @@ mod picker_parity;
 mod picker_press;
 mod progress;
 mod resize_handle;
+mod review_comment;
 mod ripple;
 mod scrollable;
 mod section_list;
@@ -137,6 +138,7 @@ mod terminal_pane;
 #[cfg(test)]
 mod test_support;
 mod text;
+mod text_area;
 mod text_field;
 /// The filled field's anatomy, checked in-crate — `material` is `pub(crate)`.
 #[cfg(test)]
@@ -186,7 +188,9 @@ pub use split_action::SplitAction;
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;
+pub use review_comment::{CardState, ReviewCommentCard};
 pub use tag::Tag;
+pub use text_area::TextArea;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
