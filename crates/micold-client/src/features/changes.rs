@@ -13,6 +13,8 @@ use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::diff::{FileDiff, LoadedDiff};
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
+use micold_core::settings::DiffLayout;
+use micold_core::tokens::Rgb;
 
 /// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9).
 pub const DEFAULT_ENTRY_NOTE: &str =
@@ -78,6 +80,9 @@ pub struct State {
     /// A read the root started while interpreting an outcome, which only the shell can run. Taken
     /// by the shell right after the message that caused it (`State::take_changes_effect`).
     pub pending: Option<Effect>,
+    /// The diff layout in force: the service-owned `Settings::diff_layout`, so it outlives a file,
+    /// the view and a restart (D1, FR-006, R12).
+    pub layout: DiffLayout,
 }
 
 /// What this feature is told.
@@ -130,6 +135,10 @@ pub enum Msg {
     SessionSelected,
     /// The project's worktrees are now these `dir_name`s (V3): a view of one that is gone closes.
     WorktreesListed(BTreeSet<String>),
+    /// The user chose a layout on the diff pane's toggle (D1).
+    LayoutChosen(DiffLayout),
+    /// The layout in force, from `Welcome` or `SettingsChanged` (R12).
+    LayoutInForce(DiffLayout),
 }
 
 /// What the shell must do.
@@ -164,11 +173,21 @@ pub enum Effect {
         /// Read it even over the size limits (the user pressed Show diff).
         force_large: bool,
     },
+    /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
+    SetLayout(DiffLayout),
 }
 
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
     match msg {
+        Msg::LayoutChosen(layout) => {
+            state.layout = layout;
+            Effect::SetLayout(layout)
+        }
+        Msg::LayoutInForce(layout) => {
+            state.layout = layout;
+            Effect::None
+        }
         Msg::Opened { entry } => {
             state.open = Some(OpenView {
                 entry,
@@ -490,4 +509,23 @@ pub fn can_pick(view: &OpenView) -> bool {
             ..
         })
     )
+}
+
+/// How many bytes of a line are syntax-coloured: a minified line cannot stall the highlighter, and
+/// the rest of it shows in the plain text colour (R10).
+pub const SPAN_CAP: usize = 2_000;
+
+/// One line's spans as a highlighter gave them (a colour, or none for "the plain text colour"),
+/// kept as the view paints them: coloured, non-empty, inside the first [`SPAN_CAP`] bytes. Plain
+/// text, as an unknown extension highlights, has no colour and so keeps no spans (R10).
+pub fn cap_spans(
+    spans: impl IntoIterator<Item = (std::ops::Range<usize>, Option<Rgb>)>,
+) -> Vec<(std::ops::Range<usize>, Rgb)> {
+    spans
+        .into_iter()
+        .filter_map(|(range, colour)| {
+            let range = range.start..range.end.min(SPAN_CAP);
+            Some((range.clone(), colour?)).filter(|_| !range.is_empty())
+        })
+        .collect()
 }

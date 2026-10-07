@@ -73,7 +73,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 part 1 (unit context over 150k). Done and committed: T041+T044 (`review::diff::{Cell, SideRow,
+side_by_side_rows, SideIndex}`; `SideIndex` mirrors `UnifiedIndex` for D5), core `Spans`
+(`LoadedDiff.spans: Spans { light, dark: SchemeSpans { old, new: SideSpans } }`, every git
+constructor `Spans::default()`), T042 tests green with the reducer half of T045
+(`changes::State.layout`, `Msg::LayoutChosen/LayoutInForce`, `Effect::SetLayout`,
+`settings::diff_layout_set`, `changes::cap_spans` + `SPAN_CAP`). Cycle log rows recorded.
+
+Next: T043 tests (diff_view side-by-side geometry; contrast) → T045 shell half: in
+`shell/changes.rs` `Effect::SetLayout` is a no-op stub (`Effect::None | Effect::SetLayout(_)`):
+send `features::settings::diff_layout_set(req, l)` with `PendingOp::SettingsSet` (as
+`shell/persist.rs` does), and in `shell/daemon_sync.rs` `adopt_daemon_settings` apply
+`update_changes(Msg::LayoutInForce(settings.diff_layout))`; highlight both sides in the ReadDiff
+background closure for both schemes. Plan for colouring: a lib module (e.g.
+`ui/material/syntax.rs`, render-free features cannot name iced) highlighting with
+`iced::highlighter::Highlighter` (token = extension; `InspiredGitHub` light, `Base16Ocean` dark),
+line truncated to `SPAN_CAP` before highlighting, then `cap_spans`; plain text gives no colour so
+an unknown extension keeps no spans (test it there). Raw theme colours (comments) fall below
+4.5:1, so map each colour toward the scheme's `on_surface` until it meets 4.5:1 on `surface`,
+`diff_added`, `diff_removed`; T043's contrast test sweeps a colour grid through that mapping plus a
+highlighted Rust sample. T046 `DiffView::new(.., layout, ..).spans(&SchemeSpans)` side by side via
+`SideIndex`, rich text over the row tint; Unified/Side by side `ToggleChip`s in `ui/changes.rs`
+`diff_pane` sending `Msg::LayoutChosen`, layout from `state.changes.layout`. Then T047–T049,
+verify (review A high, B, visual pass), full gate, PR-body section M3.
 
 ## Open escalation
 
