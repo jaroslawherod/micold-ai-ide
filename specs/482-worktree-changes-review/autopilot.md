@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M7 (T081–T089) verify: round-2 review A (sonnet), T089 visual pass, review B, full gate; M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
+- **Next step**: milestone M7 (T081–T089) verify: full gate, PR-body section; M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
 
 ## Pull requests
 
@@ -93,6 +93,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M7 (code-review high, 7bc6c029..HEAD) | 1 | d07862c24c2bdb7220d13123681afca799b78974:7ce47a8bcb738cc21f24ee8b58262cc24b29b72c | CHANGES: F1 MAJOR open (a New composer keeps its pick after the refresh drops it; Save then does nothing when the lines are gone); F2 MAJOR fixed (`Debouncer` `MAX_WAIT` 1 s); F3 MINOR fixed (`GIT_OPTIONAL_LOCKS=0` on review reads); F4 MINOR open (watch setup failures swallowed, no log); F5 MINOR open (`&GLOBAL[..3]` order dependence) |
 | Gate M7 (full, raw commands, 2nd commit after 7ce47a8b, before the F2/F3 fix) | full | — | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
 | Review A M7 fixes (unit 3) | — | — | F1 fixed red first: an unplaced New composer keeps its text, shows above the diff with a note and Save disabled, a new pick re-places it; a dropped selection closes it. F4 fixed (setup failures logged to stderr). F5 fixed (`CHECK_IGNORE_GLOBAL`) |
+| Review A M7 (code-review high, sonnet, fix diff) | 2 | ae613a12fcf468dfd126b32bf9db60ca5b589736:de6531e0d2e66603cb8338420d0ee12a5a37faec | CLEAN, no findings (F1–F5 fixed) |
+| Review B M7 (conformance, sonnet) | 1 | ae613a12fcf468dfd126b32bf9db60ca5b589736:de6531e0d2e66603cb8338420d0ee12a5a37faec | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate runs both commands) |
+| Visual pass M7 (T089) | 1 | de6531e0 | B12 edit, commit, C4 unplaced composer, ignored file pass (light); SC-004 20/20 within 2 s, max 0.74 s (`visual-pass/m7.md`); no defect |
 
 ## Declined review findings
 

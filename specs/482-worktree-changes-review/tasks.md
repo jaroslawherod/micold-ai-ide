@@ -192,7 +192,7 @@ comments can be cleared, pending ones discarded, and a removed worktree takes it
 - [X] T086 [US4] Implement the watch subscription in `crates/micold-client/src/shell/changes_watch.rs` (new): keyed by entry root, `notify::RecommendedWatcher` over the entry directory and its git metadata (own git dir `HEAD`, `index`; common dir `refs/`, `packed-refs`), debounced by `watch::Debouncer`, filtered by `relevant_paths` and `GitCli::ignored`, emitting `Msg::Changed` (the subscription holds no decision of its own); registered in `crates/micold-client/src/shell/subscriptions.rs` only while the view is open (R9)
 - [X] T087 [US4] Add refresh handling and outdated derivation to `crates/micold-client/src/features/changes.rs` and the Outdated tag to the cards in `crates/micold-client/src/ui/changes.rs`, until T083 passes
 - [X] T088 [P] [US4] Extend `docs/user-guide/reviewing-changes.md`: automatic refresh and outdated comments
-- [ ] T089 [US4] Visual pass of quickstart B12 on Linux, timing 20 file edits from a terminal and recording how many showed within 2 s (SC-004: at least 19); evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [X] T089 [US4] Visual pass of quickstart B12 on Linux, timing 20 file edits from a terminal and recording how many showed within 2 s (SC-004: at least 19); evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 ### Part B — tidying and removal (scenarios 3, 5)
 
