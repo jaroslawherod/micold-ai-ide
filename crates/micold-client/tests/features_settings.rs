@@ -1631,7 +1631,13 @@ fn the_layout_in_force_comes_from_the_service_and_outlives_the_view() {
     assert_eq!(effect, ChangesEffect::None, "an echo sends nothing back");
     assert_eq!(state.layout, DiffLayout::SideBySide);
     let entry = SessionLocation::Worktree("wt".into());
-    let _ = changes::update(&mut state, ChangesMsg::Opened { entry });
+    let _ = changes::update(
+        &mut state,
+        ChangesMsg::Opened {
+            project: std::path::PathBuf::from("/p"),
+            entry,
+        },
+    );
     let _ = changes::update(&mut state, ChangesMsg::Closed);
     assert_eq!(
         state.layout,

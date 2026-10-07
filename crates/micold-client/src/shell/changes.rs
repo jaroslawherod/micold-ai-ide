@@ -58,6 +58,23 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             }
             Task::none()
         }
+        Effect::ReviewEdit {
+            project,
+            worktree_dir,
+            edit,
+        } => {
+            // Service-owned (FR-020): the daemon stores it and pushes `ReviewChanged` to every
+            // window, this one included; a refusal surfaces through the pending op.
+            crate::shell::daemon_sync::send_op(app, PendingOp::ReviewEdit, |req| {
+                micold_core::protocol::messages::ClientMsg::ReviewEdit {
+                    req,
+                    project,
+                    worktree_dir,
+                    edit,
+                }
+            });
+            Task::none()
+        }
         Effect::ReadList {
             seq,
             entry,

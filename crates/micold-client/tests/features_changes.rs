@@ -48,13 +48,23 @@ fn list(paths: &[&str]) -> ChangeList {
     }
 }
 
+fn project() -> std::path::PathBuf {
+    std::path::PathBuf::from("/projects/p")
+}
+
 fn worktree() -> SessionLocation {
     SessionLocation::Worktree("feat-a".into())
 }
 
 /// Open the view of `entry` and return the read it asked for.
 fn open(state: &mut State, entry: SessionLocation) -> u64 {
-    match changes::update(state, Msg::Opened { entry }) {
+    match changes::update(
+        state,
+        Msg::Opened {
+            project: project(),
+            entry,
+        },
+    ) {
         Effect::ReadList { seq, .. } => seq,
         other => panic!("opening reads the list, got {other:?}"),
     }
@@ -78,7 +88,13 @@ fn ready(paths: &[&str]) -> State {
 #[test]
 fn opening_an_entry_reads_its_list_with_both_toggles_on() {
     let mut state = State::default();
-    let effect = changes::update(&mut state, Msg::Opened { entry: worktree() });
+    let effect = changes::update(
+        &mut state,
+        Msg::Opened {
+            project: project(),
+            entry: worktree(),
+        },
+    );
     let Effect::ReadList {
         seq,
         entry,
@@ -687,4 +703,325 @@ fn plain_text_as_an_unknown_extension_highlights_keeps_no_spans() {
         vec![(3..5, KEYWORD)],
         "empty and uncoloured spans are dropped"
     );
+}
+
+// ---- Comments (M4, T053, contracts/changes-view.md C1–C4, L2) ----
+
+use micold_client::features::changes::{
+    file_comments, pending_counts, ComposerTarget, Pick, ReviewView,
+};
+use micold_core::protocol::messages::ReviewEditOp;
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+use micold_core::review::{LineRange, Side};
+
+/// Old `a b c x`, new `a B c d`: context 1 and 3, `b`→`B` at 2, `x`→`d` at 4.
+fn commentable() -> LoadedDiff {
+    LoadedDiff {
+        diff: parse_unified(b"@@ -1,4 +1,4 @@\n a\n-b\n+B\n c\n-x\n+d\n"),
+        old: SideLines::from_bytes(b"a\nb\nc\nx\n"),
+        new: SideLines::from_bytes(b"a\nB\nc\nd\n"),
+        spans: Default::default(),
+    }
+}
+
+/// A view of `feat-a` listing `a.rs` and `b.rs`, with `b.rs` selected and its diff `diff` shown.
+fn showing(diff: LoadedDiff) -> State {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(diff),
+        },
+    );
+    state
+}
+
+fn gutter(state: &mut State, old: Option<u32>, new: Option<u32>, extend: bool) -> Effect {
+    changes::update(state, Msg::GutterPressed { old, new, extend })
+}
+
+fn pick(state: &State) -> Option<Pick> {
+    state.open.as_ref().unwrap().pick
+}
+
+fn comment(p: &str, side: Side, start: u32, end: u32, state: CommentState) -> ReviewComment {
+    ReviewComment {
+        id: CommentId::new(),
+        path: path(p),
+        side,
+        range: LineRange::new(start, end).unwrap(),
+        quote: (start..=end).map(|n| format!("line {n}")).collect(),
+        text: format!("about {p}:{start}"),
+        state,
+        created: 1,
+    }
+}
+
+fn push(state: &mut State, dir: &str, comments: Vec<ReviewComment>) {
+    changes::update(
+        state,
+        Msg::ReviewChanged {
+            project: project(),
+            worktree_dir: dir.into(),
+            comments,
+            sending: false,
+        },
+    );
+}
+
+/// C1. A gutter click picks one line; shift-click on the same side extends to a range.
+#[test]
+fn a_gutter_click_picks_a_line_and_shift_click_extends_it() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    assert_eq!(
+        pick(&state),
+        Some(Pick {
+            side: Side::New,
+            anchor: 2,
+            head: 2
+        })
+    );
+    gutter(&mut state, None, Some(4), true);
+    let picked = pick(&state).unwrap();
+    assert_eq!((picked.side, picked.anchor, picked.head), (Side::New, 2, 4));
+    assert_eq!(picked.range(), LineRange::new(2, 4).unwrap());
+    gutter(&mut state, None, Some(1), true);
+    assert_eq!(
+        pick(&state).unwrap().range(),
+        LineRange::new(1, 2).unwrap(),
+        "extending above the anchor keeps the range in order"
+    );
+}
+
+/// C1. A click on the other side starts a new pick there, even with shift: a pick never spans
+/// sides.
+#[test]
+fn a_click_on_the_other_side_starts_a_new_pick() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    gutter(&mut state, Some(4), None, true);
+    assert_eq!(
+        pick(&state),
+        Some(Pick {
+            side: Side::Old,
+            anchor: 4,
+            head: 4
+        })
+    );
+}
+
+/// C1. A context line counts as the new side, numbered in the new version.
+#[test]
+fn a_context_line_counts_as_the_new_side() {
+    let mut state = showing(commentable());
+    gutter(&mut state, Some(2), None, false);
+    gutter(&mut state, Some(3), Some(3), true);
+    assert_eq!(
+        pick(&state),
+        Some(Pick {
+            side: Side::New,
+            anchor: 3,
+            head: 3
+        }),
+        "the context line is on the new side, so it starts a new pick"
+    );
+}
+
+/// D3, C1. A binary file allows no pick.
+#[test]
+fn a_binary_file_allows_no_pick() {
+    let mut state = showing(loaded(FileDiff::Binary));
+    gutter(&mut state, None, Some(1), false);
+    assert_eq!(pick(&state), None);
+}
+
+/// C2, US2 s2. Add comment opens the composer under the pick; Save sends `Add` with the quote
+/// taken from the loaded lines, then closes the composer and drops the pick.
+#[test]
+fn save_sends_the_comment_with_the_quote_from_the_loaded_lines() {
+    let mut state = showing(commentable());
+    gutter(&mut state, Some(4), None, false);
+    gutter(&mut state, Some(2), None, true);
+    assert_eq!(changes::update(&mut state, Msg::AddComment), Effect::None);
+    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    assert!(
+        matches!(composer.target, ComposerTarget::New(p) if p.range() == LineRange::new(2, 4).unwrap())
+    );
+    assert_eq!(composer.text, "");
+    changes::update(
+        &mut state,
+        Msg::ComposerEdited("  removed too much ".into()),
+    );
+    let effect = changes::update(&mut state, Msg::ComposerSaved);
+    assert_eq!(
+        effect,
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::Add {
+                path: "b.rs".into(),
+                side: Side::Old,
+                start: 2,
+                end: 4,
+                quote: vec!["b".into(), "c".into(), "x".into()],
+                text: "  removed too much ".into(),
+            },
+        }
+    );
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(view.composer, None);
+    assert_eq!(view.pick, None);
+}
+
+/// C2. Save with nothing written sends nothing and keeps the composer open.
+#[test]
+fn save_with_blank_text_sends_nothing() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    changes::update(&mut state, Msg::AddComment);
+    changes::update(&mut state, Msg::ComposerEdited(" \n ".into()));
+    assert_eq!(
+        changes::update(&mut state, Msg::ComposerSaved),
+        Effect::None
+    );
+    assert!(state.open.as_ref().unwrap().composer.is_some());
+    changes::update(&mut state, Msg::ComposerCancelled);
+    assert_eq!(state.open.as_ref().unwrap().composer, None);
+}
+
+/// US2 s7. Edit opens the composer with the comment's text and Save sends `SetText`; Delete sends
+/// `Delete`.
+#[test]
+fn edit_and_delete_send_set_text_and_delete() {
+    let mut state = showing(commentable());
+    let c = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
+    let id = c.id;
+    push(&mut state, "feat-a", vec![c.clone()]);
+    changes::update(&mut state, Msg::EditComment(id));
+    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    assert_eq!(composer.target, ComposerTarget::Edit(id));
+    assert_eq!(composer.text, c.text);
+    changes::update(&mut state, Msg::ComposerEdited("better".into()));
+    assert_eq!(
+        changes::update(&mut state, Msg::ComposerSaved),
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::SetText {
+                id,
+                text: "better".into()
+            },
+        }
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::DeleteComment(id)),
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::Delete { id },
+        }
+    );
+}
+
+/// C4. The composer and its text survive a re-read of the list and of the diff.
+#[test]
+fn the_composer_survives_a_list_and_diff_reread() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    changes::update(&mut state, Msg::AddComment);
+    changes::update(&mut state, Msg::ComposerEdited("half a thought".into()));
+    let before = state.open.as_ref().unwrap().composer.clone();
+    let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
+        panic!("re-read");
+    };
+    let Effect::ReadDiff { seq, .. } = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Ok(list(&["a.rs", "b.rs"])),
+        },
+    ) else {
+        panic!("diff re-read");
+    };
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(commentable()),
+        },
+    );
+    assert!(before.is_some());
+    assert_eq!(state.open.as_ref().unwrap().composer, before);
+}
+
+/// FR-021. A `ReviewChanged` push replaces that entry's comments only.
+#[test]
+fn a_review_push_replaces_only_that_entrys_comments() {
+    let mut state = showing(commentable());
+    let a = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
+    let d = comment("x.rs", Side::New, 1, 1, CommentState::Pending);
+    push(&mut state, "feat-a", vec![a.clone()]);
+    push(&mut state, "", vec![d.clone()]);
+    push(&mut state, "feat-a", vec![]);
+    let key = |dir: &str| (project(), dir.to_string());
+    assert_eq!(
+        state.reviews.get(&key("feat-a")),
+        Some(&ReviewView::default())
+    );
+    assert_eq!(
+        state.reviews.get(&key("")).map(|r| r.comments.clone()),
+        Some(vec![d])
+    );
+}
+
+/// L2. Each listed file has its pending-comment count; sent comments and other entries' do not
+/// count.
+#[test]
+fn the_list_counts_each_files_pending_comments() {
+    let mut state = showing(commentable());
+    push(
+        &mut state,
+        "feat-a",
+        vec![
+            comment("b.rs", Side::New, 2, 2, CommentState::Pending),
+            comment("b.rs", Side::Old, 4, 4, CommentState::Pending),
+            comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 }),
+            comment("a.rs", Side::New, 9, 9, CommentState::Pending),
+        ],
+    );
+    push(
+        &mut state,
+        "",
+        vec![comment("b.rs", Side::New, 3, 3, CommentState::Pending)],
+    );
+    let counts = pending_counts(&state);
+    assert_eq!(counts.get(&path("a.rs")), Some(&1));
+    assert_eq!(counts.get(&path("b.rs")), Some(&2));
+}
+
+/// C3. The selected file's comments are placed under the row of their last line; one whose anchor
+/// is not in the current diff goes to the "Not in the current diff" group.
+#[test]
+fn comments_not_in_the_diff_are_grouped_apart() {
+    let mut state = showing(commentable());
+    let on_new = comment("b.rs", Side::New, 1, 2, CommentState::Pending);
+    let on_old = comment("b.rs", Side::Old, 4, 4, CommentState::Pending);
+    let gone = comment("b.rs", Side::New, 40, 40, CommentState::Pending);
+    let other_file = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
+    push(
+        &mut state,
+        "feat-a",
+        vec![on_new.clone(), on_old.clone(), gone.clone(), other_file],
+    );
+    let placed = file_comments(&state);
+    assert_eq!(placed.under(Side::New, 2), vec![&on_new]);
+    assert_eq!(placed.under(Side::Old, 4), vec![&on_old]);
+    assert!(
+        placed.under(Side::New, 1).is_empty(),
+        "under the last line only"
+    );
+    assert_eq!(placed.not_in_diff, vec![&gone]);
 }

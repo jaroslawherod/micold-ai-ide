@@ -152,6 +152,9 @@ pub enum PendingOp {
     /// actually applies it — this variant exists only so a failure reaches the user and a
     /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
     SettingsSet,
+    /// A `ReviewEdit` (feature 482): the result arrives as `ReviewChanged`; this exists so a
+    /// refusal or a failed write reaches the user.
+    ReviewEdit,
     /// An `AttachDiscover` (feature 582), carrying the project so a report that outlived its
     /// dialog, or was asked for another project, is dropped by the reducer.
     AttachDiscover {
@@ -199,6 +202,7 @@ impl PendingOp {
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
+            PendingOp::ReviewEdit => "save the review comment".into(),
             PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
             PendingOp::AttachOfferDiscover { .. } => "look for worktrees to attach".into(),
             PendingOp::AttachOfferApply => "attach the found worktrees".into(),
@@ -1293,6 +1297,23 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             instance,
             reason,
         } => on_shell_open_failed(app, session, instance, reason),
+        // Feature 482: every project's pushes are kept, keyed by project and entry, so switching
+        // project shows each entry's own comments (FR-021).
+        DaemonMsg::ReviewChanged {
+            project,
+            worktree_dir,
+            comments,
+            sending,
+        } => {
+            let _ = app
+                .core
+                .update_changes(micold_client::features::changes::Msg::ReviewChanged {
+                    project,
+                    worktree_dir,
+                    comments,
+                    sending,
+                });
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
