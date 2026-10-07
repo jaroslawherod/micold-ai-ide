@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M5 (T064–T075)
+- **Next step**: milestone M5 (T064–T075): core done (T064, T065, T068, T069); next T070–T072 daemon send, T066 test
 
 ## Pull requests
 
