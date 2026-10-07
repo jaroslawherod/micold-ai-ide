@@ -33,3 +33,13 @@ rows), each failing at its assertion.
 | Review A M2 F1–F3 in `GitCli::file_diff`: a glob-character path read literally, an untracked symlink diffed as its target path, an untracked file over the byte limit reports its lines | T033 (fix) | `review_git`: 3 new of 17 FAILED (`a[1].rs` also showed `a1.rs`; symlink read through to "do not show"; `TooLarge { added: 0 }`) | `review_git`: 17 passed |
 | Review A M2 F4: `UnifiedIndex` finds each unified row by hunk start (binary search), so `DiffView` builds no per-line `Vec` per redraw | T035 (fix) | `review::diff::tests::the_unified_index_finds_each_row_without_listing_them`: E0433 `UnifiedIndex` not found (red as a compile failure) | `cargo test -p micold-core --lib review::diff`: 14 passed; `micold-client --lib diff_view` 5 passed |
 | Review A M2 F5, F6: a failed list re-read drops the selection and its diff; selecting the shown file again keeps its diff and scroll unless the read failed | T036 (fix) | `features_changes`: 2 new of 22 FAILED (`selected` left `Some("b.rs")`; re-select answered `ReadDiff` instead of `None`) | `features_changes`: 22 passed |
+
+## M3 — side by side, syntax colouring, kept layout (T041–T049)
+
+Reds run against stubs that compile and answer "nothing" (empty rows, `None`, no spans), each
+failing at its assertion.
+
+| Behaviour | Tasks | Red (stub) | Green |
+|---|---|---|---|
+| `side_by_side_rows`: header first, context on both sides, a removed run paired index by index with the added run after it, the shorter side padded with `None`; the same changed lines and numbers as `unified_rows` | T041 → T044 | `cargo test -p micold-core --lib review::diff::tests::side_by_side`: 2 of 2 FAILED (`a hunk starts with its header: []`; `left: []` against the 7 unified lines) | `cargo test -p micold-core --lib review::diff`: 16 passed |
+| `SideIndex` finds each side-by-side row by run (binary search), so `DiffView` builds no per-line `Vec` per redraw (D5, as M2's `UnifiedIndex`) | T044 | `review::diff::tests::the_side_index_finds_each_row_without_listing_them` FAILED: `left: 0` `right: 8` (stub `len` 0) | `review::diff`: 17 passed |
