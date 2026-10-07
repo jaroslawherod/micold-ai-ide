@@ -152,7 +152,7 @@ session delivers one prompt to the entry's running session.
 - [x] T072 [US2] Implement `review::send` for a running target in `crates/micold-daemon/src/review.rs` (W6: snapshot, prompt, `sending`, push; W7 running part: `pick_target` over `running_sessions_in`; W8; W9 for an undelivered running target) and replace the `ReviewSend` placeholder in `crates/micold-daemon/src/server.rs`; with no running session it answers `Refused` until T077; until T066 passes. The prompt text is never logged (W12)
 - [x] T073 [US2] Add the send state and messages to `crates/micold-client/src/features/changes.rs` and the toolbar **Send to session (n)** button and snackbars to `crates/micold-client/src/ui/changes.rs` (S1, S2), until T067 passes
 - [x] T074 [P] [US2] Extend `docs/user-guide/reviewing-changes.md`: Send to session, what the prompt holds, which session receives it, sent comments
-- [ ] T075 [US2] Visual pass of quickstart B9 with a session already running in `wt`, and B10; evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T075 [US2] Visual pass of quickstart B9 with a session already running in `wt`, and B10; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 **Checkpoint**: the review loop works end to end when the entry's session runs.
 
