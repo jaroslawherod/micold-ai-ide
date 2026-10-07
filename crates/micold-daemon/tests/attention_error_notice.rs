@@ -6,20 +6,18 @@
 //! driven as `supervision_giveup.rs` drives it: every respawn runs the platform shell, which this
 //! binary points at a command that exits 1. Nothing else in this binary reads that variable.
 
+mod attention_support;
+
+use attention_support::{connect, idle_process, next_frame, session_id, Window};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{
-    ClientInstance, ClientMsg, DaemonMsg, SessionSummary, WireLifecycle,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionSummary, WireLifecycle};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -31,12 +29,7 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-use uuid::Uuid;
 
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-const OWED: Duration = Duration::from_secs(10);
 const NONCE: u64 = 0x613e;
 
 /// Point the platform shell, which every respawn runs, at a command that exits 1.
@@ -54,10 +47,6 @@ fn respawns_crash() {
             std::env::set_var("COMSPEC", &script);
         }
     });
-}
-
-fn session_id(n: u128) -> SessionId {
-    SessionId::from_uuid(Uuid::from_u128(n))
 }
 
 const A: u128 = 0xA;
@@ -183,19 +172,6 @@ impl Service {
     }
 }
 
-fn idle_process(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
-}
-
 fn process_exiting(id: SessionId, status: u8) -> PtySession {
     #[cfg(unix)]
     let mut cmd = {
@@ -223,44 +199,6 @@ fn wait_dead(pty: &PtySession) {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
-}
-
-/// Connect a window and take its `Welcome`.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { .. })) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    window
-}
-
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
-    tokio::time::timeout(OWED, window.next())
-        .await
-        .expect("the service answers in time")
-        .map(|frame| frame.expect("a well-formed frame"))
 }
 
 /// Report the window's view, then everything up to the `Pong` (discarded).
@@ -386,38 +324,48 @@ async fn a_reported_error_sends_one_notice_and_a_second_sends_none() {
     assert!(!after.unread, "an error does not mark the session unread");
 }
 
-/// US1.5, C9: an ending that is no error, a user stop and a close send nothing.
+/// US1.5, C9: an ending the CLI reports as no error sends nothing.
 #[tokio::test(flavor = "multi_thread")]
-async fn endings_without_an_error_send_nothing() {
+async fn an_ending_that_is_no_error_sends_nothing() {
     let (service, _live) = Service::copilot(None);
     let mut window = connect(&service.state, "window").await;
     reports(&mut window, true, None).await;
+
     service.note(ActivityEvent::Ended {
         reason: "routine".into(),
         error: false,
     });
-    assert_eq!(notices(&mut window).await, []);
 
-    let (service, _live) = Service::copilot(None);
+    assert_eq!(notices(&mut window).await, []);
+}
+
+/// US1.5, C9: a user stop is no error. The session ends through `stop_session` alone, and the
+/// supervision tick that follows finds nothing to report.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_user_stop_sends_nothing() {
+    let (service, live) = Service::copilot(None);
     let mut window = connect(&service.state, "window").await;
     reports(&mut window, true, None).await;
+
     let state = Arc::clone(&service.state);
     tokio::task::spawn_blocking(move || state.stop_session(session_id(A)))
         .await
         .expect("the stop runs");
-    service.note(ActivityEvent::Ended {
-        reason: "stopped".into(),
-        error: true,
-    });
-    assert_eq!(
-        notices(&mut window).await,
-        [],
-        "a stopped session is not live"
-    );
+    wait_dead(&live);
+    service.state.supervise_exited_sessions();
 
+    assert!(service.state.live_session(session_id(A)).is_none());
+    assert_eq!(notices(&mut window).await, [], "a user stop is no error");
+}
+
+/// US1.5, C9: a closed session is not live, so even an error reported after the close sends
+/// nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_close_sends_nothing() {
     let (service, _live) = Service::copilot(None);
     let mut window = connect(&service.state, "window").await;
     reports(&mut window, true, None).await;
+
     for process in service.state.remove_session(session_id(A)) {
         let _ = process.kill();
     }
@@ -425,6 +373,7 @@ async fn endings_without_an_error_send_nothing() {
         reason: "closed".into(),
         error: true,
     });
+
     assert_eq!(
         notices(&mut window).await,
         [],

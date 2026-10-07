@@ -10,7 +10,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::attention::NotificationKind;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
+use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, DaemonSettings};
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
@@ -95,7 +95,8 @@ impl Service {
     }
 }
 
-fn idle_process(id: SessionId) -> PtySession {
+/// A process that stays alive and prints nothing: `cat` (`cmd /q` on Windows).
+pub fn idle_process(id: SessionId) -> PtySession {
     #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
     #[cfg(windows)]
@@ -110,6 +111,15 @@ fn idle_process(id: SessionId) -> PtySession {
 
 /// Connect a window and take its `Welcome`.
 pub async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
+    connect_with_settings(state, build).await.0
+}
+
+/// Connect a window and take its `Welcome`. Returns the window and the settings the `Welcome`
+/// reported.
+pub async fn connect_with_settings(
+    state: &Arc<DaemonState>,
+    build: &str,
+) -> (Window, DaemonSettings) {
     let (server_io, client_io) = tokio::io::duplex(64 * 1024);
     tokio::spawn(micold_daemon::server::serve_connection(
         Arc::clone(state),
@@ -133,13 +143,13 @@ pub async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
         .await
         .expect("the hello is sent");
     match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { .. })) => {}
+        Some(Frame::Control(DaemonMsg::Welcome { settings, .. })) => (window, settings),
         other => panic!("expected Welcome, got {other:?}"),
     }
-    window
 }
 
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
+/// The window's next frame, or `None` once the service closed the connection.
+pub async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
     tokio::time::timeout(OWED, window.next())
         .await
         .expect("the service answers in time")

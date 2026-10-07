@@ -255,6 +255,14 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `notifier` in place of the system's (feature 613, T067): a
+    /// dispatch test reads what the window asked it to show.
+    #[cfg(test)]
+    pub(crate) fn with_notifier(mut self, notifier: Arc<dyn DesktopNotifier>) -> Self {
+        self.notifier = notifier;
+        self
+    }
+
     /// The same capabilities, with `tooling` in place of the real `gh` (feature 034).
     #[cfg(test)]
     pub(crate) fn with_issue_tooling(mut self, tooling: IssueTooling) -> Self {

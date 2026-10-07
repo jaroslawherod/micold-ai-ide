@@ -10,21 +10,21 @@
 //! 30 s, and a long turn moves the service's turn clock past it rather than sleeping (T071), so
 //! no turn depends on how fast the machine is.
 
+mod attention_support;
+
+use attention_support::{
+    connect_with_settings as connect, idle_process, next_frame, session_id, Window,
+};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{
-    ClientInstance, ClientMsg, DaemonMsg, DaemonSettings, WireLifecycle,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings, WireLifecycle};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -36,10 +36,6 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-use uuid::Uuid;
-
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 /// How long a window waits for a message the service owes it.
 const OWED: Duration = Duration::from_secs(10);
@@ -47,10 +43,6 @@ const OWED: Duration = Duration::from_secs(10);
 const THRESHOLD: Duration = Duration::from_secs(30);
 /// Long enough past [`THRESHOLD`] that a turn timed across it is a long task.
 const PAST_THRESHOLD: Duration = Duration::from_secs(31);
-
-fn session_id(n: u128) -> SessionId {
-    SessionId::from_uuid(Uuid::from_u128(n))
-}
 
 const A: u128 = 0xA;
 const B: u128 = 0xB;
@@ -236,20 +228,6 @@ fn respawns_crash() {
     });
 }
 
-/// A process that stays alive and prints nothing: `cat` (`cmd /q` on Windows).
-fn idle_process(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
-}
-
 /// A process that exits at once with status 1.
 fn process_exiting(id: SessionId) -> PtySession {
     #[cfg(unix)]
@@ -267,45 +245,6 @@ fn process_exiting(id: SessionId) -> PtySession {
     cmd.arg("exit 1");
     cmd.cwd(std::env::temp_dir());
     PtySession::spawn(id, cmd, 100, None).expect("a process that exits starts")
-}
-
-/// Connect a window and take its `Welcome`. It attaches to no project. Returns the window and the
-/// settings the `Welcome` reported.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> (Window, DaemonSettings) {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { settings, .. })) => (window, settings),
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-}
-
-/// The window's next frame, or `None` once the service closed the connection.
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
-    tokio::time::timeout(OWED, window.next())
-        .await
-        .expect("the service answers in time")
-        .map(|frame| frame.expect("a well-formed frame"))
 }
 
 /// Send `msg`, then a `Ping`, and return every control message the service sent before the `Pong`.

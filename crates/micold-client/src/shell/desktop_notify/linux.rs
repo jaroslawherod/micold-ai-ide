@@ -564,7 +564,7 @@ mod tests {
     fn notification() -> DesktopNotification {
         DesktopNotification {
             kind: NotificationKind::NeedsPermission,
-            title: "Fix the parser is waiting for input".to_string(),
+            title: "Fix the parser needs permission".to_string(),
             body: "repo \u{2014} Parser work".to_string(),
             project: PathBuf::from("/repo"),
             session: SessionId::new(),
@@ -581,7 +581,7 @@ mod tests {
                 app_name: "Micold AI IDE",
                 replaces_id: 0,
                 app_icon: "",
-                summary: "Fix the parser is waiting for input".to_string(),
+                summary: "Fix the parser needs permission".to_string(),
                 body: "repo \u{2014} Parser work".to_string(),
                 actions: vec!["default".to_string(), "Open".to_string()],
                 hints: vec![
@@ -1091,13 +1091,13 @@ mod tests {
         // is plain text by the specification.
         let request = notify_request(&DesktopNotification {
             kind: NotificationKind::NeedsPermission,
-            title: "R&D <x> is waiting for input".to_string(),
+            title: "R&D <x> needs permission".to_string(),
             body: "R&D \u{2014} <x>".to_string(),
             project: PathBuf::from("/repo"),
             session: SessionId::new(),
         });
         assert_eq!(request.body, "R&amp;D \u{2014} &lt;x&gt;");
-        assert_eq!(request.summary, "R&D <x> is waiting for input");
+        assert_eq!(request.summary, "R&D <x> needs permission");
     }
 
     #[test]

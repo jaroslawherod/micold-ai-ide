@@ -4273,4 +4273,124 @@ pub(crate) mod tests {
 
         assert_eq!(drain_sent(&mut rx), Vec::<ClientMsg>::new());
     }
+
+    // --- Feature 613, T067: the window's dispatch of a grant and of an error notice -----------
+
+    /// A notifier that keeps what it was asked to show.
+    #[derive(Default)]
+    struct RecordingNotifier(
+        std::sync::Mutex<Vec<micold_client::features::attention::DesktopNotification>>,
+    );
+
+    impl micold_client::features::attention::DesktopNotifier for RecordingNotifier {
+        fn show(
+            &self,
+            notification: micold_client::features::attention::DesktopNotification,
+        ) -> Result<(), micold_client::features::attention::NotifyError> {
+            self.0.lock().unwrap().push(notification);
+            Ok(())
+        }
+    }
+
+    /// An app that knows one session, "B", of `/repo`, showing through `notifier`.
+    fn app_with_session_b(notifier: std::sync::Arc<RecordingNotifier>) -> (App, SessionId) {
+        let mut app = base_app();
+        app.caps = std::mem::replace(
+            &mut app.caps,
+            crate::shell::capabilities::Capabilities::real(),
+        )
+        .with_notifier(notifier);
+        app.core
+            .workspace
+            .projects
+            .push(micold_core::project::Project {
+                path: PathBuf::from("/repo"),
+                display_name: "repo".to_string(),
+                is_git_repo: true,
+                availability: micold_core::project::Availability::Available,
+            });
+        app.core.workspace.active = Some(PathBuf::from("/repo"));
+        let mut session = micold_core::session::Session::start_new(
+            micold_core::session::SessionLocation::Default,
+            AiCli::ClaudeCode,
+        );
+        session.label = SessionLabel::Named("B".to_string());
+        let id = session.id;
+        app.core
+            .workspace
+            .sessions
+            .entry(PathBuf::from("/repo"))
+            .or_default()
+            .push(session);
+        (app, id)
+    }
+
+    /// Feed `event` through the window's dispatch and run the task it returns to its end, as
+    /// iced's executor would; return what reached the notifier.
+    fn shown_after(
+        event: impl FnOnce(SessionId) -> DaemonMsg,
+    ) -> Vec<micold_client::features::attention::DesktopNotification> {
+        use iced::futures::StreamExt;
+        let notifier = std::sync::Arc::new(RecordingNotifier::default());
+        let (mut app, b) = app_with_session_b(std::sync::Arc::clone(&notifier));
+        let task = on_daemon_event(&mut app, event(b));
+        if let Some(stream) = iced_runtime::task::into_stream(task) {
+            let runtime = tokio::runtime::Runtime::new().expect("a tokio runtime");
+            let _: Vec<_> = runtime.block_on(stream.collect());
+        }
+        let shown = notifier.0.lock().unwrap().clone();
+        shown
+    }
+
+    #[test]
+    fn a_needs_permission_grant_reaches_the_notifier_with_its_kind_and_title() {
+        // Finding 1 of the 613 audit: `attention_notify` calls `State::attention_granted`
+        // directly, so a dispatch arm that ignored the grant's kind went unseen.
+        let shown = shown_after(|b| DaemonMsg::AttentionGranted {
+            session: b,
+            seq: 1,
+            kind: micold_core::attention::NotificationKind::NeedsPermission,
+        });
+        assert_eq!(shown.len(), 1, "one notification: {shown:?}");
+        assert_eq!(
+            shown[0].kind,
+            micold_core::attention::NotificationKind::NeedsPermission
+        );
+        assert_eq!(shown[0].title, "B needs permission");
+    }
+
+    #[test]
+    fn each_granted_kind_reaches_the_notifier_as_that_kind() {
+        use micold_core::attention::NotificationKind;
+        for kind in [
+            NotificationKind::NeedsPermission,
+            NotificationKind::LongTaskFinished,
+            NotificationKind::TurnFinished,
+        ] {
+            let shown = shown_after(|b| DaemonMsg::AttentionGranted {
+                session: b,
+                seq: 1,
+                kind,
+            });
+            assert_eq!(
+                shown.iter().map(|n| n.kind).collect::<Vec<_>>(),
+                [kind],
+                "a {kind:?} grant"
+            );
+        }
+    }
+
+    #[test]
+    fn a_session_error_notice_reaches_the_notifier_as_a_session_error() {
+        let shown = shown_after(|b| DaemonMsg::SessionErrorNotice {
+            project: PathBuf::from("/repo"),
+            session: b,
+        });
+        assert_eq!(shown.len(), 1, "one notification: {shown:?}");
+        assert_eq!(
+            shown[0].kind,
+            micold_core::attention::NotificationKind::SessionError
+        );
+        assert_eq!(shown[0].title, "B stopped with an error");
+    }
 }

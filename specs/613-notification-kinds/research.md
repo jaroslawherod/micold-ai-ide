@@ -198,6 +198,16 @@ backgrounds; a bare glyph in one colour cannot. `tiny-skia` and `ttf-parser` are
 build (iced, and a client dev-dependency); `png-format` adds only the `png` crate (image-rs,
 MIT/Apache-2.0, actively maintained, the de facto Rust PNG encoder).
 
+**FR-017's reading (close, T072).** "Distinct when drawn in a single colour at 16 by 16 pixels" is
+read as the glyph itself drawn at 16×16, its ink box spanning the square: the size the Settings row
+draws it at, and the case where shape alone must tell the kinds apart. The distinctness gate
+(`tests/notification_icon.rs`, over `glyph_mask(kind, 16)`) checks that. The notification tile is
+not a single-colour drawing: it is the form FR-017's second clause governs (3:1 against white and
+black), checked on `render(kind, size)`, and the OS shows it larger than 16 px. Drawn whole at
+16×16, the tile's glyph spans 62.5 % (10 px), where **Session error** and **Long task finished**
+differ in only 13 of 256 pixels (cycle 13); the title names the kind there in any case (FR-016). No
+gate is added over `render(kind, 16)`.
+
 **Alternatives rejected.**
 - *Commit pre-rendered PNGs with a Python generator* (as `assets/icon/generate.py` does for the app
   icon): a second copy of each glyph that can drift from `icons.rs`, and a test still needs to decode

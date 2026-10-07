@@ -4,6 +4,9 @@
 //! Same harness as `attention_events.rs`: `server::serve_connection` over in-memory duplexes, one
 //! per simulated window, all sharing one `DaemonState`.
 
+mod attention_support;
+
+use attention_support::kinds;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -393,16 +396,6 @@ fn service_613(sessions: &[SessionId]) -> Service {
     service
 }
 
-/// Every grant in `msgs`, with its kind.
-fn kinds(msgs: &[DaemonMsg]) -> Vec<(SessionId, u64, NotificationKind)> {
-    msgs.iter()
-        .filter_map(|m| match m {
-            DaemonMsg::AttentionGranted { session, seq, kind } => Some((*session, *seq, *kind)),
-            _ => None,
-        })
-        .collect()
-}
-
 impl Service {
     fn unread(&self, session: SessionId) -> bool {
         self.state
@@ -531,10 +524,10 @@ async fn a_helper_agent_finishing_changes_nothing() {
     let b = session_id(0xB);
     let service = service_613(&[b]);
     let mut window = connect(&service.state, "window").await;
-    let (receiver, listener) =
-        HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test-613"))
-            .await
-            .expect("the receiver binds");
+    let hooks_dir = tempfile::tempdir().expect("a directory for the hook receiver");
+    let (receiver, listener) = HookReceiver::bind(hooks_dir.path().to_path_buf())
+        .await
+        .expect("the receiver binds");
     let token = receiver.token_for(b);
     let addr = listener.local_addr().expect("an address").to_string();
     tokio::spawn(micold_daemon::hooks::serve(
@@ -584,13 +577,23 @@ async fn a_helper_agent_finishing_changes_nothing() {
     );
 }
 
-/// SC-001: 20 short turns, 5 long ones and 5 short ones with one permission each give 5 **Long
-/// task finished** and 5 **Needs permission** grants and no other, out of 35 attention events.
+/// SC-001: 20 short turns, 5 long ones, 5 short ones with one permission each and one ending in
+/// an error give 5 **Long task finished** and 5 **Needs permission** grants and 1 **Session
+/// error** notice, 11 notifications and no other: none for the 25 short ends (35 attention
+/// events, the error counting none).
 #[tokio::test]
-async fn the_sc_001_sequence_gives_ten_grants_of_their_kinds() {
+async fn the_sc_001_sequence_gives_eleven_notifications_of_their_kinds() {
     let b = session_id(0xB);
     let service = service_613(&[b]);
     let mut window = connect(&service.state, "window").await;
+    // The window reports its view, so an error notice has a window to go to (C13).
+    window
+        .send(Frame::Control(ClientMsg::WindowView {
+            focused: true,
+            in_view: None,
+        }))
+        .await
+        .expect("the view report is sent");
     // A window claims each event as its snapshot reaches it, as the client does.
     let mut granted = Vec::new();
     let mut seen = 0;
@@ -618,12 +621,41 @@ async fn the_sc_001_sequence_gives_ten_grants_of_their_kinds() {
         service.signal(b, HookKind::Stop);
         claim_new(&mut window, &mut granted).await;
     }
-    assert_eq!(service.attention_seq(b), 35);
+    // The last turn ends in an error the CLI reports (US1.4, C8).
+    service.signal(b, HookKind::UserPromptSubmit);
+    if service.state.note_activity(
+        b,
+        ActivityEvent::Ended {
+            reason: "upstream request failed".into(),
+            error: true,
+        },
+    ) {
+        service.state.broadcast_catalog();
+    }
+    // Everything the service sends up to the `Pong`, as a window that claims again would see it.
+    let after = claims(&mut window, b, service.attention_seq(b)).await;
+    granted.extend(kinds(&after));
+    let notices = after
+        .iter()
+        .filter(|m| matches!(m, DaemonMsg::SessionErrorNotice { session, .. } if *session == b))
+        .count();
+    assert_eq!(
+        service.attention_seq(b),
+        35,
+        "the error counts no attention event"
+    );
 
     let count = |kind| granted.iter().filter(|(_, _, k)| *k == kind).count();
     assert_eq!(count(NotificationKind::LongTaskFinished), 5);
     assert_eq!(count(NotificationKind::NeedsPermission), 5);
+    assert_eq!(
+        count(NotificationKind::TurnFinished),
+        0,
+        "the 25 short ends notify nothing"
+    );
     assert_eq!(granted.len(), 10, "no other grant: {granted:?}");
+    assert_eq!(notices, 1, "one Session error notice");
+    assert_eq!(granted.len() + notices, 11, "11 notifications in all");
 }
 
 /// FR-018: with the master switch off, events are counted as before and nothing is granted.
