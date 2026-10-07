@@ -57,6 +57,9 @@ fn failed(args: &[&str], output: &Output) -> io::Error {
 fn run_read(dir: &Path, global: &[&str], args: &[&str], stdin: Option<&str>) -> io::Result<Output> {
     let mut command = Command::new("git");
     local_only(&mut command);
+    // A read never refreshes the index: that write is a change the view's own watch would see,
+    // so each refresh would ask for another (review A M7 F3).
+    command.env("GIT_OPTIONAL_LOCKS", "0");
     no_window(&mut command)
         .arg("-C")
         .arg(dir)

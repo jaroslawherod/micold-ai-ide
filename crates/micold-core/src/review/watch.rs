@@ -9,6 +9,10 @@ use std::time::{Duration, Instant};
 /// How long the watch waits without a new event before it releases a batch (R9).
 pub const QUIET: Duration = Duration::from_millis(300);
 
+/// The longest a batch waits from its first event, however busy the entry stays (a build writing
+/// ignored files): well inside FR-010's two seconds.
+pub const MAX_WAIT: Duration = Duration::from_millis(1000);
+
 /// The paths of `paths` that can change what the view shows, in their order.
 ///
 /// `entry_root` is the entry's directory; `git_dirs` its git metadata directories (its own git
@@ -52,10 +56,12 @@ fn is_git_state(relative: &Path) -> bool {
         || relative.starts_with("refs")
 }
 
-/// Collects a burst of changed paths and releases them once no event came for [`QUIET`].
+/// Collects a burst of changed paths and releases them once no event came for [`QUIET`], or
+/// [`MAX_WAIT`] after the burst's first event when events keep coming.
 #[derive(Debug, Default)]
 pub struct Debouncer {
     pending: BTreeSet<PathBuf>,
+    first: Option<Instant>,
     last: Option<Instant>,
 }
 
@@ -66,6 +72,7 @@ impl Debouncer {
             return;
         }
         self.pending.extend(paths);
+        self.first.get_or_insert(now);
         self.last = Some(now);
     }
 
@@ -75,13 +82,15 @@ impl Debouncer {
         if now < deadline {
             return None;
         }
+        self.first = None;
         self.last = None;
         Some(std::mem::take(&mut self.pending).into_iter().collect())
     }
 
-    /// When the pending batch will be ready, if there is one.
+    /// When the pending batch will be ready, if there is one: [`QUIET`] after its last event, but
+    /// no later than [`MAX_WAIT`] after its first.
     pub fn deadline(&self) -> Option<Instant> {
-        self.last.map(|last| last + QUIET)
+        Some((self.last? + QUIET).min(self.first? + MAX_WAIT))
     }
 }
 
@@ -220,5 +229,25 @@ mod tests {
         debouncer.push(Vec::new(), start);
         assert_eq!(debouncer.deadline(), None);
         assert_eq!(debouncer.ready(start + QUIET), None);
+    }
+
+    #[test]
+    fn a_stream_that_never_goes_quiet_is_released_after_the_longest_wait() {
+        // A build writing every 100 ms (ignored files pass `relevant_paths`) must not starve a
+        // real edit: the batch goes after MAX_WAIT from its first event (review A M7 F2).
+        let start = Instant::now();
+        let mut debouncer = Debouncer::default();
+        let mut released = None;
+        for tick in 0..30u32 {
+            let now = start + Duration::from_millis(100) * tick;
+            debouncer.push(paths(&["/repo/target/x"]), now);
+            if let Some(batch) = debouncer.ready(now) {
+                released = Some((now - start, batch));
+                break;
+            }
+        }
+        let (after, batch) = released.expect("released while events keep coming");
+        assert_eq!(after, MAX_WAIT);
+        assert_eq!(batch, paths(&["/repo/target/x"]));
     }
 }
