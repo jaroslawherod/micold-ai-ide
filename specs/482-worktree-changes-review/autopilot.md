@@ -90,6 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M6 (T080) | 1 | bfbf1d01 | B16, B9 (no session running), B11 pass in dark (`visual-pass/m6.md`); no defect found |
 | Gate M6 (full, raw commands, 63348a61) | full | b422fbc72864e7dcff6613b32d96ab6d793785bb:63348a61962fb962bba842c326d2c6b013319c6c | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
 | Review B M5 (conformance, sonnet) | 1 | 74cbb069cdfc59ee86ddfa6f81e310a536652ab8:ace6b8b2dd36d05440a48a13e72326b7e2f3f3a3 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate ran it: review::prompt 11/11, review_send 5/5) |
+| Review A M7 (code-review high, 7bc6c029..HEAD) | 1 | d07862c24c2bdb7220d13123681afca799b78974:7ce47a8bcb738cc21f24ee8b58262cc24b29b72c | running |
 
 ## Declined review findings
 
@@ -103,8 +104,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 unit 1 (context cap) handed over. Done and committed: T081–T085, T083, T087 (core `watch::relevant_paths`/`Debouncer`/`QUIET`, `ReviewComment::is_outdated`, `GitCli::ignored` + `GitCli::git_dirs` as inherent methods with real-git tests, reducer `Msg::Changed` + `OpenView.outdated` + pick drop + `ReviewSend.outdated`, card `.outdated(view.outdated.contains(..))`); cycle log has the reds. Branch-start was skipped: the whole run is one branch PR #624 and a rebase would need a force push.
-Next: T086 — add `ignored`/`git_dirs` to the `Git` trait (`crates/micold-core/src/git.rs`: GitCli delegates, FakeGit answers empty / no dirs), then `crates/micold-client/src/shell/changes_watch.rs` (new; `Subscription::run_with` keyed by (entry root, git dirs) like `daemon::connection`, `iced::stream::channel` + `notify::RecommendedWatcher` (pattern: `micold-daemon/src/event_log.rs:43`), canonicalise the root, `Debouncer` with `deadline`, `relevant_paths`, then `ignored` on the non-git-dir survivors, emit `Message::Changes(Msg::Changed)`), registered in `shell/subscriptions.rs` only while `app.core.changes.open` is some (R9; check `tests/idle_subscriptions.rs` for the idle guard pattern). Then T088 docs, T089 visual pass (B12, 20 edits within 2 s), then verify.md (scoped gate + review A high, review B, full gate), PR-body section `pr-body-482-M7.md`.
+None.
 
 ## Open escalation
 
