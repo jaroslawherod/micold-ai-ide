@@ -16,6 +16,12 @@
 
 use crate::support::covered_states::covered_states;
 use crate::support::layout::{self as lay, LayoutRecord};
+use iced::advanced::widget::Tree;
+use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
+use iced::{keyboard, window, Event, Point, Rectangle, Size};
+use micold_client::app::Message;
+use micold_client::features::settings::Msg as SettingsMsg;
+use micold_core::attention::NotificationKind;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::spacing;
 
@@ -49,16 +55,9 @@ fn indented(records: &[LayoutRecord], row: &LayoutRecord) -> bool {
     })
 }
 
-#[test]
-fn the_kind_rows_and_the_threshold_sit_indented_under_the_master_switch() {
-    let renderer = lay::renderer();
-    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
-    let (_, records) = covered_states()
-        .iter()
-        .zip(all.iter())
-        .find(|(c, _)| c.name == ENVIRONMENT)
-        .unwrap_or_else(|| panic!("no covered state named {ENVIRONMENT}"));
-
+/// The one run of indented rows in the Environment page: its column, the index of its first row
+/// among the column's children, and its rows.
+fn indented_run(records: &[LayoutRecord]) -> (Vec<usize>, usize, Vec<&LayoutRecord>) {
     // Every run of consecutive indented siblings, under any parent.
     let mut runs: Vec<(Vec<usize>, usize, Vec<&LayoutRecord>)> = Vec::new();
     for parent in records.iter().filter(|r| r.layer == lay::Layer::Base) {
@@ -85,7 +84,20 @@ fn the_kind_rows_and_the_threshold_sit_indented_under_the_master_switch() {
             .map(|(p, s, r)| (p, s, r.len()))
             .collect::<Vec<_>>()
     );
-    let (column, start, run) = &runs[0];
+    runs.remove(0)
+}
+
+#[test]
+fn the_kind_rows_and_the_threshold_sit_indented_under_the_master_switch() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let (_, records) = covered_states()
+        .iter()
+        .zip(all.iter())
+        .find(|(c, _)| c.name == ENVIRONMENT)
+        .unwrap_or_else(|| panic!("no covered state named {ENVIRONMENT}"));
+
+    let (column, start, run) = &indented_run(records);
     assert_eq!(run.len(), 5, "four kind rows and the threshold field");
     assert!(*start > 0, "the run follows a row");
 
@@ -136,5 +148,147 @@ fn the_kind_rows_and_the_threshold_sit_indented_under_the_master_switch() {
                 row.height
             );
         }
+    }
+}
+
+/// The Environment page's state with the master switch set to `on`.
+fn environment(on: bool) -> lay::StateUnderTest {
+    let covered = covered_states()
+        .iter()
+        .find(|c| c.name == ENVIRONMENT)
+        .unwrap_or_else(|| panic!("no covered state named {ENVIRONMENT}"));
+    let mut under = (covered.build)();
+    under
+        .state
+        .settings
+        .settings_draft
+        .as_mut()
+        .expect("the covered state opens Settings")
+        .environment
+        .desktop_notifications = on;
+    under
+}
+
+/// Hand `events` to the page, one after another with the cursor at `at`, and return what it
+/// published.
+fn publish(under: &lay::StateUnderTest, at: Point, events: &[Event]) -> Vec<Message> {
+    let renderer = lay::renderer();
+    let mut element = lay::view_of(under);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, lay::WINDOW),
+    );
+    let viewport = Rectangle::with_size(lay::WINDOW);
+    let mut messages = Vec::new();
+    // The page mounts with an entrance and takes no input until it has run.
+    let origin = std::time::Instant::now();
+    let frames: Vec<Event> = (0..lay::SETTLE_FRAMES * 2)
+        .map(|f| Event::Window(window::Event::RedrawRequested(origin + lay::FRAME * f)))
+        .collect();
+    for event in frames.iter().chain(events) {
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            &mut tree,
+            event,
+            Layout::new(&node),
+            mouse::Cursor::Available(at),
+            &renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &viewport,
+        );
+    }
+    messages
+}
+
+/// The first leaf under `row`, following first children: a kind row's box.
+fn first_leaf<'a>(records: &'a [LayoutRecord], row: &'a LayoutRecord) -> &'a LayoutRecord {
+    let mut at = row;
+    while let Some(child) = children(records, &at.path).first() {
+        at = child;
+    }
+    at
+}
+
+fn centre(row: &LayoutRecord) -> Point {
+    Point::new(row.x + row.width / 2.0, row.y + row.height / 2.0)
+}
+
+const CLICK: [Event; 2] = [
+    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+    Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+];
+
+/// S2, US2.5, FR-012: a click on a kind row toggles that kind, and a click in the threshold field
+/// followed by a digit edits it, only while Desktop notifications is on. Off, the rows still show
+/// their stored values (they are laid out as with it on) but take no input.
+#[test]
+fn the_kind_rows_and_the_threshold_take_input_only_while_the_master_switch_is_on() {
+    let renderer = lay::renderer();
+    for on in [true, false] {
+        let under = environment(on);
+        let records = lay::resolve(lay::view_of(&under), &renderer);
+        let (_, _, run) = indented_run(&records);
+        assert_eq!(
+            run.len(),
+            5,
+            "four kind rows and the threshold field (on: {on})"
+        );
+
+        let kind_rows = run.iter().enumerate().filter(|(i, _)| *i != 3);
+        for (row, kind) in kind_rows.zip(NotificationKind::ALL) {
+            let published = publish(&under, centre(first_leaf(&records, row.1)), &CLICK);
+            let toggled: Vec<_> = published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Settings(SettingsMsg::NotificationKindToggled(k, v)) => Some((*k, *v)),
+                    _ => None,
+                })
+                .collect();
+            let stored = under
+                .state
+                .settings
+                .settings_draft
+                .as_ref()
+                .expect("Settings is open")
+                .environment
+                .notification_kinds
+                .is_on(kind);
+            if on {
+                assert_eq!(toggled, vec![(kind, !stored)], "a click toggles {kind:?}");
+            } else {
+                assert!(
+                    published.is_empty(),
+                    "with the master switch off a click on {kind:?} publishes nothing, got {published:?}"
+                );
+            }
+        }
+
+        let mut typed = CLICK.to_vec();
+        typed.push(Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character("5".into()),
+            modified_key: keyboard::Key::Character("5".into()),
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Digit5),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::default(),
+            text: Some("5".into()),
+            repeat: false,
+        }));
+        let edits: Vec<_> = publish(&under, centre(run[3]), &typed)
+            .into_iter()
+            .filter(|m| {
+                matches!(
+                    m,
+                    Message::Settings(SettingsMsg::LongTaskThresholdChanged(_))
+                )
+            })
+            .collect();
+        assert_eq!(
+            edits.len(),
+            usize::from(on),
+            "typing into the threshold field edits it only with the master switch on (on: {on})"
+        );
     }
 }

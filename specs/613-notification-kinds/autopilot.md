@@ -65,6 +65,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 | M4 A (code-review high, claude -p) | 1 | 91e5bd7cfaa7f8100f9a4993640b60a0c5b3719a:2cb52cc722e2ccc8c7a103bd044f58379dacece6 | CHANGES: F1 MAJOR (macOS UNNotificationAttachment moves the attached file, so the run's shared icon is gone after the first banner) fixed: per-banner copy in temp dir (`attachable_copy`) + 2 tests; F2 MINOR (`png` swallowed encode errors) fixed: returns io::Result; F3 MINOR (premultiply round trip) fixed: shared `draw`; F4 MINOR (render per Linux notification) not fixed |
 | M4 B (conformance, sonnet, claude -p) | 1 | 91e5bd7cfaa7f8100f9a4993640b60a0c5b3719a:2cb52cc722e2ccc8c7a103bd044f58379dacece6 | CLEAN (F1 MINOR distinctness mask span: kept, see Decisions; F2 MINOR guide block detached the bullet list: moved; F3 MINOR = A F2, fixed). Reviewer could not run Verify (sandbox) |
 | M4 A (code-review high, sonnet, claude -p) | 2 | 442821189a78a1aa4e2a8974cc00c28da1ac68b8:3725f4361ffb1102e600cb62ac4592f4b2d70cca | CLEAN (F1 MINOR: a refused macOS banner left its per-banner copy in the temp dir; fixed: removed on send error) |
+| Close (tests and docs, claude -p) | 1 | d33d06eb06a53e001981a7286a8f3ee18b6c5072:0c2b4a1d354ae5b07bf3a86fd26f1f514ced362f | CLEAN (F1, F2 MINOR fixed, prose only; F3 MINOR `advance_turn_clock` comment = T080, left open) |
 
 ## CI fixes
 
@@ -92,9 +93,7 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-- **Done** (not pushed: no full gate yet): part 2 (merge of main, T068, T071, reds T059/T033/T058). Part 3: T069 client reds (T034/T035/T060 failed under mutants; T036's source-scan stayed green → covered by T075), T067 (daemon_sync dispatch tests + `Capabilities::with_notifier`; M15 mutant now caught), T072 (FR-017 reading in research.md R7), T073 (SC-001 eleven notifications incl. the error notice), T074 (split into three tests, user stop through `stop_session` + supervise), T075 gate (`tests/gates/notification_kind_rows_sit_under_the_switch.rs` in the `layout_snapshot` binary, green), T076 (shared `attention_support` helpers, tempdir hook receiver, linux fixture titles). Clippy daemon+client `--all-targets -D warnings` clean. Cycle 14 in `tdd/cycle-log.md` records all of it.
-- **Next**: T075 red (reverse `NotificationKind::ALL` in `ui/settings/environment.rs:177`, run `cargo test -p micold-client --test layout_snapshot notification_kind`, expect the gate to fail, restore; log in cycle 14), then tick T075 and reword its task text (gate lives in `tests/gates/`, not `settings_sections.rs`). T070 `tdd/test-list.md`. Then speckit-tdd-verify (inline) until PASS, review of the close diff (fresh reviewer via `claude -p --agent autopilot-reviewer`), full gate (raw commands, CARGO_INCREMENTAL=0), record gate, push, PR body `$SCRATCHPAD/pr-613-body-close.md`, spec Status Closed, ledger Phase done.
-- **Note**: `claude -p --agent autopilot-worker` cannot edit files here; do the edits in the unit. Reviewers (read-only) work.
+None.
 
 ## Open escalation
 
@@ -104,9 +103,12 @@ None. (Disk escalation resolved: fresh container with ~30 GB free.)
 
 - Merged origin/main (4c106e28): main's BUG-442 took protocol 29 → 30, so 613's bumps are 30 → 31 → 32 → 33.
 - speckit-tdd-verify round 1 at f8f07f58: FAIL (`tdd/verification.md`); remediation T067–T076 added (e2fd99ed).
+- Full gate at 0c2b4a1d (tree 993db760): fmt, clippy core + workspace, `cargo test --workspace` green but for the 6 root-only permission tests, `scripts/tests/*.test.sh` green; recorded and pushed.
+- T075 red recorded, T070 `tdd/test-list.md` written. speckit-tdd-verify round 2: FAIL on finding 14 only (master-off rows had no behavioural test); Phase 9 T077–T081 added. T077–T079 done (input test in the `layout_snapshot` gate, reds in cycle 15). Round 3: PASS_WITH_GAPS (permanent history gaps 5, 15; LOW 17, 19–21 = T080, T081 open).
 
 ## Follow-ups not done
 
+- T080 (LOW, finding 17): `advance_turn_clock` is `pub` in production builds; gate it behind a test-support feature or test the spinner path. T081 (LOW, findings 19–21): test function names in `test-list.md`, `attention_support` in `attention_claims.rs`, fold `the_threshold_is_one_minute`. Left open: tdd-verify passes without them.
 - M1 review A F1: Claude Code turn that, after a granted permission, ends with PostToolUse then Stop (no further PreToolUse) stays `AwaitingInput` from the Notification, so its end is no attention event (010 FSM; pre-dates 613). Candidate: PostToolUse after AwaitingInput → Working.
 - `scripts/tests/autopilot.test.sh` on a full disk (mktemp fails) falls back to running its git fixtures in the real repo (checked out and committed onto local `main` during the M4 gate). The script should abort when `mktemp -d` fails. Not this milestone's to fix.
 - Local `main` / `stash@{0}` from the M4 disk incident, left for the user (`git branch -f main 98f41a61`, drop stash@{0}) — in the earlier container only.

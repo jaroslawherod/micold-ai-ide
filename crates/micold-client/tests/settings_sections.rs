@@ -621,7 +621,7 @@ fn the_desktop_notifications_section_lists_the_four_kind_rows() {
     let rows = view.find("NotificationKind::ALL").expect("kind rows");
     assert!(master < rows, "the kind rows come after the master switch");
     assert!(
-        !view.contains("AiCli::ALL") || !view.contains("NotificationKindToggled(cli"),
+        !view.contains("NotificationKindToggled(cli"),
         "no per-CLI rows"
     );
     assert_eq!(
@@ -634,15 +634,8 @@ fn the_desktop_notifications_section_lists_the_four_kind_rows() {
     );
 }
 
-/// S2: the rows are enabled only while the master switch is on.
-#[test]
-fn the_kind_rows_are_disabled_while_the_master_switch_is_off() {
-    let view = environment_view();
-    assert!(
-        view.contains("draft.environment.desktop_notifications"),
-        "the rows' `on_toggle` depends on the draft's master switch"
-    );
-}
+// S2 (the rows take input only while the master switch is on) is a behavioural test in
+// `gates/notification_kind_rows_sit_under_the_switch.rs` (T077), not a scan of this source.
 
 /// S5, US2.10: the threshold field sits directly after the Long task finished row, indented as the
 /// kind rows are, labelled "Long-task threshold", supporting text "Seconds, 10–3600".
