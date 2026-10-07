@@ -118,6 +118,35 @@ fn focus_toggles_via_messages() {
     assert!(!s.terminal_focused());
 }
 
+/// Feature 482, V1: the Changes view takes the terminal pane's place, so the terminal does not hold
+/// the keyboard while it is open — or `KeyboardElsewhere` strips the review composer's focus on
+/// every frame and nothing typed reaches it while a session is selected.
+#[test]
+fn the_changes_view_takes_the_keyboard_from_the_terminal_it_replaces() {
+    use micold_client::app::Message;
+    use micold_client::features::changes;
+    use micold_core::session::Session;
+    let mut s = State::default();
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    ))));
+    s.update(Message::Session(SessionMsg::TerminalFocused));
+    assert!(s.terminal_focused(), "precondition: the terminal holds it");
+    changes::update(
+        &mut s.changes,
+        changes::Msg::Opened {
+            project: "/projects/p".into(),
+            entry: SessionLocation::Worktree("feat-x".to_string()),
+        },
+    );
+    assert!(s.changes.open.is_some(), "precondition: the view is open");
+    assert!(
+        !s.terminal_focused(),
+        "the terminal is not on screen while the Changes view is"
+    );
+}
+
 #[test]
 fn context_menu_opens_at_a_point_and_dismisses() {
     use micold_client::app::Message;
