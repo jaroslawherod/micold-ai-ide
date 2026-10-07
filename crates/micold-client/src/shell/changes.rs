@@ -10,6 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use iced::widget::text_editor;
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::changes::Effect;
@@ -27,7 +28,36 @@ use crate::App;
 /// Apply a Changes view message, and run the read the reducer asks for.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let effect = app.core.update_changes(msg);
+    sync_composer(app);
     run(app, effect)
+}
+
+/// Perform an action in the composer's editor; an edit reports the new text to the reducer (C2).
+pub fn composer_action(app: &mut App, action: text_editor::Action) -> Task<Message> {
+    let edit = action.is_edit();
+    app.composer.perform(action);
+    if edit {
+        update(app, Msg::ComposerEdited(app.composer.text()))
+    } else {
+        Task::none()
+    }
+}
+
+/// Keep the editor's text the reducer's: a composer that opened (Edit fills it with the comment,
+/// cursor at the end), closed or was saved starts the editor over; typing leaves it alone.
+fn sync_composer(app: &mut App) {
+    let text = app
+        .core
+        .changes
+        .open
+        .as_ref()
+        .and_then(|view| view.composer.as_ref())
+        .map_or("", |composer| composer.text.as_str());
+    if app.composer.text() != text {
+        app.composer = text_editor::Content::with_text(text);
+        app.composer
+            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    }
 }
 
 /// Run the read the root left pending while it opened the view (V1).

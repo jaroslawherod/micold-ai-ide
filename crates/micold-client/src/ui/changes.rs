@@ -4,29 +4,44 @@
 //! is decided by the render-free `features::changes`; this module lays it out from library
 //! components. It stands in the terminal pane's place while open (V1).
 
-use iced::widget::{column, container, row, Space};
+use std::collections::BTreeMap;
+
+use iced::widget::{column, container, row, text_editor, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
+use micold_core::review::comment::ReviewComment;
+use micold_core::review::Side;
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 
-use crate::app::{Message, State};
+use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    base_line, committed_available, diff_body, list_body, DiffBody, ListBody, Msg, OpenView,
+    base_line, can_pick, committed_available, diff_body, file_comments, is_pending, list_body,
+    pending_counts, review_of, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
     DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    Button, ButtonVariant, DiffView, StageProgress, Tag, Text, ToggleChip, TypeRole, VirtualRows,
+    Button, ButtonVariant, CardState, DiffView, ReviewCommentCard, StageProgress, Tag, Text,
+    TextArea, ToggleChip, TypeRole, VirtualRows,
 };
+
+/// The heading of the comments whose lines the diff on screen does not show (C3).
+pub const NOT_IN_DIFF: &str = "Not in the current diff";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
 pub const ROW_HEIGHT: f32 = 36.0;
 
-/// The Changes view of `view`'s entry.
-pub fn view<'a>(state: &'a State, view: &'a OpenView, scheme: ColorScheme) -> Element<'a, Message> {
+/// The Changes view of `view`'s entry. `composer` is the review composer's editor, which only the
+/// binary holds; without it an open composer shows its text read-only.
+pub fn view<'a>(
+    state: &'a State,
+    view: &'a OpenView,
+    scheme: ColorScheme,
+    composer: Option<&'a text_editor::Content>,
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let title = match &view.entry {
         SessionLocation::Default => crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
@@ -48,8 +63,8 @@ pub fn view<'a>(state: &'a State, view: &'a OpenView, scheme: ColorScheme) -> El
     .align_y(Alignment::Center);
 
     let body = row![
-        container(list_pane(view, r)).width(Length::FillPortion(2)),
-        container(diff_pane(view, state.changes.layout, scheme)).width(Length::FillPortion(3)),
+        container(list_pane(state, view, r)).width(Length::FillPortion(2)),
+        container(diff_pane(state, view, scheme, composer)).width(Length::FillPortion(3)),
     ]
     .spacing(spacing::LG)
     .height(Length::Fill);
@@ -66,7 +81,7 @@ pub fn view<'a>(state: &'a State, view: &'a OpenView, scheme: ColorScheme) -> El
 }
 
 /// The left pane: the two toggles (L1) over the file list or its empty state (L2, L3).
-fn list_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
     let available = committed_available(view);
     let toggles = row![
         ToggleChip::new("Committed", Message::Changes(Msg::CommittedToggled), r)
@@ -89,12 +104,14 @@ fn list_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
         ListBody::Empty(sentence) => Text::new(sentence, TypeRole::Body, r).muted().into(),
         ListBody::Files(files) => {
             let selected = view.selected.as_ref();
+            let counts = pending_counts(&state.changes);
             VirtualRows::new(
                 files.len(),
                 ROW_HEIGHT,
                 move |index| {
                     let file = &files[index];
-                    file_row(file, selected == Some(&file.path), r)
+                    let pending = counts.get(&file.path).copied().unwrap_or(0);
+                    file_row(file, selected == Some(&file.path), pending, r)
                 },
                 r,
             )
@@ -107,8 +124,13 @@ fn list_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
     pane.push(list).into()
 }
 
-/// One file (L2): path, kind tag, content tag when not text, and `+a −r`.
-fn file_row(file: &ChangedFile, selected: bool, r: Roles) -> Element<'static, Message> {
+/// One file (L2): path, kind tag, content tag when not text, `+a −r`, and its pending comments.
+fn file_row(
+    file: &ChangedFile,
+    selected: bool,
+    pending: usize,
+    r: Roles,
+) -> Element<'static, Message> {
     let (kind, accent) = kind_tag(&file.kind, r);
     let mut line = row![
         container(Text::new(file.path.to_string(), TypeRole::Body, r)).width(Length::Fill),
@@ -129,6 +151,9 @@ fn file_row(file: &ChangedFile, selected: bool, r: Roles) -> Element<'static, Me
         )
         .muted(),
     );
+    if pending > 0 {
+        line = line.push(Tag::new(pending_label(pending), r.tertiary));
+    }
     let variant = if selected {
         ButtonVariant::Outlined
     } else {
@@ -159,10 +184,12 @@ fn kind_tag(kind: &ChangeKind, r: Roles) -> (String, Rgb) {
 /// read runs, git's message when it fails, else the diff — whose D3 messages and D4 large gate
 /// `DiffView` draws.
 fn diff_pane<'a>(
+    state: &'a State,
     view: &'a OpenView,
-    layout: DiffLayout,
     scheme: ColorScheme,
+    composer: Option<&'a text_editor::Content>,
 ) -> Element<'a, Message> {
+    let layout = state.changes.layout;
     let r = tokens::roles(scheme);
     // D1, FR-006: the layout is a setting, so its choice shows whatever the pane holds.
     let layouts = row![
@@ -189,18 +216,86 @@ fn diff_pane<'a>(
                 ColorScheme::Light => &loaded.spans.light,
                 ColorScheme::Dark => &loaded.spans.dark,
             };
-            let diff = DiffView::new(&loaded.diff, layout, r)
+            let heights: BTreeMap<(Side, u32), f32> = view
+                .slot_heights
+                .iter()
+                .map(|(anchor, height)| (*anchor, *height as f32))
+                .collect();
+            let mut diff = DiffView::new(&loaded.diff, layout, r)
                 .spans(spans)
                 .offset(view.diff_offset)
                 .viewport(view.diff_viewport)
                 .on_scroll(|offset, viewport| {
                     Message::Changes(Msg::DiffScrolled { offset, viewport })
                 })
-                .on_show_large(Message::Changes(Msg::ShowLarge));
-            return column![layouts, diff]
-                .spacing(spacing::MD)
-                .height(Length::Fill)
-                .into();
+                .on_show_large(Message::Changes(Msg::ShowLarge))
+                .slot_heights(&heights)
+                .on_slot_measured(|side, line, height| {
+                    Message::Changes(Msg::SlotMeasured {
+                        side,
+                        line,
+                        height: height.ceil() as u32,
+                    })
+                });
+            if can_pick(view) {
+                diff = diff.on_gutter(|old, new, extend| {
+                    Message::Changes(Msg::GutterPressed { old, new, extend })
+                });
+            }
+            if let Some(pick) = view.pick {
+                diff = diff.pick(pick.side, pick.range());
+            }
+            // C3: each comment under the row of its last line; an edit's composer takes its card's
+            // place.
+            let comments = file_comments(&state.changes);
+            let sending = review_of(&state.changes, view).is_some_and(|review| review.sending);
+            for (&(side, line), placed) in &comments.placed {
+                for comment in placed {
+                    diff = diff.slot(
+                        side,
+                        line,
+                        comment_or_editor(view, comment, sending, composer, r),
+                    );
+                }
+            }
+            // C2: the composer, or the way to open it, under the last picked row.
+            match (view.pick, view.composer.as_ref()) {
+                (Some(pick), None) => {
+                    diff = diff.slot(
+                        pick.side,
+                        pick.head,
+                        row![
+                            Space::new().width(Length::Fill),
+                            Button::text("Add comment", r)
+                                .on_press(Message::Changes(Msg::AddComment)),
+                        ]
+                        .padding(spacing::XS),
+                    );
+                }
+                (_, Some(open)) => {
+                    if let ComposerTarget::New(pick) = open.target {
+                        diff =
+                            diff.slot(pick.side, pick.head, composer_box(&open.text, composer, r));
+                    }
+                }
+                (None, None) => {}
+            }
+            let mut pane = column![layouts].spacing(spacing::MD).height(Length::Fill);
+            if !comments.not_in_diff.is_empty() {
+                let mut group = column![Text::new(NOT_IN_DIFF, TypeRole::Label, r).muted()]
+                    .spacing(spacing::SM);
+                for comment in &comments.not_in_diff {
+                    group = group.push(
+                        column![
+                            Text::new(range_label(comment), TypeRole::Caption, r).muted(),
+                            comment_or_editor(view, comment, sending, composer, r),
+                        ]
+                        .spacing(spacing::XS),
+                    );
+                }
+                pane = pane.push(group);
+            }
+            return pane.push(diff).into();
         }
     };
     let message = container(column![content, Space::new().height(Length::Fill)])
@@ -210,5 +305,89 @@ fn diff_pane<'a>(
     column![layouts, message]
         .spacing(spacing::MD)
         .height(Length::Fill)
+        .into()
+}
+
+/// A file row's pending-comment count (L2).
+pub fn pending_label(pending: usize) -> String {
+    match pending {
+        1 => "1 comment".into(),
+        n => format!("{n} comments"),
+    }
+}
+
+/// Which lines a comment is on, for the "Not in the current diff" group.
+pub fn range_label(comment: &ReviewComment) -> String {
+    let side = match comment.side {
+        Side::New => "",
+        Side::Old => "old ",
+    };
+    let (start, end) = (comment.range.start(), comment.range.end());
+    if start == end {
+        format!("On {side}line {start}")
+    } else {
+        format!("On {side}lines {start}\u{2013}{end}")
+    }
+}
+
+/// A comment's card, or the composer editing it (C2, C3). Edit and Delete only on a pending
+/// comment no send has taken.
+fn comment_or_editor<'a>(
+    view: &'a OpenView,
+    comment: &'a ReviewComment,
+    sending: bool,
+    composer: Option<&'a text_editor::Content>,
+    r: Roles,
+) -> Element<'a, Message> {
+    if let Some(open) = view.composer.as_ref() {
+        if open.target == ComposerTarget::Edit(comment.id) {
+            return composer_box(&open.text, composer, r);
+        }
+    }
+    let state = match (is_pending(comment), sending) {
+        (false, _) => CardState::Sent,
+        (true, true) => CardState::InSend,
+        (true, false) => CardState::Pending,
+    };
+    let mut card = ReviewCommentCard::new(&comment.text, state, r).outdated(false);
+    if state == CardState::Pending {
+        card = card
+            .on_edit(Message::Changes(Msg::EditComment(comment.id)))
+            .on_delete(Message::Changes(Msg::DeleteComment(comment.id)));
+    }
+    card.into()
+}
+
+/// The composer (C2): the text area, Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
+/// text: the service refuses an empty comment (W1).
+fn composer_box<'a>(
+    text: &'a str,
+    editor: Option<&'a text_editor::Content>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let has_text = !text.trim().is_empty();
+    let save = Message::Changes(Msg::ComposerSaved);
+    let area: Element<'a, Message> = match editor {
+        Some(content) => {
+            let mut area = TextArea::new(content, r)
+                .placeholder("Comment")
+                .on_action(|action| Message::ComposerAction(EditorAction(action)));
+            if has_text {
+                area = area.on_submit(save.clone());
+            }
+            area.into()
+        }
+        None => Text::new(text, TypeRole::Body, r).into(),
+    };
+    let actions = row![
+        Space::new().width(Length::Fill),
+        Button::text("Cancel", r).on_press(Message::Changes(Msg::ComposerCancelled)),
+        Button::filled("Save", r).on_press_maybe(has_text.then_some(save)),
+    ]
+    .spacing(spacing::SM)
+    .align_y(Alignment::Center);
+    column![area, actions]
+        .spacing(spacing::SM)
+        .padding(spacing::SM)
         .into()
 }
