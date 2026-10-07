@@ -203,7 +203,7 @@ comments can be cleared, pending ones discarded, and a removed worktree takes it
 - [x] T094 [US4] Serve `ClearSent`/`DiscardPending` in `crates/micold-daemon/src/review.rs`, call `review::forget_worktree` from `ops::delete_worktree` on success in `crates/micold-daemon/src/ops.rs`, prune a worktree that disappears from the catalog on refresh, and `review::forget_project` on project removal, until T091 passes
 - [x] T095 [US4] Add **Clear sent** and **Discard pending…** with its `Modal` built with `dialog::body` as `crates/micold-client/src/ui/confirm_delete.rs` does ("Discard n pending comments? This cannot be undone.") to `crates/micold-client/src/features/changes.rs` and `crates/micold-client/src/ui/changes.rs`, until T092 passes
 - [x] T096 [P] [US4] Extend `docs/user-guide/reviewing-changes.md`: clearing sent comments, discarding pending ones, what happens to comments when a worktree is removed
-- [ ] T097 [US4] Visual pass of quickstart B13 and B17; evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T097 [US4] Visual pass of quickstart B13 and B17; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 **Checkpoint**: all user stories complete.
 

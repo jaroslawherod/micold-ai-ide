@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M8: review B result, T097 visual pass (prepared, see Handover), full gate, PR-body section
+- **Next step**: close unit (T098–T100); every milestone done, PR #624 carries the whole branch
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T064–T075 | full | Send comments to the running session | #624 | done |
 | M6 | T076–T080 | full | Send when no session is running | #624 | done |
 | M7 | T081–T089 | full | Live refresh and outdated comments | #624 | done |
-| M8 | T090–T097 | full | Clear, discard, and removal with the worktree | — | todo |
+| M8 | T090–T097 | full | Clear, discard, and removal with the worktree | #624 | done |
 
 ## Decisions
 
@@ -100,7 +100,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Gate M8 (scoped, d5d77ffa) | scoped | — | red: `popover_displacement::every_popover_is_in_the_table` (dialog count 12 → 13); fixed. The client run after it hit a full disk (`No space left`): `cargo clean -p` of the three workspace crates freed 26 GiB |
 | Review A M8 (code-review high) | 1 | 5550a1436bf5abe77ebb811936ce8f44ab624f28:d5d77ffaf356418bd3d77b00ed2b4da185669324 | CHANGES: F1 MAJOR (unreadable repo prunes every worktree) fixed red first (`an_unreadable_repository_prunes_nothing_on_refresh`); F2 MAJOR (offline included worktree pruned) fixed (an included path counts as gone only when its parent folder can be read); F4 MINOR fixed (confirm re-checks there is something pending; test added with the fix, not red first); F3, F5 MINOR declined |
 | Review A M8 (code-review high, sonnet, fix diff) | 2 | f6e13d5bfa152a6e9b5b6f7f4ebcb29ccdc57f1a:2ecb60db9250d6d1a17e9ec726ea5ffc90a403aa | CLEAN, no findings (F1, F2, F4 fixed; F3, F5 declined stand) |
-| Review B M8 (conformance, sonnet) | 1 | aa905d18ec5f1460e73484105375922b16cd6626:49051558c35a557ee260fadf3d01658ffef24424 | running |
+| Review B M8 (conformance, sonnet) | 1 | aa905d18ec5f1460e73484105375922b16cd6626:49051558c35a557ee260fadf3d01658ffef24424 | CLEAN; 3 MINOR: F1 Verify not runnable in its sandbox (the full gate ran `review_edit`: 10 passed); F2 declined; F3 fixed (`DiscardCancelled` arm moved above the connection arm's comment block) |
+| Visual pass M8 (T097) | 1 | 49051558 | B13 (Clear sent; Discard pending… Cancel, then confirm) and B17 (delete `wt` with its view open; empty after restart) pass in light (`visual-pass/m8.md`); no defect |
+| Gate M8 (full, raw commands, `--no-fail-fast`) | full | 37b6b00864c4ea23e70b9f64aa873c15d904a671:c7e2614d4918abd18d88c9d327f97efc0b354e18 (+ F3 move) | green except the 6 root-only permission tests (pass in CI) and one hang of `history_service_restart::a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order` (killed after ~16 min). Pre-existing flake, not M8: the binary built at M7 (411f25a5) hangs the same way (2 of 6 parallel runs each, M7 and M8); alone or `--test-threads=1` it passes 10 of 10. Scripts rerun outside the build lock (the first run deadlocked on a nested `build-lock.sh` because the gate itself held the lock): 18 scripts, no SCRIPT_FAIL. `review_edit` 10, `features_changes` 54 passed |
 
 ## Declined review findings
 
@@ -112,13 +114,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M4 F3 (MINOR, review-file write under the daemon's state lock): not fixed: MINOR; the lock also orders concurrent edits to one file.
 - Review B M6 F3 (MINOR, `FirstPromptUndelivered::NotStarted` untested): `AsksTrust` now has a test; `NotStarted` needs `start_session` to return false, i.e. the spawn itself failing, which a stand-in CLI cannot cause deterministically (a CLI that exits at once still spawns); the missing-CLI test covers the earlier refusal. Not tested; MINOR.
 - Review A M8 F3 (MINOR, memory dropped when the review file write fails): not fixed: MINOR; every other review edit already keeps memory as the truth and logs a failed save (M4 F3 shape).
+- Review B M8 F2 (MINOR, `discard_dialog`'s unused `_env_include_outcome`): declined: every registered dialog builder takes it (`about.rs`, `confirm_delete.rs`, …); the registry calls them through one signature.
 - Review A M8 F5 (MINOR, `forget_project` keeps reviews when the catalog removal fails): declined: the project is then still in the catalog, so keeping its comments is right; clients drop the project's views on removal, so no empty push is needed.
 
 ## Handover
 
-M8 unit 2 (context cap). Done: T090–T096 green and ticked (core 22, `review_edit` 10, `features_changes` 54, overlay guards at 13 dialogs / 11 snapshots, `popover_displacement` DIALOGS 13); user guide §Clearing and discarding, §When a worktree is removed (T096); review A M8 round 1 fixed/declined, round 2 CLEAN. Scoped gate 49051558: fmt + clippy green, tests stopped at the root-only `settings_refuses_save_over_failed_read` (expected locally; no other failure seen before it). Review B M8 round 1 was dispatched detached at snapshot aa905d18…:49051558 — its result lands in scratchpad `review-B-M8-r1.out` (prompt `review-B-M8-r1.txt`); read it, act per review-rounds.md, record it in Review rounds (row says `running`).
-T097 visual pass not done yet. Prepared: pinned client+daemon pair from 49051558 in `.visual-pass/run.iHgGBr/bin` (strings checked; remove the dir when the pass ends); fixture worktree `wt8` in `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/fx/P` (b.rs lines 3, 7, 10 changed, uncommitted); data home `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/vpdata-m8` seeded with wt8's 2 sent + 2 pending comments (and wt's 1 pending); launch with `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/vp8.sh <tag>` (display :78, runtime /tmp/vp78 — first claim it: `mkdir -m 700 /tmp/vp78`, start `Xvfb :78 -screen 0 1600x1400x24 -nolisten tcp`), screenshots with `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/shot8.sh <name> [crop]`. The launch attached (`client attached to daemon`). Check B13 (Clear sent; Discard pending… → Cancel, then confirm) and B17 (delete `wt8` from the sidebar while its view is open: view closes; restart shows no wt8 comments, `reviews/4b6a2f98472811bc.json` has no wt8 entry). Evidence `visual-pass/m8.md` + ≤5 cropped `m8-*.png`.
-Then: full gate (raw commands as `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/gate.sh`; disk was 6 GiB free — if short, `scripts/build-lock.sh cargo clean -p micold-core -p micold-daemon -p micold-client` freed 26 GiB; deleting files in target-shared/deps by hand was refused by the permission classifier), PR-body section `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/pr-body-482-M8.md`, plain `git push -u origin claude/project-thread-v1va8z` after a green gate (never force, no gate-ok marker).
+None.
 
 ## Open escalation
 
@@ -126,4 +127,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- `micold-daemon` `history_service_restart::a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order` hangs in about 1 of 3 parallel runs of its binary in this container, at M7 as at M8 (not this feature's code). Not investigated; worth an issue if CI shows it.
