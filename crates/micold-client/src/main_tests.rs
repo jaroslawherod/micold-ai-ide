@@ -8311,7 +8311,11 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
-            DaemonMsg::AttentionGranted { session, seq: 1 },
+            DaemonMsg::AttentionGranted {
+                session,
+                seq: 1,
+                kind: micold_core::attention::NotificationKind::LongTaskFinished,
+            },
         );
         assert!(
             notifier.threads().is_empty(),
@@ -8344,7 +8348,11 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
-            DaemonMsg::AttentionGranted { session, seq: 1 },
+            DaemonMsg::AttentionGranted {
+                session,
+                seq: 1,
+                kind: micold_core::attention::NotificationKind::LongTaskFinished,
+            },
         );
         for message in messages(work) {
             let _ = update(&mut app, message);
