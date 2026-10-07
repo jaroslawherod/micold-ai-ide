@@ -1,5 +1,5 @@
-//! Review comments (feature 482, data-model "Core: review comments"): what one comment holds and
-//! its state. The operations on an entry's comments arrive with the daemon's review store.
+//! Review comments (feature 482, data-model "Core: review comments"): what one comment holds, its
+//! state, and the pure operations on one entry's comments ([`EntryReview`]).
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -145,6 +145,132 @@ impl From<ReviewComment> for StoredComment {
     }
 }
 
+/// Why an operation on an entry's comments was refused (data-model `EntryReview`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReviewError {
+    /// The input breaks a rule of W1 (the message says which).
+    Invalid(String),
+    /// No comment of this entry has that id (W3).
+    NotFound,
+    /// The comment is sent: sent comments are only cleared (W3).
+    Refused,
+}
+
+impl std::fmt::Display for ReviewError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalid(why) => f.write_str(why),
+            Self::NotFound => f.write_str("no such comment in this entry"),
+            Self::Refused => f.write_str("a sent comment cannot be changed; clear it instead"),
+        }
+    }
+}
+
+impl std::error::Error for ReviewError {}
+
+/// What the user picked and wrote, before it becomes a [`ReviewComment`]. One `side` for the whole
+/// range, so a range never mixes sides by construction (FR-011).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Draft {
+    /// The file, relative to the entry root.
+    pub path: RelPath,
+    /// Which version the lines are numbered in.
+    pub side: Side,
+    /// The lines.
+    pub range: LineRange,
+    /// Those lines' text, one entry per line.
+    pub quote: Vec<String>,
+    /// What the user wrote (trimmed when stored).
+    pub text: String,
+}
+
+/// One entry's comments, in the order they were made (data-model `EntryReview`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EntryReview {
+    comments: Vec<ReviewComment>,
+}
+
+impl EntryReview {
+    /// An entry holding `comments` as loaded.
+    pub fn from_comments(comments: Vec<ReviewComment>) -> Self {
+        Self { comments }
+    }
+
+    /// Every comment, pending and sent.
+    pub fn comments(&self) -> &[ReviewComment] {
+        &self.comments
+    }
+
+    /// No comments at all.
+    pub fn is_empty(&self) -> bool {
+        self.comments.is_empty()
+    }
+
+    /// Add a pending comment `id` made at `created` (W1): refused when the quote does not hold
+    /// one line per line of the range or the trimmed text is empty; the text is stored trimmed.
+    pub fn add(&mut self, draft: Draft, id: CommentId, created: u64) -> Result<(), ReviewError> {
+        let text = checked_text(&draft.text)?;
+        if draft.quote.len() != draft.range.len() as usize {
+            return Err(ReviewError::Invalid(format!(
+                "the quote holds {} lines but the range {}..={} covers {}",
+                draft.quote.len(),
+                draft.range.start(),
+                draft.range.end(),
+                draft.range.len()
+            )));
+        }
+        self.comments.push(ReviewComment {
+            id,
+            path: draft.path,
+            side: draft.side,
+            range: draft.range,
+            quote: draft.quote,
+            text,
+            state: CommentState::Pending,
+            created,
+        });
+        Ok(())
+    }
+
+    /// Replace a pending comment's text (trimmed, non-empty).
+    pub fn set_text(&mut self, id: CommentId, text: &str) -> Result<(), ReviewError> {
+        let text = checked_text(text)?;
+        let index = self.pending_index(id)?;
+        self.comments[index].text = text;
+        Ok(())
+    }
+
+    /// Delete a pending comment.
+    pub fn delete(&mut self, id: CommentId) -> Result<(), ReviewError> {
+        let index = self.pending_index(id)?;
+        self.comments.remove(index);
+        Ok(())
+    }
+
+    /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `Refused`
+    /// when it is sent.
+    fn pending_index(&self, id: CommentId) -> Result<usize, ReviewError> {
+        let index = self
+            .comments
+            .iter()
+            .position(|comment| comment.id == id)
+            .ok_or(ReviewError::NotFound)?;
+        match self.comments[index].state {
+            CommentState::Pending => Ok(index),
+            CommentState::Sent { .. } => Err(ReviewError::Refused),
+        }
+    }
+}
+
+/// `text` trimmed, or `Invalid` when nothing is left.
+fn checked_text(text: &str) -> Result<String, ReviewError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err(ReviewError::Invalid("a comment needs some text".to_owned()));
+    }
+    Ok(trimmed.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,6 +287,150 @@ mod tests {
             state,
             created: 1_790_000_000,
         }
+    }
+
+    fn draft(start: u32, end: u32, quote: &[&str], text: &str) -> Draft {
+        Draft {
+            path: RelPath::from_git("src/a.rs"),
+            side: Side::New,
+            range: LineRange::new(start, end).expect("a valid range"),
+            quote: quote.iter().map(|line| (*line).to_owned()).collect(),
+            text: text.to_owned(),
+        }
+    }
+
+    fn id(n: u128) -> CommentId {
+        CommentId(Uuid::from_u128(n))
+    }
+
+    const NOW: u64 = 1_790_000_000;
+
+    #[test]
+    fn add_stores_a_pending_comment_with_its_text_trimmed() {
+        let mut review = EntryReview::default();
+        review
+            .add(
+                draft(12, 14, &["a", "b", "c"], "  Why clone here?\n"),
+                id(1),
+                NOW,
+            )
+            .expect("a valid draft is accepted");
+        let stored = review.comments();
+        assert_eq!(stored.len(), 1, "the comment is kept");
+        assert_eq!(stored[0].id, id(1));
+        assert_eq!(
+            stored[0].text, "Why clone here?",
+            "text is stored trimmed (W1)"
+        );
+        assert_eq!(
+            stored[0].state,
+            CommentState::Pending,
+            "a new comment is pending"
+        );
+        assert_eq!(stored[0].quote, vec!["a", "b", "c"]);
+        assert_eq!((stored[0].range.start(), stored[0].range.end()), (12, 14));
+        assert_eq!(stored[0].created, NOW);
+    }
+
+    #[test]
+    fn add_refuses_a_quote_that_is_not_one_line_per_line_of_the_range() {
+        let mut review = EntryReview::default();
+        for quote in [&["a", "b"][..], &["a", "b", "c", "d"][..]] {
+            assert!(
+                matches!(
+                    review.add(draft(12, 14, quote, "text"), id(1), NOW),
+                    Err(ReviewError::Invalid(_))
+                ),
+                "a {}-line quote of a 3-line range is refused (FR-012)",
+                quote.len()
+            );
+        }
+        assert!(review.is_empty(), "nothing is stored on a refusal");
+    }
+
+    #[test]
+    fn add_refuses_text_that_is_empty_once_trimmed() {
+        let mut review = EntryReview::default();
+        for text in ["", "   ", "\n\t "] {
+            assert!(
+                matches!(
+                    review.add(draft(3, 3, &["x"], text), id(1), NOW),
+                    Err(ReviewError::Invalid(_))
+                ),
+                "{text:?} is no comment (W1)"
+            );
+        }
+        assert!(review.is_empty(), "nothing is stored on a refusal");
+    }
+
+    #[test]
+    fn set_text_replaces_a_pending_comments_text_trimmed() {
+        let mut review = EntryReview::default();
+        review
+            .add(draft(3, 3, &["x"], "first"), id(1), NOW)
+            .expect("added");
+        review
+            .set_text(id(1), " second ")
+            .expect("a pending comment can be edited");
+        assert_eq!(
+            review.comments()[0].text,
+            "second",
+            "the edit is stored trimmed"
+        );
+        assert!(
+            matches!(review.set_text(id(1), "  "), Err(ReviewError::Invalid(_))),
+            "an edit to empty text is refused; delete is the way to drop a comment"
+        );
+        assert_eq!(
+            review.comments()[0].text,
+            "second",
+            "a refused edit changes nothing"
+        );
+    }
+
+    #[test]
+    fn delete_removes_a_pending_comment_only() {
+        let mut review = EntryReview::default();
+        review
+            .add(draft(3, 3, &["x"], "one"), id(1), NOW)
+            .expect("added");
+        review
+            .add(draft(4, 4, &["y"], "two"), id(2), NOW)
+            .expect("added");
+        review
+            .delete(id(1))
+            .expect("a pending comment can be deleted");
+        let left: Vec<_> = review.comments().iter().map(|c| c.id).collect();
+        assert_eq!(left, vec![id(2)], "only the deleted comment is gone");
+    }
+
+    #[test]
+    fn an_unknown_id_is_not_found_for_set_text_and_delete() {
+        let mut review = EntryReview::default();
+        review
+            .add(draft(3, 3, &["x"], "one"), id(1), NOW)
+            .expect("added");
+        assert_eq!(review.set_text(id(9), "t"), Err(ReviewError::NotFound));
+        assert_eq!(review.delete(id(9)), Err(ReviewError::NotFound));
+        assert_eq!(review.comments().len(), 1, "nothing changed");
+    }
+
+    #[test]
+    fn a_sent_comment_refuses_set_text_and_delete() {
+        let mut sent = sample(CommentState::Sent { at: NOW });
+        sent.id = id(1);
+        let mut review = EntryReview::from_comments(vec![sent.clone()]);
+        assert_eq!(
+            review.set_text(id(1), "new"),
+            Err(ReviewError::Refused),
+            "a sent comment's text is what the session got; it is not rewritten (W3)"
+        );
+        assert_eq!(
+            review.delete(id(1)),
+            Err(ReviewError::Refused),
+            "sent comments are only cleared"
+        );
+        assert_eq!(review.comments(), &[sent][..], "nothing changed");
     }
 
     #[test]

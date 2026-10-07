@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
 | M2 | T027–T040 | full | Unified diff of the selected file | #624 | done |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | #624 | done |
-| M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
+| M4 | T050–T063 | full | Comments on lines and ranges | — | in progress |
 | M5 | T064–T075 | full | Send comments to the running session | — | todo |
 | M6 | T076–T080 | full | Send when no session is running | — | todo |
 | M7 | T081–T089 | full | Live refresh and outdated comments | — | todo |
@@ -79,7 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 unit 1 stopped at the 150k context cap. Done: T050/T055 (`EntryReview`, `Draft`, `ReviewError` in core `review/comment.rs`), T051/T056 (`ReviewFile` in `review/store.rs`; `JsonFileStore::{reviews_path, load_reviews, save_reviews}` + private `reviews_dir` in `store.rs`), all green; T052 written (`crates/micold-daemon/tests/review_edit.rs`, 5 tests) and red against the placeholder (cycle log M4). Next: T057 — add `load_reviews`/`save_reviews` to the `ProjectStore` trait (defaults: empty / `Ok`; `JsonFileStore` delegates; `FakeProjectStore` in-memory) and `Catalog::{load_reviews, save_reviews}`; new `crates/micold-daemon/src/review.rs` keyed by project then worktree dir (`""` = Default; `SessionLocation` is not `Hash`), loaded lazily per project; W1 checks (`\` or absolute path, `LineRange::new`, quote length, text) → `InvalidInput`; W2 project not in catalog or dir not in `snapshot_locked` worktrees → `NotFound`; W3 via `ReviewError`; edit a clone, save through the catalog, then swap (W5); `ReviewChanged` broadcast to every client (catalog-style broadcast — attach is exclusive per project, so "every window" means every connection; the client keeps its active project's) then `OperationOk(Ack)`; on `Attach` send this client one `ReviewChanged` per entry with comments after `Attached`; logs name entry + count only (W12). Replace the placeholder in `server.rs` (~line 1131) and retire the `ReviewEdit` half of `diff_layout_setting.rs::review_edit_and_review_send_are_refused_until_served`. Then T053/T059, T054/T058, T060–T063, then verify.md. No reviews or gates run yet for M4.
 
 ## Open escalation
 
