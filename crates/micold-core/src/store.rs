@@ -18,6 +18,7 @@
 //! project's own state file and stops carrying it in the catalog.
 
 use crate::project::{Availability, Project};
+use crate::review::store::ReviewFile;
 use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -675,6 +676,50 @@ impl JsonFileStore {
     pub fn project_state_path(&self, project_path: &Path) -> PathBuf {
         self.project_state_dir()
             .join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Directory holding every project's review comments (feature 482): `reviews/` beside
+    /// `projects/`.
+    fn reviews_dir(&self) -> PathBuf {
+        match self.path.parent() {
+            Some(parent) => parent.join("reviews"),
+            None => PathBuf::from("reviews"),
+        }
+    }
+
+    /// A project's review file, addressed by [`project_id`]. `pub` so tests can find it.
+    pub fn reviews_path(&self, project_path: &Path) -> PathBuf {
+        self.reviews_dir()
+            .join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Load a project's review comments (feature 482). Never fails: a missing file is an empty
+    /// review; an unparseable one is kept aside as `<name>.corrupt` and an empty review loads.
+    pub fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        let path = self.reviews_path(project_path);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            // Missing, or unreadable for now: no comments, and the file is left where it is.
+            Err(_) => return ReviewFile::default(),
+        };
+        match ReviewFile::from_json(&text) {
+            Ok(file) => file,
+            Err(_) => {
+                let mut aside = path.as_os_str().to_os_string();
+                aside.push(".corrupt");
+                let _ = std::fs::rename(&path, PathBuf::from(aside));
+                ReviewFile::default()
+            }
+        }
+    }
+
+    /// Write a project's review comments atomically (temp file, then rename).
+    pub fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        let path = self.reviews_path(project_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_then_rename(&temp_path_for(&path), &path, &file.to_json())
     }
 
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
