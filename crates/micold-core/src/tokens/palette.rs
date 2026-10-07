@@ -326,3 +326,18 @@ pub const TAG_ISSUE: TagRamp = TagRamp([
     Rgb::hex(0xCFC4C5),
     Rgb::hex(0xFFFFFF),
 ]);
+
+// --- diff row tints (feature 482, US1 s8) ------------------------------------------------------
+//
+// A diff tints whole rows, so the fill sits behind body text and muted line numbers: pale in the
+// light scheme and deep in the dark one, near the `TAG_FEAT` green and `TAG_FIX` red hues, so the
+// text roles of each scheme keep 4.5:1 on them (`composition_contrast` checks it).
+
+/// The fill of an added line in the light scheme.
+pub const DIFF_ADDED_LIGHT: Rgb = Rgb::hex(0xDDF3D4);
+/// The fill of an added line in the dark scheme.
+pub const DIFF_ADDED_DARK: Rgb = Rgb::hex(0x1E3A1E);
+/// The fill of a removed line in the light scheme.
+pub const DIFF_REMOVED_LIGHT: Rgb = Rgb::hex(0xFFE0DB);
+/// The fill of a removed line in the dark scheme.
+pub const DIFF_REMOVED_DARK: Rgb = Rgb::hex(0x4A1E1B);

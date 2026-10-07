@@ -228,3 +228,31 @@ fn the_walk_covers_a_host_of_each_kind() {
          exclusion again, written differently."
     );
 }
+
+/// Diff rows (feature 482, US1 s8): a line's text (`on_surface`) and its muted line numbers
+/// (`on_surface_variant`) are read on the added and the removed tint, in both schemes, at 4.5:1.
+#[test]
+fn diff_line_text_is_legible_on_the_added_and_removed_tints() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for (tint_name, tint) in [("diff_added", r.diff_added), ("diff_removed", r.diff_removed)] {
+            for (text_name, text) in [
+                ("on_surface", r.on_surface),
+                ("on_surface_variant", r.on_surface_variant),
+            ] {
+                let ratio = contrast(text, tint);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {text_name} on {tint_name}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "diff text cannot be read on its row tint:\n  {}",
+        violations.join("\n  ")
+    );
+}
