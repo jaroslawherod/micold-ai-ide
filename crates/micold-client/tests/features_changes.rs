@@ -1025,3 +1025,34 @@ fn comments_not_in_the_diff_are_grouped_apart() {
     );
     assert_eq!(placed.not_in_diff, vec![&gone]);
 }
+
+#[test]
+fn slot_heights_are_kept_for_the_shown_file_and_layout_only() {
+    use micold_core::settings::DiffLayout;
+    let mut state = showing(commentable());
+    changes::update(
+        &mut state,
+        Msg::SlotMeasured {
+            side: Side::New,
+            line: 2,
+            height: 122,
+        },
+    );
+    let heights = |s: &State| s.open.as_ref().unwrap().slot_heights.clone();
+    assert_eq!(heights(&state).get(&(Side::New, 2)), Some(&122));
+    changes::update(&mut state, Msg::LayoutChosen(DiffLayout::SideBySide));
+    assert!(
+        heights(&state).is_empty(),
+        "another layout lays the slots out anew"
+    );
+    changes::update(
+        &mut state,
+        Msg::SlotMeasured {
+            side: Side::Old,
+            line: 4,
+            height: 80,
+        },
+    );
+    select(&mut state, "a.rs");
+    assert!(heights(&state).is_empty(), "another file has other slots");
+}

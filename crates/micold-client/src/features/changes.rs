@@ -77,6 +77,9 @@ pub struct OpenView {
     pub pick: Option<Pick>,
     /// The comment being written or edited (C2); survives a refresh (C4).
     pub composer: Option<Composer>,
+    /// The diff's slots (comment cards, the composer) as last measured, in whole pixels, keyed by
+    /// the line they hang under; for the shown file in the layout in force.
+    pub slot_heights: BTreeMap<(Side, u32), u32>,
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -208,6 +211,15 @@ pub enum Msg {
         /// Shift was held: extend the pick on the same side.
         extend: bool,
     },
+    /// A slot under line `line` of `side` was laid out `height` pixels tall.
+    SlotMeasured {
+        /// The side of the line it hangs under.
+        side: Side,
+        /// The line it hangs under.
+        line: u32,
+        /// Its height, whole pixels (rounded up).
+        height: u32,
+    },
     /// **Add comment** was pressed (C2).
     AddComment,
     /// The composer's text changed.
@@ -282,10 +294,20 @@ pub enum Effect {
 pub fn update(state: &mut State, msg: Msg) -> Effect {
     match msg {
         Msg::LayoutChosen(layout) => {
+            if state.layout != layout {
+                if let Some(view) = state.open.as_mut() {
+                    view.slot_heights.clear();
+                }
+            }
             state.layout = layout;
             Effect::SetLayout(layout)
         }
         Msg::LayoutInForce(layout) => {
+            if state.layout != layout {
+                if let Some(view) = state.open.as_mut() {
+                    view.slot_heights.clear();
+                }
+            }
             state.layout = layout;
             Effect::None
         }
@@ -304,6 +326,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 diff_viewport: 0,
                 pick: None,
                 composer: None,
+                slot_heights: BTreeMap::new(),
             });
             request_read(state)
         }
@@ -350,6 +373,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             view.diff = Load::Idle;
             view.diff_offset = 0;
+            view.slot_heights.clear();
             request_diff(state, false)
         }
         Msg::ShowLarge => {
@@ -414,6 +438,12 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                         head: line,
                     },
                 });
+            }
+            Effect::None
+        }
+        Msg::SlotMeasured { side, line, height } => {
+            if let Some(view) = state.open.as_mut() {
+                view.slot_heights.insert((side, line), height);
             }
             Effect::None
         }
