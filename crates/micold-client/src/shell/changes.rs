@@ -3,7 +3,8 @@
 //! reading, so a large diff never blocks input or redraws (FR-009).
 //!
 //! The reducer decides when a read starts and drops an answer that is no longer current; this
-//! module only resolves the entry's directory, calls git in `spawn_blocking`, and answers
+//! module only resolves the entry's directory, calls git in `spawn_blocking` (highlighting the
+//! diff there too), sends the layout the user chose to the service, and answers
 //! [`Msg::ListRead`] or [`Msg::DiffRead`] with the read's own `seq`.
 
 use std::path::{Path, PathBuf};
@@ -13,11 +14,14 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::changes::Effect;
 use micold_client::features::changes::Msg;
+use micold_client::features::settings;
+use micold_client::ui::syntax;
 use micold_core::git::Git;
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::changes::ChangeList;
 use micold_core::session::SessionLocation;
 
+use crate::shell::daemon_sync::PendingOp;
 use crate::App;
 
 /// Apply a Changes view message, and run the read the reducer asks for.
@@ -40,9 +44,20 @@ const NOT_LOCAL: &str =
     "This computer cannot read the worktree's files: the session service runs elsewhere";
 
 /// Start `effect`'s read, answering `Msg::ListRead` or `Msg::DiffRead` when git is done.
-fn run(app: &App, effect: Effect) -> Task<Message> {
+fn run(app: &mut App, effect: Effect) -> Task<Message> {
     match effect {
-        Effect::None | Effect::SetLayout(_) => Task::none(),
+        Effect::None => Task::none(),
+        Effect::SetLayout(layout) => {
+            // Service-owned (R12): the daemon stores it and echoes `SettingsChanged` to every
+            // window. Disconnected, the choice holds for this run only, as the reducer set it.
+            if let Some(daemon) = &app.daemon {
+                let req = app.next_req;
+                app.next_req += 1;
+                daemon.send(settings::diff_layout_set(req, layout));
+                app.pending_ops.insert(req, PendingOp::SettingsSet);
+            }
+            Task::none()
+        }
         Effect::ReadList {
             seq,
             entry,
@@ -71,8 +86,12 @@ fn run(app: &App, effect: Effect) -> Task<Message> {
             };
             off_thread(
                 move || {
-                    git.file_diff(&dir, &scope, toggles, &path, from.as_ref(), force_large)
-                        .map_err(|error| error.to_string())
+                    let mut loaded = git
+                        .file_diff(&dir, &scope, toggles, &path, from.as_ref(), force_large)
+                        .map_err(|error| error.to_string())?;
+                    // Off the update thread with the read, both schemes at once (R10).
+                    loaded.spans = syntax::highlight(&loaded, &path.to_string());
+                    Ok(loaded)
                 },
                 answer,
             )

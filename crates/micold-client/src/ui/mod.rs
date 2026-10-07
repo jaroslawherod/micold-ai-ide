@@ -67,6 +67,9 @@ pub use sidebar::SIDEBAR_SCROLL_ID;
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
 pub use material::theme;
+/// Syntax colours for the Changes view's diff (feature 482, R10): highlighted off the update thread
+/// by the shell, painted by `DiffView`.
+pub mod syntax;
 pub mod terminal;
 mod toolbar;
 pub(crate) mod worktree_form;

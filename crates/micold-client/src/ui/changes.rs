@@ -49,7 +49,7 @@ pub fn view<'a>(state: &'a State, view: &'a OpenView, scheme: ColorScheme) -> El
 
     let body = row![
         container(list_pane(view, r)).width(Length::FillPortion(2)),
-        container(diff_pane(view, r)).width(Length::FillPortion(3)),
+        container(diff_pane(view, state.changes.layout, scheme)).width(Length::FillPortion(3)),
     ]
     .spacing(spacing::LG)
     .height(Length::Fill);
@@ -158,26 +158,57 @@ fn kind_tag(kind: &ChangeKind, r: Roles) -> (String, Rgb) {
 /// The right pane (D1–D4): what to do before a file is picked, the progress line while its first
 /// read runs, git's message when it fails, else the diff — whose D3 messages and D4 large gate
 /// `DiffView` draws.
-fn diff_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+fn diff_pane<'a>(
+    view: &'a OpenView,
+    layout: DiffLayout,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
+    let r = tokens::roles(scheme);
+    // D1, FR-006: the layout is a setting, so its choice shows whatever the pane holds.
+    let layouts = row![
+        ToggleChip::new(
+            "Unified",
+            Message::Changes(Msg::LayoutChosen(DiffLayout::Unified)),
+            r
+        )
+        .active(layout == DiffLayout::Unified),
+        ToggleChip::new(
+            "Side by side",
+            Message::Changes(Msg::LayoutChosen(DiffLayout::SideBySide)),
+            r
+        )
+        .active(layout == DiffLayout::SideBySide),
+    ]
+    .spacing(spacing::SM);
     let content: Element<'a, Message> = match diff_body(view) {
         DiffBody::NoSelection => Text::new("Select a file", TypeRole::Body, r).muted().into(),
         DiffBody::Loading => StageProgress::new("Loading diff…", r).into(),
         DiffBody::Failed(message) => Text::new(message, TypeRole::Body, r).tint(r.error).into(),
         DiffBody::Diff(loaded) => {
-            // The layout choice (D1, FR-006) arrives with M3; until then every diff is unified.
-            return DiffView::new(&loaded.diff, DiffLayout::default(), r)
+            let spans = match scheme {
+                ColorScheme::Light => &loaded.spans.light,
+                ColorScheme::Dark => &loaded.spans.dark,
+            };
+            let diff = DiffView::new(&loaded.diff, layout, r)
+                .spans(spans)
                 .offset(view.diff_offset)
                 .viewport(view.diff_viewport)
                 .on_scroll(|offset, viewport| {
                     Message::Changes(Msg::DiffScrolled { offset, viewport })
                 })
-                .on_show_large(Message::Changes(Msg::ShowLarge))
+                .on_show_large(Message::Changes(Msg::ShowLarge));
+            return column![layouts, diff]
+                .spacing(spacing::MD)
+                .height(Length::Fill)
                 .into();
         }
     };
-    container(column![content, Space::new().height(Length::Fill)])
+    let message = container(column![content, Space::new().height(Length::Fill)])
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x(Length::Fill)
+        .center_x(Length::Fill);
+    column![layouts, message]
+        .spacing(spacing::MD)
+        .height(Length::Fill)
         .into()
 }
