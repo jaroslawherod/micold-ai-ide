@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #613
 - **Worktree branch**: claude/project-thread-8kdqkn
 - **Started**: 2026-10-06
-- **Phase**: close
-- **Next step**: close — Phase 8 remediation T067–T076, then tdd-verify, review, full gate
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #618 | whole run (design + milestones), one PR from claude/project-thread-8kdqkn | draft, open | — |
+| #618 | whole run (design + milestones + close), one PR from claude/project-thread-8kdqkn | draft, open; close pushed (body in scratchpad pr-613-body-close.md) | — |
 
 ## Milestones
 
@@ -108,6 +108,8 @@ None. (Disk escalation resolved: fresh container with ~30 GB free.)
 
 ## Follow-ups not done
 
+- Phase 7 Polish T053 (architecture doc), T054 (quickstart Part A record), T055 (CI's three OS legs and sandbox job) not done in this run.
+- Full gate 2 at 7c2eef79 (tree 7b825be8) green but for the 6 root-only permission tests; spec Status set Closed.
 - T080 (LOW, finding 17): `advance_turn_clock` is `pub` in production builds; gate it behind a test-support feature or test the spinner path. T081 (LOW, findings 19–21): test function names in `test-list.md`, `attention_support` in `attention_claims.rs`, fold `the_threshold_is_one_minute`. Left open: tdd-verify passes without them.
 - M1 review A F1: Claude Code turn that, after a granted permission, ends with PostToolUse then Stop (no further PreToolUse) stays `AwaitingInput` from the Notification, so its end is no attention event (010 FSM; pre-dates 613). Candidate: PostToolUse after AwaitingInput → Working.
 - `scripts/tests/autopilot.test.sh` on a full disk (mktemp fails) falls back to running its git fixtures in the real repo (checked out and committed onto local `main` during the M4 gate). The script should abort when `mktemp -d` fails. Not this milestone's to fix.

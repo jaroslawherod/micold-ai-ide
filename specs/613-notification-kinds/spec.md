@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Draft
+**Status**: Closed 2026-10-07 — shipped in PR #618
 
 **Input**: User description: "Implement GitHub issue #613: Notifications: only notify when a session needs attention; add per-kind settings and icons. Problem: notifications fire for every session state change, so the ones that matter (a session that needs real attention) are buried. There is no setting to choose which kinds of notifications to receive. Notifications carry no icon, so important ones can't be told apart from routine ones at a glance. Expected: notify by default only when a session needs real attention (e.g. waiting for input or permission, errored, finished a long task). Let the user choose which notification kinds they want (per kind on/off). Give each kind a distinct icon, so urgency is visible without reading. Context: this builds on specs/039-session-attention-notifications (and 575-workspace-attention-list)."
 
