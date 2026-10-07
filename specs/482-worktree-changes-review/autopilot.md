@@ -48,6 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1 part 4: the orchestrator waived the part-4 escalation limit for M1 (steady progress on a 26-task milestone) and continued.
 - M3 Windows CI (`review_git` LF → CRLF test red on windows-latest): the fix is in the test fixture (repo-local `core.autocrlf=false`), not in `GitCli::file_diff`. With `autocrlf=true` git normalises the edit away and would not commit it; forcing `autocrlf=false` in the diff would show every line of every touched file changed on a Windows checkout. Quickstart §C B6 now says to run with `core.autocrlf=false` and why; the user guide notes it.
 
+- M4 T057: the daemon's `Reviews` keys entries by worktree dir `String` (`""` = Default, as on the wire; `SessionLocation` is not `Hash`) and reads a project's review file on first use rather than at catalog adoption — same observable behaviour (attach and edits read it), no read for projects nobody opens. `ClearSent`/`DiscardPending` answer `Refused` ("not available in this build") until M8 (W4); `Busy` for a comment in a send arrives with M5.
+
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
@@ -79,7 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 unit 1 stopped at the 150k context cap. Done: T050/T055 (`EntryReview`, `Draft`, `ReviewError` in core `review/comment.rs`), T051/T056 (`ReviewFile` in `review/store.rs`; `JsonFileStore::{reviews_path, load_reviews, save_reviews}` + private `reviews_dir` in `store.rs`), all green; T052 written (`crates/micold-daemon/tests/review_edit.rs`, 5 tests) and red against the placeholder (cycle log M4). Next: T057 — add `load_reviews`/`save_reviews` to the `ProjectStore` trait (defaults: empty / `Ok`; `JsonFileStore` delegates; `FakeProjectStore` in-memory) and `Catalog::{load_reviews, save_reviews}`; new `crates/micold-daemon/src/review.rs` keyed by project then worktree dir (`""` = Default; `SessionLocation` is not `Hash`), loaded lazily per project; W1 checks (`\` or absolute path, `LineRange::new`, quote length, text) → `InvalidInput`; W2 project not in catalog or dir not in `snapshot_locked` worktrees → `NotFound`; W3 via `ReviewError`; edit a clone, save through the catalog, then swap (W5); `ReviewChanged` broadcast to every client (catalog-style broadcast — attach is exclusive per project, so "every window" means every connection; the client keeps its active project's) then `OperationOk(Ack)`; on `Attach` send this client one `ReviewChanged` per entry with comments after `Attached`; logs name entry + count only (W12). Replace the placeholder in `server.rs` (~line 1131) and retire the `ReviewEdit` half of `diff_layout_setting.rs::review_edit_and_review_send_are_refused_until_served`. Then T053/T059, T054/T058, T060–T063, then verify.md. No reviews or gates run yet for M4.
+M4 unit 2 in progress: T050–T052, T055–T057 done. Next: T053/T059 (client state), T054/T058 (components), T060–T063, then verify.md.
 
 ## Open escalation
 
