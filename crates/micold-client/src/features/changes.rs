@@ -559,13 +559,21 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
-        Msg::DiscardConfirmed => match state.open.as_mut() {
-            Some(view) if view.confirm_discard => {
-                view.confirm_discard = false;
-                review_edit(view, ReviewEditOp::DiscardPending)
+        Msg::DiscardConfirmed => {
+            // Re-checked: a push since the question opened may have left nothing to discard.
+            let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
+            match state.open.as_mut() {
+                Some(view) if view.confirm_discard => {
+                    view.confirm_discard = false;
+                    if enabled {
+                        review_edit(view, ReviewEditOp::DiscardPending)
+                    } else {
+                        Effect::None
+                    }
+                }
+                _ => Effect::None,
             }
-            _ => Effect::None,
-        },
+        }
         Msg::EditComment(id) => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;

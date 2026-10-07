@@ -2167,19 +2167,24 @@ impl DaemonState {
                 }
                 // Feature 482 (Edge Case "removed worktree"): a worktree removed outside the app
                 // takes its review comments with it. Only one that discovery no longer lists *and*
-                // whose directory is gone counts, so a failed git query (which still lists the
-                // directories on disk) never discards anyone's comments.
+                // whose directory is gone from a folder that can still be read counts, so neither a
+                // failed git query (which still lists the directories on disk) nor an unmounted
+                // drive or a renamed folder (review A M8 F1, F2) discards anyone's comments.
                 let root = micold_core::worktree::worktrees_root(&repo);
+                let vanished = |p: &Path| !p.exists() && p.parent().is_some_and(Path::is_dir);
                 let gone = |dir: &str| {
                     !discovered.iter().any(|w| w.dir_name == dir)
                         && !root.join(dir).exists()
-                        && !included
+                        && included
                             .iter()
-                            .any(|p| p.file_name().is_some_and(|n| n == dir) && p.exists())
+                            .filter(|p| p.file_name().is_some_and(|n| n == dir))
+                            .all(|p| vanished(p))
                 };
                 let inner = &mut *inner;
-                let pruned = inner.reviews.prune_worktrees(&inner.catalog, project, gone);
-                Self::broadcast_locked(inner, pruned);
+                if repo.is_dir() {
+                    let pruned = inner.reviews.prune_worktrees(&inner.catalog, project, gone);
+                    Self::broadcast_locked(inner, pruned);
+                }
                 inner.worktrees.insert(project.to_path_buf(), discovered);
             }
             _ => {

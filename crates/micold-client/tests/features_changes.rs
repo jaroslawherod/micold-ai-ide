@@ -1586,6 +1586,29 @@ fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
     );
 }
 
+/// S3, review A M8 F4: a push that leaves nothing pending while the question is open makes its
+/// confirm send nothing.
+#[test]
+fn a_confirm_after_the_pending_comments_went_elsewhere_sends_nothing() {
+    let mut state = showing(commentable());
+    push(
+        &mut state,
+        "feat-a",
+        vec![comment("a.rs", Side::New, 1, 1, CommentState::Pending)],
+    );
+    changes::update(&mut state, Msg::DiscardPendingPressed);
+    push(
+        &mut state,
+        "feat-a",
+        vec![comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 })],
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardConfirmed),
+        Effect::None
+    );
+    assert_eq!(discard_prompt(&state), None, "the confirm still closes it");
+}
+
 /// S3. One pending comment reads in the singular; closing the view drops the confirmation.
 #[test]
 fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
