@@ -25,6 +25,9 @@ const GLOBAL: [&str; 4] = [
     "--literal-pathspecs",
 ];
 
+/// `GLOBAL` without `--literal-pathspecs`: check-ignore takes paths, and refuses pathspec magic.
+const CHECK_IGNORE_GLOBAL: [&str; 3] = ["-c", "core.quotepath=false", "--no-pager"];
+
 /// The diff options every review read passes after `diff` (R1).
 const DIFF: [&str; 5] = ["--no-ext-diff", "--no-textconv", "--no-color", "-z", "-M"];
 
@@ -225,8 +228,7 @@ impl GitCli {
         let mut input = asked.join("\0");
         input.push('\0');
         let args = ["check-ignore", "-z", "--stdin"];
-        // Not `--literal-pathspecs`: check-ignore takes paths, and refuses pathspec magic.
-        let output = run_read(dir, &GLOBAL[..3], &args, Some(&input))?;
+        let output = run_read(dir, &CHECK_IGNORE_GLOBAL, &args, Some(&input))?;
         // Exit 1: none of them is ignored.
         match output.status.code() {
             Some(0) => Ok(String::from_utf8_lossy(&output.stdout)

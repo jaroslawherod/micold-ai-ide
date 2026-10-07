@@ -384,16 +384,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             view.selected = Some(path);
             // Picked lines and a new comment on them belong to the file they were picked in.
-            view.pick = None;
-            if matches!(
-                view.composer,
-                Some(Composer {
-                    target: ComposerTarget::New(_),
-                    ..
-                })
-            ) {
-                view.composer = None;
-            }
+            close_new(view);
             view.diff = Load::Idle;
             view.diff_offset = 0;
             view.slot_heights.clear();
@@ -462,14 +453,21 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                     (Some(o), None) => (Side::Old, o),
                     (None, None) => return Effect::None,
                 };
-                view.pick = Some(match view.pick {
+                let pick = match view.pick {
                     Some(p) if extend && p.side == side => Pick { head: line, ..p },
                     _ => Pick {
                         side,
                         anchor: line,
                         head: line,
                     },
-                });
+                };
+                view.pick = Some(pick);
+                // A new comment's composer follows the pick, keeping its text (C4).
+                if let Some(composer) = view.composer.as_mut() {
+                    if let ComposerTarget::New(_) = composer.target {
+                        composer.target = ComposerTarget::New(pick);
+                    }
+                }
             }
             Effect::None
         }
@@ -603,6 +601,30 @@ fn review_edit(view: &OpenView, edit: ReviewEditOp) -> Effect {
     }
 }
 
+/// The lines a new comment's composer is on, while they are still picked (C4). A refresh that
+/// removes them drops the pick (R2) and leaves the composer, with its text, unplaced until the
+/// next pick places it again.
+pub fn composer_placed(view: &OpenView) -> Option<Pick> {
+    match view.composer.as_ref()?.target {
+        ComposerTarget::New(pick) if view.pick == Some(pick) => Some(pick),
+        _ => None,
+    }
+}
+
+/// Close a new comment's composer: the file it was picked in is no longer shown.
+fn close_new(view: &mut OpenView) {
+    view.pick = None;
+    if matches!(
+        view.composer,
+        Some(Composer {
+            target: ComposerTarget::New(_),
+            ..
+        })
+    ) {
+        view.composer = None;
+    }
+}
+
 /// Save in the composer (C2): `Add` with the quote from the loaded lines, or `SetText`; blank
 /// text sends nothing and keeps the composer open.
 fn composer_saved(state: &mut State) -> Effect {
@@ -616,9 +638,14 @@ fn composer_saved(state: &mut State) -> Effect {
         return Effect::None;
     }
     let text = composer.text.clone();
+    let placed = composer_placed(view);
     let edit = match composer.target {
         ComposerTarget::Edit(id) => ReviewEditOp::SetText { id, text },
-        ComposerTarget::New(pick) => {
+        ComposerTarget::New(_) => {
+            // Unplaced: its lines are gone and nothing is picked yet.
+            let Some(pick) = placed else {
+                return Effect::None;
+            };
             let (Some(path), Load::Ready(loaded)) = (view.selected.as_ref(), &view.diff) else {
                 return Effect::None;
             };
@@ -819,6 +846,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
                 if !list.files.iter().any(|f| &f.path == selected) {
                     view.selected = None;
                     view.diff = Load::Idle;
+                    close_new(view);
                 }
             }
             Load::Ready(list)
@@ -827,6 +855,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
             // Nothing listed backs the selection any more.
             view.selected = None;
             view.diff = Load::Idle;
+            close_new(view);
             Load::Failed(message)
         }
     };

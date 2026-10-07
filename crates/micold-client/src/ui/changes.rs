@@ -18,9 +18,9 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    base_line, can_pick, committed_available, diff_body, file_comments, is_pending, list_body,
-    pending_counts, review_of, send_action, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
-    DEFAULT_ENTRY_NOTE,
+    base_line, can_pick, committed_available, composer_placed, diff_body, file_comments,
+    is_pending, list_body, pending_counts, review_of, send_action, ComposerTarget, DiffBody,
+    ListBody, Msg, OpenView, DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -30,6 +30,8 @@ use crate::ui::material::{
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
 pub const NOT_IN_DIFF: &str = "Not in the current diff";
+/// Above a new comment whose lines a refresh removed (C4).
+pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
 pub const ROW_HEIGHT: f32 = 36.0;
@@ -267,7 +269,9 @@ fn diff_pane<'a>(
                     );
                 }
             }
-            // C2: the composer, or the way to open it, under the last picked row.
+            // C2: the composer, or the way to open it, under the last picked row. C4: a new
+            // comment's composer whose lines a refresh removed waits above the diff for a pick.
+            let mut unplaced = None;
             match (view.pick, view.composer.as_ref()) {
                 (Some(pick), None) => {
                     diff = diff.slot(
@@ -282,14 +286,33 @@ fn diff_pane<'a>(
                     );
                 }
                 (_, Some(open)) => {
-                    if let ComposerTarget::New(pick) = open.target {
-                        diff =
-                            diff.slot(pick.side, pick.head, composer_box(&open.text, composer, r));
+                    if let ComposerTarget::New(_) = open.target {
+                        match composer_placed(view) {
+                            Some(pick) => {
+                                diff = diff.slot(
+                                    pick.side,
+                                    pick.head,
+                                    composer_box(&open.text, composer, true, r),
+                                );
+                            }
+                            None => {
+                                unplaced = Some(
+                                    column![
+                                        Text::new(UNPLACED, TypeRole::Caption, r).muted(),
+                                        composer_box(&open.text, composer, false, r),
+                                    ]
+                                    .spacing(spacing::XS),
+                                );
+                            }
+                        }
                     }
                 }
                 (None, None) => {}
             }
             let mut pane = column![layouts].spacing(spacing::MD).height(Length::Fill);
+            if let Some(unplaced) = unplaced {
+                pane = pane.push(unplaced);
+            }
             if !comments.not_in_diff.is_empty() {
                 let mut group = column![Text::new(NOT_IN_DIFF, TypeRole::Label, r).muted()]
                     .spacing(spacing::SM);
@@ -350,7 +373,7 @@ fn comment_or_editor<'a>(
 ) -> Element<'a, Message> {
     if let Some(open) = view.composer.as_ref() {
         if open.target == ComposerTarget::Edit(comment.id) {
-            return composer_box(&open.text, composer, r);
+            return composer_box(&open.text, composer, true, r);
         }
     }
     let state = match (is_pending(comment), sending) {
@@ -369,13 +392,14 @@ fn comment_or_editor<'a>(
 }
 
 /// The composer (C2): the text area, Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
-/// text: the service refuses an empty comment (W1).
+/// text, the service refuses an empty comment (W1), and only while `placed` on lines (C4).
 fn composer_box<'a>(
     text: &'a str,
     editor: Option<&'a text_editor::Content>,
+    placed: bool,
     r: Roles,
 ) -> Element<'a, Message> {
-    let has_text = !text.trim().is_empty();
+    let has_text = placed && !text.trim().is_empty();
     let save = Message::Changes(Msg::ComposerSaved);
     let area: Element<'a, Message> = match editor {
         Some(content) => {
