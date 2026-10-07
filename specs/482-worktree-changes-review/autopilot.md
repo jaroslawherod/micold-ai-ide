@@ -82,6 +82,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M4 (T063) | 1 | a46f1c19 | B7, B8 (dark), B14 (light, after restart) pass; Send to session is M5 |
 | Review B M4 (conformance, sonnet) | 1 | eecc77bb3f560f5dfed9108b8047f6423c45ad54:a46f1c19c1d7839c0e46269f3e52c3dd7bfceedb | CLEAN; 2 MINOR not fixed (F1 `review_edit` pushes `ReviewChanged` to every client, not only the project's, and snapshots the catalog per edit; F2 Verify not runnable in its sandbox, the scoped gate ran it) |
 | Visual pass M5 (T075) | 1 | 2473be8a, e2cc6eba | B9, B10 (light) pass; found the composer taking no keys with a session selected (MAJOR), fixed in e2cc6eba (`terminal_focused()` and `view_facts().main_area_taken` count the Changes view); re-run in dark: typing works with a session running, B10 pass |
+| Gate M5 (scoped, workspace) | scoped | 63c21b52..ace6b8b2 | red: clippy `too_many_arguments` on review_send's `add` helper (allowed); a disk-full link (stale test binaries removed); `documentation_is_not_read` ("README.md" fixture path in prompt.rs tests, now `notes.md`); then only the root-only permission test stopping the run — full gate next |
+| Review A M5 (code-review high, 018d55df..HEAD) | 1 | e6497af342fd4835004625d99753fe74d44b76c2:63c21b52f0d70f946f038ce9de7d97fd61020965 | CLEAN, no findings |
 
 ## Declined review findings
 
