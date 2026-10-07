@@ -11,7 +11,7 @@ suite_baseline: see cycle-log.md Baseline
 # Test List: Environment include script — BUG-454 (a per-directory failure reaches Settings)
 
 **Scope.** Feature 011 closed before this extension was installed, and this list was written for
-bugfix BUG-454 only (`bugs/BUG-454.md`, tasks T041–T046). It covers `FR-022` and the part of
+bugfix BUG-454 only (`bugs/BUG-454.md`, tasks T047–T052). It covers `FR-022` and the part of
 `FR-013` it extends (the captured output stays off disk). The feature's other criteria shipped
 before the list existed and are not re-derived here.
 
