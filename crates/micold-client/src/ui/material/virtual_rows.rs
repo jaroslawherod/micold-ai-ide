@@ -64,8 +64,47 @@ pub fn visible_range_with(
     overscan: usize,
     extras: &[(usize, f32)],
 ) -> Range<usize> {
-    let _ = extras;
-    visible_range(offset, viewport, row_height, len, overscan)
+    if len == 0 || row_height <= 0.0 {
+        return 0..0;
+    }
+    let first = row_at(offset as f32, row_height, len, extras);
+    // The row holding the last visible pixel, one past it as the end.
+    let last = rows_before((offset + viewport) as f32, row_height, len, extras);
+    let start = first.min(len).saturating_sub(overscan);
+    let end = last.saturating_add(overscan).min(len);
+    start..end.max(start)
+}
+
+/// How many rows start above the pixel `y`: one past the row holding the pixel just above it.
+fn rows_before(y: f32, row_height: f32, len: usize, extras: &[(usize, f32)]) -> usize {
+    let mut extra = 0.0;
+    for &(index, height) in extras {
+        let top = index as f32 * row_height + extra;
+        if y <= top {
+            break;
+        }
+        if y <= top + row_height + height {
+            return (index + 1).min(len);
+        }
+        extra += height;
+    }
+    (((y - extra) / row_height).ceil().max(0.0) as usize).min(len)
+}
+
+/// The row whose own height or slot holds the pixel `y`.
+fn row_at(y: f32, row_height: f32, len: usize, extras: &[(usize, f32)]) -> usize {
+    let mut extra = 0.0;
+    for &(index, height) in extras {
+        let top = index as f32 * row_height + extra;
+        if y < top {
+            break;
+        }
+        if y < top + row_height + height {
+            return index.min(len);
+        }
+        extra += height;
+    }
+    (((y - extra) / row_height).floor().max(0.0) as usize).min(len)
 }
 
 /// [`spacers`] for a list whose rows carry the slots `extras`.
@@ -75,8 +114,15 @@ pub fn spacers_with(
     len: usize,
     extras: &[(usize, f32)],
 ) -> (f32, f32) {
-    let _ = extras;
-    spacers(rows, row_height, len)
+    let (mut above, mut below) = spacers(rows, row_height, len);
+    for &(index, height) in extras {
+        if index < rows.start {
+            above += height;
+        } else if index >= rows.end && index < len {
+            below += height;
+        }
+    }
+    (above, below)
 }
 
 /// Builds one row by its index.
