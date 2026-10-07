@@ -158,7 +158,7 @@ pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
-pub use diff_view::DiffView;
+pub use diff_view::{DiffLayout, DiffView};
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;

@@ -532,3 +532,49 @@ fn a_six_thousand_line_file_is_too_large_unless_forced() {
         "Show diff reads it whole"
     );
 }
+
+/// Review A M2 F1: a path is a literal, never a pathspec pattern: `a[1].rs` shows its own diff, not
+/// `a1.rs`'s too.
+#[test]
+fn a_path_with_glob_characters_is_read_literally() {
+    let f = fixture();
+    write(&f.wt, "a1.rs", "one\n");
+    write(&f.wt, "a[1].rs", "one\n");
+    commit_all(&f.wt, "both");
+    write(&f.wt, "a1.rs", "two\n");
+    write(&f.wt, "a[1].rs", "three\n");
+    let diff = diff_of(&f.wt, UNCOMMITTED, "a[1].rs", None, false);
+    assert_eq!(changes(&diff.diff), [removed("one"), added("three")]);
+}
+
+/// Review A M2 F3: an untracked symlink is diffed as git stores it — its target path — never by
+/// reading through it.
+#[cfg(unix)]
+#[test]
+fn an_untracked_symlink_shows_its_target_not_the_file_it_points_to() {
+    let f = fixture();
+    let outside = tempfile::tempdir().expect("temp dir");
+    let secret = outside.path().join("secret.txt");
+    fs::write(&secret, "do not show\n").expect("write");
+    std::os::unix::fs::symlink(&secret, f.wt.join("link")).expect("symlink");
+    let diff = diff_of(&f.wt, UNCOMMITTED, "link", None, false);
+    let target = secret.to_str().expect("utf-8 temp path");
+    assert_eq!(changes(&diff.diff), [added(target)]);
+}
+
+/// Review A M2 F2: an untracked file over the byte limit still reports its line count.
+#[test]
+fn an_untracked_file_over_the_byte_limit_reports_its_lines() {
+    let f = fixture();
+    let line = "x".repeat(999);
+    let text: String = (0..2_200).map(|_| format!("{line}\n")).collect();
+    write(&f.wt, "huge.txt", &text);
+    let diff = diff_of(&f.wt, UNCOMMITTED, "huge.txt", None, false);
+    assert_eq!(
+        diff.diff,
+        FileDiff::TooLarge {
+            added: 2_200,
+            removed: 0
+        }
+    );
+}

@@ -8,12 +8,13 @@
 //! show says why instead, with no gutter (D3); one over the size limits shows its counts and a
 //! **Show diff** action (D4).
 //!
-//! What is shown is the pure [`body`]; the tint of a line is the pure [`tint`].
+//! What is shown is the pure `body`; the tint of a line is the pure [`tint`].
 //!
 //! Builder form: `DiffView::new(&diff, layout, roles).offset(o).viewport(v)
 //! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).into()`. The side-by-side
 //! layout arrives with M3; until then both layouts render unified.
 
+#[cfg(test)]
 use std::ops::Range;
 
 use iced::alignment::Horizontal;
@@ -21,9 +22,11 @@ use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row, text};
 use iced::{Alignment, Element, Font, Length};
 use micold_core::review::diff::{unified_rows, DiffLine, FileDiff, Hunk, LineKind, UnifiedRow};
-use micold_core::settings::DiffLayout;
+/// The layout a diff is shown in, re-exported so callers need not reach into the settings module.
+pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
+#[cfg(test)]
 use super::virtual_rows::{visible_range, ASSUMED_VIEWPORT, OVERSCAN};
 use super::{Button, Text, TypeRole, VirtualRows};
 
@@ -62,7 +65,7 @@ pub fn large_message(added: u32, removed: u32) -> String {
 
 /// What the diff area shows for a diff.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Body<'a> {
+enum Body<'a> {
     /// The unified rows, in order.
     Rows(Vec<UnifiedRow<'a>>),
     /// No lines to show, and the sentence that says why (D3).
@@ -77,7 +80,7 @@ pub enum Body<'a> {
 }
 
 /// What the diff area shows for `diff`.
-pub fn body(diff: &FileDiff) -> Body<'_> {
+fn body(diff: &FileDiff) -> Body<'_> {
     match diff {
         FileDiff::Text(hunks) if hunks.is_empty() => Body::Message(NO_CONTENT),
         FileDiff::Text(_) => Body::Rows(unified_rows(diff)),
@@ -149,7 +152,8 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
     }
 
     /// The rows this view builds as it stands: the visible ones and the overscan (D5).
-    pub fn built_rows(&self) -> Range<usize> {
+    #[cfg(test)]
+    fn built_rows(&self) -> Range<usize> {
         let len = match body(self.diff) {
             Body::Rows(rows) => rows.len(),
             Body::Message(_) | Body::Large { .. } => return 0..0,
