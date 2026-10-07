@@ -7,6 +7,7 @@
 //! * the snackbar's 250 ms clock, subscribed only while a notification is on screen (FR-032a);
 //! * the pointer stream, only while the project switcher is open (feature 015);
 //! * the per-frame clock, only during a measurement run (FR-039b).
+//! * the Changes view's file watch, only while the view is open (482 R9).
 //!
 //! Dropping any of those `if`s compiles, changes no behaviour a test can observe, and leaves the
 //! application waking four (or sixty) times a second forever. A `Subscription` is opaque — it
@@ -125,6 +126,22 @@ fn the_frame_clock_agrees_with_the_gate_frame_probe_glue_checks_it_by() {
         guard.contains("probe_config()"),
         "the frame clock is inside `{guard}` — `frame_probe_glue` reads the same gate a different \
          way, so a disagreement here means one of the two is misreading the file"
+    );
+}
+
+/// The Changes view's file watch runs only while the view is open (feature 482, research R9).
+///
+/// A recursive watch of a worktree held for the life of the process would wake the window on
+/// every build and every agent edit in an entry nobody is looking at.
+#[test]
+fn the_changes_watch_runs_only_while_the_view_is_open() {
+    let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
+    let guard = enclosing_block(&src, "changes_watch::")
+        .expect("the Changes view's watch is subscribed unconditionally");
+    assert!(
+        guard.contains("changes.open"),
+        "the Changes view's watch is inside `{guard}`, which does not test whether the view is \
+         open (482 R9)"
     );
 }
 

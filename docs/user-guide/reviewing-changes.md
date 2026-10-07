@@ -86,6 +86,18 @@ A file with more than 5,000 changed lines, or a version larger than 2 MB, is not
 away. The diff area shows how many lines were added and removed and a **Show diff** button; press it
 to read and show the whole diff. The view remembers the choice for that file until it closes.
 
+### Keeping up with changes
+
+The view keeps itself current while it is open. When a file in the entry is created, edited,
+deleted or renamed, or a change is staged or committed — by you in a terminal or editor, or by
+the agent — the list and the diff on screen are read again within about two seconds, with nothing
+to press. A burst of edits (a build, an agent rewriting several files) is read once when it
+settles, not once per file. Files git ignores do not trigger a refresh, and the Default entry does
+not react to changes inside its worktrees.
+
+The text you are writing in a comment box is kept across a refresh. Picked lines are kept while
+they are still in the diff; when they are gone, the pick is dropped.
+
 ## Commenting on lines
 
 You can leave comments on the diff, the way you would in a code review, for the session to act on
@@ -117,6 +129,13 @@ the comment's text; **Save** keeps the new text. **Delete** removes the comment 
 A comment whose lines the diff on screen does not show — for example because you turned off the
 kind of change it is on — is listed under **Not in the current diff** above that file's diff, with
 the lines it is on.
+
+### Outdated comments
+
+When the lines a comment points at no longer hold the code it quoted — the agent or you changed
+them, or the file is gone — its card is marked **Outdated**. The comment stays where it is and
+keeps the code it quoted when it was written. It is still sent with that quoted code and its line
+range, so the session sees what you were looking at.
 
 ### Where comments are kept
 

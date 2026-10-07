@@ -196,7 +196,7 @@ fn off_thread<T: Send + 'static>(
 
 /// The directory of `entry`: a listed worktree's own path (an included one lives outside the
 /// project), else where a session there would run.
-fn entry_dir(app: &App, entry: &SessionLocation) -> Option<PathBuf> {
+pub(crate) fn entry_dir(app: &App, entry: &SessionLocation) -> Option<PathBuf> {
     if let SessionLocation::Worktree(dir_name) = entry {
         if let Some(worktree) = app
             .core
