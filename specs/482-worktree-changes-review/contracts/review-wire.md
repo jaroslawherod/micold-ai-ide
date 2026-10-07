@@ -1,6 +1,6 @@
 # Contract: review comments on the client–service wire
 
-Protocol change: `PROTOCOL_VERSION` 29 → 30 (`crates/micold-core/src/protocol/version.rs`); the
+Protocol change: `PROTOCOL_VERSION` 30 → 31 (`crates/micold-core/src/protocol/version.rs`); the
 schema hash follows from the new types. All new types derive `Serialize, Deserialize` and live in
 `crates/micold-core/src/protocol/messages.rs` (wire) and `crates/micold-core/src/review/` (domain).
 

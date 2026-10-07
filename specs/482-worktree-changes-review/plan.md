@@ -43,7 +43,7 @@ refresh within 2 s of a change (SC-004)
 **Constraints**: offline; diff bodies never cross the wire; prompt bytes identical on all platforms
 (SC-006); limits 5,000 changed lines / 2 MB per version / 50 quoted lines (R8)
 
-**Scale/Scope**: one new core module (8 files), one daemon module, protocol v30, one client
+**Scale/Scope**: one new core module (8 files), one daemon module, protocol v31, one client
 feature + shell + glue, four new shared components, one user-guide page
 
 ## Constitution Check
@@ -90,11 +90,11 @@ Post-design re-check: unchanged, all PASS.
   `crates/micold-core/src/store.rs`; `reviews_dir` stays private and the daemon reaches review
   files only through `JsonFileStore` load/save methods.
 
-### D2 — Protocol v30 — contracts/review-wire.md
+### D2 — Protocol v31 — contracts/review-wire.md
 
 `crates/micold-core/src/protocol/messages.rs`: `ClientMsg::ReviewEdit`, `ClientMsg::ReviewSend`,
 `ReviewEditOp`, `SettingsSet.diff_layout`, `DaemonMsg::ReviewChanged`,
-`OperationResult::ReviewSent`; `version.rs` 29 → 30. `crates/micold-core/src/settings.rs`:
+`OperationResult::ReviewSent`; `version.rs` 30 → 31. `crates/micold-core/src/settings.rs`:
 `DiffLayout` and `Settings::diff_layout` (serde default).
 
 ### D3 — Daemon — R3–R6, W1–W12
@@ -221,7 +221,7 @@ specs/482-worktree-changes-review/
 ```text
 crates/micold-core/src/
 ├── review/{mod,base,changes,diff,comment,prompt,target,watch,git,store}.rs   # new
-├── protocol/{messages,version}.rs     # v30 messages
+├── protocol/{messages,version}.rs     # v31 messages
 ├── settings.rs                        # DiffLayout
 ├── store.rs                           # reviews_dir
 └── tokens/{mod.rs,css.rs}             # diff_added / diff_removed roles
