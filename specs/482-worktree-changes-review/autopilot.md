@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M7 (T081–T089) verify: full gate, PR-body section; M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
+- **Next step**: milestone M8 (T090–T097); M5–M7 commits are local unless the push below went through (PR-body section for M7 in the scratchpad `pr-body-482-M7.md`)
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T050–T063 | full | Comments on lines and ranges | #624 | done |
 | M5 | T064–T075 | full | Send comments to the running session | #624 | done |
 | M6 | T076–T080 | full | Send when no session is running | #624 | done |
-| M7 | T081–T089 | full | Live refresh and outdated comments | #624 | in progress |
+| M7 | T081–T089 | full | Live refresh and outdated comments | #624 | done |
 | M8 | T090–T097 | full | Clear, discard, and removal with the worktree | — | todo |
 
 ## Decisions
@@ -96,6 +96,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M7 (code-review high, sonnet, fix diff) | 2 | ae613a12fcf468dfd126b32bf9db60ca5b589736:de6531e0d2e66603cb8338420d0ee12a5a37faec | CLEAN, no findings (F1–F5 fixed) |
 | Review B M7 (conformance, sonnet) | 1 | ae613a12fcf468dfd126b32bf9db60ca5b589736:de6531e0d2e66603cb8338420d0ee12a5a37faec | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate runs both commands) |
 | Visual pass M7 (T089) | 1 | de6531e0 | B12 edit, commit, C4 unplaced composer, ignored file pass (light); SC-004 20/20 within 2 s, max 0.74 s (`visual-pass/m7.md`); no defect |
+| Gate M7 (full, raw commands, b05e78ee) | full | 00aa5c2b98be8fb30202acd473c24c759a4fba20:b05e78eed6cf8f1a0629a8be84edbfdcf7de15ca | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
 
 ## Declined review findings
 
