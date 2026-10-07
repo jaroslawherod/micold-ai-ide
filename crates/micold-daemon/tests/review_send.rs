@@ -801,6 +801,37 @@ async fn us3_s2_an_ai_cli_that_cannot_start_leaves_the_comments_pending() {
     assert!(s.inputs().is_empty(), "nothing was typed anywhere");
 }
 
+/// The trust-question branch (`FirstPromptUndelivered::AsksTrust`): the CLI would first ask whether
+/// to trust the folder, and typing the prompt would answer that question (review B M6 F3).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_s2_a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    std::fs::remove_file(s._home.path().join(".claude.json")).unwrap();
+    let mut client = window(&s.state, &project).await;
+    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Not typed.").await;
+
+    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    let (kind, message) = result.expect_err("the send fails");
+    assert_eq!(kind, ErrorKind::Refused, "{message}");
+    assert!(
+        message.contains("trust"),
+        "the error names the trust question: {message}"
+    );
+    let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
+    assert!(!sending, "`sending` is cleared (W9)");
+    assert!(
+        comments.iter().all(|c| c.state == CommentState::Pending),
+        "every comment stays pending"
+    );
+    // The session starts (its stand-in creates an empty input file); the prompt is never typed.
+    assert!(
+        s.inputs().iter().all(|(_, typed)| typed.is_empty()),
+        "nothing was typed anywhere"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn w9_a_session_not_ready_within_the_bound_gets_nothing_and_the_comments_stay_pending() {
     let _guard = ENV.lock().await;
