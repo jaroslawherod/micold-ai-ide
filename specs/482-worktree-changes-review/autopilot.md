@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M8 T097 visual pass (B13, B17), then scoped gate + review A (high) + review B + full gate; T090–T096 green locally
+- **Next step**: M8: review A round 2 (sonnet, fix diff) + scoped gate, then review B + visual pass B13/B17 (T097), full gate, PR-body section
 
 ## Pull requests
 
@@ -97,6 +97,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M7 (conformance, sonnet) | 1 | ae613a12fcf468dfd126b32bf9db60ca5b589736:de6531e0d2e66603cb8338420d0ee12a5a37faec | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate runs both commands) |
 | Visual pass M7 (T089) | 1 | de6531e0 | B12 edit, commit, C4 unplaced composer, ignored file pass (light); SC-004 20/20 within 2 s, max 0.74 s (`visual-pass/m7.md`); no defect |
 | Gate M7 (full, raw commands, b05e78ee) | full | 00aa5c2b98be8fb30202acd473c24c759a4fba20:b05e78eed6cf8f1a0629a8be84edbfdcf7de15ca | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
+| Gate M8 (scoped, d5d77ffa) | scoped | — | red: `popover_displacement::every_popover_is_in_the_table` (dialog count 12 → 13); fixed. The client run after it hit a full disk (`No space left`): `cargo clean -p` of the three workspace crates freed 26 GiB |
+| Review A M8 (code-review high) | 1 | 5550a1436bf5abe77ebb811936ce8f44ab624f28:d5d77ffaf356418bd3d77b00ed2b4da185669324 | CHANGES: F1 MAJOR (unreadable repo prunes every worktree) fixed red first (`an_unreadable_repository_prunes_nothing_on_refresh`); F2 MAJOR (offline included worktree pruned) fixed (an included path counts as gone only when its parent folder can be read); F4 MINOR fixed (confirm re-checks there is something pending; test added with the fix, not red first); F3, F5 MINOR declined |
 
 ## Declined review findings
 
@@ -107,6 +109,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M4 F2 (MINOR, composer cleared before the service answers, text lost on a refused edit): a refusal is a validation or I/O failure the composer cannot fix by retrying; the error surfaces as an operation error. Not fixed: MINOR, and keeping the text needs a restore path on every refusal; left for M5's send work to revisit.
 - Review A M4 F3 (MINOR, review-file write under the daemon's state lock): not fixed: MINOR; the lock also orders concurrent edits to one file.
 - Review B M6 F3 (MINOR, `FirstPromptUndelivered::NotStarted` untested): `AsksTrust` now has a test; `NotStarted` needs `start_session` to return false, i.e. the spawn itself failing, which a stand-in CLI cannot cause deterministically (a CLI that exits at once still spawns); the missing-CLI test covers the earlier refusal. Not tested; MINOR.
+- Review A M8 F3 (MINOR, memory dropped when the review file write fails): not fixed: MINOR; every other review edit already keeps memory as the truth and logs a failed save (M4 F3 shape).
+- Review A M8 F5 (MINOR, `forget_project` keeps reviews when the catalog removal fails): declined: the project is then still in the catalog, so keeping its comments is right; clients drop the project's views on removal, so no empty push is needed.
 
 ## Handover
 

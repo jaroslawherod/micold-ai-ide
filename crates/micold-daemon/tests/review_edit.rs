@@ -716,6 +716,31 @@ async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refre
 }
 
 #[tokio::test]
+async fn an_unreadable_repository_prunes_nothing_on_refresh() {
+    // Review A M8 F1: an unmounted drive or a renamed folder is not every worktree removed.
+    let f = Fixture::new();
+    seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let away = f.project().with_extension("away");
+    std::fs::rename(f.project(), &away).unwrap();
+    let refreshed = Arc::clone(&state);
+    let project = f.project();
+    tokio::task::spawn_blocking(move || refreshed.refresh_worktrees(&project))
+        .await
+        .unwrap();
+    std::fs::rename(&away, f.project()).unwrap();
+
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::len),
+        Some(1),
+        "the worktree's comments stay while its repository cannot be read"
+    );
+}
+
+#[tokio::test]
 async fn removing_the_project_from_the_catalog_deletes_its_review_file() {
     let f = Fixture::new();
     seed(&f, vec![stored(1, CommentState::Pending)]);
