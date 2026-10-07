@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M5 (T064–T075): continue from *Handover*
+- **Next step**: M5 T075 visual pass, then verify.md
 
 ## Pull requests
 
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 Windows CI (`review_git` LF → CRLF test red on windows-latest): the fix is in the test fixture (repo-local `core.autocrlf=false`), not in `GitCli::file_diff`. With `autocrlf=true` git normalises the edit away and would not commit it; forcing `autocrlf=false` in the diff would show every line of every touched file changed on a Windows checkout. Quickstart §C B6 now says to run with `core.autocrlf=false` and why; the user guide notes it.
 
 - M4 T057: the daemon's `Reviews` keys entries by worktree dir `String` (`""` = Default, as on the wire; `SessionLocation` is not `Hash`) and reads a project's review file on first use rather than at catalog adoption — same observable behaviour (attach and edits read it), no read for projects nobody opens. `ClearSent`/`DiscardPending` answer `Refused` ("not available in this build") until M8 (W4); `Busy` for a comment in a send arrives with M5.
+- M5 T070: MCP `send_session_input`/`deliver_first_prompt` keep their pre-confirm trust check and write without requiring bracketed paste (unchanged behaviour, `write_submission(.., false)`); the review send requires bracketed paste (W9) and refuses without it.
 
 ## Review rounds
 
@@ -91,12 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 unit 2 handed over at the 150k cap (2026-10-07).
-- **Done (uncommitted work committed as WIP in this handover commit)**: T070 (`ops::{Undelivered, write_submission, type_submission}`; MCP `send_session_input`/`deliver_first_prompt` call `write_submission(.., false)`, trust check stays pre-confirm in MCP), T071 (`LiveSession.last_active`, set at both constructors, `session_input`, `note_activity` on change, spinner change in `drain_signals`; `running_sessions_in`/`running_sessions_locked`, `session_cwd_and_cli`), T072 (`Reviews::{begin_send, finish_send, abort_send}`, `file_with` helper, `changed()` reports `sending`; `DaemonState::{review_send, close_review_send, check_entry_locked}`, `unix_now`; server spawns `review_send`; `diff_layout_setting` placeholder test retired). `mcp_create_session` and `mcp_cross_session` green; `review_send` 4/5 green.
-- **Red still**: `review_send::r5_…` — the test's `SessionInput { session: sid(1), serial: 0, bytes: b"x" }` never reaches S1's input ("never received \"x\"; it has \"\""). Check the serial the `InputReceiver` expects first (likely 1, or the test must use the stamper's first serial), or whether `apply_input` drops it; fix the test or the routing, then T071 is proven.
-- **T067 written red (not yet run)**: 3 tests appended to `crates/micold-client/tests/features_changes.rs` (S1 enablement/label, `SendPressed` → `Effect::ReviewSend{..count}`, `sent_text`/`send_error_text`). Stubs in `features/changes.rs` (`send_action` → None, `SendPressed` → None, texts empty) — run them red, log the red in the cycle log, then implement (T073). Shell (`PendingOp::ReviewSend{count}`, OperationOk/Error snackbars, `Effect::ReviewSend` → `ClientMsg::ReviewSend`) and the toolbar button in `ui/changes.rs` are already wired; not compiled yet.
-- **Next**: fix r5; run T067 red → implement T073; cycle log rows for T070–T073; tick T070–T073; T074 docs; T075 visual pass; verify.md (scoped gate + review A high, review B, full gate, PR-body section `pr-body-482-M5.md`). Record Decision: MCP keeps its pre-confirm trust check and writes without requiring bracketed paste (unchanged behaviour); the review send requires it (W9).
-- **Env**: disk tight — run `$SCRATCHPAD/prune.sh` before builds; `$SCRATCHPAD/t.sh <log> cargo …` runs detached, hold on `^T_EXIT=`. Last daemon test log: `$SCRATCHPAD/m5-send-green.log`.
+None.
 
 ## Open escalation
 

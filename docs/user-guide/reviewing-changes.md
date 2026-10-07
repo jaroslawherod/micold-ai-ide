@@ -124,6 +124,28 @@ Comments belong to the worktree (or the Default entry) they were written in, and
 service keeps them: they are still there after you restart the app, and every window open on the
 project shows the same comments as they are added, edited and deleted.
 
+### Sending comments to the session
+
+**Send to session (n)** in the view's header sends the entry's pending comments — *n* of them — to
+the session working in that worktree (or in the project root, for the Default entry) as one
+prompt. It is unavailable while there are no pending comments, and reads **Sending…** while a send
+of this entry is under way in any window.
+
+The prompt asks the session to address the comments. For each file, in path order, it lists every
+comment with the lines it is about — marked as current lines, or as removed lines with their
+numbers in the base version — the code on those lines as it was when the comment was written, and
+the comment's text. A long range of lines is shortened to its first and last lines.
+
+The prompt goes to the session running in the same entry; with several running there, to the one
+you used most recently (typed into, or whose activity last changed). It never goes to a session of
+another worktree. It is typed as one pasted submission, exactly as if you had pasted it and pressed
+Enter.
+
+When it is delivered, a message says how many comments went to which session, and the comments
+become **sent**: they stay on their lines, but can no longer be edited or deleted, and a later
+send carries only the comments added since. When it is not delivered — for example the session's
+terminal cannot take a pasted text — an error says why and the comments stay pending.
+
 ## The base line
 
 Under the header, **Compared with** `<branch>` **at** `<short commit>` names what the worktree is

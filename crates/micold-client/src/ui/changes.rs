@@ -58,8 +58,11 @@ pub fn view<'a>(
         Button::filled(action.label, r)
             .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed)))
     });
-    let header = row![container(heading).width(Length::Fill),]
-        .push_maybe(send)
+    let mut header = row![container(heading).width(Length::Fill)];
+    if let Some(send) = send {
+        header = header.push(send);
+    }
+    let header = header
         .push(
             Button::text("Close", r)
                 .leading(Icon::Close)

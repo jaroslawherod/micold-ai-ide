@@ -489,7 +489,23 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ComposerSaved => composer_saved(state),
-        Msg::SendPressed => Effect::None,
+        Msg::SendPressed => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            let count = review_of(state, view)
+                .filter(|r| !r.sending)
+                .map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+            if count == 0 {
+                return Effect::None;
+            }
+            Effect::ReviewSend {
+                project: view.project.clone(),
+                worktree_dir: entry_dir(&view.entry),
+                outdated: Vec::new(),
+                count,
+            }
+        }
         Msg::EditComment(id) => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -631,18 +647,35 @@ pub struct SendAction {
 }
 
 /// The open view's **Send to session (n)**; `None` with no view open (S1).
-pub fn send_action(_state: &State) -> Option<SendAction> {
-    None
+pub fn send_action(state: &State) -> Option<SendAction> {
+    let view = state.open.as_ref()?;
+    let review = review_of(state, view);
+    if review.is_some_and(|r| r.sending) {
+        return Some(SendAction {
+            label: "Sending…".into(),
+            enabled: false,
+        });
+    }
+    let count = review.map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+    Some(SendAction {
+        label: format!("Send to session ({count})"),
+        enabled: count > 0,
+    })
 }
 
 /// The success snackbar (S2).
-pub fn sent_text(_count: usize, _session: &str, _started: bool) -> String {
-    String::new()
+pub fn sent_text(count: usize, session: &str, started: bool) -> String {
+    let noun = if count == 1 { "comment" } else { "comments" };
+    if started {
+        format!("Started a session and sent {count} {noun}")
+    } else {
+        format!("Sent {count} {noun} to {session}")
+    }
 }
 
 /// The error snackbar (S2): the service's message.
-pub fn send_error_text(_message: &str) -> String {
-    String::new()
+pub fn send_error_text(message: &str) -> String {
+    format!("Couldn't send the comments: {message}")
 }
 
 /// Each file's pending-comment count in the open view's entry (L2).

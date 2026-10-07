@@ -567,7 +567,8 @@ async fn r5_the_most_recently_active_running_session_of_the_entry_receives_it() 
         .send(Frame::Control(ClientMsg::SessionInput {
             session: sid(1),
             serial: 0,
-            bytes: b"x".to_vec(),
+            // A line end: the stand-in `cat` reads a canonical-mode terminal line by line.
+            bytes: b"x\r".to_vec(),
         }))
         .await
         .unwrap();
