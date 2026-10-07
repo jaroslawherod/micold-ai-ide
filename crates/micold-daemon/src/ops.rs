@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use alacritty_terminal::term::TermMode;
+use micold_core::cli_reason::{self, AttemptDir, Explanation};
 use micold_core::git::GitCli;
 use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
@@ -560,4 +561,141 @@ pub async fn type_submission(
         return Err(Undelivered::NotRunning);
     }
     write_submission(&pty, text, true)
+}
+
+/// Why the AI CLI a new session would run cannot run where it would (037, FR-012): the reason and
+/// what to do, in `cli_reason`'s words. `None` when it is available.
+///
+/// What is available and the state of the environment it was looked for in come from one
+/// resolution of `cwd`, so the reason describes the attempt that did not find the CLI. A refusal
+/// drops the cached environment, so the next attempt looks again (D18).
+pub async fn cli_unavailable(state: &Arc<DaemonState>, cwd: &Path, cli: AiCli) -> Option<String> {
+    let st = Arc::clone(state);
+    let place = cwd.to_path_buf();
+    let (available, env) =
+        match tokio::task::spawn_blocking(move || st.availability_in(&place)).await {
+            Ok(found) => found,
+            Err(join) => return Some(format!("the AI CLIs could not be looked for: {join}")),
+        };
+    if available.contains(&cli) {
+        return None;
+    }
+    let image = crate::state::image_reference();
+    let Explanation { reason, action } =
+        cli_reason::explain_one(cli, env, crate::state::place(&image), AttemptDir::Dir(cwd));
+    state.invalidate_env_include(cwd);
+    Some(format!("{reason} {action}"))
+}
+
+/// Where a new session goes and what it runs (see [`create_session_with_prompt`]).
+#[derive(Debug, Clone, Copy)]
+pub struct NewSession<'a> {
+    /// The project it belongs to.
+    pub project: &'a Path,
+    /// Its entry: a worktree directory name, `""` for the project root.
+    pub worktree_dir: &'a str,
+    /// The directory it runs in (the entry's root).
+    pub cwd: &'a Path,
+    /// The AI CLI it runs.
+    pub cli: AiCli,
+}
+
+/// A new session's first input (see [`create_session_with_prompt`]).
+#[derive(Debug, Clone, Copy)]
+pub struct FirstPrompt<'a> {
+    /// What to type, as one submission.
+    pub text: &'a str,
+    /// When it was asked for: the first-prompt bound counts from here.
+    pub asked: tokio::time::Instant,
+    /// Refuse a terminal that has not asked for bracketed paste (see [`write_submission`]).
+    pub require_bracketed: bool,
+}
+
+/// Why a new session's first prompt was not typed (034 FR-017, 482 W9). Nothing reached its
+/// terminal; the session itself stays, as any session the user created would.
+#[derive(Debug)]
+pub enum FirstPromptUndelivered {
+    /// The session's process did not start.
+    NotStarted,
+    /// The CLI would first ask whether to trust the folder; the prompt's Enter would answer it.
+    AsksTrust(AiCli),
+    /// The CLI was not ready for input within the first-prompt bound of the request.
+    NotReady(AiCli, std::time::Duration),
+    /// Typing it failed.
+    Typing(Undelivered),
+}
+
+impl FirstPromptUndelivered {
+    /// What to tell the user: why nothing was typed into `session`.
+    pub fn message(&self, session: SessionId) -> String {
+        match self {
+            Self::NotStarted => "the session did not start, so the prompt was not typed".into(),
+            Self::AsksTrust(cli) => {
+                let display = cli.provider().display_name();
+                format!(
+                    "{display} would first ask whether to trust this folder, so the prompt was not \
+                     typed; trust the project in {display} first"
+                )
+            }
+            Self::NotReady(cli, bound) => format!(
+                "{} was not ready for input within {} s of the request, so the prompt was not typed",
+                cli.provider().display_name(),
+                bound.as_secs()
+            ),
+            Self::Typing(why) => why.message(session),
+        }
+    }
+}
+
+/// Create a session in `new`'s entry, start it fresh (never a resume), and, given a `prompt`, type
+/// it as the session's first input once its CLI is ready, if that happens within the first-prompt
+/// bound of `prompt.asked` (034 FR-017, 482 W7). A ready signal after the bound types nothing: the
+/// wait has ended, and nothing else writes the prompt.
+///
+/// `Err` only when the session record could not be created. Otherwise the session exists, whether
+/// or not it started, and the inner result says whether the prompt was typed (`Ok` with no
+/// prompt). The prompt is never logged.
+pub async fn create_session_with_prompt(
+    state: &Arc<DaemonState>,
+    new: NewSession<'_>,
+    prompt: Option<FirstPrompt<'_>>,
+) -> io::Result<(SessionId, Result<(), FirstPromptUndelivered>)> {
+    let session = state.create_session(new.project, new.worktree_dir, new.cli)?;
+    state.begin_start(session);
+    state.broadcast_catalog();
+    let started = start_session(state, session, LaunchMode::Fresh)
+        .await
+        .unwrap_or(false);
+    let Some(prompt) = prompt else {
+        return Ok((session, Ok(())));
+    };
+    if !started {
+        return Ok((session, Err(FirstPromptUndelivered::NotStarted)));
+    }
+    let st = Arc::clone(state);
+    let place = new.cwd.to_path_buf();
+    let cli = new.cli;
+    // A failed check counts as asking: typing into a trust question would answer it.
+    let asks = tokio::task::spawn_blocking(move || st.cli_would_ask_trust(&place, cli))
+        .await
+        .unwrap_or(true);
+    if asks {
+        return Ok((session, Err(FirstPromptUndelivered::AsksTrust(cli))));
+    }
+    let bound = state.first_prompt_bound();
+    if !state
+        .wait_ready_for_input(session, prompt.asked + bound)
+        .await
+    {
+        return Ok((session, Err(FirstPromptUndelivered::NotReady(cli, bound))));
+    }
+    let Some(pty) = state.primary_pty(session) else {
+        return Ok((
+            session,
+            Err(FirstPromptUndelivered::Typing(Undelivered::NotRunning)),
+        ));
+    };
+    let typed = write_submission(&pty, prompt.text, prompt.require_bracketed)
+        .map_err(FirstPromptUndelivered::Typing);
+    Ok((session, typed))
 }

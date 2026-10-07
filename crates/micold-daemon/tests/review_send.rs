@@ -174,6 +174,25 @@ impl Sandbox {
         std::fs::read_to_string(self.input_path(id)).unwrap_or_default()
     }
 
+    /// What was typed into every session that read input so far, sessions the service started
+    /// itself included.
+    fn inputs(&self) -> Vec<(SessionId, String)> {
+        std::fs::read_dir(self.bin.path())
+            .unwrap()
+            .filter_map(|entry| {
+                let name = entry.ok()?.file_name().into_string().ok()?;
+                let id = uuid::Uuid::parse_str(name.strip_prefix("input.")?).ok()?;
+                let id = SessionId::from_uuid(id);
+                Some((id, self.typed(id)))
+            })
+            .collect()
+    }
+
+    /// The stand-in waits `secs` before it draws anything.
+    fn slow(&self, secs: f32) {
+        std::fs::write(self.bin.path().join("slow"), secs.to_string()).unwrap();
+    }
+
     /// Wait until what was typed into `id` holds `needle`.
     async fn typed_holds(&self, id: SessionId, needle: &str) -> String {
         let deadline = Instant::now() + BOUND;
@@ -194,16 +213,19 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        for n in 1..=3 {
-            if let Some(pty) = self.state.live_session(sid(n)) {
+        let mut ids: Vec<SessionId> = (1..=3).map(sid).collect();
+        ids.extend(self.inputs().into_iter().map(|(id, _)| id));
+        for id in ids {
+            if let Some(pty) = self.state.live_session(id) {
                 let _ = pty.kill();
             }
         }
     }
 }
 
-/// The stand-in `claude`: asks for bracketed paste (unless told not to), draws a prompt, and
-/// appends everything typed into it to `<bin>/input.<its --session-id>`.
+/// The stand-in `claude`: waits `<bin>/slow` seconds when that file exists, asks for bracketed
+/// paste (unless told not to), draws a prompt, and appends everything typed into it to
+/// `<bin>/input.<its --session-id>`.
 fn install_claude(bin: &Path) {
     let dir = bin.display();
     let path = bin.join("claude");
@@ -213,6 +235,7 @@ fn install_claude(bin: &Path) {
             "#!/bin/sh\n\
              sid=''; prev=''\n\
              for a in \"$@\"; do [ \"$prev\" = --session-id ] && sid=\"$a\"; prev=\"$a\"; done\n\
+             [ -e '{dir}'/slow ] && sleep \"$(cat '{dir}'/slow)\"\n\
              [ -e '{dir}'/nopaste.\"$sid\" ] || printf '\\033[?2004h'\n\
              printf 'ready> '\n\
              exec cat >> '{dir}'/input.\"$sid\"\n"
@@ -275,6 +298,14 @@ async fn request(
     msg: ClientMsg,
 ) -> (Result<OperationResult, (ErrorKind, String)>, Vec<Pushed>) {
     client.send(Frame::Control(msg)).await.unwrap();
+    answer(client, req).await
+}
+
+/// Wait for the answer to `req`, collecting the pushes seen meanwhile.
+async fn answer(
+    client: &mut Client,
+    req: u64,
+) -> (Result<OperationResult, (ErrorKind, String)>, Vec<Pushed>) {
     let mut seen = Vec::new();
     let answered = async {
         loop {
@@ -345,17 +376,35 @@ async fn send(
     project: &Path,
     dir: &str,
 ) -> (Result<OperationResult, (ErrorKind, String)>, Vec<Pushed>) {
-    request(
-        client,
+    request(client, req, send_msg(req, project, dir)).await
+}
+
+fn send_msg(req: u64, project: &Path, dir: &str) -> ClientMsg {
+    ClientMsg::ReviewSend {
         req,
-        ClientMsg::ReviewSend {
-            req,
-            project: project.to_path_buf(),
-            worktree_dir: dir.into(),
-            outdated: Vec::new(),
-        },
-    )
-    .await
+        project: project.to_path_buf(),
+        worktree_dir: dir.into(),
+        outdated: Vec::new(),
+    }
+}
+
+/// The session a send started: `ReviewSent { started: true }` naming a session that is not one of
+/// the sandbox's records.
+fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
+    match result {
+        Ok(OperationResult::ReviewSent {
+            session,
+            started: true,
+        }) => {
+            assert!(
+                !(1..=3).map(sid).any(|known| known == *session),
+                "a new session, not an existing record: {}",
+                session.0
+            );
+            *session
+        }
+        other => panic!("a session was started for the send: {other:?}"),
+    }
 }
 
 /// The bytes a submission of `prompt` types into a terminal with bracketed paste on, as the
@@ -606,4 +655,228 @@ async fn r5_the_most_recently_active_running_session_of_the_entry_receives_it() 
         !s.typed(sid(1)).contains("Third."),
         "only one session receives a prompt"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_prompt() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let mut client = window(&s.state, &project).await;
+    let comments = add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &["fn a() {}"],
+        "Rename a.",
+    )
+    .await;
+    let expected = prompt::build(EntryKind::Worktree, &pending(&comments), &[]);
+
+    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    let new = started_session(&result);
+    let (cwd, cli) = s
+        .state
+        .session_cwd_and_cli(new)
+        .expect("the session is kept");
+    assert_eq!(cli, s.state.default_ai_cli(), "the default AI CLI (FR-016)");
+    assert_eq!(
+        cwd.file_name().and_then(|name| name.to_str()),
+        Some("wt"),
+        "it runs in the entry's worktree: {}",
+        cwd.display()
+    );
+    assert_eq!(
+        s.typed_holds(new, "Rename a.").await,
+        submitted(&expected),
+        "its first input is the prompt, typed once"
+    );
+    let (_, last, sending) = seen.last().expect("the end of the send is pushed").clone();
+    assert!(!sending, "the send is closed");
+    assert!(
+        last.iter()
+            .all(|c| matches!(c.state, CommentState::Sent { .. })),
+        "the comments are sent (US3 s1): {last:?}"
+    );
+    assert!(
+        s.state.live_session(new).is_some_and(|pty| pty.is_alive()),
+        "the session the send started keeps running"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_s1_the_default_entry_starts_its_session_in_the_project_root() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let mut client = window(&s.state, &project).await;
+    let comments = add(&mut client, 1, &project, "", "a", 1, &["x"], "At the root.").await;
+    let expected = prompt::build(EntryKind::Default, &pending(&comments), &[]);
+
+    let (result, _) = send(&mut client, 2, &project, "").await;
+    let new = started_session(&result);
+    let (cwd, _) = s.state.session_cwd_and_cli(new).unwrap();
+    assert_eq!(
+        cwd, project,
+        "the Default entry's session runs in the project root"
+    );
+    assert_eq!(
+        s.typed_holds(new, "At the root.").await,
+        submitted(&expected)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_s4_an_ended_session_is_not_resumed_and_a_new_one_starts() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.start(sid(1), false).await;
+    assert!(
+        micold_daemon::ops::stop_session(&s.state, sid(1))
+            .await
+            .unwrap(),
+        "S1 ends"
+    );
+    let mut client = window(&s.state, &project).await;
+    add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "a",
+        1,
+        &["x"],
+        "Not for S1.",
+    )
+    .await;
+
+    let (result, _) = send(&mut client, 2, &project, "wt").await;
+    let new = started_session(&result);
+    s.typed_holds(new, "Not for S1.").await;
+    assert!(
+        s.state
+            .live_session(sid(1))
+            .is_none_or(|pty| !pty.is_alive()),
+        "the ended session is not resumed (US3 s4)"
+    );
+    assert!(
+        !s.typed(sid(1)).contains("Not for S1."),
+        "nothing reached S1"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_s2_an_ai_cli_that_cannot_start_leaves_the_comments_pending() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let mut client = window(&s.state, &project).await;
+    add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "a",
+        1,
+        &["x"],
+        "Never typed.",
+    )
+    .await;
+    std::fs::remove_file(s.bin.path().join("claude")).unwrap();
+
+    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    let (kind, message) = result.expect_err("the send fails");
+    assert_eq!(kind, ErrorKind::Refused, "{message}");
+    assert!(!message.is_empty(), "the error says why");
+    let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
+    assert!(!sending, "`sending` is cleared (W9)");
+    assert!(
+        comments.iter().all(|c| c.state == CommentState::Pending),
+        "every comment stays pending (US3 s2, FR-017)"
+    );
+    assert!(s.inputs().is_empty(), "nothing was typed anywhere");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w9_a_session_not_ready_within_the_bound_gets_nothing_and_the_comments_stay_pending() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.state.set_first_prompt_bound(Duration::from_secs(1));
+    s.slow(3.0);
+    let mut client = window(&s.state, &project).await;
+    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Too early.").await;
+
+    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    let (kind, message) = result.expect_err("the send fails");
+    assert_eq!(kind, ErrorKind::Refused, "{message}");
+    assert!(message.contains("ready"), "the message says why: {message}");
+    let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
+    assert!(!sending, "`sending` is cleared (W9)");
+    assert!(
+        comments.iter().all(|c| c.state == CommentState::Pending),
+        "every comment stays pending (FR-017)"
+    );
+    tokio::time::sleep(Duration::from_secs(3) + QUIET).await;
+    assert!(
+        s.inputs()
+            .iter()
+            .all(|(_, typed)| !typed.contains("Too early.")),
+        "a session ready after the bound is typed nothing: {:?}",
+        s.inputs()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn fr018_a_second_window_sending_meanwhile_is_busy_and_the_prompt_is_typed_once() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.slow(1.0);
+    let mut first = window(&s.state, &project).await;
+    let mut second = window(&s.state, &project).await;
+    let comments = add(&mut first, 1, &project, "wt", "a", 1, &["x"], "Once only.").await;
+    let expected = prompt::build(EntryKind::Worktree, &pending(&comments), &[]);
+
+    first
+        .send(Frame::Control(send_msg(2, &project, "wt")))
+        .await
+        .unwrap();
+    let opened = async {
+        loop {
+            if let Frame::Control(DaemonMsg::ReviewChanged { sending: true, .. }) =
+                second.next().await.expect("stream open").unwrap()
+            {
+                return;
+            }
+        }
+    };
+    tokio::time::timeout(BOUND, opened)
+        .await
+        .expect("the second window sees the send open");
+    let (busy, _) = send(&mut second, 1, &project, "wt").await;
+    assert_eq!(
+        busy.map_err(|(kind, _)| kind),
+        Err(ErrorKind::Busy),
+        "a send in progress makes the entry's send unavailable (FR-018, US3 s3)"
+    );
+
+    let (result, _) = answer(&mut first, 2).await;
+    let new = started_session(&result);
+    assert_eq!(
+        s.typed_holds(new, "Once only.").await,
+        submitted(&expected),
+        "the prompt is typed once"
+    );
+    tokio::time::sleep(QUIET).await;
+    let typed: Vec<_> = s
+        .inputs()
+        .into_iter()
+        .filter(|(_, typed)| typed.contains("Once only."))
+        .collect();
+    assert_eq!(typed.len(), 1, "one session received it: {typed:?}");
 }
