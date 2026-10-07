@@ -124,7 +124,7 @@ fn dirs_of(failures: &[EnvIncludeFailure]) -> Vec<PathBuf> {
     failures.iter().map(|failure| failure.dir.clone()).collect()
 }
 
-/// A1 (T041): the failed directory is listed with its category and output, the one that resolved
+/// A1 (T047): the failed directory is listed with its category and output, the one that resolved
 /// is not, and the entry lives exactly as long as the cached failure does. Each change reaches a
 /// connected window without anything else happening.
 #[test]
@@ -193,7 +193,7 @@ impl<'a> MakeWriter<'a> for LogBuffer {
     }
 }
 
-/// A2 (T042): the service's log names the directory whose resolution failed, and holds nothing the
+/// A2 (T048): the service's log names the directory whose resolution failed, and holds nothing the
 /// script printed: FR-013 keeps that output in memory only, and the service logs to a file.
 #[test]
 fn the_log_names_the_failed_directory_without_the_scripts_output() {

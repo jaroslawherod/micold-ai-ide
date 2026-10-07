@@ -18,8 +18,8 @@ existed and failed before the implementation.
   the left (field declared `#[serde(skip)]` as the stub)
 - green: `#[serde(default, skip_serializing_if = "Vec::is_empty")]`; file 15 passed, 0 failed
 - refactor: none needed
-- notes: `PROTOCOL_VERSION` 29 -> 30 with its doc line and `tests/schema_hash.rs`'s pin, as a
-  structural step of T043 in the same commit
+- notes: `PROTOCOL_VERSION` 29 -> 30 (34 -> 35 once merged with main) with its doc line and `tests/schema_hash.rs`'s pin, as a
+  structural step of T049 in the same commit
 
 ## Cycle 2: U2 a snapshot without the field reads back empty
 
@@ -50,8 +50,8 @@ existed and failed before the implementation.
   `spawn_env_for` broadcasts after filling a failed cell and logs `env = ?attempted` only,
   `invalidate_env_include` / `set_env_include` broadcast when they removed a failure; file 2 passed
 - refactor: none needed
-- notes: A1 and A2 share one implementation step (T044). Workspace not yet compiled with the new
-  field: other `CatalogSnapshot` literals still to update (T044 remainder, handover).
+- notes: A1 and A2 share one implementation step (T050). Workspace not yet compiled with the new
+  field: other `CatalogSnapshot` literals still to update (T050 remainder, handover).
 
 ## Cycle 5: U4 the client keeps the latest snapshot's failure list
 
@@ -63,5 +63,5 @@ existed and failed before the implementation.
   applies; the list is passed through `settings_view::view` to `environment::view`, which chains
   `directory_failure_lines(..)` after `script_path_notice(..)`; 1 passed
 - refactor: none needed
-- notes: T044 finished first (`env_include_failures: Vec::new()` in the remaining
-  `CatalogSnapshot` literals); T046 docs in `docs/user-guide/settings.md` and `spawn_env_for`.
+- notes: T050 finished first (`env_include_failures: Vec::new()` in the remaining
+  `CatalogSnapshot` literals); T052 docs in `docs/user-guide/settings.md` and `spawn_env_for`.
