@@ -892,7 +892,10 @@ pub fn interpret(
             crate::features::worktree::close_menu(state);
             let effect = crate::features::changes::update(
                 &mut state.changes,
-                crate::features::changes::Msg::Opened { entry },
+                crate::features::changes::Msg::Opened {
+                    project: state.workspace.active.clone().unwrap_or_default(),
+                    entry,
+                },
             );
             state.changes.pending = Some(effect);
         }

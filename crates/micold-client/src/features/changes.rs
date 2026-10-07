@@ -6,12 +6,15 @@
 //! [`Msg::DiffRead`]. What the list pane says when it has no rows
 //! is chosen here ([`list_body`], [`base_line`]) so the glue in `ui/changes.rs` only renders it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
+use micold_core::protocol::messages::ReviewEditOp;
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
 use micold_core::review::diff::{FileDiff, LoadedDiff};
-use micold_core::review::RelPath;
+use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
 use micold_core::tokens::Rgb;
@@ -48,7 +51,9 @@ pub enum Load<T> {
 /// The open view (data-model § Client).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenView {
-    /// The entry shown; its project is the window's active project.
+    /// The project of the entry: the window's active project when the view opened.
+    pub project: PathBuf,
+    /// The entry shown.
     pub entry: SessionLocation,
     /// Which kinds of change are listed; both on at open (FR-004).
     pub toggles: Toggles,
@@ -68,6 +73,56 @@ pub struct OpenView {
     pub diff_offset: u32,
     /// The diff's viewport height, in pixels.
     pub diff_viewport: u32,
+    /// The gutter selection (C1).
+    pub pick: Option<Pick>,
+    /// The comment being written or edited (C2); survives a refresh (C4).
+    pub composer: Option<Composer>,
+}
+
+/// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pick {
+    /// The side every picked line is on.
+    pub side: Side,
+    /// The line the pick started on.
+    pub anchor: u32,
+    /// The line a shift-click extended it to; the composer opens under it.
+    pub head: u32,
+}
+
+impl Pick {
+    /// The picked lines, in order.
+    pub fn range(&self) -> LineRange {
+        let (start, end) = (self.anchor.min(self.head), self.anchor.max(self.head));
+        LineRange::new(start.max(1), end.max(1)).expect("start <= end, both >= 1")
+    }
+}
+
+/// What the composer writes (C2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComposerTarget {
+    /// A new comment on the picked lines.
+    New(Pick),
+    /// A new text for this pending comment.
+    Edit(CommentId),
+}
+
+/// The open composer (data-model § Client).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Composer {
+    /// What Save does.
+    pub target: ComposerTarget,
+    /// What the user has written so far.
+    pub text: String,
+}
+
+/// The last `ReviewChanged` of one entry.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReviewView {
+    /// Every comment of the entry, pending and sent.
+    pub comments: Vec<ReviewComment>,
+    /// A send is in progress: editing and deleting are unavailable.
+    pub sending: bool,
 }
 
 /// What this window holds about the Changes view.
@@ -83,6 +138,9 @@ pub struct State {
     /// The diff layout in force: the service-owned `Settings::diff_layout`, so it outlives a file,
     /// the view and a restart (D1, FR-006, R12).
     pub layout: DiffLayout,
+    /// The last `ReviewChanged` per entry, keyed by project and the wire's worktree dir (`""` is
+    /// the Default entry), so no entry ever shows another's comments (FR-021).
+    pub reviews: BTreeMap<(PathBuf, String), ReviewView>,
 }
 
 /// What this feature is told.
@@ -90,6 +148,8 @@ pub struct State {
 pub enum Msg {
     /// Open the view of `entry` (V1); reopening resets the toggles.
     Opened {
+        /// The entry's project.
+        project: PathBuf,
         /// The entry.
         entry: SessionLocation,
     },
@@ -139,6 +199,38 @@ pub enum Msg {
     LayoutChosen(DiffLayout),
     /// The layout in force, from `Welcome` or `SettingsChanged` (R12).
     LayoutInForce(DiffLayout),
+    /// A diff row's gutter was pressed: the row's old and new numbers (C1).
+    GutterPressed {
+        /// Its number in the old version; `None` for an added line.
+        old: Option<u32>,
+        /// Its number in the new version; `None` for a removed line.
+        new: Option<u32>,
+        /// Shift was held: extend the pick on the same side.
+        extend: bool,
+    },
+    /// **Add comment** was pressed (C2).
+    AddComment,
+    /// The composer's text changed.
+    ComposerEdited(String),
+    /// Save (or Ctrl/Cmd+Enter) in the composer.
+    ComposerSaved,
+    /// Cancel in the composer.
+    ComposerCancelled,
+    /// Edit on a pending comment's card.
+    EditComment(CommentId),
+    /// Delete on a pending comment's card.
+    DeleteComment(CommentId),
+    /// An entry's comments, as the service pushed them.
+    ReviewChanged {
+        /// The project.
+        project: PathBuf,
+        /// The wire's worktree dir; `""` is the Default entry.
+        worktree_dir: String,
+        /// Every comment of the entry.
+        comments: Vec<ReviewComment>,
+        /// A send is in progress.
+        sending: bool,
+    },
 }
 
 /// What the shell must do.
@@ -175,6 +267,15 @@ pub enum Effect {
     },
     /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
     SetLayout(DiffLayout),
+    /// Send `ClientMsg::ReviewEdit` for the entry (contracts/review-wire.md).
+    ReviewEdit {
+        /// The project.
+        project: PathBuf,
+        /// The wire's worktree dir; `""` is the Default entry.
+        worktree_dir: String,
+        /// The change.
+        edit: ReviewEditOp,
+    },
 }
 
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
@@ -188,8 +289,9 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state.layout = layout;
             Effect::None
         }
-        Msg::Opened { entry } => {
+        Msg::Opened { project, entry } => {
             state.open = Some(OpenView {
+                project,
                 entry,
                 toggles: Toggles::default(),
                 list: Load::Idle,
@@ -200,6 +302,8 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 shown_large: BTreeSet::new(),
                 diff_offset: 0,
                 diff_viewport: 0,
+                pick: None,
+                composer: None,
             });
             request_read(state)
         }
@@ -233,6 +337,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 return Effect::None;
             }
             view.selected = Some(path);
+            // Picked lines and a new comment on them belong to the file they were picked in.
+            view.pick = None;
+            if matches!(
+                view.composer,
+                Some(Composer {
+                    target: ComposerTarget::New(_),
+                    ..
+                })
+            ) {
+                view.composer = None;
+            }
             view.diff = Load::Idle;
             view.diff_offset = 0;
             request_diff(state, false)
@@ -283,7 +398,228 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
+        Msg::GutterPressed { old, new, extend } => {
+            if let Some(view) = state.open.as_mut().filter(|v| can_pick(v)) {
+                // C1: a context line has both numbers and counts as the new side.
+                let (side, line) = match (old, new) {
+                    (_, Some(n)) => (Side::New, n),
+                    (Some(o), None) => (Side::Old, o),
+                    (None, None) => return Effect::None,
+                };
+                view.pick = Some(match view.pick {
+                    Some(p) if extend && p.side == side => Pick { head: line, ..p },
+                    _ => Pick {
+                        side,
+                        anchor: line,
+                        head: line,
+                    },
+                });
+            }
+            Effect::None
+        }
+        Msg::AddComment => {
+            if let Some(view) = state.open.as_mut() {
+                if let Some(pick) = view.pick {
+                    view.composer = Some(Composer {
+                        target: ComposerTarget::New(pick),
+                        text: String::new(),
+                    });
+                }
+            }
+            Effect::None
+        }
+        Msg::ComposerEdited(text) => {
+            if let Some(composer) = state.open.as_mut().and_then(|v| v.composer.as_mut()) {
+                composer.text = text;
+            }
+            Effect::None
+        }
+        Msg::ComposerCancelled => {
+            if let Some(view) = state.open.as_mut() {
+                view.composer = None;
+            }
+            Effect::None
+        }
+        Msg::ComposerSaved => composer_saved(state),
+        Msg::EditComment(id) => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            let text = review_of(state, view)
+                .filter(|r| !r.sending)
+                .and_then(|r| r.comments.iter().find(|c| c.id == id && is_pending(c)))
+                .map(|c| c.text.clone());
+            if let (Some(text), Some(view)) = (text, state.open.as_mut()) {
+                view.composer = Some(Composer {
+                    target: ComposerTarget::Edit(id),
+                    text,
+                });
+            }
+            Effect::None
+        }
+        Msg::DeleteComment(id) => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            if review_of(state, view).is_some_and(|r| r.sending) {
+                return Effect::None;
+            }
+            review_edit(view, ReviewEditOp::Delete { id })
+        }
+        Msg::ReviewChanged {
+            project,
+            worktree_dir,
+            comments,
+            sending,
+        } => {
+            state
+                .reviews
+                .insert((project, worktree_dir), ReviewView { comments, sending });
+            Effect::None
+        }
     }
+}
+
+/// An edit of the open view's entry.
+fn review_edit(view: &OpenView, edit: ReviewEditOp) -> Effect {
+    Effect::ReviewEdit {
+        project: view.project.clone(),
+        worktree_dir: entry_dir(&view.entry),
+        edit,
+    }
+}
+
+/// Save in the composer (C2): `Add` with the quote from the loaded lines, or `SetText`; blank
+/// text sends nothing and keeps the composer open.
+fn composer_saved(state: &mut State) -> Effect {
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    let Some(composer) = view.composer.as_ref() else {
+        return Effect::None;
+    };
+    if composer.text.trim().is_empty() {
+        return Effect::None;
+    }
+    let text = composer.text.clone();
+    let edit = match composer.target {
+        ComposerTarget::Edit(id) => ReviewEditOp::SetText { id, text },
+        ComposerTarget::New(pick) => {
+            let (Some(path), Load::Ready(loaded)) = (view.selected.as_ref(), &view.diff) else {
+                return Effect::None;
+            };
+            let lines = match pick.side {
+                Side::New => loaded.new.as_ref(),
+                Side::Old => loaded.old.as_ref(),
+            };
+            let range = pick.range();
+            let quote: Option<Vec<String>> = (range.start()..=range.end())
+                .map(|n| lines.and_then(|l| l.line(n)).map(str::to_string))
+                .collect();
+            let Some(quote) = quote else {
+                return Effect::None;
+            };
+            view.pick = None;
+            ReviewEditOp::Add {
+                path: path.as_str().to_string(),
+                side: pick.side,
+                start: range.start(),
+                end: range.end(),
+                quote,
+                text,
+            }
+        }
+    };
+    view.composer = None;
+    review_edit(view, edit)
+}
+
+/// The wire's form of an entry: its worktree `dir_name`, `""` for the Default entry.
+pub fn entry_dir(entry: &SessionLocation) -> String {
+    match entry {
+        SessionLocation::Worktree(dir) => dir.clone(),
+        SessionLocation::Default => String::new(),
+    }
+}
+
+/// The open view's entry's comments, if the service pushed any.
+pub fn review_of<'a>(state: &'a State, view: &OpenView) -> Option<&'a ReviewView> {
+    state
+        .reviews
+        .get(&(view.project.clone(), entry_dir(&view.entry)))
+}
+
+/// Each file's pending-comment count in the open view's entry (L2).
+pub fn pending_counts(state: &State) -> BTreeMap<RelPath, usize> {
+    let mut counts = BTreeMap::new();
+    let review = state.open.as_ref().and_then(|view| review_of(state, view));
+    for comment in review.iter().flat_map(|r| &r.comments) {
+        if is_pending(comment) {
+            *counts.entry(comment.path.clone()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+/// The selected file's comments, placed for the diff on screen (C3).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FileComments<'a> {
+    /// Comments shown under the row of their last line, keyed by that line's side and number.
+    pub placed: BTreeMap<(Side, u32), Vec<&'a ReviewComment>>,
+    /// Comments whose last line is not in the diff on screen ("Not in the current diff").
+    pub not_in_diff: Vec<&'a ReviewComment>,
+}
+
+impl<'a> FileComments<'a> {
+    /// The comments shown under the row of line `line` of `side`.
+    pub fn under(&self, side: Side, line: u32) -> Vec<&'a ReviewComment> {
+        self.placed.get(&(side, line)).cloned().unwrap_or_default()
+    }
+}
+
+/// The selected file's comments in the open view's entry, placed for the diff on screen (C3).
+pub fn file_comments(state: &State) -> FileComments<'_> {
+    let mut placed = FileComments::default();
+    let Some(view) = state.open.as_ref() else {
+        return placed;
+    };
+    let (Some(path), Some(review)) = (view.selected.as_ref(), review_of(state, view)) else {
+        return placed;
+    };
+    let hunks = match diff_body(view) {
+        DiffBody::Diff(LoadedDiff {
+            diff: FileDiff::Text(hunks),
+            ..
+        }) => hunks.as_slice(),
+        _ => &[],
+    };
+    for comment in review.comments.iter().filter(|c| &c.path == path) {
+        let end = comment.range.end();
+        // The row a comment sits under: its last line on its side; a removed-side comment may
+        // end on a context line, which carries both numbers.
+        let shown = hunks
+            .iter()
+            .flat_map(|h| &h.lines)
+            .any(|line| match comment.side {
+                Side::New => line.new == Some(end),
+                Side::Old => line.old == Some(end),
+            });
+        if shown {
+            placed
+                .placed
+                .entry((comment.side, end))
+                .or_default()
+                .push(comment);
+        } else {
+            placed.not_in_diff.push(comment);
+        }
+    }
+    placed
+}
+
+/// Whether a comment is still pending.
+pub fn is_pending(comment: &ReviewComment) -> bool {
+    comment.state == CommentState::Pending
 }
 
 /// Start a read of the open view's list, or queue one behind the read under way.
