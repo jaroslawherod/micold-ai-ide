@@ -22,10 +22,13 @@ use iced::alignment::Horizontal;
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, rich_text, row, span, text, Space};
 use iced::{Alignment, Element, Font, Length};
+use std::collections::BTreeMap;
+
 use micold_core::review::diff::{
     Cell, DiffLine, FileDiff, Hunk, LineKind, SchemeSpans, SideIndex, SideRow, SideSpans,
     UnifiedIndex, UnifiedRow,
 };
+use micold_core::review::{LineRange, Side};
 /// The layout a diff is shown in, re-exported so callers need not reach into the settings module.
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
@@ -109,6 +112,47 @@ pub fn tint(kind: LineKind, roles: Roles) -> Option<Rgb> {
         LineKind::Removed => Some(roles.diff_removed),
         LineKind::Context => None,
     }
+}
+
+/// The height assumed for a slot (comment cards, the composer) until its sensor reports one.
+pub const SLOT_ESTIMATE: f32 = 96.0;
+
+/// A line on one side: where a slot hangs and what a pick covers.
+pub type Anchor = (Side, u32);
+
+/// Whether the `side` number `number` of a row is inside `pick` (C1): a picked row's number cell
+/// takes the pick fill on the picked side only.
+pub fn picked(pick: Option<(Side, LineRange)>, side: Side, number: Option<u32>) -> bool {
+    let _ = (pick, side, number);
+    false
+}
+
+/// The numbers a gutter press on a side-by-side pair reports: the pressed half's own number, and
+/// the other half's too when the line is context (it carries both, C1).
+fn gutter_numbers(
+    left: Option<Cell<'_>>,
+    right: Option<Cell<'_>>,
+    on_left: bool,
+) -> (Option<u32>, Option<u32>) {
+    let _ = (left, right, on_left);
+    (None, None)
+}
+
+/// The row each anchor's slot hangs under, in one pass over the rows: a `New` anchor under the
+/// row showing that new-side number, an `Old` one under the row showing that old-side number.
+fn slot_rows(body: &Body<'_>, anchors: &[Anchor]) -> BTreeMap<usize, Vec<Anchor>> {
+    let _ = (body, anchors);
+    BTreeMap::new()
+}
+
+/// The extra height under each slotted row: its anchors' measured heights, [`SLOT_ESTIMATE`] for
+/// one not measured yet.
+fn slot_extras(
+    rows: &BTreeMap<usize, Vec<Anchor>>,
+    measured: &BTreeMap<Anchor, f32>,
+) -> Vec<(usize, f32)> {
+    let _ = (rows, measured);
+    Vec::new()
 }
 
 /// One file's diff.
@@ -662,6 +706,57 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A one-line change between two context lines.
+    const SWAP: &str = "@@ -1,3 +1,3 @@\n one\n-two\n+deux\n three\n";
+
+    #[test]
+    fn a_picked_range_fills_its_numbers_on_its_side_only() {
+        let pick = Some((Side::New, LineRange::new(3, 5).unwrap()));
+        assert!(picked(pick, Side::New, Some(3)));
+        assert!(picked(pick, Side::New, Some(5)));
+        assert!(!picked(pick, Side::New, Some(6)), "past the range");
+        assert!(!picked(pick, Side::Old, Some(4)), "the other side is not picked");
+        assert!(!picked(pick, Side::New, None), "a cell with no number");
+        assert!(!picked(None, Side::New, Some(4)), "no pick");
+    }
+
+    #[test]
+    fn a_side_by_side_gutter_press_reports_its_half_and_a_context_lines_both_numbers() {
+        let removed = cell(LineKind::Removed, 2, "two");
+        let added = cell(LineKind::Added, 2, "deux");
+        assert_eq!(gutter_numbers(Some(removed), Some(added), true), (Some(2), None));
+        assert_eq!(gutter_numbers(Some(removed), Some(added), false), (None, Some(2)));
+        let (old, new) = (cell(LineKind::Context, 7, "x"), cell(LineKind::Context, 9, "x"));
+        assert_eq!(gutter_numbers(Some(old), Some(new), true), (Some(7), Some(9)));
+        assert_eq!(gutter_numbers(Some(old), Some(new), false), (Some(7), Some(9)));
+    }
+
+    #[test]
+    fn slots_hang_under_their_anchor_rows_with_their_measured_heights() {
+        let diff = parse_unified(SWAP.as_bytes());
+        let anchors = [(Side::New, 2), (Side::Old, 2), (Side::Old, 3), (Side::New, 9)];
+        // Unified: header, context 1, removed 2, added 2, context 3.
+        let unified = slot_rows(&body(&diff, DiffLayout::Unified), &anchors);
+        assert_eq!(
+            unified,
+            BTreeMap::from([
+                (2, vec![(Side::Old, 2)]),
+                (3, vec![(Side::New, 2)]),
+                (4, vec![(Side::Old, 3)]),
+            ]),
+            "an anchor not in the diff hangs nowhere"
+        );
+        // Side by side: header, context 1, the removed/added pair, context 3.
+        let side = slot_rows(&body(&diff, DiffLayout::SideBySide), &anchors);
+        assert_eq!(side.get(&2).map(Vec::len), Some(2), "both halves of the pair");
+        let measured = BTreeMap::from([((Side::New, 2), 40.0)]);
+        assert_eq!(
+            slot_extras(&unified, &measured),
+            vec![(2, SLOT_ESTIMATE), (3, 40.0), (4, SLOT_ESTIMATE)]
+        );
+        assert_eq!(slot_extras(&side, &measured)[0], (2, 40.0 + SLOT_ESTIMATE));
     }
 
     #[test]

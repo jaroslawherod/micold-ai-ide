@@ -54,6 +54,31 @@ pub fn spacers(rows: &Range<usize>, row_height: f32, len: usize) -> (f32, f32) {
     (above, below)
 }
 
+/// [`visible_range`] for a list whose rows `extras` carry slots under them: each `(index, height)`
+/// adds `height` pixels under row `index`, sorted by index (feature 482, T054).
+pub fn visible_range_with(
+    offset: u32,
+    viewport: u32,
+    row_height: f32,
+    len: usize,
+    overscan: usize,
+    extras: &[(usize, f32)],
+) -> Range<usize> {
+    let _ = extras;
+    visible_range(offset, viewport, row_height, len, overscan)
+}
+
+/// [`spacers`] for a list whose rows carry the slots `extras`.
+pub fn spacers_with(
+    rows: &Range<usize>,
+    row_height: f32,
+    len: usize,
+    extras: &[(usize, f32)],
+) -> (f32, f32) {
+    let _ = extras;
+    spacers(rows, row_height, len)
+}
+
 /// Builds one row by its index.
 type BuildRow<'a, M> = Box<dyn Fn(usize) -> Element<'a, M> + 'a>;
 
@@ -179,6 +204,25 @@ mod tests {
         let (above, below) = spacers(&rows, ROW, len);
         assert_eq!(above, rows.start as f32 * ROW);
         assert_eq!(above + rows.len() as f32 * ROW + below, len as f32 * ROW);
+    }
+
+    #[test]
+    fn slot_rows_keep_their_measured_heights() {
+        // Row 10 carries a 100 px slot: it spans 320..452, so row 11 starts at 452.
+        let extras = [(10, 100.0)];
+        assert_eq!(visible_range_with(460, 320, ROW, 2_000, 0, &extras), 11..22);
+        // An offset inside the slot still builds row 10, which holds it.
+        assert_eq!(visible_range_with(400, 32, ROW, 2_000, 0, &extras), 10..11);
+        let rows = 11..22;
+        let (above, below) = spacers_with(&rows, ROW, 2_000, &extras);
+        assert_eq!(above, 11.0 * ROW + 100.0, "the slot above is kept in the spacer");
+        assert_eq!(
+            above + rows.len() as f32 * ROW + below,
+            2_000.0 * ROW + 100.0,
+            "the content measures every row and every slot"
+        );
+        // A slot inside the built rows is not in either spacer.
+        assert_eq!(spacers_with(&(5..15), ROW, 2_000, &extras), (5.0 * ROW, 1_985.0 * ROW));
     }
 
     #[test]

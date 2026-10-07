@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- M4 T054/T058: slot rows. `VirtualRows` takes sorted `(row, extra height)` pairs (`visible_range_with`/`spacers_with`); `DiffView::slot(side, line, element)` anchors a slot by its line rather than a row index (the caller knows lines, `DiffView` maps them in one pass over the rows), wraps each in an iced `Sensor` whose `on_resize` reports the measured height (`.on_slot_measured`), and takes the measured heights back (`.slot_heights`), `SLOT_ESTIMATE` until measured. Gutter shift-clicks: a small gutter widget tracks `ModifiersChanged` itself. `TextArea` is a thin widget around `text_editor` drawing `FilledField`'s container, hover layer and indicator (focus read from the editor's tree state).
 - M4 T059: `features::changes::State.reviews` is keyed by `(project, wire worktree dir)` rather than by `SessionLocation` (not `Ord`), and keeps every attached project's pushes so a project switch shows each entry's own comments without a re-push; `Msg::Opened` now carries the project (the root passes `workspace.active`). The client sends the composer text untrimmed; the service trims (W1). Selecting another file drops the pick and a new-comment composer (an edit composer stays).
 - Clarify round 1: US3 scenario 4 and FR-003 answered by the orchestrator as defaults (user away); recorded in spec.md Clarifications. No further ambiguities, no second round.
 
