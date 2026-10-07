@@ -121,6 +121,7 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | FR-014 | Only the two existing selection messages are sent | R6; N5; W3.3 |
 | FR-015 | Every backend shows without needing a click report; a click nobody can resolve changes nothing | R4, R6 Known limit; N7, N9 |
 | FR-015a | No launch registration, no session argument | R6; N8 |
+| FR-015b | Linux: the id table is keyed by the service's unique name and the id; a signal from another sender, or from an earlier owner of the name, is nothing (*BUG-566*) | R7; N9a |
 | FR-016 | `unread` set with the event, not when in view | R1; W2.1; A1, A3 |
 | FR-017 | `unread` does not depend on claim, grant or setting | W2.3; W4.2 |
 | FR-018 | `UnreadMark` on `TreeItem`, by position and weight | R9; U1, U3 |
@@ -254,3 +255,16 @@ adds the click to story 1's notification, story 4 adds the switch (on until then
 ## Complexity Tracking
 
 No violations.
+
+## Bugfix BUG-566 — a click counts only from the service that showed the notification
+
+On Linux, `Shown` keeps with each id the unique name of the connection that answered the `Notify`
+call (the reply's header sender). `Shown::on_signal` takes the signal's header sender and acts only
+when it is that name. The listening thread also reads `NameOwnerChanged` for
+`org.freedesktop.Notifications` from `org.freedesktop.DBus`, and drops the old owner's entries. The
+match rule names `sender='org.freedesktop.Notifications'`, which only spares the thread other
+peers' broadcasts: a unicast signal reaches it whatever the rule, and zbus does not compare a
+well-known sender with the header (`bugs/BUG-566.md#reproduction-2026-10-06-on-originmain-7681c0f4`).
+The connection, its timeout and `notify_error` do not change (issue #569 works there).
+
+**Bugfix**: 2026-10-06 — BUG-566. FR-015b row and this section added; nothing above them changed. See `bugs/BUG-566.md`.

@@ -548,6 +548,79 @@ client cache, which no longer exists. See `bugs/BUG-005.md`.
 
 ---
 
+## Phase 10: Bugfix BUG-442 — a session's manual restart does not re-source the script
+
+**Goal**: Both of a session's restart controls — the AI CLI's and a Regular Terminal instance's —
+make the service re-source the restarted session's own directory before it spawns the new
+process; a plain start and supervision's automatic respawn keep the cached snapshot (FR-007(b) and
+its BUG-442 clarification, FR-020, FR-021).
+
+**Independent Test**: With environment-include on and a script that logs each run, open a Regular
+Terminal instance and restart it: the script runs again. Start an AI CLI session, let it stop, and
+use the AI CLI restart: the script runs again. A second plain `SessionStart` runs it no more.
+
+### Tests for BUG-442 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL on `origin/main` for the reported reason before T043–T045.
+
+- [X] T041 [BUG-442] Regression test, new file
+  `crates/micold-daemon/tests/env_include_restart_refresh.rs`, driven over a real connection (the
+  `connect`/`answers_to` harness of `shell_open_refused_reported.rs`): environment-include on with
+  a script that appends one line to a run log (a PowerShell body beside the bash one, as
+  `env_include_cache_coherence.rs` does), a Regular session at the project root. Case 1:
+  `SessionOpenShell` instance 1, then `SessionRestartShell` instance 1 — assert the log has two
+  runs (`origin/main`: one; the reproduction in `bugs/BUG-442.md`). Case 2: `SessionOpenShell`
+  instance 1, then `SessionOpenShell` instance 2 — assert one run (an open that is not a restart
+  stays cached, FR-020). FR-007(b).
+- [X] T042 [BUG-442] Regression test, same file: the AI CLI restart. Start a session with
+  `SessionStart`, wait until it is live, stop it (`SessionStop`) and wait for `Idle`, then send
+  `ClientMsg::SessionRestart` — assert the script ran twice; the same sequence with a plain
+  `SessionStart` in place of the restart — assert it ran once (FR-007's BUG-442 clarification).
+  Use a provider command the test controls (as `session_start.rs` or `resume_failure_reported.rs`
+  does), not a real AI CLI. Fails to compile until T043 adds the message; its red run is that and,
+  once T043 lands, one run where two are asserted. Add the variant to
+  `crates/micold-core/tests/protocol_roundtrip.rs` in the same change.
+
+### Implementation for BUG-442
+
+- [X] T043 [BUG-442] Add `ClientMsg::SessionRestart { session: SessionId }` in
+  `crates/micold-core/src/protocol/messages.rs` (doc: a user's manual restart of the session's AI
+  CLI; as `SessionStart`, after re-sourcing the session's directory — 011 FR-007(b)); bump
+  `PROTOCOL_VERSION` 29 → 30 in `crates/micold-core/src/protocol/version.rs` with its history line;
+  add the message under *Session commands* in
+  `specs/010-daemon-session-persistence/contracts/messages.md`. Depends on T041, T042.
+- [X] T044 [BUG-442] In the service (`crates/micold-daemon/src/server.rs`, `state.rs`): the
+  `SessionRestartShell` arm, and a new `SessionRestart` arm, drop the session's own directory
+  (`SessionLocation::cwd` of its catalog entry — the directory `open_shell` and `start_session`
+  resolve in) with `invalidate_env_include` before respawning; `SessionRestart` then does exactly
+  what the `SessionStart` arm does (`begin_start` + `spawn_session_start` with
+  `LaunchMode::Resume`). A small `DaemonState` method that finds the session's directory and
+  invalidates it serves both arms; no subprocess under the state lock. `SessionStart`,
+  `SessionOpenShell` and `respawn_primary` are unchanged. Makes T041 and T042 pass;
+  `env_include_cache_coherence.rs` stays green. Depends on T043.
+- [X] T045 [BUG-442] In the client
+  (`crates/micold-client/src/shell/daemon_sync.rs::on_terminal_restart_requested`): send
+  `ClientMsg::SessionRestart` in place of the `SessionStart` that `view_and_start` sends for this
+  path only (every other `view_and_start` caller keeps `SessionStart`); keep the existing
+  `refresh_env_include` call, which updates the client's own displayed outcome. Add a client test
+  beside the existing restart tests in `crates/micold-client/src/main_tests.rs` asserting the
+  restart sends `SessionRestart` and a plain session selection sends `SessionStart`. Depends on
+  T043.
+- [X] T046 [BUG-442] Docs (Principle VII): update the doc comments on `invalidate_env_include`
+  (its callers now include the two restart arms) and `on_terminal_restart_requested` (the refresh
+  reaches the service through `SessionRestart`); check that `docs/user-guide/settings.md`'s
+  restart-control recovery path (T026) is now true for both restart controls and say so if it
+  names only one. Depends on T044, T045.
+
+**Checkpoint**: T041 and T042 pass; `mise run gate` green.
+
+**Bugfix**: 2026-10-06 — BUG-442 Added Phase 10 (T041–T046). FR-007 gained a clarification;
+plan.md gained a design correction; data-model.md's lifecycle annotated. No task reopened: T024
+and T035 still describe the client code they built; the missing trigger is the service's. Feature
+010's `contracts/messages.md` gains `SessionRestart` in T043. See `bugs/BUG-442.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -655,9 +728,13 @@ With multiple developers:
 - Phase 9 (BUG-005) depends on no earlier phase of this file: it changes the daemon's cache
   (`crates/micold-daemon/src/state.rs`, feature 010's T098), which replaced the `main.rs` cache
   Phase 8 built. Within it, T037 → T038 → T039 → T040.
+- Phase 10 (BUG-442) depends on Phase 9's coherent cache (T039: `invalidate_env_include` wins
+  over a resolve in progress). Within it, T041/T042 → T043 → T044 and T045 → T046.
 
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
 
 **Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.
+
+**Bugfix**: 2026-10-06 — BUG-442 Updated from bugfix patch.

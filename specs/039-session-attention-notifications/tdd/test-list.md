@@ -393,6 +393,9 @@ the step T122 adds to `.github/workflows/ci.yml`; their red phase is that step's
 | U172 | Windows: a `DesktopNotification` maps to the toast's title and first text line | FR-004, FR-029 | example | DONE | T036 / T040 |
 | U173 | Windows: an error from `show` maps to a `NotifyError` | FR-010 | example | DONE | T036 / T040 |
 | U174 | Windows: `on_activated` maps to `Activated` for the session of the toast it was registered on, with two toasts live | FR-011 | example | DONE | T080 / T087 |
+| U179 | Linux: a signal for an id in the table, from a sender other than the one that answered its `Notify`, is nothing and leaves the entry and its token as they were; from that sender it is the click (BUG-566) | FR-015b | example | TODO | T124 / T125 |
+| U180 | Linux: after the service's owner changes, the new owner's signal for an id the old owner gave is nothing (BUG-566) | FR-015b | example | TODO | T124 / T125 |
+| U181 | Linux: `NameOwnerChanged` for `org.freedesktop.Notifications` from `org.freedesktop.DBus` drops the old owner's entries and keeps the new owner's; the same signal from another sender, or for another name, drops nothing (BUG-566) | FR-015b | example | TODO | T124 / T125 |
 
 ## Invariants and edge cases still to place
 

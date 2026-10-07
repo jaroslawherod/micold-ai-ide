@@ -26,7 +26,8 @@ core and service logic; only icon delivery differs, inside the existing
 (`SessionErrorNotice`), M3 31 → 32 (`notification_kinds` and `long_task_threshold_secs` in
 `DaemonSettings` and `SettingsSet`). If
 an earlier milestone has not merged when a later one is cut, the later one still bumps once from
-whatever `main` has. No `#[serde(default)]` on wire types.
+whatever `main` has. No `#[serde(default)]` on wire types. Merging `main` during close found 30 taken by 011 BUG-442
+(`SessionRestart`), so the three bumps landed as 30 → 31, 31 → 32 and 32 → 33.
 
 **Test threshold**: the daemon's integration tests cannot wait 60 s for a long turn.
 `DaemonState` holds `long_task_threshold: Duration`, initialised from

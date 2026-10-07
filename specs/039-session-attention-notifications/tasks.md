@@ -350,6 +350,48 @@ the same in every window. While it is off nothing is notified; unread marks are 
 
 ---
 
+## Phase 12: Bugfix BUG-566 — a click counts only from the service that showed the notification (GitHub #566)
+
+**Goal**: On Linux, a notification signal opens a session only when it comes from the unique bus
+name that answered the `Notify` call for its id. A signal forged by another peer, broadcast or sent
+to the window's own name, and a signal of a restarted service that reuses an id, open nothing
+(FR-015b, N9a). Local to `linux.rs`: the match rule, `Shown`, `signal` and the listening thread;
+the connection and `notify_error` stay as they are (issue #569 changes them).
+
+### Tests for BUG-566 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T124 [BUG-566] [U179] [U180] [U181] *(test)* `crates/micold-client/src/shell/desktop_notify/linux.rs`
+      tests, against stubs that compile so each fails on its assertion. U179: an entry recorded
+      for service `:1.5`, then `ActionInvoked(id, "default")` from `:1.9` is no event and the entry
+      stays (a later one from `:1.5` is `Activated`); an `ActivationToken` or `NotificationClosed`
+      from `:1.9` changes nothing. U180: after `NameOwnerChanged(":1.5" → ":1.6")`, the click for
+      the old id from `:1.6` is nothing. U181: `NameOwnerChanged` with old owner `:1.5` drops `:1.5`'s
+      entries and keeps one recorded for `:1.6`; one with a sender other than
+      `org.freedesktop.DBus`, or naming another bus name, drops nothing. The message parsing
+      (sender, and `NameOwnerChanged`'s arguments) is tested on `zbus::Message`s built as the
+      existing `message` helper builds them.
+
+### Implementation for BUG-566
+
+- [x] T125 [BUG-566] `crates/micold-client/src/shell/desktop_notify/linux.rs`: `Entry` keeps the
+      service's unique name; `Shown::record` takes it from the `Notify` reply's header sender (no
+      sender: nothing recorded, the notification is still shown, N7); `Shown::on_signal` takes the
+      signal's sender and acts only on a match; a `NameOwnerChanged` for
+      `org.freedesktop.Notifications` from `org.freedesktop.DBus` drops the old owner's entries.
+      `SIGNALS` names `sender='org.freedesktop.Notifications'`; the listening thread also reads
+      `type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='org.freedesktop.Notifications'`
+      (one iterator per rule, or one thread reading both). Module and type docs say why the
+      sender rule is not the check (BUG-566 *Mechanism*). Turns T124 green.
+- [x] T126 [BUG-566] Verify on a private `dbus-daemon --session` with a stand-in service, as the
+      M6 visual pass did (`visual-pass/M6/`): a click from the service still opens the session; a
+      forged `ActionInvoked` from another peer, broadcast and unicast to the client's unique name,
+      opens nothing; after the service is restarted, its id 1 does not open the old notification's
+      session. Record the result in `bugs/BUG-566.md`. Then the gate's commands (`mise run gate`).
+
+**Bugfix**: 2026-10-06 — BUG-566. Phase 12 (T124–T126) added; no task reopened. See `bugs/BUG-566.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -363,6 +405,7 @@ the same in every window. While it is off nothing is notified; unread marks are 
 - **US3 slice B (Phase 9)** depends on US3 slice A.
 - **US4 (Phase 10)** depends on US1 slice B (`grant`). Its `unread` assertion in T104 depends on US2 slice A, and its wire number follows US3 slice B's, taken or not.
 - **Polish (Phase 11)** depends on all stories.
+- **Bugfix BUG-566 (Phase 12)** depends on US3 slice A (T078, T085) and M7 (T095, T099); T124 before T125, T126 last.
 
 ### Within Each Phase
 

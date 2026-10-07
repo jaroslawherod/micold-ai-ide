@@ -222,17 +222,20 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 28 → 29 for feature 010 BUG-592's `DaemonMsg::ShellOpenFailed`: a refused shell open is
 /// reported to the client that asked. A new variant an older client cannot decode.
 ///
-/// And 29 → 30 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
+/// And 29 → 30 for feature 011 BUG-442's `ClientMsg::SessionRestart`: the AI CLI's manual restart
+/// re-sources the session's directory first. A new variant an older service cannot decode.
+///
+/// And 30 → 31 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
 /// says which kind of event the window notifies for. An older peer would fail to decode it.
 ///
-/// And 30 → 31 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
+/// And 31 → 32 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
 /// one window that a session ended because of an error. A new variant an older client cannot
 /// decode.
 ///
-/// And 31 → 32 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
+/// And 32 → 33 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
 /// `DaemonSettings` and `SettingsSet` (wire W5.3, W5.4, W5.6): the service holds the per-kind
 /// switches and the long-task threshold for every window. An older peer cannot decode them.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 32;
+const FEATURE_026_PROTOCOL_VERSION: u32 = 33;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

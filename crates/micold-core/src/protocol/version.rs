@@ -102,15 +102,18 @@
 /// worktrees and sessions. An older peer would fail to decode any of them.
 /// And 28 → 29 for `DaemonMsg::ShellOpenFailed` (feature 010 BUG-592): a refused shell open is
 /// reported to the client that asked. An older client would fail to decode it.
-/// And 29 → 30 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
+/// And 29 → 30 for `ClientMsg::SessionRestart` (feature 011 BUG-442): the AI CLI's manual restart
+/// tells the service to re-source the session's directory first. An older service would fail to
+/// decode it.
+/// And 30 → 31 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
 /// says which kind of event the window notifies for. An older peer would fail to decode it.
-/// And 30 → 31 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
+/// And 31 → 32 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
 /// one window that a session ended because of an error. An older client would fail to decode it.
-/// And 31 → 32 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
+/// And 32 → 33 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
 /// `DaemonSettings` and `ClientMsg::SettingsSet` (wire W5.3, W5.4, W5.6): the per-kind switches and
 /// the long-task threshold, held by the service for every window. An older peer would fail to
 /// decode either.
-pub const PROTOCOL_VERSION: u32 = 32;
+pub const PROTOCOL_VERSION: u32 = 33;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

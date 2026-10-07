@@ -999,13 +999,42 @@ impl DaemonState {
     /// when the worktree at that path is deleted, mirroring the equivalent fix recorded in
     /// `specs/011-env-include-script/bugs/BUG-002.md`'s Resolution: a worktree recreated for the
     /// same branch reuses the exact same path (dir names are derived from the branch name), so a
-    /// stale pre-deletion snapshot would otherwise be served forever for that path.
+    /// stale pre-deletion snapshot would otherwise be served forever for that path. Also called
+    /// after a refused AI-CLI start (`mcp/tools.rs`), and, through
+    /// [`Self::forget_session_env`], by both manual restart controls (`ClientMsg::SessionRestart`
+    /// and `ClientMsg::SessionRestartShell`, 011 FR-007(b), BUG-442).
     ///
     /// Removes a resolve in progress for `cwd` too, which then answers only the callers already
     /// waiting on it and caches nothing: the invalidation wins, and the next ask resolves afresh
     /// (FR-021, BUG-005).
     pub fn invalidate_env_include(&self, cwd: &Path) {
         self.lock().env_include_cache.remove(cwd);
+    }
+
+    /// Drop the cached environment-include resolution for `session`'s own directory, so the next
+    /// spawn there re-sources the script (feature 011, FR-007(b), BUG-442): the user's manual
+    /// restart of a session's AI CLI (`ClientMsg::SessionRestart`) or of one of its terminals
+    /// (`ClientMsg::SessionRestartShell`). Only that directory: others stay cached (FR-020).
+    ///
+    /// The directory is the one [`Self::open_shell`] and `start_session` spawn in,
+    /// `SessionLocation::cwd` of the catalog entry. A session the catalog does not hold drops
+    /// nothing. Two short locks, no subprocess.
+    pub fn forget_session_env(&self, session: SessionId) {
+        let cwd =
+            self.lock()
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == session)
+                        .map(|s| s.location.cwd(project))
+                });
+        if let Some(cwd) = cwd {
+            self.invalidate_env_include(&cwd);
+        }
     }
 
     /// Record `reason` as why `id` did not start, and drop the resolution of `cwd` the launch gate

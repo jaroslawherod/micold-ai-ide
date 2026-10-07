@@ -273,6 +273,13 @@ pub enum ClientMsg {
         /// Target session.
         session: SessionId,
     },
+    /// A user's manual restart of the session's AI CLI: as `SessionStart`, after re-sourcing the
+    /// environment-include script for the session's directory (011 FR-007(b), BUG-442). A plain
+    /// `SessionStart` (selecting a session, reconnecting) is served the cached environment.
+    SessionRestart {
+        /// Target session.
+        session: SessionId,
+    },
     /// Graceful stop → `Idle`, no restart.
     SessionStop {
         /// Target session.
