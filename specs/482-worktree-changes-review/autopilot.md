@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M1 (T001–T026)
+- **Next step**: milestone M2 (T027–T040)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | in progress |
+| M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
 | M2 | T027–T040 | full | Unified diff of the selected file | — | todo |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | — | todo |
 | M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | c960571fb7bed1fa440f89fe3b9720fd30c8d897:c74e2d4a9e09412fc66dd4915e3c7e105b785552 | CLEAN: 2 MINOR (both fixed) |
 | Plan | 1 | 76b23838a33fc28d5c9f6db389cc15f46acd39a1:3a5ac98c80a82e8c74fb02606f5bee99309eaeeb | CLEAN: 3 MINOR (all fixed, prose only) |
 | Review A M1 (code-review high) | 1 | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | CLEAN: 2 MINOR (untracked files read whole to count lines; lossy UTF-8 of non-UTF-8 paths), not fixed |
+| Review B M1 (conformance, sonnet) | 1 | 6f1dd0f1b8ccac63f75133430d4aa2f34f23e4c6:e3ab664fc93e6c9de5e7223181127788b4024731 | CHANGES: 1 MAJOR (cycle-log greens missing) fixed by running the tests and recording them; 2 MINOR (T009 test-after kept as recorded; Verify not runnable in reviewer sandbox, unit re-ran it: all pass) |
 | Gate M1 | full | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | green except the 6 root-only permission tests (container runs as root; pass in CI) |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
 
@@ -65,9 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 5 handed over at 150k. Pushed 64271ac3 (full gate green at tree c30e1678 except the 6 root-only permission tests; snapshot recorded in autopilot-gate-ok).
-- **Done, ticked:** T001–T026 (all of M1). T024 showcase `sections/review.rs` (VirtualRows 2,000 rows, scroll held in `Showcase::rows_scroll`); T025 `docs/user-guide/reviewing-changes.md` + SUMMARY/README/worktrees links; T026 visual pass B1/B2/B15 light+dark passed, evidence `specs/482-worktree-changes-review/visual-pass/m1.md`. DEFERRED `("diff_layout", "482 T041")` added.
-- **Next:** review A is done (CLEAN, 2 MINOR). Run review B (conformance rubric, sonnet) via `run-review.sh`; full gate once more if code changed (raw mise.toml gate commands, `CARGO_INCREMENTAL=0`; delete exec files in target-shared/debug/deps first when disk < 15G); push; write the PR-body section to `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/pr-body-482-M1.md` (pr.md template); return `PR: #624`.
+None.
 
 ## Open escalation
 
