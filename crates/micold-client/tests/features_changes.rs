@@ -1600,7 +1600,13 @@ fn a_confirm_after_the_pending_comments_went_elsewhere_sends_nothing() {
     push(
         &mut state,
         "feat-a",
-        vec![comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 })],
+        vec![comment(
+            "a.rs",
+            Side::New,
+            1,
+            1,
+            CommentState::Sent { at: 5 },
+        )],
     );
     assert_eq!(
         changes::update(&mut state, Msg::DiscardConfirmed),
