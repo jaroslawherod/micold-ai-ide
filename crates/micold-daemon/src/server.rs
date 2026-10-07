@@ -305,11 +305,11 @@ fn spawn_history_saver(state: Arc<DaemonState>) {
     });
 }
 
-/// Spawn the restart-supervision loop (US4, FR-005). Ticks on [`SUPERVISION_INTERVAL`], drives the
+/// Spawn the restart-supervision loop (US4, FR-005). Ticks on `SUPERVISION_INTERVAL`, drives the
 /// crash-loop policy for any session whose child exited, and broadcasts `CatalogChanged` when a
 /// lifecycle moved. The supervision itself is blocking (PTY spawn / process teardown), so it runs on
 /// a blocking thread, never on the async runtime (module invariant).
-fn spawn_supervisor(state: Arc<DaemonState>) {
+pub fn spawn_supervisor(state: Arc<DaemonState>) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(SUPERVISION_INTERVAL);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);

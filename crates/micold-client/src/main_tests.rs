@@ -8239,3 +8239,165 @@ fn another_windows_kinds_and_threshold_reach_the_stored_values() {
     assert_eq!(env.notification_kinds, kinds);
     assert_eq!(env.long_task_threshold_secs, "15");
 }
+
+/// Feature 039 (#572 item 5, close finding F9): the glue between the window's halves of a
+/// notification — the show leaves the thread the update's work runs on, its result reaches the
+/// `AttentionShown` arm, and a click's raise comes before the switch and the selection. Each test
+/// was seen red under one mutant of `shell/daemon_sync.rs`.
+mod attention_glue {
+    use super::*;
+    use micold_client::features::attention::{DesktopNotification, DesktopNotifier, NotifyError};
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{Session, SessionId, SessionLocation};
+    use std::sync::Mutex;
+    use std::thread::ThreadId;
+
+    /// A notifier that records the thread each show ran on and answers `answer`.
+    struct Recording {
+        threads: Mutex<Vec<ThreadId>>,
+        answer: Result<(), NotifyError>,
+    }
+
+    impl Recording {
+        fn answering(answer: Result<(), NotifyError>) -> Arc<Self> {
+            Arc::new(Self {
+                threads: Mutex::new(Vec::new()),
+                answer,
+            })
+        }
+
+        fn threads(&self) -> Vec<ThreadId> {
+            self.threads.lock().unwrap().clone()
+        }
+    }
+
+    impl DesktopNotifier for Recording {
+        fn show(&self, _notification: DesktopNotification) -> Result<(), NotifyError> {
+            self.threads
+                .lock()
+                .unwrap()
+                .push(std::thread::current().id());
+            self.answer.clone()
+        }
+    }
+
+    /// An app whose active project, a folder that exists, holds one session; and that session.
+    fn app_with_a_session(
+        folder: &std::path::Path,
+        notifier: Arc<dyn DesktopNotifier>,
+    ) -> (App, SessionId) {
+        let mut app = base_app();
+        app.caps.set_notifier(notifier);
+        let project = folder.to_path_buf();
+        app.core.workspace.projects.push(Project::new(
+            project.clone(),
+            true,
+            Availability::Available,
+        ));
+        app.core.workspace.active = Some(project.clone());
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let id = session.id;
+        app.core.workspace.sessions.insert(project, vec![session]);
+        (app, id)
+    }
+
+    /// (a) The show waits on the system's bus, so it runs on a blocking task: not in the update,
+    /// and not on the thread that drives the update's work.
+    #[test]
+    fn a_granted_claim_shows_the_notification_off_the_thread_that_runs_the_work() {
+        let folder = tempfile::tempdir().unwrap();
+        let notifier = Recording::answering(Ok(()));
+        let (mut app, session) = app_with_a_session(folder.path(), notifier.clone());
+
+        let work = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::AttentionGranted { session, seq: 1 },
+        );
+        assert!(
+            notifier.threads().is_empty(),
+            "the update itself shows nothing"
+        );
+        let out = messages(work);
+
+        let threads = notifier.threads();
+        assert_eq!(threads.len(), 1, "the work shows the notification once");
+        assert_ne!(
+            threads[0],
+            std::thread::current().id(),
+            "the show ran on the thread that drives the work, not a blocking one"
+        );
+        assert!(
+            matches!(
+                out.as_slice(),
+                [Message::Connection(ConnectionMsg::AttentionShown(Ok(())))]
+            ),
+            "the result comes back as AttentionShown"
+        );
+    }
+
+    /// (b) A refused show comes back through the `AttentionShown` arm, which logs it once.
+    #[test]
+    fn a_refused_show_reaches_the_attention_shown_arm() {
+        let folder = tempfile::tempdir().unwrap();
+        let notifier = Recording::answering(Err(NotifyError::Refused("busy".into())));
+        let (mut app, session) = app_with_a_session(folder.path(), notifier);
+
+        let work = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::AttentionGranted { session, seq: 1 },
+        );
+        for message in messages(work) {
+            let _ = update(&mut app, message);
+        }
+
+        assert!(
+            app.core.attention.failure_logged,
+            "the refusal was not handed to the attention state"
+        );
+    }
+
+    /// The order the actions of `work` arrive in: `raise` for the window raise's first request
+    /// (answered "no window", which ends the raise), `message` for each message.
+    fn action_order(work: Task<Message>) -> Vec<&'static str> {
+        use iced::futures::StreamExt;
+        let Some(stream) = iced_runtime::task::into_stream(work) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+        runtime.block_on(async {
+            let order = stream
+                .map(|action| match action {
+                    iced_runtime::Action::Window(iced_runtime::window::Action::GetLatest(
+                        reply,
+                    )) => {
+                        let _ = reply.send(None);
+                        "raise"
+                    }
+                    iced_runtime::Action::Output(_) => "message",
+                    _ => "other",
+                })
+                .collect::<Vec<_>>();
+            tokio::time::timeout(std::time::Duration::from_secs(10), order)
+                .await
+                .expect("the work an update returned has to finish")
+        })
+    }
+
+    /// (c) A click's reveal raises the window first, then dispatches the selection (N5, N6).
+    #[test]
+    fn a_reveal_raises_the_window_before_the_selection() {
+        let folder = tempfile::tempdir().unwrap();
+        let (mut app, session) = app_with_a_session(folder.path(), Recording::answering(Ok(())));
+
+        let work = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::RevealSession {
+                project: folder.path().to_path_buf(),
+                session,
+                activation: None,
+            },
+        );
+
+        assert_eq!(action_order(work), ["raise", "message"]);
+    }
+}

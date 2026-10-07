@@ -8,139 +8,25 @@
 //! The windows here are real connections to a real service; the sessions are idle processes whose
 //! activity is driven through `note_activity`, the way `hooks.rs` drives it.
 
-use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, DaemonSettings};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
-use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
-};
+use futures_util::SinkExt;
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings};
+use micold_core::session::{AiCli, SessionId};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
-use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::workspace::Workspace;
-use micold_daemon::activity::{ActivityEvent, HookKind};
-use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use micold_daemon::supervisor::PtySession;
-use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-use uuid::Uuid;
 
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-/// How long a window waits for a message the service owes it.
-const OWED: Duration = Duration::from_secs(10);
-
-fn session_id(n: u128) -> SessionId {
-    SessionId::from_uuid(Uuid::from_u128(n))
-}
+#[path = "support/attention.rs"]
+mod attention;
+use attention::{
+    connect_with_settings as connect, next_frame, session_id, state_on, Service, Window,
+};
 
 const A: u128 = 0xA;
 const B: u128 = 0xB;
 
-/// A service on a store directory, with one project and its sessions, each of them live.
-struct Service {
-    state: Arc<DaemonState>,
-    store: tempfile::TempDir,
-    _project: tempfile::TempDir,
-    _live: Vec<Arc<PtySession>>,
-}
-
 impl Service {
-    /// A service whose catalog holds `sessions`, each a Claude Code session.
-    fn with_sessions(sessions: &[SessionId]) -> Self {
-        let sessions: Vec<_> = sessions.iter().map(|id| (*id, AiCli::ClaudeCode)).collect();
-        Self::with_sessions_of(&sessions)
-    }
-
-    /// A service whose catalog holds `sessions`, each of the AI CLI named beside it and backed by
-    /// an idle process.
-    fn with_sessions_of(sessions: &[(SessionId, AiCli)]) -> Self {
-        let store = tempfile::tempdir().expect("a store directory");
-        let project = tempfile::tempdir().expect("a project directory");
-        let workspace = Workspace {
-            projects: vec![Project::new(
-                project.path().to_path_buf(),
-                false,
-                Availability::Available,
-            )],
-            active: Some(project.path().to_path_buf()),
-            sessions: BTreeMap::from([(
-                project.path().to_path_buf(),
-                sessions
-                    .iter()
-                    .map(|(id, cli)| {
-                        Session::restored(
-                            *id,
-                            SessionLocation::Default,
-                            SessionLabel::Pending,
-                            TerminalMode::AiCli,
-                            *cli,
-                        )
-                    })
-                    .collect(),
-            )]),
-            ..Default::default()
-        };
-        JsonFileStore::at(store.path().join("projects.json"))
-            .save(&workspace)
-            .expect("the catalog saves");
-
-        let state = Arc::new(state_on(store.path()));
-        let live = sessions
-            .iter()
-            .map(|(id, _cli)| state.register_session(idle_process(*id)))
-            .collect();
-        Self {
-            state,
-            store,
-            _project: project,
-            _live: live,
-        }
-    }
-
-    /// A full turn that ends with the session awaiting input.
-    fn finishes_a_turn(&self, session: SessionId) {
-        self.signal(session, HookKind::UserPromptSubmit);
-        self.signal(session, HookKind::Stop);
-    }
-
-    /// Deliver one hook the way `hooks.rs` does: the catalog is sent when the signal changed.
-    fn signal(&self, session: SessionId, hook: HookKind) {
-        if self.state.note_activity(session, ActivityEvent::Hook(hook)) {
-            self.state.broadcast_catalog();
-        }
-    }
-
-    /// Whether the service holds `session` as unread now.
-    fn unread(&self, session: SessionId) -> bool {
-        self.summary(session).1
-    }
-
-    /// The session's count of attention events now.
-    fn attention_seq(&self, session: SessionId) -> u64 {
-        self.summary(session).0
-    }
-
-    fn summary(&self, session: SessionId) -> (u64, bool) {
-        self.state
-            .catalog_snapshot()
-            .projects
-            .iter()
-            .flat_map(|p| &p.sessions)
-            .find(|s| s.id == session)
-            .map(|s| (s.attention_seq, s.unread))
-            .expect("the session is in the snapshot")
-    }
-
     /// A service started on the same store directory.
     fn restarted(&self) -> Arc<DaemonState> {
         Arc::new(state_on(self.store.path()))
@@ -153,76 +39,6 @@ impl Service {
             .settings
             .desktop_notifications
     }
-}
-
-/// A service on `store` where every finished turn is a long task (feature 613): these tests are
-/// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
-/// **Turn finished** is off by default.
-fn state_on(store: &Path) -> DaemonState {
-    let state = DaemonState::new(catalog_on(store));
-    state.set_long_task_threshold(std::time::Duration::ZERO);
-    state
-}
-
-/// The catalog the service loads from `store`: what a start of the service on that directory reads.
-fn catalog_on(store: &Path) -> Catalog {
-    Catalog::load(
-        Box::new(JsonFileStore::at(store.join("projects.json"))),
-        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
-    )
-}
-
-/// A process that stays alive and prints nothing: `cat` (`cmd /q` on Windows).
-fn idle_process(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
-}
-
-/// Connect a window and take its `Welcome`. It attaches to no project. Returns the window and the
-/// settings the `Welcome` reported.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> (Window, DaemonSettings) {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { settings, .. })) => (window, settings),
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-}
-
-/// The window's next frame, or `None` once the service closed the connection.
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
-    tokio::time::timeout(OWED, window.next())
-        .await
-        .expect("the service answers in time")
-        .map(|frame| frame.expect("a well-formed frame"))
 }
 
 /// Send `msg`, then a `Ping`, and return every control message the service sent before the `Pong`.

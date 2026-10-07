@@ -7,208 +7,28 @@
 mod attention_support;
 
 use attention_support::kinds;
-use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use micold_core::attention::NotificationKind;
-use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, SessionSummary};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
-use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
-};
-use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::workspace::Workspace;
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::session::SessionId;
 use micold_daemon::activity::{ActivityEvent, HookKind};
-use micold_daemon::catalog::Catalog;
-use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-use uuid::Uuid;
 
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
+#[path = "support/attention.rs"]
+mod attention;
+use attention::{
+    connect, next_frame, process_that_exits, session_id, state_on, wait_dead, Service, Window,
+};
 
+/// How long a test waits for something the service owes it.
 const OWED: Duration = Duration::from_secs(10);
+
 const NONCE: u64 = 0x039;
-
-fn session_id(n: u128) -> SessionId {
-    SessionId::from_uuid(Uuid::from_u128(n))
-}
-
-struct Service {
-    state: Arc<DaemonState>,
-    _store: tempfile::TempDir,
-    _project: tempfile::TempDir,
-    _live: Vec<Arc<PtySession>>,
-}
-
-impl Service {
-    fn with_sessions(sessions: &[SessionId]) -> Self {
-        Self::with_processes(sessions, idle_process)
-    }
-
-    /// As [`Self::with_sessions`], each session's process made by `spawn`.
-    fn with_processes(sessions: &[SessionId], spawn: fn(SessionId) -> PtySession) -> Self {
-        let store = tempfile::tempdir().expect("a store directory");
-        let project = tempfile::tempdir().expect("a project directory");
-        let workspace = Workspace {
-            projects: vec![Project::new(
-                project.path().to_path_buf(),
-                false,
-                Availability::Available,
-            )],
-            active: Some(project.path().to_path_buf()),
-            sessions: BTreeMap::from([(
-                project.path().to_path_buf(),
-                sessions
-                    .iter()
-                    .map(|id| {
-                        Session::restored(
-                            *id,
-                            SessionLocation::Default,
-                            SessionLabel::Pending,
-                            TerminalMode::AiCli,
-                            AiCli::ClaudeCode,
-                        )
-                    })
-                    .collect(),
-            )]),
-            ..Default::default()
-        };
-        JsonFileStore::at(store.path().join("projects.json"))
-            .save(&workspace)
-            .expect("the catalog saves");
-        let state = Arc::new(state_on(store.path()));
-        let live = sessions
-            .iter()
-            .map(|id| state.register_session(spawn(*id)))
-            .collect();
-        Self {
-            state,
-            _store: store,
-            _project: project,
-            _live: live,
-        }
-    }
-
-    /// A full turn that ends with the session awaiting input and no window viewing it: one
-    /// attention event.
-    fn finishes_a_turn(&self, session: SessionId) {
-        self.signal(session, HookKind::UserPromptSubmit);
-        self.signal(session, HookKind::Stop);
-    }
-
-    fn signal(&self, session: SessionId, hook: HookKind) {
-        if self.state.note_activity(session, ActivityEvent::Hook(hook)) {
-            self.state.broadcast_catalog();
-        }
-    }
-
-    fn attention_seq(&self, session: SessionId) -> u64 {
-        self.state
-            .catalog_snapshot()
-            .projects
-            .iter()
-            .flat_map(|p| &p.sessions)
-            .find(|s| s.id == session)
-            .map(|s: &SessionSummary| s.attention_seq)
-            .expect("the session is in the snapshot")
-    }
-}
-
-/// A service on `store` where every finished turn is a long task (feature 613): these tests are
-/// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
-/// **Turn finished** is off by default.
-fn state_on(store: &Path) -> DaemonState {
-    let state = DaemonState::new(catalog_on(store));
-    state.set_long_task_threshold(std::time::Duration::ZERO);
-    state
-}
-
-fn catalog_on(store: &Path) -> Catalog {
-    Catalog::load(
-        Box::new(JsonFileStore::at(store.join("projects.json"))),
-        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
-    )
-}
-
-fn idle_process(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
-}
-
-/// A process that exits by itself at once, with success.
-fn process_that_exits(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("sh");
-        cmd.arg("-c");
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
-        cmd
-    };
-    cmd.arg("exit 0");
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 100, None).expect("a process that exits starts")
-}
-
-/// Connect a window and take its `Welcome`. It attaches to no project (W1.6).
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { .. })) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    window
-}
-
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
-    tokio::time::timeout(OWED, window.next())
-        .await
-        .expect("the service answers in time")
-        .map(|frame| frame.expect("a well-formed frame"))
-}
 
 /// Send the claim, then a `Ping`, and return every control message the service sent before the
 /// `Pong`. A connection's messages are handled in order, so the claim has been answered (or not) by
@@ -356,14 +176,7 @@ async fn the_grants_of_a_session_dropped_by_supervision_are_forgotten() {
         "precondition: the event is granted once"
     );
 
-    let deadline = std::time::Instant::now() + OWED;
-    while service._live[0].is_alive() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the process did not exit"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    wait_dead(&service.live[0]);
     service.state.supervise_exited_sessions();
     assert!(
         service.state.primary_pty(a).is_none(),
@@ -397,17 +210,6 @@ fn service_613(sessions: &[SessionId]) -> Service {
 }
 
 impl Service {
-    fn unread(&self, session: SessionId) -> bool {
-        self.state
-            .catalog_snapshot()
-            .projects
-            .iter()
-            .flat_map(|p| &p.sessions)
-            .find(|s| s.id == session)
-            .map(|s: &SessionSummary| s.unread)
-            .expect("the session is in the snapshot")
-    }
-
     /// A turn of `hooks` after the prompt.
     fn turn(&self, session: SessionId, hooks: &[HookKind]) {
         self.signal(session, HookKind::UserPromptSubmit);
@@ -750,7 +552,7 @@ async fn after_a_restart_an_event_noted_before_it_is_not_granted() {
     service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
     service.state.persist_attention();
 
-    let restarted = Arc::new(state_on(service._store.path()));
+    let restarted = Arc::new(state_on(service.store.path()));
     let mut window = connect(&restarted, "after").await;
 
     assert_eq!(

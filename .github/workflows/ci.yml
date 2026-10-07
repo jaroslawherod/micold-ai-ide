@@ -340,9 +340,15 @@ jobs:
       # list above names integration tests, which reach no unit test of the binary, and
       # `cargo test --workspace` runs on the Linux leg alone: without this step those tests would be
       # compiled on their own system and run nowhere. Linux runs `linux.rs`'s in the workspace step.
+      # The filter is the backends' module path, and a run that selects no test fails the step: a
+      # renamed module would otherwise pass on "0 passed" (issue #572). Checked by
+      # `scripts/tests/ci-desktop-notify-step.test.sh`.
       - name: Test (desktop notification backends)
         if: runner.os != 'Linux'
-        run: cargo test -p micold-client --bin micold-ai-ide desktop_notify
+        shell: bash
+        run: |
+          cargo test -p micold-client --bin micold-ai-ide shell::desktop_notify:: 2>&1 | tee desktop-notify.log
+          grep -q 'test result: ok\. [1-9]' desktop-notify.log
       # Feature 010's T144 (BUG-008). The daemon's PTY tests are Unix-only and run in the Linux
       # full-workspace step below, so without this step no Windows runner ever started a session:
       # job-object process-tree teardown, the `0x03` interrupt through ConPTY, `portable-pty`'s

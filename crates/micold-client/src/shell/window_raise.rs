@@ -248,3 +248,55 @@ mod wayland {
         sent.map(|_| ()).map_err(|e| format!("the request: {e}"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The windows the requests whose wait is not over were sent for.
+    fn waiting(requests: &Activation) -> HashMap<u64, Id> {
+        requests.sent.lock().unwrap().windows.clone()
+    }
+
+    /// M7 review A round 2 F2 (issue #572): each request gets the next number, and keeps the
+    /// window it was sent for under it.
+    #[test]
+    fn each_request_is_numbered_in_turn_and_keeps_its_window() {
+        let mut sent = Sent::default();
+        let (first, second) = (Id::unique(), Id::unique());
+
+        let numbers = [sent.record(first), sent.record(second)];
+
+        assert_eq!(numbers, [1, 2], "the requests are numbered in turn from 1");
+        assert_eq!(
+            sent.windows,
+            HashMap::from([(1, first), (2, second)]),
+            "each number keeps the window its request was sent for"
+        );
+    }
+
+    /// M7 review A round 2 F2 (issue #572): once its wait is over a request is forgotten, whether
+    /// a later one replaced it (no step follows) or it was judged (its step follows).
+    #[test]
+    fn a_replaced_or_judged_request_is_forgotten_when_its_wait_is_over() {
+        let mut requests = Activation::default();
+        let (first, second) = (Id::unique(), Id::unique());
+        for window in [first, second] {
+            let check = requests.sent.lock().unwrap().record(window);
+            requests.watch.sent(check);
+        }
+
+        let _ = settled(&mut requests, 1);
+        assert_eq!(
+            waiting(&requests),
+            HashMap::from([(2, second)]),
+            "the replaced request is forgotten though no step follows it"
+        );
+
+        let _ = settled(&mut requests, 2);
+        assert!(
+            waiting(&requests).is_empty(),
+            "the judged request is forgotten too"
+        );
+    }
+}
