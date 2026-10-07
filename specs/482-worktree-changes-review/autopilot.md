@@ -119,7 +119,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Close unit 1 handed over at the context cap (2026-10-07).
+
+Done: converge (subagent): no unbuilt behaviour, 3 LOW test-gap notes (no e2e watcher test, no SC-003 timing, no fill-colour assertion), no new milestone. speckit-tdd-verify: `tdd/verification.md` written, verdict FAIL (7 HIGH smells, 4 test-after); 9 deliberate mutants, 8 caught, `forget_worktree` survivor. Remediation appended as tasks.md Phase 8, T101–T106. T100 done: guide wording fixed (Default menu, 2,000-byte colouring cap). T098/T099: quickstart `## Results` records §B per milestone pass and §C not run (no macOS/Windows host); leave both unticked, listed under Follow-ups.
+
+In flight, uncommitted: two detached `autopilot-worker` (sonnet) fix runs editing test code only: client C1–C6 (T102–T105 client part), output `$SCRATCHPAD/fix-client.out`; daemon D1–D5 (T101, T105 daemon part), output `$SCRATCHPAD/fix-daemon.out`. Each ends with `WORKER_EXIT=`; hold on them. Then vet their diff, tick T101–T105 that hold, do T106, rerun the two crates' tests, update verification.md's frontmatter/verdict paragraph with a "Remediation" note (re-audit not needed for test-after rows: history cannot change).
+
+Next: review of the close diff (review.md, no rubric: correctness of the tests, truth of the docs), full gate (test code changed), spec `**Status**: Closed <date> — shipped in PR #624`, Phase `done`, Next step `handoff`, commit, write `$SCRATCHPAD/pr-body-482-close.md`, return `PR: #624`. Scratchpad: /tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad.
 
 ## Open escalation
 
@@ -127,4 +133,5 @@ None.
 
 ## Follow-ups not done
 
+- T098 (quickstart §C on macOS and Windows) and T099 (one full §B pass on the merged result) not run in the close unit: no macOS/Windows host; §B passed piecewise per milestone (quickstart `## Results`).
 - `micold-daemon` `history_service_restart::a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order` hangs in about 1 of 3 parallel runs of its binary in this container, at M7 as at M8 (not this feature's code). Not investigated; worth an issue if CI shows it.

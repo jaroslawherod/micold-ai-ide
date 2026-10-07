@@ -215,7 +215,7 @@ No code. Done by the close unit in the close PR.
 
 - [ ] T098 Run quickstart §C on macOS and Windows (B1, B3, B7, B9, B12, B6 with `core.autocrlf=true`) and compare B9's prompt bytes with Linux's; record the results in `specs/482-worktree-changes-review/quickstart.md`
 - [ ] T099 Run the full quickstart §B (B1–B18) once on the merged result and record it in `specs/482-worktree-changes-review/quickstart.md`
-- [ ] T100 Review `docs/user-guide/reviewing-changes.md` end to end against FR-023 and fix wording across sections
+- [x] T100 Review `docs/user-guide/reviewing-changes.md` end to end against FR-023 and fix wording across sections
 
 ---
 
@@ -334,3 +334,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Polish (T098–T100) changes no code: the close unit does it in the close PR.
+
+## Phase 8: TDD remediation
+
+From `tdd/verification.md` (verdict FAIL). The feature is not done until T101–T104 are cleared.
+Test code only; each proven with a deliberate mutant the old test missed.
+
+- [ ] T101 Findings 1–3: replace the vacuous `.all()` checks in `crates/micold-daemon/tests/review_send.rs:478,553,699,797,824,851` and `crates/micold-daemon/tests/review_edit.rs:670-678` with exact ids and states; `cargo test -p micold-daemon --test review_send --test review_edit`
+- [ ] T102 Finding 4: assert the exact effect of the second `CommittedToggled` in `crates/micold-client/tests/features_changes.rs:140`; `cargo test -p micold-client --test features_changes`
+- [ ] T103 Findings 5–6: test production `visible_range_with` in `virtual_rows.rs:216-272` and observe what `DiffView` builds in `diff_view.rs:856-981`; `cargo test -p micold-client --lib -- virtual_rows diff_view`
+- [ ] T104 Finding 7: assert the three distinct fills in `crates/micold-client/src/ui/syntax.rs:233`; `cargo test -p micold-client --lib -- syntax`
+- [ ] T105 Findings 8–11: a focused `forget_worktree` test (or a recorded reason), a positive outcome in `review_send.rs:580`, full cell counts in `diff_view.rs:901,1040`, an exact re-read in `features_changes.rs:661`
+- [ ] T106 Finding 17: move `diff_layout` out of `DEFERRED` in `crates/micold-client/tests/settings_sections.rs:48` to a record of settings chosen outside Settings, or name the reason; `cargo test -p micold-client --test settings_sections`

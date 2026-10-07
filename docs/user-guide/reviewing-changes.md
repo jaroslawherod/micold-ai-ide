@@ -7,7 +7,7 @@ before you merge it or tell the session what to change next.
 
 Right-click a worktree in the sidebar and choose **Review changes**. The **Default** entry (the
 project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
-has the same right-click menu, with **Review changes** as its one item.
+has a right-click menu too, with **Review changes** as its one item.
 
 The view takes the place of the terminal. Its header names the entry; **Close** returns to the
 terminal. Selecting a session in the sidebar also closes it, and so does the worktree disappearing
@@ -66,8 +66,8 @@ the latest choice.
 Files in a language the app recognises from their extension (Rust, Python, JavaScript, Markdown and
 many more) are shown with syntax colouring, in both the light and the dark theme; the colours are
 adjusted so that every token stays readable on the added and removed tints. Other files are shown
-as plain text. Only the first 2,000 characters of a very long line are coloured; the rest of it is
-shown in the plain text colour.
+as plain text. Only the start of a very long line is coloured (its first 2,000 bytes, which is 2,000
+characters of plain ASCII text); the rest of it is shown in the plain text colour.
 
 ### Binary and non-text files
 
