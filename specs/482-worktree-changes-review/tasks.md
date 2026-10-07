@@ -169,7 +169,7 @@ first input; failures keep comments pending; concurrent sends deliver once.
 - [x] T077 [US3] Move `deliver_first_prompt` out of `crates/micold-daemon/src/mcp/tools.rs` into `ops::create_session_with_prompt(...)` in `crates/micold-daemon/src/ops.rs` (create with `state.default_ai_cli()`, `ops::start_session` with `LaunchMode::Fresh`, `wait_ready_for_input` bounded by `first_prompt_bound`, then `type_submission`); `mcp/tools.rs` calls it unchanged in behaviour; `review::send` in `crates/micold-daemon/src/review.rs` uses it when `pick_target` gives `None` (W7, W9: a session the send started stays); until T076 passes
 - [x] T078 [P] [US3] Extend `crates/micold-client/tests/features_changes.rs` with a failing test that `ReviewSent { started: true }` gives "Started a session and sent n comments", and implement it in `crates/micold-client/src/features/changes.rs` (S2)
 - [x] T079 [P] [US3] Extend `docs/user-guide/reviewing-changes.md`: sending when no session runs, what happens when the session cannot start, sending from two windows
-- [ ] T080 [US3] Visual pass of quickstart B9 (no session running), B11 and B16; evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T080 [US3] Visual pass of quickstart B9 (no session running), B11 and B16; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 **Checkpoint**: Send to session works whether or not a session runs.
 
