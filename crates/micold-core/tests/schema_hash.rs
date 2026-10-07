@@ -359,22 +359,22 @@ fn the_claim_and_the_grant_are_in_the_hashed_source() {
 
 #[test]
 fn the_grants_kind_is_in_the_hashed_source() {
-    // Feature 613, wire W5.1 (version 30). Read from the text `build.rs` hashes, as above.
+    // Feature 613, wire W5.1 (version 31). Read from the text `build.rs` hashes, as above.
     let (messages, _grid, _envelope) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("kind: NotificationKind,"),
-        "`kind: NotificationKind,` is not in messages.rs, so version 30's hash is not the hash of \
+        "`kind: NotificationKind,` is not in messages.rs, so version 31's hash is not the hash of \
          the message set whose grant carries the notification kind"
     );
 }
 
 #[test]
 fn the_session_error_notice_is_in_the_hashed_source() {
-    // Feature 613, wire W5.2 (version 31). Read from the text `build.rs` hashes, as above.
+    // Feature 613, wire W5.2 (version 32). Read from the text `build.rs` hashes, as above.
     let (messages, _grid, _envelope) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("SessionErrorNotice {"),
-        "`SessionErrorNotice {{` is not in messages.rs, so version 31's hash is not the hash of \
+        "`SessionErrorNotice {{` is not in messages.rs, so version 32's hash is not the hash of \
          the message set that tells a window a session ended with an error"
     );
 }
@@ -443,7 +443,7 @@ fn the_desktop_notifications_setting_is_in_the_hashed_source() {
 
 #[test]
 fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
-    // Feature 613, wire W5.3, W5.4, W5.6 (version 32). Read from the text `build.rs` hashes.
+    // Feature 613, wire W5.3, W5.4, W5.6 (version 33). Read from the text `build.rs` hashes.
     let (messages, _grid, _envelope) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in [
@@ -456,13 +456,13 @@ fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
     ] {
         assert!(
             messages.contains(anchor),
-            "`{anchor}` is not in messages.rs, so version 32's hash is not the hash of the \
+            "`{anchor}` is not in messages.rs, so version 33's hash is not the hash of the \
              message set that carries the kind switches and the long-task threshold"
         );
     }
     assert_eq!(
         micold_core::protocol::version::PROTOCOL_VERSION,
-        32,
-        "W5.3, W5.4 and W5.6 are version 32"
+        33,
+        "W5.3, W5.4 and W5.6 are version 33"
     );
 }
