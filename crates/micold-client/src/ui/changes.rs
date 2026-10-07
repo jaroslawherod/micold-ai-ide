@@ -19,7 +19,7 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     base_line, can_pick, committed_available, diff_body, file_comments, is_pending, list_body,
-    pending_counts, review_of, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
+    pending_counts, review_of, send_action, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
     DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
@@ -53,14 +53,20 @@ pub fn view<'a>(
     if let Some(line) = base_line(view) {
         heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
     }
-    let header = row![
-        container(heading).width(Length::Fill),
-        Button::text("Close", r)
-            .leading(Icon::Close)
-            .on_press(Message::Changes(Msg::Closed)),
-    ]
-    .spacing(spacing::MD)
-    .align_y(Alignment::Center);
+    // S1: Send to session (n), "Sending…" while a send of this entry is open in any window.
+    let send = send_action(&state.changes).map(|action| {
+        Button::filled(action.label, r)
+            .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed)))
+    });
+    let header = row![container(heading).width(Length::Fill),]
+        .push_maybe(send)
+        .push(
+            Button::text("Close", r)
+                .leading(Icon::Close)
+                .on_press(Message::Changes(Msg::Closed)),
+        )
+        .spacing(spacing::MD)
+        .align_y(Alignment::Center);
 
     let body = row![
         container(list_pane(state, view, r)).width(Length::FillPortion(2)),

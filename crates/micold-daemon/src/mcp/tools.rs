@@ -17,14 +17,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use alacritty_terminal::term::TermMode;
 use micold_core::cli_reason::{self, AttemptDir, Explanation};
 use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
-use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::tools::{
     is_mutating_tool, parse_call, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
 };
@@ -1173,14 +1171,9 @@ async fn send_session_input(
     if !Arc::ptr_eq(&pty, &asked_about) {
         return Err(not_running(session));
     }
-    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
-    pty.write_input(&encode_submission(text.as_str(), bracketed))
-        .map_err(|err| {
-            OpError::service_error(format!(
-                "the text could not be typed into session {}: {err}",
-                session.0
-            ))
-        })?;
+    // A terminal without bracketed paste still gets the text, as one plain submission.
+    ops::write_submission(&pty, text.as_str(), false)
+        .map_err(|why| OpError::service_error(why.message(session)))?;
     Ok(json!({}))
 }
 
@@ -1326,8 +1319,7 @@ async fn deliver_first_prompt(
     let Some(pty) = state.primary_pty(session) else {
         return false;
     };
-    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
-    pty.write_input(&encode_submission(text, bracketed)).is_ok()
+    ops::write_submission(&pty, text, false).is_ok()
 }
 
 /// A worktree directory name given by the agent: accepted only as the dialog would write it

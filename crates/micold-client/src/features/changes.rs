@@ -247,6 +247,8 @@ pub enum Msg {
         /// A send is in progress.
         sending: bool,
     },
+    /// **Send to session (n)** was pressed (S1).
+    SendPressed,
 }
 
 /// What the shell must do.
@@ -291,6 +293,17 @@ pub enum Effect {
         worktree_dir: String,
         /// The change.
         edit: ReviewEditOp,
+    },
+    /// Send `ClientMsg::ReviewSend` for the entry (W6, S1).
+    ReviewSend {
+        /// The project.
+        project: PathBuf,
+        /// The wire's worktree dir; `""` is the Default entry.
+        worktree_dir: String,
+        /// The comments judged outdated (R14); empty until M7.
+        outdated: Vec<CommentId>,
+        /// How many pending comments the send carries, for the success snackbar (S2).
+        count: usize,
     },
 }
 
@@ -476,6 +489,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ComposerSaved => composer_saved(state),
+        Msg::SendPressed => Effect::None,
         Msg::EditComment(id) => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -605,6 +619,30 @@ pub fn review_of<'a>(state: &'a State, view: &OpenView) -> Option<&'a ReviewView
     state
         .reviews
         .get(&(view.project.clone(), entry_dir(&view.entry)))
+}
+
+/// The toolbar's **Send to session (n)** (S1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendAction {
+    /// "Send to session (n)", or "Sending…" while a send is open.
+    pub label: String,
+    /// Whether pressing it sends.
+    pub enabled: bool,
+}
+
+/// The open view's **Send to session (n)**; `None` with no view open (S1).
+pub fn send_action(_state: &State) -> Option<SendAction> {
+    None
+}
+
+/// The success snackbar (S2).
+pub fn sent_text(_count: usize, _session: &str, _started: bool) -> String {
+    String::new()
+}
+
+/// The error snackbar (S2): the service's message.
+pub fn send_error_text(_message: &str) -> String {
+    String::new()
 }
 
 /// Each file's pending-comment count in the open view's entry (L2).

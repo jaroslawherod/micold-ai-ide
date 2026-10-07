@@ -1,7 +1,6 @@
 //! The Changes view's diff layout on the service (feature 482, R12, contracts/review-wire.md):
 //! `SettingsSet { diff_layout }` is stored in the settings file, reported in `Welcome` after a
-//! restart and pushed to every attached client, as `pr_status_enabled` is. `ReviewSend` is refused
-//! until the send is served (T072 retires that assertion).
+//! restart and pushed to every attached client, as `pr_status_enabled` is.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -186,27 +185,4 @@ async fn setting_the_diff_layout_is_pushed_to_a_second_client() {
         DiffLayout::SideBySide,
         "the window that did nothing is pushed the layout"
     );
-}
-
-/// Placeholder until the review store: both review messages are refused, not dropped.
-#[tokio::test]
-async fn review_send_is_refused_until_served() {
-    let store = tempfile::tempdir().unwrap();
-    let state = service(store.path());
-    let (mut client, _) = connect(&state).await;
-
-    // Retired by T072.
-    client
-        .send(Frame::Control(ClientMsg::ReviewSend {
-            req: 2,
-            project: store.path().to_path_buf(),
-            worktree_dir: String::new(),
-            outdated: Vec::new(),
-        }))
-        .await
-        .unwrap();
-    let (kind, _) = answer(&mut client, 2)
-        .await
-        .expect_err("ReviewSend is refused");
-    assert_eq!(kind, ErrorKind::Refused);
 }

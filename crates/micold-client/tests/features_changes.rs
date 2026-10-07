@@ -1075,3 +1075,124 @@ fn slot_heights_are_kept_for_the_shown_file_and_layout_only() {
     select(&mut state, "a.rs");
     assert!(heights(&state).is_empty(), "another file has other slots");
 }
+
+// --- M5: Send to session (S1, S2) ---
+
+use micold_client::features::changes::{send_action, send_error_text, sent_text, SendAction};
+
+fn sending(state: &mut State, dir: &str, comments: Vec<ReviewComment>, on: bool) {
+    changes::update(
+        state,
+        Msg::ReviewChanged {
+            project: project(),
+            worktree_dir: dir.into(),
+            comments,
+            sending: on,
+        },
+    );
+}
+
+/// S1. Enabled iff n ≥ 1 pending and no send is open; counts only the open entry's pending
+/// comments; reads "Sending…" while a send is open (US2 s5, FR-018).
+#[test]
+fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
+    let mut state = showing(commentable());
+    assert_eq!(
+        send_action(&state),
+        Some(SendAction {
+            label: "Send to session (0)".into(),
+            enabled: false,
+        }),
+        "no comments: unavailable (US2 s5)"
+    );
+    let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let pending_a = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
+    let pending_b = comment("b.rs", Side::Old, 2, 2, CommentState::Pending);
+    push(
+        &mut state,
+        "",
+        vec![comment("x", Side::New, 1, 1, CommentState::Pending)],
+    );
+    push(&mut state, "feat-a", vec![sent.clone()]);
+    assert_eq!(
+        send_action(&state).map(|a| (a.label, a.enabled)),
+        Some(("Send to session (0)".into(), false)),
+        "only sent comments here, and another entry's pending one does not count (FR-021)"
+    );
+    push(
+        &mut state,
+        "feat-a",
+        vec![sent.clone(), pending_a.clone(), pending_b.clone()],
+    );
+    assert_eq!(
+        send_action(&state),
+        Some(SendAction {
+            label: "Send to session (2)".into(),
+            enabled: true,
+        })
+    );
+    sending(&mut state, "feat-a", vec![sent, pending_a, pending_b], true);
+    assert_eq!(
+        send_action(&state),
+        Some(SendAction {
+            label: "Sending…".into(),
+            enabled: false,
+        }),
+        "a send open in any window disables it (FR-018)"
+    );
+    assert_eq!(send_action(&State::default()), None, "no view, no action");
+}
+
+/// S1. Pressing it sends `ReviewSend` for the open entry with an empty `outdated` list (M7 fills
+/// it); pressing it while unavailable does nothing.
+#[test]
+fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
+    let mut state = showing(commentable());
+    assert_eq!(
+        changes::update(&mut state, Msg::SendPressed),
+        Effect::None,
+        "nothing pending"
+    );
+    let comments = vec![
+        comment("a.rs", Side::New, 2, 2, CommentState::Pending),
+        comment("b.rs", Side::New, 4, 4, CommentState::Pending),
+    ];
+    push(&mut state, "feat-a", comments.clone());
+    assert_eq!(
+        changes::update(&mut state, Msg::SendPressed),
+        Effect::ReviewSend {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            outdated: Vec::new(),
+            count: 2,
+        }
+    );
+    sending(&mut state, "feat-a", comments, true);
+    assert_eq!(
+        changes::update(&mut state, Msg::SendPressed),
+        Effect::None,
+        "never while a send is open"
+    );
+}
+
+/// S2. The snackbars: success names the count and the session; failure carries the service's
+/// message.
+#[test]
+fn the_send_snackbars_name_the_count_the_session_and_the_reason() {
+    assert_eq!(
+        sent_text(2, "Fix the parser", false),
+        "Sent 2 comments to Fix the parser"
+    );
+    assert_eq!(
+        sent_text(1, "Fix the parser", false),
+        "Sent 1 comment to Fix the parser"
+    );
+    assert_eq!(
+        sent_text(3, "ignored", true),
+        "Started a session and sent 3 comments"
+    );
+    assert_eq!(
+        send_error_text("no session is running in this entry"),
+        "Couldn't send the comments: no session is running in this entry"
+    );
+}

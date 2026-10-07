@@ -308,11 +308,22 @@ struct LiveSession {
     /// Whether the CLI has said it is ready for its first prompt (feature 034, FR-017): Pi's
     /// `session_start` event. `create_session` waits on it.
     ready: tokio::sync::watch::Sender<bool>,
+    /// When the user last did something with this session: its start, their input, or a change
+    /// of its activity (feature 482, research R5). A review send goes to the entry's running
+    /// session with the latest reading.
+    last_active: micold_core::clock::Uptime,
 }
 
 /// How long `create_session` waits for a new session to be ready for its first prompt, counted
 /// from the request (feature 034, FR-017).
 pub const FIRST_PROMPT_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Seconds since the Unix epoch, for a comment's `created_at` and `Sent { at }`.
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
 /// The variable Pi's activity component reads to find its log (feature 029, contracts/pi-cli.md).
@@ -1641,7 +1652,23 @@ impl DaemonState {
         op: micold_core::protocol::messages::ReviewEditOp,
     ) -> Result<(), crate::review::Refusal> {
         let mut inner = self.lock();
-        let snapshot = Self::snapshot_locked(&inner);
+        Self::check_entry_locked(&inner, project, worktree_dir)?;
+        let inner = &mut *inner;
+        let msg =
+            inner
+                .reviews
+                .apply_edit(&inner.catalog, project, worktree_dir, op, unix_now())?;
+        Self::broadcast_locked(inner, vec![msg]);
+        Ok(())
+    }
+
+    /// W2: a project the catalog does not list, or a worktree it does not have, is `NotFound`.
+    fn check_entry_locked(
+        inner: &Inner,
+        project: &Path,
+        worktree_dir: &str,
+    ) -> Result<(), crate::review::Refusal> {
+        let snapshot = Self::snapshot_locked(inner);
         let known = snapshot
             .projects
             .iter()
@@ -1649,21 +1676,168 @@ impl DaemonState {
             .is_some_and(|p| {
                 worktree_dir.is_empty() || p.worktrees.iter().any(|w| w.dir_name == worktree_dir)
             });
-        if !known {
-            return Err(crate::review::Refusal {
+        if known {
+            Ok(())
+        } else {
+            Err(crate::review::Refusal {
                 kind: micold_core::protocol::messages::ErrorKind::NotFound,
                 message: "no such project or worktree".into(),
-            });
+            })
         }
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs());
+    }
+
+    /// Send entry `worktree_dir`'s pending comments to its running session as one prompt (feature
+    /// 482, W6–W9): open the send and push `sending`, pick the entry's running session with the
+    /// latest `last_active` (W7, R5), type the prompt, then close the send — the comments become
+    /// sent only once the prompt was typed (FR-017), and stay pending otherwise. With no running
+    /// session in the entry the send is refused (a session started for it arrives with T077). The
+    /// prompt is never logged (W12).
+    pub async fn review_send(
+        self: &Arc<Self>,
+        project: &Path,
+        worktree_dir: &str,
+        outdated: &[micold_core::review::comment::CommentId],
+    ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
+        use micold_core::protocol::messages::{ErrorKind, OperationResult};
+        use micold_core::review::prompt::EntryKind;
+        let kind = if worktree_dir.is_empty() {
+            EntryKind::Default
+        } else {
+            EntryKind::Worktree
+        };
+        let (snapshot, candidates) = {
+            let mut inner = self.lock();
+            Self::check_entry_locked(&inner, project, worktree_dir)?;
+            let inner = &mut *inner;
+            let (snapshot, msg) =
+                inner
+                    .reviews
+                    .begin_send(&inner.catalog, project, worktree_dir, kind, outdated)?;
+            Self::broadcast_locked(inner, vec![msg]);
+            let candidates = Self::running_sessions_locked(inner, project, worktree_dir);
+            (snapshot, candidates)
+        };
+        let count = snapshot.ids.len();
+        let Some(target) = micold_core::review::target::pick_target(&candidates) else {
+            self.close_review_send(project, worktree_dir, None);
+            tracing::info!(
+                project = %project.display(),
+                entry = worktree_dir,
+                comments = count,
+                outcome = "no running session",
+                "review send refused"
+            );
+            return Err(crate::review::Refusal {
+                kind: ErrorKind::Refused,
+                message: "no session is running in this entry".into(),
+            });
+        };
+        match crate::ops::type_submission(self, target, &snapshot.prompt).await {
+            Ok(()) => {
+                self.close_review_send(project, worktree_dir, Some(&snapshot));
+                tracing::info!(
+                    project = %project.display(),
+                    entry = worktree_dir,
+                    comments = count,
+                    session = %target.0,
+                    outcome = "delivered",
+                    "review sent"
+                );
+                Ok(OperationResult::ReviewSent {
+                    session: target,
+                    started: false,
+                })
+            }
+            Err(why) => {
+                self.close_review_send(project, worktree_dir, None);
+                let kind = match why {
+                    crate::ops::Undelivered::WriteFailed(_) => ErrorKind::Internal,
+                    _ => ErrorKind::Refused,
+                };
+                let message = why.message(target);
+                tracing::warn!(
+                    project = %project.display(),
+                    entry = worktree_dir,
+                    comments = count,
+                    session = %target.0,
+                    outcome = %message,
+                    "review not delivered"
+                );
+                Err(crate::review::Refusal { kind, message })
+            }
+        }
+    }
+
+    /// Close entry `worktree_dir`'s open send, as delivered when `delivered` holds its snapshot
+    /// and as undelivered otherwise, and push the entry to every client.
+    fn close_review_send(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        delivered: Option<&micold_core::review::comment::SendSnapshot>,
+    ) {
+        let mut inner = self.lock();
         let inner = &mut *inner;
-        let msg = inner
-            .reviews
-            .apply_edit(&inner.catalog, project, worktree_dir, op, now)?;
+        let msg = match delivered {
+            Some(snapshot) => inner.reviews.finish_send(
+                &inner.catalog,
+                project,
+                worktree_dir,
+                snapshot,
+                unix_now(),
+            ),
+            None => inner
+                .reviews
+                .abort_send(&inner.catalog, project, worktree_dir),
+        };
         Self::broadcast_locked(inner, vec![msg]);
-        Ok(())
+    }
+
+    /// The running AI CLI sessions of entry `worktree_dir` (`""` = Default) of `project`, each
+    /// with when the user was last active in it (feature 482, W7, R5): live with a living primary
+    /// process, not starting, not archived.
+    pub fn running_sessions_in(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+    ) -> Vec<(SessionId, micold_core::clock::Uptime)> {
+        Self::running_sessions_locked(&self.lock(), project, worktree_dir)
+    }
+
+    fn running_sessions_locked(
+        inner: &Inner,
+        project: &Path,
+        worktree_dir: &str,
+    ) -> Vec<(SessionId, micold_core::clock::Uptime)> {
+        let workspace = inner.catalog.workspace();
+        inner
+            .sessions
+            .iter()
+            .filter(|(id, live)| {
+                !inner.starting.contains_key(id)
+                    && live
+                        .procs
+                        .get(&SessionProcess::Primary)
+                        .is_some_and(|p| p.pty.is_alive())
+                    && workspace.find_session(**id).is_some_and(|(path, session)| {
+                        path == project
+                            && session.mode == TerminalMode::AiCli
+                            && !session.archived
+                            && match &session.location {
+                                SessionLocation::Default => worktree_dir.is_empty(),
+                                SessionLocation::Worktree(dir) => dir == worktree_dir,
+                            }
+                    })
+            })
+            .map(|(id, live)| (*id, live.last_active))
+            .collect()
+    }
+
+    /// Where `session` runs and which AI CLI it is, from its record (feature 482).
+    pub fn session_cwd_and_cli(&self, session: SessionId) -> Option<(PathBuf, AiCli)> {
+        let inner = self.lock();
+        let (project, record) = inner.catalog.workspace().find_session(session)?;
+        Some((record.location.cwd(project), record.provider))
     }
 
     /// The `ReviewChanged` pushes a client that has just attached to `project` is owed: one per
@@ -3075,6 +3249,7 @@ impl DaemonState {
                 event_log: None,
                 respawned_at: None,
                 ready: tokio::sync::watch::Sender::new(false),
+                last_active: micold_core::clock::now(),
             },
         );
         // A fresh FSM starts at `Unknown`, so a retained `Ended` from the previous run would be
@@ -3411,6 +3586,9 @@ impl DaemonState {
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
         live.name_stale |= changed || first_turn_evidence;
+        if changed {
+            live.last_active = micold_core::clock::now();
+        }
         // An attention event (feature 039, FR-001, FR-004): the session came to await input from
         // another signal while no window had it in view. Counted here, by the service, so it is
         // counted with no window open as well (FR-008).
@@ -3564,6 +3742,7 @@ impl DaemonState {
                         // waits for the end of the turn to be read — well outside the minute US3
                         // promises.
                         live.name_stale = true;
+                        live.last_active = micold_core::clock::now();
                     }
                 }
             }
@@ -4130,6 +4309,7 @@ impl DaemonState {
                         event_log: None,
                         respawned_at: None,
                         ready: tokio::sync::watch::Sender::new(false),
+                        last_active: micold_core::clock::now(),
                     },
                 );
             }
@@ -4187,6 +4367,10 @@ impl DaemonState {
     pub fn session_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
         {
             let mut inner = self.lock();
+            // The user typed into it: it is the session they are working with (feature 482, R5).
+            if let Some(live) = inner.sessions.get_mut(&session) {
+                live.last_active = micold_core::clock::now();
+            }
             if let Some(held) = inner.starting.get_mut(&session) {
                 held.push((serial, bytes.to_vec()));
                 return;

@@ -1168,17 +1168,28 @@ where
                     },
                 ),
             },
-            // Placeholder until T072 serves the send (and retires its `diff_layout_setting`
-            // assertion).
-            ClientMsg::ReviewSend { req, .. } => state.send(
-                id,
-                DaemonMsg::OperationError {
-                    req,
-                    kind: micold_core::protocol::messages::ErrorKind::Refused,
-                    message: "review comments are not available in this build".into(),
-                    detail: None,
-                },
-            ),
+            // Feature 482 (W6–W9): the send waits on a terminal, so it runs off the connection
+            // loop and answers when the prompt was typed or refused.
+            ClientMsg::ReviewSend {
+                req,
+                project,
+                worktree_dir,
+                outdated,
+            } => {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let answer = match state.review_send(&project, &worktree_dir, &outdated).await {
+                        Ok(result) => DaemonMsg::OperationOk { req, result },
+                        Err(refusal) => DaemonMsg::OperationError {
+                            req,
+                            kind: refusal.kind,
+                            message: refusal.message,
+                            detail: None,
+                        },
+                    };
+                    state.send(id, answer);
+                });
+            }
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,
