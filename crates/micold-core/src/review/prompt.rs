@@ -268,7 +268,7 @@ mod tests {
             EntryKind::Worktree,
             &[comment(
                 1,
-                "README.md",
+                "notes.md",
                 Side::New,
                 2,
                 2,

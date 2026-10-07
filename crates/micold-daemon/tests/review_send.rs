@@ -305,6 +305,7 @@ async fn request(
     (result, seen)
 }
 
+#[allow(clippy::too_many_arguments)] // a test helper naming every field of one comment
 async fn add(
     client: &mut Client,
     req: u64,
