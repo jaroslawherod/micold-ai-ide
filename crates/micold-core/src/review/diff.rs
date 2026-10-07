@@ -358,6 +358,203 @@ impl<'a> UnifiedIndex<'a> {
     }
 }
 
+/// One cell of the side-by-side layout: a line of one version (data-model `SideRow`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cell<'a> {
+    /// Its number in that version.
+    pub number: u32,
+    /// The line, without its ending.
+    pub text: &'a str,
+    /// Context, added or removed.
+    pub kind: LineKind,
+}
+
+/// One row of the side-by-side layout: a hunk's header, or the old version's line on the left and
+/// the new version's on the right, either side `None` where the other has no partner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SideRow<'a> {
+    /// A hunk's header row.
+    Header(&'a Hunk),
+    /// A pair of cells.
+    Pair {
+        /// The old version's line.
+        left: Option<Cell<'a>>,
+        /// The new version's line.
+        right: Option<Cell<'a>>,
+    },
+}
+
+/// The side-by-side layout's rows: each hunk's header, then its context lines on both sides and
+/// each run of removed lines paired index by index with the run of added lines that follows it,
+/// the shorter run padded with `None` (US1 s4). None for a diff that is not text.
+pub fn side_by_side_rows(diff: &FileDiff) -> Vec<SideRow<'_>> {
+    let FileDiff::Text(hunks) = diff else {
+        return Vec::new();
+    };
+    let mut rows = Vec::new();
+    for hunk in hunks {
+        rows.push(SideRow::Header(hunk));
+        let mut lines = hunk.lines.as_slice();
+        while let Some(first) = lines.first() {
+            if first.kind == LineKind::Context {
+                rows.push(SideRow::Pair {
+                    left: side_cell(first, first.old),
+                    right: side_cell(first, first.new),
+                });
+                lines = &lines[1..];
+                continue;
+            }
+            let removed = run_of(lines, LineKind::Removed);
+            let added = run_of(&lines[removed.len()..], LineKind::Added);
+            for i in 0..removed.len().max(added.len()) {
+                rows.push(SideRow::Pair {
+                    left: removed.get(i).and_then(|l| side_cell(l, l.old)),
+                    right: added.get(i).and_then(|l| side_cell(l, l.new)),
+                });
+            }
+            lines = &lines[removed.len() + added.len()..];
+        }
+    }
+    rows
+}
+
+/// The leading lines of `lines` that are `kind`.
+fn run_of(lines: &[DiffLine], kind: LineKind) -> &[DiffLine] {
+    let end = lines
+        .iter()
+        .position(|l| l.kind != kind)
+        .unwrap_or(lines.len());
+    &lines[..end]
+}
+
+/// `line` as a cell numbered `number` (its old or its new number).
+fn side_cell(line: &DiffLine, number: Option<u32>) -> Option<Cell<'_>> {
+    Some(Cell {
+        number: number?,
+        text: &line.text,
+        kind: line.kind,
+    })
+}
+
+/// The side-by-side layout's rows, found by index without listing them: one entry per header,
+/// context run and change run, so a view that builds only the visible rows does not lay out the
+/// whole file on every redraw (D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SideIndex<'a> {
+    hunks: &'a [Hunk],
+    /// The runs, in row order.
+    runs: Vec<Run>,
+    len: usize,
+}
+
+/// A stretch of side-by-side rows built the same way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Run {
+    /// Its first row.
+    start: usize,
+    /// The hunk it is in.
+    hunk: usize,
+    /// The index of its first line in the hunk.
+    first: usize,
+    kind: RunKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunKind {
+    /// The hunk's header: one row.
+    Header,
+    /// Context lines, one row each.
+    Context(usize),
+    /// Removed lines then the added lines after them, paired.
+    Change { removed: usize, added: usize },
+}
+
+impl RunKind {
+    fn rows(self) -> usize {
+        match self {
+            RunKind::Header => 1,
+            RunKind::Context(n) => n,
+            RunKind::Change { removed, added } => removed.max(added),
+        }
+    }
+}
+
+impl<'a> SideIndex<'a> {
+    /// The index of `diff`'s rows; empty for a diff that is not text.
+    pub fn new(diff: &'a FileDiff) -> Self {
+        let hunks: &[Hunk] = match diff {
+            FileDiff::Text(hunks) => hunks,
+            _ => &[],
+        };
+        let mut runs = Vec::new();
+        let mut len = 0;
+        let mut push = |hunk, first, kind: RunKind| {
+            runs.push(Run {
+                start: len,
+                hunk,
+                first,
+                kind,
+            });
+            len += kind.rows();
+        };
+        for (h, hunk) in hunks.iter().enumerate() {
+            push(h, 0, RunKind::Header);
+            let mut first = 0;
+            while first < hunk.lines.len() {
+                let rest = &hunk.lines[first..];
+                let context = run_of(rest, LineKind::Context).len();
+                let kind = if context > 0 {
+                    RunKind::Context(context)
+                } else {
+                    let removed = run_of(rest, LineKind::Removed).len();
+                    let added = run_of(&rest[removed..], LineKind::Added).len();
+                    RunKind::Change { removed, added }
+                };
+                push(h, first, kind);
+                first += match kind {
+                    RunKind::Change { removed, added } => removed + added,
+                    other => other.rows(),
+                };
+            }
+        }
+        Self { hunks, runs, len }
+    }
+
+    /// How many rows there are.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether there are no rows.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Row `index`, or `None` past the end.
+    pub fn row(&self, index: usize) -> Option<SideRow<'a>> {
+        if index >= self.len {
+            return None;
+        }
+        let run = self.runs[self.runs.partition_point(|r| r.start <= index) - 1];
+        let hunk = &self.hunks[run.hunk];
+        let k = index - run.start;
+        let at = |i: usize| &hunk.lines[run.first + i];
+        Some(match run.kind {
+            RunKind::Header => SideRow::Header(hunk),
+            RunKind::Context(_) => SideRow::Pair {
+                left: side_cell(at(k), at(k).old),
+                right: side_cell(at(k), at(k).new),
+            },
+            RunKind::Change { removed, added } => SideRow::Pair {
+                left: (k < removed).then(|| side_cell(at(k), at(k).old)).flatten(),
+                right: (k < added)
+                    .then(|| side_cell(at(removed + k), at(removed + k).new))
+                    .flatten(),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,5 +806,101 @@ mod tests {
         );
         assert_eq!(side.line(0), None, "lines are numbered from 1");
         assert_eq!(SideLines::from_bytes(&[0xFF]), None);
+    }
+
+    /// One hunk: a context line, three removed lines replaced by one added, a context line, one
+    /// added line with no removed partner.
+    const PAIRING: &str = concat!(
+        "@@ -1,5 +1,4 @@\n",
+        " keep\n",
+        "-r1\n",
+        "-r2\n",
+        "-r3\n",
+        "+a1\n",
+        " mid\n",
+        "+a2\n",
+    );
+
+    fn cell(number: u32, text: &str, kind: LineKind) -> Option<Cell<'_>> {
+        Some(Cell { number, text, kind })
+    }
+
+    #[test]
+    fn side_by_side_pairs_removed_runs_with_the_added_run_after_them() {
+        let diff = parse_unified(PAIRING.as_bytes());
+        let rows = side_by_side_rows(&diff);
+        let pairs: Vec<_> = rows
+            .iter()
+            .filter_map(|row| match row {
+                SideRow::Pair { left, right } => Some((*left, *right)),
+                SideRow::Header(_) => None,
+            })
+            .collect();
+        assert!(
+            matches!(rows.first(), Some(SideRow::Header(_))),
+            "a hunk starts with its header: {rows:?}"
+        );
+        use LineKind::{Added as A, Context as C, Removed as R};
+        assert_eq!(
+            pairs,
+            vec![
+                (cell(1, "keep", C), cell(1, "keep", C)),
+                (cell(2, "r1", R), cell(2, "a1", A)),
+                (cell(3, "r2", R), None),
+                (cell(4, "r3", R), None),
+                (cell(5, "mid", C), cell(3, "mid", C)),
+                (None, cell(4, "a2", A)),
+            ]
+        );
+        assert!(side_by_side_rows(&FileDiff::Binary).is_empty());
+    }
+
+    #[test]
+    fn side_by_side_shows_the_same_changed_lines_as_unified() {
+        for raw in [TWO_HUNKS, PAIRING] {
+            let diff = parse_unified(raw.as_bytes());
+            let mut unified: Vec<(LineKind, Option<u32>, Option<u32>, &str)> = unified_rows(&diff)
+                .into_iter()
+                .filter_map(|row| match row {
+                    UnifiedRow::Line(l) => Some((l.kind, l.old, l.new, l.text.as_str())),
+                    UnifiedRow::Header(_) => None,
+                })
+                .collect();
+            let mut side = Vec::new();
+            for row in side_by_side_rows(&diff) {
+                if let SideRow::Pair { left, right } = row {
+                    match (left, right) {
+                        (Some(l), Some(r)) if l.kind == LineKind::Context => {
+                            side.push((l.kind, Some(l.number), Some(r.number), l.text));
+                        }
+                        (l, r) => {
+                            side.extend(l.map(|c| (c.kind, Some(c.number), None, c.text)));
+                            side.extend(r.map(|c| (c.kind, None, Some(c.number), c.text)));
+                        }
+                    }
+                }
+            }
+            unified.sort_by_key(|l| (l.1, l.2, l.3));
+            side.sort_by_key(|l| (l.1, l.2, l.3));
+            assert_eq!(side, unified, "the same lines and numbers in both layouts");
+        }
+    }
+
+    #[test]
+    fn the_side_index_finds_each_row_without_listing_them() {
+        let mut big = String::from("@@ -1,4 +1,5 @@\n");
+        big.push_str("-x\n+y\n+z\n c\n-p\n-q\n+r\n c2\n");
+        for raw in [TWO_HUNKS, PAIRING, big.as_str()] {
+            let diff = parse_unified(raw.as_bytes());
+            let rows = side_by_side_rows(&diff);
+            let index = SideIndex::new(&diff);
+            assert_eq!(index.len(), rows.len(), "{raw}");
+            for (i, row) in rows.iter().enumerate() {
+                assert_eq!(index.row(i).as_ref(), Some(row), "row {i} of {raw}");
+            }
+            assert_eq!(index.row(rows.len()), None);
+        }
+        let binary = SideIndex::new(&FileDiff::Binary);
+        assert_eq!((binary.len(), binary.row(0)), (0, None));
     }
 }
