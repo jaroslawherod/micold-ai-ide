@@ -1690,8 +1690,7 @@ impl DaemonState {
     /// 482, W6–W9): open the send and push `sending`, pick the entry's running session with the
     /// latest `last_active` (W7, R5), type the prompt, then close the send — the comments become
     /// sent only once the prompt was typed (FR-017), and stay pending otherwise. With no running
-    /// session in the entry the send is refused (a session started for it arrives with T077). The
-    /// prompt is never logged (W12).
+    /// session in the entry, a new one is started for it (US3). The prompt is never logged (W12).
     pub async fn review_send(
         self: &Arc<Self>,
         project: &Path,
@@ -1700,6 +1699,7 @@ impl DaemonState {
     ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
         use micold_core::protocol::messages::{ErrorKind, OperationResult};
         use micold_core::review::prompt::EntryKind;
+        let asked = tokio::time::Instant::now();
         let kind = if worktree_dir.is_empty() {
             EntryKind::Default
         } else {
@@ -1719,18 +1719,9 @@ impl DaemonState {
         };
         let count = snapshot.ids.len();
         let Some(target) = micold_core::review::target::pick_target(&candidates) else {
-            self.close_review_send(project, worktree_dir, None);
-            tracing::info!(
-                project = %project.display(),
-                entry = worktree_dir,
-                comments = count,
-                outcome = "no running session",
-                "review send refused"
-            );
-            return Err(crate::review::Refusal {
-                kind: ErrorKind::Refused,
-                message: "no session is running in this entry".into(),
-            });
+            return self
+                .review_send_to_new_session(project, worktree_dir, &snapshot, asked)
+                .await;
         };
         match crate::ops::type_submission(self, target, &snapshot.prompt).await {
             Ok(()) => {
@@ -1764,6 +1755,84 @@ impl DaemonState {
                     "review not delivered"
                 );
                 Err(crate::review::Refusal { kind, message })
+            }
+        }
+    }
+
+    /// The rest of [`Self::review_send`] when no session of the entry runs (feature 482 W7, W9,
+    /// US3): start a new session of the default AI CLI in the entry, never resuming an ended one,
+    /// and type the prompt as its first input once it is ready. The send stays open meanwhile, so
+    /// a second send of the entry is `Busy` (FR-018). A session the send started stays, delivered
+    /// to or not.
+    async fn review_send_to_new_session(
+        self: &Arc<Self>,
+        project: &Path,
+        worktree_dir: &str,
+        snapshot: &micold_core::review::comment::SendSnapshot,
+        asked: tokio::time::Instant,
+    ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
+        use micold_core::protocol::messages::{ErrorKind, OperationResult};
+        let count = snapshot.ids.len();
+        let cli = self.default_ai_cli();
+        let location = if worktree_dir.is_empty() {
+            SessionLocation::Default
+        } else {
+            SessionLocation::Worktree(worktree_dir.to_owned())
+        };
+        let cwd = location.cwd(project);
+        let refuse = |kind: ErrorKind, message: String| {
+            self.close_review_send(project, worktree_dir, None);
+            tracing::warn!(
+                project = %project.display(),
+                entry = worktree_dir,
+                comments = count,
+                outcome = %message,
+                "review not delivered to a new session"
+            );
+            Err(crate::review::Refusal { kind, message })
+        };
+        if let Some(why) = crate::ops::cli_unavailable(self, &cwd, cli).await {
+            return refuse(ErrorKind::Refused, why);
+        }
+        let new = crate::ops::NewSession {
+            project,
+            worktree_dir,
+            cwd: &cwd,
+            cli,
+        };
+        let first = crate::ops::FirstPrompt {
+            text: &snapshot.prompt,
+            asked,
+            require_bracketed: true,
+        };
+        match crate::ops::create_session_with_prompt(self, new, Some(first)).await {
+            Err(err) => refuse(
+                ErrorKind::IoFailed,
+                format!("a session could not be created: {err}"),
+            ),
+            Ok((session, Err(why))) => {
+                let kind = match why {
+                    crate::ops::FirstPromptUndelivered::Typing(
+                        crate::ops::Undelivered::WriteFailed(_),
+                    ) => ErrorKind::Internal,
+                    _ => ErrorKind::Refused,
+                };
+                refuse(kind, why.message(session))
+            }
+            Ok((session, Ok(()))) => {
+                self.close_review_send(project, worktree_dir, Some(snapshot));
+                tracing::info!(
+                    project = %project.display(),
+                    entry = worktree_dir,
+                    comments = count,
+                    session = %session.0,
+                    outcome = "delivered to a new session",
+                    "review sent"
+                );
+                Ok(OperationResult::ReviewSent {
+                    session,
+                    started: true,
+                })
             }
         }
     }

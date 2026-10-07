@@ -146,6 +146,26 @@ become **sent**: they stay on their lines, but can no longer be edited or delete
 send carries only the comments added since. When it is not delivered — for example the session's
 terminal cannot take a pasted text — an error says why and the comments stay pending.
 
+#### When no session is running
+
+If no session is running in the entry, Send to session starts one there with the project's
+default AI CLI (Settings), waits until it is ready for input, and types the prompt as its first
+input. A session that ended earlier is never resumed for this: the new session starts fresh. The
+message then reads "Started a session and sent *n* comments", and the new session appears in the
+sidebar like any other.
+
+If the session cannot start — the default AI CLI is not installed or not available where the entry
+runs, its process fails to start, or it is not ready for input within a minute — an error says
+why, nothing is typed, and every comment stays pending. A session that was started but not ready
+in time stays in the sidebar; you can use it, or close it, and send again.
+
+#### Sending from two windows
+
+While a send of an entry is under way, Send to session reads **Sending…** and is unavailable for
+that entry in every window, including while a new session is starting for it. Each comment is
+delivered once: a second send started meanwhile is refused, and the comments of the first are
+not sent twice.
+
 ## The base line
 
 Under the header, **Compared with** `<branch>` **at** `<short commit>` names what the worktree is
