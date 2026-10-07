@@ -81,7 +81,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 unit 2 in progress: T050–T052, T055–T057 done. Next: T053/T059 (client state), T054/T058 (components), T060–T063, then verify.md.
+M4 unit 2 stopped at the context cap (130k). Done and committed locally (4eb9fe9c, not pushed — no full gate yet): T050–T052, T055–T057, all green (cycle log M4). Next: T053 red then T059 in `features/changes.rs`, then T054/T058, T060–T063, then verify.md (no reviews or gates run for M4 yet). Notes for the client half, found while reading:
+- `SessionLocation` is neither `Hash` nor `Ord`: key `State.reviews` by the wire's dir `String` (`""` = Default), as the daemon does, or add a helper from `SessionLocation`.
+- `DaemonMsg`s are dispatched in `crates/micold-client/src/shell/daemon_sync.rs::on_daemon_event` (a `_ => {}` arm at ~line 1297 swallows `ReviewChanged` today), not in `app.rs`; route it there to `app.core.update_changes(Msg::ReviewChanged{..})`, keeping only the active project's. Layout echoes already go this way (`adopt_daemon_settings`).
+- `ReviewEdit` sends go out like `Effect::SetLayout` in `shell/changes.rs::run` (`app.next_req`, `daemon.send`, `app.pending_ops.insert(req, PendingOp::…)`); add a `PendingOp` for review edits so `OperationError` is surfaced.
+- C1 in the reducer: take the row's numbers, `GutterPressed { old: Option<u32>, new: Option<u32>, extend: bool }`, and pick `New` when `new` is `Some` (context counts as New); only when `can_pick`.
+- Nothing in the client uses iced `text_editor` yet; its `Content` is not `Clone`/`PartialEq` while `features::changes::State` derives both, and `ui::changes::view(state, view, scheme)` sees only that state. Decide where the composer's `Content` lives (keep `Composer.text: String` in the reducer and the `Content` beside it in the shell, or a wrapper with manual `PartialEq`).
 
 ## Open escalation
 
