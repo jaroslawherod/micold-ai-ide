@@ -37,9 +37,9 @@ type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
 /// How long a window waits for a message the service owes it.
 const OWED: Duration = Duration::from_secs(10);
 /// The test override of the long-task threshold.
-const OVERRIDE: Duration = Duration::from_millis(200);
+const OVERRIDE: Duration = Duration::from_secs(30);
 /// Long enough past [`OVERRIDE`] that a turn timed across it is a long task.
-const PAST_OVERRIDE: Duration = Duration::from_millis(300);
+const PAST_OVERRIDE: Duration = Duration::from_secs(31);
 
 fn session_id(n: u128) -> SessionId {
     SessionId::from_uuid(Uuid::from_u128(n))
@@ -125,7 +125,7 @@ impl Service {
     /// A turn that ends past the threshold.
     async fn long_turn(&self, session: SessionId) {
         self.turn(session, &[]);
-        tokio::time::sleep(PAST_OVERRIDE).await;
+        self.state.advance_turn_clock(PAST_OVERRIDE);
         self.signal(session, HookKind::Stop);
     }
 

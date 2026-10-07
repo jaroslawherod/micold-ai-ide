@@ -92,7 +92,9 @@ M1 (16 story tasks) and M3 (25, with the D4 threshold tasks) exceed ~10 tasks: k
 
 ## Handover
 
-None.
+- **Done** (commit below, not pushed: no full gate yet): merged origin/main (4c106e28, protocol renumbered 31/32/33, schema_hash pins fixed a640c174). T068 (C15 kind snapshot deleted; test `turning_a_kind_on_keeps_a_pending_event_of_a_kind_that_was_already_on`, red then green; contract C15 reworded). T071 (turn-clock seam `advance_turn_clock`; 20/20 green under taskset). T069 reds recorded for T059, T033, T058 (cycle-log Cycle 14). All in `tdd/cycle-log.md` Cycle 14.
+- **Next**: T069 client reds (T034, T035, T036, T060); T067 (client daemon_sync dispatch test + mutant); T072 (record FR-017 reading in research.md — ledger Decisions already keeps the 16 px glyph gate); T073 (SC-001 + error ending, 11 total: `reports` a focused view, `Ended{error:true}`, count `SessionErrorNotice`); T074 (split `endings_without_an_error_send_nothing`; user stop via `stop_session` + `supervise_exited_sessions`); T075; T076 (make `idle_process`/`next_frame` pub in `attention_support`, use them in `attention_error_notice.rs` and `settings_notification_kinds.rs`; import `attention_support::kinds` in `attention_claims.rs`; tempdir for the hook receiver at attention_claims.rs:535; linux.rs:455 fixture title); T070 test-list.md. Then speckit-tdd-verify (inline) until PASS, review, full gate, push, PR body $SCRATCHPAD/pr-613-body-close.md.
+- **Note**: `claude -p --agent autopilot-worker` cannot edit files here (Edit refused, untrusted workspace); do the edits in the unit. Reviewers (read-only) work.
 
 ## Open escalation
 

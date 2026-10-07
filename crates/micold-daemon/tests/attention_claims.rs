@@ -377,13 +377,14 @@ async fn the_grants_of_a_session_dropped_by_supervision_are_forgotten() {
 
 // ---------------------------------------------------------------------------------------------
 // Feature 613, M1 (T010): each attention event has a kind, and a claim is granted only when the
-// kind notifies now. These tests set a short long-task threshold in place of the minute.
+// kind notifies now. These tests set a 30 s long-task threshold and make a turn long by moving
+// the service's turn clock past it (`advance_turn_clock`, T071), never by sleeping.
 
 /// The long-task threshold of these tests.
-const THRESHOLD: Duration = Duration::from_millis(200);
+const THRESHOLD: Duration = Duration::from_secs(30);
 
 /// Long enough past [`THRESHOLD`] that a turn timed across it is a long task.
-const PAST_THRESHOLD: Duration = Duration::from_millis(300);
+const PAST_THRESHOLD: Duration = Duration::from_secs(31);
 
 /// A service whose long-task threshold is [`THRESHOLD`].
 fn service_613(sessions: &[SessionId]) -> Service {
@@ -446,7 +447,7 @@ async fn a_long_turn_is_granted_as_long_task_finished() {
     let mut window = connect(&service.state, "window").await;
 
     service.turn(b, &[]);
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     service.signal(b, HookKind::Stop);
 
     assert_eq!(
@@ -469,7 +470,7 @@ async fn a_permission_is_granted_and_the_wait_counts_toward_the_turn() {
         vec![(b, 1, NotificationKind::NeedsPermission)]
     );
 
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     service.signal(b, HookKind::PreToolUse);
     service.signal(b, HookKind::Stop);
 
@@ -504,7 +505,7 @@ async fn a_refused_permission_ending_the_turn_adds_nothing() {
     let mut window = connect(&service.state, "window").await;
 
     service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     service.signal(b, HookKind::Stop);
 
     assert_eq!(
@@ -567,7 +568,7 @@ async fn a_helper_agent_finishing_changes_nothing() {
 
     service.signal(b, HookKind::Notification);
     service.signal(b, HookKind::PreToolUse);
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     subagent_stop().await;
     assert_eq!(
         service.attention_seq(b),
@@ -606,7 +607,7 @@ async fn the_sc_001_sequence_gives_ten_grants_of_their_kinds() {
     }
     for _ in 0..5 {
         service.turn(b, &[HookKind::PreToolUse]);
-        tokio::time::sleep(PAST_THRESHOLD).await;
+        service.state.advance_turn_clock(PAST_THRESHOLD);
         service.signal(b, HookKind::Stop);
         claim_new(&mut window, &mut granted).await;
     }
@@ -672,7 +673,7 @@ async fn three_sessions_are_each_granted_their_own_kind() {
     let mut window = connect(&service.state, "window").await;
     service.turn(a, &[HookKind::PreToolUse]);
     service.turn(c, &[HookKind::PreToolUse]);
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
     service.signal(a, HookKind::Stop);
     service.signal(c, HookKind::Notification);
@@ -774,7 +775,7 @@ async fn a_turn_seen_only_by_its_spinner_is_timed_from_the_spinner() {
         service.state.drain_signals();
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    tokio::time::sleep(PAST_THRESHOLD).await;
+    service.state.advance_turn_clock(PAST_THRESHOLD);
     service.signal(b, HookKind::Stop);
 
     assert_eq!(

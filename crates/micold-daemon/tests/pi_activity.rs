@@ -170,11 +170,13 @@ async fn a_long_pi_turn_is_granted_as_long_task_finished() {
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_millis(200));
+    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(b, pi_event(&line("turn_start")).expect("mapped"));
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    service
+        .state
+        .advance_turn_clock(std::time::Duration::from_secs(31));
     service.note(b, pi_event(&line("turn_end")).expect("mapped"));
 
     assert_eq!(
@@ -190,7 +192,7 @@ async fn a_short_pi_turn_is_not_granted() {
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_millis(200));
+    let service = Service::new(b, AiCli::Pi, std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(b, pi_event(&line("turn_start")).expect("mapped"));

@@ -48,5 +48,5 @@ Data model: [../data-model.md](../data-model.md).
 
 | # | Rule |
 |---|---|
-| C15 | When `SettingsSet` turns the master switch on or any kind on, every current `attention_seq` is recorded as granted before the new value is stored (extends 039's `set_desktop_notifications`), so nothing that happened while off is notified afterwards. |
+| C15 | When `SettingsSet` turns the master switch on, every current `attention_seq` is recorded as granted before the new value is stored (039's `set_desktop_notifications`), so nothing that happened while it was off is notified afterwards. Turning a kind on uses up nothing: an event made while its kind was off was recorded as granted when it was noted (C10), so it is never notified, and a pending event of a kind that was already on stays claimable (T068). |
 | C16 | Every `notify(kind)` reads the catalog's current settings; no copy is cached per session. |

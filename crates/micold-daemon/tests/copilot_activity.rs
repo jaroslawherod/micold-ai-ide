@@ -398,14 +398,16 @@ async fn a_long_copilot_turn_is_granted_as_long_task_finished() {
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_millis(200));
+    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(
         b,
         copilot_event(r#"{"type":"user.message","data":{}}"#).expect("mapped"),
     );
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    service
+        .state
+        .advance_turn_clock(std::time::Duration::from_secs(31));
     service.note(
         b,
         copilot_event(r#"{"type":"assistant.turn_end","data":{}}"#).expect("mapped"),
@@ -424,7 +426,7 @@ async fn a_short_copilot_turn_is_not_granted() {
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_millis(200));
+    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(

@@ -7,7 +7,8 @@
 //!
 //! The windows are real connections to a real service; the sessions are idle processes whose
 //! activity is driven through `note_activity`. The long-task threshold is a test override of
-//! 200 ms, so a long turn is a short sleep.
+//! 30 s, and a long turn moves the service's turn clock past it rather than sleeping (T071), so
+//! no turn depends on how fast the machine is.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -43,9 +44,9 @@ type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
 /// How long a window waits for a message the service owes it.
 const OWED: Duration = Duration::from_secs(10);
 /// The long-task threshold of these tests.
-const THRESHOLD: Duration = Duration::from_millis(200);
+const THRESHOLD: Duration = Duration::from_secs(30);
 /// Long enough past [`THRESHOLD`] that a turn timed across it is a long task.
-const PAST_THRESHOLD: Duration = Duration::from_millis(300);
+const PAST_THRESHOLD: Duration = Duration::from_secs(31);
 
 fn session_id(n: u128) -> SessionId {
     SessionId::from_uuid(Uuid::from_u128(n))
@@ -144,7 +145,7 @@ impl Service {
     /// A turn that ends past the threshold.
     async fn long_turn(&self, session: SessionId) {
         self.turn(session, &[]);
-        tokio::time::sleep(PAST_THRESHOLD).await;
+        self.state.advance_turn_clock(PAST_THRESHOLD);
         self.signal(session, HookKind::Stop);
     }
 
@@ -682,5 +683,24 @@ async fn an_event_made_while_the_master_switch_is_off_is_not_granted_after_it_is
     assert_eq!(
         claims(&mut window, a, 2).await,
         [(a, 2, NotificationKind::LongTaskFinished)]
+    );
+}
+
+/// C15, FR-013 (T068): turning one kind on does not use up an event of another kind that was on
+/// when it was made and is not claimed yet. Only events made while their kind was off are spent.
+#[tokio::test]
+async fn turning_a_kind_on_keeps_a_pending_event_of_a_kind_that_was_already_on() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    let (mut window, _) = connect(&service.state, "window").await;
+    sets_kinds(&mut window, only(NotificationKind::NeedsPermission)).await;
+    service.permission(a);
+
+    sets_kinds(&mut window, all(true)).await;
+
+    assert_eq!(
+        claims(&mut window, a, 1).await,
+        [(a, 1, NotificationKind::NeedsPermission)],
+        "the permission asked while its kind was on is still notified"
     );
 }

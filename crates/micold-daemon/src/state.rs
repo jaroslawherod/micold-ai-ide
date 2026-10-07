@@ -238,6 +238,9 @@ struct Inner {
     /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
     /// decides ([`Inner::effective_long_task_threshold`]).
     long_task_threshold_override: Option<std::time::Duration>,
+    /// How far a test has moved the turn clock forward (feature 613, T071), set by
+    /// [`DaemonState::advance_turn_clock`]; zero outside tests.
+    turn_clock_ahead: std::time::Duration,
 }
 
 impl Inner {
@@ -247,6 +250,11 @@ impl Inner {
     fn effective_long_task_threshold(&self) -> std::time::Duration {
         self.long_task_threshold_override
             .unwrap_or_else(|| self.catalog.long_task_threshold())
+    }
+
+    /// The turn clock's reading: [`micold_core::clock::now`], plus what a test advanced it by.
+    fn turn_now(&self) -> micold_core::clock::Uptime {
+        micold_core::clock::now().saturating_add(self.turn_clock_ahead)
     }
 }
 
@@ -550,6 +558,7 @@ impl DaemonState {
                 views: Views::default(),
                 attention_unsaved: false,
                 long_task_threshold_override: None,
+                turn_clock_ahead: std::time::Duration::ZERO,
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -637,6 +646,13 @@ impl DaemonState {
     /// Nothing else calls it.
     pub fn set_long_task_threshold(&self, threshold: std::time::Duration) {
         self.lock().long_task_threshold_override = Some(threshold);
+    }
+
+    /// Move the turn clock forward by `by`, so a test makes a turn long without sleeping and a
+    /// short turn stays short however slow the machine is (feature 613, T071). Nothing else calls
+    /// it.
+    pub fn advance_turn_clock(&self, by: std::time::Duration) {
+        self.lock().turn_clock_ahead += by;
     }
 
     /// The long-task threshold the next turn end is judged by: a test's override, else the stored
@@ -1621,23 +1637,12 @@ impl DaemonState {
 
     /// Set every notification kind's switch (feature 613, T038, W5.4) and push `SettingsChanged`
     /// to every client. Applies to the next claim with nothing restarted (FR-013); unread state is
-    /// not touched (SC-003).
+    /// not touched (SC-003). Nothing is used up here (C15): an event made while its kind was off
+    /// was already noted as not to notify, and a pending event of a kind that was on stays
+    /// claimable.
     pub fn set_notification_kinds(&self, kinds: NotificationKinds) -> std::io::Result<()> {
         let settings = {
             let mut inner = self.lock();
-            let before = inner.catalog.notification_kinds();
-            let turned_on = NotificationKind::ALL
-                .into_iter()
-                .any(|kind| kinds.is_on(kind) && !before.is_on(kind));
-            if turned_on {
-                // As for the master switch (C15): an event made while its kind was off is never
-                // notified after the kind is turned on. Every event made so far is used up.
-                for (session, seq) in inner.catalog.attention_seqs() {
-                    inner
-                        .views
-                        .note_event(session, seq, NotificationKind::TurnFinished, false);
-                }
-            }
             inner.catalog.set_notification_kinds(kinds)?;
             inner.catalog.settings_wire()
         };
@@ -3461,6 +3466,7 @@ impl DaemonState {
         // Reborrowed so the live sessions, the views and the catalog borrow apart.
         let inner = &mut *guard;
         let threshold = inner.effective_long_task_threshold();
+        let turn_now = inner.turn_now();
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
@@ -3473,10 +3479,8 @@ impl DaemonState {
         live.name_stale |= changed || first_turn_evidence;
         // The turn clock sees every event, before the attention event is decided (feature 613,
         // C2); its kind is used only if the session began waiting just now.
-        let kind = turn_change(&event_for_turn, changed).and_then(|change| {
-            live.turn
-                .change(change, micold_core::clock::now(), threshold)
-        });
+        let kind = turn_change(&event_for_turn, changed)
+            .and_then(|change| live.turn.change(change, turn_now, threshold));
         // An attention event (feature 039, FR-001, FR-004): the session came to await input from
         // another signal while no window had it in view. Counted here, by the service, so it is
         // counted with no window open as well (FR-008).
@@ -3633,6 +3637,7 @@ impl DaemonState {
         let inner = &mut *guard;
         let workspace = inner.catalog.workspace();
         let threshold = inner.effective_long_task_threshold();
+        let turn_now = inner.turn_now();
         for (id, live) in inner.sessions.iter_mut() {
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
@@ -3669,8 +3674,7 @@ impl DaemonState {
                         // A spinner that lifted the signal is the turn's work (feature 613,
                         // data-model "Mapping"): the turn clock starts here when no hook did.
                         if let Some(change) = turn_change(&ActivityEvent::SpinnerObserved, true) {
-                            live.turn
-                                .change(change, micold_core::clock::now(), threshold);
+                            live.turn.change(change, turn_now, threshold);
                         }
                         // An activity change here re-arms the live name lookup, exactly as
                         // `note_activity` does for a hook (feature 032, FR-010, C6.3b, research

@@ -46,6 +46,17 @@ impl Uptime {
     pub fn saturating_sub(self, earlier: Self) -> Duration {
         Duration::from_nanos(self.0.saturating_sub(earlier.0))
     }
+
+    /// The reading `by` later than this one, saturating at the clock's end.
+    ///
+    /// For a test seam that moves a clock forward without waiting (feature 613, T071): the daemon's
+    /// turn clock reads [`now`] plus an offset only a test sets.
+    pub fn saturating_add(self, by: Duration) -> Self {
+        Self(
+            self.0
+                .saturating_add(u64::try_from(by.as_nanos()).unwrap_or(u64::MAX)),
+        )
+    }
 }
 
 /// Read the clock.
