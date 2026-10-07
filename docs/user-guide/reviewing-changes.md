@@ -120,6 +120,9 @@ it without saving. **Save** stays unavailable while the box is empty.
 
 The comment then shows as a card under its last line, marked **Pending** until it is sent to a
 session. The text you are writing is kept while the list or the diff is read again.
+If a change removes the lines you picked, the box moves above the diff with the note "The lines
+this comment was on are gone. Pick lines to place it." and keeps your text; pick lines again and
+**Save** adds the comment there. If the file itself leaves the list, the unsaved comment is closed.
 
 ### Editing and deleting
 
