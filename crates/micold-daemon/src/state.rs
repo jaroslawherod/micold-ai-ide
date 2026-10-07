@@ -1807,7 +1807,7 @@ impl DaemonState {
         };
         match crate::ops::create_session_with_prompt(self, new, Some(first)).await {
             Err(err) => refuse(
-                ErrorKind::IoFailed,
+                ErrorKind::Internal,
                 format!("a session could not be created: {err}"),
             ),
             Ok((session, Err(why))) => {
