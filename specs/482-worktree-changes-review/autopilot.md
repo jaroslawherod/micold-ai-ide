@@ -57,41 +57,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high) | 1 | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | CLEAN: 2 MINOR (untracked files read whole to count lines; lossy UTF-8 of non-UTF-8 paths), not fixed |
 | Review B M1 (conformance, sonnet) | 1 | 6f1dd0f1b8ccac63f75133430d4aa2f34f23e4c6:e3ab664fc93e6c9de5e7223181127788b4024731 | CHANGES: 1 MAJOR (cycle-log greens missing) fixed by running the tests and recording them; 2 MINOR (T009 test-after kept as recorded; Verify not runnable in reviewer sandbox, unit re-ran it: all pass) |
 | Gate M1 | full | c30e1678e86420d958d5891c993fbec650892723:1ed086452e5a2581dc19a1453b11c73730c68936 | green except the 6 root-only permission tests (container runs as root; pass in CI) |
+| Review A M2 (code-review high, scoped 24009c2d..HEAD) | 1 | 0141f0f550c385a1179f01e688868725e0526001:142cf0fa764870556e1cbadf46a52186aab5b9c6 | CHANGES: 5 MAJOR, 3 MINOR — F1–F3 fixed (literal pathspecs, symlink target, untracked line count); F4, F5 open; F6, F7 MINOR open; F8 declined |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
 
 ## Declined review findings
+
+- Review A M2 F8 (MINOR, `file_diff` reads both blobs into `SideLines` though nothing uses them yet): data-model `LoadedDiff` carries them for M4 quotes and M7 outdated checks; kept.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M2 unit 1 handed over at the 150k cap (branch-start.sh skipped: one branch PR #624, M1 on it).
-
-**Done (committed, green):** T027 + T032 (`review/diff.rs`: `LineKind`, `DiffLine`, `Hunk`
-{section, old/new_no_newline, `header()`}, `FileDiff`, `UnifiedRow`, `SideLines::from_bytes/line/len`,
-`LoadedDiff {diff, old, new}`, `parse_unified(&[u8])` — bytes, not `&str`, so NotUtf8 is
-detectable —, `added_file`, `unified_rows`); T028 + T033 (`GitCli::file_diff(dir, &scope, toggles,
-path, from: Option<&RelPath>, force_large) -> io::Result<LoadedDiff>`, also on the `Git` trait and
-the fake; `from` is a rename's old path, passed as a second pathspec); T031 + T034
-(`Roles::diff_added/diff_removed`, palette `DIFF_*_LIGHT/DARK`, CSS role list 38, contrast test).
-Cycle log has M2 rows (red and green) for all three.
-
-**Next:** T030 → T035 (`ui/material/diff_view.rs`, export in `mod.rs`): planned API
-`DiffView::new(&FileDiff, DiffLayout, roles).offset().viewport().on_scroll().on_show_large(msg)`
-(side-by-side falls back to unified until M3); pure `body(&FileDiff) -> Body {Rows, Message(&str),
-Large{added, removed}}`, `tint(LineKind, Roles) -> Option<Rgb>`, consts `BINARY` "Binary file — not
-shown", `NOT_UTF8` "Not UTF-8 text — not shown", `MODE_ONLY` "Only the file mode changed"; line row =
-fixed-width old/new number cells (muted `on_surface_variant`), text in `Font::MONOSPACE` on the tint
-(raw iced `text` is allowed inside material/); geometry test lays out two rows (`test_support::renderer`,
-as `content_placement.rs` l.418) and compares the text cell's x. Then T029 → T036: in
-`features/changes.rs` add `diff: Load<LoadedDiff>`, `shown_large`, `diff_offset/viewport`,
-`Msg::{ShowLarge, DiffRead{seq,result}, DiffScrolled}` (keep the existing `Msg::FileSelected` as the
-select message), `Effect::ReadDiff{seq, entry, scope, toggles, path, from, force_large}` (scope and
-`from` taken from the shown list's row, so the shell needs no lookup), `can_pick(view)` (Text only,
-D3); `list_read` re-reads the kept selection's diff (unless a queued list read goes first); shell
-runs `file_diff` in `spawn_blocking` as `read_list` does. Then T037–T040, review A/B, full gate,
-PR-body section to the scratchpad file named in the unit prompt.
+M2 unit 2 handed over at the 150k cap. **Done (committed):** T029, T030, T035–T039 (`ui/material/diff_view.rs` `DiffView` + pure `body`/`tint`, `DiffLayout` re-exported from `ui::material`; diff half of `features/changes.rs`: `diff`, `shown_large`, `diff_offset/viewport`, `Msg::{ShowLarge, DiffScrolled, DiffRead}`, `Effect::ReadDiff`, `diff_body`/`DiffBody`, `can_pick`; `shell/changes.rs` runs `ReadDiff` via `spawn_blocking`; `ui/changes.rs` diff pane with `StageProgress` "Loading diff…"; showcase `DiffView` entry with 3 poses; user guide sections). Full gate 1 (scratchpad gate1.log): fmt+clippy green; 3 client test failures since fixed (builder API, showcase completeness/isolation); else only the root-only permission tests. Review A M2 round 1 F1–F3 fixed with red/green in the cycle log.
+**Next:** (1) fix review A F4 — `DiffView` builds `unified_rows` (O(N) Vec) on every view: index rows by hunk prefix sums (binary search per built row) instead; F5 — `list_read` with `Err` must clear `selected` and set `diff` Idle (add a red test in features_changes.rs first); F6 MINOR — `FileSelected` of the already-selected file returns early unless its diff `Failed`; F7 MINOR — `NUMBER_WIDTH` 52 → 64. (2) Review A round 2 on sonnet, scoped: `review-snapshot.sh diff 0141f0f5…:142cf0fa…`; prompt template `scratchpad/review-A-M2-r1.txt`. (3) Review B (conformance rubric, sonnet) + T040 visual pass (quickstart B1, B4, B5, B6, B15 diff part; evidence under specs/482-worktree-changes-review/visual-pass/). (4) Full gate (`scratchpad/gate.sh`), commit, push, write the M2 PR-body section to `scratchpad/pr-body-482-M2.md`, return `PR: #624`.
 
 ## Open escalation
 

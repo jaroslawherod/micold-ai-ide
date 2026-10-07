@@ -17,7 +17,13 @@ use crate::git::{local_only, run_git, GitCli};
 use crate::process::no_window;
 
 /// Options every review read passes before the subcommand (R1).
-const GLOBAL: [&str; 3] = ["-c", "core.quotepath=false", "--no-pager"];
+const GLOBAL: [&str; 4] = [
+    "-c",
+    "core.quotepath=false",
+    "--no-pager",
+    // A path is a path, never a pattern: `a[1].rs` must not match `a1.rs` (review A M2 F1).
+    "--literal-pathspecs",
+];
 
 /// The diff options every review read passes after `diff` (R1).
 const DIFF: [&str; 5] = ["--no-ext-diff", "--no-textconv", "--no-color", "-z", "-M"];
@@ -338,7 +344,7 @@ impl GitCli {
             let old_size = object_sizes(dir, &[format!("{old_rev}:{old_path}")])[0];
             let new_size = match new_rev {
                 Some(rev) => object_sizes(dir, &[format!("{rev}:{path}")])[0],
-                None => std::fs::metadata(dir.join(path.as_str()))
+                None => std::fs::symlink_metadata(dir.join(path.as_str()))
                     .ok()
                     .map(|m| m.len()),
             };
@@ -376,7 +382,7 @@ impl GitCli {
         let old = blob(dir, old_rev, old_path);
         let new = match new_rev {
             Some(rev) => blob(dir, rev, path),
-            None => std::fs::read(dir.join(path.as_str())).ok(),
+            None => worktree_bytes(&dir.join(path.as_str())).ok(),
         };
         Ok(LoadedDiff {
             diff,
@@ -406,18 +412,18 @@ fn is_untracked(dir: &Path, path: &RelPath) -> io::Result<bool> {
 /// An untracked file's diff, read from disk: every line added (R8: a NUL byte is binary).
 fn untracked_diff(dir: &Path, path: &RelPath, force_large: bool) -> io::Result<LoadedDiff> {
     let full = dir.join(path.as_str());
-    let size = std::fs::metadata(&full)?.len();
+    let size = std::fs::symlink_metadata(&full)?.len();
     if !force_large && size > limits::MAX_VERSION_BYTES {
         return Ok(LoadedDiff {
             diff: FileDiff::TooLarge {
-                added: 0,
+                added: count_lines(&full)?,
                 removed: 0,
             },
             old: None,
             new: None,
         });
     }
-    let bytes = std::fs::read(&full)?;
+    let bytes = worktree_bytes(&full)?;
     let (_, lines) = content_of(&bytes);
     if !force_large && lines > limits::MAX_CHANGED_LINES {
         return Ok(LoadedDiff {
@@ -451,4 +457,38 @@ fn blob(dir: &Path, rev: &str, path: &RelPath) -> Option<Vec<u8>> {
         None,
     )
     .ok()
+}
+
+/// The bytes git diffs for a working-tree file: a symlink's target path, never what it points to
+/// (review A M2 F3: the target may be outside the worktree).
+fn worktree_bytes(full: &Path) -> io::Result<Vec<u8>> {
+    if std::fs::symlink_metadata(full)?.file_type().is_symlink() {
+        return Ok(std::fs::read_link(full)?
+            .into_os_string()
+            .into_encoded_bytes());
+    }
+    std::fs::read(full)
+}
+
+/// The lines of a file too large to read whole, counted in chunks: newlines, plus a last line
+/// without one (review A M2 F2).
+fn count_lines(full: &Path) -> io::Result<u32> {
+    use std::io::Read as _;
+    let mut file = std::fs::File::open(full)?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let (mut lines, mut last) = (0u32, b'\n');
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        let newlines = buf[..n].iter().filter(|&&b| b == b'\n').count();
+        lines = lines.saturating_add(u32::try_from(newlines).unwrap_or(u32::MAX));
+        last = buf[n - 1];
+    }
+    Ok(if last == b'\n' {
+        lines
+    } else {
+        lines.saturating_add(1)
+    })
 }

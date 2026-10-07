@@ -19,9 +19,8 @@ use crate::showcase::state::{Message, Showcase};
 use std::sync::LazyLock;
 
 use micold_core::review::diff::{parse_unified, FileDiff};
-use micold_core::settings::DiffLayout;
 
-use crate::ui::material::{DiffView, Tag, Text, TypeRole, VirtualRows};
+use crate::ui::material::{DiffLayout, DiffView, Tag, Text, TypeRole, VirtualRows};
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
 pub const LONG_LIST: usize = 2_000;
