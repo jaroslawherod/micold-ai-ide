@@ -1291,3 +1291,44 @@ integration test carries the `cfg(windows)` arm of `idle_process` that `unread_s
   `SIGNALS` names the sender and `listen` also reads `OWNER_CHANGES`. Same command,
   `32 passed; 0 failed`.
 - refactor: none beyond docs (module, `Shown`, `on_signal`, `listen`).
+
+## Cycle 48 — #572: reds recorded for tests that were never seen to fail (no new behavior id)
+
+Each test below was run against one deliberate mutant of the code it guards, on `1270e43d` plus
+the mutant, and failed at its own assertion; the mutant was then reverted and the test passed.
+
+- F1, the supervisor tick's write (`micold-daemon/tests/attention_events.rs`, the
+  `spawn_supervisor` loop's call commented out): `the supervisor loop did not store the sequence in
+  time (the store holds 0)`.
+- F10, U157 `button_anatomy::a_button_with_an_unread_count_keeps_its_height` (`button.rs` mark
+  padding `top: 40.0`): `the unread count is not laid out whole inside the button`.
+- F10, U155 `menu_anatomy::a_switcher_row_with_an_unread_count_keeps_its_height` (`menu.rs`
+  `column![running, unread].spacing(30.0)`): `the unread count is not laid out whole inside the row`.
+  Both use `test_support::holds_whole`: a "no box outside" check could not go red, because iced
+  clamps every box to its limits.
+- `window_raise::tests::a_replaced_or_judged_request_is_forgotten_when_its_wait_is_over`
+  (`settled` removes the window only when a step follows): `the replaced request is forgotten
+  though no step follows it`, `left: {2: Id(2), 1: Id(1)}`, `right: {2: Id(2)}`.
+- U48 `notification_registers_nothing::the_scan_reads_what_it_claims_to` (the old `rust_comment`
+  that skipped every line starting with `*`): `the continuation line is read as code, and the
+  block comment is not`, `left: []`.
+- CI's desktop-notify step (`scripts/tests/ci-desktop-notify-step.test.sh`): 3/6 on `main`, 6/6
+  here — the old step passed on a filter that matched no test.
+- Not given a mutant: `wait_dead` (a test helper; exercised by the claims and events tests) and the
+  item 10 pins (`attention_notify.rs`, `attention_events.rs`), which pin behaviour that already held.
+
+## Cycle 49 — #572 item 5 (close finding F9): the glue between the window's halves (no new behavior id)
+
+- tests: `crates/micold-client/src/main_tests.rs` `attention_glue::` —
+  `a_granted_claim_shows_the_notification_off_the_thread_that_runs_the_work`,
+  `a_refused_show_reaches_the_attention_shown_arm`, `a_reveal_raises_the_window_before_the_selection`.
+  The notifier is swapped by `Capabilities::set_notifier` (in place: `App` implements `Drop`).
+- red, one mutant of `shell/daemon_sync.rs` each
+  (`cargo test -p micold-client --bins -- attention_glue`, `0 passed; 3 failed`):
+  `notifier.show` called in the async block: `the show ran on the thread that drives the work, not
+  a blocking one` (`ThreadId(4)` both sides); `on_attention_shown` ignoring the result: `the
+  refusal was not handed to the attention state`; the reveal's messages chained before the raise:
+  `left: ["message", "raise"]`, `right: ["raise", "message"]`.
+- green: mutants reverted, same command, `3 passed; 0 failed`.
+- not done: (d) the 2 s bus timeout. The Linux backend reads the session bus address only from the
+  environment; a test needs a notifier constructor that takes one (follow-up).
