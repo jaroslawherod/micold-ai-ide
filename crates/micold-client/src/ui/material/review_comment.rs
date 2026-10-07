@@ -83,7 +83,15 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
 
     /// What the card shows besides its text.
     pub fn parts(&self) -> Parts {
-        Parts::default()
+        Parts {
+            label: match self.state {
+                CardState::Pending | CardState::InSend => PENDING,
+                CardState::Sent => SENT,
+            },
+            outdated: self.outdated,
+            actions: self.state == CardState::Pending
+                && (self.on_edit.is_some() || self.on_delete.is_some()),
+        }
     }
 }
 

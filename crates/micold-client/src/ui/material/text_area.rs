@@ -11,6 +11,7 @@
 use iced::widget::text_editor::{Action, Content};
 use iced::widget::TextEditor;
 use iced::{Color, Element};
+
 use micold_core::tokens::Roles;
 
 /// The height of an empty text area: one filled field's (§7.7).
@@ -18,8 +19,7 @@ pub const MIN_HEIGHT: f32 = 56.0;
 
 /// The indicator's colour and thickness: thicker, in `primary`, while focused.
 pub fn indicator(r: Roles, focused: bool) -> (Color, f32) {
-    let _ = (r, focused);
-    (Color::TRANSPARENT, 0.0)
+    super::style::field_indicator(r, focused, false)
 }
 
 /// A multi-line filled field over `content`.

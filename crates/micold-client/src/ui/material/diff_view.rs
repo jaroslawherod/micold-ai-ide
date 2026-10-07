@@ -123,8 +123,7 @@ pub type Anchor = (Side, u32);
 /// Whether the `side` number `number` of a row is inside `pick` (C1): a picked row's number cell
 /// takes the pick fill on the picked side only.
 pub fn picked(pick: Option<(Side, LineRange)>, side: Side, number: Option<u32>) -> bool {
-    let _ = (pick, side, number);
-    false
+    matches!((pick, number), (Some((s, range)), Some(n)) if s == side && (range.start()..=range.end()).contains(&n))
 }
 
 /// The numbers a gutter press on a side-by-side pair reports: the pressed half's own number, and
@@ -134,15 +133,54 @@ fn gutter_numbers(
     right: Option<Cell<'_>>,
     on_left: bool,
 ) -> (Option<u32>, Option<u32>) {
-    let _ = (left, right, on_left);
-    (None, None)
+    let context = |cell: Option<Cell<'_>>| {
+        cell.filter(|c| c.kind == LineKind::Context)
+            .map(|c| c.number)
+    };
+    let own = |cell: Option<Cell<'_>>| cell.map(|c| c.number);
+    if on_left {
+        (own(left), context(left).and(context(right)))
+    } else {
+        (context(right).and(context(left)), own(right))
+    }
 }
 
 /// The row each anchor's slot hangs under, in one pass over the rows: a `New` anchor under the
 /// row showing that new-side number, an `Old` one under the row showing that old-side number.
 fn slot_rows(body: &Body<'_>, anchors: &[Anchor]) -> BTreeMap<usize, Vec<Anchor>> {
-    let _ = (body, anchors);
-    BTreeMap::new()
+    let mut rows: BTreeMap<usize, Vec<Anchor>> = BTreeMap::new();
+    if anchors.is_empty() {
+        return rows;
+    }
+    let mut hang = |index: usize, old: Option<u32>, new: Option<u32>| {
+        for &(side, line) in anchors {
+            let shown = match side {
+                Side::New => new == Some(line),
+                Side::Old => old == Some(line),
+            };
+            if shown {
+                rows.entry(index).or_default().push((side, line));
+            }
+        }
+    };
+    match body {
+        Body::Rows(index) => {
+            for i in 0..index.len() {
+                if let Some(UnifiedRow::Line(line)) = index.row(i) {
+                    hang(i, line.old, line.new);
+                }
+            }
+        }
+        Body::Side(index) => {
+            for i in 0..index.len() {
+                if let Some(SideRow::Pair { left, right }) = index.row(i) {
+                    hang(i, left.map(|c| c.number), right.map(|c| c.number));
+                }
+            }
+        }
+        Body::Message(_) | Body::Large { .. } => {}
+    }
+    rows
 }
 
 /// The extra height under each slotted row: its anchors' measured heights, [`SLOT_ESTIMATE`] for
@@ -151,8 +189,15 @@ fn slot_extras(
     rows: &BTreeMap<usize, Vec<Anchor>>,
     measured: &BTreeMap<Anchor, f32>,
 ) -> Vec<(usize, f32)> {
-    let _ = (rows, measured);
-    Vec::new()
+    rows.iter()
+        .map(|(&row, anchors)| {
+            let height = anchors
+                .iter()
+                .map(|a| measured.get(a).copied().unwrap_or(SLOT_ESTIMATE))
+                .sum();
+            (row, height)
+        })
+        .collect()
 }
 
 /// One file's diff.
