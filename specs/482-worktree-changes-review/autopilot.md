@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
-| M2 | T027–T040 | full | Unified diff of the selected file | — | todo |
+| M2 | T027–T040 | full | Unified diff of the selected file | #624 | in progress |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | — | todo |
 | M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
 | M5 | T064–T075 | full | Send comments to the running session | — | todo |
@@ -66,7 +66,32 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit 1 handed over at the 150k cap (branch-start.sh skipped: one branch PR #624, M1 on it).
+
+**Done (committed, green):** T027 + T032 (`review/diff.rs`: `LineKind`, `DiffLine`, `Hunk`
+{section, old/new_no_newline, `header()`}, `FileDiff`, `UnifiedRow`, `SideLines::from_bytes/line/len`,
+`LoadedDiff {diff, old, new}`, `parse_unified(&[u8])` — bytes, not `&str`, so NotUtf8 is
+detectable —, `added_file`, `unified_rows`); T028 + T033 (`GitCli::file_diff(dir, &scope, toggles,
+path, from: Option<&RelPath>, force_large) -> io::Result<LoadedDiff>`, also on the `Git` trait and
+the fake; `from` is a rename's old path, passed as a second pathspec); T031 + T034
+(`Roles::diff_added/diff_removed`, palette `DIFF_*_LIGHT/DARK`, CSS role list 38, contrast test).
+Cycle log has M2 rows (red and green) for all three.
+
+**Next:** T030 → T035 (`ui/material/diff_view.rs`, export in `mod.rs`): planned API
+`DiffView::new(&FileDiff, DiffLayout, roles).offset().viewport().on_scroll().on_show_large(msg)`
+(side-by-side falls back to unified until M3); pure `body(&FileDiff) -> Body {Rows, Message(&str),
+Large{added, removed}}`, `tint(LineKind, Roles) -> Option<Rgb>`, consts `BINARY` "Binary file — not
+shown", `NOT_UTF8` "Not UTF-8 text — not shown", `MODE_ONLY` "Only the file mode changed"; line row =
+fixed-width old/new number cells (muted `on_surface_variant`), text in `Font::MONOSPACE` on the tint
+(raw iced `text` is allowed inside material/); geometry test lays out two rows (`test_support::renderer`,
+as `content_placement.rs` l.418) and compares the text cell's x. Then T029 → T036: in
+`features/changes.rs` add `diff: Load<LoadedDiff>`, `shown_large`, `diff_offset/viewport`,
+`Msg::{ShowLarge, DiffRead{seq,result}, DiffScrolled}` (keep the existing `Msg::FileSelected` as the
+select message), `Effect::ReadDiff{seq, entry, scope, toggles, path, from, force_large}` (scope and
+`from` taken from the shown list's row, so the shell needs no lookup), `can_pick(view)` (Text only,
+D3); `list_read` re-reads the kept selection's diff (unless a queued list read goes first); shell
+runs `file_diff` in `spawn_blocking` as `read_list` does. Then T037–T040, review A/B, full gate,
+PR-body section to the scratchpad file named in the unit prompt.
 
 ## Open escalation
 
