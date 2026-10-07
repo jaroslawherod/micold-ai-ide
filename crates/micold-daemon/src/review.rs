@@ -1,4 +1,4 @@
-//! Review comments held by the service (feature 482, contracts/review-wire.md W1–W3, W5, W12).
+//! Review comments held by the service (feature 482, contracts/review-wire.md W1–W5, W11, W12).
 //!
 //! One [`EntryReview`] per entry, keyed by project and then by worktree directory name (`""` is
 //! the Default entry, as on the wire). A project's comments are read from its review file the
@@ -120,12 +120,8 @@ impl Reviews {
             }
             ReviewEditOp::SetText { id, text } => edited.set_text(id, &text)?,
             ReviewEditOp::Delete { id } => edited.delete(id)?,
-            ReviewEditOp::ClearSent | ReviewEditOp::DiscardPending => {
-                return Err(Refusal::new(
-                    ErrorKind::Refused,
-                    "clearing comments is not available in this build",
-                ));
-            }
+            ReviewEditOp::ClearSent => edited.clear_sent(),
+            ReviewEditOp::DiscardPending => edited.discard_pending(),
         }
 
         catalog.save_reviews(project, &file_with(entries, dir, &edited)).map_err(|err| {
@@ -202,6 +198,65 @@ impl Reviews {
         msg
     }
 
+    /// Forget worktree `dir` of `project` once it is deleted (W11): its comments leave memory and
+    /// the review file, and the empty `ReviewChanged` to push is returned. A failed write is
+    /// logged; memory forgets them regardless, since the worktree is gone.
+    pub fn forget_worktree(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> DaemonMsg {
+        let entries = self.project(catalog, project);
+        if entries.remove(dir).is_some() {
+            save_logged(
+                catalog,
+                project,
+                entries,
+                "deleted worktree's review comments not removed",
+            );
+            tracing::info!(project = %project.display(), entry = dir, "review comments of a deleted worktree removed");
+        }
+        changed(project, dir, &EntryReview::default())
+    }
+
+    /// Forget the comments of every worktree of `project` that is gone (Edge Case "removed
+    /// worktree": removed outside the app): `gone` says whether a worktree directory name no
+    /// longer exists. The Default entry is never pruned. Returns the empty `ReviewChanged` of each
+    /// one pruned.
+    pub fn prune_worktrees(
+        &mut self,
+        catalog: &Catalog,
+        project: &Path,
+        gone: impl Fn(&str) -> bool,
+    ) -> Vec<DaemonMsg> {
+        let entries = self.project(catalog, project);
+        let mut pruned: Vec<String> = entries
+            .keys()
+            .filter(|dir| !dir.is_empty() && gone(dir))
+            .cloned()
+            .collect();
+        if pruned.is_empty() {
+            return Vec::new();
+        }
+        pruned.sort();
+        for dir in &pruned {
+            entries.remove(dir);
+        }
+        save_logged(
+            catalog,
+            project,
+            entries,
+            "removed worktrees' review comments not pruned",
+        );
+        tracing::info!(project = %project.display(), entries = ?pruned, "review comments of removed worktrees pruned");
+        pruned
+            .iter()
+            .map(|dir| changed(project, dir, &EntryReview::default()))
+            .collect()
+    }
+
+    /// Forget a project removed from the catalog: its comments leave memory (the catalog deletes
+    /// its review file, W11).
+    pub fn forget_project(&mut self, project: &Path) {
+        self.projects.remove(project);
+    }
+
     /// Close entry `dir`'s send undelivered (W9): every comment stays as it was.
     pub fn abort_send(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> DaemonMsg {
         let entries = self.project(catalog, project);
@@ -212,6 +267,24 @@ impl Reviews {
             }
             None => changed(project, dir, &EntryReview::default()),
         }
+    }
+}
+
+/// Write `entries` as `project`'s review file, logging a failure as `what`.
+fn save_logged(
+    catalog: &Catalog,
+    project: &Path,
+    entries: &HashMap<String, EntryReview>,
+    what: &str,
+) {
+    let file = ReviewFile {
+        entries: entries
+            .iter()
+            .map(|(dir, review)| (dir.clone(), review.comments().to_vec()))
+            .collect(),
+    };
+    if let Err(err) = catalog.save_reviews(project, &file) {
+        tracing::warn!(project = %project.display(), %err, "{what}");
     }
 }
 

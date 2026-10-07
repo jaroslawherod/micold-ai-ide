@@ -508,3 +508,235 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
         "the same comments with the same states come back after a restart (US4 s4)"
     );
 }
+
+// ---- Clear, discard, and removal with the worktree (M8, T091; W4, W11; US4 s3, s5) ----
+
+/// A comment of entry `feat` in state `state`, as the file holds it.
+fn stored(n: u128, state: CommentState) -> ReviewComment {
+    ReviewComment {
+        id: CommentId(uuid::Uuid::from_u128(n)),
+        state,
+        ..serde_json::from_value(serde_json::json!({
+            "id": "01234567-89ab-4def-8123-456789abcdef", "path": "src/a.rs", "side": "new",
+            "start": 2, "end": 2, "quote": ["two"], "text": format!("comment {n}"),
+            "state": { "pending": null }, "created": 1_790_000_000u64
+        }))
+        .unwrap()
+    }
+}
+
+/// Seed entry `feat` (and the Default entry, untouched by everything here) with `comments`.
+fn seed(f: &Fixture, comments: Vec<ReviewComment>) -> ReviewComment {
+    let other = stored(99, CommentState::Pending);
+    let mut file = ReviewFile::default();
+    file.entries.insert("feat".into(), comments);
+    file.entries.insert(String::new(), vec![other.clone()]);
+    f.files().save_reviews(&f.project(), &file).unwrap();
+    other
+}
+
+/// Send `msg` and wait for the answer to `req`; also returns the `ReviewChanged` pushes seen
+/// meanwhile.
+async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, Vec<Pushed>) {
+    client.send(Frame::Control(msg)).await.unwrap();
+    let mut seen = Vec::new();
+    let answered = async {
+        loop {
+            if let Frame::Control(msg) = client.next().await.expect("stream open").unwrap() {
+                if let Some(p) = pushed(&msg) {
+                    seen.push(p);
+                    continue;
+                }
+                match &msg {
+                    DaemonMsg::OperationOk { req: r, .. }
+                    | DaemonMsg::OperationError { req: r, .. }
+                        if *r == req =>
+                    {
+                        return msg
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
+    let answer = tokio::time::timeout(BOUND, answered)
+        .await
+        .expect("the service answers");
+    // A push sent right after the answer.
+    while let Ok(Some(Ok(Frame::Control(msg)))) = tokio::time::timeout(QUIET, client.next()).await {
+        if let Some(p) = pushed(&msg) {
+            seen.push(p);
+        }
+    }
+    (answer, seen)
+}
+
+#[tokio::test]
+async fn w4_clear_sent_removes_sent_comments_and_discard_pending_the_pending_ones() {
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let pending = stored(2, CommentState::Pending);
+    let other = seed(&f, vec![sent, pending.clone()]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+
+    let (result, _) = edit(&mut a, 1, &f.project(), "feat", ReviewEditOp::ClearSent).await;
+    result.expect("clear sent is accepted (W4)");
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::as_slice),
+        Some(&[pending.clone()][..]),
+        "only the sent comment is gone, on disk before the answer (US4 s3, W5)"
+    );
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments),
+        ("feat", vec![pending]),
+        "every window is pushed the pending comment alone"
+    );
+
+    let (result, _) = edit(
+        &mut a,
+        2,
+        &f.project(),
+        "feat",
+        ReviewEditOp::DiscardPending,
+    )
+    .await;
+    result.expect("discard pending is accepted (W4)");
+    assert!(
+        f.on_disk().entries.get("feat").is_none_or(Vec::is_empty),
+        "the pending comment is gone from disk (FR-019)"
+    );
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0)
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "another entry's comments are untouched (FR-021)"
+    );
+}
+
+#[tokio::test]
+async fn w11_deleting_the_worktree_removes_its_comments_from_memory_and_file_and_pushes_none() {
+    let f = Fixture::new();
+    let other = seed(
+        &f,
+        vec![
+            stored(1, CommentState::Pending),
+            stored(2, CommentState::Sent { at: 1_790_000_100 }),
+        ],
+    );
+    let state = f.service();
+    let mut a = connect(&state).await;
+    let on_attach = attach(&mut a, &f.project()).await;
+    assert!(on_attach.iter().any(|p| p.worktree_dir == "feat"));
+
+    let (answer, seen) = request(
+        &mut a,
+        1,
+        ClientMsg::WorktreeDelete {
+            req: 1,
+            project: f.project(),
+            dir_name: "feat".into(),
+            stop_sessions: true,
+            delete_branch: true,
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the worktree is deleted: {answer:?}"
+    );
+    assert!(
+        seen.iter()
+            .any(|p| p.worktree_dir == "feat" && p.comments.is_empty() && !p.sending),
+        "an empty ReviewChanged is pushed for the deleted worktree (W11): {seen:?}"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "its comments are gone from the file (FR-020)"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "the Default entry keeps its own"
+    );
+
+    // Gone from memory too: a restarted service has none, and nor has this one on attach.
+    let mut again = connect(&state).await;
+    let on_attach = attach(&mut again, &f.project()).await;
+    assert!(
+        on_attach
+            .iter()
+            .all(|p| p.worktree_dir != "feat" || p.comments.is_empty()),
+        "no comments for the deleted worktree on attach (US4 s5): {on_attach:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refresh() {
+    let f = Fixture::new();
+    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let status = std::process::Command::new("git")
+        .current_dir(f.project())
+        .args(["worktree", "remove", "--force", ".claude/worktrees/feat"])
+        .status()
+        .unwrap();
+    assert!(status.success(), "git removed the worktree");
+    let refreshed = Arc::clone(&state);
+    let project = f.project();
+    tokio::task::spawn_blocking(move || refreshed.refresh_worktrees(&project))
+        .await
+        .unwrap();
+
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0),
+        "the removed worktree's comments are pushed as none (Edge: removed worktree)"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "and gone from the file"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "the Default entry is never pruned"
+    );
+}
+
+#[tokio::test]
+async fn removing_the_project_from_the_catalog_deletes_its_review_file() {
+    let f = Fixture::new();
+    seed(&f, vec![stored(1, CommentState::Pending)]);
+    let file = f.files().reviews_path(&f.project());
+    assert!(file.exists(), "seeded");
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let (answer, _) = request(
+        &mut a,
+        1,
+        ClientMsg::ProjectRemove {
+            req: 1,
+            path: f.project(),
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the project is removed: {answer:?}"
+    );
+    assert!(!file.exists(), "its reviews/ file is deleted (W11)");
+}

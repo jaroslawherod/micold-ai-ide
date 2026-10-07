@@ -1442,3 +1442,164 @@ fn a_refresh_that_drops_the_selected_file_closes_a_new_comment() {
     answer_list(&mut state, effect, &["a.rs"]);
     assert_eq!(state.open.as_ref().unwrap().composer, None);
 }
+
+// ---- Clear sent and Discard pending (M8, T092, contracts/changes-view.md S3) ----
+
+use micold_client::features::changes::{discard_prompt, tidy_actions, TidyActions};
+
+/// S3. **Clear sent** is enabled iff the open entry has a sent comment, **Discard pending…** iff
+/// it has a pending one and no send is open; another entry's comments do not count (FR-021).
+#[test]
+fn clear_sent_and_discard_pending_are_enabled_only_with_comments_to_act_on() {
+    let mut state = showing(commentable());
+    assert_eq!(
+        tidy_actions(&state),
+        Some(TidyActions {
+            clear_sent: false,
+            discard_pending: false,
+        }),
+        "no comments: neither"
+    );
+    let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let pending = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
+    push(&mut state, "", vec![sent.clone(), pending.clone()]);
+    assert_eq!(
+        tidy_actions(&state),
+        Some(TidyActions {
+            clear_sent: false,
+            discard_pending: false,
+        }),
+        "another entry's comments do not count"
+    );
+    push(&mut state, "feat-a", vec![sent.clone()]);
+    assert_eq!(
+        tidy_actions(&state),
+        Some(TidyActions {
+            clear_sent: true,
+            discard_pending: false,
+        })
+    );
+    push(&mut state, "feat-a", vec![pending.clone()]);
+    assert_eq!(
+        tidy_actions(&state),
+        Some(TidyActions {
+            clear_sent: false,
+            discard_pending: true,
+        })
+    );
+    sending(&mut state, "feat-a", vec![sent, pending], true);
+    assert_eq!(
+        tidy_actions(&state),
+        Some(TidyActions {
+            clear_sent: true,
+            discard_pending: false,
+        }),
+        "no discarding while a send is open"
+    );
+    assert_eq!(tidy_actions(&State::default()), None, "no view, no actions");
+}
+
+/// S3. **Clear sent** sends `ClearSent` for the open entry; with nothing sent it sends nothing.
+#[test]
+fn clear_sent_sends_clear_sent_for_the_open_entry() {
+    let mut state = showing(commentable());
+    assert_eq!(
+        changes::update(&mut state, Msg::ClearSentPressed),
+        Effect::None,
+        "nothing sent"
+    );
+    push(
+        &mut state,
+        "feat-a",
+        vec![comment(
+            "a.rs",
+            Side::New,
+            1,
+            1,
+            CommentState::Sent { at: 5 },
+        )],
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::ClearSentPressed),
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::ClearSent,
+        }
+    );
+}
+
+/// S3. **Discard pending…** only opens the confirmation; Cancel closes it sending nothing; only
+/// its confirm sends `DiscardPending` (US4 s3, FR-019).
+#[test]
+fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
+    let mut state = showing(commentable());
+    assert_eq!(discard_prompt(&state), None, "no confirmation yet");
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardPendingPressed),
+        Effect::None
+    );
+    assert_eq!(
+        discard_prompt(&state),
+        None,
+        "nothing pending: nothing to confirm"
+    );
+
+    push(
+        &mut state,
+        "feat-a",
+        vec![
+            comment("a.rs", Side::New, 1, 1, CommentState::Pending),
+            comment("a.rs", Side::New, 2, 2, CommentState::Pending),
+            comment("a.rs", Side::New, 3, 3, CommentState::Sent { at: 5 }),
+        ],
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardPendingPressed),
+        Effect::None,
+        "pressing it sends nothing"
+    );
+    assert_eq!(
+        discard_prompt(&state).as_deref(),
+        Some("Discard 2 pending comments? This cannot be undone.")
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardCancelled),
+        Effect::None
+    );
+    assert_eq!(discard_prompt(&state), None, "Cancel closes it");
+
+    changes::update(&mut state, Msg::DiscardPendingPressed);
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardConfirmed),
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::DiscardPending,
+        }
+    );
+    assert_eq!(discard_prompt(&state), None, "the confirm closes it");
+    assert_eq!(
+        changes::update(&mut state, Msg::DiscardConfirmed),
+        Effect::None,
+        "a confirm with no confirmation open sends nothing"
+    );
+}
+
+/// S3. One pending comment reads in the singular; closing the view drops the confirmation.
+#[test]
+fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
+    let mut state = showing(commentable());
+    push(
+        &mut state,
+        "feat-a",
+        vec![comment("a.rs", Side::New, 1, 1, CommentState::Pending)],
+    );
+    changes::update(&mut state, Msg::DiscardPendingPressed);
+    assert_eq!(
+        discard_prompt(&state).as_deref(),
+        Some("Discard 1 pending comment? This cannot be undone.")
+    );
+    changes::update(&mut state, Msg::Closed);
+    assert_eq!(discard_prompt(&state), None);
+}
