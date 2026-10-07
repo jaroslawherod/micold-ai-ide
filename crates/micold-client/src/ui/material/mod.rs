@@ -39,6 +39,7 @@ pub(crate) mod dialog;
 /// size check can see.
 #[cfg(test)]
 mod dialog_anatomy;
+mod diff_view;
 mod divider;
 mod edge_fade;
 mod ellipsized;
@@ -157,6 +158,7 @@ pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
+pub use diff_view::DiffView;
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
