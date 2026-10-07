@@ -486,7 +486,7 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         }),
         "the running session received it (W8)"
     );
-    let typed = s.typed_holds(sid(1), "Say more.").await;
+    let typed = s.typed_holds(sid(1), &submitted(&expected)).await;
     assert_eq!(
         typed,
         submitted(&expected),
@@ -520,7 +520,7 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
     let (result, _) = send(&mut client, 5, &project, "wt").await;
     assert!(result.is_ok(), "{result:?}");
     let second = prompt::build(EntryKind::Worktree, &pending(&after), &[]);
-    let typed = s.typed_holds(sid(1), "Only this one.").await;
+    let typed = s.typed_holds(sid(1), &submitted(&second)).await;
     assert_eq!(
         typed,
         format!("{}{}", submitted(&expected), submitted(&second)),
@@ -725,7 +725,7 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
         cwd.display()
     );
     assert_eq!(
-        s.typed_holds(new, "Rename a.").await,
+        s.typed_holds(new, &submitted(&expected)).await,
         submitted(&expected),
         "its first input is the prompt, typed once"
     );
@@ -755,7 +755,7 @@ async fn us3_s1_the_default_entry_starts_its_session_in_the_project_root() {
         "the Default entry's session runs in the project root"
     );
     assert_eq!(
-        s.typed_holds(new, "At the root.").await,
+        s.typed_holds(new, &submitted(&expected)).await,
         submitted(&expected)
     );
 }
@@ -936,7 +936,7 @@ async fn fr018_a_second_window_sending_meanwhile_is_busy_and_the_prompt_is_typed
     let (result, _) = answer(&mut first, 2).await;
     let new = started_session(&result);
     assert_eq!(
-        s.typed_holds(new, "Once only.").await,
+        s.typed_holds(new, &submitted(&expected)).await,
         submitted(&expected),
         "the prompt is typed once"
     );
