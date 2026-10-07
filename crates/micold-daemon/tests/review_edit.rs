@@ -471,7 +471,7 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
     let sent = ReviewComment {
         state: CommentState::Sent { at: 1_790_000_100 },
         ..serde_json::from_value(serde_json::json!({
-            "id": "01234567-89ab-4def-8123-456789abcdef", "path": "README.md", "side": "old",
+            "id": "01234567-89ab-4def-8123-456789abcdef", "path": "src/lib.rs", "side": "old",
             "start": 4, "end": 4, "quote": ["gone"], "text": "Why remove this?",
             "state": { "pending": null }, "created": 1_790_000_000u64
         }))
