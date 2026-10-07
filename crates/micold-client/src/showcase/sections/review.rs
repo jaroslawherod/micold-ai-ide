@@ -8,6 +8,10 @@
 //! `DiffView` (M2, T038) is posed in the three shapes a selected file takes: a unified text diff with
 //! added, removed and context rows on their tints, a binary file's message, and the large-file gate.
 //! The page's scheme switch shows each in both schemes.
+//!
+//! M3 (T047) adds the side-by-side layout and the syntax colours: the same Rust diff side by side,
+//! then coloured in each layout, the colours highlighted by the very function the Changes view runs
+//! (`ui::syntax::highlight`) for the scheme the page is in.
 
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length};
@@ -18,7 +22,11 @@ use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::state::{Message, Showcase};
 use std::sync::LazyLock;
 
-use micold_core::review::diff::{parse_unified, FileDiff};
+use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
+use micold_core::theme::ColorScheme;
+use micold_core::tokens;
+
+use crate::ui::syntax;
 
 use crate::ui::material::{DiffLayout, DiffView, Tag, Text, TypeRole, VirtualRows};
 
@@ -95,6 +103,34 @@ static UNIFIED: LazyLock<FileDiff> = LazyLock::new(|| {
     )
 });
 
+/// The file before and after [`UNIFIED`], so the coloured poses highlight real versions: the nine
+/// lines in front of the hunk put the highlighter inside `fn render` by line 10, as in a real file.
+const BEFORE: &str = "use crate::view::View;\n\n/// Draws `view` and marks it finished.\n#[inline]\n\
+                      fn render(view: &View) {\n    // The rows and the width come first.\n\
+                      \x20   let _title = \"rows\";\n    let _count = 42_u32;\n    debug_assert!(true);\n\
+                      \x20   let rows = view.rows();\n    let width = view.width();\n\
+                      \x20   draw(rows, width);\n    view.finish();\n}\n\n";
+
+/// [`BEFORE`] with the hunk applied.
+static AFTER: LazyLock<String> = LazyLock::new(|| {
+    BEFORE.replace(
+        "    draw(rows, width);\n",
+        "    let height = view.height();\n    draw(rows, width, height);\n",
+    )
+});
+
+/// [`UNIFIED`] with both versions and their syntax colours in both schemes.
+static COLOURED: LazyLock<LoadedDiff> = LazyLock::new(|| {
+    let mut loaded = LoadedDiff {
+        diff: UNIFIED.clone(),
+        old: SideLines::from_bytes(BEFORE.as_bytes()),
+        new: SideLines::from_bytes(AFTER.as_bytes()),
+        spans: Spans::default(),
+    };
+    loaded.spans = syntax::highlight(&loaded, "src/render.rs");
+    loaded
+});
+
 /// A binary file.
 static BINARY: FileDiff = FileDiff::Binary;
 
@@ -107,15 +143,41 @@ static LARGE: FileDiff = FileDiff::TooLarge {
 /// The diff area's height in a pose.
 const DIFF_HEIGHT: f32 = 200.0;
 
-/// `DiffView` — a unified diff, a binary file's message, and the large-file gate.
+/// `DiffView` — a unified and a side-by-side diff, both again syntax-coloured, a binary file's
+/// message, and the large-file gate.
 pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let pose = |diff: &'static FileDiff| {
         container(DiffView::new(diff, DiffLayout::Unified, roles).on_show_large(Message::NoOp))
             .height(Length::Fixed(DIFF_HEIGHT))
     };
+    let spans = if roles == tokens::roles(ColorScheme::Dark) {
+        &COLOURED.spans.dark
+    } else {
+        &COLOURED.spans.light
+    };
+    let coloured = |layout| {
+        container(DiffView::new(&COLOURED.diff, layout, roles).spans(spans))
+            .height(Length::Fixed(DIFF_HEIGHT))
+    };
     arrange(
         vec![
             posed("unified", pose(&UNIFIED), roles),
+            posed(
+                "side by side",
+                container(DiffView::new(&UNIFIED, DiffLayout::SideBySide, roles))
+                    .height(Length::Fixed(DIFF_HEIGHT)),
+                roles,
+            ),
+            posed(
+                "unified, syntax-coloured",
+                coloured(DiffLayout::Unified),
+                roles,
+            ),
+            posed(
+                "side by side, syntax-coloured",
+                coloured(DiffLayout::SideBySide),
+                roles,
+            ),
             posed("binary message", pose(&BINARY), roles),
             posed("large-file gate", pose(&LARGE), roles),
         ],

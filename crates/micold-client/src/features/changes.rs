@@ -525,7 +525,8 @@ pub fn cap_spans(
         .into_iter()
         .filter_map(|(range, colour)| {
             let range = range.start..range.end.min(SPAN_CAP);
-            Some((range.clone(), colour?)).filter(|_| !range.is_empty())
+            let colour = colour?;
+            (!range.is_empty()).then_some((range, colour))
         })
         .collect()
 }

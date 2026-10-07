@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1 part 5: the review reads go through the `Git` seam (`Git::review_base`/`change_list`, delegating to `GitCli`'s inherent methods; `FakeGit` answers no base / no files) and `Capabilities::shared_git()`, because `no_concrete_implementations` allows `GitCli` to be chosen only in `shell/capabilities.rs`. With no local git (daemon elsewhere) the view says the files cannot be read here.
 - M1 part 5: `settings_sections` DEFERRED gains `("diff_layout", "482 T041")`; the root vocabulary guard moves to 15 feature wrappers (`Changes`); the layout snapshot's worktree-menu state grows by the **Review changes** row (regenerated deliberately).
 - M1 part 4: the orchestrator waived the part-4 escalation limit for M1 (steady progress on a 26-task milestone) and continued.
+- M3 Windows CI (`review_git` LF → CRLF test red on windows-latest): the fix is in the test fixture (repo-local `core.autocrlf=false`), not in `GitCli::file_diff`. With `autocrlf=true` git normalises the edit away and would not commit it; forcing `autocrlf=false` in the diff would show every line of every touched file changed on a Windows checkout. Quickstart §C B6 now says to run with `core.autocrlf=false` and why; the user guide notes it.
 
 ## Review rounds
 
@@ -73,29 +74,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 part 1 (unit context over 150k). Done and committed: T041+T044 (`review::diff::{Cell, SideRow,
-side_by_side_rows, SideIndex}`; `SideIndex` mirrors `UnifiedIndex` for D5), core `Spans`
-(`LoadedDiff.spans: Spans { light, dark: SchemeSpans { old, new: SideSpans } }`, every git
-constructor `Spans::default()`), T042 tests green with the reducer half of T045
-(`changes::State.layout`, `Msg::LayoutChosen/LayoutInForce`, `Effect::SetLayout`,
-`settings::diff_layout_set`, `changes::cap_spans` + `SPAN_CAP`). Cycle log rows recorded.
-
-Next: T043 tests (diff_view side-by-side geometry; contrast) → T045 shell half: in
-`shell/changes.rs` `Effect::SetLayout` is a no-op stub (`Effect::None | Effect::SetLayout(_)`):
-send `features::settings::diff_layout_set(req, l)` with `PendingOp::SettingsSet` (as
-`shell/persist.rs` does), and in `shell/daemon_sync.rs` `adopt_daemon_settings` apply
-`update_changes(Msg::LayoutInForce(settings.diff_layout))`; highlight both sides in the ReadDiff
-background closure for both schemes. Plan for colouring: a lib module (e.g.
-`ui/material/syntax.rs`, render-free features cannot name iced) highlighting with
-`iced::highlighter::Highlighter` (token = extension; `InspiredGitHub` light, `Base16Ocean` dark),
-line truncated to `SPAN_CAP` before highlighting, then `cap_spans`; plain text gives no colour so
-an unknown extension keeps no spans (test it there). Raw theme colours (comments) fall below
-4.5:1, so map each colour toward the scheme's `on_surface` until it meets 4.5:1 on `surface`,
-`diff_added`, `diff_removed`; T043's contrast test sweeps a colour grid through that mapping plus a
-highlighted Rust sample. T046 `DiffView::new(.., layout, ..).spans(&SchemeSpans)` side by side via
-`SideIndex`, rich text over the row tint; Unified/Side by side `ToggleChip`s in `ui/changes.rs`
-`diff_pane` sending `Msg::LayoutChosen`, layout from `state.changes.layout`. Then T047–T049,
-verify (review A high, B, visual pass), full gate, PR-body section M3.
+M3 part 2 (context over 150k). Done and committed: T043, T045, T046, T047, T048 — `ui::syntax`
+(pub lib module: `highlight`, `highlight_lines`, `legible`, `fills`, `token`), `DiffView` side by
+side + `.spans()`, Unified/Side by side `ToggleChip`s in `ui/changes.rs` `diff_pane`, shell sends
+`diff_layout_set` on `Effect::SetLayout` and highlights in the ReadDiff closure, `adopt_daemon_settings`
+applies `LayoutInForce`, showcase poses (+catalogue), user guide. Windows CI fix (orchestrator ask):
+`review_git` fixture sets repo-local `core.autocrlf=false` (red/green in cycle log). fmt + workspace
+clippy green at this commit; targeted tests green (lib diff_view/syntax/composition_contrast 23,
+features_settings 67, features_changes 24, review_git 17 under autocrlf=true). Nothing pushed yet
+(local commits a86c489d, 74778f1b and this one).
+Next: T049 visual pass (quickstart B3, B18; showcase DiffView poses "side by side",
+"unified, syntax-coloured", "side by side, syntax-coloured" light+dark; evidence under
+`specs/482-worktree-changes-review/visual-pass/`), then verify.md: scoped gate + review A (high,
+scoped `4aafd1bf..HEAD`), review B, full gate, push, PR-body section M3 to the scratchpad
+`pr-body-482-M3.md`, mark M3 done.
 
 ## Open escalation
 

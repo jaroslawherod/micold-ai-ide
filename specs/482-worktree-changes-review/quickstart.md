@@ -58,5 +58,7 @@ Record a screenshot for every step that names a look, in the light and the dark 
 ## §C — Other platforms
 
 On macOS and Windows: B1, B3, B7, B9, B12 (refresh within 2 s via FSEvents /
-ReadDirectoryChangesW) and B6 on Windows with `core.autocrlf=true`. Compare the delivered prompt
+ReadDirectoryChangesW) and B6 on Windows with `core.autocrlf=false` (with `true`, git normalises an
+LF → CRLF edit away before it diffs, so `crlf.txt` is not listed at all: expected, git would not
+commit it either). Compare the delivered prompt
 text of B9 with Linux's byte for byte (SC-006; the core test P1–P10 already pins the bytes).

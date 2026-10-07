@@ -643,6 +643,12 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.tool_server_enabled = settings.tool_server_enabled;
     app.core.session.desktop_notifications = settings.desktop_notifications;
     app.core.session.cross_session_access = settings.cross_session_access;
+    // Feature 482 (R12): the diff layout in force, kept across files and restarts.
+    let _ = app
+        .core
+        .update_changes(micold_client::features::changes::Msg::LayoutInForce(
+            settings.diff_layout,
+        ));
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);

@@ -41,9 +41,31 @@ text:
 - an unchanged line around the change has both numbers and no tint.
 
 A change of line ending alone (for example a file converted from `LF` to `CRLF`) shows as the same
-line removed and added again; line endings themselves are never drawn. Long diffs scroll smoothly:
-only the rows on screen are drawn. While a file's diff is read, the diff area says
-**Loading diff…**; the window keeps responding meanwhile.
+line removed and added again; line endings themselves are never drawn. (With git's
+`core.autocrlf` set to `true`, as is common on Windows, git itself ignores such a change, so the
+file is not listed at all.) Long diffs scroll smoothly: only the rows on screen are drawn. While a
+file's diff is read, the diff area says **Loading diff…**; the window keeps responding meanwhile.
+
+### Unified or side by side
+
+Two chips above the diff choose its layout:
+
+- **Unified** — one column, the removed and added lines one under the other, as described above;
+- **Side by side** — the old version on the left and the new one on the right, each line with its
+  own number. Removed lines sit beside the added lines that replaced them; where one side has more
+  lines than the other, the shorter side is left blank.
+
+Both layouts show the same changed lines. The choice is kept: the next file you select opens in the
+same layout, and so does the Changes view after you restart the app. Every open window follows
+the latest choice.
+
+### Syntax colouring
+
+Files in a language the app recognises from their extension (Rust, Python, JavaScript, Markdown and
+many more) are shown with syntax colouring, in both the light and the dark theme; the colours are
+adjusted so that every token stays readable on the added and removed tints. Other files are shown
+as plain text. Only the first 2,000 characters of a very long line are coloured; the rest of it is
+shown in the plain text colour.
 
 ### Binary and non-text files
 

@@ -50,6 +50,10 @@ fn init(branch: &str) -> (tempfile::TempDir, PathBuf) {
     git(&root, &["config", "user.email", "t@t.test"]);
     git(&root, &["config", "user.name", "t"]);
     git(&root, &["config", "commit.gpgsign", "false"]);
+    // The repository's own line-ending policy, not the machine's: a Windows runner's global
+    // `core.autocrlf=true` normalises an LF → CRLF edit away before git diffs it, so the change the
+    // line-ending test makes would not exist there (git agrees: it would not be committed either).
+    git(&root, &["config", "core.autocrlf", "false"]);
     (dir, root)
 }
 
