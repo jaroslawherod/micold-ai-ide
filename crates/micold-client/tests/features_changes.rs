@@ -1143,8 +1143,8 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
     assert_eq!(send_action(&State::default()), None, "no view, no action");
 }
 
-/// S1. Pressing it sends `ReviewSend` for the open entry with an empty `outdated` list (M7 fills
-/// it); pressing it while unavailable does nothing.
+/// S1. Pressing it sends `ReviewSend` for the open entry (no comment outdated here: the shown
+/// file's comment quotes its line as it is); pressing it while unavailable does nothing.
 #[test]
 fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
     let mut state = showing(commentable());
@@ -1155,7 +1155,7 @@ fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
     );
     let comments = vec![
         comment("a.rs", Side::New, 2, 2, CommentState::Pending),
-        comment("b.rs", Side::New, 4, 4, CommentState::Pending),
+        quoting("b.rs", Side::New, 4, &["d"]),
     ];
     push(&mut state, "feat-a", comments.clone());
     assert_eq!(
@@ -1195,4 +1195,188 @@ fn the_send_snackbars_name_the_count_the_session_and_the_reason() {
         send_error_text("no session is running in this entry"),
         "Couldn't send the comments: no session is running in this entry"
     );
+}
+
+// ---- Live refresh and outdated comments (M7, T083, contracts/changes-view.md R1, R2, C4) ----
+
+/// A comment on `p` at `start..=end` of `side` quoting `quote`.
+fn quoting(p: &str, side: Side, start: u32, quote: &[&str]) -> ReviewComment {
+    let end = start + u32::try_from(quote.len()).unwrap() - 1;
+    ReviewComment {
+        quote: quote.iter().map(|line| (*line).to_owned()).collect(),
+        ..comment(p, side, start, end, CommentState::Pending)
+    }
+}
+
+/// Answer the list read `effect` asked for with `paths`, returning what the answer asks next.
+fn answer_list(state: &mut State, effect: Effect, paths: &[&str]) -> Effect {
+    let Effect::ReadList { seq, .. } = effect else {
+        panic!("a list read, got {effect:?}");
+    };
+    changes::update(
+        state,
+        Msg::ListRead {
+            seq,
+            result: Ok(list(paths)),
+        },
+    )
+}
+
+/// Answer the diff read `effect` asked for with `diff`.
+fn answer_diff(state: &mut State, effect: Effect, diff: LoadedDiff) {
+    let Effect::ReadDiff { seq, .. } = effect else {
+        panic!("a diff read, got {effect:?}");
+    };
+    changes::update(
+        state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(diff),
+        },
+    );
+}
+
+/// A refresh of `showing(..)`: the change, the list answer `paths`, the diff answer `diff`.
+fn refresh(state: &mut State, paths: &[&str], diff: LoadedDiff) {
+    let effect = changes::update(state, Msg::Changed);
+    let effect = answer_list(state, effect, paths);
+    answer_diff(state, effect, diff);
+}
+
+fn outdated(state: &State) -> BTreeSet<CommentId> {
+    state.open.as_ref().unwrap().outdated.clone()
+}
+
+/// R1, FR-010. A change re-reads the list, then the open diff.
+#[test]
+fn a_change_rereads_the_list_and_the_open_diff() {
+    let mut state = showing(commentable());
+    let effect = changes::update(&mut state, Msg::Changed);
+    assert!(
+        matches!(effect, Effect::ReadList { .. }),
+        "a change re-reads the list, got {effect:?}"
+    );
+    let effect = answer_list(&mut state, effect, &["a.rs", "b.rs"]);
+    let Effect::ReadDiff { path: asked, .. } = effect else {
+        panic!("then the open diff, got {effect:?}");
+    };
+    assert_eq!(asked, path("b.rs"));
+}
+
+/// R9. Changes arriving during a read run one more read after it, not one each.
+#[test]
+fn changes_during_a_read_are_coalesced_into_one_more_read() {
+    let mut state = ready(&["a.rs"]);
+    let first = changes::update(&mut state, Msg::Changed);
+    assert!(matches!(first, Effect::ReadList { .. }), "got {first:?}");
+    for _ in 0..3 {
+        assert_eq!(changes::update(&mut state, Msg::Changed), Effect::None);
+    }
+    let again = answer_list(&mut state, first, &["a.rs"]);
+    assert!(
+        matches!(again, Effect::ReadList { .. }),
+        "one more read after it, got {again:?}"
+    );
+    assert_eq!(
+        answer_list(&mut state, again, &["a.rs"]),
+        Effect::None,
+        "and no more"
+    );
+}
+
+/// R2, C4. A refresh drops a pick whose lines are gone and keeps the composer and its text.
+#[test]
+fn a_refresh_drops_a_pick_whose_lines_are_gone_and_keeps_the_composer() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(4), false);
+    changes::update(&mut state, Msg::AddComment);
+    changes::update(&mut state, Msg::ComposerEdited("half written".into()));
+    let shorter = LoadedDiff {
+        diff: parse_unified(b"@@ -1,4 +1,2 @@\n a\n-b\n-c\n-x\n+B\n"),
+        old: SideLines::from_bytes(b"a\nb\nc\nx\n"),
+        new: SideLines::from_bytes(b"a\nB\n"),
+        spans: Default::default(),
+    };
+    refresh(&mut state, &["a.rs", "b.rs"], shorter);
+    assert_eq!(pick(&state), None, "line 4 of the new side is gone");
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(
+        view.composer.as_ref().map(|c| c.text.as_str()),
+        Some("half written"),
+        "the composer survives the refresh (C4)"
+    );
+}
+
+/// R2. A refresh keeps a pick whose lines are still there.
+#[test]
+fn a_refresh_keeps_a_pick_whose_lines_remain() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    refresh(&mut state, &["a.rs", "b.rs"], commentable());
+    assert_eq!(
+        pick(&state),
+        Some(Pick {
+            side: Side::New,
+            anchor: 2,
+            head: 2
+        })
+    );
+}
+
+/// US4 s2, FR-013, R14. A comment whose lines no longer hold its quote is outdated, and its id
+/// goes with the send.
+#[test]
+fn a_comment_whose_quote_no_longer_matches_is_outdated_and_sent_as_such() {
+    let mut state = showing(commentable());
+    let current = quoting("b.rs", Side::New, 2, &["B"]);
+    let changed = quoting("b.rs", Side::New, 3, &["c", "x"]);
+    let removed_side = quoting("b.rs", Side::Old, 4, &["x"]);
+    push(
+        &mut state,
+        "feat-a",
+        vec![current.clone(), changed.clone(), removed_side.clone()],
+    );
+    assert_eq!(
+        outdated(&state),
+        BTreeSet::from([changed.id]),
+        "only the comment whose line 4 is now `d`"
+    );
+    let effect = changes::update(&mut state, Msg::SendPressed);
+    let Effect::ReviewSend { outdated: sent, .. } = effect else {
+        panic!("a send, got {effect:?}");
+    };
+    assert_eq!(sent, vec![changed.id], "the send names it (FR-013)");
+}
+
+/// US4 s2. An edit on disk makes a shown comment outdated on the next refresh.
+#[test]
+fn a_refresh_marks_a_comment_outdated_when_its_lines_change() {
+    let mut state = showing(commentable());
+    let about_b = quoting("b.rs", Side::New, 2, &["B"]);
+    push(&mut state, "feat-a", vec![about_b.clone()]);
+    assert!(
+        outdated(&state).is_empty(),
+        "the lines still hold the quote"
+    );
+    let edited = LoadedDiff {
+        new: SideLines::from_bytes(b"a\nBee\nc\nd\n"),
+        ..commentable()
+    };
+    refresh(&mut state, &["a.rs", "b.rs"], edited);
+    assert_eq!(outdated(&state), BTreeSet::from([about_b.id]));
+}
+
+/// R14. A file no longer listed makes its comments outdated; another file's stay as they were.
+#[test]
+fn a_file_gone_from_the_list_makes_its_comments_outdated() {
+    let mut state = showing(commentable());
+    let on_a = quoting("a.rs", Side::New, 1, &["x"]);
+    let on_b = quoting("b.rs", Side::New, 2, &["B"]);
+    push(&mut state, "feat-a", vec![on_a.clone(), on_b.clone()]);
+    assert!(
+        outdated(&state).is_empty(),
+        "a.rs is listed, its diff not read: not judged"
+    );
+    refresh(&mut state, &["b.rs"], commentable());
+    assert_eq!(outdated(&state), BTreeSet::from([on_a.id]));
 }

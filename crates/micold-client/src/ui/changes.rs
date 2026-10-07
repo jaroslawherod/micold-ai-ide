@@ -358,7 +358,8 @@ fn comment_or_editor<'a>(
         (true, true) => CardState::InSend,
         (true, false) => CardState::Pending,
     };
-    let mut card = ReviewCommentCard::new(&comment.text, state, r).outdated(false);
+    let mut card = ReviewCommentCard::new(&comment.text, state, r)
+        .outdated(view.outdated.contains(&comment.id));
     if state == CardState::Pending {
         card = card
             .on_edit(Message::Changes(Msg::EditComment(comment.id)))

@@ -3,8 +3,8 @@
 
 use std::collections::BTreeSet;
 use std::io::{self, Write};
-use std::path::Path;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 
 use super::base::{default_branch_from, Base, BaseUnavailable, DiffRange, ReviewScope, Toggles};
 use super::changes::{
@@ -35,12 +35,32 @@ fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
 
 /// [`read`], answering git's bytes as they are: a diff body is checked for UTF-8, not repaired.
 fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<u8>> {
+    let output = run_read(dir, &GLOBAL, args, stdin)?;
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        Err(failed(args, &output))
+    }
+}
+
+/// The error of a git run that did not succeed, with what it said.
+fn failed(args: &[&str], output: &Output) -> io::Error {
+    io::Error::other(format!(
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
+}
+
+/// Run a read-only git command in `dir` with `global` options before it, answering its output
+/// whatever its exit status.
+fn run_read(dir: &Path, global: &[&str], args: &[&str], stdin: Option<&str>) -> io::Result<Output> {
     let mut command = Command::new("git");
     local_only(&mut command);
     no_window(&mut command)
         .arg("-C")
         .arg(dir)
-        .args(GLOBAL)
+        .args(global)
         .args(args)
         .stdin(if stdin.is_some() {
             Stdio::piped()
@@ -65,15 +85,7 @@ fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<
             .join()
             .map_err(|_| io::Error::other("the git input writer panicked"))??;
     }
-    if output.status.success() {
-        Ok(output.stdout)
-    } else {
-        Err(io::Error::other(format!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )))
-    }
+    Ok(output)
 }
 
 /// `git diff` with the R1 options over `revs` and one more `format` option.
@@ -199,6 +211,49 @@ fn classify_all(dir: &Path, files: &mut [ChangedFile], old_rev: &str, new_rev: O
 }
 
 impl GitCli {
+    /// Which of `paths` (files of the worktree at `dir`) git ignores, by one
+    /// `git check-ignore -z --stdin` (R9). A tracked file is never ignored.
+    pub fn ignored(&self, dir: &Path, paths: &[PathBuf]) -> io::Result<BTreeSet<PathBuf>> {
+        // A path that is not UTF-8 cannot go through the text pipe: it counts as not ignored.
+        let asked: Vec<&str> = paths.iter().filter_map(|path| path.to_str()).collect();
+        if asked.is_empty() {
+            return Ok(BTreeSet::new());
+        }
+        let mut input = asked.join("\0");
+        input.push('\0');
+        let args = ["check-ignore", "-z", "--stdin"];
+        // Not `--literal-pathspecs`: check-ignore takes paths, and refuses pathspec magic.
+        let output = run_read(dir, &GLOBAL[..3], &args, Some(&input))?;
+        // Exit 1: none of them is ignored.
+        match output.status.code() {
+            Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
+                .split('\0')
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+                .collect()),
+            Some(1) => Ok(BTreeSet::new()),
+            _ => Err(failed(&args, &output)),
+        }
+    }
+
+    /// The git metadata directories of the worktree at `dir`: its own git dir and the common dir
+    /// (the same for the main worktree), absolute (R9).
+    pub fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        let out = read(
+            dir,
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-dir",
+                "--git-common-dir",
+            ],
+            None,
+        )?;
+        let mut dirs: Vec<PathBuf> = out.lines().map(PathBuf::from).collect();
+        dirs.dedup();
+        Ok(dirs)
+    }
+
     /// The base of the worktree at `dir` (R7): the merge-base of `HEAD` and the default branch.
     pub fn review_base(&self, dir: &Path) -> Base {
         let origin_head = read(

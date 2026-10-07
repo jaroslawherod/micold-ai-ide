@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T050–T063 | full | Comments on lines and ranges | #624 | done |
 | M5 | T064–T075 | full | Send comments to the running session | #624 | done |
 | M6 | T076–T080 | full | Send when no session is running | #624 | done |
-| M7 | T081–T089 | full | Live refresh and outdated comments | — | todo |
+| M7 | T081–T089 | full | Live refresh and outdated comments | #624 | in progress |
 | M8 | T090–T097 | full | Clear, discard, and removal with the worktree | — | todo |
 
 ## Decisions
@@ -103,7 +103,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M7 unit 1 (context cap) handed over. Done and committed: T081–T085, T083, T087 (core `watch::relevant_paths`/`Debouncer`/`QUIET`, `ReviewComment::is_outdated`, `GitCli::ignored` + `GitCli::git_dirs` as inherent methods with real-git tests, reducer `Msg::Changed` + `OpenView.outdated` + pick drop + `ReviewSend.outdated`, card `.outdated(view.outdated.contains(..))`); cycle log has the reds. Branch-start was skipped: the whole run is one branch PR #624 and a rebase would need a force push.
+Next: T086 — add `ignored`/`git_dirs` to the `Git` trait (`crates/micold-core/src/git.rs`: GitCli delegates, FakeGit answers empty / no dirs), then `crates/micold-client/src/shell/changes_watch.rs` (new; `Subscription::run_with` keyed by (entry root, git dirs) like `daemon::connection`, `iced::stream::channel` + `notify::RecommendedWatcher` (pattern: `micold-daemon/src/event_log.rs:43`), canonicalise the root, `Debouncer` with `deadline`, `relevant_paths`, then `ignored` on the non-git-dir survivors, emit `Message::Changes(Msg::Changed)`), registered in `shell/subscriptions.rs` only while `app.core.changes.open` is some (R9; check `tests/idle_subscriptions.rs` for the idle guard pattern). Then T088 docs, T089 visual pass (B12, 20 edits within 2 s), then verify.md (scoped gate + review A high, review B, full gate), PR-body section `pr-body-482-M7.md`.
 
 ## Open escalation
 

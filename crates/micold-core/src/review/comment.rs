@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::diff::SideLines;
 use super::prompt::{self, EntryKind};
 use super::{LineRange, RelPath, Side};
 
@@ -91,6 +92,18 @@ pub struct ReviewComment {
     pub state: CommentState,
     /// When it was made (Unix seconds).
     pub created: u64,
+}
+
+impl ReviewComment {
+    /// Whether the lines at its range on its side no longer hold its quote (R14, FR-013). `lines`
+    /// is that side's text now; `None` when the file is gone or not text.
+    pub fn is_outdated(&self, lines: Option<&SideLines>) -> bool {
+        let Some(lines) = lines else {
+            return true;
+        };
+        let now = (self.range.start()..=self.range.end()).map(|number| lines.line(number));
+        !now.eq(self.quote.iter().map(|line| Some(line.as_str())))
+    }
 }
 
 /// The stored and wire shape of [`ReviewComment`].
@@ -695,5 +708,41 @@ mod tests {
         review
             .begin_send(EntryKind::Worktree, &[])
             .expect("a new send can begin");
+    }
+
+    fn lines(text: &str) -> SideLines {
+        SideLines::from_bytes(text.as_bytes()).expect("text")
+    }
+
+    #[test]
+    fn a_comment_whose_lines_still_hold_its_quote_is_not_outdated() {
+        let comment = sample(CommentState::Pending);
+        let mut text = "x\n".repeat(11);
+        text.push_str("a\nb\nc\nd\n");
+        assert!(
+            !comment.is_outdated(Some(&lines(&text))),
+            "lines 12..=14 are a, b, c"
+        );
+    }
+
+    #[test]
+    fn a_comment_whose_lines_changed_is_outdated() {
+        let comment = sample(CommentState::Pending);
+        let mut text = "x\n".repeat(11);
+        text.push_str("a\nB\nc\n");
+        assert!(comment.is_outdated(Some(&lines(&text))), "line 13 is now B");
+    }
+
+    #[test]
+    fn a_comment_whose_range_runs_past_the_end_is_outdated() {
+        let comment = sample(CommentState::Pending);
+        let mut text = "x\n".repeat(11);
+        text.push_str("a\nb\n");
+        assert!(comment.is_outdated(Some(&lines(&text))), "line 14 is gone");
+    }
+
+    #[test]
+    fn a_comment_on_a_file_that_is_gone_is_outdated() {
+        assert!(sample(CommentState::Sent { at: NOW }).is_outdated(None));
     }
 }
