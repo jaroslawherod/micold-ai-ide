@@ -167,6 +167,12 @@ pub struct Roles {
     /// Drop shadows, likewise drawn at an alpha rather than at full strength.
     pub shadow: Rgb,
 
+    // --- diff rows (feature 482) ---
+    /// The fill of an added diff line; `on_surface` text is read on it (US1 s8).
+    pub diff_added: Rgb,
+    /// The fill of a removed diff line; `on_surface` text is read on it (US1 s8).
+    pub diff_removed: Rgb,
+
     /// Which scheme this role set is, so tag tones can follow it without a second lookup.
     scheme: ColorScheme,
 }
@@ -284,6 +290,9 @@ pub const LIGHT: Roles = Roles {
     scrim: palette::NEUTRAL.at(0),
     shadow: palette::NEUTRAL.at(0),
 
+    diff_added: palette::DIFF_ADDED_LIGHT,
+    diff_removed: palette::DIFF_REMOVED_LIGHT,
+
     scheme: ColorScheme::Light,
 };
 
@@ -330,6 +339,9 @@ pub const DARK: Roles = Roles {
     inverse_primary: palette::PRIMARY.at(30),
     scrim: palette::NEUTRAL.at(0),
     shadow: palette::NEUTRAL.at(0),
+
+    diff_added: palette::DIFF_ADDED_DARK,
+    diff_removed: palette::DIFF_REMOVED_DARK,
 
     scheme: ColorScheme::Dark,
 };

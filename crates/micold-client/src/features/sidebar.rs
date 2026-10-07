@@ -928,6 +928,13 @@ pub enum Msg {
     ViewportResized(u32),
     Toggled,
     DragMoved(u16),
+    /// **Review changes** on a worktree row's or the Default row's menu (feature 482, V1).
+    ReviewChangesRequested(SessionLocation),
+}
+
+/// **Review changes** was chosen for `entry` (feature 482, V1): the root opens the Changes view.
+pub fn review_changes(entry: SessionLocation) -> Vec<crate::features::Outcome> {
+    vec![crate::features::Outcome::ChangesRequested(entry)]
 }
 
 /// This feature's whole reducer surface: one entry point, shape A (contract M2).
@@ -949,6 +956,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::ViewportResized(height) => viewport_resized(state, height),
         Msg::Toggled => toggled(state),
         Msg::DragMoved(x) => drag_moved(state, x),
+        Msg::ReviewChangesRequested(entry) => return review_changes(entry),
     }
     Vec::new()
 }

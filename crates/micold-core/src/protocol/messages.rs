@@ -25,7 +25,10 @@ use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
+use crate::review::comment::{CommentId, ReviewComment};
+use crate::review::Side;
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
+use crate::settings::DiffLayout;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -616,6 +619,34 @@ pub enum ClientMsg {
         /// The long-task threshold in seconds, or `None` to leave it unchanged (feature 613,
         /// W5.6). The service clamps it into 10–3600 (FR-026).
         long_task_threshold_secs: Option<u64>,
+        /// The Changes view's diff layout, or `None` to leave unchanged (feature 482, R12).
+        diff_layout: Option<DiffLayout>,
+    },
+
+    // --- Review comments (feature 482, contracts/review-wire.md) ---
+    /// Change an entry's review comments (W1–W5). Answered `OperationOk(Ack)` once the change is
+    /// stored, and pushed to every attached client as [`DaemonMsg::ReviewChanged`].
+    ReviewEdit {
+        /// Correlation id.
+        req: u64,
+        /// The project.
+        project: PathBuf,
+        /// The worktree directory name; `""` is the Default entry (the project root).
+        worktree_dir: String,
+        /// What to change.
+        edit: ReviewEditOp,
+    },
+    /// Send the entry's pending comments to its session as one prompt (W6–W10). Answered
+    /// `OperationOk(ReviewSent)` once delivered.
+    ReviewSend {
+        /// Correlation id.
+        req: u64,
+        /// The project.
+        project: PathBuf,
+        /// The worktree directory name; `""` is the Default entry.
+        worktree_dir: String,
+        /// The comments the client judged outdated (R14), used only for the prompt's wording.
+        outdated: Vec<CommentId>,
     },
 
     // --- AI CLIs ---
@@ -799,6 +830,18 @@ pub enum DaemonMsg {
     SettingsChanged {
         /// The new settings.
         settings: DaemonSettings,
+    },
+    /// An entry's review comments changed (feature 482): pushed to every client attached to
+    /// `project` after `Attached` and after every change, an empty list once they are gone.
+    ReviewChanged {
+        /// The project.
+        project: PathBuf,
+        /// The worktree directory name; `""` is the Default entry.
+        worktree_dir: String,
+        /// Every comment of the entry, pending and sent.
+        comments: Vec<ReviewComment>,
+        /// A send is in progress for this entry: sending, editing and deleting are unavailable.
+        sending: bool,
     },
 
     // --- Terminal-originated notifications ---
@@ -1273,6 +1316,45 @@ pub struct DaemonSettings {
     pub notification_kinds: NotificationKinds,
     /// How long, in seconds, a turn must last to be **Long task finished** (feature 613, W5.6).
     pub long_task_threshold_secs: u64,
+    /// The Changes view's diff layout (feature 482, R12). Service-owned so every window and the
+    /// next start keep the last choice.
+    pub diff_layout: DiffLayout,
+}
+
+/// One change to an entry's review comments (feature 482, contracts/review-wire.md W1–W4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReviewEditOp {
+    /// Add a pending comment on lines `start..=end` of `side` of `path` (W1).
+    Add {
+        /// The file, relative to the entry root, `/`-separated.
+        path: String,
+        /// Which version the lines are numbered in.
+        side: Side,
+        /// The first line (1-based).
+        start: u32,
+        /// The last line (inclusive).
+        end: u32,
+        /// Those lines' text, one entry per line.
+        quote: Vec<String>,
+        /// What the user wrote.
+        text: String,
+    },
+    /// Replace a pending comment's text.
+    SetText {
+        /// The comment.
+        id: CommentId,
+        /// Its new text.
+        text: String,
+    },
+    /// Delete a pending comment.
+    Delete {
+        /// The comment.
+        id: CommentId,
+    },
+    /// Remove every sent comment of the entry (W4).
+    ClearSent,
+    /// Remove every pending comment not inside an open send (W4).
+    DiscardPending,
 }
 
 /// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond
@@ -1351,6 +1433,13 @@ pub enum OperationResult {
     MergedBranchCheck {
         /// One answer per query, in the order of the queries.
         answers: Vec<BranchContainment>,
+    },
+    /// An entry's review comments were delivered to `session` (feature 482, W8).
+    ReviewSent {
+        /// The session that received the prompt.
+        session: SessionId,
+        /// Whether the send started that session (no session was running).
+        started: bool,
     },
     /// A worktree is now shown (016 BUG-002, FR-027). Carries it as discovery sees it, so the
     /// client renders the daemon's answer rather than deriving a second one.
@@ -1617,6 +1706,7 @@ mod desktop_notifications_wire_tests {
             desktop_notifications,
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: 60,
+            diff_layout: Default::default(),
         }
     }
 
@@ -1655,6 +1745,7 @@ mod desktop_notifications_wire_tests {
                 desktop_notifications: chosen,
                 notification_kinds: None,
                 long_task_threshold_secs: None,
+                diff_layout: None,
             };
             match through_json(&asked) {
                 ClientMsg::SettingsSet {

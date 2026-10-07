@@ -106,7 +106,9 @@ file-rotate = "0.8.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
-iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy"] }
+# Feature 482 (R10): `highlighter` colours the Changes view's diff (iced_highlighter -> two-face,
+# syntect with the pure-Rust fancy-regex engine; MIT and MIT/Apache-2.0).
+iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy", "highlighter"] }
 dark-light = "3.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"

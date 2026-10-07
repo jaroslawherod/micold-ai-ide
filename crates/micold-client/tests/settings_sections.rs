@@ -47,6 +47,15 @@ use std::path::{Path, PathBuf};
 /// checkbox in the GitHub section with M4.
 const DEFERRED: &[(&str, &str)] = &[("pr_status_enabled", "040 T038")];
 
+/// Settings stored with the others but chosen outside the Settings screen, each with the client
+/// source that holds its control and the message that control sends. No Settings section will ever
+/// render them, so they are not [`DEFERRED`]; [`a_setting_chosen_elsewhere_has_its_control_there`]
+/// checks the control is where the entry says.
+///
+/// Feature 482's diff layout is chosen in the Changes view's toolbar (FR-006).
+const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] =
+    &[("diff_layout", "src/ui/changes.rs", "Msg::LayoutChosen(")];
+
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -258,7 +267,11 @@ fn no_setting_is_claimed_by_two_sections() {
 #[test]
 fn every_persisted_setting_is_claimed_or_recorded_as_deferred() {
     let claims = claims();
-    let deferred: BTreeSet<&str> = DEFERRED.iter().map(|(s, _)| *s).collect();
+    let deferred: BTreeSet<&str> = DEFERRED
+        .iter()
+        .map(|(s, _)| *s)
+        .chain(CHOSEN_ELSEWHERE.iter().map(|(s, _, _)| *s))
+        .collect();
     let unaccounted: Vec<_> = persisted_settings()
         .into_iter()
         .filter(|s| !claims.contains_key(s) && !deferred.contains(s.as_str()))
@@ -285,6 +298,29 @@ fn a_deferred_setting_that_arrived_is_stale() {
         "these settings are recorded in DEFERRED but are now rendered: {arrived:?} — delete the \
          entries, so the list keeps meaning what it says"
     );
+}
+
+/// An entry of [`CHOSEN_ELSEWHERE`] is a claim that a control outside Settings chooses the setting:
+/// the source it names sends the message it names, the setting is persisted, and no Settings
+/// section claims it as well.
+#[test]
+fn a_setting_chosen_elsewhere_has_its_control_there() {
+    let claims = claims();
+    let persisted = persisted_settings();
+    for (setting, file, message) in CHOSEN_ELSEWHERE {
+        assert!(
+            persisted.iter().any(|s| s == setting),
+            "{setting} is recorded as chosen elsewhere but is not a persisted setting"
+        );
+        assert!(
+            !claims.contains_key(*setting),
+            "{setting} is rendered by a Settings section now; delete its CHOSEN_ELSEWHERE entry"
+        );
+        assert!(
+            read(&client_dir().join(file)).contains(message),
+            "{setting} is recorded as chosen in {file} by {message}, which that file does not send"
+        );
+    }
 }
 
 /// A declaration is a claim that the module renders a control, so a control has to be there.

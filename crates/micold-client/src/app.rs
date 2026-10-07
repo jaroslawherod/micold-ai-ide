@@ -41,6 +41,15 @@ pub const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
 /// constants is a test of nothing.
 const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
 
+/// A `text_editor` action, made `Eq` so [`Message`] can stay `Eq` (it rides in
+/// `changes::Msg::ComposerAction`): the action is compared by `PartialEq`, which for an action is
+/// total (it holds no floats that can be NaN in practice — a scroll's line count is an integer and
+/// a drag's point comes from the pointer).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EditorAction(pub iced::widget::text_editor::Action);
+
+impl Eq for EditorAction {}
+
 /// Every user interaction that can change application state.
 ///
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).
@@ -140,6 +149,14 @@ pub enum Message {
     /// [`State::update_pr_status`]. `State::update` declines it.
     PrStatus(crate::features::pr_status::Msg),
 
+    // ---- Feature 482: the Changes view of a worktree or the project root ----
+    /// The Changes view's messages (feature 482); see [`crate::features::changes::Msg`].
+    ///
+    /// Shape B, like `PrStatus`: the reducer answers with a git read only the shell can run, so
+    /// the entry is `shell/changes.rs`, which reaches the reducer through
+    /// [`State::update_changes`]. `State::update` declines it.
+    Changes(crate::features::changes::Msg),
+
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
     /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
@@ -213,6 +230,8 @@ pub struct State {
     pub attach: crate::features::attach::State,
     /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
     pub pr_status: crate::features::pr_status::State,
+    /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
+    pub changes: crate::features::changes::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -366,6 +385,9 @@ impl State {
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.
             && self.settings.settings_draft.is_none()
+            // The Changes view replaces the terminal pane too (feature 482, V1); without this
+            // `KeyboardElsewhere` strips the review composer's focus while a session is selected.
+            && self.changes.open.is_none()
     }
 
     /// What decides which session this window has in view (feature 039, FR-002).
@@ -378,7 +400,7 @@ impl State {
     pub fn view_facts(&self, window_focused: bool) -> micold_core::attention::ViewFacts {
         micold_core::attention::ViewFacts {
             window_focused,
-            main_area_taken: self.settings.settings_draft.is_some(),
+            main_area_taken: self.settings.settings_draft.is_some() || self.changes.open.is_some(),
             selected: self.session.active,
         }
     }
@@ -605,6 +627,23 @@ impl State {
         crate::features::pr_status::update(&mut self.pr_status, msg)
     }
 
+    /// Apply a Changes view message and hand back the read the shell must run (feature 482).
+    ///
+    /// The read is the shell's (`shell/changes.rs`); it asks here so the root stays the only caller
+    /// of the reducer (SC-002).
+    pub fn update_changes(
+        &mut self,
+        msg: crate::features::changes::Msg,
+    ) -> crate::features::changes::Effect {
+        crate::features::changes::update(&mut self.changes, msg)
+    }
+
+    /// The read an outcome started while the root interpreted it (opening the view from the
+    /// sidebar), taken once by the shell right after the message that caused it.
+    pub fn take_changes_effect(&mut self) -> Option<crate::features::changes::Effect> {
+        self.changes.pending.take()
+    }
+
     /// Apply a session message and hand back the effect requests it made (feature 031).
     ///
     /// [`Self::update`] drains every outcome through [`interpret`], which drops the two that only
@@ -652,6 +691,12 @@ impl State {
         // prompt in between would show it only to have that same loop dismiss (decline) it.
         self.agent_confirm.update_depth += 1;
         match message {
+            // The Changes view's discard confirmation is a registered dialog: the registry closes
+            // it (Escape, another dialog opening) by sending its cancellation here, and closing it
+            // is pure state with no effect to run.
+            Message::Changes(msg @ crate::features::changes::Msg::DiscardCancelled) => {
+                let _ = crate::features::changes::update(&mut self.changes, msg);
+            }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
             // core reducer stays exhaustive over `Message` and a future variant is a compile error.
@@ -667,6 +712,7 @@ impl State {
             Message::Connection(_)
             | Message::Sandbox(_)
             | Message::PrStatus(_)
+            | Message::Changes(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
@@ -888,6 +934,22 @@ pub fn interpret(
         Outcome::WorktreesReplaced(names) => {
             crate::features::sidebar::worktrees_replaced(state, &names);
             crate::features::worktree_form::worktree_list_changed(state);
+            // V3: a view of a worktree that is gone closes. Nothing to read, so no effect.
+            let _ = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::WorktreesListed(names),
+            );
+        }
+        Outcome::ChangesRequested(entry) => {
+            crate::features::worktree::close_menu(state);
+            let effect = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::Opened {
+                    project: state.workspace.active.clone().unwrap_or_default(),
+                    entry,
+                },
+            );
+            state.changes.pending = Some(effect);
         }
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)

@@ -94,6 +94,7 @@ async fn sets(
             desktop_notifications,
             notification_kinds: None,
             long_task_threshold_secs: None,
+            diff_layout: None,
         },
     )
     .await;

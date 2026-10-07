@@ -1,0 +1,823 @@
+//! Review comments on the service (feature 482, contracts/review-wire.md W1–W3, W5, W12; US2
+//! scenarios 1, 2, 7; US4 scenario 4): `ReviewEdit` checks its input, stores the change in
+//! `reviews/<project id>.json` before answering, and pushes the entry's comments as
+//! `ReviewChanged` to every window, after each edit and on attach. A restarted service has them
+//! back.
+//!
+//! Drives `server::serve_connection` over in-memory duplexes against a real git repository with
+//! worktree `feat`, and a catalog and settings in a temporary directory, so "kept" is checked by
+//! starting a second service over that directory.
+
+#[path = "support/mcp.rs"]
+mod mcp_support;
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
+use futures_util::{SinkExt, StreamExt};
+use mcp_support::{add_worktree, init_repo};
+use micold_core::project::{Availability, Project};
+use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::messages::{
+    ClientMsg, DaemonMsg, ErrorKind, OperationResult, ReviewEditOp,
+};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+use micold_core::review::store::ReviewFile;
+use micold_core::review::Side;
+use micold_core::settings::JsonFileSettingsStore;
+use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::workspace::Workspace;
+use micold_daemon::catalog::Catalog;
+use micold_daemon::state::DaemonState;
+use tokio_util::codec::Framed;
+
+/// How long a test waits for a frame it expects.
+const BOUND: Duration = Duration::from_secs(30);
+/// How long a test waits to be sure a frame does not come.
+const QUIET: Duration = Duration::from_millis(300);
+
+type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
+
+/// A repository with worktree `feat`, and a store directory whose catalog lists it.
+struct Fixture {
+    repo: tempfile::TempDir,
+    store: tempfile::TempDir,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        add_worktree(repo.path(), "feat");
+        let store = tempfile::tempdir().unwrap();
+        let workspace = Workspace {
+            projects: vec![Project::new(
+                repo.path().to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(repo.path().to_path_buf()),
+            ..Default::default()
+        };
+        JsonFileStore::at(store.path().join("projects.json"))
+            .save(&workspace)
+            .unwrap();
+        Self { repo, store }
+    }
+
+    fn project(&self) -> PathBuf {
+        self.repo.path().to_path_buf()
+    }
+
+    fn files(&self) -> JsonFileStore {
+        JsonFileStore::at(self.store.path().join("projects.json"))
+    }
+
+    /// A service over the store directory. Called twice, the second is the first restarted.
+    fn service(&self) -> Arc<DaemonState> {
+        Arc::new(DaemonState::new(Catalog::load(
+            Box::new(self.files()),
+            Box::new(JsonFileSettingsStore::at(
+                self.store.path().join("settings.json"),
+            )),
+        )))
+    }
+
+    /// What the review file holds now.
+    fn on_disk(&self) -> ReviewFile {
+        self.files().load_reviews(&self.project())
+    }
+}
+
+/// Connect and complete the handshake.
+async fn connect(state: &Arc<DaemonState>) -> Client {
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    tokio::spawn(micold_daemon::server::serve_connection(
+        Arc::clone(state),
+        server_io,
+    ));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "test".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
+            client_package_version: PACKAGE_VERSION.into(),
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
+        }))
+        .await
+        .unwrap();
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Welcome { .. }) => client,
+        other => panic!("expected Welcome, got {other:?}"),
+    }
+}
+
+/// One `ReviewChanged` push.
+#[derive(Debug, Clone, PartialEq)]
+struct Pushed {
+    project: PathBuf,
+    worktree_dir: String,
+    comments: Vec<ReviewComment>,
+    sending: bool,
+}
+
+fn pushed(msg: &DaemonMsg) -> Option<Pushed> {
+    match msg {
+        DaemonMsg::ReviewChanged {
+            project,
+            worktree_dir,
+            comments,
+            sending,
+        } => Some(Pushed {
+            project: project.clone(),
+            worktree_dir: worktree_dir.clone(),
+            comments: comments.clone(),
+            sending: *sending,
+        }),
+        _ => None,
+    }
+}
+
+/// Attach to `project` and return the `ReviewChanged` pushes that arrive with it.
+async fn attach(client: &mut Client, project: &Path) -> Vec<Pushed> {
+    client
+        .send(Frame::Control(ClientMsg::Attach {
+            project: project.to_path_buf(),
+            force: true,
+        }))
+        .await
+        .unwrap();
+    let mut seen = Vec::new();
+    let attached = async {
+        loop {
+            if let Frame::Control(msg) = client.next().await.expect("stream open").unwrap() {
+                if let Some(p) = pushed(&msg) {
+                    seen.push(p);
+                }
+                if matches!(msg, DaemonMsg::CatalogChanged { .. }) {
+                    return;
+                }
+            }
+        }
+    };
+    tokio::time::timeout(BOUND, attached)
+        .await
+        .expect("attach completes with its catalog");
+    // Anything still in flight right after.
+    while let Ok(Some(Ok(Frame::Control(msg)))) = tokio::time::timeout(QUIET, client.next()).await {
+        if let Some(p) = pushed(&msg) {
+            seen.push(p);
+        }
+    }
+    seen
+}
+
+/// Send `edit` and wait for its answer; also returns the `ReviewChanged` pushes seen meanwhile.
+async fn edit(
+    client: &mut Client,
+    req: u64,
+    project: &Path,
+    worktree_dir: &str,
+    edit: ReviewEditOp,
+) -> (Result<(), (ErrorKind, String)>, Vec<Pushed>) {
+    client
+        .send(Frame::Control(ClientMsg::ReviewEdit {
+            req,
+            project: project.to_path_buf(),
+            worktree_dir: worktree_dir.into(),
+            edit,
+        }))
+        .await
+        .unwrap();
+    let mut seen = Vec::new();
+    let answered = async {
+        loop {
+            if let Frame::Control(msg) = client.next().await.expect("stream open").unwrap() {
+                if let Some(p) = pushed(&msg) {
+                    seen.push(p);
+                    continue;
+                }
+                match msg {
+                    DaemonMsg::OperationOk {
+                        req: r,
+                        result: OperationResult::Ack,
+                    } if r == req => return Ok(()),
+                    DaemonMsg::OperationError {
+                        req: r,
+                        kind,
+                        message,
+                        ..
+                    } if r == req => return Err((kind, message)),
+                    _ => {}
+                }
+            }
+        }
+    };
+    let result = tokio::time::timeout(BOUND, answered)
+        .await
+        .expect("the service answers the edit");
+    (result, seen)
+}
+
+/// The next `ReviewChanged` this client is pushed.
+async fn next_pushed(client: &mut Client) -> Pushed {
+    let next = async {
+        loop {
+            if let Frame::Control(msg) = client.next().await.expect("stream open").unwrap() {
+                if let Some(p) = pushed(&msg) {
+                    return p;
+                }
+            }
+        }
+    };
+    tokio::time::timeout(BOUND, next)
+        .await
+        .expect("a ReviewChanged is pushed")
+}
+
+fn add(path: &str, side: Side, start: u32, end: u32, quote: &[&str], text: &str) -> ReviewEditOp {
+    ReviewEditOp::Add {
+        path: path.into(),
+        side,
+        start,
+        end,
+        quote: quote.iter().map(|line| (*line).to_owned()).collect(),
+        text: text.into(),
+    }
+}
+
+/// Add one valid comment to `feat` and return it as pushed.
+async fn add_one(client: &mut Client, req: u64, project: &Path, text: &str) -> ReviewComment {
+    let (result, seen) = edit(
+        client,
+        req,
+        project,
+        "feat",
+        add("src/a.rs", Side::New, 2, 3, &["two", "three"], text),
+    )
+    .await;
+    result.expect("a valid comment is accepted");
+    let last = seen
+        .last()
+        .expect("the editing window is pushed the change too");
+    last.comments
+        .iter()
+        .find(|c| c.text == text.trim())
+        .cloned()
+        .expect("the new comment is in the push")
+}
+
+#[tokio::test]
+async fn w1_an_invalid_add_is_invalid_input_and_nothing_is_stored() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+
+    let refused = [
+        (
+            "an absolute path",
+            add("/etc/passwd", Side::New, 1, 1, &["x"], "t"),
+        ),
+        (
+            "a `\\` in the path",
+            add("src\\a.rs", Side::New, 1, 1, &["x"], "t"),
+        ),
+        ("line 0", add("a.rs", Side::New, 0, 1, &["x", "y"], "t")),
+        (
+            "start after end",
+            add("a.rs", Side::New, 3, 2, &["x", "y"], "t"),
+        ),
+        (
+            "a short quote",
+            add("a.rs", Side::Old, 1, 3, &["x", "y"], "t"),
+        ),
+        ("empty text", add("a.rs", Side::New, 1, 1, &["x"], " \n ")),
+    ];
+    for (n, (why, op)) in refused.into_iter().enumerate() {
+        let (result, seen) = edit(&mut client, n as u64 + 1, &f.project(), "feat", op).await;
+        let (kind, _) = result.expect_err(why);
+        assert_eq!(kind, ErrorKind::InvalidInput, "{why} is InvalidInput (W1)");
+        assert!(seen.is_empty(), "{why}: a refused edit pushes nothing");
+    }
+    assert_eq!(f.on_disk(), ReviewFile::default(), "nothing was stored");
+}
+
+#[tokio::test]
+async fn w2_an_entry_that_is_not_in_the_catalog_is_not_found_and_nothing_is_stored() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+
+    let op = || add("a.rs", Side::New, 1, 1, &["x"], "t");
+    let (result, _) = edit(&mut client, 1, &f.project(), "nope", op()).await;
+    assert_eq!(
+        result.expect_err("an unknown worktree").0,
+        ErrorKind::NotFound,
+        "a worktree the project does not have is NotFound (W2)"
+    );
+    let elsewhere = tempfile::tempdir().unwrap();
+    let (result, _) = edit(&mut client, 2, elsewhere.path(), "", op()).await;
+    assert_eq!(
+        result.expect_err("an unknown project").0,
+        ErrorKind::NotFound,
+        "a project the catalog does not list is NotFound"
+    );
+    assert_eq!(f.on_disk(), ReviewFile::default(), "nothing was stored");
+}
+
+#[tokio::test]
+async fn w3_set_text_and_delete_reach_only_their_own_entrys_comments() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+    let comment = add_one(&mut client, 1, &f.project(), "keep me").await;
+
+    let cases = [
+        (
+            "SetText through the Default entry",
+            "",
+            ReviewEditOp::SetText {
+                id: comment.id,
+                text: "hijack".into(),
+            },
+        ),
+        (
+            "Delete through the Default entry",
+            "",
+            ReviewEditOp::Delete { id: comment.id },
+        ),
+        (
+            "SetText of an unknown id",
+            "feat",
+            ReviewEditOp::SetText {
+                id: CommentId::new(),
+                text: "x".into(),
+            },
+        ),
+        (
+            "Delete of an unknown id",
+            "feat",
+            ReviewEditOp::Delete {
+                id: CommentId::new(),
+            },
+        ),
+    ];
+    for (n, (why, dir, op)) in cases.into_iter().enumerate() {
+        let (result, _) = edit(&mut client, n as u64 + 2, &f.project(), dir, op).await;
+        assert_eq!(
+            result.expect_err(why).0,
+            ErrorKind::NotFound,
+            "{why} (W3, FR-021)"
+        );
+    }
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::as_slice),
+        Some(&[comment][..]),
+        "the comment is untouched"
+    );
+}
+
+#[tokio::test]
+async fn w5_each_edit_is_on_disk_before_its_answer_and_reaches_every_window() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+
+    let comment = add_one(&mut a, 1, &f.project(), "  Why clone here?  ").await;
+    assert_eq!(comment.text, "Why clone here?", "stored trimmed (W1)");
+    assert_eq!(comment.state, CommentState::Pending);
+    assert_eq!(
+        (comment.side, comment.range.start(), comment.range.end()),
+        (Side::New, 2, 3)
+    );
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::as_slice),
+        Some(&[comment.clone()][..]),
+        "the comment was on disk when the edit was answered (W5)"
+    );
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (
+            seen.project.as_path(),
+            seen.worktree_dir.as_str(),
+            seen.sending
+        ),
+        (f.project().as_path(), "feat", false),
+        "the other window is told which entry changed"
+    );
+    assert_eq!(
+        seen.comments,
+        vec![comment.clone()],
+        "and holds the new comment"
+    );
+
+    let (result, _) = edit(
+        &mut a,
+        2,
+        &f.project(),
+        "feat",
+        ReviewEditOp::SetText {
+            id: comment.id,
+            text: "Clone is fine".into(),
+        },
+    )
+    .await;
+    result.expect("a pending comment can be edited (US2 s7)");
+    assert_eq!(
+        f.on_disk().entries["feat"][0].text,
+        "Clone is fine",
+        "the edit is on disk"
+    );
+    assert_eq!(next_pushed(&mut b).await.comments[0].text, "Clone is fine");
+
+    let (result, _) = edit(
+        &mut a,
+        3,
+        &f.project(),
+        "feat",
+        ReviewEditOp::Delete { id: comment.id },
+    )
+    .await;
+    result.expect("a pending comment can be deleted (US2 s7)");
+    assert!(
+        f.on_disk().entries.get("feat").is_none_or(Vec::is_empty),
+        "the deletion is on disk"
+    );
+    let gone = next_pushed(&mut b).await;
+    assert_eq!(
+        (gone.worktree_dir.as_str(), gone.comments.len()),
+        ("feat", 0),
+        "an entry whose last comment went is pushed as an empty list"
+    );
+}
+
+#[tokio::test]
+async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on_attach() {
+    let f = Fixture::new();
+    // A sent comment from an earlier run, as the file holds it.
+    let sent = ReviewComment {
+        state: CommentState::Sent { at: 1_790_000_100 },
+        ..serde_json::from_value(serde_json::json!({
+            "id": "01234567-89ab-4def-8123-456789abcdef", "path": "src/lib.rs", "side": "old",
+            "start": 4, "end": 4, "quote": ["gone"], "text": "Why remove this?",
+            "state": { "pending": null }, "created": 1_790_000_000u64
+        }))
+        .unwrap()
+    };
+    let mut seed = ReviewFile::default();
+    seed.entries.insert(String::new(), vec![sent.clone()]);
+    f.files().save_reviews(&f.project(), &seed).unwrap();
+
+    let first = f.service();
+    let mut client = connect(&first).await;
+    let on_attach = attach(&mut client, &f.project()).await;
+    assert!(
+        on_attach
+            .iter()
+            .any(|p| p.worktree_dir.is_empty() && p.comments == vec![sent.clone()]),
+        "attach pushes the stored comments of each entry: {on_attach:?}"
+    );
+    let pending = add_one(&mut client, 1, &f.project(), "Pending one").await;
+    drop(client);
+    drop(first);
+
+    let restarted = f.service();
+    let mut client = connect(&restarted).await;
+    let mut on_attach = attach(&mut client, &f.project()).await;
+    on_attach.sort_by(|x, y| x.worktree_dir.cmp(&y.worktree_dir));
+    let entries: Vec<(String, Vec<ReviewComment>)> = on_attach
+        .into_iter()
+        .map(|p| (p.worktree_dir, p.comments))
+        .collect();
+    assert_eq!(
+        entries,
+        vec![(String::new(), vec![sent]), ("feat".into(), vec![pending])],
+        "the same comments with the same states come back after a restart (US4 s4)"
+    );
+}
+
+// ---- Clear, discard, and removal with the worktree (M8, T091; W4, W11; US4 s3, s5) ----
+
+/// A comment of entry `feat` in state `state`, as the file holds it.
+fn stored(n: u128, state: CommentState) -> ReviewComment {
+    ReviewComment {
+        id: CommentId(uuid::Uuid::from_u128(n)),
+        state,
+        ..serde_json::from_value(serde_json::json!({
+            "id": "01234567-89ab-4def-8123-456789abcdef", "path": "src/a.rs", "side": "new",
+            "start": 2, "end": 2, "quote": ["two"], "text": format!("comment {n}"),
+            "state": { "pending": null }, "created": 1_790_000_000u64
+        }))
+        .unwrap()
+    }
+}
+
+/// Seed entry `feat` (and the Default entry, untouched by everything here) with `comments`.
+fn seed(f: &Fixture, comments: Vec<ReviewComment>) -> ReviewComment {
+    let other = stored(99, CommentState::Pending);
+    let mut file = ReviewFile::default();
+    file.entries.insert("feat".into(), comments);
+    file.entries.insert(String::new(), vec![other.clone()]);
+    f.files().save_reviews(&f.project(), &file).unwrap();
+    other
+}
+
+/// Send `msg` and wait for the answer to `req`; also returns the `ReviewChanged` pushes seen
+/// meanwhile.
+async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, Vec<Pushed>) {
+    client.send(Frame::Control(msg)).await.unwrap();
+    let mut seen = Vec::new();
+    let answered = async {
+        loop {
+            if let Frame::Control(msg) = client.next().await.expect("stream open").unwrap() {
+                if let Some(p) = pushed(&msg) {
+                    seen.push(p);
+                    continue;
+                }
+                match &msg {
+                    DaemonMsg::OperationOk { req: r, .. }
+                    | DaemonMsg::OperationError { req: r, .. }
+                        if *r == req =>
+                    {
+                        return msg
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
+    let answer = tokio::time::timeout(BOUND, answered)
+        .await
+        .expect("the service answers");
+    // A push sent right after the answer.
+    while let Ok(Some(Ok(Frame::Control(msg)))) = tokio::time::timeout(QUIET, client.next()).await {
+        if let Some(p) = pushed(&msg) {
+            seen.push(p);
+        }
+    }
+    (answer, seen)
+}
+
+#[tokio::test]
+async fn w4_clear_sent_removes_sent_comments_and_discard_pending_the_pending_ones() {
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let pending = stored(2, CommentState::Pending);
+    let other = seed(&f, vec![sent, pending.clone()]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+
+    let (result, _) = edit(&mut a, 1, &f.project(), "feat", ReviewEditOp::ClearSent).await;
+    result.expect("clear sent is accepted (W4)");
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::as_slice),
+        Some(&[pending.clone()][..]),
+        "only the sent comment is gone, on disk before the answer (US4 s3, W5)"
+    );
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments),
+        ("feat", vec![pending]),
+        "every window is pushed the pending comment alone"
+    );
+
+    let (result, _) = edit(
+        &mut a,
+        2,
+        &f.project(),
+        "feat",
+        ReviewEditOp::DiscardPending,
+    )
+    .await;
+    result.expect("discard pending is accepted (W4)");
+    assert!(
+        f.on_disk().entries.get("feat").is_none_or(Vec::is_empty),
+        "the pending comment is gone from disk (FR-019)"
+    );
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0)
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "another entry's comments are untouched (FR-021)"
+    );
+}
+
+#[tokio::test]
+async fn w11_deleting_the_worktree_removes_its_comments_from_memory_and_file_and_pushes_none() {
+    let f = Fixture::new();
+    let other = seed(
+        &f,
+        vec![
+            stored(1, CommentState::Pending),
+            stored(2, CommentState::Sent { at: 1_790_000_100 }),
+        ],
+    );
+    let state = f.service();
+    let mut a = connect(&state).await;
+    let on_attach = attach(&mut a, &f.project()).await;
+    assert!(on_attach.iter().any(|p| p.worktree_dir == "feat"));
+
+    let (answer, seen) = request(
+        &mut a,
+        1,
+        ClientMsg::WorktreeDelete {
+            req: 1,
+            project: f.project(),
+            dir_name: "feat".into(),
+            stop_sessions: true,
+            delete_branch: true,
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the worktree is deleted: {answer:?}"
+    );
+    assert!(
+        seen.iter()
+            .any(|p| p.worktree_dir == "feat" && p.comments.is_empty() && !p.sending),
+        "an empty ReviewChanged is pushed for the deleted worktree (W11): {seen:?}"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "its comments are gone from the file (FR-020)"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other.clone()][..]),
+        "the Default entry keeps its own"
+    );
+
+    // Gone from memory too: this service on attach, and a restarted one, push the Default
+    // entry's comment and nothing for `feat`.
+    let with_comments = |pushes: Vec<Pushed>| {
+        pushes
+            .into_iter()
+            .filter(|p| !p.comments.is_empty())
+            .map(|p| (p.worktree_dir, p.comments))
+            .collect::<Vec<_>>()
+    };
+    let mut again = connect(&state).await;
+    assert_eq!(
+        with_comments(attach(&mut again, &f.project()).await),
+        vec![(String::new(), vec![other.clone()])],
+        "attach pushes the Default entry's comment and none for the deleted worktree (US4 s5)"
+    );
+    let restarted = f.service();
+    let mut client = connect(&restarted).await;
+    assert_eq!(
+        with_comments(attach(&mut client, &f.project()).await),
+        vec![(String::new(), vec![other])],
+        "a restarted service has no comments for the deleted worktree either (US4 s5)"
+    );
+}
+
+/// `forget_review_worktree` alone, with no worktree refresh after it to prune the entry: the
+/// comments leave memory and the review file, and the empty push goes out (W11, FR-020).
+#[tokio::test]
+async fn w11_forgetting_a_worktree_drops_its_comments_from_memory_and_file_at_once() {
+    let f = Fixture::new();
+    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    let on_attach = attach(&mut a, &f.project()).await;
+    assert!(
+        on_attach.iter().any(|p| p.worktree_dir == "feat"),
+        "`feat`'s comment is in memory before: {on_attach:?}"
+    );
+
+    state.forget_review_worktree(&f.project(), "feat");
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0),
+        "the empty ReviewChanged is pushed (W11)"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "its comments are gone from the file (FR-020)"
+    );
+    let left: Vec<(String, usize)> = state
+        .review_pushes_on_attach(&f.project())
+        .iter()
+        .filter_map(pushed)
+        .map(|p| (p.worktree_dir, p.comments.len()))
+        .collect();
+    assert_eq!(
+        left,
+        vec![(String::new(), 1)],
+        "memory keeps only the Default entry's comment"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "the Default entry keeps its own"
+    );
+}
+
+#[tokio::test]
+async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refresh() {
+    let f = Fixture::new();
+    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let status = std::process::Command::new("git")
+        .current_dir(f.project())
+        .args(["worktree", "remove", "--force", ".claude/worktrees/feat"])
+        .status()
+        .unwrap();
+    assert!(status.success(), "git removed the worktree");
+    let refreshed = Arc::clone(&state);
+    let project = f.project();
+    tokio::task::spawn_blocking(move || refreshed.refresh_worktrees(&project))
+        .await
+        .unwrap();
+
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0),
+        "the removed worktree's comments are pushed as none (Edge: removed worktree)"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "and gone from the file"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "the Default entry is never pruned"
+    );
+}
+
+#[tokio::test]
+async fn an_unreadable_repository_prunes_nothing_on_refresh() {
+    // Review A M8 F1: an unmounted drive or a renamed folder is not every worktree removed.
+    let f = Fixture::new();
+    seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let away = f.project().with_extension("away");
+    std::fs::rename(f.project(), &away).unwrap();
+    let refreshed = Arc::clone(&state);
+    let project = f.project();
+    tokio::task::spawn_blocking(move || refreshed.refresh_worktrees(&project))
+        .await
+        .unwrap();
+    std::fs::rename(&away, f.project()).unwrap();
+
+    assert_eq!(
+        f.on_disk().entries.get("feat").map(Vec::len),
+        Some(1),
+        "the worktree's comments stay while its repository cannot be read"
+    );
+}
+
+#[tokio::test]
+async fn removing_the_project_from_the_catalog_deletes_its_review_file() {
+    let f = Fixture::new();
+    seed(&f, vec![stored(1, CommentState::Pending)]);
+    let file = f.files().reviews_path(&f.project());
+    assert!(file.exists(), "seeded");
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let (answer, _) = request(
+        &mut a,
+        1,
+        ClientMsg::ProjectRemove {
+            req: 1,
+            path: f.project(),
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the project is removed: {answer:?}"
+    );
+    assert!(!file.exists(), "its reviews/ file is deleted (W11)");
+}

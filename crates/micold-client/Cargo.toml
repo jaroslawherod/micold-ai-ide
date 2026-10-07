@@ -51,6 +51,8 @@ tokio = { workspace = true }
 # (`ttf-parser`) with `tiny-skia`, and encodes the icon files as PNG.
 ttf-parser = { workspace = true }
 tiny-skia = { workspace = true }
+# Feature 482 (R9): watch an open Changes view's entry for file changes.
+notify = { workspace = true }
 
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]

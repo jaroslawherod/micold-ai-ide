@@ -18,6 +18,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::attach::Msg as AttachMsg;
+use micold_client::features::changes::Msg as ChangesMsg;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -205,6 +206,10 @@ struct App {
     /// the scene that legitimately blinks — it settles and is pressed again on the frame after.
     /// `Cell` because it is tallied from `view`, which only ever gets `&App`.
     scene_ripple_frames: std::cell::Cell<usize>,
+    /// The review composer's editor (feature 482, C2): cursor, selection and text. The reducer
+    /// holds the text (`OpenView::composer`); this holds what `text_editor` needs beside it, kept
+    /// in step by `shell::changes`.
+    composer: iced::widget::text_editor::Content,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -604,6 +609,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // `shell/sandbox.rs` now (contract M2).
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
+        Message::Changes(msg) => shell::changes::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
@@ -652,6 +658,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 033, contract C1 A5b: revealing agent worktrees puts rows on screen that have no
         // answer yet, and hiding them takes rows away. The reducer flips the filter; the sync asks
         // about the revealed rows or drops the hidden ones' answers.
+        // Feature 482, V1: opening the Changes view starts its list read, which only the shell can
+        // run; the root left it in `changes.pending` while it interpreted the outcome.
+        Message::Sidebar(msg @ SidebarMsg::ReviewChangesRequested(_)) => {
+            app.core.update(Message::Sidebar(msg));
+            shell::changes::run_pending(app)
+        }
         Message::Sidebar(msg @ SidebarMsg::ShowAgentWorktreesToggled) => {
             app.core.update(Message::Sidebar(msg));
             shell::daemon_sync::sync_cli_availability(app);
@@ -736,6 +748,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::Session(SessionMsg::Selected(id)) => {
+            // Feature 482, V2: the terminal takes the main area back. Closing reads nothing.
+            let _ = app.core.update_changes(ChangesMsg::SessionSelected);
             shell::daemon_sync::on_session_selected(app, id)
         }
         Message::Session(SessionMsg::CloseRequested(id)) => {
@@ -964,7 +978,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
 fn render(app: &App) -> iced::Element<'_, Message> {
     // Render the displayed session from its daemon-streamed grid cache + the client-side selection
     // and scroll offset (feature 010). The daemon is the single source of screen state.
-    micold_client::ui::view(
+    micold_client::ui::view_with(
         &app.core,
         app.attached_grid(),
         app.selection.as_ref(),
@@ -973,6 +987,7 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         &app.env_include_last_outcome,
         &connection_status(app),
         &app.sandbox,
+        Some(&app.composer),
     )
 }
 

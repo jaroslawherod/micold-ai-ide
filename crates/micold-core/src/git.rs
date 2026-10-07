@@ -122,6 +122,44 @@ pub trait Git {
     /// Read-only: the local object store, no fetch, nothing written. Both arguments must be
     /// commit ids; the caller checks the one that arrives from outside.
     fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool>;
+
+    /// The review base of the worktree at `dir`: the merge-base of `HEAD` and the default branch,
+    /// or why there is none (feature 482, research R7). Read-only.
+    fn review_base(&self, dir: &Path) -> crate::review::base::Base;
+
+    /// The files changed in `dir` under `scope` and `toggles`, one row per path (feature 482,
+    /// research R1, FR-002, FR-004, FR-005). Read-only.
+    fn change_list(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList>;
+
+    /// The diff of `path` in `dir` under `scope` and `toggles`, with both versions' lines (feature
+    /// 482, research R1, R8). `from` is a renamed file's old path. Over the R8 limits it answers
+    /// `FileDiff::TooLarge` unless `force_large`. Read-only.
+    fn file_diff(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        path: &crate::review::RelPath,
+        from: Option<&crate::review::RelPath>,
+        force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff>;
+
+    /// Which of `paths` (files of the worktree at `dir`) git ignores (feature 482, research R9).
+    /// A tracked file is never ignored. Read-only.
+    fn ignored(
+        &self,
+        dir: &Path,
+        paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>>;
+
+    /// The git metadata directories of the worktree at `dir`, absolute: its own git dir and the
+    /// common dir (feature 482, research R9). Read-only.
+    fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -206,7 +244,7 @@ impl GitCli {
 /// Keep a read-only question to local objects (040 FR-016): in a partial clone git 2.44 and later
 /// would otherwise fetch a missing object from the promisor remote, and no credential prompt may
 /// hold the call. Older git ignores `GIT_NO_LAZY_FETCH`.
-fn local_only(command: &mut Command) -> &mut Command {
+pub(crate) fn local_only(command: &mut Command) -> &mut Command {
     command
         .env("GIT_NO_LAZY_FETCH", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -214,7 +252,7 @@ fn local_only(command: &mut Command) -> &mut Command {
 
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying
 /// stderr on a non-zero exit.
-fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
+pub(crate) fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
     let output = no_window(&mut Command::new("git"))
         .arg("-C")
         .arg(repo)
@@ -528,6 +566,43 @@ impl Git for GitCli {
         } else {
             Err(io::Error::other(failure_message(&retained)))
         }
+    }
+
+    fn review_base(&self, dir: &Path) -> crate::review::base::Base {
+        GitCli::review_base(self, dir)
+    }
+
+    fn change_list(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        GitCli::change_list(self, dir, scope, toggles)
+    }
+
+    fn file_diff(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        path: &crate::review::RelPath,
+        from: Option<&crate::review::RelPath>,
+        force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff> {
+        GitCli::file_diff(self, dir, scope, toggles, path, from, force_large)
+    }
+
+    fn ignored(
+        &self,
+        dir: &Path,
+        paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>> {
+        GitCli::ignored(self, dir, paths)
+    }
+
+    fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        GitCli::git_dirs(self, dir)
     }
 }
 
@@ -1146,5 +1221,57 @@ impl Git for FakeGit {
         } else {
             Ok(())
         }
+    }
+
+    /// No default branch: a fake repository has no history to compare.
+    fn review_base(&self, _dir: &Path) -> crate::review::base::Base {
+        crate::review::base::Base::Unavailable(
+            crate::review::base::BaseUnavailable::NoDefaultBranch,
+        )
+    }
+
+    /// Nothing changed: a fake repository has no files.
+    fn change_list(
+        &self,
+        _dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        _toggles: crate::review::base::Toggles,
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        Ok(crate::review::changes::ChangeList {
+            files: Vec::new(),
+            scope,
+        })
+    }
+
+    /// No diff: a fake repository has no files.
+    fn file_diff(
+        &self,
+        _dir: &Path,
+        _scope: &crate::review::base::ReviewScope,
+        _toggles: crate::review::base::Toggles,
+        _path: &crate::review::RelPath,
+        _from: Option<&crate::review::RelPath>,
+        _force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff> {
+        Ok(crate::review::diff::LoadedDiff {
+            diff: crate::review::diff::FileDiff::Text(Vec::new()),
+            old: None,
+            new: None,
+            spans: crate::review::diff::Spans::default(),
+        })
+    }
+
+    /// Nothing is ignored in the fake.
+    fn ignored(
+        &self,
+        _dir: &Path,
+        _paths: &[PathBuf],
+    ) -> io::Result<std::collections::BTreeSet<PathBuf>> {
+        Ok(std::collections::BTreeSet::new())
+    }
+
+    /// The fake has no git metadata on disk.
+    fn git_dirs(&self, _dir: &Path) -> io::Result<Vec<PathBuf>> {
+        Ok(Vec::new())
     }
 }

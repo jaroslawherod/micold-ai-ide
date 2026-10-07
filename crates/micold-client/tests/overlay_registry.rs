@@ -129,6 +129,11 @@ fn dialogs() -> Vec<Dialog> {
             open: |state| state.session.remove_target = Some(SessionId::new()),
         },
         Dialog {
+            id: "confirm_discard_pending",
+            cancel: Message::Changes(micold_client::features::changes::Msg::DiscardCancelled),
+            open: open_discard_pending,
+        },
+        Dialog {
             id: "confirm_forget_project",
             cancel: Message::Project(ProjectMsg::ForgetCancelled),
             open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
@@ -294,17 +299,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape.
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482).
     assert_eq!(
         dialogs().len(),
-        12,
+        13,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        26,
-        "twelve dialogs plus nothing open, each with the filter panel open and closed"
+        28,
+        "thirteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -826,4 +831,38 @@ fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
         operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
         target_label: "reviewer".to_string(),
     }
+}
+
+/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
+/// pending comment, then the press.
+fn open_discard_pending(state: &mut State) {
+    use micold_client::features::changes::{self, Msg as ChangesMsg};
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    let project = PathBuf::from("/p");
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::Opened {
+            project: project.clone(),
+            entry: micold_core::session::SessionLocation::Default,
+        },
+    );
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::ReviewChanged {
+            project,
+            worktree_dir: String::new(),
+            comments: vec![ReviewComment {
+                id: CommentId::new(),
+                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
+                side: micold_core::review::Side::New,
+                range: micold_core::review::LineRange::new(1, 1).unwrap(),
+                quote: vec!["a".into()],
+                text: "t".into(),
+                state: CommentState::Pending,
+                created: 1,
+            }],
+            sending: false,
+        },
+    );
+    let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
 }

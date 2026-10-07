@@ -123,6 +123,18 @@ pub struct DaemonConfig {
     pub sandbox: SandboxProfile,
 }
 
+/// How the Changes view lays out a diff (feature 482, R12). Unified until the user picks
+/// side by side; the choice is kept for the next file and the next start (US1 s4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffLayout {
+    /// One column, removed lines above added ones.
+    #[default]
+    Unified,
+    /// The old version on the left, the new on the right.
+    SideBySide,
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -195,6 +207,10 @@ pub struct Settings {
     /// the switches, and read at every turn end, so a change applies without a restart (FR-013).
     #[serde(default = "default_long_task_threshold_secs")]
     pub long_task_threshold_secs: u64,
+    /// How the Changes view lays out a diff (feature 482, US1 s4, R12). Service-owned so every
+    /// window and the next start keep the last choice.
+    #[serde(default)]
+    pub diff_layout: DiffLayout,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -242,6 +258,7 @@ impl Default for Settings {
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: default_long_task_threshold_secs(),
+            diff_layout: DiffLayout::default(),
         }
     }
 }
@@ -480,6 +497,10 @@ struct StoredSettings {
     /// clamped on read (FR-026). Additive and defaulted, so `settings_version` does not move.
     #[serde(default = "default_long_task_threshold_secs")]
     long_task_threshold_secs: u64,
+    /// Missing in files written before feature 482 → unified (R12). Additive and defaulted, so
+    /// `settings_version` does not move for it either.
+    #[serde(default)]
+    diff_layout: DiffLayout,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -517,6 +538,7 @@ impl StoredSettings {
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs,
+            diff_layout: settings.diff_layout,
         }
     }
 
@@ -552,6 +574,7 @@ impl StoredSettings {
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),
+            diff_layout: self.diff_layout,
         }
     }
 }

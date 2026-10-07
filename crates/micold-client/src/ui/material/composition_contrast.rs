@@ -228,3 +228,93 @@ fn the_walk_covers_a_host_of_each_kind() {
          exclusion again, written differently."
     );
 }
+
+/// Diff rows (feature 482, US1 s8): a line's text (`on_surface`) and its muted line numbers
+/// (`on_surface_variant`) are read on the added and the removed tint, in both schemes, at 4.5:1.
+#[test]
+fn diff_line_text_is_legible_on_the_added_and_removed_tints() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for (tint_name, tint) in [
+            ("diff_added", r.diff_added),
+            ("diff_removed", r.diff_removed),
+        ] {
+            for (text_name, text) in [
+                ("on_surface", r.on_surface),
+                ("on_surface_variant", r.on_surface_variant),
+            ] {
+                let ratio = contrast(text, tint);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {text_name} on {tint_name}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "diff text cannot be read on its row tint:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// Syntax colours (feature 482, T043, US1 s8): every colour a highlighter theme can give, as the
+/// diff draws it through `syntax::legible`, reads at 4.5:1 on the diff's surface and on both line
+/// tints of its scheme. The themes' palettes are not public, so the walk sweeps a grid of the whole
+/// colour cube, and then the colours `InspiredGitHub` and `Base16Ocean` actually give a Rust sample.
+#[test]
+fn syntax_colours_are_legible_on_the_diff_surface_and_both_tints() {
+    use crate::ui::syntax;
+    let mut violations: Vec<String> = Vec::new();
+    let steps = [0u8, 51, 102, 153, 204, 255];
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let mut check = |what: String, colour: Rgb| {
+            for fill in syntax::fills(r) {
+                let ratio = contrast(colour, fill);
+                if ratio < AA_TEXT {
+                    violations.push(format!("{scheme:?} / {what} on {fill:?}: {ratio:.2}:1"));
+                }
+            }
+        };
+        for red in steps {
+            for green in steps {
+                for blue in steps {
+                    let raw = Rgb {
+                        r: red,
+                        g: green,
+                        b: blue,
+                    };
+                    check(format!("{raw:?}"), syntax::legible(raw, r));
+                }
+            }
+        }
+        let sample = [
+            "// a comment, in the theme's faintest colour",
+            "#[derive(Debug)]",
+            "pub fn main() -> Result<(), String> {",
+            "    let s = \"text\"; let n = 42_u8 as f32;",
+            "    Ok(())",
+            "}",
+        ];
+        let spans = syntax::highlight_lines("rs", sample, scheme);
+        let mut colours: Vec<Rgb> = spans.0.iter().flatten().map(|(_, c)| *c).collect();
+        colours.sort_by_key(|c| (c.r, c.g, c.b));
+        colours.dedup();
+        assert!(
+            colours.len() >= 3,
+            "{scheme:?}: the Rust sample gave {} colours, so the walk checked nothing",
+            colours.len()
+        );
+        for colour in colours {
+            check(format!("highlighted {colour:?}"), colour);
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a syntax colour cannot be read on the diff:\n  {}",
+        violations.join("\n  ")
+    );
+}

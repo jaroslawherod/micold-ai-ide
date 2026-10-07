@@ -2557,3 +2557,31 @@ fn the_worktree_listing_cannot_be_refreshed_while_a_refresh_is_already_running()
          queue of them"
     );
 }
+
+/// Feature 482, V1: the sidebar's **Review changes** opens the Changes view of that entry, closes
+/// the row menu it came from, and leaves the list read for the shell to run.
+#[test]
+fn review_changes_opens_the_changes_view_of_that_entry() {
+    use micold_client::features::changes::Effect;
+    use micold_core::session::SessionLocation;
+
+    let mut state = State::default();
+    let entry = SessionLocation::Worktree("feat-a".into());
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
+        "feat-a".into(),
+        (10, 10),
+    )));
+    state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+        entry.clone(),
+    )));
+    assert_eq!(
+        state.changes.open.as_ref().map(|view| &view.entry),
+        Some(&entry)
+    );
+    assert!(state.worktree.menu_open.is_none(), "the row menu closes");
+    assert!(matches!(
+        state.take_changes_effect(),
+        Some(Effect::ReadList { entry: e, .. }) if e == entry
+    ));
+    assert_eq!(state.take_changes_effect(), None, "taken once");
+}

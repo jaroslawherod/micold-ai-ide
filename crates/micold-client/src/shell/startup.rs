@@ -364,6 +364,7 @@ fn boot() -> (App, Task<Message>) {
             disconnected: false,
             placement: resolved_placement,
             sandbox: sandbox_state,
+            composer: iced::widget::text_editor::Content::new(),
             sandbox_boot: boot_plan.clone(),
             sandbox_bring_up,
             version_mismatch: None,

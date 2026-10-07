@@ -1684,3 +1684,91 @@ mod script_path_notice_on {
         }
     }
 }
+
+// ---- The diff layout (feature 482, T042, R12, contracts/changes-view.md D1) ----
+
+use micold_client::features::changes::{self, Effect as ChangesEffect, Msg as ChangesMsg};
+use micold_client::features::settings::diff_layout_set;
+use micold_core::protocol::messages::ClientMsg;
+use micold_core::session::SessionLocation;
+use micold_core::settings::DiffLayout;
+
+#[test]
+fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
+    let mut state = changes::State::default();
+    let effect = changes::update(&mut state, ChangesMsg::LayoutChosen(DiffLayout::SideBySide));
+    assert_eq!(effect, ChangesEffect::SetLayout(DiffLayout::SideBySide));
+    assert_eq!(
+        state.layout,
+        DiffLayout::SideBySide,
+        "the choice shows at once, before the echo"
+    );
+    match diff_layout_set(7, DiffLayout::SideBySide) {
+        ClientMsg::SettingsSet {
+            req,
+            scrollback_lines,
+            env_include_enabled,
+            env_include_script_path,
+            env_include_timeout_secs,
+            default_ai_cli,
+            pi_activity_component,
+            tool_server_enabled,
+            cross_session_access,
+            pr_status_enabled,
+            desktop_notifications,
+            notification_kinds,
+            long_task_threshold_secs,
+            diff_layout,
+        } => {
+            assert_eq!((req, diff_layout), (7, Some(DiffLayout::SideBySide)));
+            assert!(
+                scrollback_lines.is_none()
+                    && env_include_enabled.is_none()
+                    && env_include_script_path.is_none()
+                    && env_include_timeout_secs.is_none()
+                    && default_ai_cli.is_none()
+                    && pi_activity_component.is_none()
+                    && tool_server_enabled.is_none()
+                    && cross_session_access.is_none()
+                    && pr_status_enabled.is_none()
+                    && desktop_notifications.is_none()
+                    && notification_kinds.is_none()
+                    && long_task_threshold_secs.is_none(),
+                "every other setting is left as it is"
+            );
+        }
+        other => panic!("expected SettingsSet, got {other:?}"),
+    }
+}
+
+#[test]
+fn the_layout_in_force_comes_from_the_service_and_outlives_the_view() {
+    let mut state = changes::State::default();
+    assert_eq!(state.layout, DiffLayout::Unified, "unified until told");
+    let effect = changes::update(
+        &mut state,
+        ChangesMsg::LayoutInForce(DiffLayout::SideBySide),
+    );
+    assert_eq!(effect, ChangesEffect::None, "an echo sends nothing back");
+    assert_eq!(state.layout, DiffLayout::SideBySide);
+    let entry = SessionLocation::Worktree("wt".into());
+    let _ = changes::update(
+        &mut state,
+        ChangesMsg::Opened {
+            project: std::path::PathBuf::from("/p"),
+            entry,
+        },
+    );
+    let _ = changes::update(&mut state, ChangesMsg::Closed);
+    assert_eq!(
+        state.layout,
+        DiffLayout::SideBySide,
+        "closing and reopening the view keeps the layout"
+    );
+    let _ = changes::update(&mut state, ChangesMsg::LayoutInForce(DiffLayout::Unified));
+    assert_eq!(
+        state.layout,
+        DiffLayout::Unified,
+        "another window's choice applies"
+    );
+}

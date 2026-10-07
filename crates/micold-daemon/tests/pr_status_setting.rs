@@ -88,6 +88,7 @@ async fn set(
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
+            diff_layout: None,
         }))
         .await
         .unwrap();
@@ -192,6 +193,7 @@ async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() 
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
+        diff_layout: None,
     }))
     .await
     .unwrap();

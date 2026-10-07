@@ -65,6 +65,11 @@ pub enum Outcome {
     /// sidebar's expansion set is not its to prune, so it reports what survived and the root routes
     /// that to `sidebar::worktrees_replaced`.
     WorktreesReplaced(std::collections::BTreeSet<String>),
+    /// The user asked to review this entry's changes (feature 482, V1).
+    ///
+    /// The sidebar owns the row menu that asks; the view is `changes`'s, and the menu is
+    /// `worktree`'s, so the root opens the one and closes the other.
+    ChangesRequested(micold_core::session::SessionLocation),
     /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).
     ///
     /// `worktree_form` is a separate feature because its lifecycle is independent (FR-003), but
@@ -164,6 +169,7 @@ pub(crate) fn surface_opened(open: bool, id: crate::overlay::SurfaceId) -> Vec<O
 pub mod agent_confirm;
 pub mod attach;
 pub mod attention;
+pub mod changes;
 pub mod connection;
 pub mod help;
 pub mod notifications;

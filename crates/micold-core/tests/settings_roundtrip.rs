@@ -108,6 +108,30 @@ fn pre_011_document_without_env_include_fields_loads_defaults() {
     assert!(!loaded.env_include_script_path.is_empty());
 }
 
+/// Feature 482 (T007, R12): a file written before the diff layout existed loads as unified.
+#[test]
+fn a_settings_file_without_the_diff_layout_loads_as_unified() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"settings_version":4,"scrollback_lines":10000}"#).unwrap();
+    let loaded = JsonFileSettingsStore::at(path.clone()).load().settings;
+    assert_eq!(
+        loaded.diff_layout,
+        micold_core::settings::DiffLayout::Unified
+    );
+
+    let side = Settings {
+        diff_layout: micold_core::settings::DiffLayout::SideBySide,
+        ..Settings::default()
+    };
+    JsonFileSettingsStore::at(path.clone()).save(&side).unwrap();
+    let back = JsonFileSettingsStore::at(path).load().settings;
+    assert_eq!(
+        back.diff_layout,
+        micold_core::settings::DiffLayout::SideBySide
+    );
+}
+
 #[test]
 fn saved_settings_file_records_the_current_version() {
     let dir = tempfile::tempdir().unwrap();

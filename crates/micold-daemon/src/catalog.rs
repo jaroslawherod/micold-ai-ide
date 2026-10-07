@@ -165,6 +165,7 @@ impl Catalog {
             desktop_notifications: self.settings.desktop_notifications,
             notification_kinds: self.settings.notification_kinds,
             long_task_threshold_secs: self.settings.long_task_threshold_secs,
+            diff_layout: self.settings.diff_layout,
         }
     }
 
@@ -309,6 +310,7 @@ impl Catalog {
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
                 on_disk.notification_kinds = self.settings.notification_kinds;
                 on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
+                on_disk.diff_layout = self.settings.diff_layout;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -402,6 +404,32 @@ impl Catalog {
     /// service only holds the switch for the clients; it reads no pull request itself.
     pub fn set_pr_status_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.pr_status_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// A project's stored review comments (feature 482, FR-020); empty for the ephemeral catalog.
+    pub fn load_reviews(&self, project: &Path) -> micold_core::review::store::ReviewFile {
+        self.project_store
+            .as_ref()
+            .map(|store| store.load_reviews(project))
+            .unwrap_or_default()
+    }
+
+    /// Write a project's review comments (feature 482, W5); the ephemeral catalog keeps nothing.
+    pub fn save_reviews(
+        &self,
+        project: &Path,
+        file: &micold_core::review::store::ReviewFile,
+    ) -> io::Result<()> {
+        match &self.project_store {
+            Some(store) => store.save_reviews(project, file),
+            None => Ok(()),
+        }
+    }
+
+    /// Set the Changes view's diff layout, persisting atomically (feature 482, R12).
+    pub fn set_diff_layout(&mut self, layout: micold_core::settings::DiffLayout) -> io::Result<()> {
+        self.settings.diff_layout = layout;
         self.persist_service_settings()
     }
 
@@ -989,6 +1017,10 @@ impl Catalog {
         if let Some(store) = &self.project_store {
             if let Err(err) = store.remove_project_state(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove per-project state");
+            }
+            // Feature 482 (W11): its review comments go with it.
+            if let Err(err) = store.remove_reviews(path) {
+                tracing::warn!(project = %path.display(), %err, "failed to remove the review comments");
             }
         }
         Ok(ids)

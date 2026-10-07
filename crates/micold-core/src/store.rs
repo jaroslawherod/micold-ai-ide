@@ -18,6 +18,7 @@
 //! project's own state file and stops carrying it in the catalog.
 
 use crate::project::{Availability, Project};
+use crate::review::store::ReviewFile;
 use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -90,6 +91,24 @@ pub trait ProjectStore {
     /// until something changed. The default — for stores with no file — is `false`.
     fn is_missing(&self) -> bool {
         false
+    }
+
+    /// A project's review comments (feature 482, FR-020). The default, for stores that persist
+    /// nothing, is an empty review.
+    fn load_reviews(&self, _project_path: &Path) -> ReviewFile {
+        ReviewFile::default()
+    }
+
+    /// Persist a project's review comments. The default, for stores that persist nothing, keeps
+    /// nothing and succeeds.
+    fn save_reviews(&self, _project_path: &Path, _file: &ReviewFile) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// Delete a project's review comments when the project is forgotten (feature 482, W11). The
+    /// default, for stores that persist nothing, has nothing to delete and succeeds.
+    fn remove_reviews(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -677,6 +696,58 @@ impl JsonFileStore {
             .join(format!("{}.json", project_id(project_path)))
     }
 
+    /// Directory holding every project's review comments (feature 482): `reviews/` beside
+    /// `projects/`.
+    fn reviews_dir(&self) -> PathBuf {
+        match self.path.parent() {
+            Some(parent) => parent.join("reviews"),
+            None => PathBuf::from("reviews"),
+        }
+    }
+
+    /// A project's review file, addressed by [`project_id`]. `pub` so tests can find it.
+    pub fn reviews_path(&self, project_path: &Path) -> PathBuf {
+        self.reviews_dir()
+            .join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Load a project's review comments (feature 482). Never fails: a missing file is an empty
+    /// review; an unparseable one is kept aside as `<name>.corrupt` and an empty review loads.
+    pub fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        let path = self.reviews_path(project_path);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            // Missing, or unreadable for now: no comments, and the file is left where it is.
+            Err(_) => return ReviewFile::default(),
+        };
+        match ReviewFile::from_json(&text) {
+            Ok(file) => file,
+            Err(_) => {
+                let mut aside = path.as_os_str().to_os_string();
+                aside.push(".corrupt");
+                let _ = std::fs::rename(&path, PathBuf::from(aside));
+                ReviewFile::default()
+            }
+        }
+    }
+
+    /// Write a project's review comments atomically (temp file, then rename).
+    pub fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        let path = self.reviews_path(project_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_then_rename(&temp_path_for(&path), &path, &file.to_json())
+    }
+
+    /// Delete a project's review file (feature 482, W11). An already-absent file is success.
+    pub fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(self.reviews_path(project_path)) {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
+    }
+
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
     /// FR-005). An already-absent file is success — forgetting a project that never had a state
     /// file (no sessions/overrides) is not an error, and the call is idempotent. Removing this
@@ -694,6 +765,18 @@ impl JsonFileStore {
 }
 
 impl ProjectStore for JsonFileStore {
+    fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        JsonFileStore::load_reviews(self, project_path)
+    }
+
+    fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        JsonFileStore::save_reviews(self, project_path, file)
+    }
+
+    fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_reviews(self, project_path)
+    }
+
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
     fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_project_state(self, project_path)
@@ -938,6 +1021,8 @@ struct FakeStoreState {
     removals: Vec<PathBuf>,
     /// When set, the next `save` fails with this kind — a full disk, a read-only home.
     fail_next_save: Option<io::ErrorKind>,
+    /// Review comments per project, as `save_reviews` left them.
+    reviews: BTreeMap<PathBuf, ReviewFile>,
 }
 
 impl FakeProjectStore {
@@ -1014,6 +1099,34 @@ impl ProjectStore for FakeProjectStore {
             .expect("fake lock")
             .removals
             .push(project_path.to_path_buf());
+        Ok(())
+    }
+
+    fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .get(project_path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .insert(project_path.to_path_buf(), file.clone());
+        Ok(())
+    }
+
+    fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .remove(project_path);
         Ok(())
     }
 }

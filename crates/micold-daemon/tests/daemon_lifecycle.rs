@@ -170,6 +170,7 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
+        diff_layout: None,
     }))
     .await
     .unwrap();
@@ -206,6 +207,7 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
+        diff_layout: None,
     }))
     .await
     .unwrap();
@@ -259,6 +261,7 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
+            diff_layout: None,
         }))
         .await
         .unwrap();

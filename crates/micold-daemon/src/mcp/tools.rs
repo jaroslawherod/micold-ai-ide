@@ -17,14 +17,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use alacritty_terminal::term::TermMode;
-use micold_core::cli_reason::{self, AttemptDir, Explanation};
 use micold_core::git::GitCli;
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
-use micold_core::mcp::submission::encode_submission;
 use micold_core::mcp::tools::{
     is_mutating_tool, parse_call, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
 };
@@ -1173,14 +1170,9 @@ async fn send_session_input(
     if !Arc::ptr_eq(&pty, &asked_about) {
         return Err(not_running(session));
     }
-    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
-    pty.write_input(&encode_submission(text.as_str(), bracketed))
-        .map_err(|err| {
-            OpError::service_error(format!(
-                "the text could not be typed into session {}: {err}",
-                session.0
-            ))
-        })?;
+    // A terminal without bracketed paste still gets the text, as one plain submission.
+    ops::write_submission(&pty, text.as_str(), false)
+        .map_err(|why| OpError::service_error(why.message(session)))?;
     Ok(json!({}))
 }
 
@@ -1226,66 +1218,44 @@ async fn create_session(
         },
     )?;
 
-    // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5).
-    //
-    // What is available and the state of the environment it was looked for in come from one
-    // resolution of the directory, so the reason given describes the attempt that did not find
-    // the CLI (037, FR-012). The words are `cli_reason`'s: "is not installed" was said here in
-    // every state, and is true in none that the service can tell apart (FR-009a, FR-002).
-    let st = Arc::clone(state);
-    let place = cwd.clone();
-    let (available, env) = blocking(move || Ok(st.availability_in(&place))).await?;
-    if !available.contains(&cli) {
-        let image = crate::state::image_reference();
-        let Explanation { reason, action } =
-            cli_reason::explain_one(cli, env, crate::state::place(&image), AttemptDir::Dir(&cwd));
-        // The reply tells the agent what to change, so the call it makes afterwards has to look
-        // again, as a start refused at the launch gate does (D18, review B F1). Left cached, the
-        // attempt that failed answered the retry in the same words.
-        state.invalidate_env_include(&cwd);
-        return Err(OpError::service_error(format!("{reason} {action}")));
+    // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5). The
+    // words are `cli_reason`'s: "is not installed" was said here in every state, and is true in
+    // none that the service can tell apart (FR-009a, FR-002). The reply tells the agent what to
+    // change, so the call it makes afterwards has to look again (D18, review B F1).
+    if let Some(why) = ops::cli_unavailable(state, &cwd, cli).await {
+        return Err(OpError::service_error(why));
     }
 
     let dir = match &worktree {
         WorktreeRef::Default => String::new(),
         WorktreeRef::Named(name) => name.clone(),
     };
-    let session = state
-        .create_session(&project.path, &dir, cli)
-        .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
-    state.begin_start(session);
-    state.broadcast_catalog();
-    let started = ops::start_session(state, session, LaunchMode::Fresh)
-        .await
-        .unwrap_or(false);
-
-    let display = cli.provider().display_name();
     let prompt_given = prompt.is_some();
-    let undelivered = match prompt {
-        None => None,
-        Some(_) if !started => {
-            Some("the session did not start, so the prompt was not typed".to_string())
+    let first = prompt.as_deref().map(|text| ops::FirstPrompt {
+        text,
+        asked,
+        // A terminal without bracketed paste still gets the prompt, as one plain submission.
+        require_bracketed: false,
+    });
+    let (session, typed) = ops::create_session_with_prompt(
+        state,
+        ops::NewSession {
+            project: &project.path,
+            worktree_dir: &dir,
+            cwd: &cwd,
+            cli,
+        },
+        first,
+    )
+    .await
+    .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
+    let undelivered = typed.err().map(|why| match why {
+        // A terminal that went away or refused the write: said as for a CLI never ready.
+        ops::FirstPromptUndelivered::Typing(_) => {
+            ops::FirstPromptUndelivered::NotReady(cli, state.first_prompt_bound()).message(session)
         }
-        Some(text) => {
-            let st = Arc::clone(state);
-            let place = cwd.clone();
-            if blocking(move || Ok(st.cli_would_ask_trust(&place, cli))).await? {
-                // Its first screen is the trust question; the prompt's Enter would answer it.
-                Some(format!(
-                    "{display} would first ask whether to trust this folder, so the prompt was not \
-                     typed; trust the project in {display} first"
-                ))
-            } else if deliver_first_prompt(state, session, &text, asked).await {
-                None
-            } else {
-                Some(format!(
-                    "{display} was not ready for input within {} s of the request, so the prompt \
-                     was not typed",
-                    state.first_prompt_bound().as_secs()
-                ))
-            }
-        }
-    };
+        why => why.message(session),
+    });
     let st = Arc::clone(state);
     let lifecycle = blocking(move || {
         let project = caller_project(&st, caller)?;
@@ -1308,26 +1278,6 @@ async fn create_session(
         out["prompt_reason"] = json!(reason);
     }
     Ok(out)
-}
-
-/// Type `text` into `session` as one submission once its CLI is ready for it, if that happens
-/// within the first-prompt bound of `asked` (FR-017). A signal after the bound types nothing: the
-/// wait has ended, and nothing else writes the prompt.
-async fn deliver_first_prompt(
-    state: &Arc<DaemonState>,
-    session: SessionId,
-    text: &str,
-    asked: tokio::time::Instant,
-) -> bool {
-    let deadline = asked + state.first_prompt_bound();
-    if !state.wait_ready_for_input(session, deadline).await {
-        return false;
-    }
-    let Some(pty) = state.primary_pty(session) else {
-        return false;
-    };
-    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
-    pty.write_input(&encode_submission(text, bracketed)).is_ok()
 }
 
 /// A worktree directory name given by the agent: accepted only as the dialog would write it

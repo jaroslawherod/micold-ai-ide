@@ -651,6 +651,9 @@ Right-click a worktree in the sidebar to open its context menu:
   that worktree first, then removes the directory, sessions, and (unless unchecked) the branch —
   this cannot be undone. Cancelling removes nothing, including any change you made to the
   checkbox. (A worktree that is already missing/invalid can still be cleaned up this way.)
+- **Review changes** — opens the Changes view: every file the worktree changed against its base
+  branch, committed and uncommitted. The **Default** entry offers this item too. See
+  [Reviewing a worktree's changes](reviewing-changes.md).
 
 ## Starting, switching, and closing sessions
 

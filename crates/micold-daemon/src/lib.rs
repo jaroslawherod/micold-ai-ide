@@ -24,6 +24,7 @@ pub mod mcp;
 pub mod ops;
 pub mod platform;
 pub mod progress;
+pub mod review;
 pub mod server;
 pub mod singleton;
 pub mod state;

@@ -152,6 +152,15 @@ pub enum PendingOp {
     /// actually applies it — this variant exists only so a failure reaches the user and a
     /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
     SettingsSet,
+    /// A `ReviewEdit` (feature 482): the result arrives as `ReviewChanged`; this exists so a
+    /// refusal or a failed write reaches the user.
+    ReviewEdit,
+    /// A `ReviewSend` (feature 482, S2) of `count` pending comments: the answer names the session
+    /// that received them, for the success snackbar.
+    ReviewSend {
+        /// How many comments the send carries.
+        count: usize,
+    },
     /// An `AttachDiscover` (feature 582), carrying the project so a report that outlived its
     /// dialog, or was asked for another project, is dropped by the reducer.
     AttachDiscover {
@@ -199,6 +208,8 @@ impl PendingOp {
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
+            PendingOp::ReviewEdit => "save the review comment".into(),
+            PendingOp::ReviewSend { .. } => "send the review comments".into(),
             PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
             PendingOp::AttachOfferDiscover { .. } => "look for worktrees to attach".into(),
             PendingOp::AttachOfferApply => "attach the found worktrees".into(),
@@ -645,6 +656,12 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.notification_kinds = settings.notification_kinds;
     app.core.session.long_task_threshold_secs = settings.long_task_threshold_secs;
     app.core.session.cross_session_access = settings.cross_session_access;
+    // Feature 482 (R12): the diff layout in force, kept across files and restarts.
+    let _ = app
+        .core
+        .update_changes(micold_client::features::changes::Msg::LayoutInForce(
+            settings.diff_layout,
+        ));
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
@@ -773,6 +790,25 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // nothing to do; a `SessionCreate` additionally names the daemon-assigned id so we
         // select + view it.
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
+            // Feature 482 (S2): the comments' new state arrives as `ReviewChanged`; this says
+            // where they went.
+            Some(PendingOp::ReviewSend { count }) => {
+                if let OperationResult::ReviewSent { session, started } = result {
+                    let label = app
+                        .core
+                        .active_sessions()
+                        .iter()
+                        .find(|s| s.id == session)
+                        .map_or_else(
+                            || "the session".to_owned(),
+                            |s| s.label.display().to_string(),
+                        );
+                    app.core
+                        .notify_info(micold_client::features::changes::sent_text(
+                            count, &label, started,
+                        ));
+                }
+            }
             Some(PendingOp::CreateSession) => {
                 if let OperationResult::SessionCreated { session } = result {
                     app.core
@@ -1112,6 +1148,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                         .update(Message::Attach(AttachMsg::ApplyFailed(message)));
                 }
                 Some(PendingOp::AttachOfferDiscover { .. }) => {}
+                // Feature 482 (S2): the service's message, the comments still pending.
+                Some(PendingOp::ReviewSend { .. }) => {
+                    app.core
+                        .notify_error(micold_client::features::changes::send_error_text(&message));
+                }
                 Some(PendingOp::AttachOfferApply) => {
                     app.core
                         .update(Message::Attach(AttachMsg::OfferApplyFailed(message)));
@@ -1296,6 +1337,23 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             instance,
             reason,
         } => on_shell_open_failed(app, session, instance, reason),
+        // Feature 482: every project's pushes are kept, keyed by project and entry, so switching
+        // project shows each entry's own comments (FR-021).
+        DaemonMsg::ReviewChanged {
+            project,
+            worktree_dir,
+            comments,
+            sending,
+        } => {
+            let _ = app
+                .core
+                .update_changes(micold_client::features::changes::Msg::ReviewChanged {
+                    project,
+                    worktree_dir,
+                    comments,
+                    sending,
+                });
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }

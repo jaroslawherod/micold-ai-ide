@@ -39,6 +39,7 @@ pub(crate) mod dialog;
 /// size check can see.
 #[cfg(test)]
 mod dialog_anatomy;
+mod diff_view;
 mod divider;
 mod edge_fade;
 mod ellipsized;
@@ -86,6 +87,7 @@ mod picker_parity;
 mod picker_press;
 mod progress;
 mod resize_handle;
+mod review_comment;
 mod ripple;
 mod scrollable;
 mod section_list;
@@ -136,6 +138,7 @@ mod terminal_pane;
 #[cfg(test)]
 mod test_support;
 mod text;
+mod text_area;
 mod text_field;
 /// The filled field's anatomy, checked in-crate — `material` is `pub(crate)`.
 #[cfg(test)]
@@ -149,6 +152,7 @@ mod tree_view;
 mod type_role_mapping;
 mod typeahead;
 mod unread_mark;
+mod virtual_rows;
 
 pub use accordion::Accordion;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
@@ -156,6 +160,7 @@ pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
+pub use diff_view::{DiffLayout, DiffView};
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
@@ -174,6 +179,7 @@ pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
+pub use review_comment::{CardState, ReviewCommentCard};
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
 pub use section_list::{Section, SectionList};
@@ -190,12 +196,14 @@ pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::GridSizeReporter;
 pub use terminal_pane::TerminalPane;
 pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
+pub use text_area::TextArea;
 pub use text_field::TextField;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 pub use typeahead::Typeahead;
 pub use unread_mark::UnreadMark;
+pub use virtual_rows::VirtualRows;
 
 /// The application's theme, derived from the active colour scheme.
 ///

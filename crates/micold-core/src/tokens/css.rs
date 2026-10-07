@@ -84,7 +84,7 @@ fn hex(color: Rgb) -> String {
 /// Spelled out rather than derived: a macro over the struct would emit whatever fields happen to
 /// exist, so adding a private helper field would silently add a public CSS variable. This list is
 /// the emitter's declaration of what the site is allowed to see.
-fn color_roles(r: &Roles) -> [(&'static str, Rgb); 36] {
+fn color_roles(r: &Roles) -> [(&'static str, Rgb); 38] {
     [
         ("primary", r.primary),
         ("on_primary", r.on_primary),
@@ -122,6 +122,8 @@ fn color_roles(r: &Roles) -> [(&'static str, Rgb); 36] {
         ("inverse_primary", r.inverse_primary),
         ("scrim", r.scrim),
         ("shadow", r.shadow),
+        ("diff_added", r.diff_added),
+        ("diff_removed", r.diff_removed),
     ]
 }
 
@@ -306,7 +308,7 @@ mod tests {
         identifier.replace('_', "-")
     }
 
-    const COLOR_ROLES: [&str; 36] = [
+    const COLOR_ROLES: [&str; 38] = [
         "primary",
         "on_primary",
         "primary_container",
@@ -343,6 +345,8 @@ mod tests {
         "inverse_primary",
         "scrim",
         "shadow",
+        "diff_added",
+        "diff_removed",
     ];
 
     /// A name defined in one block and missing from the other is the derivation failing silently:

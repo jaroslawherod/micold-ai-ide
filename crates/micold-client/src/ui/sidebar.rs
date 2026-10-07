@@ -812,6 +812,9 @@ fn build_default_item(
     let item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
+        // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
+        // name for the project root (`""`).
+        .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
         .expandable(
             node.expanded,
             Message::Sidebar(SidebarMsg::DefaultExpansionToggled),

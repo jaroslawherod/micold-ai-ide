@@ -24,7 +24,7 @@ use crate::workspace::Workspace;
 pub struct ViewFacts {
     /// The window has keyboard focus.
     pub window_focused: bool,
-    /// A screen fills the main area instead of the session (Settings).
+    /// A screen fills the main area instead of the session (Settings, a Changes view).
     pub main_area_taken: bool,
     /// The active project's selected session.
     pub selected: Option<SessionId>,
