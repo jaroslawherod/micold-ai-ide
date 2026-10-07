@@ -13,10 +13,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
+use alacritty_terminal::term::TermMode;
 use micold_core::git::GitCli;
+use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
-use micold_core::session::SessionId;
+use micold_core::session::{AiCli, SessionId};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
@@ -25,6 +27,7 @@ use micold_core::worktree::{
 
 use crate::server::refresh_worktrees_and_broadcast;
 use crate::state::DaemonState;
+use crate::supervisor::PtySession;
 
 /// Where a create's progress goes: the requesting window's `OperationProgress` frames, or nowhere
 /// (the tool server passes none).
@@ -473,4 +476,88 @@ pub fn describe_leftovers(leftovers: &[Leftover]) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Why a submission was not typed into a session (feature 482, W9). Nothing reached the terminal.
+#[derive(Debug)]
+pub enum Undelivered {
+    /// The session has no running primary process.
+    NotRunning,
+    /// The CLI has no record that it trusts the session's folder, so it may be asking about it, and
+    /// the submission's Enter would answer that question (research R12).
+    AsksTrust(AiCli),
+    /// The terminal has not asked for bracketed paste, so a multi-line text would arrive as several
+    /// submissions.
+    NoBracketedPaste,
+    /// Writing to the terminal failed.
+    WriteFailed(io::Error),
+}
+
+impl Undelivered {
+    /// What to tell the user: why nothing was typed into `session`.
+    pub fn message(&self, session: SessionId) -> String {
+        match self {
+            Self::NotRunning => format!("session {} is not running", session.0),
+            Self::AsksTrust(cli) => {
+                let display = cli.provider().display_name();
+                format!(
+                    "{display} has no record that it trusts the folder of session {}, and may be \
+                     asking about it, so nothing was typed; trust the project in {display} first",
+                    session.0
+                )
+            }
+            Self::NoBracketedPaste => format!(
+                "the terminal of session {} does not accept a pasted text (no bracketed paste), \
+                 so nothing was typed",
+                session.0
+            ),
+            Self::WriteFailed(err) => format!(
+                "the text could not be typed into session {}: {err}",
+                session.0
+            ),
+        }
+    }
+}
+
+/// Type `text` into `pty` as one submission (research R12): bracketed when the terminal asked for
+/// it, and refused when it did not and `require_bracketed` says a plain one will not do.
+pub fn write_submission(
+    pty: &PtySession,
+    text: &str,
+    require_bracketed: bool,
+) -> Result<(), Undelivered> {
+    let bracketed = pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE);
+    if require_bracketed && !bracketed {
+        return Err(Undelivered::NoBracketedPaste);
+    }
+    pty.write_input(&encode_submission(text, bracketed))
+        .map_err(Undelivered::WriteFailed)
+}
+
+/// Type `text` into `session`'s running AI CLI as one bracketed submission (feature 482, W8, W9):
+/// its primary process must be alive, its CLI must trust the session's folder, and its terminal
+/// must accept a paste. Nothing is typed otherwise. The text is never logged (W12).
+pub async fn type_submission(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    text: &str,
+) -> Result<(), Undelivered> {
+    let pty = state
+        .primary_pty(session)
+        .filter(|pty| pty.is_alive())
+        .ok_or(Undelivered::NotRunning)?;
+    let (cwd, cli) = state
+        .session_cwd_and_cli(session)
+        .ok_or(Undelivered::NotRunning)?;
+    let st = Arc::clone(state);
+    let asks = tokio::task::spawn_blocking(move || st.cli_would_ask_trust(&cwd, cli))
+        .await
+        .map_err(|join| Undelivered::WriteFailed(io::Error::other(join.to_string())))?;
+    if asks {
+        return Err(Undelivered::AsksTrust(cli));
+    }
+    if !pty.is_alive() {
+        return Err(Undelivered::NotRunning);
+    }
+    write_submission(&pty, text, true)
 }

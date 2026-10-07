@@ -155,6 +155,12 @@ pub enum PendingOp {
     /// A `ReviewEdit` (feature 482): the result arrives as `ReviewChanged`; this exists so a
     /// refusal or a failed write reaches the user.
     ReviewEdit,
+    /// A `ReviewSend` (feature 482, S2) of `count` pending comments: the answer names the session
+    /// that received them, for the success snackbar.
+    ReviewSend {
+        /// How many comments the send carries.
+        count: usize,
+    },
     /// An `AttachDiscover` (feature 582), carrying the project so a report that outlived its
     /// dialog, or was asked for another project, is dropped by the reducer.
     AttachDiscover {
@@ -203,6 +209,7 @@ impl PendingOp {
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
             PendingOp::ReviewEdit => "save the review comment".into(),
+            PendingOp::ReviewSend { .. } => "send the review comments".into(),
             PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
             PendingOp::AttachOfferDiscover { .. } => "look for worktrees to attach".into(),
             PendingOp::AttachOfferApply => "attach the found worktrees".into(),
@@ -774,6 +781,25 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // nothing to do; a `SessionCreate` additionally names the daemon-assigned id so we
         // select + view it.
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
+            // Feature 482 (S2): the comments' new state arrives as `ReviewChanged`; this says
+            // where they went.
+            Some(PendingOp::ReviewSend { count }) => {
+                if let OperationResult::ReviewSent { session, started } = result {
+                    let label = app
+                        .core
+                        .active_sessions()
+                        .iter()
+                        .find(|s| s.id == session)
+                        .map_or_else(
+                            || "the session".to_owned(),
+                            |s| s.label.display().to_string(),
+                        );
+                    app.core
+                        .notify_info(micold_client::features::changes::sent_text(
+                            count, &label, started,
+                        ));
+                }
+            }
             Some(PendingOp::CreateSession) => {
                 if let OperationResult::SessionCreated { session } = result {
                     app.core
@@ -1113,6 +1139,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                         .update(Message::Attach(AttachMsg::ApplyFailed(message)));
                 }
                 Some(PendingOp::AttachOfferDiscover { .. }) => {}
+                // Feature 482 (S2): the service's message, the comments still pending.
+                Some(PendingOp::ReviewSend { .. }) => {
+                    app.core
+                        .notify_error(micold_client::features::changes::send_error_text(&message));
+                }
                 Some(PendingOp::AttachOfferApply) => {
                     app.core
                         .update(Message::Attach(AttachMsg::OfferApplyFailed(message)));

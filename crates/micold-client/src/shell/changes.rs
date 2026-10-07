@@ -108,6 +108,24 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             });
             Task::none()
         }
+        Effect::ReviewSend {
+            project,
+            worktree_dir,
+            outdated,
+            count,
+        } => {
+            // W6: the service pushes `sending` to every window, then answers once the prompt was
+            // typed or refused (S2).
+            crate::shell::daemon_sync::send_op(app, PendingOp::ReviewSend { count }, |req| {
+                micold_core::protocol::messages::ClientMsg::ReviewSend {
+                    req,
+                    project,
+                    worktree_dir,
+                    outdated,
+                }
+            });
+            Task::none()
+        }
         Effect::ReadList {
             seq,
             entry,

@@ -120,7 +120,12 @@ impl Sandbox {
                 vec![
                     session(sid(1), Some("wt"), TerminalMode::AiCli, AiCli::ClaudeCode),
                     session(sid(2), Some("wt"), TerminalMode::AiCli, AiCli::ClaudeCode),
-                    session(sid(3), Some("other"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                    session(
+                        sid(3),
+                        Some("other"),
+                        TerminalMode::AiCli,
+                        AiCli::ClaudeCode,
+                    ),
                 ],
             )],
             store.path(),
@@ -374,7 +379,17 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
     s.start(sid(1), false).await;
     let mut client = window(&s.state, &project).await;
 
-    add(&mut client, 1, &project, "wt", "src/a.rs", 3, &["fn a() {}"], "Rename a.").await;
+    add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &["fn a() {}"],
+        "Rename a.",
+    )
+    .await;
     let comments = add(
         &mut client,
         2,
@@ -404,14 +419,29 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         "exactly one prompt, the one prompt::build gives, typed as one submission (US2 s3)"
     );
     let sending: Vec<bool> = seen.iter().map(|(_, _, sending)| *sending).collect();
-    assert_eq!(sending, vec![true, false], "sending shows while the send is open (W6, W8)");
+    assert_eq!(
+        sending,
+        vec![true, false],
+        "sending shows while the send is open (W6, W8)"
+    );
     let last = &seen.last().unwrap().1;
     assert!(
-        last.iter().all(|c| matches!(c.state, CommentState::Sent { .. })),
+        last.iter()
+            .all(|c| matches!(c.state, CommentState::Sent { .. })),
         "every comment of the send is sent: {last:?}"
     );
 
-    let after = add(&mut client, 4, &project, "wt", "src/a.rs", 9, &["x"], "Only this one.").await;
+    let after = add(
+        &mut client,
+        4,
+        &project,
+        "wt",
+        "src/a.rs",
+        9,
+        &["x"],
+        "Only this one.",
+    )
+    .await;
     let (result, _) = send(&mut client, 5, &project, "wt").await;
     assert!(result.is_ok(), "{result:?}");
     let second = prompt::build(EntryKind::Worktree, &pending(&after), &[]);
@@ -421,7 +451,10 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         format!("{}{}", submitted(&expected), submitted(&second)),
         "the second send carries only the new pending comment (US2 s6)"
     );
-    assert!(!second.contains("Rename a."), "no sent comment is sent again");
+    assert!(
+        !second.contains("Rename a."),
+        "no sent comment is sent again"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -449,7 +482,17 @@ async fn w9_a_terminal_without_bracketed_paste_gets_nothing_and_the_comments_sta
     let project = s.project();
     s.start(sid(1), true).await;
     let mut client = window(&s.state, &project).await;
-    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Line one\nline two").await;
+    add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "a",
+        1,
+        &["x"],
+        "Line one\nline two",
+    )
+    .await;
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let (kind, message) = result.expect_err("the send is refused");
@@ -472,7 +515,17 @@ async fn fr021_a_prompt_never_reaches_another_entrys_running_session() {
     let project = s.project();
     s.start(sid(3), false).await;
     let mut client = window(&s.state, &project).await;
-    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "For wt only.").await;
+    add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "a",
+        1,
+        &["x"],
+        "For wt only.",
+    )
+    .await;
 
     let (result, _) = send(&mut client, 2, &project, "wt").await;
     assert!(
@@ -547,5 +600,8 @@ async fn r5_the_most_recently_active_running_session_of_the_entry_receives_it() 
         "S2's activity changed last"
     );
     s.typed_holds(sid(2), "Third.").await;
-    assert!(!s.typed(sid(1)).contains("Third."), "only one session receives a prompt");
+    assert!(
+        !s.typed(sid(1)).contains("Third."),
+        "only one session receives a prompt"
+    );
 }
