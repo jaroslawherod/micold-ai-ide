@@ -20,7 +20,7 @@ milestone as the behaviour it describes (Constitution VII, CI user-guide gate).
 notify's recommended backend per OS; quickstart §C covers macOS and Windows (Constitution VI).
 
 **Wire**: every wire-visible change of this feature is made in **one** edit (T008), so
-`PROTOCOL_VERSION` moves 29 → 30 once; a second bump later in the feature fails
+`PROTOCOL_VERSION` moves 30 → 31 once; a second bump later in the feature fails
 `crates/micold-core/tests/schema_hash.rs` (see the doc comment in
 `crates/micold-core/src/protocol/version.rs`).
 
@@ -48,11 +48,11 @@ edit. No user-visible behaviour yet.
 - [x] T005 [P] Write failing serde round-trip tests in `crates/micold-core/src/review/comment.rs` for `ReviewComment` (`id`, `path`, `side`, `range`, `quote`, `text`, `state`, `created`), `CommentState::{Pending, Sent { at }}` and `CommentId` (UUID v4), matching the JSON shape in data-model.md § Core: persistence (`"side": "new"`, `"start"`, `"end"`, `"state": { "pending": null }`)
 - [x] T006 Implement the `ReviewComment`, `CommentState` and `CommentId` types (data only, no operations) in `crates/micold-core/src/review/comment.rs` until T005 passes
 - [x] T007 Write failing wire tests: in `crates/micold-core/tests/protocol_roundtrip.rs` round-trip `ClientMsg::ReviewEdit` with each `ReviewEditOp` (`Add`, `SetText`, `Delete`, `ClearSent`, `DiscardPending`), `ClientMsg::ReviewSend { outdated }`, `DaemonMsg::ReviewChanged { comments, sending }`, `OperationResult::ReviewSent { session, started }` and `SettingsSet`/`SettingsChanged` with `diff_layout`; in `crates/micold-core/tests/settings_roundtrip.rs` a settings file without `diff_layout` loads as `DiffLayout::Unified` (serde default, R12)
-- [x] T008 Make the feature's whole wire delta in one edit (contracts/review-wire.md): `ClientMsg::ReviewEdit`, `ClientMsg::ReviewSend`, `ReviewEditOp`, `DaemonMsg::ReviewChanged`, `OperationResult::ReviewSent`, and `diff_layout` on `SettingsSet` (`Option<DiffLayout>`), `SettingsChanged` and `DaemonSettings` in `crates/micold-core/src/protocol/messages.rs`; `DiffLayout { Unified, SideBySide }` and `Settings::diff_layout` (serde default `Unified`) in `crates/micold-core/src/settings.rs`; `PROTOCOL_VERSION` 29 → 30 with its "Bumped 29 → 30" doc line in `crates/micold-core/src/protocol/version.rs`; the new pin in `crates/micold-core/tests/schema_hash.rs`. T007 passes
+- [x] T008 Make the feature's whole wire delta in one edit (contracts/review-wire.md): `ClientMsg::ReviewEdit`, `ClientMsg::ReviewSend`, `ReviewEditOp`, `DaemonMsg::ReviewChanged`, `OperationResult::ReviewSent`, and `diff_layout` on `SettingsSet` (`Option<DiffLayout>`), `SettingsChanged` and `DaemonSettings` in `crates/micold-core/src/protocol/messages.rs`; `DiffLayout { Unified, SideBySide }` and `Settings::diff_layout` (serde default `Unified`) in `crates/micold-core/src/settings.rs`; `PROTOCOL_VERSION` 30 → 31 with its "Bumped 30 → 31" doc line in `crates/micold-core/src/protocol/version.rs`; the new pin in `crates/micold-core/tests/schema_hash.rs`. T007 passes
 - [x] T009 [P] Write a failing daemon test `crates/micold-daemon/tests/diff_layout_setting.rs` modelled on `crates/micold-daemon/tests/pr_status_setting.rs`: `SettingsSet { diff_layout: Some(SideBySide) }` is stored in the settings file, reported in `Welcome` after a restart, and pushed by `SettingsChanged` to a second attached client; and `ReviewEdit` / `ReviewSend` are answered `OperationError { kind: Refused }` (not yet served)
 - [x] T010 Serve `diff_layout` in the daemon as `pr_status_enabled` is served (`set_diff_layout` in `crates/micold-daemon/src/catalog.rs`, `crates/micold-daemon/src/state.rs`, the `SettingsSet` arm and `DaemonSettings`/`SettingsChanged` fill in `crates/micold-daemon/src/server.rs`); route `ReviewEdit` and `ReviewSend` in `server.rs` to an `OperationError { kind: Refused, message: "review comments are not available in this build" }` placeholder that T057 (`ReviewEdit`) and T072 (`ReviewSend`) replace, each retiring its T009 assertion. T009 passes
 
-**Checkpoint**: core value types and protocol v30 in place; the client sends no review message yet.
+**Checkpoint**: core value types and protocol v31 in place; the client sends no review message yet.
 
 ---
 
@@ -265,7 +265,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T001–T026
 - **Deliverable**: right-click a worktree or the Default row → **Review changes** opens a Changes view listing the changed files with kind and `+a −r`, the base line, and working Committed/Uncommitted toggles (Default: uncommitted only)
-- **Satisfies**: US1 acceptance scenarios 1, 2, 6, 9; FR-001, FR-002, FR-003, FR-004, FR-005, FR-022 (list part); protocol v30 and `diff_layout` stored by the daemon
+- **Satisfies**: US1 acceptance scenarios 1, 2, 6, 9; FR-001, FR-002, FR-003, FR-004, FR-005, FR-022 (list part); protocol v31 and `diff_layout` stored by the daemon
 - **Verify**: `cargo test -p micold-core --all-targets review`, `cargo test -p micold-core --test protocol_roundtrip --test schema_hash`, `cargo test -p micold-daemon --test diff_layout_setting` and `cargo test -p micold-client --test features_changes`; quickstart B1, B2, B15 (list part)
 - **Depends on**: —
 - **Tier**: full
