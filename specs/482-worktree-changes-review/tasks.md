@@ -97,7 +97,7 @@ side-by-side diffs with syntax colouring, binary and large files handled.
 - [x] T037 [US1] Show the diff pane in `crates/micold-client/src/ui/changes.rs`: `DiffView` for text, the D3 messages, the large gate with **Show diff**, and `StageProgress::new("Loading diff…", r)` while loading (D4)
 - [x] T038 [P] [US1] Add `DiffView` poses (unified, binary message, large-file gate, both schemes) to `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [x] T039 [P] [US1] Extend `docs/user-guide/reviewing-changes.md`: reading a diff, binary and non-text files, large files and Show diff
-- [ ] T040 [US1] Visual pass of quickstart B1, B4, B5, B6 and B15 (diff part), light and dark, with a 2,000-file worktree and a 50,000-line diff timed for frames over 100 ms (SC-003); evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T040 [US1] Visual pass of quickstart B1, B4, B5, B6 and B15 (diff part), light and dark, with a 2,000-file worktree and a 50,000-line diff timed for frames over 100 ms (SC-003); evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 ### Part C — side by side, syntax colouring, kept layout (scenario 4, 8)
 
