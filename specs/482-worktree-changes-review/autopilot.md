@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M8 (T090–T097); M5–M7 commits are local unless the push below went through (PR-body section for M7 in the scratchpad `pr-body-482-M7.md`)
+- **Next step**: milestone M8 (T090–T097); M5–M7 commits are local: the plain push after the green raw gate was refused by the gate hook (no `mise run gate` record) (PR-body section for M7 in the scratchpad `pr-body-482-M7.md`)
 
 ## Pull requests
 
