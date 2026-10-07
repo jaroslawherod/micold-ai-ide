@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M2 (T027–T040)
+- **Next step**: milestone M3 (T041–T049)
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
-| M2 | T027–T040 | full | Unified diff of the selected file | #624 | in progress |
+| M2 | T027–T040 | full | Unified diff of the selected file | #624 | done |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | — | todo |
 | M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
 | M5 | T064–T075 | full | Send comments to the running session | — | todo |
@@ -73,7 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 3 handed over at 116k (the visual pass would cross the 150k cap). **Done:** full gate + push of 5d37a3e5 (anatomy-scan fix); review A F4–F7 fixed in 3d697c27 with red/green in the cycle log; full gate green on 3d697c27 (tree b004815c, stamped; only the 6 root-only tests fail); pushed; review A round 2 CLEAN; review B CLEAN. PR-body section written: `scratchpad/pr-body-482-M2.md` (replace `VISUAL_PASS_PENDING`). **Next:** T040 visual pass only — the forked `visual-pass` skill drops its args in this container, so run its recipe inline (`.claude/skills/visual-pass/SKILL.md`) from the brief `scratchpad/vp-m2-brief.md`; save `m2-*.png` + `m2.md` under `specs/482-worktree-changes-review/visual-pass/`, tick T040, set M2 done in Milestones and Next step M3; a code fix found by the pass needs the scoped gate, then the full gate before push. Return `PR: #624`.
+None.
 
 ## Open escalation
 
