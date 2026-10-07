@@ -62,3 +62,35 @@ ReadDirectoryChangesW) and B6 on Windows with `core.autocrlf=false` (with `true`
 LF → CRLF edit away before it diffs, so `crlf.txt` is not listed at all: expected, git would not
 commit it either). Compare the delivered prompt
 text of B9 with Linux's byte for byte (SC-006; the core test P1–P10 already pins the bytes).
+
+## Results
+
+### §B — Linux (recorded per milestone)
+
+Every step of §B passed, each in the visual pass of the milestone that delivered it, on a Linux
+container with Xvfb and lavapipe (software Vulkan). The evidence and screenshots are in
+[visual-pass/](./visual-pass/). No step was run a second time on the finished branch as one
+pass (T099): the per-milestone passes are the record.
+
+| Step | Pass | Commit | Scheme |
+|---|---|---|---|
+| B1 | [m1](./visual-pass/m1.md), [m2](./visual-pass/m2.md) | M1, M2 | light, dark |
+| B2 | [m1](./visual-pass/m1.md) | M1 | light, dark |
+| B3 | [m3](./visual-pass/m3.md) | a04451e3 | dark |
+| B4, B5, B6 | [m2](./visual-pass/m2.md) | M2 | light, dark |
+| B7, B8 | [m4](./visual-pass/m4.md) | a46f1c19 | dark |
+| B9 (session running), B10 | [m5](./visual-pass/m5.md) | 2473be8a, e2cc6eba | light, dark |
+| B9 (no session), B11, B16 | [m6](./visual-pass/m6.md) | bfbf1d01 | dark |
+| B12 (and SC-004: 20 of 20 refreshes within 2 s, max 0.74 s) | [m7](./visual-pass/m7.md) | de6531e0 | light |
+| B13, B17 | [m8](./visual-pass/m8.md) | 49051558 | light |
+| B14 | [m4](./visual-pass/m4.md) | a46f1c19 | light |
+| B15 | [m1](./visual-pass/m1.md), [m2](./visual-pass/m2.md) | M1, M2 | light |
+| B18 | [m3](./visual-pass/m3.md) | a04451e3 (after the showcase fix) | light, dark |
+
+Defects the passes found were fixed before their milestone closed: the showcase diff literal's
+context indent (B18, M3) and the composer taking no keys with a session selected (B9, M5).
+
+### §C — macOS and Windows
+
+Not run (T098): the run had no macOS or Windows host. CI builds and tests both platforms; the
+prompt bytes of SC-006 are pinned by the core prompt tests P1–P10, which run there.
