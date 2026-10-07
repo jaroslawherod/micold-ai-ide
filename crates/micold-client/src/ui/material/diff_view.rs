@@ -842,9 +842,8 @@ mod tests {
     use iced::Size;
     use micold_core::review::diff::parse_unified;
     use micold_core::tokens::{DARK, LIGHT};
-    use std::ops::Range;
 
-    use super::super::virtual_rows::{visible_range_with, ASSUMED_VIEWPORT, OVERSCAN};
+    use super::super::virtual_rows::OVERSCAN;
 
     const TOLERANCE: f32 = 0.5;
 
@@ -852,19 +851,27 @@ mod tests {
         body(diff, DiffLayout::Unified)
     }
 
-    /// The rows `view` builds as it stands: the visible ones and the overscan (D5).
-    fn built_rows<M: Clone>(view: &DiffView<'_, M>) -> Range<usize> {
-        let len = match body(view.diff, view.layout) {
-            Body::Rows(rows) => rows.len(),
-            Body::Side(rows) => rows.len(),
-            Body::Message(_) | Body::Large { .. } => return 0..0,
-        };
-        let viewport = if view.viewport == 0 {
-            ASSUMED_VIEWPORT
-        } else {
-            view.viewport
-        };
-        visible_range_with(view.offset, viewport, ROW_HEIGHT, len, OVERSCAN, &[])
+    /// What the element `view` turns into builds, laid out 800 x 600 px: the height of the spacer
+    /// above the built rows and how many rows were built (D5), read off the list's column (spacer,
+    /// rows, spacer); `None` when it builds no list of rows at all.
+    fn built(view: DiffView<'_, ()>) -> Option<(f32, usize)> {
+        fn list(node: &layout::Node) -> Option<&layout::Node> {
+            if node.children().len() > 2 {
+                return Some(node);
+            }
+            node.children().iter().find_map(list)
+        }
+        let mut element: Element<'_, ()> = view.into();
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+        );
+        let column = list(&node)?;
+        let children = column.children();
+        Some((children[0].bounds().height, children.len() - 2))
     }
 
     fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> DiffLine {
@@ -899,6 +906,11 @@ mod tests {
         let a = cell_xs(&short);
         assert_eq!(a.len(), 4, "old number, new number, marker, text");
         for other in [cell_xs(&added), cell_xs(&removed)] {
+            assert_eq!(
+                other.len(),
+                a.len(),
+                "every row has the same cells: {other:?}"
+            );
             for (cell, (x, y)) in a.iter().zip(&other).enumerate() {
                 assert!(
                     (x - y).abs() < TOLERANCE,
@@ -935,14 +947,18 @@ mod tests {
         let view = DiffView::<()>::new(&diff, DiffLayout::Unified, LIGHT)
             .offset(400_000)
             .viewport(600);
-        let built = built_rows(&view);
+        let (above, count) = built(view).expect("a text diff builds a list of rows");
         let visible = (600.0 / ROW_HEIGHT) as usize + 1;
-        assert!(built.len() <= visible + 2 * OVERSCAN, "built {built:?}");
         assert!(
-            built.contains(&20_000),
-            "row 20,000 is on screen at 400,000 px: {built:?}"
+            (visible..=visible + 2 * OVERSCAN).contains(&count),
+            "only the visible rows and the overscan are built: {count}"
         );
-        let _element: Element<'_, ()> = view.into();
+        let first = (above / ROW_HEIGHT).round() as usize;
+        assert!(
+            (first..first + count).contains(&20_000),
+            "row 20,000 is on screen at 400,000 px: built {first}..{}",
+            first + count
+        );
     }
 
     #[test]
@@ -953,8 +969,7 @@ mod tests {
         assert_eq!(body_u(&FileDiff::Text(vec![])), Body::Message(NO_CONTENT));
         for diff in [FileDiff::Binary, FileDiff::NotUtf8, FileDiff::ModeOnly] {
             let view = DiffView::<()>::new(&diff, DiffLayout::Unified, DARK);
-            assert_eq!(built_rows(&view), 0..0, "no rows, so no gutter");
-            let _element: Element<'_, ()> = view.into();
+            assert_eq!(built(view), None, "no rows, so no gutter: {diff:?}");
         }
     }
 
@@ -977,8 +992,7 @@ mod tests {
             "{message}"
         );
         let view = DiffView::new(&diff, DiffLayout::Unified, LIGHT).on_show_large(());
-        assert_eq!(built_rows(&view), 0..0);
-        let _element: Element<'_, ()> = view.into();
+        assert_eq!(built(view), None, "a large diff builds no rows until shown");
     }
 
     fn cell(kind: LineKind, number: u32, text: &str) -> Cell<'_> {
@@ -1037,7 +1051,8 @@ mod tests {
             cells[0][2] >= NUMBER_WIDTH,
             "the text sits after the number"
         );
-        for (l, r) in [removed_only, added_only] {
+        // The half without a line: the right one of a removal, the left one of an addition.
+        for ((l, r), padded) in [(removed_only, 1), (added_only, 0)] {
             let (h, b, c) = side_layout(l, r);
             assert!(
                 (h - height).abs() < TOLERANCE && (h - ROW_HEIGHT).abs() < TOLERANCE,
@@ -1053,10 +1068,16 @@ mod tests {
                     "a padded half keeps the row height"
                 );
             }
+            assert!(c[padded].is_empty(), "a padded half has no cells: {c:?}");
             for (half, xs) in c.iter().enumerate() {
-                if xs.is_empty() {
+                if half == padded {
                     continue;
                 }
+                assert_eq!(
+                    xs.len(),
+                    cells[half].len(),
+                    "a half with a line has every cell: {c:?}"
+                );
                 for (i, (x, y)) in xs.iter().zip(&cells[half]).enumerate() {
                     assert!(
                         (x - y).abs() < TOLERANCE,

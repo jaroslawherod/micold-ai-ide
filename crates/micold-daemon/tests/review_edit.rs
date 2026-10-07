@@ -663,18 +663,74 @@ async fn w11_deleting_the_worktree_removes_its_comments_from_memory_and_file_and
     );
     assert_eq!(
         f.on_disk().entries.get("").map(Vec::as_slice),
-        Some(&[other][..]),
+        Some(&[other.clone()][..]),
         "the Default entry keeps its own"
     );
 
-    // Gone from memory too: a restarted service has none, and nor has this one on attach.
+    // Gone from memory too: this service on attach, and a restarted one, push the Default
+    // entry's comment and nothing for `feat`.
+    let with_comments = |pushes: Vec<Pushed>| {
+        pushes
+            .into_iter()
+            .filter(|p| !p.comments.is_empty())
+            .map(|p| (p.worktree_dir, p.comments))
+            .collect::<Vec<_>>()
+    };
     let mut again = connect(&state).await;
-    let on_attach = attach(&mut again, &f.project()).await;
+    assert_eq!(
+        with_comments(attach(&mut again, &f.project()).await),
+        vec![(String::new(), vec![other.clone()])],
+        "attach pushes the Default entry's comment and none for the deleted worktree (US4 s5)"
+    );
+    let restarted = f.service();
+    let mut client = connect(&restarted).await;
+    assert_eq!(
+        with_comments(attach(&mut client, &f.project()).await),
+        vec![(String::new(), vec![other])],
+        "a restarted service has no comments for the deleted worktree either (US4 s5)"
+    );
+}
+
+/// `forget_review_worktree` alone, with no worktree refresh after it to prune the entry: the
+/// comments leave memory and the review file, and the empty push goes out (W11, FR-020).
+#[tokio::test]
+async fn w11_forgetting_a_worktree_drops_its_comments_from_memory_and_file_at_once() {
+    let f = Fixture::new();
+    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    let on_attach = attach(&mut a, &f.project()).await;
     assert!(
-        on_attach
-            .iter()
-            .all(|p| p.worktree_dir != "feat" || p.comments.is_empty()),
-        "no comments for the deleted worktree on attach (US4 s5): {on_attach:?}"
+        on_attach.iter().any(|p| p.worktree_dir == "feat"),
+        "`feat`'s comment is in memory before: {on_attach:?}"
+    );
+
+    state.forget_review_worktree(&f.project(), "feat");
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments.len()),
+        ("feat", 0),
+        "the empty ReviewChanged is pushed (W11)"
+    );
+    assert!(
+        !f.on_disk().entries.contains_key("feat"),
+        "its comments are gone from the file (FR-020)"
+    );
+    let left: Vec<(String, usize)> = state
+        .review_pushes_on_attach(&f.project())
+        .iter()
+        .filter_map(pushed)
+        .map(|p| (p.worktree_dir, p.comments.len()))
+        .collect();
+    assert_eq!(
+        left,
+        vec![(String::new(), 1)],
+        "memory keeps only the Default entry's comment"
+    );
+    assert_eq!(
+        f.on_disk().entries.get("").map(Vec::as_slice),
+        Some(&[other][..]),
+        "the Default entry keeps its own"
     );
 }
 

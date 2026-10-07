@@ -210,26 +210,6 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
 mod tests {
     use super::*;
 
-    /// The rows to build for a viewport `viewport` pixels tall scrolled `offset` pixels down a list of
-    /// `len` rows of `row_height` pixels, widened by `overscan` rows on each side and clamped to the
-    /// list. Rows without slots: the reference [`visible_range_with`] must agree with.
-    fn visible_range(
-        offset: u32,
-        viewport: u32,
-        row_height: f32,
-        len: usize,
-        overscan: usize,
-    ) -> Range<usize> {
-        if len == 0 || row_height <= 0.0 {
-            return 0..0;
-        }
-        let first = (offset as f32 / row_height).floor() as usize;
-        let last = ((offset + viewport) as f32 / row_height).ceil() as usize;
-        let start = first.min(len).saturating_sub(overscan);
-        let end = last.saturating_add(overscan).min(len);
-        start..end.max(start)
-    }
-
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -238,34 +218,40 @@ mod tests {
     #[test]
     fn at_the_top_the_viewport_and_the_lower_overscan_are_built() {
         // 320 px shows rows 0..10; nothing above row 0 to overscan.
-        assert_eq!(visible_range(0, 320, ROW, 2_000, 8), 0..18);
+        assert_eq!(visible_range_with(0, 320, ROW, 2_000, 8, &[]), 0..18);
     }
 
     #[test]
     fn in_the_middle_both_overscans_are_built() {
         // Scrolled 100 rows down: rows 100..110 visible.
-        assert_eq!(visible_range(3_200, 320, ROW, 2_000, 8), 92..118);
+        assert_eq!(visible_range_with(3_200, 320, ROW, 2_000, 8, &[]), 92..118);
         // A row cut by the top edge is still built.
-        assert_eq!(visible_range(3_210, 320, ROW, 2_000, 0), 100..111);
+        assert_eq!(visible_range_with(3_210, 320, ROW, 2_000, 0, &[]), 100..111);
     }
 
     #[test]
     fn at_the_end_the_range_is_clamped_to_the_list() {
-        assert_eq!(visible_range(63_680, 320, ROW, 2_000, 8), 1_982..2_000);
+        assert_eq!(
+            visible_range_with(63_680, 320, ROW, 2_000, 8, &[]),
+            1_982..2_000
+        );
         // An offset past the end (a list that shrank under the viewport) builds the tail only.
-        assert_eq!(visible_range(1_000_000, 320, ROW, 2_000, 8), 1_992..2_000);
+        assert_eq!(
+            visible_range_with(1_000_000, 320, ROW, 2_000, 8, &[]),
+            1_992..2_000
+        );
     }
 
     #[test]
     fn an_empty_list_builds_nothing() {
-        assert_eq!(visible_range(0, 320, ROW, 0, 8), 0..0);
+        assert_eq!(visible_range_with(0, 320, ROW, 0, 8, &[]), 0..0);
         assert_eq!(spacers(&(0..0), ROW, 0), (0.0, 0.0));
     }
 
     #[test]
     fn the_spacers_keep_the_total_height() {
         let len = 2_000;
-        let rows = visible_range(3_200, 320, ROW, len, 8);
+        let rows = visible_range_with(3_200, 320, ROW, len, 8, &[]);
         let (above, below) = spacers(&rows, ROW, len);
         assert_eq!(above, rows.start as f32 * ROW);
         assert_eq!(above + rows.len() as f32 * ROW + below, len as f32 * ROW);

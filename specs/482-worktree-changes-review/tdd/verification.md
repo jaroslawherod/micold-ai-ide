@@ -13,6 +13,7 @@ high_smells: 7
 criteria_total: 52 # FR-001..023, SC-001..006, 23 acceptance scenarios
 criteria_covered: 51 # FR-023 is a documentation requirement with no test
 mutation_score: unmeasured # no mutation tool in the profile; 9 deliberate mutants, 8 caught, 1 survived (judged equivalent at system level)
+remediation: findings 1-11 and 17 fixed in the close unit (tasks T101-T106); 5 new deliberate mutants against the fixes for findings 4-8, 5 caught, the forget_worktree survivor among them; the other fixes not mutation-checked; findings 12-16 and 18 left as recorded; the verdict above is the audit's at a0aae859 and the test-after rows stand, since history cannot change
 suite: M8 full gate at c7e2614d (the audited code; only docs and specs changed since) green but the 6 root-only permission tests and the pre-existing history_service_restart hang; core review:: 88 passed, daemon review_edit 10 and review_send 12 passed
 ---
 
@@ -25,6 +26,23 @@ syntax test, an any-outcome match in `features_changes`) and four test-after beh
 The audit was run by the close unit of the same autopilot run that wrote the tests. The history,
 smell and traceability passes ran in fresh-context subagents; every HIGH they cited was opened and
 confirmed before it was recorded here.
+
+**Remediation (close unit, tasks T101–T106).** Findings 1–11 and 17 are fixed: the send and edit
+tests assert the exact comment ids and states pushed (1–3), the toggle and re-read tests the exact
+effect and state (4, 11), `virtual_rows` tests call `visible_range_with` itself (5), the `DiffView`
+tests lay out the element the view builds and read the rows off it (6, 10: every cell counted, a
+padded half asserted empty), `every_fill_is_listed_once` asserts the three distinct roles (7),
+`w11_forgetting_a_worktree_drops_its_comments_from_memory_and_file_at_once` tests
+`forget_worktree` alone (8), the FR-021 test asserts the session started in `wt` received the prompt
+(9), and `diff_layout` moved from `DEFERRED` to a `CHOSEN_ELSEWHERE` record checked against the
+Changes view's control (17). The fixes for findings 4–8 were proven with a deliberate mutant the
+old test missed:
+`forget_worktree` keeping the entry (finding 8's survivor), no queued re-read in `request_read`, no
+clamp on the range's end, `DiffView` ignoring its offset, a repeated fill: all 5 caught. The fixes for findings 1–3 and 9–11 replace weak checks with exact
+assertions and were not mutation-checked; finding 17's is a source-presence check. Findings
+12–16 and 18 (MED/LOW: real sleeps, production prompt builder as oracle, sort-then-compare, test
+helpers, messages, duplicated harness) are left as recorded. The verdict above is the audit's; the
+four test-after rows cannot change.
 
 ## Test-first evidence
 

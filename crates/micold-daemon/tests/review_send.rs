@@ -413,6 +413,30 @@ fn submitted(prompt: &str) -> String {
     format!("\u{1b}[200~{prompt}\u{1b}[201~\n")
 }
 
+/// The last push of a send holds exactly the comments `added` (same ids, same order), each sent
+/// when `sent`, else pending: an empty push passes no `all(...)` check here.
+fn assert_pushed_exactly(
+    pushed: &[ReviewComment],
+    added: &[ReviewComment],
+    sent: bool,
+    rule: &str,
+) {
+    let ids = |comments: &[ReviewComment]| comments.iter().map(|c| c.id).collect::<Vec<_>>();
+    assert_eq!(
+        ids(pushed),
+        ids(added),
+        "the push holds exactly the entry's comments ({rule}): {pushed:?}"
+    );
+    for comment in pushed {
+        assert_eq!(
+            matches!(comment.state, CommentState::Sent { .. }),
+            sent,
+            "each comment is {} ({rule}): {comment:?}",
+            if sent { "sent" } else { "pending" }
+        );
+    }
+}
+
 fn pending(comments: &[ReviewComment]) -> Vec<ReviewComment> {
     comments
         .iter()
@@ -475,10 +499,11 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         "sending shows while the send is open (W6, W8)"
     );
     let last = &seen.last().unwrap().1;
-    assert!(
-        last.iter()
-            .all(|c| matches!(c.state, CommentState::Sent { .. })),
-        "every comment of the send is sent: {last:?}"
+    assert_pushed_exactly(
+        last,
+        &comments,
+        true,
+        "every comment of the send is sent, W8",
     );
 
     let after = add(
@@ -532,7 +557,7 @@ async fn w9_a_terminal_without_bracketed_paste_gets_nothing_and_the_comments_sta
     let project = s.project();
     s.start(sid(1), true).await;
     let mut client = window(&s.state, &project).await;
-    add(
+    let added = add(
         &mut client,
         1,
         &project,
@@ -550,10 +575,7 @@ async fn w9_a_terminal_without_bracketed_paste_gets_nothing_and_the_comments_sta
     assert!(message.contains("paste"), "the message says why: {message}");
     let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "the send is closed");
-    assert!(
-        comments.iter().all(|c| c.state == CommentState::Pending),
-        "nothing is marked sent (FR-017)"
-    );
+    assert_pushed_exactly(&comments, &added, false, "nothing is marked sent, FR-017");
     tokio::time::sleep(QUIET).await;
     assert_eq!(s.typed(sid(1)), "", "nothing was typed");
 }
@@ -585,6 +607,19 @@ async fn fr021_a_prompt_never_reaches_another_entrys_running_session() {
         ),
         "`other`'s session is never the target: {result:?}"
     );
+    // With no session of `wt` running, the send starts one in `wt` and types the prompt there.
+    let new = started_session(&result);
+    let (cwd, _) = s
+        .state
+        .session_cwd_and_cli(new)
+        .expect("the session is kept");
+    assert_eq!(
+        cwd.file_name().and_then(|name| name.to_str()),
+        Some("wt"),
+        "the started session runs in `wt`, the entry sent from (FR-021): {}",
+        cwd.display()
+    );
+    s.typed_holds(new, "For wt only.").await;
     tokio::time::sleep(QUIET).await;
     assert!(
         !s.typed(sid(3)).contains("For wt only."),
@@ -696,11 +731,7 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
     );
     let (_, last, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "the send is closed");
-    assert!(
-        last.iter()
-            .all(|c| matches!(c.state, CommentState::Sent { .. })),
-        "the comments are sent (US3 s1): {last:?}"
-    );
+    assert_pushed_exactly(&last, &comments, true, "the comments are sent, US3 s1");
     assert!(
         s.state.live_session(new).is_some_and(|pty| pty.is_alive()),
         "the session the send started keeps running"
@@ -775,7 +806,7 @@ async fn us3_s2_an_ai_cli_that_cannot_start_leaves_the_comments_pending() {
     let s = Sandbox::new().await;
     let project = s.project();
     let mut client = window(&s.state, &project).await;
-    add(
+    let added = add(
         &mut client,
         1,
         &project,
@@ -794,9 +825,11 @@ async fn us3_s2_an_ai_cli_that_cannot_start_leaves_the_comments_pending() {
     assert!(!message.is_empty(), "the error says why");
     let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "`sending` is cleared (W9)");
-    assert!(
-        comments.iter().all(|c| c.state == CommentState::Pending),
-        "every comment stays pending (US3 s2, FR-017)"
+    assert_pushed_exactly(
+        &comments,
+        &added,
+        false,
+        "every comment stays pending, US3 s2, FR-017",
     );
     assert!(s.inputs().is_empty(), "nothing was typed anywhere");
 }
@@ -810,7 +843,7 @@ async fn us3_s2_a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed() {
     let project = s.project();
     std::fs::remove_file(s._home.path().join(".claude.json")).unwrap();
     let mut client = window(&s.state, &project).await;
-    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Not typed.").await;
+    let added = add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Not typed.").await;
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let (kind, message) = result.expect_err("the send fails");
@@ -821,9 +854,11 @@ async fn us3_s2_a_cli_that_would_ask_to_trust_the_folder_gets_nothing_typed() {
     );
     let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "`sending` is cleared (W9)");
-    assert!(
-        comments.iter().all(|c| c.state == CommentState::Pending),
-        "every comment stays pending"
+    assert_pushed_exactly(
+        &comments,
+        &added,
+        false,
+        "every comment stays pending, FR-017",
     );
     // The session starts (its stand-in creates an empty input file); the prompt is never typed.
     assert!(
@@ -840,7 +875,7 @@ async fn w9_a_session_not_ready_within_the_bound_gets_nothing_and_the_comments_s
     s.state.set_first_prompt_bound(Duration::from_secs(1));
     s.slow(3.0);
     let mut client = window(&s.state, &project).await;
-    add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Too early.").await;
+    let added = add(&mut client, 1, &project, "wt", "a", 1, &["x"], "Too early.").await;
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let (kind, message) = result.expect_err("the send fails");
@@ -848,9 +883,11 @@ async fn w9_a_session_not_ready_within_the_bound_gets_nothing_and_the_comments_s
     assert!(message.contains("ready"), "the message says why: {message}");
     let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "`sending` is cleared (W9)");
-    assert!(
-        comments.iter().all(|c| c.state == CommentState::Pending),
-        "every comment stays pending (FR-017)"
+    assert_pushed_exactly(
+        &comments,
+        &added,
+        false,
+        "every comment stays pending, FR-017",
     );
     tokio::time::sleep(Duration::from_secs(3) + QUIET).await;
     assert!(

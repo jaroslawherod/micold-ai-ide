@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Draft
+**Status**: Closed 2026-10-07 — shipped in PR #624
 
 **Input**: User description: "Implement GitHub issue #482: Review a worktree's changes with inline
 comments and send them to the session. Problem: reviewing what an agent changed in a worktree means

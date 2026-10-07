@@ -103,6 +103,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M8 (conformance, sonnet) | 1 | aa905d18ec5f1460e73484105375922b16cd6626:49051558c35a557ee260fadf3d01658ffef24424 | CLEAN; 3 MINOR: F1 Verify not runnable in its sandbox (the full gate ran `review_edit`: 10 passed); F2 declined; F3 fixed (`DiscardCancelled` arm moved above the connection arm's comment block) |
 | Visual pass M8 (T097) | 1 | 49051558 | B13 (Clear sent; Discard pending… Cancel, then confirm) and B17 (delete `wt` with its view open; empty after restart) pass in light (`visual-pass/m8.md`); no defect |
 | Gate M8 (full, raw commands, `--no-fail-fast`) | full | 37b6b00864c4ea23e70b9f64aa873c15d904a671:c7e2614d4918abd18d88c9d327f97efc0b354e18 (+ F3 move) | green except the 6 root-only permission tests (pass in CI) and one hang of `history_service_restart::a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order` (killed after ~16 min). Pre-existing flake, not M8: the binary built at M7 (411f25a5) hangs the same way (2 of 6 parallel runs each, M7 and M8); alone or `--test-threads=1` it passes 10 of 10. Scripts rerun outside the build lock (the first run deadlocked on a nested `build-lock.sh` because the gate itself held the lock): 18 scripts, no SCRIPT_FAIL. `review_edit` 10, `features_changes` 54 passed |
+| Review close (tests and docs) | 1 | 3a368b170332cbf6292ac222247b9326f82699d0:2983d642c4d62c21ee749fc9d8db9eab7ed8392a | CHANGES: F1 MAJOR (verification.md and tasks.md claimed every fix mutant-proven; only findings 4–8 were) fixed by rewording; round 2 due |
 
 ## Declined review findings
 
@@ -119,13 +120,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit 1 handed over at the context cap (2026-10-07).
+Close unit 2 handed over at the context cap (2026-10-07).
 
-Done: converge (subagent): no unbuilt behaviour, 3 LOW test-gap notes (no e2e watcher test, no SC-003 timing, no fill-colour assertion), no new milestone. speckit-tdd-verify: `tdd/verification.md` written, verdict FAIL (7 HIGH smells, 4 test-after); 9 deliberate mutants, 8 caught, `forget_worktree` survivor. Remediation appended as tasks.md Phase 8, T101–T106. T100 done: guide wording fixed (Default menu, 2,000-byte colouring cap). T098/T099: quickstart `## Results` records §B per milestone pass and §C not run (no macOS/Windows host); leave both unticked, listed under Follow-ups.
+Done: the detached workers changed nothing (their `claude -p` runs were denied file writes), so this unit made the T101–T106 fixes itself (test code only; production diff empty), ticked T101–T106, added the Remediation note to `tdd/verification.md`, set spec `**Status**: Closed 2026-10-07 — shipped in PR #624`. Tests green (`$SCRATCHPAD/close-tests-2.log`: daemon review_edit 11, review_send 12; client features_changes 54, settings_sections 15, lib virtual_rows/diff_view/syntax 28). Mutants (`close-mutants*.log`): D5 `forget_worktree` remove→get, C1 no queued re-read, C2 unclamped end, C3 DiffView ignores offset, C4 repeated fill: all caught.
 
-In flight, uncommitted: two detached `autopilot-worker` (sonnet) fix runs editing test code only: client C1–C6 (T102–T105 client part), output `$SCRATCHPAD/fix-client.out`; daemon D1–D5 (T101, T105 daemon part), output `$SCRATCHPAD/fix-daemon.out`. Each ends with `WORKER_EXIT=`; hold on them. Then vet their diff, tick T101–T105 that hold, do T106, rerun the two crates' tests, update verification.md's frontmatter/verdict paragraph with a "Remediation" note (re-audit not needed for test-after rows: history cannot change).
+In flight: full gate (raw commands, `--no-fail-fast`) started detached on snapshot `3a368b17…:2983d642`, log `$SCRATCHPAD/gate-close-1.log` (fmt, clippy core and workspace already OK; ends with `GATE_EXIT=`). The known `history_service_restart` hang may stall it: kill that test binary if it runs past ~10 min. Six root-only permission tests fail locally (pass in CI).
 
-Next: review of the close diff (review.md, no rubric: correctness of the tests, truth of the docs), full gate (test code changed), spec `**Status**: Closed <date> — shipped in PR #624`, Phase `done`, Next step `handoff`, commit, write `$SCRATCHPAD/pr-body-482-close.md`, return `PR: #624`. Scratchpad: /tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad.
+Next: (1) round 2 of the close review on sonnet: round 1 (`review-close-r1.out`) gave F1 MAJOR — verification.md and tasks.md claimed every fix was mutant-proven; fixed by rewording (findings 4–8 mutant-proven, 1–3 and 9–11 exact assertions not mutation-checked, 17 a source-presence check). Fix diff `$SCRATCHPAD/fix-diff-close-r2.txt`; prompt base `$SCRATCHPAD/review-close-r1.txt`; run with `run-review.sh <prompt> <out> sonnet`. (2) Hold on the gate. (3) Phase `done`, Next step `handoff`, *Pull requests* row for #624, commit, write `$SCRATCHPAD/pr-body-482-close.md` (close PR body per tasks/pr.md), return `PR: #624`. Scratchpad: /tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad.
 
 ## Open escalation
 
