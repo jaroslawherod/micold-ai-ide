@@ -14,7 +14,10 @@ use std::pin::Pin;
 use std::sync::Once;
 use std::task::{Context, Poll, Waker};
 
+use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer::Headless;
+use iced::advanced::widget::Tree;
+use iced::{Element, Size};
 
 /// Poll a future known to be immediately ready.
 ///
@@ -61,4 +64,42 @@ pub fn renderer() -> iced::Renderer {
         Some("tiny-skia"),
     ))
     .expect("the tiny-skia headless renderer must construct without a GPU")
+}
+
+/// `element` laid out in `room`, as the component tests lay out what they measure.
+fn laid_out<M>(mut element: Element<'_, M>, room: Size) -> layout::Node {
+    let renderer = renderer();
+    let mut tree = Tree::new(element.as_widget());
+    element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout::Limits::new(Size::ZERO, room))
+}
+
+/// Whether `host`, laid out in `room`, holds a box of `part`'s own size (`part` laid out alone in
+/// the same room) wholly inside the host's own box.
+///
+/// A host of fixed height keeps that height whatever it holds, so measuring the host alone cannot
+/// show a part that no longer fits it: iced clamps the part instead, shrinking it or pushing it
+/// past the host's edge. Both leave no box of the part's own size inside the host, which is what
+/// this looks for. The host's own box is not a candidate.
+pub fn holds_whole<M>(host: Element<'_, M>, part: Element<'_, M>, room: Size) -> bool {
+    const TOLERANCE: f32 = 0.5;
+    let want = laid_out(part, room).size();
+    let host = laid_out(host, room);
+    let outer = Layout::new(&host).bounds();
+    let mut boxes: Vec<Layout<'_>> = Layout::new(&host).children().collect();
+    while let Some(candidate) = boxes.pop() {
+        let b = candidate.bounds();
+        let same_size = (b.width - want.width).abs() < TOLERANCE
+            && (b.height - want.height).abs() < TOLERANCE;
+        let inside = b.x >= outer.x - TOLERANCE
+            && b.y >= outer.y - TOLERANCE
+            && b.x + b.width <= outer.x + outer.width + TOLERANCE
+            && b.y + b.height <= outer.y + outer.height + TOLERANCE;
+        if same_size && inside {
+            return true;
+        }
+        boxes.extend(candidate.children());
+    }
+    false
 }

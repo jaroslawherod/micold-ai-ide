@@ -10,222 +10,32 @@
 //! the hook receiver drives it: `note_activity`, then `broadcast_catalog` when the signal changed.
 
 use std::collections::BTreeMap;
-use std::path::Path;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    ActivitySignal, CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, SessionSummary,
-    WindowView,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+    ActivitySignal, CatalogSnapshot, ClientMsg, DaemonMsg, WindowView,
 };
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
-use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::activity::{ActivityEvent, HookKind};
-use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use micold_daemon::supervisor::PtySession;
-use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-use uuid::Uuid;
 
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-/// How long a window waits for a message the service owes it.
-const OWED: Duration = Duration::from_secs(10);
-
-fn session_id(n: u128) -> SessionId {
-    SessionId::from_uuid(Uuid::from_u128(n))
-}
+#[path = "support/attention.rs"]
+mod attention;
+use attention::{
+    catalog_on, connect, find_summary, next_frame, process_that_exits, session_id, summary,
+    wait_dead, Service, Window, OWED,
+};
 
 const A: u128 = 0xA;
 const B: u128 = 0xB;
 const C: u128 = 0xC;
-
-/// A service on a store directory, with one project and its sessions, each of them live.
-struct Service {
-    state: Arc<DaemonState>,
-    store: tempfile::TempDir,
-    _project: tempfile::TempDir,
-    _live: Vec<Arc<PtySession>>,
-}
-
-impl Service {
-    /// A service whose catalog holds `sessions`, each backed by an idle process.
-    fn with_sessions(sessions: &[SessionId]) -> Self {
-        let store = tempfile::tempdir().expect("a store directory");
-        let project = tempfile::tempdir().expect("a project directory");
-        let workspace = Workspace {
-            projects: vec![Project::new(
-                project.path().to_path_buf(),
-                false,
-                Availability::Available,
-            )],
-            active: Some(project.path().to_path_buf()),
-            sessions: BTreeMap::from([(
-                project.path().to_path_buf(),
-                sessions
-                    .iter()
-                    .map(|id| {
-                        Session::restored(
-                            *id,
-                            SessionLocation::Default,
-                            SessionLabel::Pending,
-                            TerminalMode::AiCli,
-                            AiCli::ClaudeCode,
-                        )
-                    })
-                    .collect(),
-            )]),
-            ..Default::default()
-        };
-        JsonFileStore::at(store.path().join("projects.json"))
-            .save(&workspace)
-            .expect("the catalog saves");
-
-        let state = Arc::new(DaemonState::new(catalog_on(store.path())));
-        let live = sessions
-            .iter()
-            .map(|id| state.register_session(idle_process(*id)))
-            .collect();
-        Self {
-            state,
-            store,
-            _project: project,
-            _live: live,
-        }
-    }
-
-    /// The session changes to working: its user sent a prompt.
-    fn works(&self, session: SessionId) {
-        self.signal(session, HookKind::UserPromptSubmit);
-    }
-
-    /// The session changes to awaiting input: its turn ended.
-    fn waits(&self, session: SessionId) {
-        self.signal(session, HookKind::Stop);
-    }
-
-    /// Deliver one hook the way `hooks.rs` does: the catalog is sent when the signal changed.
-    fn signal(&self, session: SessionId, hook: HookKind) {
-        if self.state.note_activity(session, ActivityEvent::Hook(hook)) {
-            self.state.broadcast_catalog();
-        }
-    }
-
-    /// A full turn that ends with the session awaiting input.
-    fn finishes_a_turn(&self, session: SessionId) {
-        self.works(session);
-        self.waits(session);
-    }
-
-    /// The sequence the service holds for `session` now.
-    fn attention_seq(&self, session: SessionId) -> u64 {
-        summary(&self.state.catalog_snapshot(), session).attention_seq
-    }
-}
-
-/// The catalog the service loads from `store`: what a start of the service on that directory reads.
-fn catalog_on(store: &Path) -> Catalog {
-    Catalog::load(
-        Box::new(JsonFileStore::at(store.join("projects.json"))),
-        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
-    )
-}
-
-/// A process that stays alive and prints nothing: `cat` (`cmd /q` on Windows).
-fn idle_process(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
-}
-
-/// A process that exits at once with success.
-fn process_that_exits(id: SessionId) -> PtySession {
-    #[cfg(unix)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("sh");
-        cmd.arg("-c");
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
-        cmd
-    };
-    cmd.arg("exit 0");
-    cmd.cwd(std::env::temp_dir());
-    PtySession::spawn(id, cmd, 100, None).expect("a process that exits starts")
-}
-
-fn summary(snapshot: &CatalogSnapshot, id: SessionId) -> SessionSummary {
-    find_summary(snapshot, id).expect("the session is in the snapshot")
-}
-
-fn find_summary(snapshot: &CatalogSnapshot, id: SessionId) -> Option<SessionSummary> {
-    snapshot
-        .projects
-        .iter()
-        .flat_map(|p| &p.sessions)
-        .find(|s| s.id == id)
-        .cloned()
-}
-
-/// Connect a window and take its `Welcome`. It attaches to no project.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { .. })) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    window
-}
-
-/// The window's next frame, or `None` once the service closed the connection.
-async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
-    tokio::time::timeout(OWED, window.next())
-        .await
-        .expect("the service answers in time")
-        .map(|frame| frame.expect("a well-formed frame"))
-}
 
 /// Report what the window has in view, and return every control message the service sent before
 /// it answered the `Ping` that follows the report. A connection's messages are handled in order,
@@ -275,17 +85,6 @@ async fn closes(mut window: Window) {
         .await
         .expect("the goodbye is sent");
     while next_frame(&mut window).await.is_some() {}
-}
-
-fn wait_dead(pty: &PtySession) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while pty.is_alive() {
-        assert!(
-            Instant::now() < deadline,
-            "the process did not exit in time"
-        );
-        std::thread::sleep(Duration::from_millis(20));
-    }
 }
 
 /// U69 (W1.3, FR-001): the change counts once, and every window is sent the new sequence.
@@ -584,6 +383,64 @@ async fn the_supervisor_tick_writes_the_sequence_to_the_store() {
         .attention_seq,
         1,
         "the store holds the sequence after one tick's write step"
+    );
+}
+
+/// FR-008a, issue #572: the supervisor loop itself calls the write step. Nothing but the loop runs
+/// here, so a loop that stopped calling `write_unsaved_attention` leaves the store at 0.
+#[tokio::test]
+async fn the_supervisor_loop_stores_the_sequence_without_being_asked() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    service.finishes_a_turn(a);
+
+    micold_daemon::server::spawn_supervisor(std::sync::Arc::clone(&service.state));
+
+    let deadline = Instant::now() + OWED;
+    loop {
+        let stored = summary(
+            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
+            a,
+        )
+        .attention_seq;
+        if stored == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the supervisor loop did not store the sequence in time (the store holds {stored})"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// U74, U118, A13 (FR-005, FR-008, US1 scenario 13), the service's half: with no window open the
+/// change is counted and granted to nobody; the window opened afterwards learns the sequence in its
+/// `Welcome`, which a client takes as its starting point, and is sent no grant it did not claim.
+#[tokio::test]
+async fn a_change_with_no_window_open_reaches_the_next_window_only_as_its_starting_sequence() {
+    let a = session_id(A);
+    let service = Service::with_sessions(&[a]);
+    service.finishes_a_turn(a);
+
+    let (mut window, welcome) = attention::connect_with_welcome(&service.state, "next").await;
+
+    let DaemonMsg::Welcome { catalog, .. } = welcome else {
+        unreachable!("connect_with_welcome returns a Welcome");
+    };
+    assert_eq!(
+        summary(&catalog, a).attention_seq,
+        1,
+        "the window opened afterwards is told the sequence the change left"
+    );
+    let unclaimed: Vec<DaemonMsg> = reports(&mut window, true, None)
+        .await
+        .into_iter()
+        .filter(|msg| matches!(msg, DaemonMsg::AttentionGranted { .. }))
+        .collect();
+    assert!(
+        unclaimed.is_empty(),
+        "nothing grants the earlier change to the new window: {unclaimed:?}"
     );
 }
 

@@ -255,4 +255,19 @@ fn a_button_with_an_unread_count_keeps_its_height() {
          {}dp for both",
         micold_core::tokens::density::BUTTON_BASE,
     );
+    // The height above is `Length::Fixed`, so it holds whatever the button holds. What shows a
+    // count that does not fit is the count itself, clamped or pushed out (F10, issue #572).
+    let button: Element<'static, Message> = Button::text("micold-ai-ide", r)
+        .leading(Icon::OpenProject)
+        .trailing_mark(3, super::unread_total_tooltip(3))
+        .on_press(Message::NoOp)
+        .into();
+    let mark: Element<'static, Message> = super::UnreadMark::new(r)
+        .count(3)
+        .role(TypeRole::Action)
+        .into();
+    assert!(
+        super::test_support::holds_whole(button, mark, ROOM),
+        "the unread count is not laid out whole inside the button"
+    );
 }
