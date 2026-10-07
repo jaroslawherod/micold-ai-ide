@@ -254,7 +254,7 @@ pub struct DiffView<'a, M> {
     gutters: Gutters<'a, M>,
     slots: BTreeMap<Anchor, Vec<Element<'a, M>>>,
     slot_heights: BTreeMap<Anchor, f32>,
-    on_slot_measured: Option<Rc<dyn Fn(Side, u32, f32) -> M + 'a>>,
+    on_slot_measured: Option<OnMeasured<'a, M>>,
 }
 
 impl<'a, M: Clone + 'a> DiffView<'a, M> {
@@ -770,12 +770,15 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
     }
 }
 
+/// What a slot's measured height sends: its anchor's side and line, and the height.
+type OnMeasured<'a, M> = Rc<dyn Fn(Side, u32, f32) -> M + 'a>;
+
 /// The slots of a view: which row each anchor hangs under, and the elements, taken as their row is
 /// built (each row is built once per view).
 struct Slots<'a, M> {
     rows: BTreeMap<usize, Vec<Anchor>>,
     elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
-    on_measured: Option<Rc<dyn Fn(Side, u32, f32) -> M + 'a>>,
+    on_measured: Option<OnMeasured<'a, M>>,
 }
 
 impl<'a, M: 'a> Slots<'a, M> {

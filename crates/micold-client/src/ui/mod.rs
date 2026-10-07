@@ -280,6 +280,33 @@ pub fn view<'a>(
     connection: &ConnectionStatus,
     sandbox: &crate::features::sandbox::Sandbox,
 ) -> Element<'a, Message> {
+    view_with(
+        state,
+        grid,
+        selection,
+        display_offset,
+        dismissing,
+        env_include_outcome,
+        connection,
+        sandbox,
+        None,
+    )
+}
+
+/// [`view`], with the review composer's editor (feature 482, C2), which only the binary holds.
+/// Without it an open composer shows its text read-only.
+#[allow(clippy::too_many_arguments)]
+pub fn view_with<'a>(
+    state: &'a State,
+    grid: Option<&'a crate::grid::GridCache>,
+    selection: Option<&'a crate::selection::Selection>,
+    display_offset: usize,
+    dismissing: Option<&'a crate::overlay::registry::Closing>,
+    env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
+    connection: &ConnectionStatus,
+    sandbox: &crate::features::sandbox::Sandbox,
+    composer: Option<&'a iced::widget::text_editor::Content>,
+) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
     let bg = roles.background;
@@ -320,7 +347,7 @@ pub fn view<'a>(
     } else if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if let Some(view) = state.changes.open.as_ref() {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open.
-            changes::view(state, view, scheme)
+            changes::view(state, view, scheme, composer)
         } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
             terminal::pane(state, grid, selection, display_offset, scheme, link_context)

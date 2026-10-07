@@ -12,8 +12,12 @@
 //! M3 (T047) adds the side-by-side layout and the syntax colours: the same Rust diff side by side,
 //! then coloured in each layout, the colours highlighted by the very function the Changes view runs
 //! (`ui::syntax::highlight`) for the scheme the page is in.
+//!
+//! M4 (T061) adds the commenting parts: `TextArea` empty, multi-line and (live) focused,
+//! `ReviewCommentCard` in each state it can be in, and a `DiffView` with a picked range and a card
+//! hanging under it.
 
-use iced::widget::{container, row};
+use iced::widget::{column, container, row, text_editor};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
 
@@ -23,12 +27,15 @@ use crate::showcase::state::{Message, Showcase};
 use std::sync::LazyLock;
 
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
+use micold_core::review::{LineRange, Side};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
 
 use crate::ui::syntax;
 
-use crate::ui::material::{DiffLayout, DiffView, Tag, Text, TypeRole, VirtualRows};
+use crate::ui::material::{
+    CardState, DiffLayout, DiffView, ReviewCommentCard, Tag, Text, TextArea, TypeRole, VirtualRows,
+};
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
 pub const LONG_LIST: usize = 2_000;
@@ -145,7 +152,7 @@ static LARGE: FileDiff = FileDiff::TooLarge {
 const DIFF_HEIGHT: f32 = 200.0;
 
 /// `DiffView` — a unified and a side-by-side diff, both again syntax-coloured, a binary file's
-/// message, and the large-file gate.
+/// message, the large-file gate, and a picked range with a comment under it.
 pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let pose = |diff: &'static FileDiff| {
         container(DiffView::new(diff, DiffLayout::Unified, roles).on_show_large(Message::NoOp))
@@ -181,7 +188,107 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
             ),
             posed("binary message", pose(&BINARY), roles),
             posed("large-file gate", pose(&LARGE), roles),
+            picked_range(roles),
         ],
         Layout::FullWidth,
+    )
+}
+
+/// The comment the card and picked-range poses show.
+const COMMENT: &str = "Pass the height through instead of reading it twice.";
+
+thread_local! {
+    /// The text areas' contents: an empty one and a multi-line one. Leaked once per thread, as the
+    /// page holds them for its whole run and `TextArea` borrows them for the frame.
+    static AREAS: &'static [text_editor::Content; 2] = Box::leak(Box::new([
+        text_editor::Content::new(),
+        text_editor::Content::with_text(
+            "Pass the height through instead of reading it twice.\n\
+             `draw` already gets the width from the caller,\n\
+             so the two stay in step.",
+        ),
+    ]));
+}
+
+/// The width a text area or card is posed at: about the diff pane's in a laptop window.
+const COMMENT_WIDTH: f32 = 480.0;
+
+/// `TextArea` — empty with its placeholder, and grown to three lines. The empty one takes focus
+/// when clicked (its edits go nowhere here), which is the focused pose.
+pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let [empty, multi] = AREAS.with(|areas| {
+        let areas: &'static [text_editor::Content; 2] = areas;
+        [&areas[0], &areas[1]]
+    });
+    let sized = |area: TextArea<'a, Message>| container(area).width(Length::Fixed(COMMENT_WIDTH));
+    arrange(
+        vec![
+            posed(
+                "empty (click it: focused)",
+                sized(
+                    TextArea::new(empty, roles)
+                        .placeholder("Comment")
+                        .on_action(|_| Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
+                "multi-line",
+                sized(TextArea::new(multi, roles).placeholder("Comment")),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `ReviewCommentCard` — pending (Edit, Delete), sent, outdated, and pending in a send.
+pub fn review_comment<'a>(
+    _showcase: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    let card = |state| {
+        let card = ReviewCommentCard::new(COMMENT, state, roles);
+        if state == CardState::Pending {
+            card.on_edit(Message::NoOp).on_delete(Message::NoOp)
+        } else {
+            card
+        }
+    };
+    let sized =
+        |card: ReviewCommentCard<'a, Message>| container(card).width(Length::Fixed(COMMENT_WIDTH));
+    arrange(
+        vec![
+            posed("pending", sized(card(CardState::Pending)), roles),
+            posed("sent", sized(card(CardState::Sent)), roles),
+            posed(
+                "outdated",
+                sized(card(CardState::Pending).outdated(true)),
+                roles,
+            ),
+            posed("in a send", sized(card(CardState::InSend)), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `DiffView` with new lines 12–13 picked and a pending card hanging under the last of them.
+fn picked_range<'a>(roles: Roles) -> Element<'a, Message> {
+    let range = LineRange::new(12, 13).expect("12 <= 13");
+    let diff = DiffView::new(&UNIFIED, DiffLayout::Unified, roles)
+        .pick(Side::New, range)
+        .on_gutter(|_, _, _| Message::NoOp)
+        .slot(
+            Side::New,
+            13,
+            column![ReviewCommentCard::new(COMMENT, CardState::Pending, roles)
+                .on_edit(Message::NoOp)
+                .on_delete(Message::NoOp)],
+        );
+    posed(
+        "picked range with a comment",
+        container(diff).height(Length::Fixed(DIFF_HEIGHT + 120.0)),
+        roles,
     )
 }

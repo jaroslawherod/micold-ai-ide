@@ -206,6 +206,10 @@ struct App {
     /// the scene that legitimately blinks — it settles and is pressed again on the frame after.
     /// `Cell` because it is tallied from `view`, which only ever gets `&App`.
     scene_ripple_frames: std::cell::Cell<usize>,
+    /// The review composer's editor (feature 482, C2): cursor, selection and text. The reducer
+    /// holds the text (`OpenView::composer`); this holds what `text_editor` needs beside it, kept
+    /// in step by `shell::changes`.
+    composer: iced::widget::text_editor::Content,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -606,6 +610,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         Message::Changes(msg) => shell::changes::update(app, msg),
+        Message::ComposerAction(action) => shell::changes::composer_action(app, action.0),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
@@ -974,7 +979,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
 fn render(app: &App) -> iced::Element<'_, Message> {
     // Render the displayed session from its daemon-streamed grid cache + the client-side selection
     // and scroll offset (feature 010). The daemon is the single source of screen state.
-    micold_client::ui::view(
+    micold_client::ui::view_with(
         &app.core,
         app.attached_grid(),
         app.selection.as_ref(),
@@ -983,6 +988,7 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         &app.env_include_last_outcome,
         &connection_status(app),
         &app.sandbox,
+        Some(&app.composer),
     )
 }
 

@@ -4,7 +4,7 @@
 //! iced 0.14 has no virtual list, and a `column` of 2,000 rows lays out every one of them on each
 //! frame. This one builds the rows inside the viewport plus an overscan, with a spacer above and
 //! below so the scrollbar still measures `len * row_height`. Rows have one fixed height, which is
-//! what keeps the arithmetic exact; the arithmetic itself is the pure [`visible_range`].
+//! what keeps the arithmetic exact; the arithmetic itself is the pure [`visible_range_with`].
 //!
 //! The scroll offset and viewport height are the caller's state: the view is rebuilt from them, so
 //! the caller stores what [`VirtualRows::on_scroll`] reports and passes it back.
@@ -28,7 +28,8 @@ pub const ASSUMED_VIEWPORT: u32 = 1_200;
 
 /// The rows to build for a viewport `viewport` pixels tall scrolled `offset` pixels down a list of
 /// `len` rows of `row_height` pixels, widened by `overscan` rows on each side and clamped to the
-/// list.
+/// list. Rows without slots: the tests' reference for [`visible_range_with`].
+#[cfg(test)]
 pub fn visible_range(
     offset: u32,
     viewport: u32,
@@ -54,8 +55,10 @@ pub fn spacers(rows: &Range<usize>, row_height: f32, len: usize) -> (f32, f32) {
     (above, below)
 }
 
-/// [`visible_range`] for a list whose rows `extras` carry slots under them: each `(index, height)`
-/// adds `height` pixels under row `index`, sorted by index (feature 482, T054).
+/// The rows to build for a viewport `viewport` pixels tall scrolled `offset` pixels down a list of
+/// `len` rows of `row_height` pixels, widened by `overscan` rows on each side and clamped to the
+/// list, where `extras` hang slots under rows: each `(index, height)` adds `height` pixels under
+/// row `index`, sorted by index (feature 482, T054).
 pub fn visible_range_with(
     offset: u32,
     viewport: u32,

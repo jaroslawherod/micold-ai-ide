@@ -21,7 +21,9 @@ One row per changed file:
 - what happened to it: **Added**, **Modified**, **Deleted**, **Renamed from** `<old path>` or
   **Mode** (only its permissions changed). A file git does not track yet counts as **Added**;
 - **Binary** or **Not text** when the file's contents are not readable text;
-- `+a −r`: how many lines were added and removed.
+- `+a −r`: how many lines were added and removed;
+- how many comments you have written on the file and not sent yet (see
+  [Commenting on lines](#commenting-on-lines)), when there are any.
 
 A file changed both in a commit and again since is listed once, with the combined change. Long
 lists scroll smoothly: only the rows on screen are drawn.
@@ -83,6 +85,44 @@ A renamed file whose contents did not change says **The content did not change**
 A file with more than 5,000 changed lines, or a version larger than 2 MB, is not drawn straight
 away. The diff area shows how many lines were added and removed and a **Show diff** button; press it
 to read and show the whole diff. The view remembers the choice for that file until it closes.
+
+## Commenting on lines
+
+You can leave comments on the diff, the way you would in a code review, for the session to act on
+later.
+
+### Picking lines
+
+Click a line's number to pick that line; its numbers fill in. To pick several lines in a row,
+**Shift**-click another line's number on the same side: every line between the two is picked. A
+pick is either removed lines or added and unchanged lines, never both; clicking a number on the
+other side starts a new pick. An unchanged line counts as part of the new version. In the side by
+side layout, click the number on the side you mean. Binary, non-text and large files that are not
+shown cannot be commented on.
+
+### Writing a comment
+
+With lines picked, press **Add comment** under them. A text box opens under the last picked line;
+write the comment and press **Save** (or **Ctrl+Enter**, **Cmd+Enter** on macOS). **Cancel** closes
+it without saving. **Save** stays unavailable while the box is empty.
+
+The comment then shows as a card under its last line, marked **Pending** until it is sent to a
+session. The text you are writing is kept while the list or the diff is read again.
+
+### Editing and deleting
+
+A pending comment's card has **Edit** and **Delete**. **Edit** opens the text box in its place with
+the comment's text; **Save** keeps the new text. **Delete** removes the comment straight away.
+
+A comment whose lines the diff on screen does not show — for example because you turned off the
+kind of change it is on — is listed under **Not in the current diff** above that file's diff, with
+the lines it is on.
+
+### Where comments are kept
+
+Comments belong to the worktree (or the Default entry) they were written in, and the session
+service keeps them: they are still there after you restart the app, and every window open on the
+project shows the same comments as they are added, edited and deleted.
 
 ## The base line
 
