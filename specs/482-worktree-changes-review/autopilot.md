@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: M8: review A round 2 (sonnet, fix diff) + scoped gate, then review B + visual pass B13/B17 (T097), full gate, PR-body section
+- **Next step**: M8: review B result, T097 visual pass (prepared, see Handover), full gate, PR-body section
 
 ## Pull requests
 
@@ -99,6 +99,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Gate M7 (full, raw commands, b05e78ee) | full | 00aa5c2b98be8fb30202acd473c24c759a4fba20:b05e78eed6cf8f1a0629a8be84edbfdcf7de15ca | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
 | Gate M8 (scoped, d5d77ffa) | scoped | — | red: `popover_displacement::every_popover_is_in_the_table` (dialog count 12 → 13); fixed. The client run after it hit a full disk (`No space left`): `cargo clean -p` of the three workspace crates freed 26 GiB |
 | Review A M8 (code-review high) | 1 | 5550a1436bf5abe77ebb811936ce8f44ab624f28:d5d77ffaf356418bd3d77b00ed2b4da185669324 | CHANGES: F1 MAJOR (unreadable repo prunes every worktree) fixed red first (`an_unreadable_repository_prunes_nothing_on_refresh`); F2 MAJOR (offline included worktree pruned) fixed (an included path counts as gone only when its parent folder can be read); F4 MINOR fixed (confirm re-checks there is something pending; test added with the fix, not red first); F3, F5 MINOR declined |
+| Review A M8 (code-review high, sonnet, fix diff) | 2 | f6e13d5bfa152a6e9b5b6f7f4ebcb29ccdc57f1a:2ecb60db9250d6d1a17e9ec726ea5ffc90a403aa | CLEAN, no findings (F1, F2, F4 fixed; F3, F5 declined stand) |
+| Review B M8 (conformance, sonnet) | 1 | aa905d18ec5f1460e73484105375922b16cd6626:49051558c35a557ee260fadf3d01658ffef24424 | running |
 
 ## Declined review findings
 
@@ -114,7 +116,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M8 unit 2 (context cap). Done: T090–T096 green and ticked (core 22, `review_edit` 10, `features_changes` 54, overlay guards at 13 dialogs / 11 snapshots, `popover_displacement` DIALOGS 13); user guide §Clearing and discarding, §When a worktree is removed (T096); review A M8 round 1 fixed/declined, round 2 CLEAN. Scoped gate 49051558: fmt + clippy green, tests stopped at the root-only `settings_refuses_save_over_failed_read` (expected locally; no other failure seen before it). Review B M8 round 1 was dispatched detached at snapshot aa905d18…:49051558 — its result lands in scratchpad `review-B-M8-r1.out` (prompt `review-B-M8-r1.txt`); read it, act per review-rounds.md, record it in Review rounds (row says `running`).
+T097 visual pass not done yet. Prepared: pinned client+daemon pair from 49051558 in `.visual-pass/run.iHgGBr/bin` (strings checked; remove the dir when the pass ends); fixture worktree `wt8` in `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/fx/P` (b.rs lines 3, 7, 10 changed, uncommitted); data home `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/vpdata-m8` seeded with wt8's 2 sent + 2 pending comments (and wt's 1 pending); launch with `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/vp8.sh <tag>` (display :78, runtime /tmp/vp78 — first claim it: `mkdir -m 700 /tmp/vp78`, start `Xvfb :78 -screen 0 1600x1400x24 -nolisten tcp`), screenshots with `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/shot8.sh <name> [crop]`. The launch attached (`client attached to daemon`). Check B13 (Clear sent; Discard pending… → Cancel, then confirm) and B17 (delete `wt8` from the sidebar while its view is open: view closes; restart shows no wt8 comments, `reviews/4b6a2f98472811bc.json` has no wt8 entry). Evidence `visual-pass/m8.md` + ≤5 cropped `m8-*.png`.
+Then: full gate (raw commands as `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/gate.sh`; disk was 6 GiB free — if short, `scripts/build-lock.sh cargo clean -p micold-core -p micold-daemon -p micold-client` freed 26 GiB; deleting files in target-shared/deps by hand was refused by the permission classifier), PR-body section `/tmp/claude-0/-home-claude-micold-ai-ide/16fcb943-297b-598f-9327-6e7781fb6a1e/scratchpad/pr-body-482-M8.md`, plain `git push -u origin claude/project-thread-v1va8z` after a green gate (never force, no gate-ok marker).
 
 ## Open escalation
 
