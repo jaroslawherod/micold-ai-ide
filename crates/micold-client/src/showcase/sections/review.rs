@@ -92,14 +92,15 @@ pub fn virtual_rows<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
 /// A short Rust diff: a hunk header with its section, context, a removed and two added lines.
 static UNIFIED: LazyLock<FileDiff> = LazyLock::new(|| {
     parse_unified(
-        b"@@ -10,6 +10,7 @@ fn render(view: &View) {\n \
-          let rows = view.rows();\n \
-          let width = view.width();\n\
+        b"@@ -10,6 +10,7 @@ fn render(view: &View) {\n\
+         \x20    let rows = view.rows();\n\
+         \x20    let width = view.width();\n\
          -    draw(rows, width);\n\
          +    let height = view.height();\n\
-         +    draw(rows, width, height);\n \
-          view.finish();\n \
-          }\n \n",
+         +    draw(rows, width, height);\n\
+         \x20    view.finish();\n\
+         \x20}\n\
+         \x20\n",
     )
 });
 
