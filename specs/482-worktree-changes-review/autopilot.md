@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M3 (T041–T049)
+- **Next step**: milestone M4 (T050–T063)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
 | M2 | T027–T040 | full | Unified diff of the selected file | #624 | done |
-| M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | — | todo |
+| M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | #624 | done |
 | M4 | T050–T063 | full | Comments on lines and ranges | — | todo |
 | M5 | T064–T075 | full | Send comments to the running session | — | todo |
 | M6 | T076–T080 | full | Send when no session is running | — | todo |
@@ -64,6 +64,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Gate M2 (after A fixes) | full | b004815caf3de89ca8132c68b3565f11535f0752:3d697c274f0b993433e7d3a0311ae71c659c034c | green except the 6 root-only permission tests |
 | Review B M2 (conformance, sonnet) | 1 | d3f26dbd66e4483c1eabd9e84926affe4230bd21:3d697c274f0b993433e7d3a0311ae71c659c034c | CLEAN: 3 MINOR (Verify not runnable in its sandbox — gate6 log: review_git 17 passed, features_changes 22 passed; ledger staleness, since updated; T040 open) |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
+| Gate M3 | full | 54d7e5783b500fcf5ba1d76cc2cee853433d3b67:a04451e3567b124ee02c64019d01feff6a2f9689 | green except the 6 root-only permission tests; push refused by the gate hook (no `mise run gate` record: mise absent here), commits left local |
+| Review A M3 (code-review high, scoped 4aafd1bf..HEAD) | 1 | 54d7e5783b500fcf5ba1d76cc2cee853433d3b67:a04451e3567b124ee02c64019d01feff6a2f9689 | CLEAN; 1 MINOR not fixed (an in-flight `LayoutInForce` echo can briefly show the previous layout after two quick toggles) |
+| Review B M3 (conformance, sonnet) | 1 | 54d7e5783b500fcf5ba1d76cc2cee853433d3b67:a04451e3567b124ee02c64019d01feff6a2f9689 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the unit's full gate ran it: all green but the 6 root-only tests) |
+| Visual pass M3 (T049) | 1 | a04451e3 | B3 pass; B18 found the showcase diff literal missing its context indent (colours 4 chars off), fixed in showcase/sections/review.rs, re-run pass |
+| Gate M3 (after the showcase fix) | full | c28ea9d173beadd20e96bdc75bf0abdf4c47a656:a04451e3567b124ee02c64019d01feff6a2f9689 | green except the 6 root-only permission tests; push refused by the gate hook, commits left local |
 
 ## Declined review findings
 
@@ -74,20 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 part 2 (context over 150k). Done and committed: T043, T045, T046, T047, T048 — `ui::syntax`
-(pub lib module: `highlight`, `highlight_lines`, `legible`, `fills`, `token`), `DiffView` side by
-side + `.spans()`, Unified/Side by side `ToggleChip`s in `ui/changes.rs` `diff_pane`, shell sends
-`diff_layout_set` on `Effect::SetLayout` and highlights in the ReadDiff closure, `adopt_daemon_settings`
-applies `LayoutInForce`, showcase poses (+catalogue), user guide. Windows CI fix (orchestrator ask):
-`review_git` fixture sets repo-local `core.autocrlf=false` (red/green in cycle log). fmt + workspace
-clippy green at this commit; targeted tests green (lib diff_view/syntax/composition_contrast 23,
-features_settings 67, features_changes 24, review_git 17 under autocrlf=true). Nothing pushed yet
-(local commits a86c489d, 74778f1b and this one).
-Next: T049 visual pass (quickstart B3, B18; showcase DiffView poses "side by side",
-"unified, syntax-coloured", "side by side, syntax-coloured" light+dark; evidence under
-`specs/482-worktree-changes-review/visual-pass/`), then verify.md: scoped gate + review A (high,
-scoped `4aafd1bf..HEAD`), review B, full gate, push, PR-body section M3 to the scratchpad
-`pr-body-482-M3.md`, mark M3 done.
+None.
 
 ## Open escalation
 

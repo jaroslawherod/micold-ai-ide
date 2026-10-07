@@ -109,7 +109,7 @@ side-by-side diffs with syntax colouring, binary and large files handled.
 - [X] T046 [US1] Add the side-by-side layout and span painting to `DiffView` (`.spans(..)`) in `crates/micold-client/src/ui/material/diff_view.rs` until T043 passes; add the **Unified** / **Side by side** `ToggleChip` pair to the diff pane in `crates/micold-client/src/ui/changes.rs` (D1)
 - [X] T047 [P] [US1] Add side-by-side and syntax-coloured `DiffView` poses, both schemes, to `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [X] T048 [P] [US1] Extend `docs/user-guide/reviewing-changes.md`: the two layouts, that the choice is kept, syntax colouring; mention the layout in `docs/user-guide/settings.md` if the setting is shown there
-- [ ] T049 [US1] Visual pass of quickstart B3 and B18 (DiffView, VirtualRows), light and dark; evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T049 [US1] Visual pass of quickstart B3 and B18 (DiffView, VirtualRows), light and dark; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 **Checkpoint**: US1 complete; the Changes view is a full diff viewer.
 
