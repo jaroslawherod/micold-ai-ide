@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M6 (T076–T080); M5 commits are local (push refused by the gate hook: no `mise run gate` record here)
+- **Next step**: milestone M7 (T081–T089); M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | #624 | done |
 | M4 | T050–T063 | full | Comments on lines and ranges | #624 | done |
 | M5 | T064–T075 | full | Send comments to the running session | #624 | done |
-| M6 | T076–T080 | full | Send when no session is running | — | todo |
+| M6 | T076–T080 | full | Send when no session is running | #624 | done |
 | M7 | T081–T089 | full | Live refresh and outdated comments | — | todo |
 | M8 | T090–T097 | full | Clear, discard, and removal with the worktree | — | todo |
 
@@ -86,6 +86,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high, 018d55df..HEAD) | 1 | e6497af342fd4835004625d99753fe74d44b76c2:63c21b52f0d70f946f038ce9de7d97fd61020965 | CLEAN, no findings |
 | Review A M6 (code-review high, a9663735..HEAD) | 1 | 75695e6e3c3006d92d4fefc683466dd35de93462:49e3e80a95417d8f00e88955445b992d847955d4 | CLEAN, no findings |
 | Review B M6 (conformance, sonnet) | 1 | 75695e6e3c3006d92d4fefc683466dd35de93462:49e3e80a95417d8f00e88955445b992d847955d4 | CHANGES: F1 MAJOR Verify not runnable in its sandbox (answer with the run); F2 MINOR fixed (Internal); F3 MINOR open |
+| Review B M6 (conformance, sonnet, fix diff) | 2 | bfbf1d01ddb34f646b043551cc22b9f32779ee95:4a3eecb82206266566f4b2f51d468c258a8f2fdd | CLEAN, no findings (F1 answered by the run: review_send 12/12, daemon + client tests green but the 6 root-only tests; F2 fixed; F3 AsksTrust tested, NotStarted declined) |
+| Visual pass M6 (T080) | 1 | bfbf1d01 | B16, B9 (no session running), B11 pass in dark (`visual-pass/m6.md`); no defect found |
+| Gate M6 (full, raw commands, 63348a61) | full | b422fbc72864e7dcff6613b32d96ab6d793785bb:63348a61962fb962bba842c326d2c6b013319c6c | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
 | Review B M5 (conformance, sonnet) | 1 | 74cbb069cdfc59ee86ddfa6f81e310a536652ab8:ace6b8b2dd36d05440a48a13e72326b7e2f3f3a3 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate ran it: review::prompt 11/11, review_send 5/5) |
 
 ## Declined review findings
@@ -96,11 +99,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 - Review A M4 F2 (MINOR, composer cleared before the service answers, text lost on a refused edit): a refusal is a validation or I/O failure the composer cannot fix by retrying; the error surfaces as an operation error. Not fixed: MINOR, and keeping the text needs a restore path on every refusal; left for M5's send work to revisit.
 - Review A M4 F3 (MINOR, review-file write under the daemon's state lock): not fixed: MINOR; the lock also orders concurrent edits to one file.
+- Review B M6 F3 (MINOR, `FirstPromptUndelivered::NotStarted` untested): `AsksTrust` now has a test; `NotStarted` needs `start_session` to return false, i.e. the spawn itself failing, which a stand-in CLI cannot cause deterministically (a CLI that exits at once still spawns); the missing-CLI test covers the earlier refusal. Not tested; MINOR.
 
 ## Handover
 
-M6 unit 1 (context cap) — done: T076–T079 implemented and ticked, committed 49e3e80a (`ops::create_session_with_prompt` + `ops::cli_unavailable`, MCP `create_session` uses them; `DaemonState::review_send_to_new_session`; 6 new `review_send` tests; user guide; cycle log M6). Red/green recorded. Review A M6 r1 CLEAN. Review B M6 r1 CHANGES: F1 MAJOR = reviewer sandbox could not run cargo (process, not code: answer it with the scoped run below), F2 MINOR fixed (create failure answers `Internal`, W9's kinds), F3 MINOR (no test for NotStarted / AsksTrust branches) open, optional.
-Next: (1) check `$SCRATCHPAD/gate-m6-scoped-2.log` (`cargo test -p micold-daemon -p micold-client --no-fail-fast`; fmt+clippy were green in gate-m6-scoped-1, whose workspace test stopped on the root-only `settings_refuses_save_over_failed_read`); rerun the daemon tests after the F2 edit. (2) Review B round 2 on sonnet with the fix diff + the Verify output (review_send 11/11). (3) T080 visual pass: build queued into VP=/home/claude/micold-ai-ide/.visual-pass/run.Rc1xY4 (log `$SCRATCHPAD/vpbuild-m6.log`); reuse fixture `$SCRATCHPAD/fx/P`, copy `vpdata77` to a new data dir, set wt's three first comments (a.rs 11, a.rs old 20, b.rs 4–6) to pending and archive wt's sessions; HOME=`$SCRATCHPAD/vphome` (trust file), PATH stand-in `vpbin` (add an optional `sleep` for B11). Order: B16 (move the stand-in off PATH, Send → error, pending), B9 (restore, Send → "Started a session and sent 3 comments"), B11 (two clients on the Default entry, slow stand-in, window 2 shows Sending…). Record in visual-pass/m6.md, tick T080. (4) full gate (raw commands, --no-fail-fast), PR-body section to `$SCRATCHPAD/pr-body-482-M6.md`, mark M6 done, try a normal push.
+None.
 
 ## Open escalation
 
