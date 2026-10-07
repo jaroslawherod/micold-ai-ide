@@ -1233,6 +1233,7 @@ impl Git for FakeGit {
             diff: crate::review::diff::FileDiff::Text(Vec::new()),
             old: None,
             new: None,
+            spans: crate::review::diff::Spans::default(),
         })
     }
 }

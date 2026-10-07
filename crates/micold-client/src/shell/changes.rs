@@ -42,7 +42,7 @@ const NOT_LOCAL: &str =
 /// Start `effect`'s read, answering `Msg::ListRead` or `Msg::DiffRead` when git is done.
 fn run(app: &App, effect: Effect) -> Task<Message> {
     match effect {
-        Effect::None => Task::none(),
+        Effect::None | Effect::SetLayout(_) => Task::none(),
         Effect::ReadList {
             seq,
             entry,

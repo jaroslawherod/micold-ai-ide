@@ -11,7 +11,7 @@ use super::changes::{
     assemble, classify, content_of, merge_untracked, parse_name_status, parse_numstat, ChangeKind,
     ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked, VersionSizes,
 };
-use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines};
+use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
 use super::{limits, RelPath};
 use crate::git::{local_only, run_git, GitCli};
 use crate::process::no_window;
@@ -310,6 +310,7 @@ impl GitCli {
                     diff: FileDiff::Text(Vec::new()),
                     old: None,
                     new: None,
+                    spans: Spans::default(),
                 })
             }
             (Some(DiffRange::BaseToHead), Some(base)) => (base, Some("HEAD")),
@@ -337,6 +338,7 @@ impl GitCli {
                 diff: FileDiff::Binary,
                 old: None,
                 new: None,
+                spans: Spans::default(),
             });
         }
         if !force_large {
@@ -357,6 +359,7 @@ impl GitCli {
                     diff: FileDiff::TooLarge { added, removed },
                     old: None,
                     new: None,
+                    spans: Spans::default(),
                 });
             }
         }
@@ -377,6 +380,7 @@ impl GitCli {
                 diff,
                 old: None,
                 new: None,
+                spans: Spans::default(),
             });
         }
         let old = blob(dir, old_rev, old_path);
@@ -388,6 +392,7 @@ impl GitCli {
             diff,
             old: old.as_deref().and_then(SideLines::from_bytes),
             new: new.as_deref().and_then(SideLines::from_bytes),
+            spans: Spans::default(),
         })
     }
 }
@@ -421,6 +426,7 @@ fn untracked_diff(dir: &Path, path: &RelPath, force_large: bool) -> io::Result<L
             },
             old: None,
             new: None,
+            spans: Spans::default(),
         });
     }
     let bytes = worktree_bytes(&full)?;
@@ -433,6 +439,7 @@ fn untracked_diff(dir: &Path, path: &RelPath, force_large: bool) -> io::Result<L
             },
             old: None,
             new: None,
+            spans: Spans::default(),
         });
     }
     let diff = added_file(&bytes);
@@ -443,6 +450,7 @@ fn untracked_diff(dir: &Path, path: &RelPath, force_large: bool) -> io::Result<L
         diff,
         old: None,
         new,
+        spans: Spans::default(),
     })
 }
 

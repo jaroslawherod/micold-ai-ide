@@ -7,6 +7,7 @@
 //! `review::git` (`GitCli::file_diff`).
 
 use super::changes::{content_of, Content};
+use crate::tokens::Rgb;
 
 /// What a diff line is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,6 +133,44 @@ pub struct LoadedDiff {
     pub old: Option<SideLines>,
     /// The new version's lines.
     pub new: Option<SideLines>,
+    /// Both versions' syntax colours (R10); empty until the client highlights them.
+    pub spans: Spans,
+}
+
+/// One line's syntax colours: byte ranges of its text and their colours (R10).
+pub type LineSpans = Vec<(std::ops::Range<usize>, Rgb)>;
+
+/// One version's syntax colours in one scheme, by line number; empty for plain text.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SideSpans(pub Vec<LineSpans>);
+
+impl SideSpans {
+    /// The spans of line `number` (1-based); none past the end.
+    pub fn line(&self, number: u32) -> &[(std::ops::Range<usize>, Rgb)] {
+        usize::try_from(number)
+            .ok()
+            .and_then(|n| n.checked_sub(1))
+            .and_then(|i| self.0.get(i))
+            .map_or(&[], Vec::as_slice)
+    }
+}
+
+/// Both versions' syntax colours in one scheme.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SchemeSpans {
+    /// The old version's.
+    pub old: SideSpans,
+    /// The new version's.
+    pub new: SideSpans,
+}
+
+/// A diff's syntax colours in both schemes, so a theme switch needs no new read (R10, US1 s8).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Spans {
+    /// In the light scheme (`InspiredGitHub`).
+    pub light: SchemeSpans,
+    /// In the dark scheme (`Base16Ocean`).
+    pub dark: SchemeSpans,
 }
 
 /// The lines of `text` without their endings (`\n` or `\r\n`); a last line without a newline

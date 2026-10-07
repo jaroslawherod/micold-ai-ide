@@ -348,6 +348,7 @@ fn loaded(diff: FileDiff) -> LoadedDiff {
         diff,
         old: SideLines::from_bytes(b"a\n"),
         new: SideLines::from_bytes(b"b\n"),
+        spans: Default::default(),
     }
 }
 
@@ -650,4 +651,40 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
         },
     );
     select(&mut state, "a.rs");
+}
+
+// ---- Syntax spans (M3, T042, research R10) ----
+
+use micold_client::features::changes::{cap_spans, SPAN_CAP};
+use micold_core::tokens::Rgb;
+
+const KEYWORD: Rgb = Rgb {
+    r: 0xA7,
+    g: 0x1D,
+    b: 0x5D,
+};
+
+#[test]
+fn spans_past_two_thousand_bytes_are_cut_at_the_cap() {
+    let capped = cap_spans([
+        (0..4, Some(KEYWORD)),
+        (1_990..2_500, Some(KEYWORD)),
+        (2_500..3_000, Some(KEYWORD)),
+    ]);
+    assert_eq!(SPAN_CAP, 2_000);
+    assert_eq!(
+        capped,
+        vec![(0..4, KEYWORD), (1_990..SPAN_CAP, KEYWORD)],
+        "the span across the cap ends at it; the one past it is gone"
+    );
+}
+
+#[test]
+fn plain_text_as_an_unknown_extension_highlights_keeps_no_spans() {
+    assert_eq!(cap_spans([(0..10, None), (10..20, None)]), vec![]);
+    assert_eq!(
+        cap_spans([(0..0, Some(KEYWORD)), (0..3, None), (3..5, Some(KEYWORD))]),
+        vec![(3..5, KEYWORD)],
+        "empty and uncoloured spans are dropped"
+    );
 }

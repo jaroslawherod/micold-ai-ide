@@ -1703,3 +1703,26 @@ pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<Stri
     )?;
     Some(format!("{reason} {action}"))
 }
+
+/// The `SettingsSet` that changes the diff layout and leaves every other setting as it is
+/// (feature 482, R12): the layout is service-owned, so the daemon stores it and echoes it to every
+/// window as `SettingsChanged`.
+pub fn diff_layout_set(
+    req: u64,
+    layout: micold_core::settings::DiffLayout,
+) -> micold_core::protocol::messages::ClientMsg {
+    micold_core::protocol::messages::ClientMsg::SettingsSet {
+        req,
+        scrollback_lines: None,
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
+        default_ai_cli: None,
+        pi_activity_component: None,
+        tool_server_enabled: None,
+        cross_session_access: None,
+        pr_status_enabled: None,
+        desktop_notifications: None,
+        diff_layout: Some(layout),
+    }
+}
