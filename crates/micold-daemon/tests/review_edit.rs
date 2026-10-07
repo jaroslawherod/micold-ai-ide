@@ -9,7 +9,6 @@
 //! starting a second service over that directory.
 
 #[path = "support/mcp.rs"]
-#[allow(dead_code)]
 mod mcp_support;
 
 use std::path::{Path, PathBuf};

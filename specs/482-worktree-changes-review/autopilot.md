@@ -73,6 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 (conformance, sonnet) | 1 | 54d7e5783b500fcf5ba1d76cc2cee853433d3b67:a04451e3567b124ee02c64019d01feff6a2f9689 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the unit's full gate ran it: all green but the 6 root-only tests) |
 | Visual pass M3 (T049) | 1 | a04451e3 | B3 pass; B18 found the showcase diff literal missing its context indent (colours 4 chars off), fixed in showcase/sections/review.rs, re-run pass |
 | Gate M3 (after the showcase fix) | full | c28ea9d173beadd20e96bdc75bf0abdf4c47a656:a04451e3567b124ee02c64019d01feff6a2f9689 | green except the 6 root-only permission tests; push refused by the gate hook, commits left local |
+| Review A M4 (code-review high, scoped 9dbcf9e9..HEAD) | 1 | e64ae19d83f1642c7bdf02e3f2843609f3dc188e:2ada2a4a7c1723fd4dc39e3a3cbd344b1bfc35cf | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (Sensor key carries whether the height is known, so a dropped height re-measures); F4 MINOR fixed (edit composer closes when its comment is gone); F2, F3 MINOR declined |
 
 ## Declined review findings
 
@@ -80,6 +81,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+- Review A M4 F2 (MINOR, composer cleared before the service answers, text lost on a refused edit): a refusal is a validation or I/O failure the composer cannot fix by retrying; the error surfaces as an operation error. Kept as designed (C2).
+- Review A M4 F3 (MINOR, review-file write under the daemon's state lock): the file is one small JSON per project, written with the same lock the catalog writes hold; ordering of edits relies on it. Kept.
 
 ## Handover
 

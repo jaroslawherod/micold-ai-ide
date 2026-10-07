@@ -709,6 +709,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
         let extras = slot_extras(&hung, &view.slot_heights);
         let slots = Slots {
             rows: hung,
+            measured: view.slot_heights,
             elements: RefCell::new(view.slots),
             on_measured: view.on_slot_measured,
         };
@@ -777,6 +778,7 @@ type OnMeasured<'a, M> = Rc<dyn Fn(Side, u32, f32) -> M + 'a>;
 /// built (each row is built once per view).
 struct Slots<'a, M> {
     rows: BTreeMap<usize, Vec<Anchor>>,
+    measured: BTreeMap<Anchor, f32>,
     elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
     on_measured: Option<OnMeasured<'a, M>>,
 }
@@ -798,7 +800,7 @@ impl<'a, M: 'a> Slots<'a, M> {
                 Some(f) => {
                     let (shown, resized) = (Rc::clone(f), Rc::clone(f));
                     Sensor::new(slot)
-                        .key((side, line))
+                        .key(sensor_key((side, line), &self.measured))
                         .on_show(move |size| shown(side, line, size.height))
                         .on_resize(move |size| resized(side, line, size.height))
                         .into()
@@ -808,6 +810,13 @@ impl<'a, M: 'a> Slots<'a, M> {
         }
         stack.into()
     }
+}
+
+/// The key a slot's `Sensor` carries: its anchor, and whether its height is known. Dropping the
+/// heights (another file or layout) changes the key, so the slot reports again even at the size
+/// the same anchor had before.
+fn sensor_key(anchor: Anchor, heights: &BTreeMap<Anchor, f32>) -> (Side, u32, bool) {
+    (anchor.0, anchor.1, heights.contains_key(&anchor))
 }
 
 /// An empty row, for an index past the end.
@@ -1099,6 +1108,19 @@ mod tests {
             gutter_numbers(Some(old), Some(new), false),
             (Some(7), Some(9))
         );
+    }
+
+    #[test]
+    fn a_slot_whose_height_was_dropped_is_measured_again() {
+        // The reducer drops every height on another file or layout; a slot at the same anchor
+        // must report again even when its size did not change (review A M4 F1).
+        let anchor = (Side::New, 4);
+        let measured = BTreeMap::from([(anchor, 60.0)]);
+        assert_ne!(
+            sensor_key(anchor, &measured),
+            sensor_key(anchor, &BTreeMap::new())
+        );
+        assert_eq!(sensor_key(anchor, &measured), sensor_key(anchor, &measured));
     }
 
     #[test]

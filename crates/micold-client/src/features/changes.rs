@@ -499,7 +499,11 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if review_of(state, view).is_some_and(|r| r.sending) {
                 return Effect::None;
             }
-            review_edit(view, ReviewEditOp::Delete { id })
+            let effect = review_edit(view, ReviewEditOp::Delete { id });
+            if let Some(view) = state.open.as_mut() {
+                close_edit_unless(view, |editing| editing != id);
+            }
+            effect
         }
         Msg::ReviewChanged {
             project,
@@ -507,10 +511,29 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             comments,
             sending,
         } => {
+            if let Some(view) = state.open.as_mut() {
+                if view.project == project && entry_dir(&view.entry) == worktree_dir {
+                    close_edit_unless(view, |id| comments.iter().any(|c| c.id == id));
+                }
+            }
             state
                 .reviews
                 .insert((project, worktree_dir), ReviewView { comments, sending });
             Effect::None
+        }
+    }
+}
+
+/// Close an edit composer whose comment fails `kept` (deleted here or from another window), so
+/// Save never targets a comment that is gone.
+fn close_edit_unless(view: &mut OpenView, kept: impl Fn(CommentId) -> bool) {
+    if let Some(Composer {
+        target: ComposerTarget::Edit(id),
+        ..
+    }) = view.composer
+    {
+        if !kept(id) {
+            view.composer = None;
         }
     }
 }
