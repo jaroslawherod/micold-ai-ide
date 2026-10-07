@@ -926,6 +926,25 @@ fn edit_and_delete_send_set_text_and_delete() {
     );
 }
 
+/// An edit composer whose comment is gone (deleted here or from another window) closes, rather
+/// than saving into a comment that no longer exists (review A M4 F4).
+#[test]
+fn an_edit_composer_closes_when_its_comment_is_gone() {
+    let mut state = showing(commentable());
+    let c = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
+    let id = c.id;
+    push(&mut state, "feat-a", vec![c.clone()]);
+    changes::update(&mut state, Msg::EditComment(id));
+    assert!(state.open.as_ref().unwrap().composer.is_some());
+    push(&mut state, "feat-a", vec![]);
+    assert_eq!(state.open.as_ref().unwrap().composer, None);
+
+    push(&mut state, "feat-a", vec![c]);
+    changes::update(&mut state, Msg::EditComment(id));
+    changes::update(&mut state, Msg::DeleteComment(id));
+    assert_eq!(state.open.as_ref().unwrap().composer, None);
+}
+
 /// C4. The composer and its text survive a re-read of the list and of the diff.
 #[test]
 fn the_composer_survives_a_list_and_diff_reread() {
