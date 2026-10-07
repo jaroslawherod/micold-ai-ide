@@ -137,6 +137,7 @@ pub struct VirtualRows<'a, M> {
     offset: u32,
     viewport: u32,
     on_scroll: Option<Box<dyn Fn(u32, u32) -> M + 'a>>,
+    extras: Vec<(usize, f32)>,
 }
 
 impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
@@ -155,7 +156,15 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
             offset: 0,
             viewport: 0,
             on_scroll: None,
+            extras: Vec::new(),
         }
+    }
+
+    /// The slots under rows: each `(index, height)`, sorted by index, adds `height` pixels under
+    /// row `index`, which then builds taller by that much (feature 482).
+    pub fn extras(mut self, extras: Vec<(usize, f32)>) -> Self {
+        self.extras = extras;
+        self
     }
 
     /// The scroll offset last reported, in pixels from the top.
@@ -184,14 +193,21 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
         } else {
             self.viewport
         };
-        visible_range(self.offset, viewport, self.row_height, self.len, OVERSCAN)
+        visible_range_with(
+            self.offset,
+            viewport,
+            self.row_height,
+            self.len,
+            OVERSCAN,
+            &self.extras,
+        )
     }
 }
 
 impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
     fn from(list: VirtualRows<'a, M>) -> Self {
         let rows = list.rows();
-        let (above, below) = spacers(&rows, list.row_height, list.len);
+        let (above, below) = spacers_with(&rows, list.row_height, list.len, &list.extras);
         let mut content = column![Space::new().height(Length::Fixed(above))].width(Length::Fill);
         for index in rows {
             content = content.push((list.build_row)(index));
@@ -261,14 +277,21 @@ mod tests {
         assert_eq!(visible_range_with(400, 32, ROW, 2_000, 0, &extras), 10..11);
         let rows = 11..22;
         let (above, below) = spacers_with(&rows, ROW, 2_000, &extras);
-        assert_eq!(above, 11.0 * ROW + 100.0, "the slot above is kept in the spacer");
+        assert_eq!(
+            above,
+            11.0 * ROW + 100.0,
+            "the slot above is kept in the spacer"
+        );
         assert_eq!(
             above + rows.len() as f32 * ROW + below,
             2_000.0 * ROW + 100.0,
             "the content measures every row and every slot"
         );
         // A slot inside the built rows is not in either spacer.
-        assert_eq!(spacers_with(&(5..15), ROW, 2_000, &extras), (5.0 * ROW, 1_985.0 * ROW));
+        assert_eq!(
+            spacers_with(&(5..15), ROW, 2_000, &extras),
+            (5.0 * ROW, 1_985.0 * ROW)
+        );
     }
 
     #[test]

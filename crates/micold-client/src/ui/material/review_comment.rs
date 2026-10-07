@@ -120,7 +120,9 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
             .padding(spacing::SM)
             .width(Length::Fill)
             .style(move |_| container::Style {
-                background: Some(iced::Background::Color(style::color(r.surface_container_low))),
+                background: Some(iced::Background::Color(style::color(
+                    r.surface_container_low,
+                ))),
                 border: Border {
                     color: style::color(r.outline_variant),
                     width: 1.0,

@@ -15,14 +15,27 @@
 //! each half with its own number, marker and tint. Either layout paints a line's syntax colours
 //! (`.spans`) over its tint, the bytes they do not cover in `on_surface` (R10).
 //!
+//! Comments (C1–C3): a press on a line's number reports the row's numbers through `.on_gutter`
+//! (with whether Shift was held), the picked range's numbers take the pick fill (`.pick`), and
+//! `.slot(side, line, element)` hangs an element — comment cards, the composer — under the row
+//! showing that line. Slots are measured as they are laid out (`.on_slot_measured`) and the
+//! heights passed back (`.slot_heights`) keep the virtualised rows' arithmetic exact.
+//!
 //! Builder form: `DiffView::new(&diff, layout, roles).spans(&scheme_spans).offset(o).viewport(v)
-//! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).into()`.
+//! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).pick(side, range)
+//! .on_gutter(|old, new, extend| ..).slot(side, line, card).slot_heights(&heights)
+//! .on_slot_measured(|side, line, h| ..).into()`.
 
+use iced::advanced::widget::{tree, Operation, Tree, Widget};
+use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Shell};
 use iced::alignment::Horizontal;
+use iced::keyboard;
 use iced::widget::text::Wrapping;
-use iced::widget::{column, container, rich_text, row, span, text, Space};
-use iced::{Alignment, Element, Font, Length};
+use iced::widget::{column, container, rich_text, row, span, text, Sensor, Space};
+use iced::{Alignment, Element, Event, Font, Length, Rectangle, Size};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use micold_core::review::diff::{
     Cell, DiffLine, FileDiff, Hunk, LineKind, SchemeSpans, SideIndex, SideRow, SideSpans,
@@ -200,6 +213,34 @@ fn slot_extras(
         .collect()
 }
 
+/// What a gutter press sends: the row's old and new numbers, and whether Shift was held.
+type OnGutter<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>, bool) -> M + 'a>;
+
+/// What the number cells need: the pick to fill and what a press sends.
+struct Gutters<'a, M> {
+    pick: Option<(Side, LineRange)>,
+    on: Option<OnGutter<'a, M>>,
+}
+
+impl<M> Clone for Gutters<'_, M> {
+    fn clone(&self) -> Self {
+        Self {
+            pick: self.pick,
+            on: self.on.clone(),
+        }
+    }
+}
+
+impl<M> Gutters<'_, M> {
+    /// No pick, and presses send nothing.
+    fn none() -> Self {
+        Self {
+            pick: None,
+            on: None,
+        }
+    }
+}
+
 /// One file's diff.
 pub struct DiffView<'a, M> {
     diff: &'a FileDiff,
@@ -210,6 +251,10 @@ pub struct DiffView<'a, M> {
     viewport: u32,
     on_scroll: Option<Box<dyn Fn(u32, u32) -> M + 'a>>,
     on_show_large: Option<M>,
+    gutters: Gutters<'a, M>,
+    slots: BTreeMap<Anchor, Vec<Element<'a, M>>>,
+    slot_heights: BTreeMap<Anchor, f32>,
+    on_slot_measured: Option<Rc<dyn Fn(Side, u32, f32) -> M + 'a>>,
 }
 
 impl<'a, M: Clone + 'a> DiffView<'a, M> {
@@ -224,7 +269,46 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
             viewport: 0,
             on_scroll: None,
             on_show_large: None,
+            gutters: Gutters::none(),
+            slots: BTreeMap::new(),
+            slot_heights: BTreeMap::new(),
+            on_slot_measured: None,
         }
+    }
+
+    /// Fill the numbers of lines `range` on `side` (C1).
+    pub fn pick(mut self, side: Side, range: LineRange) -> Self {
+        self.gutters.pick = Some((side, range));
+        self
+    }
+
+    /// What a press on a line's number sends: the row's old and new numbers (a side-by-side half
+    /// reports its own, and both for a context line) and whether Shift was held (C1).
+    pub fn on_gutter(mut self, f: impl Fn(Option<u32>, Option<u32>, bool) -> M + 'a) -> Self {
+        self.gutters.on = Some(Rc::new(f));
+        self
+    }
+
+    /// Hang `element` under the row showing line `line` of `side`; several under one line stack in
+    /// the order given. A line the diff does not show hangs nothing.
+    pub fn slot(mut self, side: Side, line: u32, element: impl Into<Element<'a, M>>) -> Self {
+        self.slots
+            .entry((side, line))
+            .or_default()
+            .push(element.into());
+        self
+    }
+
+    /// The slots' heights as last measured; one not measured yet counts [`SLOT_ESTIMATE`].
+    pub fn slot_heights(mut self, heights: &BTreeMap<Anchor, f32>) -> Self {
+        self.slot_heights = heights.clone();
+        self
+    }
+
+    /// Report a slot's height as it is laid out, so the next view passes it back.
+    pub fn on_slot_measured(mut self, f: impl Fn(Side, u32, f32) -> M + 'a) -> Self {
+        self.on_slot_measured = Some(Rc::new(f));
+        self
     }
 
     /// The scroll offset last reported, in pixels from the top.
@@ -264,17 +348,30 @@ fn side_row<'a, M: 'a>(
     right: Option<Cell<'a>>,
     spans: &'a SchemeSpans,
     r: Roles,
+    gutters: &Gutters<'a, M>,
 ) -> Element<'a, M> {
-    row![half(left, &spans.old, r), half(right, &spans.new, r)]
-        .height(Length::Fixed(ROW_HEIGHT))
-        .width(Length::Fill)
-        .into()
+    let (l_old, l_new) = gutter_numbers(left, right, true);
+    let (r_old, r_new) = gutter_numbers(left, right, false);
+    row![
+        half(left, &spans.old, r, gutters, Side::Old, (l_old, l_new)),
+        half(right, &spans.new, r, gutters, Side::New, (r_old, r_new)),
+    ]
+    .height(Length::Fixed(ROW_HEIGHT))
+    .width(Length::Fill)
+    .into()
 }
 
 /// One half of a side-by-side row: number, marker and text on the line's tint, the same cells as
 /// a unified row's so the columns align on every row; an empty half where the other side has no
 /// partner, the row's height all the same.
-fn half<'a, M: 'a>(cell: Option<Cell<'a>>, spans: &'a SideSpans, r: Roles) -> Element<'a, M> {
+fn half<'a, M: 'a>(
+    cell: Option<Cell<'a>>,
+    spans: &'a SideSpans,
+    r: Roles,
+    gutters: &Gutters<'a, M>,
+    side: Side,
+    reports: (Option<u32>, Option<u32>),
+) -> Element<'a, M> {
     let Some(cell) = cell else {
         return container(Space::new())
             .width(Length::FillPortion(1))
@@ -282,7 +379,7 @@ fn half<'a, M: 'a>(cell: Option<Cell<'a>>, spans: &'a SideSpans, r: Roles) -> El
             .into();
     };
     let cells = row![
-        number(Some(cell.number), r),
+        number(Some(cell.number), r, gutters, side, reports),
         marker(cell.kind, r),
         container(line_text(cell.text, spans.line(cell.number), r)).width(Length::Fill),
     ]
@@ -413,10 +510,12 @@ fn line_row<'a, M: 'a>(
     line: &'a DiffLine,
     spans: Option<&'a SchemeSpans>,
     r: Roles,
+    gutters: &Gutters<'a, M>,
 ) -> Element<'a, M> {
+    let reports = (line.old, line.new);
     let cells = row![
-        number(line.old, r),
-        number(line.new, r),
+        number(line.old, r, gutters, Side::Old, reports),
+        number(line.new, r, gutters, Side::New, reports),
         marker(line.kind, r),
         container(line_text(&line.text, line_spans(line, spans), r)).width(Length::Fill),
     ]
@@ -426,13 +525,160 @@ fn line_row<'a, M: 'a>(
 }
 
 /// A line-number cell: right-aligned in its fixed width, muted; empty for the side without one.
-fn number<'a, M: 'a>(n: Option<u32>, r: Roles) -> Element<'a, M> {
+/// Inside the pick it takes the pick fill (C1); a press on a numbered cell reports `reports`.
+fn number<'a, M: 'a>(
+    n: Option<u32>,
+    r: Roles,
+    gutters: &Gutters<'a, M>,
+    side: Side,
+    reports: (Option<u32>, Option<u32>),
+) -> Element<'a, M> {
     let label = n.map(|n| n.to_string()).unwrap_or_default();
-    container(code(label, r.on_surface_variant))
+    let on = picked(gutters.pick, side, n);
+    let (fill, ink) = if on {
+        (Some(r.primary_container), r.on_primary_container)
+    } else {
+        (None, r.on_surface_variant)
+    };
+    let cell: Element<'a, M> = container(code(label, ink))
         .width(Length::Fixed(NUMBER_WIDTH))
+        .height(Length::Fixed(ROW_HEIGHT))
         .padding([0.0, spacing::XS])
         .align_x(Horizontal::Right)
-        .into()
+        .align_y(Alignment::Center)
+        .style(move |_| fill.map(background).unwrap_or_default())
+        .into();
+    match (&gutters.on, n) {
+        (Some(on_press), Some(_)) => {
+            let on_press = Rc::clone(on_press);
+            let (old, new) = reports;
+            Element::new(Gutter {
+                content: cell,
+                on_press: Box::new(move |extend| on_press(old, new, extend)),
+            })
+        }
+        _ => cell,
+    }
+}
+
+/// A number cell that reports presses with whether Shift was held: iced's mouse events carry no
+/// modifiers, so it keeps the last `ModifiersChanged` itself.
+struct Gutter<'a, M> {
+    content: Element<'a, M>,
+    on_press: Box<dyn Fn(bool) -> M + 'a>,
+}
+
+impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_ref(&self.content));
+    }
+
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<keyboard::Modifiers>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(keyboard::Modifiers::default())
+    }
+
+    fn size(&self) -> Size<Length> {
+        self.content.as_widget().size()
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let child = self
+            .content
+            .as_widget_mut()
+            .layout(&mut tree.children[0], renderer, limits);
+        layout::Node::with_children(child.size(), vec![child])
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        if let Some(child) = layout.children().next() {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                child,
+                cursor,
+                viewport,
+            );
+        }
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _renderer: &iced::Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        _viewport: &Rectangle,
+    ) {
+        match event {
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                *tree.state.downcast_mut::<keyboard::Modifiers>() = *modifiers;
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+                if cursor.is_over(layout.bounds()) =>
+            {
+                let shift = tree.state.downcast_ref::<keyboard::Modifiers>().shift();
+                shell.publish((self.on_press)(shift));
+                shell.capture_event();
+            }
+            _ => {}
+        }
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        if let Some(child) = layout.children().next() {
+            self.content
+                .as_widget_mut()
+                .operate(&mut tree.children[0], child, renderer, operation);
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+        _renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        if cursor.is_over(layout.bounds()) {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
 }
 
 /// Diff text: monospace, one line, never wrapped (a long line is clipped by its row).
@@ -457,30 +703,49 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
     fn from(view: DiffView<'a, M>) -> Self {
         let r = view.roles;
         let spans = view.spans;
+        let shown = body(view.diff, view.layout);
+        let anchors: Vec<Anchor> = view.slots.keys().copied().collect();
+        let hung = slot_rows(&shown, &anchors);
+        let extras = slot_extras(&hung, &view.slot_heights);
+        let slots = Slots {
+            rows: hung,
+            elements: RefCell::new(view.slots),
+            on_measured: view.on_slot_measured,
+        };
+        let gutters = view.gutters;
         let list = |len, build: Box<dyn Fn(usize) -> Element<'a, M> + 'a>| {
             let mut list = VirtualRows::new(len, ROW_HEIGHT, build, r)
                 .offset(view.offset)
-                .viewport(view.viewport);
+                .viewport(view.viewport)
+                .extras(extras);
             if let Some(f) = view.on_scroll {
                 list = list.on_scroll(f);
             }
             list.into()
         };
-        match body(view.diff, view.layout) {
+        match shown {
             Body::Rows(rows) => list(
                 rows.len(),
-                Box::new(move |index| match rows.row(index) {
-                    Some(UnifiedRow::Header(hunk)) => header_row(hunk, r),
-                    Some(UnifiedRow::Line(line)) => line_row(line, Some(spans), r),
-                    None => blank(),
+                Box::new(move |index| {
+                    let row = match rows.row(index) {
+                        Some(UnifiedRow::Header(hunk)) => header_row(hunk, r),
+                        Some(UnifiedRow::Line(line)) => line_row(line, Some(spans), r, &gutters),
+                        None => blank(),
+                    };
+                    slots.under(index, row)
                 }),
             ),
             Body::Side(rows) => list(
                 rows.len(),
-                Box::new(move |index| match rows.row(index) {
-                    Some(SideRow::Header(hunk)) => header_row(hunk, r),
-                    Some(SideRow::Pair { left, right }) => side_row(left, right, spans, r),
-                    None => blank(),
+                Box::new(move |index| {
+                    let row = match rows.row(index) {
+                        Some(SideRow::Header(hunk)) => header_row(hunk, r),
+                        Some(SideRow::Pair { left, right }) => {
+                            side_row(left, right, spans, r, &gutters)
+                        }
+                        None => blank(),
+                    };
+                    slots.under(index, row)
                 }),
             ),
             Body::Message(sentence) => {
@@ -502,6 +767,43 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 )
             }
         }
+    }
+}
+
+/// The slots of a view: which row each anchor hangs under, and the elements, taken as their row is
+/// built (each row is built once per view).
+struct Slots<'a, M> {
+    rows: BTreeMap<usize, Vec<Anchor>>,
+    elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
+    on_measured: Option<Rc<dyn Fn(Side, u32, f32) -> M + 'a>>,
+}
+
+impl<'a, M: 'a> Slots<'a, M> {
+    /// Row `index` with the slots hanging under it, each measured as it is laid out.
+    fn under(&self, index: usize, row: Element<'a, M>) -> Element<'a, M> {
+        let Some(anchors) = self.rows.get(&index) else {
+            return row;
+        };
+        let mut stack = column![row].width(Length::Fill);
+        let mut elements = self.elements.borrow_mut();
+        for &(side, line) in anchors {
+            let Some(parts) = elements.remove(&(side, line)) else {
+                continue;
+            };
+            let slot: Element<'a, M> = column(parts).width(Length::Fill).into();
+            stack = stack.push(match &self.on_measured {
+                Some(f) => {
+                    let (shown, resized) = (Rc::clone(f), Rc::clone(f));
+                    Sensor::new(slot)
+                        .key((side, line))
+                        .on_show(move |size| shown(side, line, size.height))
+                        .on_resize(move |size| resized(side, line, size.height))
+                        .into()
+                }
+                None => slot,
+            });
+        }
+        stack.into()
     }
 }
 
@@ -564,7 +866,7 @@ mod tests {
 
     /// The x of each cell of a line row laid out 800 px wide.
     fn cell_xs(line: &DiffLine) -> Vec<f32> {
-        let mut element: Element<'_, ()> = line_row(line, None, LIGHT);
+        let mut element: Element<'_, ()> = line_row(line, None, LIGHT, &Gutters::none());
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         let node = element.as_widget_mut().layout(
@@ -678,7 +980,7 @@ mod tests {
     /// cell inside a half that has a line.
     fn side_layout(left: Option<Cell<'_>>, right: Option<Cell<'_>>) -> SideLayout {
         let spans = SchemeSpans::default();
-        let mut element: Element<'_, ()> = side_row(left, right, &spans, LIGHT);
+        let mut element: Element<'_, ()> = side_row(left, right, &spans, LIGHT, &Gutters::none());
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         let node = element.as_widget_mut().layout(
@@ -762,7 +1064,10 @@ mod tests {
         assert!(picked(pick, Side::New, Some(3)));
         assert!(picked(pick, Side::New, Some(5)));
         assert!(!picked(pick, Side::New, Some(6)), "past the range");
-        assert!(!picked(pick, Side::Old, Some(4)), "the other side is not picked");
+        assert!(
+            !picked(pick, Side::Old, Some(4)),
+            "the other side is not picked"
+        );
         assert!(!picked(pick, Side::New, None), "a cell with no number");
         assert!(!picked(None, Side::New, Some(4)), "no pick");
     }
@@ -771,17 +1076,37 @@ mod tests {
     fn a_side_by_side_gutter_press_reports_its_half_and_a_context_lines_both_numbers() {
         let removed = cell(LineKind::Removed, 2, "two");
         let added = cell(LineKind::Added, 2, "deux");
-        assert_eq!(gutter_numbers(Some(removed), Some(added), true), (Some(2), None));
-        assert_eq!(gutter_numbers(Some(removed), Some(added), false), (None, Some(2)));
-        let (old, new) = (cell(LineKind::Context, 7, "x"), cell(LineKind::Context, 9, "x"));
-        assert_eq!(gutter_numbers(Some(old), Some(new), true), (Some(7), Some(9)));
-        assert_eq!(gutter_numbers(Some(old), Some(new), false), (Some(7), Some(9)));
+        assert_eq!(
+            gutter_numbers(Some(removed), Some(added), true),
+            (Some(2), None)
+        );
+        assert_eq!(
+            gutter_numbers(Some(removed), Some(added), false),
+            (None, Some(2))
+        );
+        let (old, new) = (
+            cell(LineKind::Context, 7, "x"),
+            cell(LineKind::Context, 9, "x"),
+        );
+        assert_eq!(
+            gutter_numbers(Some(old), Some(new), true),
+            (Some(7), Some(9))
+        );
+        assert_eq!(
+            gutter_numbers(Some(old), Some(new), false),
+            (Some(7), Some(9))
+        );
     }
 
     #[test]
     fn slots_hang_under_their_anchor_rows_with_their_measured_heights() {
         let diff = parse_unified(SWAP.as_bytes());
-        let anchors = [(Side::New, 2), (Side::Old, 2), (Side::Old, 3), (Side::New, 9)];
+        let anchors = [
+            (Side::New, 2),
+            (Side::Old, 2),
+            (Side::Old, 3),
+            (Side::New, 9),
+        ];
         // Unified: header, context 1, removed 2, added 2, context 3.
         let unified = slot_rows(&body(&diff, DiffLayout::Unified), &anchors);
         assert_eq!(
@@ -795,7 +1120,11 @@ mod tests {
         );
         // Side by side: header, context 1, the removed/added pair, context 3.
         let side = slot_rows(&body(&diff, DiffLayout::SideBySide), &anchors);
-        assert_eq!(side.get(&2).map(Vec::len), Some(2), "both halves of the pair");
+        assert_eq!(
+            side.get(&2).map(Vec::len),
+            Some(2),
+            "both halves of the pair"
+        );
         let measured = BTreeMap::from([((Side::New, 2), 40.0)]);
         assert_eq!(
             slot_extras(&unified, &measured),
@@ -849,7 +1178,7 @@ mod tests {
         spans.new.0 = vec![vec![], vec![(0..3, red)]];
         let added = line(LineKind::Added, None, Some(2), "let x = 1;");
         let plain = cell_xs(&added);
-        let mut element: Element<'_, ()> = line_row(&added, Some(&spans), LIGHT);
+        let mut element: Element<'_, ()> = line_row(&added, Some(&spans), LIGHT, &Gutters::none());
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         let node = element.as_widget_mut().layout(
