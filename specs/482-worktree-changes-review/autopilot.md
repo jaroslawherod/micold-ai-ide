@@ -61,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Gate M2 (pre-fix push) | full | 1a705ff567ac2a882e87654e35d62ea5d00fa450:5d37a3e5fa473db25fc799e1e5b6128001fc4741 | green except the 6 root-only permission tests; pushed 5d37a3e5 |
 | Review A M2 (code-review high, scoped 142cf0fa..HEAD, sonnet) | 2 | b004815caf3de89ca8132c68b3565f11535f0752:3d697c274f0b993433e7d3a0311ae71c659c034c | CLEAN; 2 MINOR not fixed (git.rs `count_lines` reads an oversize untracked file whole; list row shows 0 lines for it) |
 | Gate M2 (after A fixes) | full | b004815caf3de89ca8132c68b3565f11535f0752:3d697c274f0b993433e7d3a0311ae71c659c034c | green except the 6 root-only permission tests |
-| Review B M2 (conformance, sonnet) | 1 | d3f26dbd66e4483c1eabd9e84926affe4230bd21:3d697c274f0b993433e7d3a0311ae71c659c034c | running |
+| Review B M2 (conformance, sonnet) | 1 | d3f26dbd66e4483c1eabd9e84926affe4230bd21:3d697c274f0b993433e7d3a0311ae71c659c034c | CLEAN: 3 MINOR (Verify not runnable in its sandbox — gate6 log: review_git 17 passed, features_changes 22 passed; ledger staleness, since updated; T040 open) |
 | Tasks | 1 | bdc7eb7285b7355f190266e00dd32362649c017c:a284e9b2ea58bc2c731608a1600a913ad9b91dec | CLEAN: 3 MINOR (all fixed: checklist ticked, T067 outdated list deferred to M7, M1 Verify + SC-001/SC-005 mapped) |
 
 ## Declined review findings
@@ -73,7 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 3 (continuing). Pushed 5d37a3e5 after a full gate (green but the 6 root-only tests). F4–F7 fixed in 3d697c27 (red/green in the cycle log). **Next:** Review A round 2 (running, `scratchpad/review-A-M2-r2.out`) and full gate on 3d697c27 (`scratchpad/gate6.log`); then Review B (`scratchpad/review-B-M2-r1.txt`, sonnet) + T040 visual pass; full gate, push, PR-body section `scratchpad/pr-body-482-M2.md`.
+M2 unit 3 handed over at 116k (the visual pass would cross the 150k cap). **Done:** full gate + push of 5d37a3e5 (anatomy-scan fix); review A F4–F7 fixed in 3d697c27 with red/green in the cycle log; full gate green on 3d697c27 (tree b004815c, stamped; only the 6 root-only tests fail); pushed; review A round 2 CLEAN; review B CLEAN. PR-body section written: `scratchpad/pr-body-482-M2.md` (replace `VISUAL_PASS_PENDING`). **Next:** T040 visual pass only — the forked `visual-pass` skill drops its args in this container, so run its recipe inline (`.claude/skills/visual-pass/SKILL.md`) from the brief `scratchpad/vp-m2-brief.md`; save `m2-*.png` + `m2.md` under `specs/482-worktree-changes-review/visual-pass/`, tick T040, set M2 done in Milestones and Next step M3; a code fix found by the pass needs the scoped gate, then the full gate before push. Return `PR: #624`.
 
 ## Open escalation
 
