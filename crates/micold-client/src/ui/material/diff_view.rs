@@ -16,9 +16,9 @@
 
 use iced::alignment::Horizontal;
 use iced::widget::text::Wrapping;
-use iced::widget::{column, container, row, text};
+use iced::widget::{column, container, row, text, Space};
 use iced::{Alignment, Element, Font, Length};
-use micold_core::review::diff::{unified_rows, DiffLine, FileDiff, Hunk, LineKind, UnifiedRow};
+use micold_core::review::diff::{DiffLine, FileDiff, Hunk, LineKind, UnifiedIndex, UnifiedRow};
 /// The layout a diff is shown in, re-exported so callers need not reach into the settings module.
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
@@ -30,7 +30,7 @@ use super::{Button, Text, TypeRole, VirtualRows};
 pub const ROW_HEIGHT: f32 = 20.0;
 
 /// The width of one line-number cell: six digits of the monospace text.
-pub const NUMBER_WIDTH: f32 = 52.0;
+pub const NUMBER_WIDTH: f32 = 64.0;
 
 /// The width of the `+`/`−` marker cell.
 pub const MARKER_WIDTH: f32 = 16.0;
@@ -61,8 +61,9 @@ pub fn large_message(added: u32, removed: u32) -> String {
 /// What the diff area shows for a diff.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Body<'a> {
-    /// The unified rows, in order.
-    Rows(Vec<UnifiedRow<'a>>),
+    /// The unified rows, found by index: building a view costs the hunk count, not the line
+    /// count (D5).
+    Rows(UnifiedIndex<'a>),
     /// No lines to show, and the sentence that says why (D3).
     Message(&'static str),
     /// Over the size limits: the counts and the Show diff action (D4).
@@ -78,7 +79,7 @@ enum Body<'a> {
 fn body(diff: &FileDiff) -> Body<'_> {
     match diff {
         FileDiff::Text(hunks) if hunks.is_empty() => Body::Message(NO_CONTENT),
-        FileDiff::Text(_) => Body::Rows(unified_rows(diff)),
+        FileDiff::Text(_) => Body::Rows(UnifiedIndex::new(diff)),
         FileDiff::Binary => Body::Message(BINARY),
         FileDiff::NotUtf8 => Body::Message(NOT_UTF8),
         FileDiff::ModeOnly => Body::Message(MODE_ONLY),
@@ -227,9 +228,10 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 let mut list = VirtualRows::new(
                     len,
                     ROW_HEIGHT,
-                    move |index| match rows[index] {
-                        UnifiedRow::Header(hunk) => header_row(hunk, r),
-                        UnifiedRow::Line(line) => line_row(line, r),
+                    move |index| match rows.row(index) {
+                        Some(UnifiedRow::Header(hunk)) => header_row(hunk, r),
+                        Some(UnifiedRow::Line(line)) => line_row(line, r),
+                        None => Space::new().height(Length::Fixed(ROW_HEIGHT)).into(),
                     },
                     r,
                 )
