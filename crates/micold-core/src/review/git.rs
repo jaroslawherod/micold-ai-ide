@@ -11,6 +11,7 @@ use super::changes::{
     assemble, classify, content_of, merge_untracked, parse_name_status, parse_numstat, ChangeKind,
     ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked, VersionSizes,
 };
+use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines};
 use super::{limits, RelPath};
 use crate::git::{local_only, run_git, GitCli};
 use crate::process::no_window;
@@ -23,6 +24,11 @@ const DIFF: [&str; 5] = ["--no-ext-diff", "--no-textconv", "--no-color", "-z", "
 
 /// Run a read-only git command in `dir`, kept to local objects, with `stdin` written to it.
 fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
+    read_bytes(dir, args, stdin).map(|out| String::from_utf8_lossy(&out).into_owned())
+}
+
+/// [`read`], answering git's bytes as they are: a diff body is checked for UTF-8, not repaired.
+fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<u8>> {
     let mut command = Command::new("git");
     local_only(&mut command);
     no_window(&mut command)
@@ -54,7 +60,7 @@ fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
             .map_err(|_| io::Error::other("the git input writer panicked"))??;
     }
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        Ok(output.stdout)
     } else {
         Err(io::Error::other(format!(
             "git {} failed: {}",
@@ -272,4 +278,177 @@ impl GitCli {
         };
         Ok(ChangeList { files, scope })
     }
+
+    /// The diff of `path` (R1, R8): `git diff -M -U3` over the view's range, the old path too for a
+    /// rename; an untracked file read from disk. `TooLarge` over the limits unless `force_large`.
+    /// A text diff comes with both versions' lines; a side that does not exist is `None`.
+    pub fn file_diff(
+        &self,
+        dir: &Path,
+        scope: &ReviewScope,
+        toggles: Toggles,
+        path: &RelPath,
+        from: Option<&RelPath>,
+        force_large: bool,
+    ) -> io::Result<LoadedDiff> {
+        let base = match scope {
+            ReviewScope::Worktree {
+                base: Base::MergeBase { commit, .. },
+            } => Some(commit.as_str()),
+            _ => None,
+        };
+        // (old revision, new revision — `None` for the working tree)
+        let (old_rev, new_rev) = match (DiffRange::for_view(scope, toggles), base) {
+            (None, _) => {
+                return Ok(LoadedDiff {
+                    diff: FileDiff::Text(Vec::new()),
+                    old: None,
+                    new: None,
+                })
+            }
+            (Some(DiffRange::BaseToHead), Some(base)) => (base, Some("HEAD")),
+            (Some(DiffRange::BaseToWorktree), Some(base)) => (base, None),
+            _ => ("HEAD", None),
+        };
+        if new_rev.is_none() && is_untracked(dir, path)? {
+            return untracked_diff(dir, path, force_large);
+        }
+        let old_path = from.unwrap_or(path);
+        let mut revs = vec![old_rev];
+        revs.extend(new_rev);
+        let mut pathspec = vec!["--"];
+        if from.is_some() {
+            pathspec.push(old_path.as_str());
+        }
+        pathspec.push(path.as_str());
+
+        let mut stat_args = revs.clone();
+        stat_args.extend(&pathspec);
+        let stats = parse_numstat(&diff(dir, "--numstat", &stat_args)?);
+        let lines = stats.iter().find(|s| &s.path == path).map(|s| s.lines);
+        if lines == Some(None) {
+            return Ok(LoadedDiff {
+                diff: FileDiff::Binary,
+                old: None,
+                new: None,
+            });
+        }
+        if !force_large {
+            let (added, removed) = lines.flatten().unwrap_or((0, 0));
+            let old_size = object_sizes(dir, &[format!("{old_rev}:{old_path}")])[0];
+            let new_size = match new_rev {
+                Some(rev) => object_sizes(dir, &[format!("{rev}:{path}")])[0],
+                None => std::fs::metadata(dir.join(path.as_str()))
+                    .ok()
+                    .map(|m| m.len()),
+            };
+            let too_big = |size: Option<u64>| size.is_some_and(|s| s > limits::MAX_VERSION_BYTES);
+            if u64::from(added) + u64::from(removed) > u64::from(limits::MAX_CHANGED_LINES)
+                || too_big(old_size)
+                || too_big(new_size)
+            {
+                return Ok(LoadedDiff {
+                    diff: FileDiff::TooLarge { added, removed },
+                    old: None,
+                    new: None,
+                });
+            }
+        }
+
+        let mut args = vec![
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "-M",
+            "-U3",
+        ];
+        args.extend(&revs);
+        args.extend(&pathspec);
+        let diff = parse_unified(&read_bytes(dir, &args, None)?);
+        if !matches!(diff, FileDiff::Text(_)) {
+            return Ok(LoadedDiff {
+                diff,
+                old: None,
+                new: None,
+            });
+        }
+        let old = blob(dir, old_rev, old_path);
+        let new = match new_rev {
+            Some(rev) => blob(dir, rev, path),
+            None => std::fs::read(dir.join(path.as_str())).ok(),
+        };
+        Ok(LoadedDiff {
+            diff,
+            old: old.as_deref().and_then(SideLines::from_bytes),
+            new: new.as_deref().and_then(SideLines::from_bytes),
+        })
+    }
+}
+
+/// Whether `path` is untracked and not ignored in `dir` (FR-005).
+fn is_untracked(dir: &Path, path: &RelPath) -> io::Result<bool> {
+    let out = read(
+        dir,
+        &[
+            "ls-files",
+            "-z",
+            "--others",
+            "--exclude-standard",
+            "--",
+            path.as_str(),
+        ],
+        None,
+    )?;
+    Ok(out.split('\0').any(|p| p == path.as_str()))
+}
+
+/// An untracked file's diff, read from disk: every line added (R8: a NUL byte is binary).
+fn untracked_diff(dir: &Path, path: &RelPath, force_large: bool) -> io::Result<LoadedDiff> {
+    let full = dir.join(path.as_str());
+    let size = std::fs::metadata(&full)?.len();
+    if !force_large && size > limits::MAX_VERSION_BYTES {
+        return Ok(LoadedDiff {
+            diff: FileDiff::TooLarge {
+                added: 0,
+                removed: 0,
+            },
+            old: None,
+            new: None,
+        });
+    }
+    let bytes = std::fs::read(&full)?;
+    let (_, lines) = content_of(&bytes);
+    if !force_large && lines > limits::MAX_CHANGED_LINES {
+        return Ok(LoadedDiff {
+            diff: FileDiff::TooLarge {
+                added: lines,
+                removed: 0,
+            },
+            old: None,
+            new: None,
+        });
+    }
+    let diff = added_file(&bytes);
+    let new = matches!(diff, FileDiff::Text(_))
+        .then(|| SideLines::from_bytes(&bytes))
+        .flatten();
+    Ok(LoadedDiff {
+        diff,
+        old: None,
+        new,
+    })
+}
+
+/// The bytes of `<rev>:<path>`, or `None` when that revision has no such file.
+fn blob(dir: &Path, rev: &str, path: &RelPath) -> Option<Vec<u8>> {
+    if path.as_str().contains('\n') {
+        return None;
+    }
+    read_bytes(
+        dir,
+        &["cat-file", "blob", &format!("{rev}:{}", path.as_str())],
+        None,
+    )
+    .ok()
 }

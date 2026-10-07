@@ -17,3 +17,13 @@ assertion, not on a build error.
 | Changes view list state (open, toggles, seq, again, selection, V2, V3, L1, L3) | T014 → T020 (green: 13/13) | `features_changes` on the stubbed `features::changes` (`update` → `Effect::None`, empty view-model): 13 of 13 FAILED at their assertions | `features_changes` 13 passed |
 | `VirtualRows` windowing | T015 → T019 (green: 6/6) | `virtual_rows::tests` on the stubbed `visible_range` (`0..len`) and `spacers` (`(0, 0)`): 4 of 6 FAILED; the empty-list and total-height cases pass on the stub by construction | `virtual_rows` 6 passed |
 | Review changes opens the view (V1) | T022 test → T022 | `features_sidebar`/`app_state` `review_changes*`: did not compile (no `sidebar::review_changes`, `Outcome::ChangesRequested`, `SidebarMsg::ReviewChangesRequested`, `State::changes`, `take_changes_effect`); green: `review_changes` 1 passed in `features_sidebar`, 1 in `app_state` |
+
+## M2 — unified diff (T027–T040)
+
+Reds run against stubs that compile and answer "nothing" (`FileDiff::Text(vec![])`, `None`, empty
+rows), each failing at its assertion.
+
+| Behaviour | Tasks | Red (stub) | Green |
+|---|---|---|---|
+| `parse_unified` (headers, both numbers, CRLF, ending-only pair, no-newline marker, binary, not UTF-8, mode only), `added_file`, `unified_rows`, `SideLines` | T027 → T032 | `review::diff::tests`: 13 of 13 FAILED (e.g. `a_binary_notice_gives_binary` left `Text([])`) | `cargo test -p micold-core --lib review::diff`: 13 passed (one fixture fix on the way: `\`-continuation had eaten the context lines' leading space) |
+| `GitCli::file_diff`: committed / uncommitted / both, rename with old path, deleted, untracked, binary, LF → CRLF, 6,000 lines `TooLarge` unless forced | T028 → T033 | `review_git`: 6 new of 14 FAILED at their assertions (stub `Text([])`), the 8 M1 cases ok | `review_git`: 14 passed |
