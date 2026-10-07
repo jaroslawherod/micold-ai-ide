@@ -137,7 +137,7 @@ session delivers one prompt to the entry's running session.
 - [X] T060 [US2] Wire commenting in `crates/micold-client/src/ui/changes.rs`: gutter picks, **Add comment**, the composer under the last picked row (Save, Ctrl/Cmd+Enter, Cancel), comment cards under their anchors, and the "Not in the current diff" group and list-row pending counts as `features::changes` derives them (C1–C3, L2)
 - [X] T061 [P] [US2] Add `TextArea` (empty, focused, multi-line) and `ReviewCommentCard` (pending, sent, outdated, in a send) poses and a `DiffView` picked-range pose to `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [X] T062 [P] [US2] Extend `docs/user-guide/reviewing-changes.md`: picking a line or range, writing, editing and deleting comments, that comments are kept across restarts and shown in every window
-- [ ] T063 [US2] Visual pass of quickstart B7, B8 and B14, light and dark; evidence under `specs/482-worktree-changes-review/visual-pass/`
+- [x] T063 [US2] Visual pass of quickstart B7, B8 and B14, light and dark; evidence under `specs/482-worktree-changes-review/visual-pass/`
 
 ### Part B — sending to the running session (scenarios 3–6)
 
