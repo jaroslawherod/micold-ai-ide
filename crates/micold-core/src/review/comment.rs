@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::prompt::{self, EntryKind};
 use super::{LineRange, RelPath, Side};
 
 /// A comment's identity: a v4 UUID the daemon assigns.
@@ -154,6 +155,12 @@ pub enum ReviewError {
     NotFound,
     /// The comment is sent: sent comments are only cleared (W3).
     Refused,
+    /// The comment is inside an open send (W3, R6).
+    InSend,
+    /// A send is already open for this entry (W6, R6).
+    Busy,
+    /// There is no pending comment to send (W6, US2 s5).
+    NothingPending,
 }
 
 impl std::fmt::Display for ReviewError {
@@ -162,6 +169,9 @@ impl std::fmt::Display for ReviewError {
             Self::Invalid(why) => f.write_str(why),
             Self::NotFound => f.write_str("no such comment in this entry"),
             Self::Refused => f.write_str("a sent comment cannot be changed; clear it instead"),
+            Self::InSend => f.write_str("the comment is being sent; try again once the send ends"),
+            Self::Busy => f.write_str("these comments are already being sent"),
+            Self::NothingPending => f.write_str("there are no pending comments to send"),
         }
     }
 }
@@ -184,16 +194,78 @@ pub struct Draft {
     pub text: String,
 }
 
-/// One entry's comments, in the order they were made (data-model `EntryReview`).
+/// The comments one send carries, taken when it begins (data-model `SendSnapshot`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendSnapshot {
+    /// The pending comments at `begin_send`, in the prompt's order.
+    pub ids: Vec<CommentId>,
+    /// The prompt built from them (contracts/review-prompt.md).
+    pub prompt: String,
+}
+
+/// One entry's comments, in the order they were made, and the send open on them if any
+/// (data-model `EntryReview`). The open send is never persisted (W10).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EntryReview {
     comments: Vec<ReviewComment>,
+    sending: Option<Vec<CommentId>>,
 }
 
 impl EntryReview {
     /// An entry holding `comments` as loaded.
     pub fn from_comments(comments: Vec<ReviewComment>) -> Self {
-        Self { comments }
+        Self {
+            comments,
+            sending: None,
+        }
+    }
+
+    /// A send is open for this entry.
+    pub fn sending(&self) -> bool {
+        self.sending.is_some()
+    }
+
+    /// Open a send of every pending comment (W6): `NothingPending` with none, `Busy` while
+    /// another send is open. Until it finishes or aborts, its comments refuse edits (`InSend`).
+    pub fn begin_send(
+        &mut self,
+        entry: EntryKind,
+        outdated: &[CommentId],
+    ) -> Result<SendSnapshot, ReviewError> {
+        if self.sending.is_some() {
+            return Err(ReviewError::Busy);
+        }
+        let pending: Vec<ReviewComment> = self
+            .comments
+            .iter()
+            .filter(|comment| comment.state == CommentState::Pending)
+            .cloned()
+            .collect();
+        if pending.is_empty() {
+            return Err(ReviewError::NothingPending);
+        }
+        let ids: Vec<CommentId> = pending.iter().map(|comment| comment.id).collect();
+        self.sending = Some(ids.clone());
+        Ok(SendSnapshot {
+            ids,
+            prompt: prompt::build(entry, &pending, outdated),
+        })
+    }
+
+    /// The send was delivered (W8): its comments become `Sent { at }`; comments added meanwhile
+    /// stay pending.
+    pub fn finish_send(&mut self, snapshot: &SendSnapshot, at: u64) {
+        for comment in &mut self.comments {
+            if snapshot.ids.contains(&comment.id) {
+                comment.state = CommentState::Sent { at };
+            }
+        }
+        self.sending = None;
+    }
+
+    /// The send failed (W9): every comment stays as it was, and edits are allowed again.
+    pub fn abort_send(&mut self) {
+        self.sending = None;
     }
 
     /// Every comment, pending and sent.
@@ -247,14 +319,17 @@ impl EntryReview {
         Ok(())
     }
 
-    /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `Refused`
-    /// when it is sent.
+    /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `InSend` when
+    /// an open send holds it, `Refused` when it is sent.
     fn pending_index(&self, id: CommentId) -> Result<usize, ReviewError> {
         let index = self
             .comments
             .iter()
             .position(|comment| comment.id == id)
             .ok_or(ReviewError::NotFound)?;
+        if self.sending.as_ref().is_some_and(|ids| ids.contains(&id)) {
+            return Err(ReviewError::InSend);
+        }
         match self.comments[index].state {
             CommentState::Pending => Ok(index),
             CommentState::Sent { .. } => Err(ReviewError::Refused),
@@ -488,5 +563,137 @@ mod tests {
         let (a, b) = (CommentId::new(), CommentId::new());
         assert_ne!(a, b, "two comments never share an id");
         assert_eq!(a.0.get_version_num(), 4, "ids are UUID v4");
+    }
+
+    fn three_pending_one_sent() -> EntryReview {
+        let mut review = EntryReview::default();
+        for n in 1..=3 {
+            review
+                .add(
+                    draft(n, n, &["x"], &format!("c{n}")),
+                    id(u128::from(n)),
+                    NOW,
+                )
+                .expect("valid");
+        }
+        let mut sent = sample(CommentState::Sent { at: NOW });
+        sent.id = id(9);
+        let mut comments = review.comments().to_vec();
+        comments.push(sent);
+        EntryReview::from_comments(comments)
+    }
+
+    fn state_of(review: &EntryReview, n: u128) -> CommentState {
+        review
+            .comments()
+            .iter()
+            .find(|comment| comment.id == id(n))
+            .expect("the comment is there")
+            .state
+    }
+
+    #[test]
+    fn begin_send_snapshots_exactly_the_pending_comments() {
+        let mut review = three_pending_one_sent();
+        let snapshot = review
+            .begin_send(EntryKind::Worktree, &[])
+            .expect("pending comments can be sent");
+        assert_eq!(
+            snapshot.ids,
+            vec![id(1), id(2), id(3)],
+            "sent comments are left out (US2 s6)"
+        );
+        assert!(review.sending(), "the send is open");
+        let pending: Vec<_> = review
+            .comments()
+            .iter()
+            .filter(|comment| comment.state == CommentState::Pending)
+            .cloned()
+            .collect();
+        assert_eq!(
+            snapshot.prompt,
+            crate::review::prompt::build(EntryKind::Worktree, &pending, &[]),
+            "the snapshot's prompt is built from exactly those comments"
+        );
+        assert!(
+            !snapshot.prompt.contains("Why clone here?"),
+            "no trace of the sent one"
+        );
+    }
+
+    #[test]
+    fn begin_send_with_nothing_pending_or_a_send_open_is_refused() {
+        let mut empty = EntryReview::from_comments(vec![sample(CommentState::Sent { at: NOW })]);
+        assert_eq!(
+            empty.begin_send(EntryKind::Worktree, &[]),
+            Err(ReviewError::NothingPending),
+            "only sent comments: nothing to send (US2 s5)"
+        );
+        assert!(!empty.sending(), "a refused send opens nothing");
+
+        let mut review = three_pending_one_sent();
+        review
+            .begin_send(EntryKind::Worktree, &[])
+            .expect("first send");
+        assert_eq!(
+            review.begin_send(EntryKind::Worktree, &[]),
+            Err(ReviewError::Busy),
+            "a second send while one is open is Busy (FR-018)"
+        );
+    }
+
+    #[test]
+    fn comments_in_an_open_send_refuse_edits_and_others_do_not() {
+        let mut review = three_pending_one_sent();
+        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        assert_eq!(review.set_text(id(1), "new"), Err(ReviewError::InSend));
+        assert_eq!(review.delete(id(2)), Err(ReviewError::InSend));
+        review
+            .add(draft(5, 5, &["y"], "added meanwhile"), id(5), NOW)
+            .expect("adding during a send is allowed");
+        review
+            .set_text(id(5), "edited")
+            .expect("a comment outside the send can be edited");
+        review.delete(id(5)).expect("and deleted");
+    }
+
+    #[test]
+    fn finish_send_marks_only_the_snapshot_sent() {
+        let mut review = three_pending_one_sent();
+        let snapshot = review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review
+            .add(draft(5, 5, &["y"], "added meanwhile"), id(5), NOW)
+            .expect("valid");
+        review.finish_send(&snapshot, NOW + 7);
+        for n in 1..=3 {
+            assert_eq!(state_of(&review, n), CommentState::Sent { at: NOW + 7 });
+        }
+        assert_eq!(
+            state_of(&review, 5),
+            CommentState::Pending,
+            "added meanwhile stays pending"
+        );
+        assert_eq!(
+            state_of(&review, 9),
+            CommentState::Sent { at: NOW },
+            "the old send keeps its time"
+        );
+        assert!(!review.sending(), "the send is closed");
+        review.set_text(id(5), "edit").expect("edits work again");
+    }
+
+    #[test]
+    fn abort_send_leaves_every_comment_pending_and_editable() {
+        let mut review = three_pending_one_sent();
+        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review.abort_send();
+        for n in 1..=3 {
+            assert_eq!(state_of(&review, n), CommentState::Pending, "FR-017");
+        }
+        assert!(!review.sending(), "the send is closed");
+        review.set_text(id(1), "edit").expect("edits work again");
+        review
+            .begin_send(EntryKind::Worktree, &[])
+            .expect("a new send can begin");
     }
 }

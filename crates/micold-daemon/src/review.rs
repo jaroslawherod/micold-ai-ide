@@ -39,6 +39,8 @@ impl From<ReviewError> for Refusal {
             ReviewError::Invalid(_) => ErrorKind::InvalidInput,
             ReviewError::NotFound => ErrorKind::NotFound,
             ReviewError::Refused => ErrorKind::Refused,
+            ReviewError::InSend | ReviewError::Busy => ErrorKind::Busy,
+            ReviewError::NothingPending => ErrorKind::InvalidInput,
         };
         Self::new(kind, err.to_string())
     }
