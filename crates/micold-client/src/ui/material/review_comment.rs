@@ -84,7 +84,7 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
     }
 
     /// What the card shows besides its text.
-    pub fn parts(&self) -> Parts {
+    fn parts(&self) -> Parts {
         Parts {
             label: match self.state {
                 CardState::Pending | CardState::InSend => PENDING,

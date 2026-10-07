@@ -371,7 +371,7 @@ fn composer_box<'a>(
         Some(content) => {
             let mut area = TextArea::new(content, r)
                 .placeholder("Comment")
-                .on_action(|action| Message::ComposerAction(EditorAction(action)));
+                .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))));
             if has_text {
                 area = area.on_submit(save.clone());
             }

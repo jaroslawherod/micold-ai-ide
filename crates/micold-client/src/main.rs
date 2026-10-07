@@ -610,7 +610,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         Message::Changes(msg) => shell::changes::update(app, msg),
-        Message::ComposerAction(action) => shell::changes::composer_action(app, action.0),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.

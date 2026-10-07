@@ -27,13 +27,16 @@ use crate::App;
 
 /// Apply a Changes view message, and run the read the reducer asks for.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
+    if let Msg::ComposerAction(action) = msg {
+        return composer_action(app, action.0);
+    }
     let effect = app.core.update_changes(msg);
     sync_composer(app);
     run(app, effect)
 }
 
 /// Perform an action in the composer's editor; an edit reports the new text to the reducer (C2).
-pub fn composer_action(app: &mut App, action: text_editor::Action) -> Task<Message> {
+fn composer_action(app: &mut App, action: text_editor::Action) -> Task<Message> {
     let edit = action.is_edit();
     app.composer.perform(action);
     if edit {

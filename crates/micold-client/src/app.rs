@@ -41,9 +41,10 @@ pub const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
 /// constants is a test of nothing.
 const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
 
-/// A `text_editor` action, made `Eq` so [`Message`] can stay `Eq`: the action is compared by
-/// `PartialEq`, which for an action is total (it holds no floats that can be NaN in practice — a
-/// scroll's line count is an integer and a drag's point comes from the pointer).
+/// A `text_editor` action, made `Eq` so [`Message`] can stay `Eq` (it rides in
+/// `changes::Msg::ComposerAction`): the action is compared by `PartialEq`, which for an action is
+/// total (it holds no floats that can be NaN in practice — a scroll's line count is an integer and
+/// a drag's point comes from the pointer).
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorAction(pub iced::widget::text_editor::Action);
 
@@ -155,12 +156,6 @@ pub enum Message {
     /// the entry is `shell/changes.rs`, which reaches the reducer through
     /// [`State::update_changes`]. `State::update` declines it.
     Changes(crate::features::changes::Msg),
-
-    /// An edit or a cursor move in the review composer's text area (feature 482, C2). The editor's
-    /// content is the binary's (it is runtime, not state, and neither `Clone` nor `Eq`), so the
-    /// shell performs the action and reports the new text as `changes::Msg::ComposerEdited`.
-    /// `State::update` declines it.
-    ComposerAction(EditorAction),
 
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
@@ -675,7 +670,6 @@ impl State {
             | Message::Sandbox(_)
             | Message::PrStatus(_)
             | Message::Changes(_)
-            | Message::ComposerAction(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);

@@ -16,7 +16,7 @@ use iced::widget::text_editor::{self, Action, Binding, Content, KeyPress};
 use iced::widget::TextEditor;
 use iced::{Background, Color, Element, Event, Length, Padding, Rectangle, Size};
 
-use micold_core::tokens::{spacing, typography, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 use super::style;
 
@@ -80,12 +80,13 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
 impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
     fn from(area: TextArea<'a, M>) -> Self {
         let r = area.roles;
-        let line = typography::BODY_LARGE;
+        let line = super::TypeRole::Body;
         let on_submit = area.on_submit;
         let mut editor = TextEditor::<PlainText, M, iced::Theme, iced::Renderer>::new(area.content)
             .placeholder(area.placeholder)
-            .size(line.size)
-            .line_height(iced::Pixels(line.line_height))
+            .size(line.size())
+            .line_height(line.line_height())
+            .font(line.font())
             .padding(PADDING)
             .min_height(MIN_HEIGHT - PADDING.top - PADDING.bottom)
             .style(move |_theme, status| {
