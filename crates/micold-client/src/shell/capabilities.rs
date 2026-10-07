@@ -255,6 +255,15 @@ impl Capabilities {
         self
     }
 
+    /// Put `notifier` in place of the system's notifications (feature 039, #572 item 5).
+    ///
+    /// In place rather than by value: `App` implements `Drop`, so a test cannot move `caps` out
+    /// of `base_app()` to rebuild it.
+    #[cfg(test)]
+    pub(crate) fn set_notifier(&mut self, notifier: Arc<dyn DesktopNotifier>) {
+        self.notifier = notifier;
+    }
+
     /// The same capabilities, with `tooling` in place of the real `gh` (feature 034).
     #[cfg(test)]
     pub(crate) fn with_issue_tooling(mut self, tooling: IssueTooling) -> Self {

@@ -94,8 +94,7 @@ fn rust_files_under(rel: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut dirs = vec![repo_root().join(rel)];
     while let Some(dir) = dirs.pop() {
-        let entries =
-            fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
+        let entries = fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
         for entry in entries {
             let path = entry.expect("a directory entry").path();
             if path.is_dir() {

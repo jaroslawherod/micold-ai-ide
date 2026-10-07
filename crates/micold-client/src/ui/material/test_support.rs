@@ -90,8 +90,8 @@ pub fn holds_whole<M>(host: Element<'_, M>, part: Element<'_, M>, room: Size) ->
     let mut boxes: Vec<Layout<'_>> = Layout::new(&host).children().collect();
     while let Some(candidate) = boxes.pop() {
         let b = candidate.bounds();
-        let same_size = (b.width - want.width).abs() < TOLERANCE
-            && (b.height - want.height).abs() < TOLERANCE;
+        let same_size =
+            (b.width - want.width).abs() < TOLERANCE && (b.height - want.height).abs() < TOLERANCE;
         let inside = b.x >= outer.x - TOLERANCE
             && b.y >= outer.y - TOLERANCE
             && b.x + b.width <= outer.x + outer.width + TOLERANCE
