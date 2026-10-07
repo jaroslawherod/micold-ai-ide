@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M5: continue from *Handover* (composer focus fix, T075 record, verify.md)
+- **Next step**: milestone M5: verify.md (scoped gate + review A, review B, full gate)
 
 ## Pull requests
 
@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M4 T057: the daemon's `Reviews` keys entries by worktree dir `String` (`""` = Default, as on the wire; `SessionLocation` is not `Hash`) and reads a project's review file on first use rather than at catalog adoption — same observable behaviour (attach and edits read it), no read for projects nobody opens. `ClearSent`/`DiscardPending` answer `Refused` ("not available in this build") until M8 (W4); `Busy` for a comment in a send arrives with M5.
 - M5 T070: MCP `send_session_input`/`deliver_first_prompt` keep their pre-confirm trust check and write without requiring bracketed paste (unchanged behaviour, `write_submission(.., false)`); the review send requires bracketed paste (W9) and refuses without it.
+- M5 T075 fix: the Changes view counts as taking the main area in `view_facts()` too (039's `ViewFacts` doc: "a screen fills the main area instead of the session"), so the selected session is not in view behind it — the same rule as Settings. Tested in `attention_view_report.rs`.
 
 ## Review rounds
 
@@ -80,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Gate M4 (full, raw commands, 0562c7e0) | full | green except the 6 root-only permission tests (pass in CI): fmt, clippy core+workspace, workspace tests, scripts/tests/*.test.sh |
 | Visual pass M4 (T063) | 1 | a46f1c19 | B7, B8 (dark), B14 (light, after restart) pass; Send to session is M5 |
 | Review B M4 (conformance, sonnet) | 1 | eecc77bb3f560f5dfed9108b8047f6423c45ad54:a46f1c19c1d7839c0e46269f3e52c3dd7bfceedb | CLEAN; 2 MINOR not fixed (F1 `review_edit` pushes `ReviewChanged` to every client, not only the project's, and snapshots the catalog per edit; F2 Verify not runnable in its sandbox, the scoped gate ran it) |
+| Visual pass M5 (T075) | 1 | 2473be8a, e2cc6eba | B9, B10 (light) pass; found the composer taking no keys with a session selected (MAJOR), fixed in e2cc6eba (`terminal_focused()` and `view_facts().main_area_taken` count the Changes view); re-run in dark: typing works with a session running, B10 pass |
 
 ## Declined review findings
 
@@ -92,11 +94,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 unit 3 handed over at the 150k cap (2026-10-07).
-- **Done (committed)**: R5 fixed (test sent `x` without a line end; the stand-in `cat` reads a canonical terminal line by line — now `x\r`); `review_send` 5/5 green. T067 run red (3 of 40), T073 implemented (`send_action`, `SendPressed`, `sent_text`, `send_error_text`; `ui/changes.rs` `push_maybe` → `if let` push), 40/40 green, client clippy clean. T074 user guide written. Cycle log rows for T070–T073. T067, T070–T074 ticked; Decision on MCP trust/paste recorded.
-- **T075 visual pass (light, Xvfb :77)**: B9 with a session already running in `wt` PASS — Send to session (3) enabled, snackbar "Sent 3 comments to New session", button then "(0)" disabled, cards read Sent with no Edit/Delete, the terminal shows the one bracketed prompt matching the prompt contract. B10 PASS — one new comment, "Sent 1 comment to New session", the terminal gets only that comment. Crops in `visual-pass/m5-b9-*.png`, `m5-b10-*.png`; `visual-pass/m5.md` NOT written yet. Not run: dark scheme.
-- **Defect found by the pass (fix in progress, real, MAJOR)**: with a session selected, the review composer takes no keys (works with no session). Cause: `State::terminal_focused()` (`crates/micold-client/src/app.rs:379`) ignores the Changes view, which replaces the terminal pane (V1), so `KeyboardElsewhere` (`ui/mod.rs:407`) strips the composer's focus. Red test added: `tests/terminal_focus.rs::the_changes_view_takes_the_keyboard_from_the_terminal_it_replaces` (written, red NOT yet confirmed — the last run's `head -30` cut the output; rerun `cargo test -p micold-client --test terminal_focus the_changes` and log the red). Fix: add `&& self.changes.open.is_none()` to `terminal_focused()`; check `view_facts` `main_area_taken` too (FR-002 attention: the session is not in view while the Changes view is) — decide and record. Then cycle-log row, re-run the pass to confirm typing with a session running (fake CLI: `$SCRATCHPAD/vp-fake-claude.sh` as `claude` on PATH, `HOME` with `$SCRATCHPAD/vp-claude.json` as `.claude.json`, `env_include_enabled` is false in `$SCRATCHPAD/vpdata77` settings; data home `$SCRATCHPAD/vpdata77`, fixture `$SCRATCHPAD/fx/P` now has 4 Sent comments in wt), write `visual-pass/m5.md`, tick T075.
-- **Next**: the above, then verify.md (scoped gate + review A high, review B, full gate, `pr-body-482-M5.md`). Disk tight: `$SCRATCHPAD/prune.sh` before builds; `cargo check`/clippy rather than building all client test binaries; `$SCRATCHPAD/t.sh` needs an absolute log path.
+None.
 
 ## Open escalation
 
