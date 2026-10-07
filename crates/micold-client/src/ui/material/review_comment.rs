@@ -7,9 +7,11 @@
 //! Builder form: `ReviewCommentCard::new(&text, CardState::Pending, roles).outdated(false)
 //! .on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
 
-use iced::widget::Space;
-use iced::Element;
-use micold_core::tokens::Roles;
+use iced::widget::{column, container, row, Space};
+use iced::{Alignment, Border, Element, Length};
+use micold_core::tokens::{spacing, Roles};
+
+use super::{style, Button, Tag, Text, TypeRole};
 
 /// Where a comment is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,8 +99,36 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
 
 impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
     fn from(card: ReviewCommentCard<'a, M>) -> Self {
-        let _ = (card.text, card.roles);
-        Space::new().into()
+        let parts = card.parts();
+        let r = card.roles;
+        let mut head = row![Text::new(parts.label, TypeRole::Caption, r).muted()]
+            .spacing(spacing::SM)
+            .align_y(Alignment::Center);
+        if parts.outdated {
+            head = head.push(Tag::new(OUTDATED, r.tertiary));
+        }
+        head = head.push(Space::new().width(Length::Fill));
+        if parts.actions {
+            if let Some(message) = card.on_edit {
+                head = head.push(Button::text("Edit", r).on_press(message));
+            }
+            if let Some(message) = card.on_delete {
+                head = head.push(Button::text("Delete", r).on_press(message));
+            }
+        }
+        container(column![head, Text::new(card.text, TypeRole::Body, r)].spacing(spacing::XS))
+            .padding(spacing::SM)
+            .width(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(iced::Background::Color(style::color(r.surface_container_low))),
+                border: Border {
+                    color: style::color(r.outline_variant),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..container::Style::default()
+            })
+            .into()
     }
 }
 
