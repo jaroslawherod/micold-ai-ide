@@ -88,12 +88,20 @@ fn run(root: PathBuf, git: Arc<dyn Git + Send + Sync>) -> impl Stream<Item = Mes
             },
             Config::default(),
         );
-        let Ok(mut watcher) = watcher else {
-            return;
+        let mut watcher = match watcher {
+            Ok(watcher) => watcher,
+            Err(err) => {
+                eprintln!("micold: cannot watch {} for changes: {err}", root.display());
+                return;
+            }
         };
         for (dir, mode) in targets(&root, &git_dirs) {
             // A git dir with no `refs/` of its own (a worktree's) has nothing there to watch.
-            let _ = watcher.watch(&dir, mode);
+            if let Err(err) = watcher.watch(&dir, mode) {
+                if dir == root {
+                    eprintln!("micold: cannot watch {} for changes: {err}", dir.display());
+                }
+            }
         }
         let mut debouncer = Debouncer::default();
         loop {

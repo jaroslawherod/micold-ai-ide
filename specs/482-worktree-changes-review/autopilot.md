@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M7 (T081–T089) verify: review A F1, T089 visual pass, review B, full gate; M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
+- **Next step**: milestone M7 (T081–T089) verify: round-2 review A (sonnet), T089 visual pass, review B, full gate; M5 and M6 commits are local (push refused by the gate hook: no `mise run gate` record here)
 
 ## Pull requests
 
@@ -92,6 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M5 (conformance, sonnet) | 1 | 74cbb069cdfc59ee86ddfa6f81e310a536652ab8:ace6b8b2dd36d05440a48a13e72326b7e2f3f3a3 | CLEAN; 1 MINOR (Verify not runnable in its sandbox; the full gate ran it: review::prompt 11/11, review_send 5/5) |
 | Review A M7 (code-review high, 7bc6c029..HEAD) | 1 | d07862c24c2bdb7220d13123681afca799b78974:7ce47a8bcb738cc21f24ee8b58262cc24b29b72c | CHANGES: F1 MAJOR open (a New composer keeps its pick after the refresh drops it; Save then does nothing when the lines are gone); F2 MAJOR fixed (`Debouncer` `MAX_WAIT` 1 s); F3 MINOR fixed (`GIT_OPTIONAL_LOCKS=0` on review reads); F4 MINOR open (watch setup failures swallowed, no log); F5 MINOR open (`&GLOBAL[..3]` order dependence) |
 | Gate M7 (full, raw commands, 2nd commit after 7ce47a8b, before the F2/F3 fix) | full | — | green except the 6 root-only permission tests (pass in CI); no SCRIPT_FAIL |
+| Review A M7 fixes (unit 3) | — | — | F1 fixed red first: an unplaced New composer keeps its text, shows above the diff with a note and Save disabled, a new pick re-places it; a dropped selection closes it. F4 fixed (setup failures logged to stderr). F5 fixed (`CHECK_IGNORE_GLOBAL`) |
 
 ## Declined review findings
 
@@ -105,8 +106,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 unit 2 (context cap) handed over. Done and committed: T086 (`Git::ignored`/`git_dirs` on the trait; `shell/changes_watch.rs` keyed by entry root, `notify` watch of the entry + outside git dirs and their `refs/`, `Debouncer` + `relevant_paths` + `ignored`, emits `Msg::Changed`; registered in `shell/subscriptions.rs` under `if let Some(view) = &app.core.changes.open`, guarded by `tests/idle_subscriptions.rs`), T088 (user guide: "Keeping up with changes", "Outdated comments"), review A round 1 (F2, F3 fixed with a red first). Full raw gate green (but the 6 root-only tests) before the F2/F3 fix.
-Next: (1) review A F1 (MAJOR, `features/changes.rs` ~427/608/822): after a refresh drops the pick, a `ComposerTarget::New(pick)` composer stays (C4 keeps the text: spec Edge "File changes while composing") but `composer_saved` returns `Effect::None` when the lines are gone, so Save silently does nothing; decide a fix that keeps the text (e.g. Save disabled with a note, or the composer re-anchors on the lines still there), test it red first in `tests/features_changes.rs`; then a scoped round-2 review A on sonnet over `review-snapshot.sh diff d07862c2…:7ce47a8b…`. (2) T089 visual pass inline (the `claude -p --agent autopilot-worker` route is blocked: the child is refused `mkdir`/`mktemp`/`build-lock.sh`): B12 + 20 timed edits, evidence `visual-pass/m7.md`. (3) Review B M7 (sonnet). (4) Full gate (`scratchpad/gate.sh`), PR-body section `pr-body-482-M7.md`, plain push attempt.
+None.
 
 ## Open escalation
 

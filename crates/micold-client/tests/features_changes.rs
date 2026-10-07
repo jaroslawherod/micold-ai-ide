@@ -1380,3 +1380,65 @@ fn a_file_gone_from_the_list_makes_its_comments_outdated() {
     refresh(&mut state, &["b.rs"], commentable());
     assert_eq!(outdated(&state), BTreeSet::from([on_a.id]));
 }
+
+/// The `shorter` answer of a refresh: line 4 of the new side is gone.
+fn shorter() -> LoadedDiff {
+    LoadedDiff {
+        diff: parse_unified(b"@@ -1,4 +1,2 @@\n a\n-b\n-c\n-x\n+B\n"),
+        old: SideLines::from_bytes(b"a\nb\nc\nx\n"),
+        new: SideLines::from_bytes(b"a\nB\n"),
+        spans: Default::default(),
+    }
+}
+
+/// C4, review A M7 F1. A composer whose lines a refresh removed is no longer placed, so it
+/// cannot save; a new pick places it again with its text, and Save adds the comment there.
+#[test]
+fn a_composer_whose_lines_are_gone_waits_for_a_new_pick_and_keeps_its_text() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(4), false);
+    changes::update(&mut state, Msg::AddComment);
+    changes::update(&mut state, Msg::ComposerEdited("half written".into()));
+    refresh(&mut state, &["a.rs", "b.rs"], shorter());
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(changes::composer_placed(view), None, "line 4 is gone");
+    assert_eq!(
+        changes::update(&mut state, Msg::ComposerSaved),
+        Effect::None,
+        "nowhere to save it"
+    );
+    gutter(&mut state, None, Some(2), false);
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(
+        changes::composer_placed(view),
+        Some(Pick {
+            side: Side::New,
+            anchor: 2,
+            head: 2
+        }),
+        "the new pick places it"
+    );
+    let effect = changes::update(&mut state, Msg::ComposerSaved);
+    let Effect::ReviewEdit {
+        edit: ReviewEditOp::Add {
+            start, end, text, ..
+        },
+        ..
+    } = effect
+    else {
+        panic!("an add, got {effect:?}");
+    };
+    assert_eq!((start, end, text.as_str()), (2, 2, "half written"));
+}
+
+/// Review A M7 F1. A refresh that drops the selected file closes a new comment's composer: its
+/// file is gone, as when another file is selected.
+#[test]
+fn a_refresh_that_drops_the_selected_file_closes_a_new_comment() {
+    let mut state = showing(commentable());
+    gutter(&mut state, None, Some(2), false);
+    changes::update(&mut state, Msg::AddComment);
+    let effect = changes::update(&mut state, Msg::Changed);
+    answer_list(&mut state, effect, &["a.rs"]);
+    assert_eq!(state.open.as_ref().unwrap().composer, None);
+}
