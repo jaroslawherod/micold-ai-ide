@@ -288,7 +288,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [X] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [X] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
-- [X] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)*
+- [ ] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)* *(reopened 2026-09-14 — BUG-017: the message starts 32dp from the container's left edge, not §7.8's 16dp. Fixed by T195, closes with T197's rendered frame.)*
 - [X] T053 [US4] Replace the inline notification strip in `crates/micold-client/src/ui/mod.rs` with the floating snackbar overlay, above the dialog scrim and not obstructing a dialog's action row (FR-032)
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
@@ -1892,3 +1892,25 @@ exercised on the rendered frame: a ring that a traversal showed before the termi
 border) is `origin/main` after Space, and the bottom strip (blue) is this branch after Space.
 
 **Bugfix**: 2026-09-17 — BUG-016 added Phase 28 (T188–T193; T192–T193 were added on the user's request after review). **No task is reopened.** T176–T177 are complete as written: their tests drive a button alone, with nothing else in the tree to take a key first.
+
+## Phase 29: BUG-017 — the snackbar's message started 32dp in from its left edge
+
+**Goal**: a snackbar's message starts at §7.8's 16dp horizontal padding, with or without its action and
+on one line or wrapped, while BUG-015's `Dismiss` stays whole inside the padded edge (FR-032, US4
+acceptance scenario 20).
+
+- [X] T194 Failing test first: in `crates/micold-client/src/ui/material/snackbar.rs`, lay snackbars out headlessly — a one-word message with and without `on_dismiss` in a 1200dp window, and BUG-015's long message dismissible in a 1200dp and a 400dp window and undismissible in a 1200dp one — and assert the message's text node starts `anatomy::snackbar::PADDING_H` from the container's left edge. Red today at 32dp (FR-032)
+
+- [X] T195 In `crates/micold-client/src/ui/material/snackbar.rs`, drop the message row's `spacing`, keeping §7.8's 48dp floor (the height-only spacer, width `Shrink`) and the message–action gap on `Reflow`. T194 goes green; BUG-015's two tests stay green (FR-032)
+
+- [ ] T196 Run the workspace gate (`mise run gate`) and record the result here
+
+- [ ] T197 Confirm on a rendered frame that each of the showcase's snackbar poses starts its message 16dp from the container's left edge, and that the two dismissible poses still draw `Dismiss` whole; record what was measured
+
+**Red record (T194)** — 2026-09-14, against the unfixed snackbar (`origin/main` at `fadb8e9f`),
+`cargo test -p micold-client --lib material::snackbar`: `the_message_starts_at_the_containers_horizontal_padding`
+failed with "the message (7 chars, dismissible: true, 1200dp window) starts 32dp from the container's left
+edge; §7.8's horizontal padding is 16dp", its first case; BUG-015's two tests passed. Green after T195, all
+three passing.
+
+**Bugfix**: 2026-09-14 — BUG-017 Updated from bugfix patch: reopened T052 and added Phase 29 (T194–T197).
