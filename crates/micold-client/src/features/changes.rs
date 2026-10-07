@@ -80,6 +80,9 @@ pub struct OpenView {
     /// The diff's slots (comment cards, the composer) as last measured, in whole pixels, keyed by
     /// the line they hang under; for the shown file in the layout in force.
     pub slot_heights: BTreeMap<(Side, u32), u32>,
+    /// The entry's comments judged outdated (R14): their lines no longer hold their quote, or
+    /// their file left the list. A comment keeps its judgement until its file is read again.
+    pub outdated: BTreeSet<CommentId>,
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -249,6 +252,8 @@ pub enum Msg {
     },
     /// **Send to session (n)** was pressed (S1).
     SendPressed,
+    /// A file of the open entry changed on disk or in git (R1, R9).
+    Changed,
 }
 
 /// What the shell must do.
@@ -300,7 +305,7 @@ pub enum Effect {
         project: PathBuf,
         /// The wire's worktree dir; `""` is the Default entry.
         worktree_dir: String,
-        /// The comments judged outdated (R14); empty until M7.
+        /// The pending comments judged outdated (R14), in the entry's order.
         outdated: Vec<CommentId>,
         /// How many pending comments the send carries, for the success snackbar (S2).
         count: usize,
@@ -344,6 +349,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 pick: None,
                 composer: None,
                 slot_heights: BTreeMap::new(),
+                outdated: BTreeSet::new(),
             });
             request_read(state)
         }
@@ -417,8 +423,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                         Ok(diff) => Load::Ready(diff),
                         Err(message) => Load::Failed(message),
                     };
+                    // R2: a pick stays only while its lines are still rows of the diff.
+                    if let Some(pick) = view.pick {
+                        let rows = diff_rows(view);
+                        let shown = |line| rows.contains(&(pick.side, line));
+                        if !(shown(pick.anchor) && shown(pick.head)) {
+                            view.pick = None;
+                        }
+                    }
                 }
             }
+            judge_outdated(state);
             Effect::None
         }
         Msg::ListScrolled { offset, viewport } => {
@@ -489,6 +504,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ComposerSaved => composer_saved(state),
+        Msg::Changed => request_read(state),
         Msg::SendPressed => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -499,10 +515,19 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if count == 0 {
                 return Effect::None;
             }
+            let outdated = review_of(state, view)
+                .map(|r| {
+                    r.comments
+                        .iter()
+                        .filter(|c| is_pending(c) && view.outdated.contains(&c.id))
+                        .map(|c| c.id)
+                        .collect()
+                })
+                .unwrap_or_default();
             Effect::ReviewSend {
                 project: view.project.clone(),
                 worktree_dir: entry_dir(&view.entry),
-                outdated: Vec::new(),
+                outdated,
                 count,
             }
         }
@@ -549,6 +574,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state
                 .reviews
                 .insert((project, worktree_dir), ReviewView { comments, sending });
+            judge_outdated(state);
             Effect::None
         }
     }
@@ -804,6 +830,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
             Load::Failed(message)
         }
     };
+    judge_outdated(state);
     if again {
         request_read(state)
     } else {
@@ -854,6 +881,70 @@ fn request_diff(state: &mut State, keep: bool) -> Effect {
         force_large: view.shown_large.contains(&path),
         path,
         from,
+    }
+}
+
+/// The `(side, line)` of every row of the diff on screen; a context row gives both sides.
+fn diff_rows(view: &OpenView) -> BTreeSet<(Side, u32)> {
+    let DiffBody::Diff(LoadedDiff {
+        diff: FileDiff::Text(hunks),
+        ..
+    }) = diff_body(view)
+    else {
+        return BTreeSet::new();
+    };
+    let mut rows = BTreeSet::new();
+    for line in hunks.iter().flat_map(|h| &h.lines) {
+        rows.extend(line.old.map(|n| (Side::Old, n)));
+        rows.extend(line.new.map(|n| (Side::New, n)));
+    }
+    rows
+}
+
+/// Judge the open entry's comments again (R14): a comment whose file left the shown list is
+/// outdated; one on the shown file is outdated when the lines read now no longer hold its quote;
+/// any other keeps its last judgement.
+fn judge_outdated(state: &mut State) {
+    let Some(view) = state.open.as_ref() else {
+        return;
+    };
+    let comments = review_of(state, view).map_or(&[][..], |r| r.comments.as_slice());
+    let listed = shown_list(view);
+    let read = match &view.diff {
+        Load::Ready(diff) => Some(diff),
+        _ => None,
+    };
+    let mut outdated: BTreeSet<CommentId> = view
+        .outdated
+        .iter()
+        .copied()
+        .filter(|id| comments.iter().any(|c| c.id == *id))
+        .collect();
+    for comment in comments {
+        let verdict = if listed.is_some_and(|l| !l.files.iter().any(|f| f.path == comment.path)) {
+            Some(true)
+        } else if view.selected.as_ref() == Some(&comment.path) {
+            read.map(|diff| {
+                comment.is_outdated(match comment.side {
+                    Side::Old => diff.old.as_ref(),
+                    Side::New => diff.new.as_ref(),
+                })
+            })
+        } else {
+            None
+        };
+        match verdict {
+            Some(true) => {
+                outdated.insert(comment.id);
+            }
+            Some(false) => {
+                outdated.remove(&comment.id);
+            }
+            None => {}
+        }
+    }
+    if let Some(view) = state.open.as_mut() {
+        view.outdated = outdated;
     }
 }
 

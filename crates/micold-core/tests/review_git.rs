@@ -582,3 +582,58 @@ fn an_untracked_file_over_the_byte_limit_reports_its_lines() {
         }
     );
 }
+
+#[test]
+fn an_ignored_path_is_reported_and_a_tracked_one_is_not() {
+    let f = fixture();
+    write(&f.wt, "debug.log", "noise\n");
+    write(&f.wt, "kept.log", "tracked\n");
+    git(&f.wt, &["add", "-f", "kept.log"]);
+    let paths = [
+        f.wt.join("debug.log"),
+        f.wt.join("a.rs"),
+        f.wt.join("kept.log"),
+    ];
+    let ignored = GitCli::new()
+        .ignored(&f.wt, &paths)
+        .expect("check-ignore runs");
+    assert_eq!(
+        ignored.into_iter().collect::<Vec<_>>(),
+        vec![f.wt.join("debug.log")],
+        "only the untracked *.log is ignored"
+    );
+    assert!(GitCli::new()
+        .ignored(&f.wt, &[f.wt.join("a.rs")])
+        .expect("nothing ignored is not an error")
+        .is_empty());
+}
+
+#[test]
+fn a_worktree_has_its_own_git_dir_and_the_common_one() {
+    let f = fixture();
+    let canon = |p: PathBuf| fs::canonicalize(p).expect("exists");
+    let dirs: Vec<PathBuf> = GitCli::new()
+        .git_dirs(&f.wt)
+        .expect("rev-parse runs")
+        .into_iter()
+        .map(canon)
+        .collect();
+    assert_eq!(
+        dirs,
+        vec![
+            canon(f.root.join(".git/worktrees/wt")),
+            canon(f.root.join(".git"))
+        ]
+    );
+    let root_dirs: Vec<PathBuf> = GitCli::new()
+        .git_dirs(&f.root)
+        .expect("rev-parse runs")
+        .into_iter()
+        .map(canon)
+        .collect();
+    assert_eq!(
+        root_dirs,
+        vec![canon(f.root.join(".git"))],
+        "the main worktree's are one"
+    );
+}
