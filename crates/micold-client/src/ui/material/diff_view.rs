@@ -14,9 +14,6 @@
 //! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).into()`. The side-by-side
 //! layout arrives with M3; until then both layouts render unified.
 
-#[cfg(test)]
-use std::ops::Range;
-
 use iced::alignment::Horizontal;
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row, text};
@@ -26,8 +23,6 @@ use micold_core::review::diff::{unified_rows, DiffLine, FileDiff, Hunk, LineKind
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
-#[cfg(test)]
-use super::virtual_rows::{visible_range, ASSUMED_VIEWPORT, OVERSCAN};
 use super::{Button, Text, TypeRole, VirtualRows};
 
 /// One row's height, hunk header or line: fixed, which is what lets `VirtualRows` build only the
@@ -149,21 +144,6 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
     pub fn on_show_large(mut self, message: M) -> Self {
         self.on_show_large = Some(message);
         self
-    }
-
-    /// The rows this view builds as it stands: the visible ones and the overscan (D5).
-    #[cfg(test)]
-    fn built_rows(&self) -> Range<usize> {
-        let len = match body(self.diff) {
-            Body::Rows(rows) => rows.len(),
-            Body::Message(_) | Body::Large { .. } => return 0..0,
-        };
-        let viewport = if self.viewport == 0 {
-            ASSUMED_VIEWPORT
-        } else {
-            self.viewport
-        };
-        visible_range(self.offset, viewport, ROW_HEIGHT, len, OVERSCAN)
     }
 }
 
@@ -300,8 +280,25 @@ mod tests {
     use iced::Size;
     use micold_core::review::diff::parse_unified;
     use micold_core::tokens::{DARK, LIGHT};
+    use std::ops::Range;
+
+    use super::super::virtual_rows::{visible_range, ASSUMED_VIEWPORT, OVERSCAN};
 
     const TOLERANCE: f32 = 0.5;
+
+    /// The rows `view` builds as it stands: the visible ones and the overscan (D5).
+    fn built_rows<M: Clone>(view: &DiffView<'_, M>) -> Range<usize> {
+        let len = match body(view.diff) {
+            Body::Rows(rows) => rows.len(),
+            Body::Message(_) | Body::Large { .. } => return 0..0,
+        };
+        let viewport = if view.viewport == 0 {
+            ASSUMED_VIEWPORT
+        } else {
+            view.viewport
+        };
+        visible_range(view.offset, viewport, ROW_HEIGHT, len, OVERSCAN)
+    }
 
     fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> DiffLine {
         DiffLine {
@@ -371,7 +368,7 @@ mod tests {
         let view = DiffView::<()>::new(&diff, DiffLayout::Unified, LIGHT)
             .offset(400_000)
             .viewport(600);
-        let built = view.built_rows();
+        let built = built_rows(&view);
         let visible = (600.0 / ROW_HEIGHT) as usize + 1;
         assert!(built.len() <= visible + 2 * OVERSCAN, "built {built:?}");
         assert!(
@@ -389,7 +386,7 @@ mod tests {
         assert_eq!(body(&FileDiff::Text(vec![])), Body::Message(NO_CONTENT));
         for diff in [FileDiff::Binary, FileDiff::NotUtf8, FileDiff::ModeOnly] {
             let view = DiffView::<()>::new(&diff, DiffLayout::Unified, DARK);
-            assert_eq!(view.built_rows(), 0..0, "no rows, so no gutter");
+            assert_eq!(built_rows(&view), 0..0, "no rows, so no gutter");
             let _element: Element<'_, ()> = view.into();
         }
     }
@@ -413,7 +410,7 @@ mod tests {
             "{message}"
         );
         let view = DiffView::new(&diff, DiffLayout::Unified, LIGHT).on_show_large(());
-        assert_eq!(view.built_rows(), 0..0);
+        assert_eq!(built_rows(&view), 0..0);
         let _element: Element<'_, ()> = view.into();
     }
 }
