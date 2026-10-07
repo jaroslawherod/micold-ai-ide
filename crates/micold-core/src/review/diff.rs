@@ -308,6 +308,56 @@ pub fn unified_rows(diff: &FileDiff) -> Vec<UnifiedRow<'_>> {
     rows
 }
 
+/// The unified layout's rows, found by index without listing them: one entry per hunk, so a view
+/// that builds only the visible rows costs the hunk count, not the line count (D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnifiedIndex<'a> {
+    hunks: &'a [Hunk],
+    /// The row index of each hunk's header.
+    starts: Vec<usize>,
+    len: usize,
+}
+
+impl<'a> UnifiedIndex<'a> {
+    /// The index of `diff`'s rows; empty for a diff that is not text.
+    pub fn new(diff: &'a FileDiff) -> Self {
+        let hunks: &[Hunk] = match diff {
+            FileDiff::Text(hunks) => hunks,
+            _ => &[],
+        };
+        let mut starts = Vec::with_capacity(hunks.len());
+        let mut len = 0;
+        for hunk in hunks {
+            starts.push(len);
+            len += hunk.lines.len() + 1;
+        }
+        Self { hunks, starts, len }
+    }
+
+    /// How many rows there are.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether there are no rows.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Row `index`, or `None` past the end.
+    pub fn row(&self, index: usize) -> Option<UnifiedRow<'a>> {
+        if index >= self.len {
+            return None;
+        }
+        let h = self.starts.partition_point(|&start| start <= index) - 1;
+        let hunk = &self.hunks[h];
+        match index - self.starts[h] {
+            0 => Some(UnifiedRow::Header(hunk)),
+            i => hunk.lines.get(i - 1).map(UnifiedRow::Line),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,6 +584,20 @@ mod tests {
             ]
         );
         assert!(unified_rows(&FileDiff::Binary).is_empty());
+    }
+
+    #[test]
+    fn the_unified_index_finds_each_row_without_listing_them() {
+        let diff = parse_unified(TWO_HUNKS.as_bytes());
+        let rows = unified_rows(&diff);
+        let index = UnifiedIndex::new(&diff);
+        assert_eq!(index.len(), rows.len());
+        for (i, row) in rows.iter().enumerate() {
+            assert_eq!(index.row(i).as_ref(), Some(row), "row {i}");
+        }
+        assert_eq!(index.row(rows.len()), None);
+        let binary = UnifiedIndex::new(&FileDiff::Binary);
+        assert_eq!((binary.len(), binary.row(0)), (0, None));
     }
 
     #[test]

@@ -587,3 +587,67 @@ fn a_list_reread_that_drops_the_selection_drops_its_diff() {
         DiffBody::NoSelection
     );
 }
+
+/// A list re-read that fails drops the selection and its diff: nothing listed backs them.
+#[test]
+fn a_failed_list_reread_drops_the_selection_and_its_diff() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(text_diff()),
+        },
+    );
+    let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
+        panic!("re-read");
+    };
+    let effect = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Err("fatal: not a git repository".into()),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(view.selected, None);
+    assert_eq!(diff_body(view), DiffBody::NoSelection);
+}
+
+/// Selecting the file already shown keeps its diff and its scroll; a failed read is retried.
+#[test]
+fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(text_diff()),
+        },
+    );
+    changes::update(
+        &mut state,
+        Msg::DiffScrolled {
+            offset: 120,
+            viewport: 400,
+        },
+    );
+    let effect = changes::update(&mut state, Msg::FileSelected(path("b.rs")));
+    assert_eq!(effect, Effect::None);
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
+    assert_eq!(view.diff_offset, 120);
+
+    let (seq, _) = select(&mut state, "a.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Err("fatal: bad object".into()),
+        },
+    );
+    select(&mut state, "a.rs");
+}

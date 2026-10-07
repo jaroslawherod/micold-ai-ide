@@ -209,6 +209,10 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
+            // The file already shown keeps its diff and scroll; only a failed read is retried.
+            if view.selected.as_ref() == Some(&path) && !matches!(view.diff, Load::Failed(_)) {
+                return Effect::None;
+            }
             view.selected = Some(path);
             view.diff = Load::Idle;
             view.diff_offset = 0;
@@ -309,7 +313,12 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
             }
             Load::Ready(list)
         }
-        Err(message) => Load::Failed(message),
+        Err(message) => {
+            // Nothing listed backs the selection any more.
+            view.selected = None;
+            view.diff = Load::Idle;
+            Load::Failed(message)
+        }
     };
     if again {
         request_read(state)
