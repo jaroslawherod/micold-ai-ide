@@ -135,6 +135,19 @@ pub trait Git {
         scope: crate::review::base::ReviewScope,
         toggles: crate::review::base::Toggles,
     ) -> io::Result<crate::review::changes::ChangeList>;
+
+    /// The diff of `path` in `dir` under `scope` and `toggles`, with both versions' lines (feature
+    /// 482, research R1, R8). `from` is a renamed file's old path. Over the R8 limits it answers
+    /// `FileDiff::TooLarge` unless `force_large`. Read-only.
+    fn file_diff(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        path: &crate::review::RelPath,
+        from: Option<&crate::review::RelPath>,
+        force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -554,6 +567,18 @@ impl Git for GitCli {
         toggles: crate::review::base::Toggles,
     ) -> io::Result<crate::review::changes::ChangeList> {
         GitCli::change_list(self, dir, scope, toggles)
+    }
+
+    fn file_diff(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        path: &crate::review::RelPath,
+        from: Option<&crate::review::RelPath>,
+        force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff> {
+        GitCli::file_diff(self, dir, scope, toggles, path, from, force_large)
     }
 }
 
@@ -1191,6 +1216,23 @@ impl Git for FakeGit {
         Ok(crate::review::changes::ChangeList {
             files: Vec::new(),
             scope,
+        })
+    }
+
+    /// No diff: a fake repository has no files.
+    fn file_diff(
+        &self,
+        _dir: &Path,
+        _scope: &crate::review::base::ReviewScope,
+        _toggles: crate::review::base::Toggles,
+        _path: &crate::review::RelPath,
+        _from: Option<&crate::review::RelPath>,
+        _force_large: bool,
+    ) -> io::Result<crate::review::diff::LoadedDiff> {
+        Ok(crate::review::diff::LoadedDiff {
+            diff: crate::review::diff::FileDiff::Text(Vec::new()),
+            old: None,
+            new: None,
         })
     }
 }

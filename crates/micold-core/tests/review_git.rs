@@ -1,6 +1,6 @@
 //! Feature 482 (T013): the Changes view's git reads against real repositories (research R1, R7):
 //! which files are listed under each toggle, what counts as uncommitted, renames and binary
-//! files, and how the base is found.
+//! files, and how the base is found. T028 adds one file's diff over each range (`GitCli::file_diff`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,6 +9,8 @@ use std::process::Command;
 use micold_core::git::GitCli;
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, Content, Origin};
+use micold_core::review::diff::{DiffLine, FileDiff, LineKind, LoadedDiff, SideLines};
+use micold_core::review::RelPath;
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -305,4 +307,201 @@ fn the_default_entry_lists_only_the_roots_uncommitted_changes() {
         "the root's own uncommitted changes, nothing of the worktree's commit (US1 s9)"
     );
     assert_eq!(list.scope, ReviewScope::RootUncommitted);
+}
+
+// ---- one file's diff (T028) --------------------------------------------------------------------
+
+const COMMITTED: Toggles = Toggles {
+    committed: true,
+    uncommitted: false,
+};
+
+const UNCOMMITTED: Toggles = Toggles {
+    committed: false,
+    uncommitted: true,
+};
+
+fn rel(path: &str) -> RelPath {
+    RelPath::from_native(path).expect("relative path")
+}
+
+fn diff_of(dir: &Path, toggles: Toggles, path: &str, from: Option<&str>, force: bool) -> LoadedDiff {
+    let base = GitCli::new().review_base(dir);
+    let from = from.map(rel);
+    GitCli::new()
+        .file_diff(
+            dir,
+            &ReviewScope::Worktree { base },
+            toggles,
+            &rel(path),
+            from.as_ref(),
+            force,
+        )
+        .expect("the diff reads")
+}
+
+/// The changed lines of a text diff as `(kind, text)`, context left out.
+fn changes(diff: &FileDiff) -> Vec<(LineKind, String)> {
+    let FileDiff::Text(hunks) = diff else {
+        panic!("expected a text diff, got {diff:?}");
+    };
+    hunks
+        .iter()
+        .flat_map(|hunk| &hunk.lines)
+        .filter(|line| line.kind != LineKind::Context)
+        .map(|line| (line.kind, line.text.clone()))
+        .collect()
+}
+
+fn removed(text: &str) -> (LineKind, String) {
+    (LineKind::Removed, text.into())
+}
+
+fn added(text: &str) -> (LineKind, String) {
+    (LineKind::Added, text.into())
+}
+
+fn side(text: &str) -> Option<SideLines> {
+    SideLines::from_bytes(text.as_bytes())
+}
+
+#[test]
+fn a_files_diff_follows_the_committed_uncommitted_and_both_ranges() {
+    let f = fixture();
+    write(&f.wt, "a.rs", "fn a() { committed(); }\nfn more() {}\n");
+
+    let committed = diff_of(&f.wt, COMMITTED, "a.rs", None, false);
+    assert_eq!(
+        changes(&committed.diff),
+        [removed("fn a() {}"), added("fn a() { committed(); }")],
+        "committed: base → HEAD"
+    );
+    assert_eq!(committed.old, side("fn a() {}\n"), "the base version's lines");
+    assert_eq!(
+        committed.new,
+        side("fn a() { committed(); }\n"),
+        "HEAD's lines, not the disk's"
+    );
+
+    let uncommitted = diff_of(&f.wt, UNCOMMITTED, "a.rs", None, false);
+    assert_eq!(
+        changes(&uncommitted.diff),
+        [added("fn more() {}")],
+        "uncommitted: HEAD → the file on disk"
+    );
+
+    let both = diff_of(&f.wt, on(), "a.rs", None, false);
+    assert_eq!(
+        changes(&both.diff),
+        [
+            removed("fn a() {}"),
+            added("fn a() { committed(); }"),
+            added("fn more() {}")
+        ],
+        "both: the combined change from the base to the file on disk (US1 s3)"
+    );
+    assert_eq!(both.new, side("fn a() { committed(); }\nfn more() {}\n"));
+}
+
+#[test]
+fn a_renamed_files_diff_compares_it_with_its_old_path() {
+    let f = fixture();
+    git(&f.wt, &["mv", "old.rs", "renamed.rs"]);
+    write(&f.wt, "renamed.rs", "one\nTWO\nthree\nfour\n");
+    commit_all(&f.wt, "rename with an edit");
+    let diff = diff_of(&f.wt, COMMITTED, "renamed.rs", Some("old.rs"), false);
+    assert_eq!(
+        changes(&diff.diff),
+        [removed("two"), added("TWO")],
+        "only the edited line changes, not the whole file as added"
+    );
+    assert_eq!(diff.old, side("one\ntwo\nthree\nfour\n"), "the old path's lines");
+}
+
+#[test]
+fn a_deleted_file_is_all_removed_and_an_untracked_one_all_added() {
+    let f = fixture();
+    git(&f.wt, &["rm", "-q", "old.rs"]);
+    commit_all(&f.wt, "delete");
+    let deleted = diff_of(&f.wt, COMMITTED, "old.rs", None, false);
+    assert_eq!(
+        changes(&deleted.diff),
+        [removed("one"), removed("two"), removed("three"), removed("four")]
+    );
+    assert_eq!(deleted.new, None, "a deleted file has no new version");
+
+    write(&f.wt, "notes/new.txt", "x\ny\n");
+    let untracked = diff_of(&f.wt, UNCOMMITTED, "notes/new.txt", None, false);
+    let FileDiff::Text(hunks) = &untracked.diff else {
+        panic!("text, got {:?}", untracked.diff);
+    };
+    assert_eq!(
+        hunks[0].lines,
+        vec![
+            DiffLine {
+                kind: LineKind::Added,
+                old: None,
+                new: Some(1),
+                text: "x".into()
+            },
+            DiffLine {
+                kind: LineKind::Added,
+                old: None,
+                new: Some(2),
+                text: "y".into()
+            },
+        ],
+        "an untracked file is read from disk, every line added"
+    );
+    assert_eq!(untracked.new, side("x\ny\n"));
+    assert_eq!(untracked.old, None);
+    let both = diff_of(&f.wt, on(), "notes/new.txt", None, false);
+    assert_eq!(changes(&both.diff), [added("x"), added("y")], "and under both toggles");
+}
+
+#[test]
+fn a_binary_files_diff_is_binary() {
+    let f = fixture();
+    fs::write(f.wt.join("logo.png"), [0x89u8, b'P', b'N', b'G', 0, 1, 2]).unwrap();
+    commit_all(&f.wt, "binary");
+    assert_eq!(
+        diff_of(&f.wt, COMMITTED, "logo.png", None, false).diff,
+        FileDiff::Binary
+    );
+    fs::write(f.wt.join("blob.bin"), [1u8, 0, 2]).unwrap();
+    assert_eq!(
+        diff_of(&f.wt, UNCOMMITTED, "blob.bin", None, false).diff,
+        FileDiff::Binary,
+        "an untracked binary file too"
+    );
+}
+
+#[test]
+fn a_line_ending_change_on_one_line_is_one_removed_added_pair() {
+    let f = fixture();
+    write(&f.wt, "old.rs", "one\ntwo\r\nthree\nfour\n");
+    let diff = diff_of(&f.wt, UNCOMMITTED, "old.rs", None, false);
+    assert_eq!(
+        changes(&diff.diff),
+        [removed("two"), added("two")],
+        "LF → CRLF on one line: that line only, with no `\\r` in its text"
+    );
+}
+
+#[test]
+fn a_six_thousand_line_file_is_too_large_unless_forced() {
+    let f = fixture();
+    let body: String = (1..=6_000).map(|n| format!("line {n}\n")).collect();
+    write(&f.wt, "big.txt", &body);
+    commit_all(&f.wt, "big");
+    assert_eq!(
+        diff_of(&f.wt, COMMITTED, "big.txt", None, false).diff,
+        FileDiff::TooLarge {
+            added: 6_000,
+            removed: 0
+        },
+        "over 5,000 changed lines the diff waits for Show diff (R8, US1 s7)"
+    );
+    let forced = diff_of(&f.wt, COMMITTED, "big.txt", None, true);
+    assert_eq!(changes(&forced.diff).len(), 6_000, "Show diff reads it whole");
 }
