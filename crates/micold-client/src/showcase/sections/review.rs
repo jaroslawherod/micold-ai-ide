@@ -4,6 +4,10 @@
 //! too long to build whole. So it is posed at the length that matters — 2,000 rows — with the
 //! scroll it reports held in [`Showcase`], so scrolling to the end shows rows being built rather than
 //! a blank band past the first screen.
+//!
+//! `DiffView` (M2, T038) is posed in the three shapes a selected file takes: a unified text diff with
+//! added, removed and context rows on their tints, a binary file's message, and the large-file gate.
+//! The page's scheme switch shows each in both schemes.
 
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length};
@@ -12,7 +16,12 @@ use micold_core::tokens::{spacing, Roles};
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::state::{Message, Showcase};
-use crate::ui::material::{Tag, Text, TypeRole, VirtualRows};
+use std::sync::LazyLock;
+
+use micold_core::review::diff::{parse_unified, FileDiff};
+use micold_core::settings::DiffLayout;
+
+use crate::ui::material::{DiffView, Tag, Text, TypeRole, VirtualRows};
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
 pub const LONG_LIST: usize = 2_000;
@@ -69,6 +78,48 @@ pub fn virtual_rows<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
             container(list).height(Length::Fixed(PANE_HEIGHT)),
             roles,
         )],
+        Layout::FullWidth,
+    )
+}
+
+/// A short Rust diff: a hunk header with its section, context, a removed and two added lines.
+static UNIFIED: LazyLock<FileDiff> = LazyLock::new(|| {
+    parse_unified(
+        b"@@ -10,6 +10,7 @@ fn render(view: &View) {\n \
+          let rows = view.rows();\n \
+          let width = view.width();\n\
+         -    draw(rows, width);\n\
+         +    let height = view.height();\n\
+         +    draw(rows, width, height);\n \
+          view.finish();\n \
+          }\n \n",
+    )
+});
+
+/// A binary file.
+static BINARY: FileDiff = FileDiff::Binary;
+
+/// A file over the size limits.
+static LARGE: FileDiff = FileDiff::TooLarge {
+    added: 6_000,
+    removed: 12,
+};
+
+/// The diff area's height in a pose.
+const DIFF_HEIGHT: f32 = 200.0;
+
+/// `DiffView` — a unified diff, a binary file's message, and the large-file gate.
+pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let pose = |diff: &'static FileDiff| {
+        container(DiffView::new(diff, DiffLayout::Unified, roles).on_show_large(Message::NoOp))
+            .height(Length::Fixed(DIFF_HEIGHT))
+    };
+    arrange(
+        vec![
+            posed("unified", pose(&UNIFIED), roles),
+            posed("binary message", pose(&BINARY), roles),
+            posed("large-file gate", pose(&LARGE), roles),
+        ],
         Layout::FullWidth,
     )
 }

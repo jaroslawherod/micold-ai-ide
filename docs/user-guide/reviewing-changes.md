@@ -29,6 +29,39 @@ lists scroll smoothly: only the rows on screen are drawn.
 While the list is read, the view says **Reading changes…**. With nothing to list it says why:
 **No changes against** `<branch>`, **No uncommitted changes**, or that both kinds are hidden.
 
+## Reading a diff
+
+Select a file to see its diff beside the list. Each changed region starts with a header row,
+`@@ -a,b +c,d @@`, followed by the name of the function or section it is in when git can tell. Under
+it, every line has two numbers — its line in the old version, then in the new one — and then its
+text:
+
+- an **added** line has only a new number, a `+`, and a green-tinted background;
+- a **removed** line has only an old number, a `−`, and a red-tinted background;
+- an unchanged line around the change has both numbers and no tint.
+
+A change of line ending alone (for example a file converted from `LF` to `CRLF`) shows as the same
+line removed and added again; line endings themselves are never drawn. Long diffs scroll smoothly:
+only the rows on screen are drawn. While a file's diff is read, the diff area says
+**Loading diff…**; the window keeps responding meanwhile.
+
+### Binary and non-text files
+
+A file whose contents are not readable text is listed, but its contents are never shown. The diff
+area says what it is instead:
+
+- **Binary file — not shown**;
+- **Not UTF-8 text — not shown**, for text in another encoding;
+- **Only the file mode changed**, when only its permissions changed.
+
+A renamed file whose contents did not change says **The content did not change**.
+
+### Large files
+
+A file with more than 5,000 changed lines, or a version larger than 2 MB, is not drawn straight
+away. The diff area shows how many lines were added and removed and a **Show diff** button; press it
+to read and show the whole diff. The view remembers the choice for that file until it closes.
+
 ## The base line
 
 Under the header, **Compared with** `<branch>` **at** `<short commit>` names what the worktree is

@@ -8,15 +8,19 @@ use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
 use micold_core::session::SessionLocation;
+use micold_core::settings::DiffLayout;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{Message, State};
 use crate::features::changes::{
-    base_line, committed_available, list_body, ListBody, Msg, OpenView, DEFAULT_ENTRY_NOTE,
+    base_line, committed_available, diff_body, list_body, DiffBody, ListBody, Msg, OpenView,
+    DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
-use crate::ui::material::{Button, ButtonVariant, Tag, Text, ToggleChip, TypeRole, VirtualRows};
+use crate::ui::material::{
+    Button, ButtonVariant, DiffView, StageProgress, Tag, Text, ToggleChip, TypeRole, VirtualRows,
+};
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
 pub const ROW_HEIGHT: f32 = 36.0;
@@ -151,11 +155,25 @@ fn kind_tag(kind: &ChangeKind, r: Roles) -> (String, Rgb) {
     }
 }
 
-/// The right pane: the diff arrives with M2; until a file is picked it says what to do.
+/// The right pane (D1–D4): what to do before a file is picked, the progress line while its first
+/// read runs, git's message when it fails, else the diff — whose D3 messages and D4 large gate
+/// `DiffView` draws.
 fn diff_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
-    let content: Element<'a, Message> = match &view.selected {
-        None => Text::new("Select a file", TypeRole::Body, r).muted().into(),
-        Some(path) => Text::new(path.to_string(), TypeRole::Title, r).into(),
+    let content: Element<'a, Message> = match diff_body(view) {
+        DiffBody::NoSelection => Text::new("Select a file", TypeRole::Body, r).muted().into(),
+        DiffBody::Loading => StageProgress::new("Loading diff…", r).into(),
+        DiffBody::Failed(message) => Text::new(message, TypeRole::Body, r).tint(r.error).into(),
+        DiffBody::Diff(loaded) => {
+            // The layout choice (D1, FR-006) arrives with M3; until then every diff is unified.
+            return DiffView::new(&loaded.diff, DiffLayout::default(), r)
+                .offset(view.diff_offset)
+                .viewport(view.diff_viewport)
+                .on_scroll(|offset, viewport| {
+                    Message::Changes(Msg::DiffScrolled { offset, viewport })
+                })
+                .on_show_large(Message::Changes(Msg::ShowLarge))
+                .into();
+        }
     };
     container(column![content, Space::new().height(Length::Fill)])
         .width(Length::Fill)

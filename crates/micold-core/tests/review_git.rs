@@ -325,7 +325,13 @@ fn rel(path: &str) -> RelPath {
     RelPath::from_native(path).expect("relative path")
 }
 
-fn diff_of(dir: &Path, toggles: Toggles, path: &str, from: Option<&str>, force: bool) -> LoadedDiff {
+fn diff_of(
+    dir: &Path,
+    toggles: Toggles,
+    path: &str,
+    from: Option<&str>,
+    force: bool,
+) -> LoadedDiff {
     let base = GitCli::new().review_base(dir);
     let from = from.map(rel);
     GitCli::new()
@@ -376,7 +382,11 @@ fn a_files_diff_follows_the_committed_uncommitted_and_both_ranges() {
         [removed("fn a() {}"), added("fn a() { committed(); }")],
         "committed: base → HEAD"
     );
-    assert_eq!(committed.old, side("fn a() {}\n"), "the base version's lines");
+    assert_eq!(
+        committed.old,
+        side("fn a() {}\n"),
+        "the base version's lines"
+    );
     assert_eq!(
         committed.new,
         side("fn a() { committed(); }\n"),
@@ -415,7 +425,11 @@ fn a_renamed_files_diff_compares_it_with_its_old_path() {
         [removed("two"), added("TWO")],
         "only the edited line changes, not the whole file as added"
     );
-    assert_eq!(diff.old, side("one\ntwo\nthree\nfour\n"), "the old path's lines");
+    assert_eq!(
+        diff.old,
+        side("one\ntwo\nthree\nfour\n"),
+        "the old path's lines"
+    );
 }
 
 #[test]
@@ -426,7 +440,12 @@ fn a_deleted_file_is_all_removed_and_an_untracked_one_all_added() {
     let deleted = diff_of(&f.wt, COMMITTED, "old.rs", None, false);
     assert_eq!(
         changes(&deleted.diff),
-        [removed("one"), removed("two"), removed("three"), removed("four")]
+        [
+            removed("one"),
+            removed("two"),
+            removed("three"),
+            removed("four")
+        ]
     );
     assert_eq!(deleted.new, None, "a deleted file has no new version");
 
@@ -456,7 +475,11 @@ fn a_deleted_file_is_all_removed_and_an_untracked_one_all_added() {
     assert_eq!(untracked.new, side("x\ny\n"));
     assert_eq!(untracked.old, None);
     let both = diff_of(&f.wt, on(), "notes/new.txt", None, false);
-    assert_eq!(changes(&both.diff), [added("x"), added("y")], "and under both toggles");
+    assert_eq!(
+        changes(&both.diff),
+        [added("x"), added("y")],
+        "and under both toggles"
+    );
 }
 
 #[test]
@@ -503,5 +526,9 @@ fn a_six_thousand_line_file_is_too_large_unless_forced() {
         "over 5,000 changed lines the diff waits for Show diff (R8, US1 s7)"
     );
     let forced = diff_of(&f.wt, COMMITTED, "big.txt", None, true);
-    assert_eq!(changes(&forced.diff).len(), 6_000, "Show diff reads it whole");
+    assert_eq!(
+        changes(&forced.diff).len(),
+        6_000,
+        "Show diff reads it whole"
+    );
 }
