@@ -74,6 +74,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M3 (T049) | 1 | a04451e3 | B3 pass; B18 found the showcase diff literal missing its context indent (colours 4 chars off), fixed in showcase/sections/review.rs, re-run pass |
 | Gate M3 (after the showcase fix) | full | c28ea9d173beadd20e96bdc75bf0abdf4c47a656:a04451e3567b124ee02c64019d01feff6a2f9689 | green except the 6 root-only permission tests; push refused by the gate hook, commits left local |
 | Review A M4 (code-review high, scoped 9dbcf9e9..HEAD) | 1 | e64ae19d83f1642c7bdf02e3f2843609f3dc188e:2ada2a4a7c1723fd4dc39e3a3cbd344b1bfc35cf | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (Sensor key carries whether the height is known, so a dropped height re-measures); F4 MINOR fixed (edit composer closes when its comment is gone); F2, F3 MINOR declined |
+| Review A M4 (code-review high, scoped fix diff, sonnet) | 2 | a6006bfc6d7c4efa1b155d6c2a023138d3f1209b:2d659f8afe3ae846e58bcb832f84cb766beb1671 | CLEAN |
+| Gate M4 (scoped, workspace) | scoped | 2d659f8a + review_edit fixture path | red twice then green except the 6 root-only permission tests: clippy `duplicated_attributes` (review_edit's `#[allow(dead_code)]`), `documentation_is_not_read` ("README.md" literal in review_edit's seed, now `src/lib.rs`); one run lost to a full disk |
 
 ## Declined review findings
 
@@ -81,8 +83,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-- Review A M4 F2 (MINOR, composer cleared before the service answers, text lost on a refused edit): a refusal is a validation or I/O failure the composer cannot fix by retrying; the error surfaces as an operation error. Kept as designed (C2).
-- Review A M4 F3 (MINOR, review-file write under the daemon's state lock): the file is one small JSON per project, written with the same lock the catalog writes hold; ordering of edits relies on it. Kept.
+- Review A M4 F2 (MINOR, composer cleared before the service answers, text lost on a refused edit): a refusal is a validation or I/O failure the composer cannot fix by retrying; the error surfaces as an operation error. Not fixed: MINOR, and keeping the text needs a restore path on every refusal; left for M5's send work to revisit.
+- Review A M4 F3 (MINOR, review-file write under the daemon's state lock): not fixed: MINOR; the lock also orders concurrent edits to one file.
 
 ## Handover
 
