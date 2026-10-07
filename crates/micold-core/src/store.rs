@@ -104,6 +104,12 @@ pub trait ProjectStore {
     fn save_reviews(&self, _project_path: &Path, _file: &ReviewFile) -> io::Result<()> {
         Ok(())
     }
+
+    /// Delete a project's review comments when the project is forgotten (feature 482, W11). The
+    /// default, for stores that persist nothing, has nothing to delete and succeeds.
+    fn remove_reviews(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
@@ -734,6 +740,14 @@ impl JsonFileStore {
         write_then_rename(&temp_path_for(&path), &path, &file.to_json())
     }
 
+    /// Delete a project's review file (feature 482, W11). An already-absent file is success.
+    pub fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(self.reviews_path(project_path)) {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
+    }
+
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
     /// FR-005). An already-absent file is success — forgetting a project that never had a state
     /// file (no sessions/overrides) is not an error, and the call is idempotent. Removing this
@@ -757,6 +771,10 @@ impl ProjectStore for JsonFileStore {
 
     fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
         JsonFileStore::save_reviews(self, project_path, file)
+    }
+
+    fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_reviews(self, project_path)
     }
 
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
@@ -1100,6 +1118,15 @@ impl ProjectStore for FakeProjectStore {
             .expect("fake lock")
             .reviews
             .insert(project_path.to_path_buf(), file.clone());
+        Ok(())
+    }
+
+    fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .remove(project_path);
         Ok(())
     }
 }

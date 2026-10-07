@@ -982,6 +982,10 @@ impl Catalog {
             if let Err(err) = store.remove_project_state(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove per-project state");
             }
+            // Feature 482 (W11): its review comments go with it.
+            if let Err(err) = store.remove_reviews(path) {
+                tracing::warn!(project = %path.display(), %err, "failed to remove the review comments");
+            }
         }
         Ok(ids)
     }

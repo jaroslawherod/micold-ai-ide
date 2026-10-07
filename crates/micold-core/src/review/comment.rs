@@ -332,6 +332,21 @@ impl EntryReview {
         Ok(())
     }
 
+    /// Remove every sent comment (W4); pending ones stay.
+    pub fn clear_sent(&mut self) {
+        self.comments
+            .retain(|comment| comment.state == CommentState::Pending);
+    }
+
+    /// Remove every pending comment not inside an open send (W4); sent ones and those the send
+    /// holds stay.
+    pub fn discard_pending(&mut self) {
+        let sending = self.sending.as_deref().unwrap_or_default();
+        self.comments.retain(|comment| {
+            comment.state != CommentState::Pending || sending.contains(&comment.id)
+        });
+    }
+
     /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `InSend` when
     /// an open send holds it, `Refused` when it is sent.
     fn pending_index(&self, id: CommentId) -> Result<usize, ReviewError> {
@@ -708,6 +723,44 @@ mod tests {
         review
             .begin_send(EntryKind::Worktree, &[])
             .expect("a new send can begin");
+    }
+
+    #[test]
+    fn clear_sent_removes_sent_comments_only() {
+        let mut review = three_pending_one_sent();
+        review.clear_sent();
+        let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
+        assert_eq!(ids, vec![id(1), id(2), id(3)], "pending stay (US4 s3)");
+        assert!(review
+            .comments()
+            .iter()
+            .all(|comment| comment.state == CommentState::Pending));
+    }
+
+    #[test]
+    fn discard_pending_removes_pending_comments_not_in_an_open_send() {
+        let mut review = three_pending_one_sent();
+        review.discard_pending();
+        let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
+        assert_eq!(ids, vec![id(9)], "only the sent one stays (FR-019)");
+
+        let mut sending = three_pending_one_sent();
+        sending.begin_send(EntryKind::Worktree, &[]).expect("send");
+        sending
+            .add(draft(5, 5, &["y"], "added meanwhile"), id(5), NOW)
+            .expect("valid");
+        sending.discard_pending();
+        let ids: Vec<_> = sending
+            .comments()
+            .iter()
+            .map(|comment| comment.id)
+            .collect();
+        assert_eq!(
+            ids,
+            vec![id(1), id(2), id(3), id(9)],
+            "comments in the open send stay; the one added meanwhile goes (W4)"
+        );
+        assert!(sending.sending(), "the send stays open");
     }
 
     fn lines(text: &str) -> SideLines {

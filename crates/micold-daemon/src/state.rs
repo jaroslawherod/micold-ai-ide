@@ -1909,6 +1909,17 @@ impl DaemonState {
         Some((record.location.cwd(project), record.provider))
     }
 
+    /// Forget the review comments of worktree `dir_name` of `project`, which has just been deleted,
+    /// and push its empty `ReviewChanged` to every client (feature 482, W11, FR-020).
+    pub fn forget_review_worktree(&self, project: &Path, dir_name: &str) {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        let msg = inner
+            .reviews
+            .forget_worktree(&inner.catalog, project, dir_name);
+        Self::broadcast_locked(inner, vec![msg]);
+    }
+
     /// The `ReviewChanged` pushes a client that has just attached to `project` is owed: one per
     /// entry with comments (feature 482, review-wire).
     pub fn review_pushes_on_attach(&self, project: &Path) -> Vec<DaemonMsg> {
@@ -2154,6 +2165,21 @@ impl DaemonState {
                         "could not persist the worktree provenance backfill"
                     );
                 }
+                // Feature 482 (Edge Case "removed worktree"): a worktree removed outside the app
+                // takes its review comments with it. Only one that discovery no longer lists *and*
+                // whose directory is gone counts, so a failed git query (which still lists the
+                // directories on disk) never discards anyone's comments.
+                let root = micold_core::worktree::worktrees_root(&repo);
+                let gone = |dir: &str| {
+                    !discovered.iter().any(|w| w.dir_name == dir)
+                        && !root.join(dir).exists()
+                        && !included
+                            .iter()
+                            .any(|p| p.file_name().is_some_and(|n| n == dir) && p.exists())
+                };
+                let inner = &mut *inner;
+                let pruned = inner.reviews.prune_worktrees(&inner.catalog, project, gone);
+                Self::broadcast_locked(inner, pruned);
                 inner.worktrees.insert(project.to_path_buf(), discovered);
             }
             _ => {
@@ -2887,6 +2913,8 @@ impl DaemonState {
             let mut inner = self.lock();
             let ids = inner.catalog.forget_project(path)?;
             inner.worktrees.remove(path);
+            // Feature 482 (W11): the catalog deleted its review file; memory forgets them too.
+            inner.reviews.forget_project(path);
             let ptys = Self::remove_live_by_ids(&mut inner, ids.clone());
             (ids, ptys)
         };

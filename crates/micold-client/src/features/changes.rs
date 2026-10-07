@@ -83,6 +83,8 @@ pub struct OpenView {
     /// The entry's comments judged outdated (R14): their lines no longer hold their quote, or
     /// their file left the list. A comment keeps its judgement until its file is read again.
     pub outdated: BTreeSet<CommentId>,
+    /// **Discard pending…** was pressed: its confirmation is open (S3).
+    pub confirm_discard: bool,
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -254,6 +256,14 @@ pub enum Msg {
     SendPressed,
     /// A file of the open entry changed on disk or in git (R1, R9).
     Changed,
+    /// **Clear sent** was pressed (S3).
+    ClearSentPressed,
+    /// **Discard pending…** was pressed: open its confirmation (S3).
+    DiscardPendingPressed,
+    /// The discard confirmation's Discard (S3).
+    DiscardConfirmed,
+    /// The discard confirmation's Cancel, or its dismissal (S3).
+    DiscardCancelled,
 }
 
 /// What the shell must do.
@@ -350,6 +360,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 composer: None,
                 slot_heights: BTreeMap::new(),
                 outdated: BTreeSet::new(),
+                confirm_discard: false,
             });
             request_read(state)
         }
@@ -529,6 +540,32 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 count,
             }
         }
+        Msg::ClearSentPressed => match state.open.as_ref() {
+            Some(view) if tidy_actions(state).is_some_and(|a| a.clear_sent) => {
+                review_edit(view, ReviewEditOp::ClearSent)
+            }
+            _ => Effect::None,
+        },
+        Msg::DiscardPendingPressed => {
+            let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
+            if let Some(view) = state.open.as_mut() {
+                view.confirm_discard = enabled;
+            }
+            Effect::None
+        }
+        Msg::DiscardCancelled => {
+            if let Some(view) = state.open.as_mut() {
+                view.confirm_discard = false;
+            }
+            Effect::None
+        }
+        Msg::DiscardConfirmed => match state.open.as_mut() {
+            Some(view) if view.confirm_discard => {
+                view.confirm_discard = false;
+                review_edit(view, ReviewEditOp::DiscardPending)
+            }
+            _ => Effect::None,
+        },
         Msg::EditComment(id) => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -714,6 +751,64 @@ pub fn send_action(state: &State) -> Option<SendAction> {
         label: format!("Send to session ({count})"),
         enabled: count > 0,
     })
+}
+
+/// The **Discard pending…** confirmation, as a floating surface (S3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmDiscardPendingDialog;
+
+impl crate::overlay::FloatingSurface for ConfirmDiscardPendingDialog {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("confirm_discard_pending")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::Dialog
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::Dialog)
+            .cancelled_by(crate::app::Message::Changes(Msg::DiscardCancelled))
+    }
+}
+
+impl crate::overlay::registry::Registered for ConfirmDiscardPendingDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        discard_prompt(&state.changes).map(|_| ConfirmDiscardPendingDialog)
+    }
+}
+
+/// The toolbar's **Clear sent** and **Discard pending…**, each enabled or not (S3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TidyActions {
+    /// The open entry has a sent comment.
+    pub clear_sent: bool,
+    /// The open entry has a pending comment and no send is open.
+    pub discard_pending: bool,
+}
+
+/// The open view's **Clear sent** and **Discard pending…**; `None` with no view open (S3).
+pub fn tidy_actions(state: &State) -> Option<TidyActions> {
+    let view = state.open.as_ref()?;
+    let review = review_of(state, view);
+    let any =
+        |pending: bool| review.is_some_and(|r| r.comments.iter().any(|c| is_pending(c) == pending));
+    Some(TidyActions {
+        clear_sent: any(false),
+        discard_pending: any(true) && !review.is_some_and(|r| r.sending),
+    })
+}
+
+/// The discard confirmation's question while it is open (S3): "Discard n pending comments? This
+/// cannot be undone."
+pub fn discard_prompt(state: &State) -> Option<String> {
+    let view = state.open.as_ref().filter(|view| view.confirm_discard)?;
+    let count =
+        review_of(state, view).map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+    let noun = if count == 1 { "comment" } else { "comments" };
+    Some(format!(
+        "Discard {count} pending {noun}? This cannot be undone."
+    ))
 }
 
 /// The success snackbar (S2).

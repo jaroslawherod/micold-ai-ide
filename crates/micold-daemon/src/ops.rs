@@ -295,6 +295,8 @@ pub async fn delete_worktree(
             // Feature 029 FR-018: the record dies with the worktree, and only once git has released
             // it. A directory name is reusable, so a record that outlived its worktree would hand
             // the next thing created at that path an ownership nobody granted it.
+            // Feature 482 (W11, FR-020): its review comments go with it, everywhere.
+            state.forget_review_worktree(&project, &dir_name);
             if let Err(e) = state.forget_worktree_provenance(&project, &dir_name) {
                 tracing::warn!(
                     project = %project.display(),

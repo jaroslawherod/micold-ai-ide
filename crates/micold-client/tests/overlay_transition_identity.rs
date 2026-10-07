@@ -78,6 +78,7 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
     ("confirm_session_remove", |state| {
         state.session.remove_target = Some(SessionId::new())
     }),
+    ("confirm_discard_pending", open_discard_pending),
     ("confirm_forget_project", |state| {
         state.project.forget_target = Some(PathBuf::from("/p"))
     }),
@@ -241,4 +242,38 @@ fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
         operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
         target_label: "reviewer".to_string(),
     }
+}
+
+/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
+/// pending comment, then the press.
+fn open_discard_pending(state: &mut State) {
+    use micold_client::features::changes::{self, Msg as ChangesMsg};
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    let project = PathBuf::from("/p");
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::Opened {
+            project: project.clone(),
+            entry: micold_core::session::SessionLocation::Default,
+        },
+    );
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::ReviewChanged {
+            project,
+            worktree_dir: String::new(),
+            comments: vec![ReviewComment {
+                id: CommentId::new(),
+                path: micold_core::review::RelPath::from_git("a.rs"),
+                side: micold_core::review::Side::New,
+                range: micold_core::review::LineRange::new(1, 1).unwrap(),
+                quote: vec!["a".into()],
+                text: "t".into(),
+                state: CommentState::Pending,
+                created: 1,
+            }],
+            sending: false,
+        },
+    );
+    let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
 }

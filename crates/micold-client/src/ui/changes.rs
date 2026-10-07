@@ -18,9 +18,9 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    base_line, can_pick, committed_available, composer_placed, diff_body, file_comments,
-    is_pending, list_body, pending_counts, review_of, send_action, ComposerTarget, DiffBody,
-    ListBody, Msg, OpenView, DEFAULT_ENTRY_NOTE,
+    base_line, can_pick, committed_available, composer_placed, diff_body, discard_prompt,
+    file_comments, is_pending, list_body, pending_counts, review_of, send_action, tidy_actions,
+    ComposerTarget, DiffBody, ListBody, Msg, OpenView, DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -61,6 +61,22 @@ pub fn view<'a>(
             .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed)))
     });
     let mut header = row![container(heading).width(Length::Fill)];
+    // S3: Clear sent and Discard pending…, each enabled only when it has something to act on.
+    if let Some(tidy) = tidy_actions(&state.changes) {
+        header = header
+            .push(
+                Button::text("Clear sent", r).on_press_maybe(
+                    tidy.clear_sent
+                        .then_some(Message::Changes(Msg::ClearSentPressed)),
+                ),
+            )
+            .push(
+                Button::text("Discard pending…", r).on_press_maybe(
+                    tidy.discard_pending
+                        .then_some(Message::Changes(Msg::DiscardPendingPressed)),
+                ),
+            );
+    }
     if let Some(send) = send {
         header = header.push(send);
     }
@@ -424,4 +440,32 @@ fn composer_box<'a>(
         .spacing(spacing::SM)
         .padding(spacing::SM)
         .into()
+}
+
+/// The **Discard pending…** confirmation (S3), built as `ui/confirm_delete.rs` builds its dialog;
+/// `None` when it is not open. `ui::view` wraps it in the shared `Modal` transition.
+pub fn discard_dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    let prompt = discard_prompt(&state.changes)?;
+    let r = tokens::roles(scheme);
+    let fields = crate::ui::material::dialog::fields(column![
+        Text::new("Discard pending comments", TypeRole::Headline, r),
+        Text::new(prompt, TypeRole::Body, r).muted(),
+    ]);
+    let actions = crate::ui::material::dialog::actions(row![
+        Button::filled("Discard", r).on_press(Message::Changes(Msg::DiscardConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Changes(Msg::DiscardCancelled)),
+    ]);
+    Some(
+        crate::ui::material::Surface::new(
+            crate::ui::material::dialog::body(fields, actions),
+            crate::ui::material::SurfaceKind::Dialog,
+            r,
+        )
+        .width(Length::Fixed(460.0))
+        .into(),
+    )
 }
