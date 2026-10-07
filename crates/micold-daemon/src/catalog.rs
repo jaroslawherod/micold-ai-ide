@@ -401,6 +401,26 @@ impl Catalog {
         self.persist_service_settings()
     }
 
+    /// A project's stored review comments (feature 482, FR-020); empty for the ephemeral catalog.
+    pub fn load_reviews(&self, project: &Path) -> micold_core::review::store::ReviewFile {
+        self.project_store
+            .as_ref()
+            .map(|store| store.load_reviews(project))
+            .unwrap_or_default()
+    }
+
+    /// Write a project's review comments (feature 482, W5); the ephemeral catalog keeps nothing.
+    pub fn save_reviews(
+        &self,
+        project: &Path,
+        file: &micold_core::review::store::ReviewFile,
+    ) -> io::Result<()> {
+        match &self.project_store {
+            Some(store) => store.save_reviews(project, file),
+            None => Ok(()),
+        }
+    }
+
     /// Set the Changes view's diff layout, persisting atomically (feature 482, R12).
     pub fn set_diff_layout(&mut self, layout: micold_core::settings::DiffLayout) -> io::Result<()> {
         self.settings.diff_layout = layout;

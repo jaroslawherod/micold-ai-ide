@@ -1,8 +1,7 @@
 //! The Changes view's diff layout on the service (feature 482, R12, contracts/review-wire.md):
 //! `SettingsSet { diff_layout }` is stored in the settings file, reported in `Welcome` after a
-//! restart and pushed to every attached client, as `pr_status_enabled` is. The review messages
-//! are refused until the review store serves them (T057 retires the `ReviewEdit` assertion, T072
-//! the `ReviewSend` one).
+//! restart and pushed to every attached client, as `pr_status_enabled` is. `ReviewSend` is refused
+//! until the send is served (T072 retires that assertion).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -10,7 +9,7 @@ use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, DaemonSettings, ErrorKind, OperationResult, ReviewEditOp,
+    ClientMsg, DaemonMsg, DaemonSettings, ErrorKind, OperationResult,
 };
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
@@ -191,26 +190,10 @@ async fn setting_the_diff_layout_is_pushed_to_a_second_client() {
 
 /// Placeholder until the review store: both review messages are refused, not dropped.
 #[tokio::test]
-async fn review_edit_and_review_send_are_refused_until_served() {
+async fn review_send_is_refused_until_served() {
     let store = tempfile::tempdir().unwrap();
     let state = service(store.path());
     let (mut client, _) = connect(&state).await;
-
-    // Retired by T057.
-    client
-        .send(Frame::Control(ClientMsg::ReviewEdit {
-            req: 1,
-            project: store.path().to_path_buf(),
-            worktree_dir: String::new(),
-            edit: ReviewEditOp::ClearSent,
-        }))
-        .await
-        .unwrap();
-    let (kind, message) = answer(&mut client, 1)
-        .await
-        .expect_err("ReviewEdit is refused");
-    assert_eq!(kind, ErrorKind::Refused);
-    assert!(message.contains("not available"), "{message}");
 
     // Retired by T072.
     client

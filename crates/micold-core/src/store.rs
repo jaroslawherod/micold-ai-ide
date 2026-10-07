@@ -92,6 +92,18 @@ pub trait ProjectStore {
     fn is_missing(&self) -> bool {
         false
     }
+
+    /// A project's review comments (feature 482, FR-020). The default, for stores that persist
+    /// nothing, is an empty review.
+    fn load_reviews(&self, _project_path: &Path) -> ReviewFile {
+        ReviewFile::default()
+    }
+
+    /// Persist a project's review comments. The default, for stores that persist nothing, keeps
+    /// nothing and succeeds.
+    fn save_reviews(&self, _project_path: &Path, _file: &ReviewFile) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
@@ -739,6 +751,14 @@ impl JsonFileStore {
 }
 
 impl ProjectStore for JsonFileStore {
+    fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        JsonFileStore::load_reviews(self, project_path)
+    }
+
+    fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        JsonFileStore::save_reviews(self, project_path, file)
+    }
+
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
     fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_project_state(self, project_path)
@@ -983,6 +1003,8 @@ struct FakeStoreState {
     removals: Vec<PathBuf>,
     /// When set, the next `save` fails with this kind — a full disk, a read-only home.
     fail_next_save: Option<io::ErrorKind>,
+    /// Review comments per project, as `save_reviews` left them.
+    reviews: BTreeMap<PathBuf, ReviewFile>,
 }
 
 impl FakeProjectStore {
@@ -1059,6 +1081,25 @@ impl ProjectStore for FakeProjectStore {
             .expect("fake lock")
             .removals
             .push(project_path.to_path_buf());
+        Ok(())
+    }
+
+    fn load_reviews(&self, project_path: &Path) -> ReviewFile {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .get(project_path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn save_reviews(&self, project_path: &Path, file: &ReviewFile) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .reviews
+            .insert(project_path.to_path_buf(), file.clone());
         Ok(())
     }
 }

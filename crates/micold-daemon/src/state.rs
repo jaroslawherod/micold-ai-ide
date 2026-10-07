@@ -233,6 +233,8 @@ struct Inner {
     /// An attention event was counted in memory and is not written yet (feature 039, FR-008a);
     /// [`DaemonState::persist_attention`] writes it off the async runtime.
     attention_unsaved: bool,
+    /// Review comments per project and entry (feature 482), read on first use.
+    reviews: crate::review::Reviews,
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -531,6 +533,7 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
+                reviews: crate::review::Reviews::default(),
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1625,6 +1628,50 @@ impl DaemonState {
     /// projection of durable state + git-discovered worktrees.
     pub fn catalog_snapshot(&self) -> CatalogSnapshot {
         Self::snapshot_locked(&self.lock())
+    }
+
+    /// Apply a review edit to entry `worktree_dir` of `project` and push the entry's comments to
+    /// every client (feature 482, W1–W3, W5). A project the catalog does not list, or a worktree
+    /// it does not have, is `NotFound` and nothing is stored (W2). Every window is told: attach is
+    /// exclusive per project, so a window keeps only its own project's pushes.
+    pub fn review_edit(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        op: micold_core::protocol::messages::ReviewEditOp,
+    ) -> Result<(), crate::review::Refusal> {
+        let mut inner = self.lock();
+        let snapshot = Self::snapshot_locked(&inner);
+        let known = snapshot
+            .projects
+            .iter()
+            .find(|p| p.path == project)
+            .is_some_and(|p| {
+                worktree_dir.is_empty() || p.worktrees.iter().any(|w| w.dir_name == worktree_dir)
+            });
+        if !known {
+            return Err(crate::review::Refusal {
+                kind: micold_core::protocol::messages::ErrorKind::NotFound,
+                message: "no such project or worktree".into(),
+            });
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let inner = &mut *inner;
+        let msg = inner
+            .reviews
+            .apply_edit(&inner.catalog, project, worktree_dir, op, now)?;
+        Self::broadcast_locked(inner, vec![msg]);
+        Ok(())
+    }
+
+    /// The `ReviewChanged` pushes a client that has just attached to `project` is owed: one per
+    /// entry with comments (feature 482, review-wire).
+    pub fn review_pushes_on_attach(&self, project: &Path) -> Vec<DaemonMsg> {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner.reviews.pushes_on_attach(&inner.catalog, project)
     }
 
     /// Push a full `CatalogChanged` snapshot to every connected client (FR-011; idempotent).

@@ -711,6 +711,10 @@ where
                                 sessions: state.sessions_for(&project),
                             },
                         );
+                        // Feature 482: the project's stored comments, one push per entry.
+                        for msg in state.review_pushes_on_attach(&project) {
+                            state.send(id, msg);
+                        }
                         // Discover this project's worktrees from git now that a client is looking at
                         // it, then the sessions its CLIs recorded there that we have no record of
                         // (feature 026, FR-014 — research R15), and send the refreshed catalog to
@@ -1139,9 +1143,34 @@ where
                     ),
                 }
             }
-            // Feature 482: placeholders until the review store (T057 retires `ReviewEdit`'s, T072
-            // `ReviewSend`'s, each with its `diff_layout_setting` assertion).
-            ClientMsg::ReviewEdit { req, .. } | ClientMsg::ReviewSend { req, .. } => state.send(
+            // Feature 482: comments are edited and stored under the state lock, pushed to every
+            // window, then answered (W5: on disk before `OperationOk`).
+            ClientMsg::ReviewEdit {
+                req,
+                project,
+                worktree_dir,
+                edit,
+            } => match state.review_edit(&project, &worktree_dir, edit) {
+                Ok(()) => state.send(
+                    id,
+                    DaemonMsg::OperationOk {
+                        req,
+                        result: micold_core::protocol::messages::OperationResult::Ack,
+                    },
+                ),
+                Err(refusal) => state.send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: refusal.kind,
+                        message: refusal.message,
+                        detail: None,
+                    },
+                ),
+            },
+            // Placeholder until T072 serves the send (and retires its `diff_layout_setting`
+            // assertion).
+            ClientMsg::ReviewSend { req, .. } => state.send(
                 id,
                 DaemonMsg::OperationError {
                     req,
