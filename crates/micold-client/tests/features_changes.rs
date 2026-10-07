@@ -7,11 +7,12 @@
 use std::collections::BTreeSet;
 
 use micold_client::features::changes::{
-    self, base_line, committed_available, list_body, Effect, ListBody, Load, Msg, State,
-    BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
+    self, base_line, can_pick, committed_available, diff_body, list_body, DiffBody, Effect,
+    ListBody, Load, Msg, State, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
+use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines};
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
@@ -337,5 +338,252 @@ fn loading_and_failure_have_their_own_bodies() {
     assert_eq!(
         list_body(state.open.as_ref().unwrap()),
         ListBody::Failed("fatal: not a git repository")
+    );
+}
+
+// ---- The diff half (M2, T029, contracts/changes-view.md D3, D4) ----
+
+fn loaded(diff: FileDiff) -> LoadedDiff {
+    LoadedDiff {
+        diff,
+        old: SideLines::from_bytes(b"a\n"),
+        new: SideLines::from_bytes(b"b\n"),
+    }
+}
+
+fn text_diff() -> LoadedDiff {
+    loaded(parse_unified(b"@@ -1 +1 @@\n-a\n+b\n"))
+}
+
+/// Select `p` in a ready view and return the diff read it asked for.
+fn select(state: &mut State, p: &str) -> (u64, bool) {
+    match changes::update(state, Msg::FileSelected(path(p))) {
+        Effect::ReadDiff {
+            seq,
+            path: asked,
+            force_large,
+            ..
+        } => {
+            assert_eq!(asked, path(p));
+            (seq, force_large)
+        }
+        other => panic!("selecting a file reads its diff, got {other:?}"),
+    }
+}
+
+/// US1 s3, D1. Selecting a file reads its diff under the list's scope and toggles, not forced.
+#[test]
+fn selecting_a_file_reads_its_diff() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let effect = changes::update(&mut state, Msg::FileSelected(path("b.rs")));
+    let Effect::ReadDiff {
+        seq,
+        entry,
+        scope,
+        toggles,
+        path: asked,
+        from,
+        force_large,
+    } = effect
+    else {
+        panic!("selecting reads the diff, got {effect:?}");
+    };
+    assert_eq!(entry, worktree());
+    assert_eq!(scope, main_base(), "the scope the list was read under");
+    assert_eq!(toggles, Toggles::default());
+    assert_eq!(asked, path("b.rs"));
+    assert_eq!(from, None);
+    assert!(!force_large);
+    let view = state.open.as_ref().unwrap();
+    assert!(matches!(view.diff, Load::Loading { seq: s, .. } if s == seq));
+    assert_eq!(diff_body(view), DiffBody::Loading);
+
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(text_diff()),
+        },
+    );
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
+    assert!(can_pick(view), "a text diff takes comments");
+}
+
+/// A renamed file's diff is read with its old path.
+#[test]
+fn a_renamed_file_is_read_with_its_old_path() {
+    let mut state = State::default();
+    let seq = open(&mut state, worktree());
+    let mut renamed = list(&["new.rs"]);
+    renamed.files[0].kind = ChangeKind::Renamed {
+        from: path("old.rs"),
+    };
+    changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Ok(renamed),
+        },
+    );
+    let Effect::ReadDiff { from, .. } =
+        changes::update(&mut state, Msg::FileSelected(path("new.rs")))
+    else {
+        panic!("read");
+    };
+    assert_eq!(from, Some(path("old.rs")));
+}
+
+/// An answer for an earlier selection is dropped.
+#[test]
+fn a_stale_diff_answer_is_dropped() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let (first, _) = select(&mut state, "a.rs");
+    let (second, _) = select(&mut state, "b.rs");
+    assert_ne!(first, second);
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq: first,
+            result: Ok(text_diff()),
+        },
+    );
+    assert_eq!(diff_body(state.open.as_ref().unwrap()), DiffBody::Loading);
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq: second,
+            result: Err("fatal: bad revision".into()),
+        },
+    );
+    assert_eq!(
+        diff_body(state.open.as_ref().unwrap()),
+        DiffBody::Failed("fatal: bad revision")
+    );
+}
+
+/// US1 s7, D4. A large answer shows its counts; Show diff reads it forced and remembers the path.
+#[test]
+fn show_diff_reads_a_large_file_forced_and_remembers_it() {
+    let mut state = ready(&["a.rs", "big.txt"]);
+    let (seq, _) = select(&mut state, "big.txt");
+    let large = loaded(FileDiff::TooLarge {
+        added: 6_000,
+        removed: 0,
+    });
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(large.clone()),
+        },
+    );
+    let view = state.open.as_ref().unwrap();
+    assert_eq!(
+        diff_body(view),
+        DiffBody::Diff(&large),
+        "counts and Show diff, no lines"
+    );
+    assert!(!can_pick(view));
+
+    let effect = changes::update(&mut state, Msg::ShowLarge);
+    let Effect::ReadDiff {
+        path: asked,
+        force_large,
+        ..
+    } = effect
+    else {
+        panic!("Show diff reads the diff, got {effect:?}");
+    };
+    assert_eq!(asked, path("big.txt"));
+    assert!(force_large);
+    assert!(state
+        .open
+        .as_ref()
+        .unwrap()
+        .shown_large
+        .contains(&path("big.txt")));
+
+    // Coming back to it later reads it forced again.
+    select(&mut state, "a.rs");
+    let (_, forced) = select(&mut state, "big.txt");
+    assert!(forced, "a file the user asked to see stays shown");
+}
+
+/// D3. Binary, not-UTF-8 and mode-only answers take no comments.
+#[test]
+fn binary_not_utf8_and_mode_only_allow_no_pick() {
+    for diff in [FileDiff::Binary, FileDiff::NotUtf8, FileDiff::ModeOnly] {
+        let mut state = ready(&["x"]);
+        let (seq, _) = select(&mut state, "x");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(loaded(diff.clone())),
+            },
+        );
+        assert!(!can_pick(state.open.as_ref().unwrap()), "{diff:?}");
+    }
+}
+
+/// A list re-read keeps the selection and re-reads its diff, keeping the old one on screen.
+#[test]
+fn a_list_reread_keeps_the_selection_and_rereads_its_diff() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(text_diff()),
+        },
+    );
+    let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
+        panic!("re-read");
+    };
+    let effect = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Ok(list(&["b.rs"])),
+        },
+    );
+    let Effect::ReadDiff {
+        path: asked,
+        toggles,
+        ..
+    } = effect
+    else {
+        panic!("the kept selection's diff is re-read, got {effect:?}");
+    };
+    assert_eq!(asked, path("b.rs"));
+    assert!(!toggles.uncommitted, "under the new toggles");
+    assert_eq!(
+        diff_body(state.open.as_ref().unwrap()),
+        DiffBody::Diff(&text_diff()),
+        "the old diff stays on screen while it is re-read"
+    );
+}
+
+/// A list re-read that drops the selection drops its diff.
+#[test]
+fn a_list_reread_that_drops_the_selection_drops_its_diff() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    select(&mut state, "b.rs");
+    let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
+        panic!("re-read");
+    };
+    let effect = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq,
+            result: Ok(list(&["a.rs"])),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    assert_eq!(
+        diff_body(state.open.as_ref().unwrap()),
+        DiffBody::NoSelection
     );
 }

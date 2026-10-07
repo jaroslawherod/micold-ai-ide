@@ -1,14 +1,16 @@
 //! The Changes view of one entry: which entry is open, its toggles, the changed-file list and the
 //! selected file (feature 482, contracts/changes-view.md V1–V3 and L1–L3, data-model § Client).
 //!
-//! Render-free. The shell half (`shell/changes.rs`) turns [`Effect::ReadList`] into the git read
-//! off the update thread and answers [`Msg::ListRead`]. What the list pane says when it has no rows
+//! Render-free. The shell half (`shell/changes.rs`) turns [`Effect::ReadList`] and
+//! [`Effect::ReadDiff`] into git reads off the update thread and answers [`Msg::ListRead`] and
+//! [`Msg::DiffRead`]. What the list pane says when it has no rows
 //! is chosen here ([`list_body`], [`base_line`]) so the glue in `ui/changes.rs` only renders it.
 
 use std::collections::BTreeSet;
 
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
-use micold_core::review::changes::{ChangeList, ChangedFile};
+use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
+use micold_core::review::diff::{FileDiff, LoadedDiff};
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
@@ -56,6 +58,14 @@ pub struct OpenView {
     pub list_offset: u32,
     /// The file list's viewport height, in pixels.
     pub list_viewport: u32,
+    /// The selected file's diff (D1); `Idle` with nothing selected.
+    pub diff: Load<LoadedDiff>,
+    /// Files over the size limits the user asked to see (D4); kept while the view is open.
+    pub shown_large: BTreeSet<RelPath>,
+    /// The diff's scroll offset, in pixels (D5).
+    pub diff_offset: u32,
+    /// The diff's viewport height, in pixels.
+    pub diff_viewport: u32,
 }
 
 /// What this window holds about the Changes view.
@@ -93,6 +103,22 @@ pub enum Msg {
         /// Viewport height, pixels.
         viewport: u32,
     },
+    /// The large gate's Show diff was pressed (D4).
+    ShowLarge,
+    /// The diff scrolled or was resized.
+    DiffScrolled {
+        /// Offset from the top, pixels.
+        offset: u32,
+        /// Viewport height, pixels.
+        viewport: u32,
+    },
+    /// Diff read `seq` ended.
+    DiffRead {
+        /// The read it answers.
+        seq: u64,
+        /// The diff, or git's message.
+        result: Result<LoadedDiff, String>,
+    },
     /// Read `seq` ended.
     ListRead {
         /// The read it answers.
@@ -120,6 +146,24 @@ pub enum Effect {
         /// Which kinds of change to list.
         toggles: Toggles,
     },
+    /// Read one file's diff as read `seq` (D1). The scope and the old path are the shown list's,
+    /// so the shell needs no lookup.
+    ReadDiff {
+        /// The read's sequence number.
+        seq: u64,
+        /// The entry.
+        entry: SessionLocation,
+        /// The scope the list was read under.
+        scope: ReviewScope,
+        /// Which kinds of change to include.
+        toggles: Toggles,
+        /// The file.
+        path: RelPath,
+        /// A renamed file's old path.
+        from: Option<RelPath>,
+        /// Read it even over the size limits (the user pressed Show diff).
+        force_large: bool,
+    },
 }
 
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
@@ -133,6 +177,10 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 selected: None,
                 list_offset: 0,
                 list_viewport: 0,
+                diff: Load::Idle,
+                shown_large: BTreeSet::new(),
+                diff_offset: 0,
+                diff_viewport: 0,
             });
             request_read(state)
         }
@@ -158,8 +206,39 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             request_read(state)
         }
         Msg::FileSelected(path) => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            view.selected = Some(path);
+            view.diff = Load::Idle;
+            view.diff_offset = 0;
+            request_diff(state, false)
+        }
+        Msg::ShowLarge => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            let Some(path) = view.selected.clone() else {
+                return Effect::None;
+            };
+            view.shown_large.insert(path);
+            request_diff(state, false)
+        }
+        Msg::DiffScrolled { offset, viewport } => {
             if let Some(view) = state.open.as_mut() {
-                view.selected = Some(path);
+                view.diff_offset = offset;
+                view.diff_viewport = viewport;
+            }
+            Effect::None
+        }
+        Msg::DiffRead { seq, result } => {
+            if let Some(view) = state.open.as_mut() {
+                if matches!(view.diff, Load::Loading { seq: s, .. } if s == seq) {
+                    view.diff = match result {
+                        Ok(diff) => Load::Ready(diff),
+                        Err(message) => Load::Failed(message),
+                    };
+                }
             }
             Effect::None
         }
@@ -225,6 +304,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
             if let Some(selected) = &view.selected {
                 if !list.files.iter().any(|f| &f.path == selected) {
                     view.selected = None;
+                    view.diff = Load::Idle;
                 }
             }
             Load::Ready(list)
@@ -234,7 +314,53 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
     if again {
         request_read(state)
     } else {
-        Effect::None
+        // The kept selection may have changed under the new list: read its diff again, keeping
+        // the old one on screen meanwhile.
+        request_diff(state, true)
+    }
+}
+
+/// Start a read of the selected file's diff under the shown list's scope; `keep`: the diff on
+/// screen stays there until the answer arrives. A newer read replaces an older one: the older
+/// answer is dropped by its `seq`.
+fn request_diff(state: &mut State, keep: bool) -> Effect {
+    let seq = state.next_seq;
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    let Some(path) = view.selected.clone() else {
+        return Effect::None;
+    };
+    let Some(list) = shown_list(view) else {
+        return Effect::None;
+    };
+    let Some(file) = list.files.iter().find(|f| f.path == path) else {
+        return Effect::None;
+    };
+    let from = match &file.kind {
+        ChangeKind::Renamed { from } => Some(from.clone()),
+        _ => None,
+    };
+    let scope = list.scope.clone();
+    let last = match std::mem::take(&mut view.diff) {
+        Load::Ready(diff) if keep => Some(diff),
+        Load::Loading { last, .. } if keep => last,
+        _ => None,
+    };
+    view.diff = Load::Loading {
+        seq,
+        again: false,
+        last,
+    };
+    state.next_seq += 1;
+    Effect::ReadDiff {
+        seq,
+        entry: view.entry.clone(),
+        scope,
+        toggles: view.toggles,
+        force_large: view.shown_large.contains(&path),
+        path,
+        from,
     }
 }
 
@@ -316,4 +442,43 @@ fn reason(why: BaseUnavailable) -> &'static str {
             "This worktree has no history in common with the default branch; only uncommitted changes are listed"
         }
     }
+}
+
+/// What the diff pane shows (D1, D3, D4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiffBody<'a> {
+    /// No file is selected.
+    NoSelection,
+    /// The first read of the selected file has not answered yet.
+    Loading,
+    /// The read failed, with git's message.
+    Failed(&'a str),
+    /// The diff on screen (the ready one, or the one kept while it is re-read).
+    Diff(&'a LoadedDiff),
+}
+
+/// What the diff pane shows for `view`.
+pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
+    if view.selected.is_none() {
+        return DiffBody::NoSelection;
+    }
+    match &view.diff {
+        Load::Ready(diff) => DiffBody::Diff(diff),
+        Load::Loading {
+            last: Some(diff), ..
+        } => DiffBody::Diff(diff),
+        Load::Failed(message) => DiffBody::Failed(message),
+        Load::Idle | Load::Loading { last: None, .. } => DiffBody::Loading,
+    }
+}
+
+/// Whether lines of the shown diff can be picked for a comment: text only (D3).
+pub fn can_pick(view: &OpenView) -> bool {
+    matches!(
+        &view.diff,
+        Load::Ready(LoadedDiff {
+            diff: FileDiff::Text(_),
+            ..
+        })
+    )
 }

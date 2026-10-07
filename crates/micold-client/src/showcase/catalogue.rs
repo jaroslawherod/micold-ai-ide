@@ -636,6 +636,18 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::review::virtual_rows,
     },
+    Entry {
+        module: "material/diff_view.rs",
+        component: "DiffView",
+        variants: &[],
+        density: &[],
+        posed: &["unified", "binary message", "large-file gate"],
+        live: &["scroll the unified diff", "Show diff (goes nowhere here)"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::review::diff_view,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate

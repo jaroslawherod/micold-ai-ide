@@ -351,7 +351,12 @@ mod tests {
         assert_eq!(hunks.len(), 2, "two @@ headers, two hunks");
         let first = &hunks[0];
         assert_eq!(
-            (first.old_start, first.old_len, first.new_start, first.new_len),
+            (
+                first.old_start,
+                first.old_len,
+                first.new_start,
+                first.new_len
+            ),
             (1, 3, 1, 3)
         );
         assert_eq!(first.section, "fn main() {");
@@ -382,7 +387,12 @@ mod tests {
         let raw = "--- a/x\n+++ b/x\n@@ -4 +4 @@\n-a\n+b\n";
         let hunks = text(parse_unified(raw.as_bytes()));
         assert_eq!(
-            (hunks[0].old_start, hunks[0].old_len, hunks[0].new_start, hunks[0].new_len),
+            (
+                hunks[0].old_start,
+                hunks[0].old_len,
+                hunks[0].new_start,
+                hunks[0].new_len
+            ),
             (4, 1, 4, 1),
             "`-4` is `-4,1`"
         );
@@ -424,7 +434,10 @@ mod tests {
         let raw = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n";
         let hunk = &text(parse_unified(raw.as_bytes()))[0];
         assert_eq!(hunk.lines.len(), 2, "the marker is not a line");
-        assert!(hunk.old_no_newline, "it followed a removed line: the old side");
+        assert!(
+            hunk.old_no_newline,
+            "it followed a removed line: the old side"
+        );
         assert!(!hunk.new_no_newline);
 
         let raw = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n same\n\\ No newline at end of file\n";

@@ -256,7 +256,9 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 }
                 list.into()
             }
-            Body::Message(sentence) => centred(Text::new(sentence, TypeRole::Body, r).muted().into()),
+            Body::Message(sentence) => {
+                centred(Text::new(sentence, TypeRole::Body, r).muted().into())
+            }
             Body::Large { added, removed } => {
                 let mut show = Button::filled(SHOW_DIFF, r);
                 if let Some(message) = view.on_show_large {
@@ -336,7 +338,10 @@ mod tests {
                 );
             }
         }
-        assert!(a[3] >= 2.0 * NUMBER_WIDTH, "the text sits after both number cells");
+        assert!(
+            a[3] >= 2.0 * NUMBER_WIDTH,
+            "the text sits after both number cells"
+        );
     }
 
     #[test]
@@ -365,7 +370,10 @@ mod tests {
         let built = view.built_rows();
         let visible = (600.0 / ROW_HEIGHT) as usize + 1;
         assert!(built.len() <= visible + 2 * OVERSCAN, "built {built:?}");
-        assert!(built.contains(&20_000), "row 20,000 is on screen at 400,000 px: {built:?}");
+        assert!(
+            built.contains(&20_000),
+            "row 20,000 is on screen at 400,000 px: {built:?}"
+        );
         let _element: Element<'_, ()> = view.into();
     }
 
@@ -396,7 +404,10 @@ mod tests {
             }
         );
         let message = large_message(6_000, 12);
-        assert!(message.contains("+6000") && message.contains("\u{2212}12"), "{message}");
+        assert!(
+            message.contains("+6000") && message.contains("\u{2212}12"),
+            "{message}"
+        );
         let view = DiffView::new(&diff, DiffLayout::Unified, LIGHT).on_show_large(());
         assert_eq!(view.built_rows(), 0..0);
         let _element: Element<'_, ()> = view.into();

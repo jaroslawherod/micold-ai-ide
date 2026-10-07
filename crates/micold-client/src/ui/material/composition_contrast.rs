@@ -236,7 +236,10 @@ fn diff_line_text_is_legible_on_the_added_and_removed_tints() {
     let mut violations: Vec<String> = Vec::new();
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let r = tokens::roles(scheme);
-        for (tint_name, tint) in [("diff_added", r.diff_added), ("diff_removed", r.diff_removed)] {
+        for (tint_name, tint) in [
+            ("diff_added", r.diff_added),
+            ("diff_removed", r.diff_removed),
+        ] {
             for (text_name, text) in [
                 ("on_surface", r.on_surface),
                 ("on_surface_variant", r.on_surface_variant),
