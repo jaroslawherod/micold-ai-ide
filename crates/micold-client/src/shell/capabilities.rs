@@ -261,6 +261,14 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `notifier` in place of the system's (feature 613, T067): a
+    /// dispatch test reads what the window asked it to show.
+    #[cfg(test)]
+    pub(crate) fn with_notifier(mut self, notifier: Arc<dyn DesktopNotifier>) -> Self {
+        self.notifier = notifier;
+        self
+    }
+
     /// Put `notifier` in place of the system's notifications (feature 039, #572 item 5).
     ///
     /// In place rather than by value: `App` implements `Drop`, so a test cannot move `caps` out

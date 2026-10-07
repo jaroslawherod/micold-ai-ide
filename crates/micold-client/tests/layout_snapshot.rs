@@ -137,6 +137,13 @@ mod picker_row_tooltip_clears_its_row;
 #[path = "gates/issue_rows_show_all_text.rs"]
 mod issue_rows_show_all_text;
 
+// --- The notification-kind rows gate (613, T075) -------------------------------------------------
+
+// Here because it reads a covered state, the Environment page, from the shared record cache, and
+// states the arrangement of the rows feature 613 added rather than comparing with the record.
+#[path = "gates/notification_kind_rows_sit_under_the_switch.rs"]
+mod notification_kind_rows_sit_under_the_switch;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

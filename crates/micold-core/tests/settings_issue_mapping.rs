@@ -187,6 +187,8 @@ fn other_writers_preserve_the_mapping() {
             "env_include_script_path",
             "env_include_timeout_secs",
             "issue_label_types",
+            "long_task_threshold_secs",
+            "notification_kinds",
             "pi_activity_component",
             "pr_status_enabled",
             "scrollback_lines",

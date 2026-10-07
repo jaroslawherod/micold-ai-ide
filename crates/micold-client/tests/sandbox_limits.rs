@@ -29,6 +29,7 @@ fn draft() -> SettingsDraft {
     let mut draft = SettingsDraft::default();
     draft.terminal.scrollback_lines = "5000".into();
     draft.environment.timeout_secs = "5".into();
+    draft.environment.long_task_threshold_secs = "60".into();
     draft
 }
 

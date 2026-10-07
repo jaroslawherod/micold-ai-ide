@@ -27,6 +27,8 @@ fn every_icon_tint_is_legible_on_its_surface() {
             (IconSurface::Unavailable, r.surface),
             // A menu item's glyph sits on the menu panel, which is `surface_container` (§7.5).
             (IconSurface::MenuItem, r.surface_container),
+            // A checkbox row's glyph sits on the page surface, in the label's role (feature 613, S4).
+            (IconSurface::CheckboxLabel, r.surface),
         ];
         for (surface, background) in cases {
             let ratio = contrast(icon_role(surface, r), background);
@@ -47,12 +49,14 @@ fn icon_role_maps_each_surface_to_its_expected_foreground() {
         assert_eq!(icon_role(IconSurface::Badge, r), r.on_surface_variant);
         assert_eq!(icon_role(IconSurface::Unavailable, r), r.error);
         assert_eq!(icon_role(IconSurface::MenuItem, r), r.on_surface_variant);
+        // The label's own role (`style::checkbox`'s `text_color`), so the glyph reads as the label does.
+        assert_eq!(icon_role(IconSurface::CheckboxLabel, r), r.on_surface);
     }
 }
 
 #[test]
 fn all_surfaces_are_covered() {
-    assert_eq!(IconSurface::ALL.len(), 5, "surface contexts");
+    assert_eq!(IconSurface::ALL.len(), 6, "surface contexts");
 }
 
 /// BUG-001 (feature 012 FR-011a, SC-007): a glyph nested inside a **filled** container must take

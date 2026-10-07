@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
+use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
@@ -612,6 +613,12 @@ pub enum ClientMsg {
         pr_status_enabled: Option<bool>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
+        /// The per-kind switches, all four at once, or `None` to leave them unchanged
+        /// (feature 613, W5.4).
+        notification_kinds: Option<NotificationKinds>,
+        /// The long-task threshold in seconds, or `None` to leave it unchanged (feature 613,
+        /// W5.6). The service clamps it into 10–3600 (FR-026).
+        long_task_threshold_secs: Option<u64>,
         /// The Changes view's diff layout, or `None` to leave unchanged (feature 482, R12).
         diff_layout: Option<DiffLayout>,
     },
@@ -736,6 +743,9 @@ pub enum DaemonMsg {
         session: SessionId,
         /// The granted `attention_seq`.
         seq: u64,
+        /// The kind the service decided when it noted event `seq` (feature 613, W5.1). Never
+        /// `SessionError`.
+        kind: NotificationKind,
     },
     /// Show this session: a notification for it was clicked, in this window or another
     /// (feature 039, W3). Sent to one window only; that window decides whether the session can
@@ -747,6 +757,15 @@ pub enum DaemonMsg {
         session: SessionId,
         /// The activation token of the click, as the sender wrote it (W3.4).
         activation: Option<String>,
+    },
+    /// A session not in view ended because of an error: this window raises its **Session error**
+    /// notification (feature 613, W5.2). Sent to one window only, once per error ending, and
+    /// never answered.
+    SessionErrorNotice {
+        /// The project the session belongs to.
+        project: PathBuf,
+        /// The session that ended.
+        session: SessionId,
     },
     /// Handshake or attach refused.
     Refused {
@@ -1293,6 +1312,10 @@ pub struct DaemonSettings {
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
     /// switch, and because the service is what grants a claim.
     pub desktop_notifications: bool,
+    /// Which kinds of event notify while `desktop_notifications` is on (feature 613, W5.3).
+    pub notification_kinds: NotificationKinds,
+    /// How long, in seconds, a turn must last to be **Long task finished** (feature 613, W5.6).
+    pub long_task_threshold_secs: u64,
     /// The Changes view's diff layout (feature 482, R12). Service-owned so every window and the
     /// next start keep the last choice.
     pub diff_layout: DiffLayout,
@@ -1547,6 +1570,7 @@ mod attention_wire_tests {
         let grant = DaemonMsg::AttentionGranted {
             session: session(),
             seq: SEQ,
+            kind: NotificationKind::LongTaskFinished,
         };
         assert_eq!(
             through_json(&claim),
@@ -1680,6 +1704,8 @@ mod desktop_notifications_wire_tests {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
             desktop_notifications,
+            notification_kinds: NotificationKinds::default(),
+            long_task_threshold_secs: 60,
             diff_layout: Default::default(),
         }
     }
@@ -1717,6 +1743,8 @@ mod desktop_notifications_wire_tests {
                 cross_session_access: None,
                 pr_status_enabled: None,
                 desktop_notifications: chosen,
+                notification_kinds: None,
+                long_task_threshold_secs: None,
                 diff_layout: None,
             };
             match through_json(&asked) {

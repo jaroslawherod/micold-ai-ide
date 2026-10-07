@@ -32,11 +32,13 @@
 //! geometry could not be composed; nothing here is wrong with the checkbox's geometry, so what is
 //! added is the one capability it lacks and no more.
 
+use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::keyboard_focus::TakesTheKeyboard;
 use crate::ui::material::style;
-use iced::widget::checkbox;
-use iced::{keyboard, Element};
-use micold_core::tokens::Roles;
+use crate::ui::material::{Glyph, Text, TypeRole};
+use iced::widget::{checkbox, mouse_area, row};
+use iced::{keyboard, Alignment, Element};
+use micold_core::tokens::{spacing, Roles};
 
 /// A labelled checkbox. Builder form (Principle VIII):
 /// `Checkbox::new("Enabled", draft.enabled, roles).on_toggle(Message::Toggled).into()`.
@@ -44,6 +46,7 @@ use micold_core::tokens::Roles;
 /// Without an `on_toggle` it renders disabled.
 pub struct Checkbox<'a, M> {
     label: String,
+    icon: Option<Icon>,
     checked: bool,
     roles: Roles,
     on_toggle: Option<Box<dyn Fn(bool) -> M + 'a>>,
@@ -56,12 +59,27 @@ impl<'a, M: Clone + 'a> Checkbox<'a, M> {
     pub fn new(label: impl Into<String>, checked: bool, roles: Roles) -> Self {
         Self {
             label: label.into(),
+            icon: None,
             checked,
             roles,
             on_toggle: None,
             focused: false,
             on_focus_change: None,
         }
+    }
+
+    /// A glyph drawn before the label, in the label's colour role (feature 613, S4, FR-022).
+    ///
+    /// The glyph is the label's own colour, not a tint of its own, so it holds whatever contrast the
+    /// label holds in both themes, and a row with no `on_toggle` draws it at the disabled opacity.
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    /// The colour role the glyph is drawn in: the label's.
+    fn icon_tint(&self) -> micold_core::tokens::Rgb {
+        icon_role(IconSurface::CheckboxLabel, self.roles)
     }
 
     /// The message emitted when the box is toggled, given the new state.
@@ -91,9 +109,15 @@ impl<'a, M: Clone + 'a> Checkbox<'a, M> {
 
 impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
     fn from(c: Checkbox<'a, M>) -> Self {
-        let mut widget = checkbox(c.checked)
-            .label(c.label)
-            .style(style::checkbox(c.roles, c.focused));
+        let tint = c.icon_tint();
+        let disabled = c.on_toggle.is_none();
+        let mut widget = checkbox(c.checked).style(style::checkbox(c.roles, c.focused));
+        // With a glyph the label cannot be the stack's own (it has no slot for one), so the box is
+        // bare and the glyph and label follow it in a pointer target that toggles it.
+        let beside = c.icon.map(|glyph| (glyph, c.label.clone()));
+        if beside.is_none() {
+            widget = widget.label(c.label.clone());
+        }
         // What Space will send, worked out now because the closure is about to be handed to the
         // inner widget. A checkbox has exactly one thing a key can do, so there is one message
         // rather than a second closure.
@@ -104,7 +128,37 @@ impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
 
         // `on_key` is `Some` exactly when `on_toggle` was, and a checkbox without one renders
         // disabled — so it is also the disabled test, read off the one field that still remembers.
-        let mut wrapper = TakesTheKeyboard::new(widget, on_key.is_some()).focused(c.focused);
+        let control: Element<'a, M> = match beside {
+            None => widget.into(),
+            Some((glyph, label)) => {
+                // The label dims with the glyph on a disabled row (FR-017), as the stack's own
+                // label does through the style's disabled `text_color`.
+                let text = Text::new(label, TypeRole::Body, c.roles);
+                let text = if disabled {
+                    text.disabled_tint(tint)
+                } else {
+                    text.tint(tint)
+                };
+                let mut words = mouse_area(
+                    row![
+                        Glyph::new(glyph, TypeRole::Body, c.roles)
+                            .tint(tint)
+                            .disabled(disabled),
+                        text
+                    ]
+                    .spacing(spacing::SM)
+                    .align_y(Alignment::Center),
+                );
+                if let Some(message) = on_key.clone() {
+                    words = words.on_press(message);
+                }
+                row![widget, words]
+                    .spacing(spacing::SM)
+                    .align_y(Alignment::Center)
+                    .into()
+            }
+        };
+        let mut wrapper = TakesTheKeyboard::new(control, on_key.is_some()).focused(c.focused);
         if let Some(message) = on_key {
             // Space, and **only** Space. That is the key a checkbox answers everywhere it exists —
             // the platform convention and WAI-ARIA's — and Enter is deliberately left alone,
@@ -122,5 +176,54 @@ impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
             wrapper = wrapper.on_focus_change(on_focus_change);
         }
         wrapper.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::showcase::state::Message;
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens::{contrast, roles, AA_NON_TEXT};
+
+    fn light() -> Roles {
+        roles(ColorScheme::Light)
+    }
+
+    #[test]
+    fn icon_is_chainable_and_keeps_label_state_and_toggle() {
+        let c = Checkbox::<Message>::new("Needs permission", true, light())
+            .icon(Icon::NeedsPermission)
+            .on_toggle(|_| Message::NoOp);
+        assert_eq!(c.label, "Needs permission");
+        assert!(c.checked);
+        assert_eq!(c.icon, Some(Icon::NeedsPermission));
+        assert!(c.on_toggle.is_some());
+        let _element: Element<'_, Message> = c.into();
+    }
+
+    #[test]
+    fn a_checkbox_without_an_icon_has_none() {
+        assert_eq!(Checkbox::<Message>::new("x", false, light()).icon, None);
+    }
+
+    /// S4, FR-017: the glyph is drawn in the label's role, and holds 3:1 on the row in both themes.
+    #[test]
+    fn the_glyph_is_in_the_labels_role_and_legible_in_both_themes() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = roles(scheme);
+            let c = Checkbox::<Message>::new("x", false, r).icon(Icon::TurnFinished);
+            assert_eq!(c.icon_tint(), r.on_surface, "the label's role");
+            let ratio = contrast(c.icon_tint(), r.surface);
+            assert!(ratio >= AA_NON_TEXT, "{scheme:?}: {ratio:.2} < 3:1");
+        }
+    }
+
+    /// FR-017: a row with no `on_toggle` is disabled, and still builds with its glyph.
+    #[test]
+    fn a_disabled_row_with_an_icon_builds() {
+        let c = Checkbox::<Message>::new("x", true, light()).icon(Icon::SessionError);
+        assert!(c.on_toggle.is_none());
+        let _element: Element<'_, Message> = c.into();
     }
 }

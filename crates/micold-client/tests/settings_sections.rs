@@ -619,3 +619,87 @@ fn session_survival_still_reaches_both_placements() {
          (FR-014d, SC-014)"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Feature 613: the notification kind rows and the threshold field (S1, S2, S5)
+// ---------------------------------------------------------------------------------------------
+
+/// The `view` function's text in `environment.rs`: the part after the `SETTINGS` declaration.
+fn environment_view() -> String {
+    let src = read(&settings_dir().join("environment.rs"));
+    let body = body_of(&src);
+    let at = body.find("pub fn view").expect("environment.rs has a view");
+    body[at..].to_string()
+}
+
+/// S1, FR-009, US2.1, US2.9: after the master switch, one row per kind, in `ALL` order, each a
+/// `Checkbox` with the kind's icon inside `field_note` with its description, indented one spacing
+/// step, and no per-CLI rows.
+#[test]
+fn the_desktop_notifications_section_lists_the_four_kind_rows() {
+    let view = environment_view();
+    assert!(
+        view.contains("NotificationKind::ALL"),
+        "the rows come from `NotificationKind::ALL`, in its order"
+    );
+    for needle in [
+        "kind.name()",
+        "kind.description()",
+        ".icon(notification_icon::icon(kind))",
+        "SettingsMsg::NotificationKindToggled(kind",
+        "spacing::",
+    ] {
+        assert!(view.contains(needle), "a kind row needs `{needle}`");
+    }
+    let master = view
+        .find("\"Desktop notifications\"")
+        .expect("master switch");
+    let rows = view.find("NotificationKind::ALL").expect("kind rows");
+    assert!(master < rows, "the kind rows come after the master switch");
+    assert!(
+        !view.contains("NotificationKindToggled(cli"),
+        "no per-CLI rows"
+    );
+    assert_eq!(
+        declared_by(&read(&settings_dir().join("environment.rs")))
+            .iter()
+            .filter(|(s, m)| s == "notification_kinds" && m == "NotificationKindToggled")
+            .count(),
+        1,
+        "environment.rs declares the kinds it renders"
+    );
+}
+
+// S2 (the rows take input only while the master switch is on) is a behavioural test in
+// `gates/notification_kind_rows_sit_under_the_switch.rs` (T077), not a scan of this source.
+
+/// S5, US2.10: the threshold field sits directly after the Long task finished row, indented as the
+/// kind rows are, labelled "Long-task threshold", supporting text "Seconds, 10–3600".
+#[test]
+fn the_threshold_field_sits_under_the_long_task_row() {
+    let view = environment_view();
+    assert!(view.contains(".label(\"Long-task threshold\")"), "label");
+    assert!(
+        view.contains(".supporting(\"Seconds, 10–3600\")"),
+        "supporting text"
+    );
+    for needle in [
+        "FieldId::SettingsLongTaskThreshold",
+        "SettingsMsg::LongTaskThresholdChanged",
+        "long_task_threshold_secs",
+    ] {
+        assert!(view.contains(needle), "the field needs `{needle}`");
+    }
+    let long = view
+        .find("NotificationKind::LongTaskFinished")
+        .expect("the long-task row is special-cased");
+    let field = view.find("Long-task threshold").expect("field");
+    assert!(long < field, "the field follows the Long task finished row");
+    assert!(
+        declared_by(&read(&settings_dir().join("environment.rs"))).contains(&(
+            "long_task_threshold_secs".to_string(),
+            "LongTaskThresholdChanged".to_string()
+        )),
+        "environment.rs declares the threshold with its message"
+    );
+}

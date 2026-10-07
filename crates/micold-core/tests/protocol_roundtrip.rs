@@ -11,6 +11,7 @@ use micold_core::attach::{
     DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
     Unavailable, UnresumableReason,
 };
+use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;
@@ -280,6 +281,14 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             pr_status_enabled: Some(true),
             desktop_notifications: Some(false),
+            // Feature 613 (W5.4, W5.6): the whole set of kinds, and the threshold in seconds.
+            notification_kinds: Some(NotificationKinds {
+                needs_permission: false,
+                session_error: true,
+                long_task_finished: false,
+                turn_finished: true,
+            }),
+            long_task_threshold_secs: Some(20),
             diff_layout: None,
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
@@ -296,6 +305,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
             diff_layout: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
@@ -425,6 +436,11 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Auto,
                 pr_status_enabled: true,
                 desktop_notifications: true,
+                notification_kinds: NotificationKinds {
+                    turn_finished: true,
+                    ..NotificationKinds::default()
+                },
+                long_task_threshold_secs: 120,
                 diff_layout: Default::default(),
             },
         },
@@ -487,6 +503,11 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Off,
                 pr_status_enabled: false,
                 desktop_notifications: true,
+                notification_kinds: NotificationKinds {
+                    turn_finished: true,
+                    ..NotificationKinds::default()
+                },
+                long_task_threshold_secs: 120,
                 diff_layout: Default::default(),
             },
         },
@@ -665,6 +686,10 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             expires_in_ms: 30_000,
         },
         DaemonMsg::ConfirmationWithdrawn { id: 1 },
+        DaemonMsg::SessionErrorNotice {
+            project: PathBuf::from("/a"),
+            session: sid(),
+        },
         DaemonMsg::LogLocation {
             req: 10,
             path: Some(PathBuf::from("/var/log/micold/daemon.log")),
@@ -754,6 +779,50 @@ fn every_daemon_message_json_round_trips() {
     }
 }
 
+/// Feature 613, wire W5.1: the grant carries the kind the service decided, as a snake-case string,
+/// and every awaiting-input kind survives both wires.
+#[test]
+fn an_attention_grant_carries_its_kind_as_a_snake_case_string() {
+    for (kind, encoded) in [
+        (NotificationKind::NeedsPermission, "needs_permission"),
+        (NotificationKind::LongTaskFinished, "long_task_finished"),
+        (NotificationKind::TurnFinished, "turn_finished"),
+    ] {
+        let grant = DaemonMsg::AttentionGranted {
+            session: sid(),
+            seq: 7,
+            kind,
+        };
+        let json = serde_json::to_value(&grant).expect("json encode");
+        assert_eq!(
+            json["AttentionGranted"]["kind"],
+            serde_json::Value::String(encoded.into()),
+            "the kind travels as its snake-case name (W5.1)"
+        );
+        json_roundtrip(&grant);
+        postcard_roundtrip(&grant);
+    }
+}
+
+/// Feature 613, wire W5.2: the error notice names the project and the session, carries no `req`
+/// (it is not an operation and is never answered), and survives both wires.
+#[test]
+fn a_session_error_notice_round_trips_without_a_req() {
+    let notice = DaemonMsg::SessionErrorNotice {
+        project: PathBuf::from("/repo"),
+        session: sid(),
+    };
+    let json = serde_json::to_value(&notice).expect("json encode");
+    let fields = json["SessionErrorNotice"]
+        .as_object()
+        .expect("a struct variant");
+    let mut names: Vec<&str> = fields.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["project", "session"], "no `req` (W5.2)");
+    json_roundtrip(&notice);
+    postcard_roundtrip(&notice);
+}
+
 /// U79 (feature 034, FR-016): every value of the cross-session option survives both directions,
 /// and "leave it unchanged" stays distinct from each of them.
 #[test]
@@ -770,6 +839,11 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: access,
             pr_status_enabled: false,
             desktop_notifications: true,
+            notification_kinds: NotificationKinds {
+                turn_finished: true,
+                ..NotificationKinds::default()
+            },
+            long_task_threshold_secs: 120,
             diff_layout: Default::default(),
         };
         json_roundtrip(&DaemonMsg::SettingsChanged {
@@ -787,6 +861,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: Some(access),
             pr_status_enabled: None,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
             diff_layout: None,
         };
         json_roundtrip(&set);
@@ -827,6 +903,11 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: on,
             desktop_notifications: true,
+            notification_kinds: NotificationKinds {
+                turn_finished: true,
+                ..NotificationKinds::default()
+            },
+            long_task_threshold_secs: 120,
             diff_layout: Default::default(),
         };
         let bytes = serde_json::to_vec(&DaemonMsg::SettingsChanged { settings }).unwrap();
@@ -848,6 +929,8 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: None,
             pr_status_enabled: chosen,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
             diff_layout: None,
         };
         let bytes = serde_json::to_vec(&set).unwrap();
@@ -1109,6 +1192,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
             desktop_notifications: true,
+            notification_kinds: NotificationKinds::default(),
+            long_task_threshold_secs: 60,
             diff_layout: layout,
         };
         let pushed = DaemonMsg::SettingsChanged { settings };
@@ -1132,6 +1217,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
             diff_layout: chosen,
         };
         json_roundtrip(&set);

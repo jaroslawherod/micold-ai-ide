@@ -20,7 +20,7 @@ use micold_daemon::state::DaemonState;
 #[path = "support/attention.rs"]
 mod attention;
 use attention::{
-    catalog_on, connect_with_settings as connect, next_frame, session_id, Service, Window,
+    connect_with_settings as connect, next_frame, session_id, state_on, Service, Window,
 };
 
 const A: u128 = 0xA;
@@ -29,7 +29,7 @@ const B: u128 = 0xB;
 impl Service {
     /// A service started on the same store directory.
     fn restarted(&self) -> Arc<DaemonState> {
-        Arc::new(DaemonState::new(catalog_on(self.store.path())))
+        Arc::new(state_on(self.store.path()))
     }
 
     /// What the settings file holds now.
@@ -92,6 +92,8 @@ async fn sets(
             cross_session_access: None,
             pr_status_enabled: None,
             desktop_notifications,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
             diff_layout: None,
         },
     )
@@ -139,7 +141,7 @@ async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<(Sessi
         .await
         .iter()
         .filter_map(|msg| match msg {
-            DaemonMsg::AttentionGranted { session, seq } => Some((*session, *seq)),
+            DaemonMsg::AttentionGranted { session, seq, .. } => Some((*session, *seq)),
             _ => None,
         })
         .collect()

@@ -54,6 +54,7 @@ use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::{explain, AttemptDir, Explanation};
 use micold_core::issue_types::{
     default_mapping, validate_mapping, LabelTypeEntry, MappingErrorKind,
@@ -349,6 +350,12 @@ pub struct EnvironmentDraft {
     /// FR-026). One switch for every AI CLI, service-owned like the two above it; the default-on
     /// comes from `Settings`.
     pub desktop_notifications: bool,
+    /// Which notification kinds are on (feature 613, FR-009). Held whole and sent whole on save
+    /// (S3); kept as they are while `desktop_notifications` is off (FR-012).
+    pub notification_kinds: NotificationKinds,
+    /// The long-task threshold, in seconds as typed (feature 613, FR-025, S5). Text, as the
+    /// timeout above is: only a save judges it (S6).
+    pub long_task_threshold_secs: String,
     /// Whether agents may read and type into other sessions (feature 034, FR-016). A closed choice
     /// of three values, like the default CLI above: nothing to validate on save.
     pub cross_session_access: CrossSessionAccess,
@@ -457,6 +464,10 @@ pub struct ValidSettings {
     pub tool_server_enabled: bool,
     /// Environment.
     pub desktop_notifications: bool,
+    /// Environment: the kind switches (feature 613).
+    pub notification_kinds: NotificationKinds,
+    /// Environment: the long-task threshold, in 10–3600 seconds (feature 613).
+    pub long_task_threshold_secs: u64,
     /// Environment.
     pub cross_session_access: CrossSessionAccess,
     /// Session service.
@@ -483,6 +494,8 @@ impl ValidSettings {
             issue_label_types: self.issue_label_types,
             // Not in the form yet (feature 040, M4): the save keeps the stored value.
             pr_status_enabled: false,
+            notification_kinds: self.notification_kinds,
+            long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
             diff_layout: micold_core::settings::DiffLayout::Unified,
         }
@@ -572,6 +585,7 @@ impl SettingsDraft {
     pub fn validate(&self) -> Result<ValidSettings, FieldError> {
         let scrollback_lines = self.scrollback()?;
         let env_include_timeout_secs = self.timeout()?;
+        let long_task_threshold_secs = self.long_task_threshold()?;
 
         let mut profile = self.daemon.profile.clone();
         profile.image.path = {
@@ -591,6 +605,8 @@ impl SettingsDraft {
             pi_activity_component: self.environment.pi_activity_component,
             tool_server_enabled: self.environment.tool_server_enabled,
             desktop_notifications: self.environment.desktop_notifications,
+            notification_kinds: self.environment.notification_kinds,
+            long_task_threshold_secs,
             cross_session_access: self.environment.cross_session_access,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
@@ -774,6 +790,29 @@ impl SettingsDraft {
         }
     }
 
+    /// The long-task threshold as typed, parsed and range-checked (feature 613, S6, FR-026).
+    fn long_task_threshold(&self) -> Result<u64, FieldError> {
+        let min = micold_core::settings::MIN_LONG_TASK_THRESHOLD_SECS;
+        let max = micold_core::settings::MAX_LONG_TASK_THRESHOLD_SECS;
+        let reject = |message: String| FieldError {
+            field: FieldId::SettingsLongTaskThreshold,
+            section: SettingsSection::Environment,
+            message,
+        };
+        match self
+            .environment
+            .long_task_threshold_secs
+            .trim()
+            .parse::<u64>()
+        {
+            Ok(t) if (min..=max).contains(&t) => Ok(t),
+            Ok(_) => Err(reject(format!(
+                "Enter a threshold between {min} and {max} seconds."
+            ))),
+            Err(_) => Err(reject("Enter a whole number of seconds.".to_string())),
+        }
+    }
+
     /// Seed the draft from what is stored, so the form opens showing the current values.
     pub fn from_settings(settings: &Settings) -> Self {
         Self {
@@ -792,6 +831,8 @@ impl SettingsDraft {
                 pi_activity_component: settings.pi_activity_component,
                 tool_server_enabled: settings.tool_server_enabled,
                 desktop_notifications: settings.desktop_notifications,
+                notification_kinds: settings.notification_kinds,
+                long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
                 cross_session_access: settings.cross_session_access,
             },
             daemon: DaemonDraft {
@@ -918,6 +959,10 @@ pub enum Msg {
     ToolServerToggled(bool),
     /// The Settings **Desktop notifications** switch was toggled (feature 039, FR-026).
     DesktopNotificationsToggled(bool),
+    /// A Settings notification kind switch was toggled (feature 613, S3).
+    NotificationKindToggled(NotificationKind, bool),
+    /// The Settings long-task threshold field changed (feature 613, S5).
+    LongTaskThresholdChanged(String),
     /// The Settings **Let agents read and type into other sessions** select changed
     /// (feature 034, FR-016).
     CrossSessionAccessChanged(CrossSessionAccess),
@@ -1036,6 +1081,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
         Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
+        Msg::NotificationKindToggled(kind, on) => notification_kind_toggled(state, kind, on),
+        Msg::LongTaskThresholdChanged(text) => long_task_threshold_changed(state, text),
         Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
@@ -1212,6 +1259,21 @@ pub fn tool_server_toggled(state: &mut crate::app::State, on: bool) {
 /// FR-026).
 pub fn desktop_notifications_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.desktop_notifications = on);
+}
+
+/// Environment: one notification kind's switch was toggled (feature 613, S3). The others keep
+/// their values.
+pub fn notification_kind_toggled(state: &mut crate::app::State, kind: NotificationKind, on: bool) {
+    edit(state, |draft| {
+        draft.environment.notification_kinds.set(kind, on)
+    });
+}
+
+/// Environment: the long-task threshold was edited (feature 613, S5).
+pub fn long_task_threshold_changed(state: &mut crate::app::State, text: String) {
+    edit(state, |draft| {
+        draft.environment.long_task_threshold_secs = text
+    });
 }
 
 /// Environment: whether agents may read and type into other sessions (feature 034, FR-016).
@@ -1723,6 +1785,8 @@ pub fn diff_layout_set(
         cross_session_access: None,
         pr_status_enabled: None,
         desktop_notifications: None,
+        notification_kinds: None,
+        long_task_threshold_secs: None,
         diff_layout: Some(layout),
     }
 }

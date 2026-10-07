@@ -228,7 +228,18 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 30 → 31 for feature 482's review messages (`ReviewEdit`, `ReviewSend`, `ReviewChanged`,
 /// `OperationResult::ReviewSent`) and `diff_layout` on `SettingsSet` and `DaemonSettings`, in one
 /// edit (contracts/review-wire.md).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 31;
+///
+/// And 31 → 32 for feature 613's `kind` on `DaemonMsg::AttentionGranted` (wire W5.1): the grant
+/// says which kind of event the window notifies for. An older peer would fail to decode it.
+///
+/// And 32 → 33 for feature 613's `DaemonMsg::SessionErrorNotice` (wire W5.2): the service tells
+/// one window that a session ended because of an error. A new variant an older client cannot
+/// decode.
+///
+/// And 33 → 34 for feature 613's `notification_kinds` and `long_task_threshold_secs` on
+/// `DaemonSettings` and `SettingsSet` (wire W5.3, W5.4, W5.6): the service holds the per-kind
+/// switches and the long-task threshold for every window. An older peer cannot decode them.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 34;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -351,6 +362,28 @@ fn the_claim_and_the_grant_are_in_the_hashed_source() {
 }
 
 #[test]
+fn the_grants_kind_is_in_the_hashed_source() {
+    // Feature 613, wire W5.1 (version 32). Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    assert!(
+        canonicalize(&messages).contains("kind: NotificationKind,"),
+        "`kind: NotificationKind,` is not in messages.rs, so version 32's hash is not the hash of \
+         the message set whose grant carries the notification kind"
+    );
+}
+
+#[test]
+fn the_session_error_notice_is_in_the_hashed_source() {
+    // Feature 613, wire W5.2 (version 33). Read from the text `build.rs` hashes, as above.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    assert!(
+        canonicalize(&messages).contains("SessionErrorNotice {"),
+        "`SessionErrorNotice {{` is not in messages.rs, so version 33's hash is not the hash of \
+         the message set that tells a window a session ended with an error"
+    );
+}
+
+#[test]
 fn unread_is_in_the_hashed_source() {
     // Feature 039, contract W2 (version 24). U14. Read from the text `build.rs` hashes, as above.
     let (messages, _grid, _envelope) = read_protocol_source();
@@ -410,4 +443,30 @@ fn the_desktop_notifications_setting_is_in_the_hashed_source() {
              that carries the Desktop notifications setting"
         );
     }
+}
+
+#[test]
+fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
+    // Feature 613, wire W5.3, W5.4, W5.6 (version 34). Read from the text `build.rs` hashes.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in [
+        // Outbound: the values every window follows.
+        "pub notification_kinds: NotificationKinds,",
+        "pub long_task_threshold_secs: u64,",
+        // Inbound: `None` leaves each unchanged.
+        "notification_kinds: Option<NotificationKinds>,",
+        "long_task_threshold_secs: Option<u64>,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 34's hash is not the hash of the \
+             message set that carries the kind switches and the long-task threshold"
+        );
+    }
+    assert_eq!(
+        micold_core::protocol::version::PROTOCOL_VERSION,
+        34,
+        "W5.3, W5.4 and W5.6 are version 34"
+    );
 }

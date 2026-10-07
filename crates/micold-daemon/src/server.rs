@@ -1076,6 +1076,8 @@ where
                 cross_session_access,
                 pr_status_enabled,
                 desktop_notifications,
+                notification_kinds,
+                long_task_threshold_secs,
                 diff_layout,
             } => {
                 let result = match scrollback_lines {
@@ -1118,6 +1120,14 @@ where
                 })
                 .and_then(|()| match desktop_notifications {
                     Some(on) => state.set_desktop_notifications(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match notification_kinds {
+                    Some(kinds) => state.set_notification_kinds(kinds),
+                    None => Ok(()),
+                })
+                .and_then(|()| match long_task_threshold_secs {
+                    Some(secs) => state.set_long_task_threshold_secs(secs),
                     None => Ok(()),
                 })
                 .and_then(|()| match diff_layout {

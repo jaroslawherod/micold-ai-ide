@@ -99,7 +99,7 @@ impl Service {
             .save(&workspace)
             .expect("the catalog saves");
 
-        let state = Arc::new(DaemonState::new(catalog_on(store.path())));
+        let state = Arc::new(state_on(store.path()));
         let live = sessions
             .iter()
             .map(|(id, _cli)| state.register_session(spawn(*id)))
@@ -149,6 +149,15 @@ impl Service {
     pub fn unread(&self, session: SessionId) -> bool {
         summary(&self.state.catalog_snapshot(), session).unread
     }
+}
+
+/// A service on `store` where every finished turn is a long task (feature 613): these tests are
+/// about the claim and unread rules of 039, which grant only an event whose kind notifies, and
+/// **Turn finished** is off by default.
+pub fn state_on(store: &Path) -> DaemonState {
+    let state = DaemonState::new(catalog_on(store));
+    state.set_long_task_threshold(std::time::Duration::ZERO);
+    state
 }
 
 /// The catalog the service loads from `store`: what a start of the service on that directory reads.

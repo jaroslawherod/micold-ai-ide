@@ -7,6 +7,7 @@
 //! FR-019). On-disk format is the durable contract in
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
+use crate::attention::{NotificationKinds, LONG_TASK_THRESHOLD};
 use crate::issue_types::{default_mapping, LabelTypeEntry};
 use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
@@ -85,6 +86,23 @@ fn default_env_include_script_path_string() -> String {
 /// Clamp a requested environment-include timeout into the supported range.
 pub fn clamp_env_include_timeout(secs: u64) -> u64 {
     secs.clamp(MIN_ENV_INCLUDE_TIMEOUT_SECS, MAX_ENV_INCLUDE_TIMEOUT_SECS)
+}
+
+/// Shortest accepted long-task threshold, in seconds (feature 613, FR-026).
+pub const MIN_LONG_TASK_THRESHOLD_SECS: u64 = 10;
+/// Longest accepted long-task threshold, in seconds (FR-026).
+pub const MAX_LONG_TASK_THRESHOLD_SECS: u64 = 3600;
+
+/// The long-task threshold when a file predates it or cannot be read: [`LONG_TASK_THRESHOLD`],
+/// the one definition of the default (FR-025, contract C6).
+fn default_long_task_threshold_secs() -> u64 {
+    LONG_TASK_THRESHOLD.as_secs()
+}
+
+/// Clamp a long-task threshold into 10–3600 seconds (FR-026): read from the file, or sent to the
+/// service. Settings refuses an out-of-range value on save instead.
+pub fn clamp_long_task_threshold(secs: u64) -> u64 {
+    secs.clamp(MIN_LONG_TASK_THRESHOLD_SECS, MAX_LONG_TASK_THRESHOLD_SECS)
 }
 
 /// Everything about the session daemon: where it runs, and how the sandbox is configured when it
@@ -180,6 +198,15 @@ pub struct Settings {
     /// so every window follows it at once; unread marks do not depend on it (FR-017).
     #[serde(default = "default_desktop_notifications")]
     pub desktop_notifications: bool,
+    /// Which kinds of event notify while `desktop_notifications` is on (feature 613, FR-010,
+    /// FR-011). Service-owned like the master switch.
+    #[serde(default)]
+    pub notification_kinds: NotificationKinds,
+    /// How long, in seconds, a turn must last for its end to be **Long task finished** rather
+    /// than **Turn finished** (feature 613, FR-025). 10–3600, 60 by default. Service-owned like
+    /// the switches, and read at every turn end, so a change applies without a restart (FR-013).
+    #[serde(default = "default_long_task_threshold_secs")]
+    pub long_task_threshold_secs: u64,
     /// How the Changes view lays out a diff (feature 482, US1 s4, R12). Service-owned so every
     /// window and the next start keep the last choice.
     #[serde(default)]
@@ -229,6 +256,8 @@ impl Default for Settings {
             issue_label_types: default_mapping(),
             pr_status_enabled: false,
             desktop_notifications: default_desktop_notifications(),
+            notification_kinds: NotificationKinds::default(),
+            long_task_threshold_secs: default_long_task_threshold_secs(),
             diff_layout: DiffLayout::default(),
         }
     }
@@ -459,6 +488,15 @@ struct StoredSettings {
     /// Additive and defaulted, so `settings_version` does not move for it either.
     #[serde(default = "default_desktop_notifications")]
     desktop_notifications: bool,
+    /// Missing in files written before feature 613 → the default kinds; a missing field inside
+    /// takes that kind's default (FR-010). Additive and defaulted, so `settings_version` does not
+    /// move for it either.
+    #[serde(default)]
+    notification_kinds: NotificationKinds,
+    /// Missing in files written before feature 613's threshold → 60 (FR-025); out of 10–3600 →
+    /// clamped on read (FR-026). Additive and defaulted, so `settings_version` does not move.
+    #[serde(default = "default_long_task_threshold_secs")]
+    long_task_threshold_secs: u64,
     /// Missing in files written before feature 482 → unified (R12). Additive and defaulted, so
     /// `settings_version` does not move for it either.
     #[serde(default)]
@@ -498,6 +536,8 @@ impl StoredSettings {
             issue_label_types: settings.issue_label_types.clone(),
             pr_status_enabled: settings.pr_status_enabled,
             desktop_notifications: settings.desktop_notifications,
+            notification_kinds: settings.notification_kinds,
+            long_task_threshold_secs: settings.long_task_threshold_secs,
             diff_layout: settings.diff_layout,
         }
     }
@@ -532,6 +572,8 @@ impl StoredSettings {
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
             desktop_notifications: self.desktop_notifications,
+            notification_kinds: self.notification_kinds,
+            long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),
             diff_layout: self.diff_layout,
         }
     }
@@ -894,10 +936,12 @@ mod desktop_notifications_tests {
             .map(String::as_str)
             .filter(|key| key.contains("notif"))
             .collect();
+        // Feature 613 adds the per-kind switches beside the master switch (FR-011); neither is
+        // per AI CLI.
         assert_eq!(
             naming_notifications,
-            ["desktop_notifications"],
-            "one switch, for every AI CLI"
+            ["desktop_notifications", "notification_kinds"],
+            "one master switch and one set of kinds, for every AI CLI"
         );
         assert!(
             document["desktop_notifications"].is_boolean(),
@@ -911,5 +955,103 @@ mod desktop_notifications_tests {
                 "no notification key names the AI CLI `{cli}`"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod notification_kinds_tests {
+    //! Feature 613: the per-kind switches as they are stored (FR-010, US2.8).
+
+    use super::*;
+    use crate::attention::{NotificationKind, NotificationKinds};
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    fn load_document(document: &str) -> Settings {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("settings.json"), document).unwrap();
+        let outcome = store_in(&dir).load();
+        assert_eq!(outcome.status, LoadStatus::Loaded, "the document loads");
+        outcome.settings
+    }
+
+    #[test]
+    fn a_fresh_installation_has_the_default_kinds() {
+        assert_eq!(
+            Settings::default().notification_kinds,
+            NotificationKinds::default(),
+            "FR-010"
+        );
+    }
+
+    #[test]
+    fn a_file_from_before_the_feature_keeps_its_master_switch_and_gets_the_default_kinds() {
+        for master in [false, true] {
+            let settings = load_document(&format!(
+                r#"{{ "settings_version": 4, "theme": "dark", "desktop_notifications": {master} }}"#
+            ));
+            assert_eq!(
+                settings.desktop_notifications, master,
+                "the stored master switch is kept (FR-010, US2.8)"
+            );
+            assert_eq!(
+                settings.notification_kinds,
+                NotificationKinds::default(),
+                "an older file gets the default kinds (FR-010)"
+            );
+        }
+    }
+
+    #[test]
+    fn a_kinds_object_missing_a_field_gets_that_fields_default_and_keeps_the_others() {
+        let settings = load_document(
+            r#"{ "settings_version": 4, "notification_kinds": { "needs_permission": false, "session_error": false, "turn_finished": true } }"#,
+        );
+        assert_eq!(
+            settings.notification_kinds,
+            NotificationKinds {
+                needs_permission: false,
+                session_error: false,
+                long_task_finished: true,
+                turn_finished: true,
+            },
+            "only the missing field takes its default"
+        );
+    }
+
+    #[test]
+    fn the_kinds_survive_a_save_and_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        let mut kinds = NotificationKinds::default();
+        for kind in NotificationKind::ALL {
+            kinds.set(kind, !kind.default_on());
+        }
+        store
+            .save(&Settings {
+                notification_kinds: kinds,
+                ..Settings::default()
+            })
+            .unwrap();
+        assert_eq!(
+            store.load().settings.notification_kinds,
+            kinds,
+            "all four values come back as saved"
+        );
+    }
+
+    #[test]
+    fn an_unreadable_file_falls_back_to_the_default_kinds() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("settings.json"), "{ not json").unwrap();
+        let outcome = store_in(&dir).load();
+        assert_ne!(outcome.status, LoadStatus::Loaded, "the file does not load");
+        assert_eq!(
+            outcome.settings.notification_kinds,
+            NotificationKinds::default(),
+            "Edge Cases: settings file unreadable"
+        );
     }
 }

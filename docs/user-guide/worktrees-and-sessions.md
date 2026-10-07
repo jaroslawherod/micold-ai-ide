@@ -1167,11 +1167,13 @@ Unread state is kept on your computer with the rest of the session list and is s
 
 ### Being told when a session needs you
 
-When a session you are not looking at finishes its turn or stops to ask for a permission — its
-activity dot changes to *awaiting input* — the application shows **one desktop notification** for
-it. Its title is the session's name as its sidebar row shows it, followed by *is waiting for
-input*; its text names the project and the worktree (or the **Default** entry, for a session without
-a worktree). Nothing from the conversation itself is shown.
+When a session you are not looking at stops to ask for a permission, or finishes a turn of a
+minute or more — its activity dot changes to *awaiting input* — the application shows **one desktop
+notification** for it. Its title is the session's name as its sidebar row shows it, followed by
+what happened: *needs permission* or *finished a long task*. A shorter turn notifies nothing but
+still marks the session unread ([Desktop notifications](settings.md#desktop-notifications)). The
+text names the project and the worktree (or the **Default** entry, for a session without a
+worktree). Nothing from the conversation itself is shown.
 
 - **Never for the session in view.** A session is in view when it is the selected session of a
   window that has the keyboard focus, and that window shows the session (its AI conversation or one

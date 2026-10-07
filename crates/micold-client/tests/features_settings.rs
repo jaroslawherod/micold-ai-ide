@@ -24,6 +24,7 @@ fn valid() -> SettingsDraft {
     let mut draft = SettingsDraft::default();
     draft.terminal.scrollback_lines = "5000".into();
     draft.environment.timeout_secs = "5".into();
+    draft.environment.long_task_threshold_secs = "60".into();
     draft
 }
 
@@ -440,6 +441,122 @@ fn the_desktop_notifications_switch_reaches_what_save_writes() {
             saved.desktop_notifications, chosen,
             "the position the user left the switch in must be what Save writes"
         );
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Notification kinds and the long-task threshold (feature 613, T035, T060)
+// ---------------------------------------------------------------------------------------
+
+use micold_core::attention::{NotificationKind, NotificationKinds};
+
+/// US2.10, S3: the draft opened from the stored settings holds the kinds and the threshold as text.
+#[test]
+fn the_draft_is_seeded_with_the_stored_kinds_and_threshold() {
+    let default = SettingsDraft::from_settings(&Settings::default());
+    assert_eq!(
+        default.environment.notification_kinds,
+        NotificationKinds::default()
+    );
+    assert_eq!(default.environment.long_task_threshold_secs, "60");
+
+    let kinds = NotificationKinds {
+        turn_finished: true,
+        needs_permission: false,
+        ..NotificationKinds::default()
+    };
+    let stored = Settings {
+        notification_kinds: kinds,
+        long_task_threshold_secs: 25,
+        ..Settings::default()
+    };
+    let draft = SettingsDraft::from_settings(&stored);
+    assert_eq!(draft.environment.notification_kinds, kinds);
+    assert_eq!(draft.environment.long_task_threshold_secs, "25");
+}
+
+/// S3: what Save writes carries the whole kinds value, and the threshold as a number.
+#[test]
+fn save_writes_the_whole_kinds_value_and_the_parsed_threshold() {
+    let mut draft = valid();
+    draft
+        .environment
+        .notification_kinds
+        .set(NotificationKind::TurnFinished, true);
+    draft
+        .environment
+        .notification_kinds
+        .set(NotificationKind::SessionError, false);
+    draft.environment.long_task_threshold_secs = "20".into();
+    let expected = draft.environment.notification_kinds;
+
+    let valid = draft.validate().expect("valid");
+    assert_eq!(valid.notification_kinds, expected);
+    assert_eq!(valid.long_task_threshold_secs, 20);
+    let saved = valid.into_settings();
+    assert_eq!(saved.notification_kinds, expected);
+    assert_eq!(saved.long_task_threshold_secs, 20);
+}
+
+/// US2.5, FR-012: with the master switch off the kind values and the threshold text are kept.
+/// US2.6: turning it back on leaves them as they were.
+#[test]
+fn the_master_switch_never_changes_the_kinds_or_the_threshold() {
+    let mut draft = valid();
+    draft
+        .environment
+        .notification_kinds
+        .set(NotificationKind::TurnFinished, true);
+    draft.environment.long_task_threshold_secs = "30".into();
+    let kinds = draft.environment.notification_kinds;
+
+    draft.environment.desktop_notifications = false;
+    assert_eq!(draft.environment.notification_kinds, kinds);
+    assert_eq!(draft.environment.long_task_threshold_secs, "30");
+    let off = draft.validate().expect("valid while off").into_settings();
+    assert_eq!(off.notification_kinds, kinds);
+    assert_eq!(off.long_task_threshold_secs, 30);
+
+    draft.environment.desktop_notifications = true;
+    assert_eq!(draft.environment.notification_kinds, kinds);
+    assert_eq!(draft.environment.long_task_threshold_secs, "30");
+}
+
+/// FR-025: the threshold stays valid and editable with Long task finished off.
+#[test]
+fn the_threshold_is_still_saved_with_long_task_finished_off() {
+    let mut draft = valid();
+    draft
+        .environment
+        .notification_kinds
+        .set(NotificationKind::LongTaskFinished, false);
+    draft.environment.long_task_threshold_secs = "45".into();
+    assert_eq!(
+        draft.validate().expect("valid").long_task_threshold_secs,
+        45
+    );
+}
+
+/// S6, US2.12, FR-026: out-of-range and non-numeric text refuses the save on the threshold field.
+#[test]
+fn a_bad_threshold_refuses_the_save_with_the_s6_message() {
+    for (text, message) in [
+        ("9", "Enter a threshold between 10 and 3600 seconds."),
+        ("3601", "Enter a threshold between 10 and 3600 seconds."),
+        ("abc", "Enter a whole number of seconds."),
+        ("", "Enter a whole number of seconds."),
+    ] {
+        let mut draft = valid();
+        draft.environment.long_task_threshold_secs = text.into();
+        let error = draft.validate().expect_err(text);
+        assert_eq!(error.field, FieldId::SettingsLongTaskThreshold, "{text:?}");
+        assert_eq!(error.section, SettingsSection::Environment);
+        assert_eq!(error.message, message, "{text:?}");
+    }
+    for text in ["10", "3600", "60"] {
+        let mut draft = valid();
+        draft.environment.long_task_threshold_secs = text.into();
+        assert!(draft.validate().is_ok(), "{text:?} is in range");
     }
 }
 
@@ -1599,6 +1716,8 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             cross_session_access,
             pr_status_enabled,
             desktop_notifications,
+            notification_kinds,
+            long_task_threshold_secs,
             diff_layout,
         } => {
             assert_eq!((req, diff_layout), (7, Some(DiffLayout::SideBySide)));
@@ -1612,7 +1731,9 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && tool_server_enabled.is_none()
                     && cross_session_access.is_none()
                     && pr_status_enabled.is_none()
-                    && desktop_notifications.is_none(),
+                    && desktop_notifications.is_none()
+                    && notification_kinds.is_none()
+                    && long_task_threshold_secs.is_none(),
                 "every other setting is left as it is"
             );
         }

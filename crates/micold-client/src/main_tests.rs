@@ -338,6 +338,8 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         pi_activity_component: true,
         tool_server_enabled: true,
         desktop_notifications: true,
+        notification_kinds: Default::default(),
+        long_task_threshold_secs: 60,
         diff_layout: Default::default(),
         cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         pr_status_enabled: false,
@@ -768,7 +770,13 @@ pub(crate) fn base_app() -> App {
                 ),
             ))
             .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
-        core: State::default(),
+        core: {
+            // As startup seeds it from the loaded settings (feature 613): a save validates it.
+            let mut core = State::default();
+            core.session.long_task_threshold_secs =
+                micold_core::attention::LONG_TASK_THRESHOLD.as_secs();
+            core
+        },
         reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
@@ -1809,6 +1817,8 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             pi_activity_component: true,
             tool_server_enabled: true,
             desktop_notifications: true,
+            notification_kinds: Default::default(),
+            long_task_threshold_secs: "60".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -2120,6 +2130,8 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             pi_activity_component: true,
             tool_server_enabled: true,
             desktop_notifications: true,
+            notification_kinds: Default::default(),
+            long_task_threshold_secs: "60".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -2160,6 +2172,8 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             pi_activity_component: true,
             tool_server_enabled: true,
             desktop_notifications: true,
+            notification_kinds: Default::default(),
+            long_task_threshold_secs: "60".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         daemon: micold_client::features::settings::DaemonDraft {
@@ -2349,6 +2363,8 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 pi_activity_component: true,
                 tool_server_enabled: true,
                 desktop_notifications: true,
+                notification_kinds: Default::default(),
+                long_task_threshold_secs: 60,
                 diff_layout: Default::default(),
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
@@ -2384,6 +2400,8 @@ fn settings_changed_event_syncs_env_include_fields() {
                 pi_activity_component: true,
                 tool_server_enabled: true,
                 desktop_notifications: true,
+                notification_kinds: Default::default(),
+                long_task_threshold_secs: 60,
                 diff_layout: Default::default(),
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
@@ -2861,6 +2879,8 @@ fn the_service_answers_with(
                 pi_activity_component: false,
                 tool_server_enabled: true,
                 desktop_notifications: true,
+                notification_kinds: Default::default(),
+                long_task_threshold_secs: 60,
                 diff_layout: Default::default(),
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
@@ -4105,6 +4125,8 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
             desktop_notifications: settings.desktop_notifications,
+            notification_kinds: settings.notification_kinds,
+            long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
             cross_session_access: settings.cross_session_access,
         },
         ..SettingsDraft::default()
@@ -4852,6 +4874,8 @@ mod script_path_report {
             pi_activity_component: false,
             tool_server_enabled: true,
             desktop_notifications: true,
+            notification_kinds: Default::default(),
+            long_task_threshold_secs: 60,
             diff_layout: Default::default(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
             pr_status_enabled: false,
@@ -8090,6 +8114,141 @@ mod pr_status {
     }
 }
 
+/// Feature 613, T035 (S3, W5.4): toggling one kind changes only that kind in the draft, and the
+/// save sends the whole draft value.
+#[test]
+fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
+    use micold_core::attention::{NotificationKind, NotificationKinds};
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::NotificationKindToggled(
+            NotificationKind::TurnFinished,
+            true,
+        )),
+    );
+    let mut expected = NotificationKinds::default();
+    expected.set(NotificationKind::TurnFinished, true);
+    assert_eq!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("open")
+            .environment
+            .notification_kinds,
+        expected
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            notification_kinds, ..
+        } => Some(*notification_kinds),
+        _ => None,
+    });
+    assert_eq!(told, Some(Some(expected)), "{sent:?}");
+}
+
+/// Feature 613, T060 (S6, US2.11): editing the threshold touches only its text; saving "20"
+/// sends 20; a bad value sends nothing and names the field.
+#[test]
+fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let draft = |app: &App| {
+        app.core
+            .settings
+            .settings_draft
+            .clone()
+            .expect("the page is open")
+    };
+    let before = draft(&app);
+    assert_eq!(before.environment.long_task_threshold_secs, "60");
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::LongTaskThresholdChanged("9".into())),
+    );
+    let mut expected = before.environment.clone();
+    expected.long_task_threshold_secs = "9".into();
+    assert_eq!(draft(&app).environment, expected);
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(
+        !sent
+            .iter()
+            .any(|m| matches!(m, ClientMsg::SettingsSet { .. })),
+        "a refused save sends nothing: {sent:?}"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::LongTaskThresholdChanged("20".into())),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            long_task_threshold_secs,
+            ..
+        } => Some(*long_task_threshold_secs),
+        _ => None,
+    });
+    assert_eq!(told, Some(Some(20)), "{sent:?}");
+}
+
+/// Feature 613, T035/T060: a `SettingsChanged` from another window updates the stored values.
+#[test]
+fn another_windows_kinds_and_threshold_reach_the_stored_values() {
+    use micold_core::attention::NotificationKinds;
+    let mut app = base_app();
+    let kinds = NotificationKinds {
+        turn_finished: true,
+        needs_permission: false,
+        ..NotificationKinds::default()
+    };
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                notification_kinds: kinds,
+                long_task_threshold_secs: 15,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert_eq!(app.core.session.notification_kinds, kinds);
+    assert_eq!(app.core.session.long_task_threshold_secs, 15);
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let env = &app
+        .core
+        .settings
+        .settings_draft
+        .as_ref()
+        .expect("open")
+        .environment;
+    assert_eq!(env.notification_kinds, kinds);
+    assert_eq!(env.long_task_threshold_secs, "15");
+}
+
 /// Feature 039 (#572 item 5, close finding F9): the glue between the window's halves of a
 /// notification — the show leaves the thread the update's work runs on, its result reaches the
 /// `AttentionShown` arm, and a click's raise comes before the switch and the selection. Each test
@@ -8161,7 +8320,11 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
-            DaemonMsg::AttentionGranted { session, seq: 1 },
+            DaemonMsg::AttentionGranted {
+                session,
+                seq: 1,
+                kind: micold_core::attention::NotificationKind::LongTaskFinished,
+            },
         );
         assert!(
             notifier.threads().is_empty(),
@@ -8194,7 +8357,11 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
-            DaemonMsg::AttentionGranted { session, seq: 1 },
+            DaemonMsg::AttentionGranted {
+                session,
+                seq: 1,
+                kind: micold_core::attention::NotificationKind::LongTaskFinished,
+            },
         );
         for message in messages(work) {
             let _ = update(&mut app, message);

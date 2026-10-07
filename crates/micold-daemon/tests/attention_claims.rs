@@ -4,14 +4,29 @@
 //! Same harness as `attention_events.rs`: `server::serve_connection` over in-memory duplexes, one
 //! per simulated window, all sharing one `DaemonState`.
 
+mod attention_support;
+
+use attention_support::kinds;
+use std::sync::Arc;
+use std::time::Duration;
+
 use futures_util::SinkExt;
+use micold_core::attention::NotificationKind;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::session::SessionId;
+use micold_daemon::activity::{ActivityEvent, HookKind};
+use micold_daemon::supervisor::PtySession;
+use portable_pty::CommandBuilder;
 
 #[path = "support/attention.rs"]
 mod attention;
-use attention::{connect, next_frame, process_that_exits, session_id, wait_dead, Service, Window};
+use attention::{
+    connect, next_frame, process_that_exits, session_id, state_on, wait_dead, Service, Window,
+};
+
+/// How long a test waits for something the service owes it.
+const OWED: Duration = Duration::from_secs(10);
 
 const NONCE: u64 = 0x039;
 
@@ -44,7 +59,7 @@ async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<Daemon
 fn grants(msgs: &[DaemonMsg]) -> Vec<(SessionId, u64)> {
     msgs.iter()
         .filter_map(|m| match m {
-            DaemonMsg::AttentionGranted { session, seq } => Some((*session, *seq)),
+            DaemonMsg::AttentionGranted { session, seq, .. } => Some((*session, *seq)),
             _ => None,
         })
         .collect()
@@ -168,9 +183,437 @@ async fn the_grants_of_a_session_dropped_by_supervision_are_forgotten() {
         "precondition: supervision dropped the session's process"
     );
 
+    // Feature 613 (C12): forgetting drops what was granted and what was pending, so the claim of
+    // the old sequence finds no pending kind and is refused rather than granted again.
+    assert!(
+        grants(&claims(&mut window, a, 1).await).is_empty(),
+        "nothing is kept for the dropped session"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature 613, M1 (T010): each attention event has a kind, and a claim is granted only when the
+// kind notifies now. These tests set a 30 s long-task threshold and make a turn long by moving
+// the service's turn clock past it (`advance_turn_clock`, T071), never by sleeping.
+
+/// The long-task threshold of these tests.
+const THRESHOLD: Duration = Duration::from_secs(30);
+
+/// Long enough past [`THRESHOLD`] that a turn timed across it is a long task.
+const PAST_THRESHOLD: Duration = Duration::from_secs(31);
+
+/// A service whose long-task threshold is [`THRESHOLD`].
+fn service_613(sessions: &[SessionId]) -> Service {
+    let service = Service::with_sessions(sessions);
+    service.state.set_long_task_threshold(THRESHOLD);
+    service
+}
+
+impl Service {
+    /// A turn of `hooks` after the prompt.
+    fn turn(&self, session: SessionId, hooks: &[HookKind]) {
+        self.signal(session, HookKind::UserPromptSubmit);
+        for hook in hooks {
+            self.signal(session, *hook);
+        }
+    }
+}
+
+/// US1.1: a short turn is counted and marks the session unread, but its claim is refused: **Turn
+/// finished** is off by default.
+#[tokio::test]
+async fn a_short_turn_is_counted_but_not_granted() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+
+    service.turn(b, &[HookKind::Stop]);
+
+    assert_eq!(service.attention_seq(b), 1, "the turn's end is counted");
+    assert!(service.unread(b), "and marks the session unread");
+    assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}
+
+/// US1.2: a turn at or past the threshold is granted as **Long task finished**.
+#[tokio::test]
+async fn a_long_turn_is_granted_as_long_task_finished() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+
+    service.turn(b, &[]);
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    service.signal(b, HookKind::Stop);
+
     assert_eq!(
-        grants(&claims(&mut window, a, 1).await),
-        vec![(a, 1)],
-        "what was granted for the dropped session was forgotten"
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::LongTaskFinished)]
+    );
+}
+
+/// US1.3, US1.7: a stop for a permission is **Needs permission**; the turn resumed after it ends
+/// as a long task, its duration counted from the prompt with the wait inside it.
+#[tokio::test]
+async fn a_permission_is_granted_and_the_wait_counts_toward_the_turn() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::NeedsPermission)]
+    );
+
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    service.signal(b, HookKind::PreToolUse);
+    service.signal(b, HookKind::Stop);
+
+    assert_eq!(service.attention_seq(b), 2);
+    assert_eq!(
+        kinds(&claims(&mut window, b, 2).await),
+        vec![(b, 2, NotificationKind::LongTaskFinished)],
+        "the wait for the answer counts toward the turn"
+    );
+}
+
+/// US1.8: a repeated `Notification` or `Stop` without work in between adds nothing.
+#[tokio::test]
+async fn a_repeated_wait_without_work_adds_nothing() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    service.turn(b, &[HookKind::Stop]);
+    assert_eq!(service.attention_seq(b), 1);
+
+    service.signal(b, HookKind::Stop);
+    service.signal(b, HookKind::Notification);
+
+    assert_eq!(service.attention_seq(b), 1, "nothing is counted again");
+}
+
+/// Edge Cases "A permission refused": a `Stop` right after the `Notification` adds nothing and
+/// grants nothing more.
+#[tokio::test]
+async fn a_refused_permission_ending_the_turn_adds_nothing() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    service.signal(b, HookKind::Stop);
+
+    assert_eq!(
+        service.attention_seq(b),
+        1,
+        "only the permission is counted"
+    );
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::NeedsPermission)]
+    );
+    assert!(kinds(&claims(&mut window, b, 2).await).is_empty());
+}
+
+/// FR-024: Claude Code's `SubagentStop`, posted to the hook receiver mid-turn and while paused,
+/// changes no signal, counts nothing and marks nothing unread; the turn across it still ends as a
+/// long task.
+#[tokio::test]
+async fn a_helper_agent_finishing_changes_nothing() {
+    use micold_daemon::hooks::HookReceiver;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+    let hooks_dir = tempfile::tempdir().expect("a directory for the hook receiver");
+    let (receiver, listener) = HookReceiver::bind(hooks_dir.path().to_path_buf())
+        .await
+        .expect("the receiver binds");
+    let token = receiver.token_for(b);
+    let addr = listener.local_addr().expect("an address").to_string();
+    tokio::spawn(micold_daemon::hooks::serve(
+        listener,
+        receiver.tokens(),
+        Arc::clone(&service.state),
+    ));
+    let subagent_stop = || async {
+        let body = r#"{"hook_event_name":"SubagentStop"}"#;
+        let mut stream = tokio::net::TcpStream::connect(&addr)
+            .await
+            .expect("connect");
+        let request = format!(
+            "POST /hook/{} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            b.0,
+            body.len()
+        );
+        stream.write_all(request.as_bytes()).await.expect("write");
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await.expect("read");
+        assert!(
+            String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200"),
+            "the hook is accepted"
+        );
+    };
+
+    service.turn(b, &[HookKind::PreToolUse]);
+    subagent_stop().await;
+    assert_eq!(service.attention_seq(b), 0, "mid-turn: nothing counted");
+    assert!(!service.unread(b), "mid-turn: not unread");
+
+    service.signal(b, HookKind::Notification);
+    service.signal(b, HookKind::PreToolUse);
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    subagent_stop().await;
+    assert_eq!(
+        service.attention_seq(b),
+        1,
+        "only the permission was counted"
+    );
+
+    service.signal(b, HookKind::Stop);
+    assert_eq!(
+        kinds(&claims(&mut window, b, 2).await),
+        vec![(b, 2, NotificationKind::LongTaskFinished)],
+        "the turn across the helper agents' ends is one long task"
+    );
+}
+
+/// SC-001: 20 short turns, 5 long ones, 5 short ones with one permission each and one ending in
+/// an error give 5 **Long task finished** and 5 **Needs permission** grants and 1 **Session
+/// error** notice, 11 notifications and no other: none for the 25 short ends (35 attention
+/// events, the error counting none).
+#[tokio::test]
+async fn the_sc_001_sequence_gives_eleven_notifications_of_their_kinds() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+    // The window reports its view, so an error notice has a window to go to (C13).
+    window
+        .send(Frame::Control(ClientMsg::WindowView {
+            focused: true,
+            in_view: None,
+        }))
+        .await
+        .expect("the view report is sent");
+    // A window claims each event as its snapshot reaches it, as the client does.
+    let mut granted = Vec::new();
+    let mut seen = 0;
+    let mut claim_new = async |window: &mut Window, granted: &mut Vec<_>| {
+        let current = service.attention_seq(b);
+        if current > seen {
+            seen = current;
+            granted.extend(kinds(&claims(window, b, current).await));
+        }
+    };
+    for _ in 0..20 {
+        service.turn(b, &[HookKind::Stop]);
+        claim_new(&mut window, &mut granted).await;
+    }
+    for _ in 0..5 {
+        service.turn(b, &[HookKind::PreToolUse]);
+        service.state.advance_turn_clock(PAST_THRESHOLD);
+        service.signal(b, HookKind::Stop);
+        claim_new(&mut window, &mut granted).await;
+    }
+    for _ in 0..5 {
+        service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+        claim_new(&mut window, &mut granted).await;
+        service.signal(b, HookKind::PreToolUse);
+        service.signal(b, HookKind::Stop);
+        claim_new(&mut window, &mut granted).await;
+    }
+    // The last turn ends in an error the CLI reports (US1.4, C8).
+    service.signal(b, HookKind::UserPromptSubmit);
+    if service.state.note_activity(
+        b,
+        ActivityEvent::Ended {
+            reason: "upstream request failed".into(),
+            error: true,
+        },
+    ) {
+        service.state.broadcast_catalog();
+    }
+    // Everything the service sends up to the `Pong`, as a window that claims again would see it.
+    let after = claims(&mut window, b, service.attention_seq(b)).await;
+    granted.extend(kinds(&after));
+    let notices = after
+        .iter()
+        .filter(|m| matches!(m, DaemonMsg::SessionErrorNotice { session, .. } if *session == b))
+        .count();
+    assert_eq!(
+        service.attention_seq(b),
+        35,
+        "the error counts no attention event"
+    );
+
+    let count = |kind| granted.iter().filter(|(_, _, k)| *k == kind).count();
+    assert_eq!(count(NotificationKind::LongTaskFinished), 5);
+    assert_eq!(count(NotificationKind::NeedsPermission), 5);
+    assert_eq!(
+        count(NotificationKind::TurnFinished),
+        0,
+        "the 25 short ends notify nothing"
+    );
+    assert_eq!(granted.len(), 10, "no other grant: {granted:?}");
+    assert_eq!(notices, 1, "one Session error notice");
+    assert_eq!(granted.len() + notices, 11, "11 notifications in all");
+}
+
+/// FR-018: with the master switch off, events are counted as before and nothing is granted.
+#[tokio::test]
+async fn with_the_master_switch_off_events_count_and_nothing_is_granted() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+    service
+        .state
+        .set_desktop_notifications(false)
+        .expect("the switch is stored");
+
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+
+    assert_eq!(service.attention_seq(b), 1);
+    assert!(service.unread(b));
+    assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}
+
+/// US1.6: a session in view raises no attention event.
+#[tokio::test]
+async fn a_session_in_view_raises_no_event() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    let mut window = connect(&service.state, "window").await;
+    window
+        .send(Frame::Control(ClientMsg::WindowView {
+            focused: true,
+            in_view: Some(b),
+        }))
+        .await
+        .expect("the view report is sent");
+    // Answered in order: the report is applied once a claim has been answered.
+    let _ = claims(&mut window, b, 1).await;
+
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+
+    assert_eq!(service.attention_seq(b), 0);
+}
+
+/// Principle II: three sessions at once are each granted their own kind.
+#[tokio::test]
+async fn three_sessions_are_each_granted_their_own_kind() {
+    let (a, b, c) = (session_id(0xA), session_id(0xB), session_id(0xC));
+    let service = service_613(&[a, b, c]);
+    let mut window = connect(&service.state, "window").await;
+    service.turn(a, &[HookKind::PreToolUse]);
+    service.turn(c, &[HookKind::PreToolUse]);
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+    service.signal(a, HookKind::Stop);
+    service.signal(c, HookKind::Notification);
+
+    let mut granted = Vec::new();
+    for id in [a, b, c] {
+        granted.extend(kinds(&claims(&mut window, id, 1).await));
+    }
+
+    assert_eq!(
+        granted,
+        vec![
+            (a, 1, NotificationKind::LongTaskFinished),
+            (b, 1, NotificationKind::NeedsPermission),
+            (c, 1, NotificationKind::NeedsPermission),
+        ]
+    );
+}
+
+/// Edge Cases "Reconnection": a window that connects after the event was noted is granted the
+/// kind noted then.
+#[tokio::test]
+async fn a_window_that_connects_later_is_granted_the_kind_noted_then() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+
+    let mut window = connect(&service.state, "late").await;
+
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::NeedsPermission)]
+    );
+}
+
+/// C11: after a service restart on the same store, a claim for an event noted before it is
+/// refused: its kind was kept in memory only.
+#[tokio::test]
+async fn after_a_restart_an_event_noted_before_it_is_not_granted() {
+    let b = session_id(0xB);
+    let service = service_613(&[b]);
+    service.turn(b, &[HookKind::PreToolUse, HookKind::Notification]);
+    service.state.persist_attention();
+
+    let restarted = Arc::new(state_on(service.store.path()));
+    let mut window = connect(&restarted, "after").await;
+
+    assert_eq!(
+        restarted
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .find(|s| s.id == b)
+            .map(|s| s.attention_seq),
+        Some(1),
+        "precondition: the event was stored"
+    );
+    assert!(kinds(&claims(&mut window, b, 1).await).is_empty());
+}
+
+/// A process that shows a braille spinner in its title, then idles: `Working` evidence with no
+/// hook, as after a service restart that missed the turn's prompt.
+#[cfg(unix)]
+fn spinner_process(id: SessionId) -> PtySession {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg(r"printf '\033]0;\342\240\213 Working\007'; cat");
+    cmd.cwd(std::env::temp_dir());
+    PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("a spinner process starts")
+}
+
+/// Data-model "Mapping": a spinner that lifts the signal to `Working` starts the turn clock as
+/// work does, so a turn seen only by its spinner ends as **Long task finished** when it lasted
+/// past the threshold (feature 613, C2).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_turn_seen_only_by_its_spinner_is_timed_from_the_spinner() {
+    let b = session_id(0xB);
+    let service = Service::with_processes(&[b], spinner_process);
+    service.state.set_long_task_threshold(THRESHOLD);
+    let mut window = connect(&service.state, "window").await;
+
+    let deadline = std::time::Instant::now() + OWED;
+    while service
+        .state
+        .catalog_snapshot()
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == b)
+        .map(|s| s.activity.clone())
+        != Some(micold_core::protocol::messages::ActivitySignal::Working)
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the spinner lifts the signal"
+        );
+        service.state.drain_signals();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    service.state.advance_turn_clock(PAST_THRESHOLD);
+    service.signal(b, HookKind::Stop);
+
+    assert_eq!(
+        kinds(&claims(&mut window, b, 1).await),
+        vec![(b, 1, NotificationKind::LongTaskFinished)]
     );
 }

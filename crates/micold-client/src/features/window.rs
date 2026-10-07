@@ -151,6 +151,11 @@ pub enum FieldId {
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
     SettingsEnvIncludeTimeout,
+    /// Settings: the long-task threshold (feature 613, S5).
+    SettingsLongTaskThreshold,
+    /// Settings: one notification kind's on/off checkbox (feature 613, FR-015). Parameterised
+    /// like `SettingsCredential`, so a fifth kind cannot lose its keyboard focus silently.
+    SettingsNotificationKind(micold_core::attention::NotificationKind),
     /// Settings → GitHub issues: the label of the mapping entry at this index (feature 034).
     IssueMappingLabel(usize),
     /// The attach dialog's checkbox for the row at this index (feature 582).

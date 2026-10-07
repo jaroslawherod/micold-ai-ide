@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use micold_core::attention::{NotificationKind, NotificationKinds, TurnClock};
 use micold_core::cli_reason::{AttemptDir, Place, SpawnEnv};
 use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
@@ -35,7 +36,7 @@ use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::activity::{Activity, ActivityEvent, HookKind};
+use crate::activity::{turn_change, Activity, ActivityEvent, HookKind};
 use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
@@ -235,6 +236,28 @@ struct Inner {
     attention_unsaved: bool,
     /// Review comments per project and entry (feature 482), read on first use.
     reviews: crate::review::Reviews,
+    /// A test's override of the long-task threshold (feature 613, C2), set by
+    /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
+    /// decides ([`Inner::effective_long_task_threshold`]).
+    long_task_threshold_override: Option<std::time::Duration>,
+    /// How far a test has moved the turn clock forward (feature 613, T071), set by
+    /// [`DaemonState::advance_turn_clock`]; zero outside tests.
+    turn_clock_ahead: std::time::Duration,
+}
+
+impl Inner {
+    /// The turn duration from which a finished turn is **Long task finished**: a test's override,
+    /// else the stored setting (feature 613, C2, FR-025). Read on every event, so a change applies
+    /// to the next turn end, one already running included (FR-013).
+    fn effective_long_task_threshold(&self) -> std::time::Duration {
+        self.long_task_threshold_override
+            .unwrap_or_else(|| self.catalog.long_task_threshold())
+    }
+
+    /// The turn clock's reading: [`micold_core::clock::now`], plus what a test advanced it by.
+    fn turn_now(&self) -> micold_core::clock::Uptime {
+        micold_core::clock::now().saturating_add(self.turn_clock_ahead)
+    }
 }
 
 /// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
@@ -281,6 +304,9 @@ struct LiveSession {
     /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
     /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
     activity: Activity,
+    /// The turn clock that tells a finished turn's kind (feature 613, C1). Created `NotInTurn`
+    /// with the live entry and dropped with it; not persisted.
+    turn: TurnClock,
     /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
     /// the CLI's own startup title excluded), used to project a live session title and to
     /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
@@ -544,6 +570,8 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 views: Views::default(),
                 attention_unsaved: false,
+                long_task_threshold_override: None,
+                turn_clock_ahead: std::time::Duration::ZERO,
                 reviews: crate::review::Reviews::default(),
             }),
             next_id: AtomicU64::new(1),
@@ -625,6 +653,26 @@ impl DaemonState {
             .first_prompt_bound
             .lock()
             .expect("first-prompt bound poisoned") = bound;
+    }
+
+    /// Override the turn duration from which a finished turn is **Long task finished**, so a test
+    /// need not wait a minute for a long turn (feature 613, C2). It wins over the stored setting.
+    /// Nothing else calls it.
+    pub fn set_long_task_threshold(&self, threshold: std::time::Duration) {
+        self.lock().long_task_threshold_override = Some(threshold);
+    }
+
+    /// Move the turn clock forward by `by`, so a test makes a turn long without sleeping and a
+    /// short turn stays short however slow the machine is (feature 613, T071). Nothing else calls
+    /// it.
+    pub fn advance_turn_clock(&self, by: std::time::Duration) {
+        self.lock().turn_clock_ahead += by;
+    }
+
+    /// The long-task threshold the next turn end is judged by: a test's override, else the stored
+    /// setting (feature 613, C2, FR-013). This is what the turn-end paths read.
+    pub fn effective_long_task_threshold(&self) -> std::time::Duration {
+        self.lock().effective_long_task_threshold()
     }
 
     /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
@@ -1275,19 +1323,23 @@ impl DaemonState {
 
     /// Answer window `id`'s claim of attention event `seq` of `session` (feature 039, W1.4): send
     /// it `AttentionGranted` when no window has claimed that event before, and nothing otherwise.
-    /// An unknown session, or a sequence the session has not reached, is not answered. Nor is any
-    /// claim while the **Desktop notifications** setting is off (W4.2, FR-027).
+    /// An unknown session, or a sequence the session has not reached, is not answered. Nor is a
+    /// claim whose event's kind does not notify now: the **Desktop notifications** setting or the
+    /// kind's own switch is off (W4.2, FR-027; feature 613, C11). The grant names the kind.
     pub fn claim_attention(&self, id: ClientId, session: SessionId, seq: u64) {
         let granted = {
             let mut inner = self.lock();
+            let inner = &mut *inner;
             let Some(current) = inner.catalog.attention_seq(session) else {
                 return;
             };
-            let enabled = inner.catalog.desktop_notifications();
-            inner.views.grant(session, seq, current, enabled)
+            let catalog = &inner.catalog;
+            inner
+                .views
+                .grant(session, seq, current, |kind| catalog.notify(kind))
         };
-        if granted {
-            self.send(id, DaemonMsg::AttentionGranted { session, seq });
+        if let Some(kind) = granted {
+            self.send(id, DaemonMsg::AttentionGranted { session, seq, kind });
         }
     }
 
@@ -1599,10 +1651,40 @@ impl DaemonState {
                 // Done before the write, which sets the switch in memory even when it fails. An
                 // event made while the switch was on and not claimed yet is used up with the rest.
                 for (session, seq) in inner.catalog.attention_seqs() {
-                    inner.views.note_event(session, seq, false);
+                    // Recorded as granted, so the kind is not consulted.
+                    inner
+                        .views
+                        .note_event(session, seq, NotificationKind::TurnFinished, false);
                 }
             }
             inner.catalog.set_desktop_notifications(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Set every notification kind's switch (feature 613, T038, W5.4) and push `SettingsChanged`
+    /// to every client. Applies to the next claim with nothing restarted (FR-013); unread state is
+    /// not touched (SC-003). Nothing is used up here (C15): an event made while its kind was off
+    /// was already noted as not to notify, and a pending event of a kind that was on stays
+    /// claimable.
+    pub fn set_notification_kinds(&self, kinds: NotificationKinds) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_notification_kinds(kinds)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Set the long-task threshold in seconds, clamped into 10–3600 (feature 613, T063, W5.6, FR-026), and
+    /// push `SettingsChanged` to every client. The next turn end reads it (FR-013).
+    pub fn set_long_task_threshold_secs(&self, secs: u64) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_long_task_threshold(secs)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
@@ -3346,6 +3428,7 @@ impl DaemonState {
                 attached: SessionProcess::Primary,
                 input: InputReceiver::new(),
                 activity: Activity::new(),
+                turn: TurnClock::default(),
                 last_title: None,
                 name_stale: true,
                 event_log: None,
@@ -3500,6 +3583,8 @@ impl DaemonState {
         // Each with the dead process the policy was applied to.
         let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Arc<PtySession>)> =
             Vec::new();
+        // The Session error notices of this tick's give-ups, sent off the lock (feature 613, C13).
+        let mut notices: Vec<(ClientId, DaemonMsg)> = Vec::new();
         // Phase 0: the gate of every session whose primary has exited, tried off the state lock.
         let dead: Vec<(SessionId, Arc<tokio::sync::Mutex<()>>)> = {
             let mut inner = self.lock();
@@ -3560,7 +3645,19 @@ impl DaemonState {
                     Some((project, SupervisionAction::GiveUp, _, mode, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
+                        // `Ended` is absorbing and survives a respawn, so a session the CLI
+                        // already reported ended (C8) had its one notice then (FR-007).
+                        let already_ended = inner.sessions.get(&id).is_some_and(|live| {
+                            matches!(live.activity.signal(), ActivitySignal::Ended { .. })
+                        });
                         Self::note_ended(&mut inner, id, "crash loop");
+                        // An error ending (feature 613, C7), unless the session had already ended.
+                        if let Some(notice) = (!already_ended)
+                            .then(|| Self::error_notice(&inner, &project, id))
+                            .flatten()
+                        {
+                            notices.push(notice);
+                        }
                         to_drop.push((id, mode == TerminalMode::AiCli));
                     }
                     Some((project, SupervisionAction::Stop, _, mode, _)) => {
@@ -3616,6 +3713,9 @@ impl DaemonState {
                 }
             }
         }
+        for (target, notice) in notices {
+            self.send(target, notice);
+        }
         // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
         for (id, covered) in to_drop {
             let removed = {
@@ -3654,9 +3754,33 @@ impl DaemonState {
         };
         live.activity.apply(ActivityEvent::Ended {
             reason: reason.to_string(),
+            error: false,
         });
         let signal = live.activity.signal().clone();
         inner.ended.insert(id, signal);
+    }
+
+    /// The **Session error** notice for an error ending of `session` of `project` (feature 613,
+    /// C13), and the one window it goes to: `Views::error_notice_target`, as a reveal reaches one
+    /// window. `None`, and nothing kept, when the kind does not notify, the session is in view in
+    /// a window, or no window is connected (FR-007). Neither `attention_seq` nor unread changes.
+    fn error_notice(
+        inner: &Inner,
+        project: &Path,
+        session: SessionId,
+    ) -> Option<(ClientId, DaemonMsg)> {
+        if !inner.catalog.notify(NotificationKind::SessionError) || inner.views.is_in_view(session)
+        {
+            return None;
+        }
+        let target = inner.views.error_notice_target()?;
+        Some((
+            target,
+            DaemonMsg::SessionErrorNotice {
+                project: project.to_path_buf(),
+                session,
+            },
+        ))
     }
 
     /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
@@ -3677,17 +3801,25 @@ impl DaemonState {
             self.mark_ready_for_input(session);
             return false;
         }
-        let mut inner = self.lock();
+        let mut guard = self.lock();
         // Reborrowed so the live sessions, the views and the catalog borrow apart.
-        let inner = &mut *inner;
+        let inner = &mut *guard;
+        let threshold = inner.effective_long_task_threshold();
+        let turn_now = inner.turn_now();
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
         let first_turn_evidence = matches!(event, ActivityEvent::Hook(HookKind::UserPromptSubmit));
+        let reported_error = matches!(event, ActivityEvent::Ended { error: true, .. });
         let before = live.activity.signal().clone();
+        let event_for_turn = event.clone();
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
         live.name_stale |= changed || first_turn_evidence;
+        // The turn clock sees every event, before the attention event is decided (feature 613,
+        // C2); its kind is used only if the session began waiting just now.
+        let kind = turn_change(&event_for_turn, changed)
+            .and_then(|change| live.turn.change(change, turn_now, threshold));
         if changed {
             live.last_active = micold_core::clock::now();
         }
@@ -3701,13 +3833,30 @@ impl DaemonState {
             && inner.catalog.mark_attention(session)
         {
             inner.attention_unsaved = true;
-            // While desktop notifications are off the event is used up here, so that no window
-            // is granted it after they are turned on (W4.2, FR-027). `unread` was set above
-            // either way (FR-017).
+            // While the event's kind does not notify the event is used up here, so that no
+            // window is granted it after it is turned on (W4.2, FR-027; feature 613, C10).
+            // `unread` was set above either way (FR-017, FR-018). Every path into awaiting input
+            // returns a kind; should one not, the event is `TurnFinished` (C3).
             if let Some(seq) = inner.catalog.attention_seq(session) {
-                let enabled = inner.catalog.desktop_notifications();
-                inner.views.note_event(session, seq, enabled);
+                let kind = kind.unwrap_or(NotificationKind::TurnFinished);
+                let notify = inner.catalog.notify(kind);
+                inner.views.note_event(session, seq, kind, notify);
             }
+        }
+        // An error ending (feature 613, C8): the CLI reported an error, and the session had not
+        // already ended. Sent to one window under the lock, as the grant above is decided.
+        let notice = if reported_error && !matches!(before, ActivitySignal::Ended { .. }) {
+            inner
+                .catalog
+                .workspace()
+                .find_session(session)
+                .and_then(|(project, _)| Self::error_notice(inner, project, session))
+        } else {
+            None
+        };
+        drop(guard);
+        if let Some((target, notice)) = notice {
+            self.send(target, notice);
         }
         changed
     }
@@ -3829,25 +3978,9 @@ impl DaemonState {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let workspace = inner.catalog.workspace();
+        let threshold = inner.effective_long_task_threshold();
+        let turn_now = inner.turn_now();
         for (id, live) in inner.sessions.iter_mut() {
-            // A spinner glyph seen since the last drain is positive `Working` evidence.
-            if let Some(proc) = live.procs.get(&live.attached) {
-                if proc.pty.signals().take_spinner() {
-                    let before = live.activity.signal().clone();
-                    live.activity.apply(ActivityEvent::SpinnerObserved);
-                    if live.activity.signal() != &before {
-                        out.changed = true;
-                        // An activity change here re-arms the live name lookup, exactly as
-                        // `note_activity` does for a hook (feature 032, FR-010, C6.3b, research
-                        // R9). Without it, a spinner drained *before* the `UserPromptSubmit` hook
-                        // leaves the hook with nothing to change, and the session's first turn
-                        // waits for the end of the turn to be read — well outside the minute US3
-                        // promises.
-                        live.name_stale = true;
-                        live.last_active = micold_core::clock::now();
-                    }
-                }
-            }
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
             // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
@@ -3868,6 +4001,34 @@ impl DaemonState {
                         .provider()
                         .name_in_terminal_title(&title, &session.location.cwd(project))
                 });
+            // The title is read before the spinner is taken, not after: the terminal stores a
+            // title's spinner edge before the title itself, so a drain that sees a title also
+            // takes the spinner that came with it. Taken first, a title landing in between was
+            // reported here while its spinner waited for the next drain (feature 613 CI flake on
+            // `a_copilot_session_is_watched_by_its_event_log…`).
+            // A spinner glyph seen since the last drain is positive `Working` evidence.
+            if let Some(proc) = live.procs.get(&live.attached) {
+                if proc.pty.signals().take_spinner() {
+                    let before = live.activity.signal().clone();
+                    live.activity.apply(ActivityEvent::SpinnerObserved);
+                    if live.activity.signal() != &before {
+                        out.changed = true;
+                        // A spinner that lifted the signal is the turn's work (feature 613,
+                        // data-model "Mapping"): the turn clock starts here when no hook did.
+                        if let Some(change) = turn_change(&ActivityEvent::SpinnerObserved, true) {
+                            live.turn.change(change, turn_now, threshold);
+                        }
+                        // An activity change here re-arms the live name lookup, exactly as
+                        // `note_activity` does for a hook (feature 032, FR-010, C6.3b, research
+                        // R9). Without it, a spinner drained *before* the `UserPromptSubmit` hook
+                        // leaves the hook with nothing to change, and the session's first turn
+                        // waits for the end of the turn to be read — well outside the minute US3
+                        // promises.
+                        live.name_stale = true;
+                        live.last_active = micold_core::clock::now();
+                    }
+                }
+            }
             // Debounced: only a real change is a push — and only a real change is a durable
             // write. A spinner cycling through glyph frames on an otherwise stable title produces
             // one change here, not thirty, because the glyph was stripped before the title
@@ -4404,6 +4565,7 @@ impl DaemonState {
                         attached: key,
                         input: InputReceiver::new(),
                         activity: Activity::new(),
+                        turn: TurnClock::default(),
                         last_title: None,
                         // A shell-only session has no conversation to name.
                         name_stale: false,

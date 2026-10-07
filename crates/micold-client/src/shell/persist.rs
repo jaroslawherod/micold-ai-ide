@@ -267,6 +267,8 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         cross_session_access: app.core.session.cross_session_access,
         issue_label_types: stored.issue_label_types,
         pr_status_enabled: stored.pr_status_enabled,
+        notification_kinds: app.core.session.notification_kinds,
+        long_task_threshold_secs: app.core.session.long_task_threshold_secs,
         diff_layout: stored.diff_layout,
     };
     let mut draft = SettingsDraft::from_settings(&current);
@@ -386,6 +388,8 @@ pub(crate) fn save_and_prepare_check(
     app.core.session.pi_activity_component = valid.pi_activity_component;
     app.core.session.tool_server_enabled = valid.tool_server_enabled;
     app.core.session.desktop_notifications = valid.desktop_notifications;
+    app.core.session.notification_kinds = valid.notification_kinds;
+    app.core.session.long_task_threshold_secs = valid.long_task_threshold_secs;
     app.core.session.cross_session_access = valid.cross_session_access;
 
     let settings = valid.into_settings();
@@ -397,7 +401,7 @@ pub(crate) fn save_and_prepare_check(
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
         // through the `notify_error` below, which is T160.
         let write = store.update_reporting(&mut |stored| {
-            // The form does not hold the pull request switch yet (feature 040, M4), so the
+            // The form does not hold the pull request switch (feature 040, M4) yet, so the
             // document keeps the value it has.
             // Nor the diff layout (feature 482), which the service owns.
             let pr_status_enabled = stored.pr_status_enabled;
@@ -436,6 +440,8 @@ pub(crate) fn save_and_prepare_check(
             diff_layout: None,
             cross_session_access: Some(settings.cross_session_access),
             pr_status_enabled: None,
+            notification_kinds: Some(settings.notification_kinds),
+            long_task_threshold_secs: Some(settings.long_task_threshold_secs),
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
@@ -883,6 +889,12 @@ mod tests {
                 type_: micold_core::naming::ConventionalType::Perf,
             }],
             pr_status_enabled: true,
+            notification_kinds: micold_core::attention::NotificationKinds {
+                needs_permission: false,
+                turn_finished: true,
+                ..Default::default()
+            },
+            long_task_threshold_secs: 120,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

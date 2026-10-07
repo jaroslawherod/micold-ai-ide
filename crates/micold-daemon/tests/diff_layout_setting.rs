@@ -78,6 +78,8 @@ fn set_layout(req: u64, layout: DiffLayout) -> ClientMsg {
         cross_session_access: None,
         pr_status_enabled: None,
         desktop_notifications: None,
+        notification_kinds: None,
+        long_task_threshold_secs: None,
         diff_layout: Some(layout),
     }
 }

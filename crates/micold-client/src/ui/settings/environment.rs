@@ -14,15 +14,18 @@ use crate::features::settings::{
     missing_cli_notice, script_path_notice, NoticeLine, ScriptCheck, SettingsDraft, SettingsSection,
 };
 use crate::features::window::FieldId;
+use crate::notification_icon;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
 use crate::ui::settings::{caution, field_note, note, page};
+use iced::widget::container;
 use iced::Element;
+use micold_core::attention::NotificationKind;
 use micold_core::cli_reason;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::session::AiCli;
-use micold_core::tokens::Roles;
+use micold_core::tokens::{spacing, Roles};
 
 /// What this section renders. See [`crate::ui::settings`].
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
@@ -36,6 +39,8 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("pi_activity_component", "PiActivityComponentToggled"),
     ("tool_server_enabled", "ToolServerToggled"),
     ("desktop_notifications", "DesktopNotificationsToggled"),
+    ("notification_kinds", "NotificationKindToggled"),
+    ("long_task_threshold_secs", "LongTaskThresholdChanged"),
     ("cross_session_access", "CrossSessionAccessChanged"),
 ];
 
@@ -154,6 +159,55 @@ pub fn view<'a>(
         roles,
     );
 
+    // Feature 613, S1/S2/S5: one row per kind below the master switch, in `ALL` order, each a
+    // checkbox with the kind's icon and its description beneath, indented one spacing step. They
+    // take a toggle only while the master switch is on; off, they show their stored values (S2).
+    // The threshold field sits directly under the Long task finished row (S5) and follows the same
+    // rule, though it stays editable while that one kind is off (FR-025).
+    let master_on = draft.environment.desktop_notifications;
+    let indent = |element: Element<'a, Message>| -> Element<'a, Message> {
+        container(element)
+            .padding(iced::Padding {
+                left: spacing::MD,
+                ..iced::Padding::ZERO
+            })
+            .into()
+    };
+    let mut kind_rows: Vec<Element<'a, Message>> = Vec::new();
+    for kind in NotificationKind::ALL {
+        let mut row = Checkbox::new(
+            kind.name(),
+            draft.environment.notification_kinds.is_on(kind),
+            roles,
+        )
+        .icon(notification_icon::icon(kind))
+        .track_focus(FieldId::SettingsNotificationKind(kind), focused);
+        if master_on {
+            row = row.on_toggle(move |v| {
+                Message::Settings(SettingsMsg::NotificationKindToggled(kind, v))
+            });
+        }
+        kind_rows.push(indent(field_note(row, Some(kind.description()), roles)));
+        if kind == NotificationKind::LongTaskFinished {
+            let mut threshold =
+                TextField::new("", &draft.environment.long_task_threshold_secs, roles)
+                    .label("Long-task threshold")
+                    .supporting("Seconds, 10–3600")
+                    .error(super::error_for(
+                        draft,
+                        SettingsSection::Environment,
+                        FieldId::SettingsLongTaskThreshold,
+                    ))
+                    .track_focus(FieldId::SettingsLongTaskThreshold, focused);
+            if master_on {
+                threshold = threshold
+                    .on_input(|v| Message::Settings(SettingsMsg::LongTaskThresholdChanged(v)))
+                    .on_submit(Message::Settings(SettingsMsg::Saved));
+            }
+            kind_rows.push(indent(threshold.into()));
+        }
+    }
+
     // Feature 034, FR-016: whether an agent may read another session's terminal and type into it.
     // A separate option from the binding above it, with three values, so it is the shared `Select`
     // (Principle VIII) rather than a second checkbox. The values are drawn by their `Display`.
@@ -171,13 +225,10 @@ pub fn view<'a>(
         roles,
     );
 
-    let mut controls: Vec<Element<'a, Message>> = vec![
-        cli,
-        pi_activity,
-        tool_server,
-        desktop_notifications,
-        cross_session,
-    ];
+    let mut controls: Vec<Element<'a, Message>> =
+        vec![cli, pi_activity, tool_server, desktop_notifications];
+    controls.extend(kind_rows);
+    controls.push(cross_session);
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,

@@ -145,24 +145,76 @@ every open window shows the same value.
 
 ### Desktop notifications
 
-On by default. When a session you are not looking at finishes its turn or stops to ask for a
-permission, the app shows one desktop notification for it
+On by default. When a session you are not looking at needs you, the app shows one desktop
+notification for it
 ([Being told when a session needs you](worktrees-and-sessions.md#being-told-when-a-session-needs-you)).
 Turn **Desktop notifications** off and save, and the app shows none.
+
+Under the master switch are four switches, one per kind of notification, in this order. Each one
+applies to every AI CLI.
+
+- **Needs permission** (on by default): the session stopped mid-turn to ask for a permission or an
+  answer. The notification's title is the session's name followed by *needs permission*.
+- **Session error** (on by default): the session ended because of an error: it kept crashing until
+  the app gave up restarting it, or its AI CLI reported an error and stopped. The title ends in
+  *stopped with an error*. One window shows it, the one you used last. Closing or stopping a
+  session, a CLI that exits normally, and a crash the app restarts raise none. An error does not
+  mark the session unread.
+- **Long task finished** (on by default): the session finished a turn at least as long as the
+  long-task threshold (60 seconds by default), counted from your prompt, any wait for you inside it
+  included. The title ends in *finished a long task*.
+- **Turn finished** (off by default): the session finished a shorter turn. With it off such a turn
+  raises no notification, but still marks the session unread.
+
+**Long-task threshold.** Directly under **Long task finished**, in seconds, from 10 to 3600, 60 by
+default. It decides which of **Long task finished** and **Turn finished** a turn that ended counts
+as, even while **Long task finished** is off: a turn at least that long is never reported as
+**Turn finished**. A change applies to the next turn that ends, one already running included.
+Input outside the range, or that is not a whole number, is refused when you save, with a message
+under the field. A value outside the range in the settings file is clamped to the range.
+
+The master switch **Desktop notifications** turns all four off at once. While it is off the four
+switches and the threshold are greyed and cannot be changed, but they keep their positions and
+their values; turn it on again and they are as you left them.
+
+Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they
+neither notify you nor mark the session unread.
 
 - **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot and Pi sessions.
   There is no switch per CLI.
 - **Every window at once.** The session service keeps the setting, so it holds for every open
   window from the moment you save, and every window's Settings shows the same value.
-- **Nothing to restart.** It applies to the next time a session stops, also for sessions that are
-  already running.
-- **Nothing after the fact.** When you turn it on again, the next session that stops while you are
-  not looking at it notifies you. Sessions that stopped while it was off do not.
-- **Unread marks do not depend on it.** With the switch off a session that needs you is still
+- **Nothing to restart.** A change to the master switch, a kind switch or the threshold applies to
+  the next event, also for sessions that are already running.
+- **Nothing after the fact.** When you turn a switch on again, the next event of that kind while you
+  are not looking at the session notifies you. Events that happened while it was off are never
+  notified later.
+- **Unread marks do not depend on the switches.** With every switch off a session that needs you is still
   marked unread in the sidebar and counted in the project switcher
   ([Unread sessions](worktrees-and-sessions.md#unread-sessions)).
-- **It survives a restart.** In the settings file it is `desktop_notifications`, `true` or `false`.
-  A file written before the switch existed, or one that cannot be read, counts as on.
+- **It survives a restart.** In the settings file the master switch is `desktop_notifications`,
+  `true` or `false`. A file written before the switch existed, or one that cannot be read, counts as
+  on. The kinds are `notification_kinds`, with the four fields `needs_permission`, `session_error`,
+  `long_task_finished` and `turn_finished`, each `true` or `false`; a field the file lacks has its
+  default above. The threshold is `long_task_threshold_secs`, a whole number of seconds.
+
+**Each kind has its own icon.** The icon beside a kind's switch is the one its desktop
+notifications carry: a raised hand for **Needs permission**, a circled exclamation mark for
+**Session error**, a circled tick for **Long task finished** and a speech bubble for **Turn
+finished**. In a notification the icon is drawn in white on a coloured rounded square, so it stands
+out on a light and a dark desktop alike.
+
+- **Linux**: the notification shows the icon in place of the app's, on desktops whose notification
+  service shows images (GNOME, KDE Plasma and most others do).
+- **Windows**: the toast shows the icon in place of the app's logo.
+- **macOS**: the notification always shows the app's own icon; the kind's icon is attached to it
+  and shows on its right side, or larger when you expand the notification.
+
+Where a system shows no icon from the app, the notification is still shown, and its title names
+the kind: *needs permission*, *stopped with an error*, *finished a long task* or *finished its
+turn*. Windows and macOS need the icons as files: the app writes them to `notification-icons/`
+beside the settings file ([Where settings are stored](#where-settings-are-stored)) once each time
+it runs. If it cannot, it notes that once and shows the notifications without icons.
 
 The operating system's own permission is separate. With the switch on, the system can still
 withhold notifications: you refused the permission, turned notifications off for the app in the

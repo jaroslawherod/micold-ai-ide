@@ -17,8 +17,7 @@ use micold_daemon::state::DaemonState;
 #[path = "support/attention.rs"]
 mod attention;
 use attention::{
-    catalog_on, connect, find_summary, idle_process, next_frame, session_id, summary, Service,
-    Window,
+    connect, find_summary, idle_process, next_frame, session_id, state_on, summary, Service, Window,
 };
 
 const A: u128 = 0xA;
@@ -41,7 +40,7 @@ impl Service {
         // The supervisor tick's write: unread state changes under the state lock, the write is off
         // it.
         self.state.persist_attention();
-        DaemonState::new(catalog_on(self.store.path()))
+        state_on(self.store.path())
     }
 }
 
@@ -348,11 +347,7 @@ async fn a_read_is_written_by_persist_attention() {
     service.finishes_a_turn(a);
     service.state.persist_attention();
     assert!(
-        summary(
-            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
-            a
-        )
-        .unread,
+        summary(&state_on(service.store.path()).catalog_snapshot(), a).unread,
         "precondition: the store holds the session as unread"
     );
     let mut window = connect(&service.state, "window").await;
@@ -362,11 +357,7 @@ async fn a_read_is_written_by_persist_attention() {
     service.state.persist_attention();
 
     assert!(
-        !summary(
-            &DaemonState::new(catalog_on(service.store.path())).catalog_snapshot(),
-            a
-        )
-        .unread,
+        !summary(&state_on(service.store.path()).catalog_snapshot(), a).unread,
         "the store holds the session as read after the write the tick makes"
     );
     closes(window).await;
@@ -388,7 +379,7 @@ async fn stopping_the_service_writes_an_unsaved_event_and_a_read() {
 
     micold_daemon::server::unwind(&service.state, micold_daemon::idle::StopReason::Requested).await;
 
-    let stored = DaemonState::new(catalog_on(service.store.path())).catalog_snapshot();
+    let stored = state_on(service.store.path()).catalog_snapshot();
     assert!(
         !summary(&stored, a).unread,
         "the read was stored by the stop"

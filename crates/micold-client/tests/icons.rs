@@ -43,6 +43,10 @@ fn expected(icon: Icon) -> char {
         Icon::IssueMapping => '\u{e892}',
         Icon::MoveUp => '\u{e316}',
         Icon::MoveDown => '\u{e313}',
+        Icon::NeedsPermission => '\u{e925}',
+        Icon::SessionError => '\u{e000}',
+        Icon::LongTaskFinished => '\u{e2e6}',
+        Icon::TurnFinished => '\u{e0cb}',
     }
 }
 
@@ -72,8 +76,9 @@ fn all_covers_every_variant_without_duplicates() {
     // control — Material's `refresh`, chosen over `sync` and `autorenew` because those two say
     // "there is a remote" and "this happens by itself", and neither is true here), +3 for
     // IssueMapping/MoveUp/MoveDown (feature 034's GitHub issues settings section — `label`,
-    // `keyboard_arrow_up`, `keyboard_arrow_down`; `arrow_upward` is already `NavigateUp`).
-    assert_eq!(Icon::ALL.len(), 35, "curated set size");
+    // `keyboard_arrow_up`, `keyboard_arrow_down`; `arrow_upward` is already `NavigateUp`), +4 for the notification kinds' icons (feature 613, I1 —
+    // `pan_tool`, `error`, `task_alt`, `chat_bubble`).
+    assert_eq!(Icon::ALL.len(), 39, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -90,6 +95,27 @@ fn all_covers_every_variant_without_duplicates() {
                 b.glyph(),
                 "{a:?} and {b:?} must not share a codepoint"
             );
+        }
+    }
+}
+
+/// Feature 613, I1: the four notification-kind icons are in the vocabulary, on the Material Symbols
+/// codepoints for `pan_tool`, `error`, `task_alt` and `chat_bubble`, and are four different glyphs.
+#[test]
+fn the_four_notification_kind_icons_are_in_the_vocabulary_and_distinct() {
+    let kinds = [
+        (Icon::NeedsPermission, '\u{e925}'),
+        (Icon::SessionError, '\u{e000}'),
+        (Icon::LongTaskFinished, '\u{e2e6}'),
+        (Icon::TurnFinished, '\u{e0cb}'),
+    ];
+    for (icon, glyph) in kinds {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+    }
+    for (i, (a, _)) in kinds.iter().enumerate() {
+        for (b, _) in &kinds[i + 1..] {
+            assert_ne!(a.glyph(), b.glyph(), "{a:?} and {b:?} must differ");
         }
     }
 }

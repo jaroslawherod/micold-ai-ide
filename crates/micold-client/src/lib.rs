@@ -18,6 +18,7 @@ pub mod grid;
 pub mod icons;
 pub mod input;
 pub mod keymap;
+pub mod notification_icon;
 pub mod overlay;
 pub mod reveal_trace;
 pub mod selection;

@@ -13,6 +13,7 @@
 //! External-modification detection is out of scope (spec Out of Scope).
 
 use micold_core::attach::{AttachOutcome, RefuseReason};
+use micold_core::attention::{NotificationKind, NotificationKinds};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -29,7 +30,8 @@ use micold_core::session::{
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{
-    clamp_env_include_timeout, clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore,
+    clamp_env_include_timeout, clamp_long_task_threshold, clamp_scrollback, JsonFileSettingsStore,
+    Settings, SettingsStore,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -161,6 +163,8 @@ impl Catalog {
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
             desktop_notifications: self.settings.desktop_notifications,
+            notification_kinds: self.settings.notification_kinds,
+            long_task_threshold_secs: self.settings.long_task_threshold_secs,
             diff_layout: self.settings.diff_layout,
         }
     }
@@ -304,6 +308,8 @@ impl Catalog {
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
+                on_disk.notification_kinds = self.settings.notification_kinds;
+                on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
                 on_disk.diff_layout = self.settings.diff_layout;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
@@ -434,9 +440,39 @@ impl Catalog {
         self.settings.desktop_notifications
     }
 
+    /// Which notification kinds are on (feature 613). Read live on every call (C16).
+    pub fn notification_kinds(&self) -> NotificationKinds {
+        self.settings.notification_kinds
+    }
+
+    /// Whether an event of `kind` raises a desktop notification now: the master switch and the
+    /// kind's own switch are both on (feature 613, data-model "Effective switch", C16).
+    pub fn notify(&self, kind: NotificationKind) -> bool {
+        self.settings.desktop_notifications && self.settings.notification_kinds.is_on(kind)
+    }
+
     /// Turn desktop notifications on or off, persisting atomically (feature 039, FR-026).
     pub fn set_desktop_notifications(&mut self, on: bool) -> io::Result<()> {
         self.settings.desktop_notifications = on;
+        self.persist_service_settings()
+    }
+
+    /// Set every notification kind's switch at once, persisting atomically (feature 613, T038).
+    pub fn set_notification_kinds(&mut self, kinds: NotificationKinds) -> io::Result<()> {
+        self.settings.notification_kinds = kinds;
+        self.persist_service_settings()
+    }
+
+    /// The long-task threshold: how long a turn must last to finish as **Long task finished**
+    /// (feature 613, FR-025). Read on every turn end, so a change applies to the next one (C2).
+    pub fn long_task_threshold(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.settings.long_task_threshold_secs)
+    }
+
+    /// Set the long-task threshold in seconds, clamped into 10–3600 (FR-026), persisting
+    /// atomically (feature 613, T063).
+    pub fn set_long_task_threshold(&mut self, secs: u64) -> io::Result<()> {
+        self.settings.long_task_threshold_secs = clamp_long_task_threshold(secs);
         self.persist_service_settings()
     }
 
@@ -1325,5 +1361,124 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
         SessionLifecycle::Restarting { attempts } => WireLifecycle::Restarting { attempts },
         SessionLifecycle::Failed { reason, attempts } => WireLifecycle::Failed { reason, attempts },
         SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
+    }
+}
+
+#[cfg(test)]
+mod notify_tests {
+    //! Feature 613, T002: the effective switch per kind, and the service write keeping the kinds.
+
+    use super::*;
+    use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+    use micold_core::store::JsonFileStore;
+
+    fn catalog_with(settings: Settings) -> (tempfile::TempDir, Catalog) {
+        let dir = tempfile::tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        JsonFileSettingsStore::at(settings_path.clone())
+            .save(&settings)
+            .unwrap();
+        let catalog = Catalog::load(
+            Box::new(JsonFileStore::at(dir.path().join("catalog.json"))),
+            Box::new(JsonFileSettingsStore::at(settings_path)),
+        );
+        (dir, catalog)
+    }
+
+    /// Data-model "Effective switch": off for every kind while the master switch is off.
+    #[test]
+    fn notify_is_off_for_every_kind_while_the_master_switch_is_off() {
+        let (_dir, catalog) = catalog_with(Settings {
+            desktop_notifications: false,
+            ..Settings::default()
+        });
+        for kind in NotificationKind::ALL {
+            assert!(!catalog.notify(kind), "{kind:?}");
+        }
+    }
+
+    /// Data-model "Effective switch": with the master switch on, each kind follows its own switch.
+    #[test]
+    fn notify_follows_each_kind_while_the_master_switch_is_on() {
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::NeedsPermission, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        let (_dir, catalog) = catalog_with(Settings {
+            desktop_notifications: true,
+            notification_kinds: kinds,
+            ..Settings::default()
+        });
+        assert_eq!(catalog.notification_kinds(), kinds);
+        for kind in NotificationKind::ALL {
+            assert_eq!(catalog.notify(kind), kinds.is_on(kind), "{kind:?}");
+        }
+    }
+
+    /// The service's own settings write carries the kinds into the file it writes.
+    #[test]
+    fn the_service_write_keeps_the_notification_kinds() {
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::SessionError, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        let (dir, mut catalog) = catalog_with(Settings {
+            notification_kinds: kinds,
+            ..Settings::default()
+        });
+        catalog.set_desktop_notifications(false).unwrap();
+        let on_disk = JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .load()
+            .settings;
+        assert!(!on_disk.desktop_notifications);
+        assert_eq!(on_disk.notification_kinds, kinds);
+    }
+
+    fn stored(dir: &tempfile::TempDir) -> Settings {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .load()
+            .settings
+    }
+
+    /// T038: the kinds are stored whole, in memory and in the file.
+    #[test]
+    fn set_notification_kinds_stores_and_persists_them() {
+        let (dir, mut catalog) = catalog_with(Settings::default());
+        let mut kinds = NotificationKinds::default();
+        kinds.set(NotificationKind::LongTaskFinished, false);
+        kinds.set(NotificationKind::TurnFinished, true);
+        catalog.set_notification_kinds(kinds).unwrap();
+        assert_eq!(catalog.notification_kinds(), kinds);
+        assert_eq!(catalog.settings_wire().notification_kinds, kinds);
+        assert_eq!(stored(&dir).notification_kinds, kinds);
+    }
+
+    /// T056: the service clamps the threshold into 10–3600 s (FR-026) and reads it as a duration.
+    #[test]
+    fn set_long_task_threshold_clamps_and_stores_the_value() {
+        let (_dir, mut catalog) = catalog_with(Settings::default());
+        for (given, kept) in [(5, 10), (99999, 3600), (120, 120)] {
+            catalog.set_long_task_threshold(given).unwrap();
+            assert_eq!(
+                catalog.long_task_threshold(),
+                std::time::Duration::from_secs(kept),
+                "set_long_task_threshold({given})"
+            );
+            assert_eq!(catalog.settings_wire().long_task_threshold_secs, kept);
+        }
+    }
+
+    /// T056: the service's settings write carries the threshold into the file, from its own
+    /// setter and from an unrelated one.
+    #[test]
+    fn the_service_write_keeps_the_long_task_threshold() {
+        let (dir, mut catalog) = catalog_with(Settings::default());
+        catalog.set_long_task_threshold(45).unwrap();
+        assert_eq!(stored(&dir).long_task_threshold_secs, 45);
+
+        let (dir, mut catalog) = catalog_with(Settings {
+            long_task_threshold_secs: 300,
+            ..Settings::default()
+        });
+        catalog.set_desktop_notifications(false).unwrap();
+        assert_eq!(stored(&dir).long_task_threshold_secs, 300);
     }
 }
