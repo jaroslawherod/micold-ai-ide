@@ -348,6 +348,16 @@ the same in every window. While it is off nothing is notified; unread marks are 
 - [x] T116 Run quickstart §C and record it in the same section of `specs/039-session-attention-notifications/quickstart.md`: C3 (the session service in a container: `mise run image`, then B1, B6, B9) and C4 on the development host; C1 on a macOS bundle and C2 on an installed Windows build, including whether a click on a toast in the notification centre is reported (research R4, **Unverified**) — write the answer into R4; only if it contradicts the sentence T090 put in `docs/user-guide/install-windows.md`, correct that sentence. A pass that needs a machine that is not at hand is listed under *Follow-ups not done* in `specs/039-session-attention-notifications/autopilot.md`, with the steps to run
 - [x] T117 `mise run gate` green on the branch, and CI green on Linux, macOS and Windows for `crates/micold-client/src/shell/desktop_notify/` (Principle VI)
 
+## Phase 12: Bugfix BUG-567 — a failed write of the attention state is not retried
+
+- [x] T133 [BUG-567] Regression tests first: `crates/micold-daemon/tests/attention_write_retry.rs` — a read whose write failed is due again and written once the store takes writes; a failed write is not due again at once; the write does not hold the state lock; one `server::supervisor_tick` stores a read (covers `tdd/verification.md` T124). The first and third fail on `origin/main`
+- [x] T134 [BUG-567] `DaemonState::persist_attention`: copy the catalog under the lock (`Catalog::pending_write`), write after releasing it in issue order, set the flag again on `Err` with a back-off (1 s doubling to 60 s) and warn once; extract `server::supervisor_tick`. Depends on T133
+
+## Phase 13: Bugfix BUG-568 — a window that does not hold its project reports its session in view
+
+- [x] T135 [BUG-568] Regression tests first: `crates/micold-client/src/main_tests.rs` — a focused window sends `in_view: None` on `Displaced` and on `Refused { ProjectBusy }`, and the session again on `Attached`; `tests/attention_view_report.rs` — `view_facts` with `holds_project: false` has the main area taken. The three shell tests fail on `origin/main`
+- [x] T136 [BUG-568] `State::view_facts` and its callers take `WindowFacts { focused, holds_project }`; the shell passes `!active_project_displaced(app)`. Depends on T135
+
 ---
 
 ## Phase 12: Bugfix BUG-566 — a click counts only from the service that showed the notification (GitHub #566)

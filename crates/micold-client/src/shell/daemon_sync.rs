@@ -1523,7 +1523,8 @@ pub fn report_window_view(app: &mut App) {
     let Some(daemon) = &app.daemon else {
         return;
     };
-    if let Some(view) = app.core.view_report(app.window_focused) {
+    let window = window_facts(app);
+    if let Some(view) = app.core.view_report(window) {
         daemon.send(ClientMsg::WindowView {
             focused: view.focused,
             in_view: view.in_view,
@@ -1575,15 +1576,24 @@ pub fn on_notifier_reported(
     Task::none()
 }
 
+/// What this window has that decides what it has in view: keyboard focus, and whether it holds its
+/// active project (feature 039, 039 BUG-568).
+fn window_facts(app: &App) -> micold_client::app::WindowFacts {
+    micold_client::app::WindowFacts {
+        focused: app.window_focused,
+        holds_project: !active_project_displaced(app),
+    }
+}
+
 /// Send the attention claims a catalog snapshot gives rise to (feature 039, research R3): every
 /// window sees the same change and claims it, and the service grants it to one. `welcome` is the
 /// snapshot a `Welcome` carried.
 fn claim_attention_events(app: &mut App, catalog: &CatalogSnapshot, welcome: bool) {
+    let window = window_facts(app);
     let claims = if welcome {
-        app.core.attention_on_welcome(catalog, app.window_focused)
+        app.core.attention_on_welcome(catalog, window)
     } else {
-        app.core
-            .attention_on_catalog_changed(catalog, app.window_focused)
+        app.core.attention_on_catalog_changed(catalog, window)
     };
     if let Some(daemon) = &app.daemon {
         for claim in claims {

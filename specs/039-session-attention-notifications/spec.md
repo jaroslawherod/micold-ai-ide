@@ -11,7 +11,7 @@
 ## Terms
 
 - **Awaiting input**: the existing session activity state the sidebar's activity indicator already shows when a session's AI CLI has stopped and waits for the user — its turn ended, it asks for a permission, or it sits at an idle prompt. This feature adds no new way of detecting it.
-- **In view**: a session is in view when all three hold: it is the selected session of a window; that window has the operating system's keyboard focus; and the window's main area shows the session — its AI conversation or one of its regular terminal tabs — rather than a screen that takes the main area over, such as Settings. A session is **not in view** when no window of the application is open, when another session or another project is selected, when its window is unfocused, minimised, or on another desktop, or when Settings or another such screen fills the main area.
+- **In view**: a session is in view when all three hold: it is the selected session of a window; that window has the operating system's keyboard focus; and the window's main area shows the session — its AI conversation or one of its regular terminal tabs — rather than a screen that takes the main area over, such as Settings. A session is **not in view** when no window of the application is open, when another session or another project is selected, when its window is unfocused, minimised, or on another desktop, or when Settings or another such screen fills the main area, or when its window was displaced from the session's project or refused it, and shows the takeover banner in its place (BUG-568).
 - **Desktop notification**: a notification shown by the operating system's own notification facility, outside the application's window. The application's existing in-window notices are a different thing and are called **in-app notices** here.
 - **Session service**: where sessions run — directly on the user's computer, or in a container (the sandbox).
 
@@ -262,3 +262,8 @@ A developer who shares their screen, or who finds the notifications distracting,
 - **Dependencies**: the session activity states and their detection for Claude Code, GitHub Copilot and Pi Coding Agent; the project switcher and background projects (008-background-project-switching); session row labels (032-untitled-session-labels); the Settings screen and its stored file.
 
 **Bugfix**: 2026-10-06 — BUG-566 (GitHub #566). FR-015b and the edge case *Forged or out-of-date click reports* added: on Linux a click counts only as reported by the service that showed the notification. See `bugs/BUG-566.md`.
+
+**Bugfix**: 2026-10-05 — BUG-568 Terms, *In view*: a window displaced from its project, or refused it,
+has no session in view. It kept reporting its selected session, so that session's attention events
+were not counted and its unread mark was cleared. See `bugs/BUG-568.md`. BUG-567 (a failed write of
+the attention state is retried) changes no requirement; see `bugs/BUG-567.md`.

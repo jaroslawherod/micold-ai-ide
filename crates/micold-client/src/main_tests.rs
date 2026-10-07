@@ -8474,3 +8474,122 @@ mod attention_glue {
         assert_eq!(action_order(work), ["raise", "message"]);
     }
 }
+
+// --- `039` BUG-568: a window that does not hold its project has no session in view ------------
+
+/// A focused, connected window on `/repo/demo` with one of its sessions selected, its outbox
+/// drained: the window reports that session in view, as a precondition the tests below check.
+fn focused_on_a_session_of(
+    project: &Path,
+) -> (
+    App,
+    iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    SessionId,
+) {
+    let session = SessionId::new();
+    let mut app = app_on_project(project);
+    app.window_focused = true;
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let _ = update(
+        &mut app,
+        Message::Connection(ConnectionMsg::Connected {
+            outbox: micold_client::daemon::Outbox::new(tx),
+            catalog: snapshot_with(
+                &project.to_string_lossy(),
+                vec![summary(session, "s", WireLifecycle::Running)],
+            ),
+            settings: quiet_settings(),
+        }),
+    );
+    let _ = update(
+        &mut app,
+        Message::Session(micold_client::features::session::Msg::Selected(session)),
+    );
+    assert_eq!(
+        window_views(&mut rx).last(),
+        Some(&(true, Some(session))),
+        "fixture check: a focused window that holds its project has its selected session in view"
+    );
+    (app, rx, session)
+}
+
+/// Every `WindowView` on the wire since the last drain, as `(focused, in_view)`.
+fn window_views(
+    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) -> Vec<(bool, Option<SessionId>)> {
+    let mut views = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        if let ClientMsg::WindowView { focused, in_view } = msg {
+            views.push((focused, in_view));
+        }
+    }
+    views
+}
+
+/// The reported defect (#568): another window takes the project over, and this one keeps telling
+/// the service it has the selected session in view, so that session's attention events are taken
+/// as watched and its unread mark is cleared. The window does not show it any more.
+#[test]
+fn a_window_displaced_from_its_project_reports_no_session_in_view() {
+    let project = PathBuf::from("/repo/demo");
+    let (mut app, mut rx, _) = focused_on_a_session_of(&project);
+
+    let _ = update(
+        &mut app,
+        Message::Connection(ConnectionMsg::Event(DaemonMsg::Displaced {
+            project: project.clone(),
+            by: other_window(),
+        })),
+    );
+
+    assert_eq!(
+        window_views(&mut rx),
+        vec![(true, None)],
+        "a displaced window still has focus, but no session in view"
+    );
+}
+
+/// Refused the project on a (re)attach (`010` BUG-023): the same read-only state, the same report.
+#[test]
+fn a_window_refused_its_project_reports_no_session_in_view() {
+    let project = PathBuf::from("/repo/demo");
+    let (mut app, mut rx, _) = focused_on_a_session_of(&project);
+
+    let _ = update(
+        &mut app,
+        Message::Connection(ConnectionMsg::Event(DaemonMsg::Refused {
+            reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                project: project.clone(),
+                holder: other_window(),
+                since_secs: 3,
+            },
+        })),
+    );
+
+    assert_eq!(window_views(&mut rx), vec![(true, None)]);
+}
+
+/// Taking the project back brings the selected session back into view.
+#[test]
+fn a_window_that_takes_its_project_back_reports_the_session_in_view_again() {
+    let project = PathBuf::from("/repo/demo");
+    let (mut app, mut rx, session) = focused_on_a_session_of(&project);
+    let _ = update(
+        &mut app,
+        Message::Connection(ConnectionMsg::Event(DaemonMsg::Displaced {
+            project: project.clone(),
+            by: other_window(),
+        })),
+    );
+    let _ = window_views(&mut rx);
+
+    let _ = update(
+        &mut app,
+        Message::Connection(ConnectionMsg::Event(DaemonMsg::Attached {
+            project: project.clone(),
+            sessions: Vec::new(),
+        })),
+    );
+
+    assert_eq!(window_views(&mut rx), vec![(true, Some(session))]);
+}

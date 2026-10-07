@@ -243,6 +243,8 @@ struct Inner {
     /// How far a test has moved the turn clock forward (feature 613, T071), set by
     /// [`DaemonState::advance_turn_clock`]; zero outside tests.
     turn_clock_ahead: std::time::Duration,
+    /// When the attention write last failed, when it may be tried again (BUG-567).
+    attention_retry: AttentionRetry,
 }
 
 impl Inner {
@@ -257,6 +259,39 @@ impl Inner {
     /// The turn clock's reading: [`micold_core::clock::now`], plus what a test advanced it by.
     fn turn_now(&self) -> micold_core::clock::Uptime {
         micold_core::clock::now().saturating_add(self.turn_clock_ahead)
+    }
+}
+
+/// The back-off of a failing attention write (feature 039, BUG-567). A read-only data directory
+/// fails every write; tried and warned about on every 250 ms tick, it would fill the log.
+#[derive(Debug, Default)]
+struct AttentionRetry {
+    /// The write is not tried before this. `None` while writes succeed.
+    not_before: Option<Instant>,
+    /// The wait after the next failure.
+    delay: Option<std::time::Duration>,
+}
+
+/// The first wait after a failed attention write, doubled on each further failure up to
+/// [`ATTENTION_RETRY_MAX`].
+const ATTENTION_RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(1);
+const ATTENTION_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
+
+impl AttentionRetry {
+    fn due(&self, now: Instant) -> bool {
+        self.not_before.is_none_or(|at| now >= at)
+    }
+
+    /// Whether the write failed before, and has not succeeded since.
+    fn failing(&self) -> bool {
+        self.delay.is_some()
+    }
+
+    /// A write failed at `now`: wait before the next one.
+    fn failed(&mut self, now: Instant) {
+        let delay = self.delay.unwrap_or(ATTENTION_RETRY_FIRST);
+        self.not_before = Some(now + delay);
+        self.delay = Some((delay * 2).min(ATTENTION_RETRY_MAX));
     }
 }
 
@@ -573,6 +608,7 @@ impl DaemonState {
                 long_task_threshold_override: None,
                 turn_clock_ahead: std::time::Duration::ZERO,
                 reviews: crate::review::Reviews::default(),
+                attention_retry: AttentionRetry::default(),
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1389,22 +1425,57 @@ impl DaemonState {
 
     /// Whether an attention event waits to be written (feature 039); the supervisor tick asks
     /// before it spends a `spawn_blocking` hop on [`Self::persist_attention`].
+    ///
+    /// Not while a failed write waits out its back-off (BUG-567).
     pub fn has_unsaved_attention(&self) -> bool {
-        self.lock().attention_unsaved
+        let inner = self.lock();
+        inner.attention_unsaved && inner.attention_retry.due(Instant::now())
     }
 
     /// Write the attention events counted since the last write (feature 039, FR-008a).
     ///
-    /// **Blocking**, like [`Self::record_observed_names`]: it runs in the supervisor's
-    /// `spawn_blocking` hop. A failed write is logged and the count stays in memory, so the next
-    /// event writes it again; a read-only data directory is not a session failure.
+    /// **Blocking**: it runs in the supervisor's `spawn_blocking` hop. The catalog is copied under
+    /// the state lock and written after it is released, so no user of the lock waits for the disk
+    /// (BUG-567).
+    ///
+    /// A failed write is due again after a back-off ([`Self::has_unsaved_attention`]), so a read
+    /// is not lost at the next restart when no later event writes the catalog (BUG-567). It is
+    /// warned about once until a write succeeds; a read-only data directory is not a session
+    /// failure.
     pub fn persist_attention(&self) {
-        let mut inner = self.lock();
-        if !std::mem::take(&mut inner.attention_unsaved) {
+        let pending = {
+            let mut inner = self.lock();
+            if !std::mem::take(&mut inner.attention_unsaved) {
+                return;
+            }
+            inner.catalog.pending_write()
+        };
+        let Some(pending) = pending else {
             return;
-        }
-        if let Err(err) = inner.catalog.persist() {
-            tracing::warn!(%err, "could not store the attention events; they are still counted");
+        };
+        let result = pending.write();
+        let mut inner = self.lock();
+        match result {
+            Ok(_) => {
+                if inner.attention_retry.failing() {
+                    tracing::info!("stored the attention events again");
+                }
+                inner.attention_retry = AttentionRetry::default();
+            }
+            Err(err) => {
+                if inner.attention_retry.failing() {
+                    tracing::debug!(%err, "could not store the attention events; will retry");
+                } else {
+                    tracing::warn!(
+                        %err,
+                        "could not store the attention events; they are still counted, and the \
+                         write will be retried"
+                    );
+                }
+                // Due again once the back-off has passed.
+                inner.attention_unsaved = true;
+                inner.attention_retry.failed(Instant::now());
+            }
         }
     }
 
