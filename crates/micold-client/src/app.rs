@@ -385,6 +385,9 @@ impl State {
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.
             && self.settings.settings_draft.is_none()
+            // The Changes view replaces the terminal pane too (feature 482, V1); without this
+            // `KeyboardElsewhere` strips the review composer's focus while a session is selected.
+            && self.changes.open.is_none()
     }
 
     /// What decides which session this window has in view (feature 039, FR-002).
@@ -397,7 +400,7 @@ impl State {
     pub fn view_facts(&self, window_focused: bool) -> micold_core::attention::ViewFacts {
         micold_core::attention::ViewFacts {
             window_focused,
-            main_area_taken: self.settings.settings_draft.is_some(),
+            main_area_taken: self.settings.settings_draft.is_some() || self.changes.open.is_some(),
             selected: self.session.active,
         }
     }

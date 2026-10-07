@@ -97,6 +97,32 @@ fn view_facts_has_the_main_area_taken_while_settings_is_open() {
 }
 
 #[test]
+fn view_facts_has_the_main_area_taken_while_the_changes_view_is_open() {
+    // Feature 482 V1: the Changes view replaces the terminal pane, as Settings does, so the
+    // selected session is not in view behind it.
+    use micold_client::features::changes;
+    let (mut state, session) = state_with_selected_session();
+
+    changes::update(
+        &mut state.changes,
+        changes::Msg::Opened {
+            project: "/repo".into(),
+            entry: SessionLocation::Worktree("feat-x".to_string()),
+        },
+    );
+
+    assert_eq!(
+        state.view_facts(true),
+        ViewFacts {
+            window_focused: true,
+            main_area_taken: true,
+            selected: Some(session),
+        },
+        "the Changes view fills the main area in place of the session, which stays selected"
+    );
+}
+
+#[test]
 fn showing_another_tab_of_the_selected_session_leaves_view_facts_equal() {
     // U178 (US1 scenario 10, US2 scenario 12).
     let (mut state, session) = state_with_selected_session();
