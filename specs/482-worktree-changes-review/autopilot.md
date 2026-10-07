@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v1va8z
 - **Started**: 2026-10-06
 - **Phase**: implement
-- **Next step**: milestone M4 (T050–T063)
+- **Next step**: milestone M5 (T064–T075)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T026 | full | Changes view with the changed-file list (MVP) | #624 | done |
 | M2 | T027–T040 | full | Unified diff of the selected file | #624 | done |
 | M3 | T041–T049 | full | Side-by-side layout, syntax colouring, kept layout | #624 | done |
-| M4 | T050–T063 | full | Comments on lines and ranges | — | in progress |
+| M4 | T050–T063 | full | Comments on lines and ranges | #624 | done |
 | M5 | T064–T075 | full | Send comments to the running session | — | todo |
 | M6 | T076–T080 | full | Send when no session is running | — | todo |
 | M7 | T081–T089 | full | Live refresh and outdated comments | — | todo |
@@ -76,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code-review high, scoped 9dbcf9e9..HEAD) | 1 | e64ae19d83f1642c7bdf02e3f2843609f3dc188e:2ada2a4a7c1723fd4dc39e3a3cbd344b1bfc35cf | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (Sensor key carries whether the height is known, so a dropped height re-measures); F4 MINOR fixed (edit composer closes when its comment is gone); F2, F3 MINOR declined |
 | Review A M4 (code-review high, scoped fix diff, sonnet) | 2 | a6006bfc6d7c4efa1b155d6c2a023138d3f1209b:2d659f8afe3ae846e58bcb832f84cb766beb1671 | CLEAN |
 | Gate M4 (scoped, workspace) | scoped | 2d659f8a + review_edit fixture path | red twice then green except the 6 root-only permission tests: clippy `duplicated_attributes` (review_edit's `#[allow(dead_code)]`), `documentation_is_not_read` ("README.md" literal in review_edit's seed, now `src/lib.rs`); one run lost to a full disk |
+| Gate M4 (full, raw commands, 0562c7e0) | full | green except the 6 root-only permission tests (pass in CI): fmt, clippy core+workspace, workspace tests, scripts/tests/*.test.sh |
 | Visual pass M4 (T063) | 1 | a46f1c19 | B7, B8 (dark), B14 (light, after restart) pass; Send to session is M5 |
 | Review B M4 (conformance, sonnet) | 1 | eecc77bb3f560f5dfed9108b8047f6423c45ad54:a46f1c19c1d7839c0e46269f3e52c3dd7bfceedb | CLEAN; 2 MINOR not fixed (F1 `review_edit` pushes `ReviewChanged` to every client, not only the project's, and snapshots the catalog per edit; F2 Verify not runnable in its sandbox, the scoped gate ran it) |
 
@@ -90,9 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 unit 7 stopped at the context cap. Local commits only (not pushed). Done: the four architecture gates fixed (green); review A M4 round 1 (1 MAJOR + 1 MINOR fixed, 2 MINOR declined) and round 2 CLEAN; scoped gate green except the 6 root-only tests (needed fixes: clippy duplicated_attributes and a "README.md" literal in daemon `review_edit`); T063 visual pass recorded (`visual-pass/m4.md`), T063 ticked — every M4 task done.
-Review B M4 round 1 returned CLEAN (row in *Review rounds*).
-Next: the full gate once (verify.md step 3: fmt, clippy core + workspace `-D warnings`, `cargo test --workspace`, `scripts/tests/*.test.sh`; client clippy has not run since the F1/F4 fixes), try a normal push (do not bypass the hook), write the M4 PR-body section to scratchpad `pr-body-482-M4.md`, set M4 done. Disk: ~5 GB free; delete linked test binaries in `target-shared/debug/deps` before a workspace build (`find target-shared/debug/deps -maxdepth 1 -type f -perm -u+x ! -name "*.so" -delete`) or the link dies with a bus error.
+None.
 
 ## Open escalation
 
