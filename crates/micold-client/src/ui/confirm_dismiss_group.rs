@@ -8,11 +8,10 @@ use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self};
+use micold_core::tokens::{self, Roles};
 
 /// The dialog body for the group named `name`.
-pub fn modal<'a>(name: &str, scheme: ColorScheme) -> Element<'a, Message> {
-    let r = tokens::roles(scheme);
+pub fn modal<'a>(name: &str, r: Roles) -> Element<'a, Message> {
     let fields = material::dialog::fields(column![
         Text::new(format!("Dismiss “{name}”?"), TypeRole::Headline, r),
         Text::new(DISMISS_CONFIRMATION, TypeRole::Body, r).muted(),
@@ -43,5 +42,5 @@ pub fn dialog<'a>(
         .iter()
         .find(|group| group.id == target.group)
         .map(|group| group.name.as_str())?;
-    Some(modal(name, scheme))
+    Some(modal(name, tokens::roles(scheme)))
 }
