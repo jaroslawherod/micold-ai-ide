@@ -26,4 +26,4 @@ The script waits for the `ci complete` check, the only required one, and merges 
 | `CHECKLESS <n> <reason>` | [ci.md](ci.md), *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | [ci.md](ci.md), *Merge problems*, then run the script again. |
 | `CLOSED <n>` | Someone closed the PR. Escalate (category 1); never reopen it unasked. |
-| `TIMEOUT <n> <what>` or no result line | Check `gh auth status` and the PR by hand, then run the script again. |
+| `TIMEOUT <n> <what>` or no result line | Check `gh auth status` and the PR by hand, then run the script again. A timeout means 6 h passed: CI is stuck or queued, so say so in one line and re-arm once; do not re-arm a third time without asking. |
