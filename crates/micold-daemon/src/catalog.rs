@@ -433,6 +433,26 @@ impl Catalog {
         }
     }
 
+    /// A project's run groups (feature 483); none for the ephemeral catalog.
+    pub fn load_runs(&self, project: &Path) -> micold_core::runs::store::RunsFile {
+        self.project_store
+            .as_ref()
+            .map(|store| store.store.load_runs(project))
+            .unwrap_or_default()
+    }
+
+    /// Write a project's run groups (feature 483, W5); the ephemeral catalog keeps nothing.
+    pub fn save_runs(
+        &self,
+        project: &Path,
+        file: &micold_core::runs::store::RunsFile,
+    ) -> io::Result<()> {
+        match &self.project_store {
+            Some(store) => store.store.save_runs(project, file),
+            None => Ok(()),
+        }
+    }
+
     /// Set the Changes view's diff layout, persisting atomically (feature 482, R12).
     pub fn set_diff_layout(&mut self, layout: micold_core::settings::DiffLayout) -> io::Result<()> {
         self.settings.diff_layout = layout;
@@ -1027,6 +1047,10 @@ impl Catalog {
             // Feature 482 (W11): its review comments go with it.
             if let Err(err) = store.store.remove_reviews(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove the review comments");
+            }
+            // Feature 483 (W5): its run groups go with it.
+            if let Err(err) = store.store.remove_runs(path) {
+                tracing::warn!(project = %path.display(), %err, "failed to remove the run groups");
             }
         }
         Ok(ids)

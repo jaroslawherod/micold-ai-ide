@@ -456,3 +456,73 @@ fn a_free_name_still_creates_exactly_as_before() {
     assert!(git.add_existing_calls(&repo).is_empty());
     assert!(git.add_reset_calls(&repo).is_empty());
 }
+
+/// Feature 483 — a run of a group starts its new branch at the group's base branch: the progress
+/// line names that start point, not HEAD.
+#[test]
+fn a_new_branch_at_a_start_point_names_it_in_the_progress_line() {
+    let git = FakeGit::new().with_repo("/repo");
+    let repo = PathBuf::from("/repo");
+    let mut events: Vec<CreateProgressEvent> = Vec::new();
+    let mode = CreateMode::NewBranchAt {
+        start: "base".into(),
+    };
+
+    create_worktree(
+        &git,
+        &repo,
+        &target(),
+        &names(),
+        false,
+        &mode,
+        &[],
+        &ProvenanceView::none(),
+        &mut |e| events.push(e),
+    )
+    .unwrap();
+
+    assert!(git.branch_exists(&repo, &names().branch).unwrap());
+    assert!(
+        events
+            .iter()
+            .any(|e| e.line.contains("git worktree add -b") && e.line.ends_with(" base")),
+        "the command starts the branch at the base branch: {events:?}"
+    );
+}
+
+/// Feature 483 — a run's branch that already exists fails the run and leaves the branch alone:
+/// starting at a given point never reuses or overwrites a branch.
+#[test]
+fn a_new_branch_at_a_start_point_refuses_a_taken_name_without_mutation() {
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "feat/abc-123-login");
+    let repo = PathBuf::from("/repo");
+
+    let err = create_worktree(
+        &git,
+        &repo,
+        &target(),
+        &names(),
+        false,
+        &CreateMode::NewBranchAt {
+            start: "base".into(),
+        },
+        &[],
+        &ProvenanceView::none(),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(err, CreateError::SituationChanged);
+    assert!(git.worktrees(&repo).is_empty());
+}
+
+/// Feature 483 — the start-point mode is the daemon's own: it never goes over the wire.
+#[test]
+fn a_new_branch_at_a_start_point_is_never_serialised() {
+    let mode = CreateMode::NewBranchAt {
+        start: "base".into(),
+    };
+    assert!(serde_json::to_string(&mode).is_err());
+    assert!(serde_json::from_str::<CreateMode>(r#"{"NewBranchAt":{"start":"base"}}"#).is_err());
+}

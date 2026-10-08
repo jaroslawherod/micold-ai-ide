@@ -240,6 +240,8 @@ struct Inner {
     attention_unsaved: bool,
     /// Review comments per project and entry (feature 482), read on first use.
     reviews: crate::review::Reviews,
+    /// Run groups per project (feature 483), read on first use.
+    runs: crate::runs::Runs,
     /// A test's override of the long-task threshold (feature 613, C2), set by
     /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
     /// decides ([`Inner::effective_long_task_threshold`]).
@@ -641,6 +643,7 @@ impl DaemonState {
                 long_task_threshold_override: None,
                 turn_clock_ahead: std::time::Duration::ZERO,
                 reviews: crate::review::Reviews::default(),
+                runs: crate::runs::Runs::default(),
                 attention_retry: AttentionRetry::default(),
             }),
             next_id: AtomicU64::new(1),
@@ -2159,6 +2162,54 @@ impl DaemonState {
         inner.reviews.pushes_on_attach(&inner.catalog, project)
     }
 
+    /// The `RunGroupsChanged` a client that has just attached to `project` is owed (feature 483).
+    pub fn run_groups_on_attach(&self, project: &Path) -> DaemonMsg {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner.runs.changed(&inner.catalog, project)
+    }
+
+    /// Record a new run group of `project`, written before it is held (feature 483, W5). Pushes
+    /// nothing: the caller answers first, then [`Self::broadcast_run_groups`].
+    pub fn add_run_group(
+        &self,
+        project: &Path,
+        group: micold_core::runs::RunGroup,
+    ) -> Result<(), crate::review::Refusal> {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner.runs.add(&inner.catalog, project, group)
+    }
+
+    /// Push `project`'s run groups to every client (feature 483).
+    pub fn broadcast_run_groups(&self, project: &Path) {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        let msg = inner.runs.changed(&inner.catalog, project);
+        Self::broadcast_locked(inner, vec![msg]);
+    }
+
+    /// Move a run to `status` (and record its session) when the transition is allowed, and push
+    /// the project's run groups (feature 483, W2).
+    pub fn set_run_status(
+        &self,
+        project: &Path,
+        group: micold_core::runs::GroupId,
+        number: u8,
+        status: micold_core::runs::RunStatus,
+        session: Option<SessionId>,
+    ) {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        if let Some(msg) =
+            inner
+                .runs
+                .set_run(&inner.catalog, project, group, number, status, session)
+        {
+            Self::broadcast_locked(inner, vec![msg]);
+        }
+    }
+
     /// Push a full `CatalogChanged` snapshot to every connected client (FR-011; idempotent).
     pub fn broadcast_catalog(&self) {
         let catalog = Self::snapshot_locked(&self.lock());
@@ -3151,6 +3202,8 @@ impl DaemonState {
             inner.worktrees.remove(path);
             // Feature 482 (W11): the catalog deleted its review file; memory forgets them too.
             inner.reviews.forget_project(path);
+            // Feature 483 (W5): and its run groups.
+            inner.runs.forget_project(path);
             let ptys = Self::remove_live_by_ids(&mut inner, ids.clone());
             (ids, ptys)
         };

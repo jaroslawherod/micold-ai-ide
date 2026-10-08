@@ -145,8 +145,29 @@ pub enum RunStatus {
 impl RunStatus {
     /// Whether a run in this status may move to `next` — the only transitions there are.
     pub fn can_become(&self, next: &RunStatus) -> bool {
-        let _ = next;
-        false
+        use RunStatus::*;
+        matches!(
+            (self, next),
+            (Creating, Starting)
+                | (
+                    Creating,
+                    Failed {
+                        step: RunStep::Worktree,
+                        ..
+                    }
+                )
+                | (Starting, Prompted)
+                | (Starting, PromptNotDelivered { .. })
+                | (
+                    Starting,
+                    Failed {
+                        step: RunStep::Session,
+                        ..
+                    }
+                )
+                | (Prompted, Picked)
+                | (PromptNotDelivered { .. }, Picked)
+        )
     }
 
     /// Whether the run failed.
@@ -225,18 +246,70 @@ impl std::error::Error for InvalidGroup {}
 impl RunGroup {
     /// A new group: `MIN_RUNS..=MAX_RUNS` runs numbered exactly `1..=runs.len()`, no winner.
     pub fn new(new: NewGroup) -> Result<Self, InvalidGroup> {
-        let _ = new;
-        Err(InvalidGroup(String::new()))
+        let count = new.runs.len();
+        if !(MIN_RUNS..=MAX_RUNS).contains(&count) {
+            return Err(InvalidGroup(format!(
+                "a group takes {MIN_RUNS} to {MAX_RUNS} runs, not {count}"
+            )));
+        }
+        let numbered_from_one = new
+            .runs
+            .iter()
+            .zip(1..)
+            .all(|(run, expected)| usize::from(run.number) == expected);
+        if !numbered_from_one {
+            return Err(InvalidGroup(format!(
+                "a new group's runs are numbered 1 to {count} in order"
+            )));
+        }
+        Ok(Self {
+            id: new.id,
+            name: new.name,
+            naming: new.naming,
+            prompt: new.prompt,
+            base_branch: new.base_branch,
+            base_commit: new.base_commit,
+            created: new.created,
+            runs: new.runs,
+            winner: None,
+        })
     }
 
     /// The invariants a group keeps for its whole life, checked on load.
     pub fn validate(&self) -> Result<(), InvalidGroup> {
+        if self.runs.is_empty() {
+            return Err(InvalidGroup("a group holds at least one run".into()));
+        }
+        if self.runs.len() > MAX_RUNS {
+            return Err(InvalidGroup(format!(
+                "a group holds at most {MAX_RUNS} runs"
+            )));
+        }
+        let in_range = |number: u8| (1..=MAX_RUNS).contains(&usize::from(number));
+        let mut previous = 0;
+        for run in &self.runs {
+            if !in_range(run.number) || run.number <= previous {
+                return Err(InvalidGroup(format!(
+                    "run numbers are distinct, increasing and within 1 to {MAX_RUNS}; #{} is not",
+                    run.number
+                )));
+            }
+            previous = run.number;
+        }
+        if let Some(winner) = self.winner.filter(|&winner| !in_range(winner)) {
+            return Err(InvalidGroup(format!(
+                "the winner #{winner} is outside 1 to {MAX_RUNS}"
+            )));
+        }
         Ok(())
     }
 
     /// How many runs failed.
     pub fn failed_count(&self) -> usize {
-        self.runs.iter().filter(|run| run.status.is_failed()).count()
+        self.runs
+            .iter()
+            .filter(|run| run.status.is_failed())
+            .count()
     }
 }
 
