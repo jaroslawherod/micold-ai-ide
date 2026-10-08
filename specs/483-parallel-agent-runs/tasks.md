@@ -121,7 +121,7 @@ the 3 runs under it and the 2 others outside; restart and see the same.
 - [x] T036 [US2] Implement the group row's menu (**Dismiss group**) in `crates/micold-client/src/features/sidebar.rs` and the dismiss confirmation in `crates/micold-client/src/features/runs.rs` until T030 passes
 - [x] T037 [US2] Render the group row's menu in `crates/micold-client/src/ui/sidebar.rs` and register the dismiss confirmation in `crates/micold-client/src/overlay/registry.rs` (parallel-surfaces G4, G5)
 - [x] T038 [P] [US2] Add to `docs/user-guide/parallel-runs.md` what a restart keeps, interrupted runs, deleting a run, and Dismiss group (FR-022 part)
-- [ ] T039 [US2] Run the visual pass for quickstart B7, B21, B22 and record the results under quickstart.md § Results § B
+- [x] T039 [US2] Run the visual pass for quickstart B7, B21, B22 and record the results under quickstart.md § Results § B
 
 **Checkpoint**: groups are visible, persistent and dismissable.
 

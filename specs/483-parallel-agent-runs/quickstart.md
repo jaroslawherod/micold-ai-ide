@@ -76,6 +76,16 @@ driven (no fixture daemon in this container); the reducer, sidebar and dialog ru
 covered by `features_runs`, `features_sidebar` and the gallery gates, and B1–B6 stay for the
 milestone that wires the daemon end to end.
 
+**M2 (2026-10-08, Xvfb, showcase, light and dark):** the Dismiss group dialog ("Dismiss “login
+page”?", the sentence that worktrees, branches and sessions stay as they are, a primary Dismiss
+group and a Cancel) and the TreeView group row poses are readable in both schemes
+(`visual-pass/m2-dismiss-group-light.png`, `-dark.png`). B7, B21 and B22 need a live client with
+a daemon that can be restarted or killed mid-run, which this container cannot drive; they stay
+for a pass with a display. Their rules are covered by `run_group_persist` (restart keeps groups
+and run order, interrupted runs read Failed "interrupted", half-created folders cleaned),
+`run_group_create` (delete follows, Dismiss group leaves worktrees and sessions, an emptied group
+disappears) and `features_runs` (menu and confirmation).
+
 ### §C — macOS and Windows
 
 (filled when run, or recorded as not run with what CI covers instead)
