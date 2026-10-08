@@ -79,7 +79,47 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
         // The reducer sends nothing else; a new request needs a route above.
         Some(Effect::Send(_)) => {}
         Some(Effect::ReadSummaries(reads)) => {
-            return Task::batch(reads.into_iter().map(|read| read_summary(app, read)));
+            return Task::batch(reads.into_iter().map(|read| {
+                read_summary(app, read, |seq, run, result| Msg::SummaryRead {
+                    seq,
+                    run,
+                    result,
+                })
+            }));
+        }
+        // The cleanup offer's fresh reads (K3, K4) answer `CleanupRead`.
+        Some(Effect::ReadCleanup(reads)) => {
+            return Task::batch(reads.into_iter().map(|read| {
+                read_summary(app, read, |seq, run, result| Msg::CleanupRead {
+                    seq,
+                    run,
+                    result,
+                })
+            }));
+        }
+        // The offer's deletes: the existing Delete, one per loser (K4, FR-016).
+        Some(Effect::SendEach(msgs)) => {
+            for msg in msgs {
+                if let ClientMsg::WorktreeDelete {
+                    project,
+                    dir_name,
+                    stop_sessions,
+                    delete_branch,
+                    ..
+                } = msg
+                {
+                    let dir = dir_name.clone();
+                    send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
+                        ClientMsg::WorktreeDelete {
+                            req,
+                            project,
+                            dir_name,
+                            stop_sessions,
+                            delete_branch,
+                        }
+                    });
+                }
+            }
         }
     }
     Task::none()
@@ -88,7 +128,11 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
 /// Read one run's counts off the UI thread (C2, T045) and answer [`Msg::SummaryRead`]. A run
 /// whose directory cannot be read here (no project, or the session service runs on another
 /// computer, as for `shell/changes.rs`) answers with the reason instead of counts.
-fn read_summary(app: &App, read: SummaryRead) -> Task<Message> {
+fn read_summary(
+    app: &App,
+    read: SummaryRead,
+    answer: fn(u64, u8, Result<runs::RunSummary, String>) -> Msg,
+) -> Task<Message> {
     let SummaryRead {
         seq,
         run,
@@ -109,6 +153,6 @@ fn read_summary(app: &App, read: SummaryRead) -> Task<Message> {
             .await
             .unwrap_or_else(|joined| Err(joined.to_string()))
         },
-        move |result| Message::Runs(Msg::SummaryRead { seq, run, result }),
+        move |result| Message::Runs(answer(seq, run, result)),
     )
 }

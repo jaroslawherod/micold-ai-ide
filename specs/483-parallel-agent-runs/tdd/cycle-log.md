@@ -76,3 +76,22 @@ Red by mutation (one build each, then reverted):
 - in-progress-merge check removed from `merge_in_checkout` → `a_merge_the_user_left_in_progress_is_refused_and_kept` and `a_conflicting_merge_is_undone_by_the_call_that_started_it` FAILED
 - Creating/Starting runs no longer disable Pick → `pick_is_disabled_on_every_row_with_the_reason_while_a_run_is_creating_or_starting` and `a_pick_that_is_not_offered_sends_nothing` FAILED
 - uncommitted-files refusal skipped in `ops::pick_run` → `w3_uncommitted_changes_refuse_naming_the_files_until_committed` FAILED
+
+## M5 — Clean up the losers (T062–T067)
+
+| Behaviour | Tasks | Evidence | Result |
+|---|---|---|---|
+| Offer opens once with a heading, a row per loser (sessions, branch on) and a fresh read per loser; dismissing emits nothing and it does not reopen | T062 → T063 | `features_runs` cleanup tests; first run compile-red against the missing `CleanupOffer` | `cargo test -p micold-client --test features_runs` green |
+| Pending, failed or uncommitted loser starts unselected and is never removable unconfirmed; failed read = uncommitted | T062 → T063 | `a_loser_whose_read_is_pending_failed_or_uncommitted…`, `a_failed_read_counts_as_uncommitted` | green |
+| Confirm re-reads every selected loser first, sends nothing until they answer, then one `WorktreeDelete { stop_sessions: true, delete_branch }` per removable loser | T062 → T063 | `confirming_reads_the_selected_again…`, `keeping_the_branch_is_passed_through…` | green |
+| Turned-uncommitted or selected-uncommitted loser: second confirmation naming it; declining removes the rest; dismissing removes nothing | T062 → T063 | two second-confirmation tests | green |
+| Choice frozen during the re-read; a late first read keeps the user's untick (review A M5 F1, F2) | fix | test written first for the fix | green |
+| Offer and second confirmation as `Modal`s, registered; showcase poses | T064, T065 | `overlay_registry`, `popover_displacement`, `showcase_completeness` | green |
+
+The tests and the reducer were written in one session, as in M2–M4: the first run was compile-red. Red by mutation is below.
+
+Red by mutation (one build each, then reverted):
+
+- `removable()` dropping the clean-or-confirmed condition → `a_failed_read_counts_as_uncommitted`, `a_loser_whose_read_is_pending_failed_or_uncommitted…` and `a_loser_that_turned_uncommitted_needs_the_second_confirmation…` FAILED
+- the toggle freeze (`is_editable`) removed → `the_choice_is_frozen_while_confirm_re_reads…` FAILED
+

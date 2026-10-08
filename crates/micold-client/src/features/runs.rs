@@ -42,6 +42,10 @@ pub struct State {
     pub pick_target: Option<PickTarget>,
     /// The open Compare view (C1–C5); present only while it is shown.
     pub compare: Option<CompareView>,
+    /// The cleanup offer shown after a successful pick (K1–K6); present only while it is shown.
+    pub cleanup: Option<CleanupOffer>,
+    /// Groups whose cleanup offer was already shown: it never comes back (K6).
+    pub offered: BTreeSet<GroupId>,
     /// The next summary read's sequence number.
     pub next_seq: u64,
     /// The request the root left for the shell while it interpreted an outcome (opening the
@@ -72,6 +76,99 @@ pub struct SummaryRead {
     pub dir_name: String,
     /// The group's base branch the counts are against.
     pub base_branch: String,
+}
+
+/// What a loser's fresh read says about uncommitted changes (K3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Uncommitted {
+    /// Read, and nothing is uncommitted.
+    Clean,
+    /// Read, and something is uncommitted.
+    Uncommitted,
+    /// Not read yet, or the read failed: treated exactly as [`Uncommitted::Uncommitted`].
+    Unknown,
+}
+
+/// One loser in the cleanup offer (K2, K3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CleanupLoser {
+    /// The run's number.
+    pub number: u8,
+    /// Its worktree folder name.
+    pub dir_name: String,
+    /// Its branch.
+    pub branch: String,
+    /// How many sessions removal stops.
+    pub sessions: usize,
+    /// Whether the user left it selected.
+    pub selected: bool,
+    /// What the freshest read said.
+    pub uncommitted: Uncommitted,
+    /// Whether the user confirmed removing it despite uncommitted changes (K5).
+    pub confirmed: bool,
+    /// Whether removal also deletes its branch (K2); on by default.
+    pub delete_branch: bool,
+    /// The read under way, by sequence number.
+    pub reading: Option<u64>,
+    /// Whether the user ticked or unticked it: a late first read then leaves the choice alone.
+    pub touched: bool,
+}
+
+/// The cleanup offer after a successful pick (K1–K6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CleanupOffer {
+    /// The group.
+    pub group: GroupId,
+    /// The project that owns it.
+    pub project: PathBuf,
+    /// The base branch the pick went into.
+    pub base_branch: String,
+    /// What happened (K1).
+    pub heading: String,
+    /// The losers, by run number.
+    pub losers: Vec<CleanupLoser>,
+    /// Confirm was pressed and the selected losers are being read again.
+    pub rechecking: bool,
+    /// The second confirmation (K5): the selected losers that hold, or may hold, uncommitted
+    /// changes.
+    pub confirming: Option<Vec<u8>>,
+}
+
+impl CleanupOffer {
+    /// The runs a confirm may delete (FR-015): selected, and either clean or confirmed. A loser
+    /// whose changes are unknown never qualifies without its confirmation.
+    pub fn removable(&self) -> Vec<u8> {
+        self.losers
+            .iter()
+            .filter(|l| l.selected && (l.uncommitted == Uncommitted::Clean || l.confirmed))
+            .map(|l| l.number)
+            .collect()
+    }
+
+    fn deletes(&self) -> Vec<ClientMsg> {
+        let removable = self.removable();
+        self.losers
+            .iter()
+            .filter(|l| removable.contains(&l.number))
+            .map(|l| ClientMsg::WorktreeDelete {
+                req: 0,
+                project: self.project.clone(),
+                dir_name: l.dir_name.clone(),
+                stop_sessions: true,
+                delete_branch: l.delete_branch,
+            })
+            .collect()
+    }
+
+    /// Whether the checkboxes still take presses: not while Confirm re-reads, nor at the second
+    /// question.
+    pub fn is_editable(&self) -> bool {
+        !self.rechecking && self.confirming.is_none()
+    }
+
+    fn loser_mut(&mut self, run: u8) -> Option<&mut CleanupLoser> {
+        self.losers.iter_mut().find(|l| l.number == run)
+    }
 }
 
 impl State {
@@ -341,6 +438,40 @@ pub enum Msg {
     PickConfirmed,
     /// The still-working confirmation was cancelled.
     PickCancelled,
+    /// The pick succeeded: offer to remove the losers (K1). `sessions` counts each run's sessions.
+    Picked {
+        /// The group.
+        group: GroupId,
+        /// The project that owns it.
+        project: PathBuf,
+        /// The run picked.
+        run: u8,
+        /// How it was integrated.
+        integration: Integration,
+        /// Sessions per run number.
+        sessions: BTreeMap<u8, usize>,
+    },
+    /// A loser's checkbox in the offer (K2).
+    CleanupToggled(u8),
+    /// A loser's **Delete the branch too** checkbox (K2).
+    CleanupBranchToggled(u8),
+    /// A fresh read for the offer ended.
+    CleanupRead {
+        /// The read's sequence number.
+        seq: u64,
+        /// The run read.
+        run: u8,
+        /// Its counts, or why git could not give them.
+        result: Result<RunSummary, String>,
+    },
+    /// The offer's confirm button (K4).
+    CleanupConfirmed,
+    /// The offer was dismissed (K6).
+    CleanupDismissed,
+    /// The second confirmation was accepted: remove the selected losers, uncommitted ones too (K5).
+    CleanupSecondConfirmed,
+    /// The second confirmation was declined: keep the uncommitted losers, remove the rest (K5).
+    CleanupSecondDeclined,
 }
 
 /// What the shell must do after a message.
@@ -353,6 +484,10 @@ pub enum Effect {
     /// Read these runs' change counts off the UI thread; each answers [`Msg::SummaryRead`] with its
     /// own `seq` (the read is the shell's, never `update`'s).
     ReadSummaries(Vec<SummaryRead>),
+    /// Read these losers' counts for the cleanup offer; each answers [`Msg::CleanupRead`].
+    ReadCleanup(Vec<SummaryRead>),
+    /// Send each of these requests (the offer's deletes).
+    SendEach(Vec<ClientMsg>),
 }
 
 /// Apply a message.
@@ -387,6 +522,9 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if state.pick_target.as_ref().is_some_and(decided) {
                 state.pick_target = None;
             }
+            if state.cleanup.as_ref().is_some_and(|o| gone(o.group)) {
+                state.cleanup = None;
+            }
             return compare_groups_changed(state);
         }
         Msg::CompareOpened { group, project } => {
@@ -396,6 +534,67 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         Msg::CompareClosed => {
             state.compare = None;
             state.pick_target = None;
+        }
+        Msg::Picked {
+            group,
+            project,
+            run,
+            integration,
+            sessions,
+        } => return picked(state, group, project, run, &integration, &sessions),
+        // The choice is frozen once Confirm re-reads the selected losers: a loser selected in that
+        // window would be deleted on a stale read (K4, FR-015).
+        Msg::CleanupToggled(run) => {
+            if let Some(l) = state
+                .cleanup
+                .as_mut()
+                .filter(|o| o.is_editable())
+                .and_then(|o| o.loser_mut(run))
+            {
+                l.selected = !l.selected;
+                l.touched = true;
+            }
+        }
+        Msg::CleanupBranchToggled(run) => {
+            if let Some(l) = state
+                .cleanup
+                .as_mut()
+                .filter(|o| o.is_editable())
+                .and_then(|o| o.loser_mut(run))
+            {
+                l.delete_branch = !l.delete_branch;
+            }
+        }
+        Msg::CleanupRead { seq, run, result } => return cleanup_read(state, seq, run, result),
+        Msg::CleanupConfirmed => return cleanup_confirmed(state),
+        Msg::CleanupDismissed => state.cleanup = None,
+        Msg::CleanupSecondConfirmed => {
+            if let Some(offer) = &mut state.cleanup {
+                for l in &mut offer.losers {
+                    if offer
+                        .confirming
+                        .as_ref()
+                        .is_some_and(|c| c.contains(&l.number))
+                    {
+                        l.confirmed = true;
+                    }
+                }
+            }
+            return cleanup_send(state);
+        }
+        Msg::CleanupSecondDeclined => {
+            if let Some(offer) = &mut state.cleanup {
+                for l in &mut offer.losers {
+                    if offer
+                        .confirming
+                        .as_ref()
+                        .is_some_and(|c| c.contains(&l.number))
+                    {
+                        l.selected = false;
+                    }
+                }
+            }
+            return cleanup_send(state);
         }
         Msg::SummaryRead { seq, run, result } => return summary_read(state, seq, run, result),
         Msg::RunChanged { run } => return request_read(state, run),
@@ -473,6 +672,161 @@ pub fn apply(state: &mut State, msg: Msg) {
     let effect = update(state, msg);
     if effect != Effect::None {
         state.pending = Some(effect);
+    }
+}
+
+/// The pick succeeded: open the cleanup offer once, with a fresh read per loser (K1–K3).
+fn picked(
+    state: &mut State,
+    group: GroupId,
+    project: PathBuf,
+    run: u8,
+    integration: &Integration,
+    sessions: &BTreeMap<u8, usize>,
+) -> Effect {
+    let Some(g) = state.groups.iter().find(|g| g.id == group) else {
+        return Effect::None;
+    };
+    if !state.offered.insert(group) {
+        return Effect::None;
+    }
+    let mut losers: Vec<CleanupLoser> = g
+        .runs
+        .iter()
+        .filter(|r| r.number != run && r.status.has_worktree())
+        .map(|r| CleanupLoser {
+            number: r.number,
+            dir_name: r.names.dir_name.clone(),
+            branch: r.names.branch.clone(),
+            sessions: sessions.get(&r.number).copied().unwrap_or(0),
+            selected: false,
+            uncommitted: Uncommitted::Unknown,
+            confirmed: false,
+            delete_branch: true,
+            reading: None,
+            touched: false,
+        })
+        .collect();
+    if losers.is_empty() {
+        return Effect::None;
+    }
+    let base_branch = g.base_branch.clone();
+    let mut reads = Vec::new();
+    for l in &mut losers {
+        let seq = state.next_seq;
+        state.next_seq += 1;
+        l.reading = Some(seq);
+        reads.push(SummaryRead {
+            seq,
+            run: l.number,
+            dir_name: l.dir_name.clone(),
+            base_branch: base_branch.clone(),
+        });
+    }
+    state.cleanup = Some(CleanupOffer {
+        group,
+        project,
+        heading: picked_text(run, &base_branch, integration),
+        base_branch,
+        losers,
+        rechecking: false,
+        confirming: None,
+    });
+    Effect::ReadCleanup(reads)
+}
+
+/// A read for the offer ended. A loser found clean on the first read becomes selected (K3); a read
+/// that fails leaves it `Unknown`. After a confirm, the last answer decides what happens next.
+fn cleanup_read(
+    state: &mut State,
+    seq: u64,
+    run: u8,
+    result: Result<RunSummary, String>,
+) -> Effect {
+    let Some(offer) = &mut state.cleanup else {
+        return Effect::None;
+    };
+    let rechecking = offer.rechecking;
+    let Some(l) = offer.loser_mut(run) else {
+        return Effect::None;
+    };
+    if l.reading != Some(seq) {
+        return Effect::None;
+    }
+    l.reading = None;
+    l.uncommitted = match result {
+        Ok(s) if !s.uncommitted => Uncommitted::Clean,
+        Ok(_) => Uncommitted::Uncommitted,
+        Err(_) => Uncommitted::Unknown,
+    };
+    if !rechecking {
+        // First read: a clean loser starts selected, any other stays unselected.
+        if l.uncommitted == Uncommitted::Clean && !l.touched {
+            l.selected = true;
+        }
+        return Effect::None;
+    }
+    if offer
+        .losers
+        .iter()
+        .any(|l| l.selected && l.reading.is_some())
+    {
+        return Effect::None;
+    }
+    offer.rechecking = false;
+    let held: Vec<u8> = offer
+        .losers
+        .iter()
+        .filter(|l| l.selected && l.uncommitted != Uncommitted::Clean)
+        .map(|l| l.number)
+        .collect();
+    if held.is_empty() {
+        return cleanup_send(state);
+    }
+    offer.confirming = Some(held);
+    Effect::None
+}
+
+/// Confirm: read every selected loser again before anything is sent (K4).
+fn cleanup_confirmed(state: &mut State) -> Effect {
+    let Some(offer) = &mut state.cleanup else {
+        return Effect::None;
+    };
+    if offer.rechecking || offer.confirming.is_some() {
+        return Effect::None;
+    }
+    if !offer.losers.iter().any(|l| l.selected) {
+        state.cleanup = None;
+        return Effect::None;
+    }
+    offer.rechecking = true;
+    let mut reads = Vec::new();
+    for l in offer.losers.iter_mut().filter(|l| l.selected) {
+        let seq = state.next_seq;
+        state.next_seq += 1;
+        l.reading = Some(seq);
+        l.uncommitted = Uncommitted::Unknown;
+        l.confirmed = false;
+        reads.push(SummaryRead {
+            seq,
+            run: l.number,
+            dir_name: l.dir_name.clone(),
+            base_branch: offer.base_branch.clone(),
+        });
+    }
+    Effect::ReadCleanup(reads)
+}
+
+/// Close the offer and delete exactly its removable losers (K4, K5).
+fn cleanup_send(state: &mut State) -> Effect {
+    let Some(offer) = state.cleanup.take() else {
+        return Effect::None;
+    };
+    let deletes = offer.deletes();
+    if deletes.is_empty() {
+        Effect::None
+    } else {
+        Effect::SendEach(deletes)
     }
 }
 
@@ -964,6 +1318,64 @@ impl Registered for ConfirmPickRunDialog {
     }
 }
 
+/// The cleanup offer (K1–K6), as a floating surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CleanupOfferDialog;
+
+impl FloatingSurface for CleanupOfferDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("run_cleanup_offer")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::CleanupDismissed))
+    }
+}
+
+impl Registered for CleanupOfferDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .runs
+            .cleanup
+            .as_ref()
+            .filter(|o| o.confirming.is_none())
+            .map(|_| CleanupOfferDialog)
+    }
+}
+
+/// The second confirmation for losers with uncommitted changes (K5), as a floating surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CleanupSecondConfirmDialog;
+
+impl FloatingSurface for CleanupSecondConfirmDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("run_cleanup_second_confirm")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::CleanupDismissed))
+    }
+}
+
+impl Registered for CleanupSecondConfirmDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .runs
+            .cleanup
+            .as_ref()
+            .filter(|o| o.confirming.is_some())
+            .map(|_| CleanupSecondConfirmDialog)
+    }
+}
+
 /// Route a message through the root: the two that open a surface say so, and the dialog closes
 /// the other surfaces first.
 pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
@@ -978,6 +1390,29 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             vec![Outcome::ChangesClosedForCompare]
         }
         Msg::DiffOpened { run } => open_diff(&state.runs, run),
+        Msg::Picked { .. } => {
+            state.clear_for_dialog();
+            apply(&mut state.runs, msg);
+            if state.runs.cleanup.is_some() {
+                vec![Outcome::SurfaceOpened(CleanupOfferDialog.id())]
+            } else {
+                Vec::new()
+            }
+        }
+        Msg::CleanupRead { .. } => {
+            let before = state
+                .runs
+                .cleanup
+                .as_ref()
+                .is_some_and(|o| o.confirming.is_some());
+            apply(&mut state.runs, msg);
+            let now = state
+                .runs
+                .cleanup
+                .as_ref()
+                .is_some_and(|o| o.confirming.is_some());
+            crate::features::surface_opened(now && !before, CleanupSecondConfirmDialog.id())
+        }
         Msg::DismissAsked { .. } | Msg::PickPressed { working: true, .. } => {
             state.clear_for_dialog();
             apply(&mut state.runs, msg);

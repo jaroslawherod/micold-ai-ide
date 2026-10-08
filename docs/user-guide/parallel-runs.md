@@ -126,6 +126,20 @@ started, every row's pick is disabled, with the reason.
 
 A refusal changes nothing: no branch, worktree or file is touched.
 
-## Coming later
+## Cleaning up the other runs
 
-The offer to clean up the other runs comes in a later release of this feature.
+Right after a successful pick, the app offers to remove the runs you did not pick. The heading says
+what happened, for example "Run 2 was merged into main".
+
+- **What removal deletes.** Each run is listed with what removing it does: it deletes the run's
+  worktree folder and stops its sessions (the count is shown). Its branch is deleted too unless you
+  untick **Delete the branch too**; keep the branch to come back to that run's commits later.
+- **Choosing.** The app reads each run first; a run found without uncommitted changes is selected for you, and you can untick it. **Remove selected** removes exactly the runs left selected.
+- **Declining.** **Keep them all**, or Escape, removes nothing; every run stays in the group. The
+  offer does not come back, so remove a run later from its own row in the sidebar.
+- **Runs with uncommitted changes.** A run with uncommitted changes is tagged **uncommitted changes**
+  and starts unselected. A run whose changes could not be read is treated the same way. If you select
+  it anyway, the app reads every selected run again and then asks a second time, naming the runs that
+  hold uncommitted changes. **Remove anyway** removes them with the rest; **Keep it** keeps them and
+  removes only the others. Uncommitted changes are lost for good once removed.
+

@@ -168,6 +168,10 @@ pub enum FieldId {
     IssueMappingLabel(usize),
     /// The attach dialog's checkbox for the row at this index (feature 582).
     AttachWorktreeRow(usize),
+    /// The cleanup offer's checkbox for run `n` (feature 483).
+    CleanupLoser(u8),
+    /// The cleanup offer's **Delete the branch too** checkbox for run `n` (feature 483).
+    CleanupBranch(u8),
 }
 
 /// What the window reports about itself (feature 028, FR-001).

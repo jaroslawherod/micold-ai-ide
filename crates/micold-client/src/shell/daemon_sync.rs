@@ -859,6 +859,42 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                         );
                         app.core.notify_info(text);
                     }
+                    // Offer to remove the losers (K1): the sessions each one holds, per run.
+                    if let Some(project) = app.core.workspace.active.clone() {
+                        let sessions = app
+                            .core
+                            .runs
+                            .groups
+                            .iter()
+                            .find(|g| g.id == group)
+                            .map(|g| {
+                                g.runs
+                                    .iter()
+                                    .map(|r| {
+                                        let here =
+                                            SessionLocation::Worktree(r.names.dir_name.clone());
+                                        let n = app
+                                            .core
+                                            .active_sessions()
+                                            .iter()
+                                            .filter(|s| s.location == here)
+                                            .count();
+                                        (r.number, n)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        app.core.update(Message::Runs(
+                            micold_client::features::runs::Msg::Picked {
+                                group,
+                                project,
+                                run,
+                                integration,
+                                sessions,
+                            },
+                        ));
+                        follow_up = Task::batch([follow_up, crate::shell::runs::run_pending(app)]);
+                    }
                 }
             }
             // Feature 482 (S2): the comments' new state arrives as `ReviewChanged`; this says
