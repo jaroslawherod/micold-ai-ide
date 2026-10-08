@@ -79,6 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | c61c9b57176ad6134bb9d4cd0fe376dc69bb33bc:d689b0660d22190b4db34f3feb4c401a7a4b8b4d | CLEAN: 3 MINOR (all fixed, prose only) |
 | M1a review A (code-review high) | 1 | d2b15e8fe0ecb4b8f9e021a5fe1bda5ace611fae:634a59c6d386d5f1564d6223b4d83269702136a3 | CHANGES: 1 fixed (runs start at base_commit, regression test), 9 declined |
 | M1a review B (conformance, sonnet) | 1 | d2b15e8fe0ecb4b8f9e021a5fe1bda5ace611fae:634a59c6d386d5f1564d6223b4d83269702136a3 | CHANGES: 1 MAJOR (red evidence, fixed by mutation runs in cycle-log), 1 MINOR fixed |
+| M1a review A (code-review high) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CHANGES: 2 fixed (a session that never started is `Failed{Session}`, not pickable; a run stops when its group is gone), 8 declined |
+| M1a review B (conformance, sonnet) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CLEAN |
 
 ## Declined review findings
 
@@ -90,6 +92,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1a A: `NewBranchAt` refuses `RemoteOnly`: plan Decision, a run's branch must be new; the reason names the branch.
 - M1a A: no up-front name preflight: US1 s3 / FR-006 require the taken run to fail alone, the others to run.
 - M1a A: `Debug` derives hold the prompt: no log line formats them; `w2_the_prompt_is_never_logged` guards W2.
+- M1a A r2: `Typing` failures said as "not ready": copied on purpose from the MCP create (`mcp/tools.rs`), one wording for one cause.
+- M1a A r2: no prompt size cap: the spec sets none; frames are bounded by the codec.
+- M1a A r2: session id recorded only when the prompt step ends: W2 records it with the run's next status; taste.
+- M1a A r2: a panicking run task leaves its run `Creating`/`Starting`: stale runs are M2's restart cleanup (T028–T039).
+- M1a A r2: one invalid group sets the whole file aside; whole list cloned per transition: as round 1's declined store and lock findings.
+- M1a A r2: `validate()` does not check the winner is `Picked`: winners are set by pick, M4 (T051–T061).
+- M1a A r2: unused public types and empty `integrate.rs`/`summary.rs`: T001 creates them for M3/M4.
 
 ## Handover
 

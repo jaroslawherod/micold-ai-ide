@@ -2190,7 +2190,8 @@ impl DaemonState {
     }
 
     /// Move a run to `status` (and record its session) when the transition is allowed, and push
-    /// the project's run groups (feature 483, W2).
+    /// the project's run groups (feature 483, W2). `false` when nothing changed: the group is no
+    /// longer held, or the transition is not allowed.
     pub fn set_run_status(
         &self,
         project: &Path,
@@ -2198,15 +2199,18 @@ impl DaemonState {
         number: u8,
         status: micold_core::runs::RunStatus,
         session: Option<SessionId>,
-    ) {
+    ) -> bool {
         let mut inner = self.lock();
         let inner = &mut *inner;
-        if let Some(msg) =
-            inner
-                .runs
-                .set_run(&inner.catalog, project, group, number, status, session)
+        match inner
+            .runs
+            .set_run(&inner.catalog, project, group, number, status, session)
         {
-            Self::broadcast_locked(inner, vec![msg]);
+            Some(msg) => {
+                Self::broadcast_locked(inner, vec![msg]);
+                true
+            }
+            None => false,
         }
     }
 
