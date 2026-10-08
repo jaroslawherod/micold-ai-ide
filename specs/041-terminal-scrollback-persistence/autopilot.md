@@ -121,3 +121,4 @@ None.
 - To confirm in M3: a restore at scrollback limit N shows the most recent N-1 lines and the separator, because `history::seed` counts the separator inside the limit (A5 and U60 assert that). If FR-012 means N lines and the separator, `seed` changes.
 
 - RED CI run 37519388539 (windows): ConPTY throughput (10 busy sessions reached line ~565 in 10 s) starved the test setup wait, not the 3.5 s unwind bound; Windows now prints 500 lines. Attempt 1; gate green (gh desktop-launch test skipped via MICOLD_SKIP_GH_LAUNCH_TEST=1, local env only).
+- RED CI run 37523108659 (ubuntu, macos): `ten_busy_sessions_are_all_saved_within_the_bound` took 4.5 s against 3.5 s. Cause: `history::capture` walks 1M cells a terminal and an unoptimised build needs ~1 s of CPU each, so ten on a two-core runner outlast the 3 s save bound (2.5 s locally pinned to two cores). Fix: `[profile.dev.package]` opt-level 1 for micold-daemon and 2 for alacritty_terminal (0.85 s pinned). Attempt 1.
