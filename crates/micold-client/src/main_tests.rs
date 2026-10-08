@@ -2048,6 +2048,58 @@ fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() 
     }
 }
 
+/// A50 (BUG-475, FR-026b, US4 scenario 8): another window's save reaches a Settings page that is
+/// open here. Each field this window's user has not touched shows the value now stored; a field
+/// they edited keeps their edit.
+#[test]
+fn an_open_settings_page_shows_another_windows_save_and_keeps_its_own_edits() {
+    let mut app = base_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::ScrollbackChanged("4321".into())),
+    );
+
+    // Another window saves: notifications off, a new script path, and a scrollback limit this
+    // window's user has already edited.
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                desktop_notifications: false,
+                env_include_script_path: "/elsewhere/env.sh".into(),
+                scrollback_lines: 9999,
+                ..quiet_settings()
+            },
+        },
+    );
+
+    let draft = app
+        .core
+        .settings
+        .settings_draft
+        .as_ref()
+        .expect("the page stays open");
+    assert!(
+        !draft.environment.desktop_notifications,
+        "an untouched switch shows the value another window saved"
+    );
+    assert_eq!(
+        draft.environment.script_path, "/elsewhere/env.sh",
+        "an untouched field shows the value another window saved"
+    );
+    assert_eq!(
+        draft.terminal.scrollback_lines, "4321",
+        "a field this window's user edited keeps their edit"
+    );
+}
+
 /// A49 (BUG-570, FR-026a, US4 scenario 7): a page opened before another window turned both
 /// switches off, then saved after changing only another setting, must not turn them back on: not
 /// at the service, not in the file, not in this window.

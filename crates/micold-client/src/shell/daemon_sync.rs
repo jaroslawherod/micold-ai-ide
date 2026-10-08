@@ -675,6 +675,7 @@ pub(crate) fn on_settings_changed(
     settings: micold_core::protocol::messages::DaemonSettings,
 ) -> Option<crate::shell::env_include::ScriptPathCheckJob> {
     adopt_daemon_settings(app, settings);
+    refresh_open_settings(app);
     // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
     // holds, so a change to it re-asks every answer. Compared against what the answers were
     // asked under, not against `app`'s fields — this window's own save overwrote those
@@ -687,6 +688,25 @@ pub(crate) fn on_settings_changed(
     // window saved it (Edge Cases, "Several sessions and several open windows"). Opened, not
     // Saved: only the window that saved posts the save's notice (FR-007).
     recheck_open_settings(app)
+}
+
+/// Bring an open Settings page up to the settings now in force (BUG-475, FR-026b): another
+/// window's save shows in every field this window's user has not edited, and their edits stay.
+/// The page is seeded the way opening it seeds it: the service's values from `app`, the rest from
+/// the store.
+fn refresh_open_settings(app: &mut App) {
+    if app.core.settings.settings_draft.is_none() {
+        return;
+    }
+    let stored = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings)
+        .unwrap_or_default();
+    let now = crate::shell::persist::window_settings(app, stored);
+    if let Some(draft) = app.core.settings.settings_draft.as_mut() {
+        draft.refresh_untouched(&now);
+    }
 }
 
 /// Prepare a check of the stored script path when Settings is showing, none otherwise (spec 035

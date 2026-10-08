@@ -828,6 +828,98 @@ impl SettingsDraft {
         }
     }
 
+    /// Bring an open page up to `now`, the settings as stored after another window saved
+    /// (BUG-475, FR-026b): each field the user has not edited since the page opened shows its value
+    /// in `now`, and a field they edited keeps their edit. "Edited" is judged against the page as
+    /// opened ([`Self::baseline`]), which then becomes `now`, so a later save still sends only the
+    /// fields the user changed (FR-026a) and a later refresh judges against what the page shows.
+    ///
+    /// A draft with no baseline was not seeded from stored settings and is left as it is. The
+    /// runtime's capabilities and the sandbox's sign-in report are not settings and are untouched.
+    pub fn refresh_untouched(&mut self, now: &Settings) {
+        let Some(opened) = self.baseline.as_ref().map(Self::from_settings) else {
+            return;
+        };
+        let fresh = Self::from_settings(now);
+        // Named in full so that a field added to the form fails to compile here until this says
+        // whether another window's save refreshes it.
+        let Self {
+            section: _,
+            appearance: AppearanceDraft { theme: _ },
+            terminal: TerminalDraft {
+                scrollback_lines: _,
+            },
+            environment:
+                EnvironmentDraft {
+                    enabled: _,
+                    script_path: _,
+                    timeout_secs: _,
+                    default_ai_cli: _,
+                    pi_activity_component: _,
+                    tool_server_enabled: _,
+                    desktop_notifications: _,
+                    notification_kinds: _,
+                    long_task_threshold_secs: _,
+                    cross_session_access: _,
+                },
+            daemon:
+                DaemonDraft {
+                    placement: _,
+                    profile: _,
+                    image_path: _,
+                    cpus: _,
+                    memory_mib: _,
+                    pids: _,
+                    storage_mib: _,
+                    capabilities: _,
+                    unshared_sign_in: _,
+                },
+            github:
+                GithubDraft {
+                    entries: _,
+                    pr_status_enabled: _,
+                },
+            error: _,
+            baseline: _,
+        } = &fresh;
+        macro_rules! refresh {
+            ($($part:ident . $field:ident),+ $(,)?) => {$(
+                if self.$part.$field == opened.$part.$field {
+                    self.$part.$field = fresh.$part.$field.clone();
+                }
+            )+};
+        }
+        refresh!(
+            appearance.theme,
+            terminal.scrollback_lines,
+            environment.enabled,
+            environment.script_path,
+            environment.timeout_secs,
+            environment.default_ai_cli,
+            environment.pi_activity_component,
+            environment.tool_server_enabled,
+            environment.desktop_notifications,
+            environment.notification_kinds,
+            environment.long_task_threshold_secs,
+            environment.cross_session_access,
+            daemon.placement,
+            daemon.profile,
+            daemon.image_path,
+            daemon.cpus,
+            daemon.memory_mib,
+            daemon.pids,
+            daemon.storage_mib,
+            github.entries,
+            github.pr_status_enabled,
+        );
+        self.baseline = Some(
+            fresh
+                .validate()
+                .map(ValidSettings::into_settings)
+                .unwrap_or_else(|_| now.clone()),
+        );
+    }
+
     /// Seed the draft from what is stored, so the form opens showing the current values.
     pub fn from_settings(settings: &Settings) -> Self {
         Self {
