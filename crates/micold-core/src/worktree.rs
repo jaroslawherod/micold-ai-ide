@@ -781,8 +781,8 @@ pub enum CreateMode {
     Overwrite,
     /// Start a local branch at `<remote>/<branch>` and track it (FR-017).
     TrackRemote { remote: String },
-    /// Create a fresh branch at `start` rather than HEAD (feature 483: a run of a group starts at
-    /// the group's base branch). The daemon's own mode, never sent by a client.
+    /// Create a fresh branch at `start` (a commit or ref) rather than HEAD (feature 483: a run of a
+    /// group starts at the group's base commit). The daemon's own mode, never sent by a client.
     #[serde(skip)]
     NewBranchAt { start: String },
 }
