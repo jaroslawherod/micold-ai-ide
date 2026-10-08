@@ -39,6 +39,9 @@ follows describes the version you are reading it from (constitution, Principle V
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
   its worktree, switchable and individually closeable/restartable).
+- [Running a prompt in parallel](user-guide/parallel-runs.md) — the **Run in parallel** button: one
+  prompt, 2 to 8 runs each with its own AI CLI, worktree and branch, and the run group in the
+  sidebar.
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Changes view: opening it
   from a worktree or the Default entry, the changed-file list, the base line, and the
   Committed/Uncommitted toggles.
