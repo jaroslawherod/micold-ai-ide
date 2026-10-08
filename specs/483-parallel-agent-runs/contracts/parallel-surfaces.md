@@ -29,6 +29,9 @@ Opened from the sidebar's project menu, beside **New worktree**. A `Modal` + `di
   tag (`3 runs`) and, when any run failed, a failed-count tag (`1 failed`). The runs sit one level
   in, each row showing `#<n>`, its provider and its worktree's usual name and tags; their sessions
   sit one level further in, unchanged.
+- **G1a** A run with no worktree (failed while creating it) is still listed under its group, as a
+  row reading `#<n>`, its provider and a `failed` tag, with the failure reason as its tooltip and no
+  worktree menu; it leaves the group only with the group (FR-005, US1 s3).
 - **G2** The group row is expandable (`TreeItem::expandable`); collapsed, it still shows both counts
   (US2 s2).
 - **G3** Runs of a group never also appear as ungrouped worktree rows; unrelated worktrees are
@@ -72,8 +75,9 @@ Shown once, right after a successful pick, as a `Modal`.
   its sessions (with their count), and its branch. A per-loser **Delete the branch too** checkbox,
   on by default.
 - **K3** A loser with uncommitted changes carries an `uncommitted changes` tag and starts
-  **unselected** (FR-015, US4 s4).
-- **K4** Confirm removes exactly the losers left selected, by sending the existing
+  **unselected** (FR-015, US4 s4). Each loser's state is read fresh when the offer opens; until it is
+  known, or when the read fails, the loser is treated as having uncommitted changes.
+- **K4** Confirm first re-reads the selected losers, then removes exactly the losers left selected, by sending the existing
   `WorktreeDelete { stop_sessions: true, delete_branch }` per loser (FR-016, research R13).
 - **K5** A selected loser with uncommitted changes triggers a second confirmation before anything is
   removed, naming it and that it holds uncommitted changes; declining that leaves it alone and

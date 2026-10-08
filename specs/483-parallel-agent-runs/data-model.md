@@ -25,8 +25,15 @@ Stable across restarts; a dismissed group's id is never reused.
 | `runs` | `Vec<Run>` | ordered by `number`, length 2..=`MAX_RUNS` |
 | `winner` | `Option<u8>` | the picked run's `number`; `None` until a pick succeeds (FR-018) |
 
-Invariants: `runs` is non-empty and its `number`s are `1..=runs.len()`, strictly increasing;
-`winner`, when set, names an existing run; `base_branch` is a valid branch name.
+Invariants, checked by `RunGroup::validate` on create and on load: `runs` is non-empty, holds at most
+`MAX_RUNS` runs, and its `number`s are distinct, strictly increasing and within `1..=MAX_RUNS`;
+`winner`, when set, is within `1..=MAX_RUNS`; `base_branch` is a valid branch name. On create
+(`RunGroup::new`) the group additionally holds `MIN_RUNS..=MAX_RUNS` runs numbered exactly
+`1..=runs.len()` and no winner. A run whose worktree is deleted leaves the group
+(`forget_worktree`): the others keep their numbers (a number is never reused, so a group may read
+`#1, #3`), a group may shrink to one run, and a group with no runs is dropped. `winner` stays set when
+the winner's own run is removed: the group stays picked and offers no further pick, and Compare
+names the removed winner by number.
 
 ### `Run`
 
@@ -49,13 +56,16 @@ Failed { step: RunStep, reason: String }  FR-005, FR-019
 Picked                                    this run won the group (terminal)
 ```
 
-`RunStep` is `Worktree | Session | Prompt`, so the failed step is reportable without parsing the
-reason (FR-005).
+`RunStep` is `Worktree | Session`, so the failed step is reportable without parsing the reason
+(FR-005). An undelivered prompt is not a failure: it is `PromptNotDelivered`, which keeps the
+worktree and the session.
 
 Transitions (the only ones): `Creating → Starting | Failed{Worktree}`;
 `Starting → Prompted | PromptNotDelivered | Failed{Session}`; `Prompted → Picked`;
 `PromptNotDelivered → Picked`. `Failed` and `Picked` are terminal. On load, a persisted `Creating` or
-`Starting` becomes `Failed { step, reason: "interrupted" }` (R10).
+`Starting` becomes `Failed { step, reason: "interrupted" }` (R10): `Creating` → step `Worktree`,
+whose half-created worktree is removed; `Starting` → step `Session`, whose fully created worktree
+and branch are kept.
 
 The statuses FR-009 lists that are *not* stored — working, waiting for input — are derived for
 display from the run's session (`SessionSummary::activity`, Assumptions), never persisted.
@@ -115,4 +125,8 @@ and a name are required, the run count is `MIN_RUNS..=MAX_RUNS`, every provider 
 sessions run (`State::offered_providers`), and the derived names must all validate.
 
 `CleanupOffer::removable()` is the pure rule behind FR-015: a loser with `uncommitted` is removable
-only while it is both selected and confirmed; nothing else can put it in the delete set.
+only while it is both selected and confirmed; nothing else can put it in the delete set. A loser's
+`uncommitted` is a tri-state read fresh for the offer (R8's reader): `Clean`, `Uncommitted`, or
+`Unknown` (not read yet, or the read failed), and `Unknown` is treated exactly as `Uncommitted`.
+Confirming re-reads every selected loser before any delete is sent; a loser that turned uncommitted
+since the offer opened needs the second confirmation like any other.

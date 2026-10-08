@@ -17,7 +17,7 @@
 ## §A — Automated
 
 ```sh
-mise run test-core     # runs::{naming,group,integrate,summary} + real-git integration tests
+mise run test-core     # runs::{naming,store,integrate,summary} + real-git integration tests
 mise run gate          # daemon run-group tests, client state tests, geometry gates, fmt, clippy, docs
 ```
 

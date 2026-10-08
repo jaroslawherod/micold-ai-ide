@@ -64,13 +64,14 @@ Taken under the project's worktree gate (R9), in this order; each refusal change
 1. group unknown → `NotFound`.
 2. `group.winner.is_some()` → `Refused`, "this group already has a winner" (FR-018, US4 s6).
 3. any run of the group is `Creating` or `Starting` → `Busy`, naming that run (FR-017).
-4. the named run has no branch (`Failed`) → `Refused`, with its reason (FR-017).
+4. the named run is `Failed` (with or without a branch, no pickable status, FR-017) → `Refused`,
+   with its reason.
 5. the run's worktree holds uncommitted changes (R8) → `Refused`, `Uncommitted { files }`, listing
    them (FR-012, US4 s9).
-6. the merge pre-check reports conflicts → `Refused`, `Conflicts { files }` (FR-013, US4 s2).
+6. the merge pre-check reports conflicts → `Refused`, `Conflicts { files }` (FR-013, US4 s2); git
+   cannot run the pre-check → `Refused`, `GitTooOld` or `Git(message)`.
 7. the base branch's tip is no longer `observed old tip` → `Refused`, `BaseMoved`.
 8. the base branch is checked out and git refuses the merge → `Refused`, `BaseBusy(git's message)`.
-9. git cannot run the pre-check → `Refused`, `GitTooOld` or `Git(message)`.
 
 Accepted: the integration of [integration.md](./integration.md) runs, `winner` and the run's `Picked`
 status are written **after** the ref moved, `OperationOk(RunPicked { integration })` is answered and
