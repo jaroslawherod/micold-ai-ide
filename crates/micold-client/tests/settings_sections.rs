@@ -725,7 +725,7 @@ fn the_terminal_page_claims_the_save_terminal_history_switch() {
     let claims = claims();
     assert_eq!(
         claims.get("save_terminal_history").map(Vec::as_slice),
-        Some(["terminal".to_string()].as_slice()),
+        Some(["terminal.rs".to_string()].as_slice()),
         "{claims:#?}"
     );
 }

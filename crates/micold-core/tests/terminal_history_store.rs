@@ -627,3 +627,34 @@ fn a_save_racing_turning_saving_off_leaves_no_file() {
         assert_eq!(left, Vec::<PathBuf>::new(), "round {round}");
     }
 }
+
+// FR-033: a directory that cannot be listed when saving is turned off keeps its files from
+// being shown, and they are deleted once it can be listed.
+#[cfg(unix)]
+#[test]
+fn an_unlistable_directory_is_retried_and_its_files_are_never_loaded() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read_dir(&dir).is_ok() {
+        // Running as root: nothing stops the listing, so there is nothing to test.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        return;
+    }
+
+    let failures = store.set_enabled(false);
+    assert_eq!(
+        failures.len(),
+        1,
+        "one failure for the directory: {failures:?}"
+    );
+    assert_eq!(store.retry_deletions().len(), 1, "still not listable");
+    assert!(store.set_enabled(true).len() <= 1);
+    assert_eq!(store.load(session()), LoadOutcome::None);
+
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    store.set_enabled(false);
+    assert!(store.retry_deletions().is_empty());
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+}

@@ -126,12 +126,13 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
         let pty = state.primary_pty(id).expect("live");
         let term = pty.term().lock();
         let grid = term.grid();
-        (0..grid.screen_lines() as i32).any(|row| {
-            let text: String = (0..grid.columns())
-                .map(|col| grid[Point::new(Line(row), Column(col))].c)
-                .collect();
-            text.contains(token)
-        })
+        // The rows joined, because the echoes pile up on one line and a token can wrap across the
+        // end of a row (it is not split by anything else).
+        let text: String = (0..grid.screen_lines() as i32)
+            .flat_map(|row| (0..grid.columns()).map(move |col| Point::new(Line(row), Column(col))))
+            .map(|point| grid[point].c)
+            .collect();
+        text.contains(token)
     }
 
     /// The echo times of `SAMPLES` keystrokes in `id`, sorted, while a thread saves every session.
