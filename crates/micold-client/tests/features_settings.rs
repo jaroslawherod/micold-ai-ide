@@ -363,12 +363,20 @@ fn turning_the_pi_activity_switch_off_is_a_choice_not_a_fault() {
 
 #[test]
 fn the_draft_holds_the_save_terminal_history_setting_of_the_service() {
-    assert!(SettingsDraft::from_settings(&Settings::default()).terminal.save_terminal_history);
+    assert!(
+        SettingsDraft::from_settings(&Settings::default())
+            .terminal
+            .save_terminal_history
+    );
     let off = Settings {
         save_terminal_history: false,
         ..Settings::default()
     };
-    assert!(!SettingsDraft::from_settings(&off).terminal.save_terminal_history);
+    assert!(
+        !SettingsDraft::from_settings(&off)
+            .terminal
+            .save_terminal_history
+    );
 }
 
 #[test]

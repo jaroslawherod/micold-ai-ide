@@ -215,7 +215,10 @@ fn turning_saving_on_saves_the_running_history_including_what_was_printed_while_
     });
     assert!(landed.is_some_and(|s| s - 10 <= 60), "saved: {landed:?}");
     let lines = saved_lines(saved.path(), id);
-    assert!(holds(&lines, "first") && holds(&lines, "while off"), "{lines:#?}");
+    assert!(
+        holds(&lines, "first") && holds(&lines, "while off"),
+        "{lines:#?}"
+    );
     state.stop_session(id);
 }
 
@@ -228,12 +231,7 @@ fn turning_saving_off_deletes_every_file_at_once_and_leaves_the_running_terminal
     let saved = tempfile::tempdir().unwrap();
     let (running, stopped) = (ai_session(), ai_session());
     let (run_id, stop_id) = (running.id, stopped.id);
-    let state = service_with(
-        project.path(),
-        vec![running, stopped],
-        saved.path(),
-        true,
-    );
+    let state = service_with(project.path(), vec![running, stopped], saved.path(), true);
     let t0 = Instant::now();
     run_printing(&state, project.path(), stop_id, &["stopped session text"]);
     assert!(state.stop_session(stop_id));
@@ -363,7 +361,10 @@ fn a_failed_deletion_is_logged_once_and_retried_every_30_seconds() {
         state.save_due_at(t0 + SAVE_SPACING);
         state.save_due_at(t0 + 2 * SAVE_SPACING);
     });
-    let named: Vec<_> = log.iter().filter(|l| l.contains(&id.0.to_string())).collect();
+    let named: Vec<_> = log
+        .iter()
+        .filter(|l| l.contains(&id.0.to_string()))
+        .collect();
     assert_eq!(named.len(), 1, "one warning for the session: {log:#?}");
     assert!(
         named[0].contains("not deleted") && named[0].contains("ermission"),
@@ -427,7 +428,11 @@ async fn a_settings_set_deletes_the_files_before_it_is_answered_and_is_broadcast
             None => panic!("the service closed the connection"),
         }
     }
-    assert_eq!(files(saved.path()), Vec::<PathBuf>::new(), "gone at the answer");
+    assert_eq!(
+        files(saved.path()),
+        Vec::<PathBuf>::new(),
+        "gone at the answer"
+    );
     assert!(
         pushed.iter().any(|s| !s.save_terminal_history),
         "the sender is told: {pushed:?}"
