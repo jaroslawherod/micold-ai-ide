@@ -1426,6 +1426,28 @@ mod parallel_runs {
     }
 
     #[test]
+    fn a_group_whose_list_shrank_shows_the_remaining_numbers() {
+        let mut g = three_runs();
+        g.runs.remove(1);
+        let entries = vec![default_entry(), node("feat-login-1"), node("feat-login-3")];
+        let arranged = arrange_groups(entries, &[g], |_| true);
+        let g = group_of(&arranged);
+        assert_eq!(
+            g.runs.iter().map(|r| r.number).collect::<Vec<_>>(),
+            [1, 3],
+            "#1 and #3, no #2"
+        );
+        assert_eq!(g.run_count, 2);
+    }
+
+    #[test]
+    fn a_dropped_group_is_not_shown() {
+        let entries = vec![default_entry(), node("feat-login-1")];
+        let arranged = arrange_groups(entries, &[], |_| true);
+        assert!(!arranged.iter().any(|e| matches!(e, SidebarEntry::Group(_))));
+    }
+
+    #[test]
     fn a_run_without_a_worktree_is_still_a_child_row_with_its_reason() {
         let failed = RunStatus::Failed {
             step: RunStep::Worktree,

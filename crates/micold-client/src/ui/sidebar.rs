@@ -813,6 +813,10 @@ fn group_items(
     let mut items = vec![TreeItem::new(0, group.name.clone(), r.on_surface)
         .tags(tags)
         .row_tooltip(group.name.clone())
+        .on_right_press({
+            let id = group.id;
+            move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
+        })
         .expandable(
             group.expanded,
             Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),

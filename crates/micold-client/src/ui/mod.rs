@@ -7,6 +7,7 @@ pub mod cdk;
 pub(crate) mod changes;
 pub(crate) mod confirm_agent_request;
 pub(crate) mod confirm_delete;
+pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_placement;
@@ -571,6 +572,31 @@ pub fn view_with<'a>(
                 .into()
         });
 
+    // The run group row's right-click menu (feature 483, G4): **Dismiss group** only. Same anchor
+    // rule and clamping as the worktree menu above.
+    let group_menu: Option<cdk::overlay::Surface<'a, Message>> = state.runs.menu.map(|menu| {
+        let items = vec![material::MenuItem::new(
+            Icon::Close,
+            crate::features::runs::GROUP_MENU_ITEMS[0],
+            Message::Runs(crate::features::runs::Msg::DismissAsked {
+                group: menu.group,
+                project: state.workspace.active.clone().unwrap_or_default(),
+            }),
+        )];
+        let (x, y) = crate::features::project::clamp_menu_anchor(
+            menu.anchor,
+            material::menu_panel_size(items.len()),
+            state.window.window_size,
+        );
+        material::MenuOverlay::new(
+            items,
+            Message::Runs(crate::features::runs::Msg::MenuDismissed),
+            roles,
+        )
+        .anchor(iced::Point::new(x as f32, y as f32))
+        .into()
+    });
+
     // The session right-click context menu (feature 010's BUG-003). Only present while a session's
     // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
@@ -733,6 +759,7 @@ pub fn view_with<'a>(
         .push(switcher)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
+        .push_maybe(group_menu)
         .push_maybe(session_menu)
         .push_maybe(shell_instance_menu)
         .push_maybe(session_start_menu)
