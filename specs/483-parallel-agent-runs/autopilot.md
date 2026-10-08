@@ -83,6 +83,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a review A (code-review high) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CHANGES: 2 fixed (a session that never started is `Failed{Session}`, not pickable; a run stops when its group is gone), 8 declined |
 | M1a review B (conformance, sonnet) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CLEAN |
 | M1a review A (code-review, sonnet) | 3 (fix diff) | a919a4e20e57e980b74b417fcc4831d7e9ea4006:b4963b20c7ee533270a1b9a49a98aef4e981498c | both fixes hold; 5 MINOR: spec prose and cycle-log fixed (prose only), 3 to follow-ups |
+| M1b review A (code-review high, fresh) | 1 | 80164d66f8f40785e3b73921cf40b5c06e7b46b4:e710b37db81f20266b2754d01e834d9eb39a6d6f | CLEAN: 3 MINOR (Remove disabled instead of hidden fixed; single-line prompt and silent BranchList failure to follow-ups) |
+| M1b review B (conformance, sonnet) | 1 | 80164d66f8f40785e3b73921cf40b5c06e7b46b4:e710b37db81f20266b2754d01e834d9eb39a6d6f | CHANGES: 2 MAJOR (cycle-log M1b section added; T027 re-scoped to B23, B1-B6 live pass deferred), 1 MINOR (placement prose and test name fixed) |
 
 ## Declined review findings
 
@@ -104,13 +106,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1b unit 2 stopped at ~150k context. Branch claude/project-thread-wysm57, 2 unmerged commits (T021/T026 docs; code below). Not pushed, no PR.
-Done and green (`cargo test -p micold-client --test features_runs --test features_sidebar` pass; `cargo check --tests` clean; fmt applied):
-- T012/T017: `features/runs.rs` (State, Msg, Effect::Send, ParallelDialog, Invalid, Opening, `ParallelRunDialog` FloatingSurface+Registered with SurfaceId "run_in_parallel"), `Message::Runs`, `State.runs`, `Outcome::RunInParallelRequested` interpreted in app.rs (opens dialog, leaves BranchList in `runs.pending`), `shell/runs.rs::run_pending`, PendingOp::{RunGroupCreate,RunBranchList}, DaemonMsg::RunGroupsChanged arm, main.rs routes.
-- T013/T018/T022/T023/T024: `HEADER_ACTIONS`, `run_in_parallel()`, `SidebarEntry::Group(GroupNode{RunNode,RunRow})`, `arrange_groups`, heights/current_session_row/unread; `ui/sidebar.rs` header IconButton (Icon::AiCli, after New worktree) and `group_items`; build_items now takes depth and run label. Tests ticked in tasks.md.
-Deviation to record in PR body: no project menu has "New worktree" (it is a header IconButton), so Run in parallel is a header IconButton beside it.
-Remaining: T019 `ui/parallel_dialog.rs` (fn dialog(state,scheme,_)->Option<Element>, copy ui/worktree_form.rs modal: Surface+material::dialog::fields/body, Select for type/base branch/providers via ConventionalType::ALL and dialog.branches/offered, TextField for ticket/name; use TextField for the prompt (TextArea needs a binary-owned text_editor Content like app.composer: record as follow-up unless cheap), Add run Button, remove IconButton, derived names via `derived_names()`, Start runs disabled unless `validate().is_ok()`, error text from `dialog.error`; FieldId variants in features/window.rs for track_focus), declare in ui/mod.rs, register `crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog` in overlay/registry.rs (gates material_builder_api, composite_call_sites, overlay_registration, field_focus_call_sites). Then T020/T025 showcase poses (showcase/sections/surfaces.rs, catalogue.rs), T027 visual pass + quickstart Results B, tick T019 T020 T025 T027, full `cargo test -p micold-client`, then verify.md, review (code-review high + conformance), gate, PR text in the scratchpad (pr-483-m1b.md), push.
-Not yet run: whole client test suite (guards such as features_are_render_free, overlay_registration, sidebar_*), clippy.
+None.
 
 ## Open escalation
 
@@ -120,3 +116,6 @@ None.
 
 - `run_one` (review A M1a r3): the forgotten-group guard covers only `Starting`. A project forgotten during the session step still gets a session. A worktree created just before is left unowned. The guard's comment names only one of `set_run_status`'s two `false` causes, and no test covers the guard.
 - Runs file: an unreadable (not missing) file loads as no groups and the next save replaces it; `.corrupt` backups overwrite each other (review A M1a, declined for M1a).
+- M1b: the Run in parallel prompt is a single-line `TextField`; contract D1 wants a multi-line `TextArea` (needs a binary-owned `text_editor::Content`).
+- M1b: a `BranchList` failure leaves the base-branch select empty with only the generic "Choose a base branch" error.
+- M1b: quickstart B1-B6 on the live client not driven (no fixture daemon in the cloud container); only B23 poses.
