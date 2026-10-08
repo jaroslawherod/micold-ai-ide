@@ -82,6 +82,8 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M4) | 1 | adaaf1d297ab989112ff5b2956eb606bab4821c2:2b07f096f7a0aafe7af690ed3225d26f9f65bb5f | CLEAN; Verify exit 0 |
 | Code A (M5) | 1 | 22fa3c4e0a2a1bac226c39e66d365b59a1cb4bf6:9cc9eafa5e00910aee038aad0e5eac20cfafc45c | CHANGES: 1 MAJOR (T044's scan test was missing: written), 1 MINOR (bidi/zero-width in titles: fixed with a test). |
 | Code B (M5) | 1 | 22fa3c4e0a2a1bac226c39e66d365b59a1cb4bf6:9cc9eafa5e00910aee038aad0e5eac20cfafc45c | CHANGES: 1 BLOCKER (same as A's F1, fixed), 2 MINOR (guard shown red by mutation, logged; menu entry now uses the handler's address function). Verify: five suites and `pr_status_open` (6) passed. |
+| Code A (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | No BLOCKER or MAJOR; 6 MINOR/notes, none needed a round. |
+| Code B (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | CLEAN; 1 MINOR (compile-red, already logged as a deviation). Verify suites passed. |
 
 ## Declined review findings
 
@@ -90,6 +92,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 
 - Code B (M3) F2: red before green for T024/T025 behaviours beyond the two mutants — the cycle log already records that these tests were written after the wiring; every behaviour is pinned by a passing test and two were shown red by mutant; a retrofit of ~15 mutants buys no behaviour. Recorded as a known Constitution I deviation for the reviewer of the PR.
 - Code B (M3) F3: `crate::log_line` is the client's only logging facility (no level exists).
+- Code A (M6) F1 (mark can go stale until the next reading): the interval and refresh triggers are M7 (T055-T065); FR-018a asks for a fresh check at every reading, which this does. F2 to F6 (request-id coupling with `send_op`, duplicate limit constant, reducer carrying shell messages, redundant timeout lookup, uncancelled timer): the same pattern as the shipped `RemotesTimedOut`; harmless, kept consistent.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
