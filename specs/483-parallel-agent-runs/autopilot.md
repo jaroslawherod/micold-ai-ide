@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: milestone M4
-- **Next step**: M4 PR opened by the orchestrator; then M5
+- **Phase**: milestone M5
+- **Next step**: orchestrator opens the M5 PR from the scratchpad pr-483-m5.md; then the close unit (T068–T070)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #647 | M1b (Run in parallel dialog, group row) | merged (rebase) | a90e7642e50390aad3665af07f95d32d34152e49 |
 | #650 | M2 (restart survival, deletes, Dismiss group) | merged (rebase) | 0d356a56a83775c03741c14413fd93fd09cee0df |
 | #651 | M3 (Compare the runs) | merged (rebase) | 2d07a5ac7d387657f0dfd6fddde527d10fea0d77 |
+| #652 | M4 (Pick this one) | merged (rebase) | 6e84ae5292e3b767b81c75369ca8f8ff4f3b53f7 |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | #650 | merged |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | #651 | merged |
-| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | (orchestrator opens) | gated, reviewed, PR text written |
-| M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
+| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | #652 | merged |
+| M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | (orchestrator opens) | gated, reviewed, PR text written |
 
 ## Decisions
 
@@ -94,6 +95,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B (conformance, sonnet) | 1 | ab8cf27d772af2bb17fb4bef7534e340ba477502:680acdffa53531475dabe73ad702b0efb639c54e | CHANGES: 2 MAJOR (red by mutation recorded in cycle-log; T050 re-scoped to the showcase pose, B8-B11 live deferred as for T027), 2 MINOR fixed (Compare view built lazily; task text names the real files) |
 | M4 review A (code-review high, sonnet reviewer) | 1 | f59ac801b29efe14bac3fe591b0b3b191a5f7611:5c277d598d45b5b481d31cfb4a68cd7763d98a15 | CHANGES: 1 MAJOR fixed (a merge the user left in progress in the base checkout is refused and kept; `merge_in_checkout` aborts only its own), 1 MINOR declined |
 | M4 review B (conformance, sonnet) | 1 | 6f532084659d7e8843a5697dd2d1a7aba4ecfaba:5c277d598d45b5b481d31cfb4a68cd7763d98a15 | CHANGES: Verify not runnable in the reviewer sandbox (run by the unit in the gate, all green); red evidence by mutation recorded in the cycle-log; uncommitted tree committed; T053/T057 text records the deviations |
+| M5 review A (code correctness, autopilot-reviewer) | 1 | 0473220f5a335538d8d6461e5c458f02aa4112ba:6e84ae5292e3b767b81c75369ca8f8ff4f3b53f7 | CHANGES: 1 MAJOR fixed (choice frozen while Confirm re-reads: `is_editable`), 2 MINOR (late read vs untick fixed with `touched`; Esc on the second dialog declined) |
+| M5 review B (conformance) | 1 | 0473220f5a335538d8d6461e5c458f02aa4112ba:6e84ae5292e3b767b81c75369ca8f8ff4f3b53f7 | CHANGES: 1 MAJOR fixed (cycle-log M5 section, tasks ticked), 2 MINOR fixed (user guide wording, touched) |
+| M5 review A+B round 2 (sonnet) | 2 | working tree after the fixes | CLEAN |
 
 ## Declined review findings
 
@@ -119,6 +123,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 A F1 (MINOR): a `Failed` read is not retried on a group push, only on the watch's next change; retrying every push would re-read a persistently failing run on each push.
 - M4 A F2 (MINOR): the `MergeInCheckout` base check is check-then-act, not a compare-and-swap: `git merge` of the run branch never rewrites history and a conflict or overwrite is refused and undone, so a base that moves in the window still ends consistent; the contract's I1 observe-once stands.
 - M4 B F1: Verify refused by the reviewer's sandbox, not a test failure; run by the unit (gate). B F2: red evidence by mutation, as M2 and M3 (precedent accepted). B F4: BaseMoved daemon race test and snackbar test: BaseMoved is held by the core CAS test, amended in T053 text; snackbars are glue held by the visual pass.
+- M5 A F3 (MINOR): Escape on the second confirmation dismisses the whole offer and removes nothing, not even the clean losers: Escape must never delete; the buttons Remove anyway / Keep it carry the decision (K5 'declining' = Keep it). Round 2 agreed.
+- M5 data-model deviation: `CleanupOffer.confirming` is `Option<Vec<u8>>` (one question naming every selected loser that holds or may hold uncommitted changes) rather than `Option<u8>`; per-loser `uncommitted` is the Clean/Uncommitted/Unknown tri-state with `confirmed`, `touched` and `reading` beside it.
 
 ## Handover
 

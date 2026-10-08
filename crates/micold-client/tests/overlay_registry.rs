@@ -224,6 +224,17 @@ fn dialogs() -> Vec<Dialog> {
                 });
             },
         },
+        // The cleanup offer after a pick, and its second confirmation (feature 483, K).
+        Dialog {
+            id: "run_cleanup_offer",
+            cancel: Message::Runs(micold_client::features::runs::Msg::CleanupDismissed),
+            open: |state| state.runs.cleanup = Some(a_cleanup_offer(None)),
+        },
+        Dialog {
+            id: "run_cleanup_second_confirm",
+            cancel: Message::Runs(micold_client::features::runs::Msg::CleanupDismissed),
+            open: |state| state.runs.cleanup = Some(a_cleanup_offer(Some(vec![1]))),
+        },
         // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
         // without answering; the daemon keeps waiting for another window or times out.
         Dialog {
@@ -344,17 +355,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483).
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483).
     assert_eq!(
         dialogs().len(),
-        16,
+        18,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        34,
-        "sixteen dialogs plus nothing open, each with the filter panel open and closed"
+        38,
+        "eighteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -910,4 +921,28 @@ fn open_discard_pending(state: &mut State) {
         },
     );
     let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
+}
+
+fn a_cleanup_offer(confirming: Option<Vec<u8>>) -> micold_client::features::runs::CleanupOffer {
+    use micold_client::features::runs::{CleanupLoser, CleanupOffer, Uncommitted};
+    CleanupOffer {
+        group: micold_core::runs::GroupId(uuid::Uuid::from_u128(1)),
+        project: std::path::PathBuf::from("/p"),
+        base_branch: "main".into(),
+        heading: "Run 2 was merged into main".into(),
+        losers: vec![CleanupLoser {
+            number: 1,
+            dir_name: "feat-a-1".into(),
+            branch: "feat/a-1".into(),
+            sessions: 1,
+            selected: true,
+            uncommitted: Uncommitted::Uncommitted,
+            confirmed: false,
+            delete_branch: true,
+            reading: None,
+            touched: false,
+        }],
+        rechecking: false,
+        confirming,
+    }
 }

@@ -390,6 +390,18 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
                 roles,
             ),
             posed(
+                "Cleanup offer",
+                crate::ui::compare::cleanup_modal(&cleanup_pose(None), None, roles)
+                    .map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
+                "Cleanup offer, second confirmation",
+                crate::ui::compare::second_confirmation_modal(&cleanup_pose(Some(vec![3])), roles)
+                    .map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
                 "a worktree tree",
                 material::TreeView::new(items, roles)
                     // The selected row's heavier label (feature 024, FR-003a). Posed here because it is
@@ -485,4 +497,34 @@ pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
         )],
         Layout::Inline,
     )
+}
+
+/// The cleanup offer after run 2 was merged: run 1 is clean and selected, run 3 holds uncommitted
+/// changes and starts unselected (feature 483, K1-K3).
+fn cleanup_pose(confirming: Option<Vec<u8>>) -> crate::features::runs::CleanupOffer {
+    use crate::features::runs::{CleanupLoser, CleanupOffer, Uncommitted};
+    let loser = |number: u8, sessions: usize, selected: bool, uncommitted| CleanupLoser {
+        number,
+        dir_name: format!("feat-login-page-{number}"),
+        branch: format!("feat/login-page-{number}"),
+        sessions,
+        selected,
+        uncommitted,
+        confirmed: false,
+        delete_branch: true,
+        reading: None,
+        touched: false,
+    };
+    CleanupOffer {
+        group: micold_core::runs::GroupId(uuid::Uuid::nil()),
+        project: std::path::PathBuf::from("/p"),
+        base_branch: "main".into(),
+        heading: "Run 2 was merged into main".into(),
+        losers: vec![
+            loser(1, 2, true, Uncommitted::Clean),
+            loser(3, 1, false, Uncommitted::Uncommitted),
+        ],
+        rechecking: false,
+        confirming,
+    }
 }

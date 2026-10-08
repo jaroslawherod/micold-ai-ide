@@ -95,6 +95,8 @@ equal the Changes totals for the default base, exclude the base's own commits ot
 `features_runs` (rows, stale-answer drop, per-run refresh, Open diff, failed run), and the live
 refresh by the shared `changes_watch` debounce. They stay for a pass with a display.
 
+**M5 (2026-10-08, Xvfb, showcase, light and dark):** the cleanup offer pose (heading "Run 2 was merged into main"; run 1 selected with "Deletes its worktree folder and stops 2 sessions."; run 3 tagged `uncommitted changes`, unselected, 1 session; each with **Delete the branch too** on) and its second confirmation ("Remove runs with uncommitted changes?", naming Run 3, **Remove anyway** and **Keep it**) are readable in both schemes (`visual-pass/m5-cleanup-offer-light.png`, `-dark.png`, `m5-cleanup-second-light.png`, `-dark.png`). B17–B19 on the live client were not driven (no fixture daemon in this container); their rules are covered by `features_runs` (offer once, unselected-uncommitted, re-read before delete, second confirmation, decline removes the rest, dismiss removes nothing and does not reopen, choice frozen during the re-read) and `overlay_registry` (both surfaces, Escape). They stay for a pass with a display.
+
 ### §C — macOS and Windows
 
 (filled when run, or recorded as not run with what CI covers instead)

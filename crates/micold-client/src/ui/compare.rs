@@ -6,13 +6,19 @@
 
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Element, Length};
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
 
 use crate::app::{Message, State};
-use crate::features::runs::{compare_rows, CompareRow, Msg, PickAvailability, RunCounts};
+use crate::features::runs::{
+    compare_rows, CleanupLoser, CleanupOffer, CompareRow, Msg, PickAvailability, RunCounts,
+    Uncommitted,
+};
+use crate::features::window::FieldId;
 use crate::icons::Icon;
-use crate::ui::material::{Button, Tag, Text, Tooltip, TypeRole};
+use crate::ui::focus::TrackFocus;
+use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Tag, Text, Tooltip, TypeRole};
 
 /// Characters of the prompt the header shows before it is cut; the tooltip holds all of it (C1).
 pub const PROMPT_CLAMP: usize = 160;
@@ -145,6 +151,141 @@ pub fn run_row<'a, M: Clone + 'a>(
     line.into()
 }
 
+/// What removing a loser deletes (K2): its folder, its sessions and, optionally, its branch.
+pub fn removal_text(loser: &CleanupLoser) -> String {
+    let sessions = match loser.sessions {
+        0 => "no sessions".to_string(),
+        1 => "1 session".to_string(),
+        n => format!("{n} sessions"),
+    };
+    format!("Deletes its worktree folder and stops {sessions}.")
+}
+
+fn loser_row<'a>(
+    loser: &CleanupLoser,
+    editable: bool,
+    focused: Option<FieldId>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let run = loser.number;
+    let mut select = Checkbox::new(format!("Run {run} ({})", loser.branch), loser.selected, r)
+        .track_focus(FieldId::CleanupLoser(run), focused);
+    let mut branch = Checkbox::new("Delete the branch too", loser.delete_branch, r)
+        .track_focus(FieldId::CleanupBranch(run), focused);
+    if editable {
+        select = select.on_toggle(move |_| Message::Runs(Msg::CleanupToggled(run)));
+        branch = branch.on_toggle(move |_| Message::Runs(Msg::CleanupBranchToggled(run)));
+    }
+    let mut head = row![select].spacing(spacing::MD).align_y(Alignment::Center);
+    if loser.uncommitted != Uncommitted::Clean {
+        let label = match loser.uncommitted {
+            Uncommitted::Unknown => "changes unknown",
+            _ => "uncommitted changes",
+        };
+        head = head.push(Tag::new(label, r.tertiary));
+    }
+    column![
+        head,
+        Text::new(removal_text(loser), TypeRole::Body, r).muted(),
+        branch,
+    ]
+    .spacing(spacing::XS)
+    .into()
+}
+
+/// The cleanup offer (K1–K3, K6): one row per loser, confirm and dismiss.
+pub fn cleanup_modal<'a>(
+    offer: &CleanupOffer,
+    focused: Option<FieldId>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let mut list = column![].spacing(spacing::MD);
+    for loser in &offer.losers {
+        list = list.push(loser_row(loser, offer.is_editable(), focused, r));
+    }
+    let fields = material::dialog::fields(column![
+        Text::new(offer.heading.clone(), TypeRole::Headline, r),
+        Text::new("Remove the other runs?", TypeRole::Body, r).muted(),
+        list,
+    ]);
+    let mut confirm = Button::filled("Remove selected", r);
+    if !offer.rechecking {
+        confirm = confirm.on_press(Message::Runs(Msg::CleanupConfirmed));
+    }
+    let actions = material::dialog::actions(row![
+        confirm,
+        Button::outlined("Keep them all", r).on_press(Message::Runs(Msg::CleanupDismissed)),
+    ]);
+    material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(520.0))
+    .into()
+}
+
+/// The second confirmation (K5): names each loser that holds uncommitted changes.
+pub fn second_confirmation_modal<'a>(offer: &CleanupOffer, r: Roles) -> Element<'a, Message> {
+    let held: Vec<u8> = offer.confirming.clone().unwrap_or_default();
+    let names = held
+        .iter()
+        .map(|n| format!("Run {n}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let fields = material::dialog::fields(column![
+        Text::new(
+            "Remove runs with uncommitted changes?",
+            TypeRole::Headline,
+            r
+        ),
+        Text::new(
+            format!(
+                "{names} holds uncommitted changes that exist nowhere else. Removing it deletes \
+                 them for good."
+            ),
+            TypeRole::Body,
+            r
+        )
+        .muted(),
+    ]);
+    let actions = material::dialog::actions(row![
+        Button::filled("Remove anyway", r).on_press(Message::Runs(Msg::CleanupSecondConfirmed)),
+        Button::outlined("Keep it", r).on_press(Message::Runs(Msg::CleanupSecondDeclined)),
+    ]);
+    material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(460.0))
+    .into()
+}
+
+/// The registered cleanup offer.
+pub fn cleanup_dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    let offer = state.runs.cleanup.as_ref()?;
+    Some(cleanup_modal(
+        offer,
+        state.window.focused_field,
+        tokens::roles(scheme),
+    ))
+}
+
+/// The registered second confirmation.
+pub fn second_confirmation_dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    let offer = state.runs.cleanup.as_ref()?;
+    Some(second_confirmation_modal(offer, tokens::roles(scheme)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,6 +293,28 @@ mod tests {
     #[test]
     fn counts_read_files_then_added_then_removed_with_a_true_minus() {
         assert_eq!(counts_text(4, 120, 30), "4 files +120 \u{2212}30");
+    }
+
+    #[test]
+    fn removal_text_counts_the_sessions_it_stops() {
+        let mut loser = CleanupLoser {
+            number: 1,
+            dir_name: "d".into(),
+            branch: "b".into(),
+            sessions: 2,
+            selected: true,
+            uncommitted: Uncommitted::Clean,
+            confirmed: false,
+            delete_branch: true,
+            reading: None,
+            touched: false,
+        };
+        assert_eq!(
+            removal_text(&loser),
+            "Deletes its worktree folder and stops 2 sessions."
+        );
+        loser.sessions = 1;
+        assert!(removal_text(&loser).ends_with("stops 1 session."));
     }
 
     #[test]

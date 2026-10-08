@@ -866,3 +866,266 @@ fn success_names_the_base_branch_and_a_refusal_changes_nothing_in_the_view() {
     let before = compare_rows(&state, &[]).unwrap().1;
     assert_eq!(compare_rows(&state, &[]).unwrap().1, before);
 }
+
+// ---- Clean up the losers (T062, K1-K6) ----
+
+use micold_client::features::runs::{CleanupOffer, SummaryRead as Read, Uncommitted};
+use std::collections::BTreeMap;
+
+fn dirty() -> RunSummary {
+    RunSummary {
+        uncommitted: true,
+        ..summary(1, 1, 0)
+    }
+}
+
+/// A group of three prompted runs, run 2 picked: the offer is open with its three reads pending.
+fn offer_ready() -> (State, GroupId, Vec<Read>) {
+    let (mut state, id) = pick_ready(&vec![RunStatus::Prompted; 3]);
+    let sessions = BTreeMap::from([(1, 2), (3, 1)]);
+    let effect = update(
+        &mut state,
+        Msg::Picked {
+            group: id,
+            project: PathBuf::from("/p"),
+            run: 2,
+            integration: Integration::MergeCommit { commit: "c".into() },
+            sessions,
+        },
+    );
+    let Effect::ReadCleanup(reads) = effect else {
+        panic!("expected one read per loser, got {effect:?}");
+    };
+    (state, id, reads)
+}
+
+fn offer(state: &State) -> &CleanupOffer {
+    state.cleanup.as_ref().expect("the offer is open")
+}
+
+fn answer(state: &mut State, read: &Read, result: Result<RunSummary, String>) -> Effect {
+    update(
+        state,
+        Msg::CleanupRead {
+            seq: read.seq,
+            run: read.run,
+            result,
+        },
+    )
+}
+
+fn deletes(effect: Effect) -> Vec<(String, bool)> {
+    let Effect::SendEach(msgs) = effect else {
+        panic!("expected deletes, got {effect:?}");
+    };
+    msgs.into_iter()
+        .map(|m| match m {
+            ClientMsg::WorktreeDelete {
+                dir_name,
+                stop_sessions: true,
+                delete_branch,
+                ..
+            } => (dir_name, delete_branch),
+            other => panic!("expected only worktree deletes, got {other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn a_pick_opens_the_offer_once_with_a_row_and_a_fresh_read_per_loser() {
+    let (mut state, id, reads) = offer_ready();
+    let o = offer(&state);
+    assert_eq!(o.heading, "Run 2 was merged into main");
+    let numbers: Vec<u8> = o.losers.iter().map(|l| l.number).collect();
+    assert_eq!(numbers, [1, 3]);
+    assert_eq!(o.losers[0].sessions, 2);
+    assert_eq!(o.losers[1].sessions, 1);
+    assert!(o.losers.iter().all(|l| l.delete_branch));
+    assert_eq!(reads.iter().map(|r| r.run).collect::<Vec<_>>(), [1, 3]);
+    assert!(reads.iter().all(|r| r.base_branch == "main"));
+    // Dismissing it emits nothing and it does not reopen.
+    assert_eq!(update(&mut state, Msg::CleanupDismissed), Effect::None);
+    assert!(state.cleanup.is_none());
+    let again = update(
+        &mut state,
+        Msg::Picked {
+            group: id,
+            project: PathBuf::from("/p"),
+            run: 2,
+            integration: Integration::MergeCommit { commit: "c".into() },
+            sessions: BTreeMap::new(),
+        },
+    );
+    assert_eq!(again, Effect::None);
+    assert!(state.cleanup.is_none());
+}
+
+#[test]
+fn a_fast_forward_pick_says_so() {
+    let (mut state, id) = pick_ready(&vec![RunStatus::Prompted; 2]);
+    update(
+        &mut state,
+        Msg::Picked {
+            group: id,
+            project: PathBuf::from("/p"),
+            run: 1,
+            integration: Integration::FastForward {
+                base_tip: "t".into(),
+            },
+            sessions: BTreeMap::new(),
+        },
+    );
+    assert_eq!(offer(&state).heading, "Run 1 fast-forwarded main");
+}
+
+#[test]
+fn a_loser_whose_read_is_pending_failed_or_uncommitted_starts_unselected_and_is_not_removable() {
+    let (mut state, _, reads) = offer_ready();
+    // Pending: unselected, unknown, not removable (even when the user ticks it).
+    assert!(offer(&state).losers.iter().all(|l| !l.selected));
+    assert!(offer(&state)
+        .losers
+        .iter()
+        .all(|l| l.uncommitted == Uncommitted::Unknown));
+    update(&mut state, Msg::CleanupToggled(1));
+    assert!(offer(&state).removable().is_empty());
+    // Clean: selected and removable.
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    assert_eq!(offer(&state).removable(), [1]);
+    // Uncommitted: unselected, tagged, not removable even when ticked.
+    answer(&mut state, &reads[1], Ok(dirty()));
+    assert_eq!(
+        offer(&state).losers[1].uncommitted,
+        Uncommitted::Uncommitted
+    );
+    assert!(!offer(&state).losers[1].selected);
+    update(&mut state, Msg::CleanupToggled(3));
+    assert_eq!(offer(&state).removable(), [1]);
+}
+
+#[test]
+fn a_failed_read_counts_as_uncommitted() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[1], Err("no git".into()));
+    assert_eq!(offer(&state).losers[1].uncommitted, Uncommitted::Unknown);
+    assert!(!offer(&state).losers[1].selected);
+    update(&mut state, Msg::CleanupToggled(3));
+    assert!(!offer(&state).removable().contains(&3));
+}
+
+#[test]
+fn confirming_reads_the_selected_again_and_sends_nothing_until_they_answer() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    answer(&mut state, &reads[1], Ok(summary(1, 1, 0)));
+    let Effect::ReadCleanup(fresh) = update(&mut state, Msg::CleanupConfirmed) else {
+        panic!("confirm must read first");
+    };
+    assert_eq!(fresh.iter().map(|r| r.run).collect::<Vec<_>>(), [1, 3]);
+    assert!(fresh.iter().all(|f| reads.iter().all(|r| r.seq != f.seq)));
+    assert_eq!(
+        answer(&mut state, &fresh[0], Ok(summary(1, 1, 0))),
+        Effect::None
+    );
+    // A stale answer changes nothing.
+    assert_eq!(answer(&mut state, &reads[1], Ok(dirty())), Effect::None);
+    let sent = deletes(answer(&mut state, &fresh[1], Ok(summary(1, 1, 0))));
+    assert_eq!(
+        sent,
+        [
+            ("feat-a-1".to_string(), true),
+            ("feat-a-3".to_string(), true)
+        ]
+    );
+    assert!(state.cleanup.is_none());
+}
+
+#[test]
+fn keeping_the_branch_is_passed_through_and_an_unselected_loser_is_left_alone() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    answer(&mut state, &reads[1], Ok(summary(1, 1, 0)));
+    update(&mut state, Msg::CleanupToggled(3));
+    update(&mut state, Msg::CleanupBranchToggled(1));
+    let Effect::ReadCleanup(fresh) = update(&mut state, Msg::CleanupConfirmed) else {
+        panic!("confirm must read first");
+    };
+    assert_eq!(fresh.len(), 1);
+    let sent = deletes(answer(&mut state, &fresh[0], Ok(summary(1, 1, 0))));
+    assert_eq!(sent, [("feat-a-1".to_string(), false)]);
+}
+
+#[test]
+fn a_loser_that_turned_uncommitted_needs_the_second_confirmation_and_declining_removes_the_rest() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    answer(&mut state, &reads[1], Ok(summary(1, 1, 0)));
+    let Effect::ReadCleanup(fresh) = update(&mut state, Msg::CleanupConfirmed) else {
+        panic!("confirm must read first");
+    };
+    answer(&mut state, &fresh[0], Ok(summary(1, 1, 0)));
+    assert_eq!(answer(&mut state, &fresh[1], Ok(dirty())), Effect::None);
+    assert_eq!(offer(&state).confirming, Some(vec![3]));
+    assert!(!offer(&state).removable().contains(&3));
+    let sent = deletes(update(&mut state, Msg::CleanupSecondDeclined));
+    assert_eq!(sent, [("feat-a-1".to_string(), true)]);
+    assert!(state.cleanup.is_none());
+}
+
+#[test]
+fn a_selected_uncommitted_loser_is_removed_only_after_the_second_confirmation() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    answer(&mut state, &reads[1], Ok(dirty()));
+    update(&mut state, Msg::CleanupToggled(3));
+    let Effect::ReadCleanup(fresh) = update(&mut state, Msg::CleanupConfirmed) else {
+        panic!("confirm must read first");
+    };
+    answer(&mut state, &fresh[0], Ok(summary(1, 1, 0)));
+    assert_eq!(answer(&mut state, &fresh[1], Ok(dirty())), Effect::None);
+    assert_eq!(offer(&state).confirming, Some(vec![3]));
+    // Escape (dismissing) at the second question removes nothing at all.
+    let mut backed = state.clone();
+    assert_eq!(update(&mut backed, Msg::CleanupDismissed), Effect::None);
+    assert!(backed.cleanup.is_none());
+    let sent = deletes(update(&mut state, Msg::CleanupSecondConfirmed));
+    assert_eq!(
+        sent,
+        [
+            ("feat-a-1".to_string(), true),
+            ("feat-a-3".to_string(), true)
+        ]
+    );
+}
+
+#[test]
+fn confirming_with_nothing_selected_closes_without_sending() {
+    let (mut state, _, reads) = offer_ready();
+    answer(&mut state, &reads[0], Ok(dirty()));
+    answer(&mut state, &reads[1], Ok(dirty()));
+    assert_eq!(update(&mut state, Msg::CleanupConfirmed), Effect::None);
+    assert!(state.cleanup.is_none());
+}
+
+#[test]
+fn the_choice_is_frozen_while_confirm_re_reads_and_a_late_read_keeps_the_users_untick() {
+    let (mut state, _, reads) = offer_ready();
+    // Untick run 1 before its read arrives: the clean answer does not tick it again.
+    update(&mut state, Msg::CleanupToggled(1));
+    update(&mut state, Msg::CleanupToggled(1));
+    answer(&mut state, &reads[0], Ok(summary(1, 1, 0)));
+    answer(&mut state, &reads[1], Ok(summary(1, 1, 0)));
+    update(&mut state, Msg::CleanupToggled(1));
+    update(&mut state, Msg::CleanupToggled(1));
+    assert_eq!(offer(&state).removable(), [3]);
+    let Effect::ReadCleanup(fresh) = update(&mut state, Msg::CleanupConfirmed) else {
+        panic!("confirm must read first");
+    };
+    // Ticking the unselected run 1 now would delete it on a stale read: it is ignored.
+    update(&mut state, Msg::CleanupToggled(1));
+    update(&mut state, Msg::CleanupBranchToggled(3));
+    assert!(!offer(&state).losers[0].selected);
+    assert!(offer(&state).losers[1].delete_branch);
+    let sent = deletes(answer(&mut state, &fresh[0], Ok(summary(1, 1, 0))));
+    assert_eq!(sent, [("feat-a-3".to_string(), true)]);
+}
