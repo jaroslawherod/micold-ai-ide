@@ -853,9 +853,11 @@ impl SettingsDraft {
         let Self {
             section: _,
             appearance: AppearanceDraft { theme: _ },
-            terminal: TerminalDraft {
-                scrollback_lines: _,
-            },
+            terminal:
+                TerminalDraft {
+                    scrollback_lines: _,
+                    save_terminal_history: _,
+                },
             environment:
                 EnvironmentDraft {
                     enabled: _,
@@ -899,6 +901,7 @@ impl SettingsDraft {
         refresh!(
             appearance.theme,
             terminal.scrollback_lines,
+            terminal.save_terminal_history,
             environment.enabled,
             environment.script_path,
             environment.timeout_secs,
