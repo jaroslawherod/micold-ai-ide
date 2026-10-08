@@ -158,10 +158,20 @@ impl Runs {
         dir_name: &str,
     ) -> Option<DaemonMsg> {
         let groups = self.project(catalog, project);
-        let at = groups
-            .iter()
-            .position(|g| g.runs.iter().any(|run| run.names.dir_name == dir_name))?;
-        groups[at].runs.retain(|run| run.names.dir_name != dir_name);
+        // A run that failed at its worktree never owned that folder: an unrelated worktree of the
+        // same name must not take the run out of its group.
+        let owns = |run: &Run| {
+            run.names.dir_name == dir_name
+                && !matches!(
+                    run.status,
+                    RunStatus::Failed {
+                        step: RunStep::Worktree,
+                        ..
+                    }
+                )
+        };
+        let at = groups.iter().position(|g| g.runs.iter().any(owns))?;
+        groups[at].runs.retain(|run| !owns(run));
         if groups[at].runs.is_empty() {
             groups.remove(at);
         }

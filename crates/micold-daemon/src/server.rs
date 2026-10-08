@@ -739,8 +739,11 @@ where
                             })
                             .await
                         };
-                        if let Ok(groups) = groups {
-                            state.send(id, groups);
+                        match groups {
+                            Ok(groups) => state.send(id, groups),
+                            Err(err) => {
+                                tracing::warn!(%err, "the run groups were not read on attach");
+                            }
                         }
                         // Feature 482: the project's stored comments, one push per entry.
                         for msg in state.review_pushes_on_attach(&project) {
