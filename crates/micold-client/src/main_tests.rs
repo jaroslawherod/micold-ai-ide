@@ -9198,11 +9198,11 @@ fn a_window_that_takes_its_project_back_reports_the_session_in_view_again() {
 /// GitHub reported to the link opener, and only when it is a GitHub address (FR-014; U116, U117).
 mod pr_status_open {
     use super::*;
-    use std::sync::Mutex;
     use crate::shell::link_opener::LinkOpener;
     use micold_client::features::OpenFailure;
     use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
     use micold_core::worktree::WorktreeStatus::Valid;
+    use std::sync::Mutex;
 
     #[derive(Default)]
     struct Recording {
