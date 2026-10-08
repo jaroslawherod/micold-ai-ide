@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: milestone M3
-- **Next step**: M3 PR (title and body in the scratchpad pr-483-m3.md) opened by the orchestrator; then M4
+- **Phase**: milestone M4
+- **Next step**: M4 handover: gate, reviews, mutation evidence, visual pass, PR text (see Handover)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #644 | M1a (core, protocol v36, daemon) | merged (rebase) | 8d574eb591164a3e7ea3d01866461409023c46a8 |
 | #647 | M1b (Run in parallel dialog, group row) | merged (rebase) | a90e7642e50390aad3665af07f95d32d34152e49 |
 | #650 | M2 (restart survival, deletes, Dismiss group) | merged (rebase) | 0d356a56a83775c03741c14413fd93fd09cee0df |
+| #651 | M3 (Compare the runs) | merged (rebase) | 2d07a5ac7d387657f0dfd6fddde527d10fea0d77 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | #650 | merged |
-| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | (orchestrator opens) | pushed, PR pending |
-| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
+| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | #651 | merged |
+| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | (orchestrator opens) | implemented, not yet gated/reviewed |
 | M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
 
 ## Decisions
@@ -117,7 +118,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 branch restarted from origin/main (2d07a5ac). Done and committed (2 commits, NOT pushed): core `runs::integrate` (pure) + `Git` trait methods + `summary::read_uncommitted_files` (T051/52/55/56, core tests green), daemon `ops::pick_run`, `Runs::group/pick`, server arm (T053/57/58, run_group_pick + run_group_create green; the placeholder test was removed), client `features/runs.rs` pick availability/confirm/refusal + `ui/confirm_pick_run.rs` (T054/59, features_runs 39 green, clippy client clean), user guide section (T060). T051–T060 ticked; T061 open.
+
+Deviations to record in the PR: `base_branch_is_checked_out` (T057) is not in state.rs: the checkout is read live with `git worktree list` per contract I1 (cache can be stale). `integrate::plan` takes (run_tip, is_ancestor, checkout) without base_tip. A run already contained in the base is a no-op `FastForward{base_tip}`. BaseMoved is covered by the core CAS test only (no daemon race test).
+
+Known gaps for next unit: (1) tests were written AFTER code for the pure integrate module and the client (no red phase): add red-by-mutation evidence to specs/483-parallel-agent-runs/tdd/cycle-log.md as M2/M3 did (review B flagged this in M3). (2) Refusal/success snackbars live in `shell/daemon_sync.rs`, untested. (3) Full gate was started: `cargo` raw commands, log `scratchpad/gate-m4.log` (use `--no-fail-fast`; expect only the 6 root permission failures); rerun if the tree changed. (4) Not yet run: review A (code-review high on origin/main...HEAD), review B (conformance rubric, sonnet, `claude -p --agent autopilot-reviewer`; run review-snapshot.sh first and record it), visual pass B12–B16, B20 (T061, record under quickstart.md § Results § B), write PR text to scratchpad/pr-483-m4.md, gate stamp + push.
 
 ## Open escalation
 
