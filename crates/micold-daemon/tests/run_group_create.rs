@@ -382,31 +382,26 @@ async fn w2_the_prompt_is_never_logged() {
     );
 }
 
-/// Pick and dismiss are not served in this milestone (T035 and T058 retire this).
+/// Pick is not served in this milestone (T058 retires this); dismiss is (T035, run_group_persist.rs).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn pick_and_dismiss_are_refused_for_now() {
+async fn pick_is_refused_for_now() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new();
     let project = s.project();
     let mut client = window(&s.state, &project).await;
-    let group = GroupId::new();
-    for msg in [
+    let (answer, _) = request(
+        &mut client,
+        1,
         ClientMsg::RunGroupPick {
             req: 1,
             project: project.clone(),
-            group,
+            group: GroupId::new(),
             run: 1,
         },
-        ClientMsg::RunGroupDismiss {
-            req: 1,
-            project: project.clone(),
-            group,
-        },
-    ] {
-        let (answer, _) = request(&mut client, 1, msg).await;
-        let (kind, _) = answer.expect_err("not served yet");
-        assert_eq!(kind, ErrorKind::Refused);
-    }
+    )
+    .await;
+    let (kind, _) = answer.expect_err("not served yet");
+    assert_eq!(kind, ErrorKind::Refused);
 }
 
 #[path = "support/mcp.rs"]

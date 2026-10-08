@@ -2166,7 +2166,7 @@ impl DaemonState {
     pub fn run_groups_on_attach(&self, project: &Path) -> DaemonMsg {
         let mut inner = self.lock();
         let inner = &mut *inner;
-        inner.runs.changed(&inner.catalog, project)
+        inner.runs.changed(&mut inner.catalog, project)
     }
 
     /// Record a new run group of `project`, written before it is held (feature 483, W5). Pushes
@@ -2178,14 +2178,40 @@ impl DaemonState {
     ) -> Result<(), crate::review::Refusal> {
         let mut inner = self.lock();
         let inner = &mut *inner;
-        inner.runs.add(&inner.catalog, project, group)
+        inner.runs.add(&mut inner.catalog, project, group)
+    }
+
+    /// Dismiss run group `group` of `project`, leaving its worktrees, branches and sessions
+    /// (feature 483, W4). Pushes nothing: the caller answers first, then
+    /// [`Self::broadcast_run_groups`].
+    pub fn dismiss_run_group(
+        &self,
+        project: &Path,
+        group: micold_core::runs::GroupId,
+    ) -> Result<(), crate::review::Refusal> {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner.runs.dismiss(&mut inner.catalog, project, group)
+    }
+
+    /// Take the run of the deleted worktree `dir_name` out of its group, and push the project's
+    /// run groups when one changed (feature 483, W5, FR-008).
+    pub fn forget_run_worktree(&self, project: &Path, dir_name: &str) {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        if let Some(msg) = inner
+            .runs
+            .forget_worktree(&mut inner.catalog, project, dir_name)
+        {
+            Self::broadcast_locked(inner, vec![msg]);
+        }
     }
 
     /// Push `project`'s run groups to every client (feature 483).
     pub fn broadcast_run_groups(&self, project: &Path) {
         let mut inner = self.lock();
         let inner = &mut *inner;
-        let msg = inner.runs.changed(&inner.catalog, project);
+        let msg = inner.runs.changed(&mut inner.catalog, project);
         Self::broadcast_locked(inner, vec![msg]);
     }
 
@@ -2204,7 +2230,7 @@ impl DaemonState {
         let inner = &mut *inner;
         match inner
             .runs
-            .set_run(&inner.catalog, project, group, number, status, session)
+            .set_run(&mut inner.catalog, project, group, number, status, session)
         {
             Some(msg) => {
                 Self::broadcast_locked(inner, vec![msg]);

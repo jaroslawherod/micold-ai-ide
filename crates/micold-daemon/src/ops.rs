@@ -297,6 +297,8 @@ pub async fn delete_worktree(
             // the next thing created at that path an ownership nobody granted it.
             // Feature 482 (W11, FR-020): its review comments go with it, everywhere.
             state.forget_review_worktree(&project, &dir_name);
+            // Feature 483 (W5, FR-008): its run leaves its group, and an emptied group goes.
+            state.forget_run_worktree(&project, &dir_name);
             if let Err(e) = state.forget_worktree_provenance(&project, &dir_name) {
                 tracing::warn!(
                     project = %project.display(),

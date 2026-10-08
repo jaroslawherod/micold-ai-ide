@@ -45,7 +45,7 @@ worktree with uncommitted changes without asking. Depends on #482 for the compar
   user confirmation)_
 - Q: How does Pick this one integrate the run's branch into the base branch? → A: Always a merge:
   a fast-forward when the base branch has not moved since the run's branch left it, otherwise a
-  merge commit; the run's branch is never rewritten. _(default, pending user confirmation)_
+  merge commit; the run's branch is never rewritten. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
