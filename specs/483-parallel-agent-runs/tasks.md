@@ -106,7 +106,7 @@ the 3 runs under it and the 2 others outside; restart and see the same.
 - [x] T024 [US2] Render the group row (`TreeItem::expandable`, the group's name, `3 runs` and `1 failed` `Tag`s), the run rows' `#<n>` and provider, and the no-worktree run row with its reason as tooltip in `crates/micold-client/src/ui/sidebar.rs` (parallel-surfaces G1, G1a, G2, G3)
 - [x] T025 [P] [US2] Add showcase poses of the group row (expanded with 3 runs, one failed with no worktree; collapsed with `3 runs` and `1 failed`) in `crates/micold-client/src/showcase/sections/surfaces.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [x] T026 [P] [US2] Add to `docs/user-guide/parallel-runs.md` the group row: its runs, counts and collapsing, and how a failed run is shown (FR-022 part)
-- [ ] T027 [US2] Run the visual pass for quickstart B1–B6 (`visual-pass` skill) and record the results under quickstart.md § Results § B
+- [x] T027 [US2] Run the visual pass for quickstart B1–B6 (`visual-pass` skill) and record the results under quickstart.md § Results § B
 
 ### Part B — Restart, delete and dismiss (US2 s3–s6)
 
