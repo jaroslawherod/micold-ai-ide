@@ -123,6 +123,8 @@ pub struct DaemonState {
     history_store: std::sync::OnceLock<micold_core::terminal_history::HistoryStore>,
     /// The periodic saver's schedules (feature 041, R6). Never held across a write.
     saver: Mutex<history::Saver>,
+    /// Serialises changes of the terminal history setting.
+    setting_change: Mutex<()>,
 }
 
 struct Inner {
@@ -662,6 +664,7 @@ impl DaemonState {
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
             saver: Mutex::new(history::Saver::default()),
+            setting_change: Mutex::new(()),
         }
     }
 
@@ -1756,11 +1759,18 @@ impl DaemonState {
     /// terminals and carried histories are untouched (FR-033); turned on, every running terminal
     /// is saved at the next tick.
     pub fn set_save_terminal_history(&self, on: bool) -> std::io::Result<()> {
-        let settings = {
+        // One change at a time, so two windows cannot leave the store and the setting disagreeing.
+        let _one_at_a_time = self
+            .setting_change
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (persisted, settings) = {
             let mut inner = self.lock();
-            inner.catalog.set_save_terminal_history(on)?;
-            inner.catalog.settings_wire()
+            let persisted = inner.catalog.set_save_terminal_history(on);
+            (persisted, inner.catalog.settings_wire())
         };
+        // The value in memory has changed even when it could not be written, so it is applied to
+        // the store either way: off must never keep writing terminal output to disk.
         if let Some(store) = self.history_store.get() {
             let failures = store.set_enabled(on);
             self.log_undeleted(&failures);
@@ -1772,7 +1782,7 @@ impl DaemonState {
             }
         }
         self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        persisted
     }
 
     /// One warning per file and reason that could not be deleted (FR-033).

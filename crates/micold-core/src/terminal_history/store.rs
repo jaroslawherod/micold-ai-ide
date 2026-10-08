@@ -75,6 +75,9 @@ struct State {
     /// Files whose deletion failed. Each is retried, never loaded, and leaves the set when it is
     /// deleted or replaced by a save, also after saving is turned on again (FR-033).
     undeleted: HashSet<String>,
+    /// The directory could not be listed when files were to be deleted: nothing is loaded and the
+    /// deletion is tried again as a whole (FR-033).
+    unlisted: bool,
     /// The checksum of the file last written for each session by this store.
     last_written: HashMap<SessionId, [u8; CHECKSUM_BYTES]>,
 }
@@ -90,6 +93,7 @@ impl HistoryStore {
             state: Mutex::new(State {
                 enabled: true,
                 undeleted: HashSet::new(),
+                unlisted: false,
                 last_written: HashMap::new(),
             }),
         }
@@ -115,9 +119,11 @@ impl HistoryStore {
     pub fn set_enabled(&self, enabled: bool) -> Vec<DeletionFailure> {
         let mut state = self.lock();
         state.enabled = enabled;
-        if enabled {
+        if enabled && !state.unlisted {
             return Vec::new();
         }
+        // Off, or on again after a directory that could not be listed: delete what is there, so
+        // nothing that was to be deleted comes back.
         self.delete_all(&mut state)
     }
 
@@ -132,6 +138,9 @@ impl HistoryStore {
     /// Try the files whose deletion failed again (FR-033). Returns those that still fail.
     pub fn retry_deletions(&self) -> Vec<DeletionFailure> {
         let mut state = self.lock();
+        if state.unlisted && !state.enabled {
+            return self.delete_all(&mut state);
+        }
         let names: Vec<String> = state.undeleted.iter().cloned().collect();
         let mut failures = Vec::new();
         for name in names {
@@ -154,11 +163,13 @@ impl HistoryStore {
     /// Delete every saved and temporary file; the ones that stay go to the retry set.
     fn delete_all(&self, state: &mut State) -> Vec<DeletionFailure> {
         state.last_written.clear();
+        state.unlisted = false;
         let mut failures = Vec::new();
         let entries = match std::fs::read_dir(&self.dir) {
             Ok(entries) => entries,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return failures,
             Err(error) => {
+                state.unlisted = true;
                 failures.push(DeletionFailure {
                     session: None,
                     error,
@@ -226,7 +237,7 @@ impl HistoryStore {
         let read = {
             let state = self.lock();
             // A history that was to be deleted never comes back (story 2 scenario 7).
-            if !state.enabled || state.undeleted.contains(&file_name(id)) {
+            if !state.enabled || state.unlisted || state.undeleted.contains(&file_name(id)) {
                 return LoadOutcome::None;
             }
             read_capped(&self.dir.join(file_name(id)))

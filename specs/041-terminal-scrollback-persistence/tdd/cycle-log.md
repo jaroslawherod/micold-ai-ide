@@ -844,3 +844,17 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - red: `cargo test -p micold-daemon --test history_stop_request` before the save step and the signal future: `test result: FAILED. 2 passed; 5 failed` (`no saved history` in the idle, bounded, waits and ten-session cases; the real service did not save its file on `SIGTERM`). The refusing-store and not-rewritten cases pass against an unwind that saves nothing, as they would
 - green: `history::save_all_live` (parallel `spawn_blocking`, 3 s bound) called by `unwind`, `DaemonState::save_final` (gate, `Saver::unsaved`), `platform::stop_requested` (Unix: three signals; Windows: pending until T063) and the `select!` arms in both accept loops. Same command: `test result: ok. 7 passed`
 - refactor: none
+
+## Cycles 81-92 (M5): the Save terminal history setting (U86-U105, U131)
+
+- test: `settings.rs` unit tests, `protocol_roundtrip.rs`, `schema_hash.rs`, `terminal_history_store.rs` (U92-U97), `history_setting.rs` (9 cases, U98-U100 and A12-A18), `features_settings.rs` and `settings_sections.rs` (U101-U105), `history_timing.rs` (U131, SC-005)
+- red: not recorded at the time. The tests and the code of T037-T047 and T074 were written in one unit and committed together (`07f47300`), so there is no red run before the code for them. Review B found this. Red is shown by mutation for the cases the review fixes below: see the next entries
+- green: `cargo test -p micold-core --test terminal_history_store`, `-p micold-daemon --test history_setting --test history_timing`, `-p micold-client` settings tests; all passed in the unit's runs
+- notes: SC-005 measured echo p95 0.4 ms with saving off and 0.75 ms on
+
+### Review fixes (M5)
+
+- test: `terminal_history_store.rs::an_unlistable_directory_is_retried_and_its_files_are_never_loaded` (review A: `delete_all` kept no record when the directory could not be listed, so the files came back when saving was turned on)
+- green: `State::unlisted` makes `load` return none, `retry_deletions` and `set_enabled` repeat the whole deletion
+- test: `history_timing.rs::shows` read one row at a time, so a token wrapped across the end of a row was never seen: a test race, not a lost echo (review B F2; the same flake seen once on Windows CI). It now reads the rows joined
+- code: `DaemonState::set_save_terminal_history` applies the value to the store even when the settings file cannot be written, and one change runs at a time (review A)
