@@ -1022,9 +1022,14 @@ fn with_state(state: PrState, review: ReviewState) -> PullRequestStatus {
 #[test]
 fn a_tooltip_without_a_pull_request_is_todays_text() {
     let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
+    // The location is a platform path (`\` on Windows), as the line has always been.
+    let location = Path::new(".claude/worktrees").join("feat-a");
     assert_eq!(
         tip,
-        "Name: Feat a\nBranch: feat/feat-a\nFolder: feat-a\nLocation: .claude/worktrees/feat-a"
+        format!(
+            "Name: Feat a\nBranch: feat/feat-a\nFolder: feat-a\nLocation: {}",
+            location.display()
+        )
     );
 }
 
