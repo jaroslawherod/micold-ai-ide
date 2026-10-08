@@ -170,6 +170,19 @@ impl RunStatus {
         )
     }
 
+    /// Whether a run in this status has a worktree to read: it is not still being created and did
+    /// not fail creating it (Compare, C3).
+    pub fn has_worktree(&self) -> bool {
+        !matches!(
+            self,
+            RunStatus::Creating
+                | RunStatus::Failed {
+                    step: RunStep::Worktree,
+                    ..
+                }
+        )
+    }
+
     /// Whether the run failed.
     pub fn is_failed(&self) -> bool {
         matches!(self, RunStatus::Failed { .. })

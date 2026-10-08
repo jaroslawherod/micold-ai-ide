@@ -56,6 +56,7 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
         }
         // The reducer sends nothing else; a new request needs a route above.
         Some(Effect::Send(_)) => {}
+        Some(Effect::ReadSummaries(_)) => {}
     }
     Task::none()
 }

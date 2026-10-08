@@ -138,6 +138,11 @@ pub trait Git {
     /// or why there is none (feature 482, research R7). Read-only.
     fn review_base(&self, dir: &Path) -> crate::review::base::Base;
 
+    /// The merge-base of `HEAD` and local branch `branch` in the worktree at `dir`, or why there
+    /// is none (feature 483, research R7): what Compare counts a run against when its group's
+    /// base branch is not the default branch. Read-only.
+    fn review_base_against(&self, dir: &Path, branch: &str) -> crate::review::base::Base;
+
     /// The files changed in `dir` under `scope` and `toggles`, one row per path (feature 482,
     /// research R1, FR-002, FR-004, FR-005). Read-only.
     fn change_list(
@@ -592,6 +597,10 @@ impl Git for GitCli {
 
     fn review_base(&self, dir: &Path) -> crate::review::base::Base {
         GitCli::review_base(self, dir)
+    }
+
+    fn review_base_against(&self, dir: &Path, branch: &str) -> crate::review::base::Base {
+        GitCli::review_base_against(self, dir, branch)
     }
 
     fn change_list(
@@ -1258,6 +1267,13 @@ impl Git for FakeGit {
 
     /// No default branch: a fake repository has no history to compare.
     fn review_base(&self, _dir: &Path) -> crate::review::base::Base {
+        crate::review::base::Base::Unavailable(
+            crate::review::base::BaseUnavailable::NoDefaultBranch,
+        )
+    }
+
+    /// No such branch: a fake repository has no history to compare.
+    fn review_base_against(&self, _dir: &Path, _branch: &str) -> crate::review::base::Base {
         crate::review::base::Base::Unavailable(
             crate::review::base::BaseUnavailable::NoDefaultBranch,
         )
