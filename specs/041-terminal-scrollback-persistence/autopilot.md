@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | merged |
-| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | in progress |
+| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | PR | in review |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
@@ -85,6 +85,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (saves record the tick's `now`, not the write's; the gap can be a little under 30 s when a write is delayed within a tick), declined: the injected clock is the tick's, ticks are 5 s, and the delay is only that of earlier writes in the same tick |
 | B M3 | 1 | 8d8c93bfe94117fad2715a8ed7653e3c44a4d4b8:f0d53f766df7420b5b3d70b7be86155d4202d563 | CHANGES: 1 MAJOR (a terminal first seen by the saver counted its earlier output as saved), 1 MINOR (red by mutation only); fixed with `SaveSchedule::new(0)` for an untracked process and a first-look test shown red (cycle 77). Verify: `history_periodic_save` and `terminal_history_schedule` ok |
 | B M3 | 2 | 611fea62d521c3d6f132b95f3b34fd09102e4a61:f0d53f766df7420b5b3d70b7be86155d4202d563 | CLEAN: 1 MINOR (no case for an idle terminal started from a restored seed; the code holds, the seed never raises the output count), not fixed. Verify: `history_periodic_save` 9 passed, `terminal_history_schedule` 8 passed |
+| M5 review A (code-review high) | 1 | ec36b09056965d05e017bf4bd9d586d54788d32c:34278345e2267e81547a89ddc80d2f21a61b0e4b | 9 findings: 3 fixed (unlistable directory kept no retry record; two-window race on the setting; persist failure left the store on), 6 declined as MINOR/no concrete failure (blocking deletion in async arm: catalog write there is already blocking; redundant on; nil-session warning dedup; Skipped(Disabled) marked saved; TerminalDraft bool default; store default enabled) |
+| M5 review B (conformance, sonnet) | 1 | same | CHANGES: 2 MAJOR fixed (cycle-log entry written, with the missing red noted; Verify flake was a test race: `shows` missed a token wrapped across a row end, fixed), 2 MINOR (T045 wording about main.rs left; tick case normalised no) |
+| M5 re-review of A fixes (sonnet) | 2 | ceb65a439e8c8fcd541b802c9426f3636ead0379:b2551e8bd43de3e32af9f04210b0421e372cb688 | CLEAN |
 
 ## Declined review findings
 
@@ -102,8 +105,7 @@ Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5
 
 ## Handover
 
-M5 (unit over the 150k cap, no PR yet, nothing pushed). Branch reset to origin/main (031d01c6). Done and ticked: T037-T047 and T074 (code + tests, all green when run singly: micold-core store/settings/protocol/schema_hash tests, micold-client lib+bin tests, micold-daemon `history_setting` (9) and `history_timing` (2, SC-005 echo p95 off 0.4 ms / on 0.75 ms)). Layout snapshot fixture regenerated. PROTOCOL_VERSION 35 -> 36. Design: `HistoryStore` gained `with_enabled`, `enabled`, `set_enabled`, `purge`, `retry_deletions`, `DeletionFailure`, `SkipReason::Disabled`; `DaemonState::set_history_store` applies the stored setting and purges when off; `set_save_terminal_history` applies to the store before the broadcast; `Saver` got `retry_due`, `mark_all_due`, `deletion_failed`; `save_due_at` skips capture while off. Stand-in gained a `flood` directive.
-Next: (1) T048 docs: `docs/user-guide/settings.md` and `docs/user-guide/worktrees-and-sessions.md` (FR-032), tick T048; (2) quickstart Part B B6-B8 / visual pass of the new checkbox via `visual-pass` (Terminal page changed look); (3) commit, then gate.md/review.md flow: scoped gate, review A (high) in its shadow, review B (conformance, sonnet), full gate with MICOLD_SKIP_GH_LAUNCH_TEST=1, then pr.md (title `feat(041): ...Save terminal history setting (#485)`, body says saving is on from M2 and removal lands in M7, hold on releases; `Refs #485`). Follow-up carried from M2 review A: store's `last_written` is now cleared by set_enabled(false); M7's delete must clear it too. Review rounds: none run yet.
+None.
 
 ## Open escalation
 
