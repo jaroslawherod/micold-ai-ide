@@ -23,7 +23,8 @@ use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
 use micold_core::mcp::tools::{
-    is_mutating_tool, parse_call, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
+    is_mutating_tool, parse_call, CreateWorktreeRequest, LineCount, NonEmptyText, Operation,
+    SessionRef, WorktreeRef,
 };
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
@@ -99,9 +100,7 @@ async fn dispatch(
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
     match operation {
-        Operation::CreateWorktree { branch, name, mode } => {
-            create_worktree(&state, caller, branch, name, mode).await
-        }
+        Operation::CreateWorktree(request) => create_worktree(&state, caller, request).await,
         Operation::CreateSession {
             worktree,
             ai_cli,
@@ -186,7 +185,7 @@ fn read_call(
             offset,
             worktree.as_ref(),
         )),
-        Operation::CreateWorktree { .. }
+        Operation::CreateWorktree(_)
         | Operation::CreateSession { .. }
         | Operation::StartSession { .. }
         | Operation::AttachWorktree { .. }
@@ -607,9 +606,97 @@ fn live_sessions_conflict(
     )
 }
 
-/// `create_worktree` (contracts/mcp-tools.md): scope, then the naming rules and git's ref check,
-/// then policy (FR-015a), then the dialog's pre-flight, then the dialog's own create (FR-009).
+/// `create_worktree` (contracts/mcp-tools.md, 550 contracts/create-worktree-tool.md): a literal
+/// branch, or the form's derived inputs.
 async fn create_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    request: CreateWorktreeRequest,
+) -> Result<Value, OpError> {
+    match request {
+        CreateWorktreeRequest::Literal { branch, name, mode } => {
+            create_literal_worktree(state, caller, branch, name, mode).await
+        }
+        derived @ CreateWorktreeRequest::Derived { .. } => {
+            create_derived_worktree(state, caller, derived).await
+        }
+    }
+}
+
+/// A derived request: policy, then the form's `naming::derive` (its error text is the refusal),
+/// git's ref check, a branch that is free, and the form's own create (FR-003, FR-004, FR-014).
+async fn create_derived_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    request: CreateWorktreeRequest,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
+    let Some((repo, true)) = state.project_repo(&project.path) else {
+        return Err(OpError::invalid_input(
+            "this project is not a git repository, so it has no worktrees",
+        ));
+    };
+    check_policy(&who, &Operation::CreateWorktree(request.clone()))?;
+
+    let naming = request.naming().expect("a derived request has form inputs");
+    let names = naming::derive(&naming).map_err(|e| OpError::invalid_input(e.to_string()))?;
+    let checked = names.branch.clone();
+    blocking(move || {
+        GitCli::new()
+            .check_branch_name(&repo, &checked)
+            .map_err(|e| OpError::invalid_input(e.to_string()))
+    })
+    .await?;
+
+    match ops::branch_situation(state, &project.path, &names).await {
+        Some(Ok(BranchSituation::Free)) => {}
+        Some(Ok(situation)) => {
+            return Err(OpError::new(
+                ErrorCategory::Conflict,
+                describe_situation(&names.branch, &situation),
+            ))
+        }
+        Some(Err(e)) => {
+            return Err(OpError::service_error(format!(
+                "could not check the branch: {e}"
+            )))
+        }
+        None => {
+            return Err(OpError::invalid_input(
+                "this project is not a git repository, so it has no worktrees",
+            ))
+        }
+    }
+
+    ops::create_worktree(
+        state,
+        project.path.clone(),
+        names.clone(),
+        CreateMode::NewBranch,
+        None,
+    )
+    .await
+    .map_err(create_failure)?;
+
+    let mut row = worktree_row(state, caller, names.dir_name.clone()).await?;
+    if let Some(row) = row.as_object_mut() {
+        row.insert("branch".into(), names.branch.into());
+        row.insert("directory".into(), names.dir_name.into());
+        if let Some(type_) = naming.type_ {
+            row.insert("type".into(), type_.as_str().into());
+        }
+        let ticket = naming.ticket.as_deref().map(naming::slugify);
+        if let Some(ticket) = ticket.filter(|t| !t.is_empty()) {
+            row.insert("ticket".into(), ticket.into());
+        }
+    }
+    Ok(row)
+}
+
+/// A literal branch: scope, then the naming rules and git's ref check, then policy (FR-015a), then
+/// the dialog's pre-flight, then the dialog's own create (FR-009).
+async fn create_literal_worktree(
     state: &Arc<DaemonState>,
     caller: SessionId,
     branch: String,
@@ -646,11 +733,11 @@ async fn create_worktree(
 
     check_policy(
         &who,
-        &Operation::CreateWorktree {
+        &Operation::CreateWorktree(CreateWorktreeRequest::Literal {
             branch: branch.clone(),
             name,
             mode: mode.clone(),
-        },
+        }),
     )?;
 
     let names = DerivedNames {

@@ -15,7 +15,9 @@ use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::policy::{
     decide, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
-use micold_core::mcp::tools::{LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef};
+use micold_core::mcp::tools::{
+    CreateWorktreeRequest, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
+};
 use micold_core::session::{AiCli, SessionId, SessionLocation};
 use micold_core::worktree::CreateMode;
 use uuid::Uuid;
@@ -35,11 +37,11 @@ fn caller(location: SessionLocation) -> Caller {
 }
 
 fn create_worktree() -> Operation {
-    Operation::CreateWorktree {
+    Operation::CreateWorktree(CreateWorktreeRequest::Literal {
         branch: "feat-x".into(),
         name: None,
         mode: CreateMode::NewBranch,
-    }
+    })
 }
 
 fn decide_for(location: SessionLocation, operation: &Operation) -> PolicyDecision {
@@ -62,17 +64,38 @@ fn a_default_caller_may_create_a_worktree() {
             remote: "origin".into(),
         },
     ] {
-        let operation = Operation::CreateWorktree {
+        let operation = Operation::CreateWorktree(CreateWorktreeRequest::Literal {
             branch: "feat-x".into(),
             name: None,
             mode: mode.clone(),
-        };
+        });
         assert_eq!(
             decide_for(SessionLocation::Default, &operation),
             PolicyDecision::Proceed,
             "{mode:?}"
         );
     }
+}
+
+/// FR-015: the audit names the branch, the name, or `#<issue>`; a derived request is allowed from
+/// a Default session too.
+#[test]
+fn a_derived_create_is_allowed_and_audited_by_name_or_issue() {
+    let derived = |name: Option<&str>, issue: Option<u32>| {
+        Operation::CreateWorktree(CreateWorktreeRequest::Derived {
+            type_: None,
+            ticket: None,
+            name: name.map(str::to_string),
+            github_issue: issue,
+        })
+    };
+    assert_eq!(derived(Some("login"), None).audit_target(), "login");
+    assert_eq!(derived(None, Some(7)).audit_target(), "#7");
+    assert_eq!(create_worktree().audit_target(), "feat-x");
+    assert_eq!(
+        decide_for(SessionLocation::Default, &derived(Some("login"), None)),
+        PolicyDecision::Proceed
+    );
 }
 
 #[test]

@@ -460,3 +460,34 @@ fn a_second_boundary_is_part_of_the_name() {
     );
     assert_eq!(display_name("feat-abc-1_a_b"), "A b");
 }
+
+/// SC-001: the branch and directory the `create_worktree` tool derives equal the form's, for every
+/// type, with and without a ticket, and for the names that stress the slug rules.
+#[test]
+fn the_tool_derives_the_same_names_as_the_form() {
+    use micold_core::mcp::tools::{parse_call, Operation};
+    use serde_json::json;
+
+    let long = "a very long description ".repeat(20);
+    let tickets = [None, Some("ABC-123"), Some("#123"), Some("   "), Some("")];
+    let names = ["login crash", "con", "Dark mode", long.as_str()];
+    for type_ in ConventionalType::ALL {
+        for ticket in tickets {
+            for name in names {
+                let mut args = json!({"type": type_.as_str(), "name": name});
+                if let Some(ticket) = ticket {
+                    args["ticket"] = json!(ticket);
+                }
+                let Operation::CreateWorktree(request) =
+                    parse_call("create_worktree", &args).unwrap()
+                else {
+                    panic!("not a create_worktree")
+                };
+                let tool = derive(&request.naming().unwrap());
+                let form = derive(&naming(Some(*type_), ticket, name));
+                assert_eq!(tool, form, "{args}");
+                assert!(tool.is_ok(), "{args}");
+            }
+        }
+    }
+}

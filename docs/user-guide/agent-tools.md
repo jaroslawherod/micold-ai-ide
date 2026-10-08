@@ -35,12 +35,28 @@ These tools make changes, exactly as the sidebar does:
 
 | Tool | What it does |
 |---|---|
-| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch |
+| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below) |
 | `attach_worktree` | Attaches a worktree an AI CLI created, as **Attach existing...** in the app does, so it shows in the sidebar with its sessions and is no longer hidden. Give its folder name, its absolute path or its branch. Nothing is checked out, moved or deleted. The result says `attached` or `already_attached`. A path or branch that is not a worktree of this project is refused as not found, and `default`, an ambiguous branch, a worktree whose folder is missing or invalid, or one that is not under an AI CLI's worktree location, is refused as invalid input; nothing changes in any of those cases |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
 | `send_session_input` | Types text into another session and submits it once, as if you had typed it there and pressed Enter. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
+
+#### Creating a worktree from a type, ticket and name
+
+`create_worktree` takes either a literal `branch` (with `mode`, `remote` and an optional directory
+`name`) or the inputs of the new-worktree form, never both:
+
+- `type`: one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`.
+- `ticket`: optional; a reference such as `#123` or `ABC-123`. Blank means none.
+- `name`: the description. Without a `branch` it is the description, not the folder name.
+
+The branch and folder are built exactly as the form builds them: type `fix`, ticket `#123` and name
+`login crash` give the branch `fix/123_login-crash` in the folder `fix-123_login-crash`, with the
+type and issue tags in the sidebar. Without a ticket there is no ticket part. The result lists the
+worktree and also its `branch`, `directory`, `type` and (when there is one) `ticket`. A derived
+branch that already exists is refused, and nothing is created: use `branch` with `mode` to reuse
+it. `github_issue` is accepted by the tool's description but is not available yet and is refused.
 
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch
