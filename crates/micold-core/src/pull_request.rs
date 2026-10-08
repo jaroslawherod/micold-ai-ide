@@ -107,6 +107,16 @@ pub enum ReadingFailure {
     },
 }
 
+/// How old a reading may be before the indicator is drawn in its lower-emphasis form: two refresh
+/// intervals of 5 minutes (FR-019, R13).
+pub const STALE_AFTER_SECS: u64 = 600;
+
+/// Whether a reading that started at `read_at` (Unix seconds) is stale at `now`: older than
+/// [`STALE_AFTER_SECS`]. A clock that went backwards makes nothing stale.
+pub fn is_stale(read_at: u64, now: u64) -> bool {
+    now.saturating_sub(read_at) > STALE_AFTER_SECS
+}
+
 /// The most branches one request asks about (FR-023).
 pub const BRANCHES_PER_REQUEST: usize = 50;
 

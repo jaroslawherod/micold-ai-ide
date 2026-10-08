@@ -65,9 +65,29 @@ pub enum Outcome {
     Err(ReadingFailure),
 }
 
+/// Why a reading is asked for outside the first listing and the switch (S3, S4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cause {
+    /// The 5-minute interval elapsed.
+    Interval,
+    /// A list refresh ended.
+    Refresh,
+}
+
+/// A reading that has been under way this long is taken to be lost (reading-and-wire §2): the
+/// next trigger abandons it. Above the worst case of a real reading for 50 worktrees.
+pub const ABANDON_AFTER_SECS: u64 = 60;
+
 /// What this feature is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
+    /// The interval elapsed (S3) or a list refresh ended (S4).
+    Trigger {
+        /// Which of the two.
+        cause: Cause,
+        /// Unix seconds.
+        now: u64,
+    },
     /// `Attached` for the active project: the window holds it.
     Held,
     /// A listing arrived (`CatalogChanged`); the first one after `Held` starts a reading (S1).
@@ -137,6 +157,30 @@ pub enum Effect {
 /// Apply `msg` (contracts/reading-and-wire.md §2).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
     match msg {
+        Msg::Trigger { cause, now } => {
+            if !state.enabled || !state.held || state.awaiting_listing || paused(state, now) {
+                return Effect::None;
+            }
+            match state.phase {
+                Phase::Idle => start(state, now),
+                Phase::Reading { started, .. }
+                    if now.saturating_sub(started) >= ABANDON_AFTER_SECS =>
+                {
+                    // A lost task must not stop the schedule for ever: a late answer of the old
+                    // reading carries another `seq` and is dropped.
+                    state.phase = Phase::Idle;
+                    start(state, now)
+                }
+                Phase::Reading { .. } => {
+                    if cause == Cause::Refresh {
+                        if let Phase::Reading { again, .. } = &mut state.phase {
+                            *again = true;
+                        }
+                    }
+                    Effect::None
+                }
+            }
+        }
         Msg::Held => {
             state.held = true;
             state.awaiting_listing = true;

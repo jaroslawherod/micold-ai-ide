@@ -343,7 +343,12 @@ fn with_pull_requests(width: u16) -> State {
     state.sidebar.width = width;
     state.pr_status.enabled = true;
     state.pr_status.held = true;
-    state.pr_status.read_at = Some(1_000);
+    // Read just now, so the rows draw the current form; `with_stale_pull_requests` ages it.
+    state.pr_status.read_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs()),
+    );
     state.pr_status.statuses.insert(
         "feat/short".to_string(),
         status(
@@ -357,6 +362,14 @@ fn with_pull_requests(width: u16) -> State {
         .pr_status
         .statuses
         .insert("fix/a-bug".to_string(), status(8, PrState::Merged));
+    state
+}
+
+/// [`with_pull_requests`], read long ago: every indicator is drawn in the stale form (feature 040
+/// US4, FR-019).
+fn with_stale_pull_requests(width: u16) -> State {
+    let mut state = with_pull_requests(width);
+    state.pr_status.read_at = Some(1_000);
     state
 }
 
@@ -1638,6 +1651,13 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "main-shell-sidebar-pull-request-removable-narrowest",
             build: || StateUnderTest::new(with_removable_pull_request(SIDEBAR_MIN_WIDTH)),
+            anchors: &[],
+        },
+        // Feature 040 US4 (UI §6, U148): the same rows read long ago. The stale form changes the
+        // indicator's colour role only, so the geometry is the current form's.
+        CoveredState {
+            name: "main-shell-sidebar-pull-request-stale",
+            build: || StateUnderTest::new(with_stale_pull_requests(260)),
             anchors: &[],
         },
         // An agent's destructive request (feature 034, FR-014, U213): the confirmation every

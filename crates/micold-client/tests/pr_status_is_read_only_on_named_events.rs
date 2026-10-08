@@ -2,8 +2,8 @@
 //!
 //! The reading runs `gh`, which reaches GitHub. It may start only through the schedule reducer's
 //! `Effect::Read`, and the reducer emits that only on the events the contract names: S1 (the
-//! listing arrived), S2 (the setting turned on, including on connect). S3 to S5 are added by US4
-//! (milestone M7), which raises the pinned counts below. A read started from a render, a hover or
+//! listing arrived), S2 (the setting turned on, including on connect). S3 (the interval tick), S4 (a list refresh
+//! ended) and S5 (a reading ended with a further one pending) are pinned below. A read started from a render, a hover or
 //! a timer of the view would contact GitHub for a user who never asked.
 //!
 //! So this scans `crates/micold-client/src` as text, in the pattern of
@@ -44,6 +44,18 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         SYNC,
         6,
         "`Msg::Held` / `Msg::Released` only: they hold or release a reading and start nothing.",
+    ),
+    (
+        "shell::pr_status::refresh_ended(",
+        SYNC,
+        3,
+        "S4: a list refresh ended: acknowledged, refused, or timed out (not the disconnect drain).",
+    ),
+    (
+        "shell::pr_status::tick(",
+        MAIN,
+        1,
+        "S3: `Message::PrStatusTick`, the interval subscription's tick.",
     ),
     (
         "shell::pr_status::on_remotes(",
@@ -206,7 +218,7 @@ fn a_read_starts_from_one_line_and_the_shell_entry_points_are_pinned() {
     assert!(
         problems.is_empty(),
         "the shell entry points into the reading moved:\n{}\n\nA new caller is a new way to \
-         start a read; add it to ALLOWED with its reason (S3 to S5 arrive with US4, milestone M7).",
+         start a read; add it to ALLOWED with its reason.",
         problems.join("\n")
     );
 }

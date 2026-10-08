@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: PR #641 (M6) open, gate green. Wait for CI, merge, then M7.
+- **Next step**: M7 in progress (tests first).
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #611 | M3 | merged | ef56a970339f2a77a0f8642a6c4dcc848a00b1ce |
 | #619 | M4 | merged | f354cd21fe15d5c76cff5c5c8dac414e9cda0dea |
 | #637 | M5 | merged | 88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 |
-| #641 | M6 | open (gate green) | |
+| #641 | M6 | merged | 98da2889252f1804c9d3ada474d2d3ecdaf94249 |
 
 ## Milestones
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | #611 | merged |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | #619 | merged |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | #637 | merged |
-| M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | #641 | open |
+| M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | #641 | merged |
 | M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | | pending |
 | M8 | T066–T068 | full | Architecture page and the recorded quickstart §B pass | | pending |
 

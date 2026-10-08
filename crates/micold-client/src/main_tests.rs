@@ -8603,6 +8603,143 @@ mod pr_status {
         assert!(nothing_was_reported(&rig.app));
     }
 
+    /// Press the refresh control on a rig that holds, and return the refresh request's `req`.
+    fn press_refresh(rig: &mut Rig) -> u64 {
+        // The task is the 30-second bound; it is dropped, not waited for.
+        let _ = shell::daemon_sync::on_worktree_refresh_requested(&mut rig.app);
+        assert!(rig.app.core.worktree.refreshing, "the control is busy");
+        let refresh = sent(rig)
+            .into_iter()
+            .find_map(|msg| match msg {
+                ClientMsg::WorktreeRefresh { req, .. } => Some(req),
+                _ => None,
+            })
+            .expect("the press asks the daemon to refresh");
+        // Notices from before the press are not what is asserted on afterwards.
+        refresh
+    }
+
+    // A32, A33 (S4, FR-018a, FR-027): the refresh acknowledged returns the control to idle, shows
+    // its notice, and only then starts a reading for the branches the updated listing shows.
+    #[test]
+    fn pr_status_refresh_ack_reads_after_the_control_is_idle() {
+        let mut rig = holding();
+        let refresh = press_refresh(&mut rig);
+        // The daemon broadcasts the new listing before it acknowledges (029 contract §4).
+        listed(
+            &mut rig.app,
+            listing(&[("a", Some("feat/a")), ("c", Some("feat/c"))]),
+        );
+        assert!(
+            remote_lists(&mut rig).is_empty(),
+            "the listing alone starts nothing"
+        );
+
+        // The follow-up is the reading's 10-second bound; it is dropped, not waited for.
+        daemon(
+            &mut rig.app,
+            DaemonMsg::OperationOk {
+                req: refresh,
+                result: OperationResult::Ack,
+            },
+        );
+        assert!(!rig.app.core.worktree.refreshing, "the control is idle");
+        assert_eq!(
+            rig.app
+                .core
+                .notifications
+                .queue
+                .visible()
+                .map(|n| n.message.as_str()),
+            Some("Worktree list refreshed.")
+        );
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1, "one reading starts");
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert_eq!(
+            rig.source
+                .calls()
+                .last()
+                .map(|(_, branches)| branches.clone()),
+            Some(vec!["feat/a".to_string(), "feat/c".to_string()]),
+            "the branches the updated listing shows"
+        );
+    }
+
+    // A34 (S4): a refresh that timed out ends the same way, and still reads.
+    #[test]
+    fn pr_status_refresh_timed_out_reads_too() {
+        let mut rig = holding();
+        let refresh = press_refresh(&mut rig);
+        let _ = shell::daemon_sync::on_worktree_refresh_timed_out(&mut rig.app, refresh);
+        assert!(!rig.app.core.worktree.refreshing);
+        assert_eq!(remote_lists(&mut rig).len(), 1);
+    }
+
+    // A35 (FR-027): a failed reading changes neither the control nor the notice the refresh shows.
+    #[test]
+    fn pr_status_refresh_then_a_failed_reading_adds_nothing_to_the_refresh() {
+        let mut rig = holding();
+        let refresh = press_refresh(&mut rig);
+        // The follow-up is the reading's 10-second bound; it is dropped, not waited for.
+        daemon(
+            &mut rig.app,
+            DaemonMsg::OperationOk {
+                req: refresh,
+                result: OperationResult::Ack,
+            },
+        );
+        let notice_before = rig
+            .app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone());
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1);
+        let seq = seq_under_way(&rig.app);
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req: asked[0] }),
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert!(!rig.app.core.worktree.refreshing);
+        assert_eq!(
+            rig.app
+                .core
+                .notifications
+                .queue
+                .visible()
+                .map(|n| n.message.clone()),
+            notice_before
+        );
+        assert_eq!(rig.app.core.notifications.queue.pending(), 0);
+    }
+
+    // A36 (S3): the interval's tick starts one reading; a tick while the switch is off starts none.
+    #[test]
+    fn pr_status_tick_starts_a_reading() {
+        let mut rig = holding();
+        let _ = update_inner(&mut rig.app, Message::PrStatusTick);
+        assert_eq!(remote_lists(&mut rig).len(), 1);
+        assert!(matches!(
+            rig.app.core.pr_status.phase,
+            Phase::Reading { .. }
+        ));
+    }
+
+    #[test]
+    fn pr_status_tick_with_the_switch_off_starts_nothing() {
+        let mut rig = holding();
+        let _ = shell::pr_status::enabled_changed(&mut rig.app, false);
+        let _ = sent(&mut rig);
+        let _ = update_inner(&mut rig.app, Message::PrStatusTick);
+        assert!(sent(&mut rig).is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+    }
+
     // A10 (FR-025): `gh` not found.
     #[test]
     fn pr_status_without_gh_never_calls_the_source_and_clears() {

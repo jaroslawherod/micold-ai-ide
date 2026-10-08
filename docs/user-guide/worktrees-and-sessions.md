@@ -122,6 +122,35 @@ A merged or closed pull request, and one with no checks, shows the state alone. 
 status has its own shape, so none depends on colour. The indicator keeps its size however wide the
 sidebar is.
 
+#### When the status is read
+
+With the switch on, the status of a project is read:
+
+- when you open the project in a window;
+- when you turn the switch on;
+- every 5 minutes while the project stays open, without you doing anything;
+- whenever you press the sidebar's refresh button: the indicators catch up within about 10
+  seconds, and the button and its "Worktree list refreshed." notice do not wait for the reading.
+
+Only one reading of a project runs at a time. Refreshes pressed while one is under way cause one
+further reading when it ends. A project no window shows is never read, and with the switch off
+nothing is sent to GitHub.
+
+Each reading keeps the last status you saw until a newer one replaces it. When the last reading is
+more than 10 minutes old, the indicator is drawn dimmed, and the tooltip adds
+`Read: <n> min ago` (`Read: <h> h ago` from 120 minutes) after the review line.
+
+If GitHub answers that its request limit was reached, nothing is read until the time GitHub gives
+for the limit to reset, and the indicators keep showing what was last read. The same pause applies
+to a refresh pressed meanwhile.
+
+Failures are silent: with no network, no answer within 10 seconds, or an answer the application
+cannot understand, the rows keep their last status and no error, notice or dialog appears; the next
+reading is tried at the next interval. When pull requests cannot be read at all (`gh` is no longer
+installed, you are no longer signed in, the sign-in cannot see the repository, or the repository no
+longer has a GitHub remote), every indicator, tooltip line and removal suggestion of that project
+is removed, again without a message.
+
 #### The tooltip and opening the pull request
 
 Hover a row with an indicator and its tooltip adds these lines after the ones it already has:

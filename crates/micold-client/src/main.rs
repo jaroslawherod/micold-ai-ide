@@ -657,6 +657,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // `shell/sandbox.rs` now (contract M2).
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
+        Message::PrStatusTick => shell::pr_status::tick(app),
         Message::Changes(msg) => shell::changes::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application

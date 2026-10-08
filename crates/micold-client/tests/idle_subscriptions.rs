@@ -145,6 +145,23 @@ fn the_changes_watch_runs_only_while_the_view_is_open() {
     );
 }
 
+/// The pull request status interval (feature 040, FR-018, SC-006) runs only while the switch is on
+/// and the window holds its active project.
+///
+/// With the switch off, or in a window that does not hold its project, a five-minute timer would
+/// wake an idle window for a reading that cannot start (reading-and-wire §1).
+#[test]
+fn the_pull_request_interval_is_subscribed_only_while_enabled_and_held() {
+    let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
+    let guard = enclosing_block(&src, "every(PR_STATUS_INTERVAL)")
+        .expect("the pull request interval is subscribed unconditionally — it must be in an `if`");
+    assert!(
+        guard.contains("pr_status.enabled") && guard.contains("pr_status.held"),
+        "the pull request interval is inside `{guard}`, which does not test both the switch and \
+         the hold (040 FR-018, SC-006)"
+    );
+}
+
 /// The OS theme poll is deliberately *not* conditional, and that is the assertion.
 ///
 /// This is the inverse failure and it has already happened once (003 FR-006 / SC-003): the poll

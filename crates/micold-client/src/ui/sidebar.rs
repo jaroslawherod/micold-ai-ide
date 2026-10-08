@@ -649,7 +649,7 @@ fn build_items(
             state.pr_status.read_at,
             now,
         );
-        let pull_request = row_pr.map(|row| indicator_marks(&row.status.state));
+        let pull_request = row_pr.map(|row| (indicator_marks(&row.status.state), row.stale));
         // The location's attention indicator (feature 575, FR-001/002): its unread sessions, not
         // closed and not the one in view, counted whether the row is expanded or not (FR-003).
         let unread = entry.unread_count(in_view);
@@ -756,8 +756,8 @@ fn build_items(
         );
         item = item.trailing_element(match pull_request {
             // The indicator leads the trailing element, before the actions (UI §2).
-            Some((mark, checks)) => {
-                let mut indicator = PullRequestIndicator::<Message>::new(mark, &r);
+            Some(((mark, checks), stale)) => {
+                let mut indicator = PullRequestIndicator::<Message>::new(mark, &r).stale(stale);
                 if let Some(checks) = checks {
                     indicator = indicator.checks(checks);
                 }
