@@ -10,7 +10,8 @@ came from one, else the session's) and takes the context of its last request. Un
 prints nothing. Over it, and only on a branch an autopilot ledger names, it prints a
 PostToolUse `additionalContext` that tells the caller to hand over. It repeats only after the
 context grew by another AUTOPILOT_CONTEXT_STEP tokens (default 20000), so it does not nag on every
-call. The cap is AUTOPILOT_CONTEXT_CAP, default 150000, as in context.py.
+call. The cap is AUTOPILOT_CONTEXT_CAP, default 150000 for a unit as in context.py; the orchestrator's
+is AUTOPILOT_ORCH_CAP, default 80000.
 
 Batching: in measured runs, a lone read-only call right after another cost 3.8M and 5.9M cost_eq a
 run, a tenth of it, at about 100k of context each. When the caller's last AUTOPILOT_BATCH_RUN
@@ -119,7 +120,10 @@ def main():
     transcript = Path(session[: -len(".jsonl")]) / "subagents" / f"agent-{agent}.jsonl" if agent else Path(session)
     if not session or not transcript.is_file():
         return 0
-    cap = int(os.environ.get("AUTOPILOT_CONTEXT_CAP", "150000"))
+    # The orchestrator is told earlier than a unit: after an idle wait it re-writes all of its context
+    # to the cache, and in the 430 run those rebuilds were 23% of the cost.
+    default_cap = "150000" if agent else os.environ.get("AUTOPILOT_ORCH_CAP", "80000")
+    cap = int(os.environ.get("AUTOPILOT_CONTEXT_CAP", default_cap))
     step = int(os.environ.get("AUTOPILOT_CONTEXT_STEP", "20000"))
     ctx, requests = last_requests(transcript)
     who = agent or hook.get("session_id", "session")

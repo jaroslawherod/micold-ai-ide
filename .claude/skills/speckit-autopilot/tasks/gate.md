@@ -17,6 +17,10 @@ log="$SCRATCHPAD/gate-$(date +%s).log"
 setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 ```
 
+- **Free disk first.** Two milestones lost a gate to `No space left on device`: if `df` shows under
+  20 GB free on the target's filesystem, run `mise run sweep` (the `reclaim-disk` skill) before you start it.
+- **Always `mise run gate`** (or the scoped gate), never the raw cargo commands: the gate hook counts
+  only a green `mise run gate`, and two pushes were refused for it.
 - **Detach it.** A plain background task can be killed while it waits on the build lock.
 - **The full gate's order is CI's:** fmt → clippy (core, then workspace) → `cargo test --workspace`
   → `mise run test-scripts`. `mise run test` alone is not the gate.

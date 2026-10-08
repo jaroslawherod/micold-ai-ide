@@ -18,9 +18,21 @@ context, which costs as much as 12 calls. The orchestrator's lasts 60 minutes (2
 - Run work that needs no build (a review, a subagent) while the gate builds, and wait for what
   runs together in one wait, not one after another.
 - A job waiting on the build lock idles too: do not start it until the build is done.
+- Never end your turn with a subagent or a gate still running, and plan a wait over 4 minutes as a
+  `hold.sh` call before you start it: a unit that ended its turn waiting 21 minutes on a handback
+  re-wrote its whole context.
 
 ## The orchestrator
 
 After you dispatch a unit, run `scripts/autopilot/hold.sh --long "$SCRATCHPAD/unit-<description>"`
 with `run_in_background` and `timeout: 3300000`. When it reports `HOLD` and the unit has not
 returned, run it again. Stop on `STOP`, when the unit returns, and while you wait on the human.
+
+- **A notification with nothing new** (a subagent you no longer wait on, a review you have already
+  read) needs no reply and no tool call: end the turn in one line. Each wake re-reads the whole
+  context, and re-writes it when the last call was over an hour ago.
+- **Before a long wait on the human** (`AskUserQuestion`, a manual step): run
+  `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`. On `OVER`, make sure the ledger holds
+  the open escalation and the next step, and add to the banner: `Cheaper: /clear, then
+  /speckit-autopilot resume. The ledger is current.` An answer hours later otherwise re-writes your
+  whole context to the cache.

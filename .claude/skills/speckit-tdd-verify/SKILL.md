@@ -194,7 +194,9 @@ determinism, speed, specificity about what broke, and insensitivity to refactori
 A suite that is smell free but takes 20 minutes or fails intermittently is still a
 poor safety net, and the report should say so.
 
-Where a fresh-context subagent is available, delegate this pass with the absolute
+Where a fresh-context subagent is available (inside an autopilot run: `subagent_type`
+`autopilot-reviewer`, never `general-purpose`, which carries about 10k more tokens on every call),
+delegate this pass with the absolute
 path to the rubric, the profile's conventions section and its exemplar and
 `helpers` paths, the list of files to read, and an instruction to return findings
 only, with no fixes and no file dumps. Include Hard Rules 6 and 7 verbatim, since a
