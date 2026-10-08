@@ -133,6 +133,7 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | FR-024 | One holder, sent to every window | R1 |
 | FR-025 | Catalog file and local connection only | R1 |
 | FR-026 | `Settings::desktop_notifications`, default `true` | R8; W4.1 |
+| FR-026a | The draft keeps the settings it was seeded with; a save sends and writes only the fields that differ from them (BUG-570) | W4.1 |
 | FR-027 | The grant is refused while off, and events while off are recorded as granted | R8; W4.2 |
 | FR-028 | One field, no per-CLI field | R8 |
 | FR-029 | Three backends behind one trait | R4; contract Backends |
@@ -268,3 +269,25 @@ well-known sender with the header (`bugs/BUG-566.md#reproduction-2026-10-06-on-o
 The connection, its timeout and `notify_error` do not change (issue #569 works there).
 
 **Bugfix**: 2026-10-06 — BUG-566. FR-015b row and this section added; nothing above them changed. See `bugs/BUG-566.md`.
+
+## Increment: a save changes only what the user changed (BUG-570)
+
+`SettingsDraft` keeps the `Settings` it was seeded from (`open_settings`,
+`crates/micold-client/src/shell/persist.rs`). On save, `save_and_prepare_check` compares the
+validated settings (`ValidSettings::into_settings`) with that baseline field by field. Compared in
+`Settings` terms, after validation, so a field retyped to the value it had is unchanged.
+
+- **`ClientMsg::SettingsSet`**: `Some(value)` for each service-owned field that differs, `None` for
+  the rest. Nothing is sent when no service-owned field differs. The message already has this
+  meaning (W4.1); no wire change and no `PROTOCOL_VERSION` bump.
+- **The file**: the `update_reporting` closure sets only the fields that differ on the document as
+  stored, instead of replacing it whole. `pr_status_enabled`, which the form does not hold, is
+  never written, as now.
+- **The window's own copy** (`app.scrollback_lines`, `app.env_include_*`, `app.core.session.*`,
+  the theme): set only for the fields that differ. The service's `SettingsChanged` echo stays what
+  applies a service-owned value everywhere (FR-011 of 010).
+- An open page is not refreshed by another window's save: what it shows for a field the user did
+  not touch can be out of date until it is opened again, but a save no longer writes it.
+
+**Bugfix**: 2026-10-06 — BUG-570. Section and the FR-026a coverage row added; nothing else
+changed. See `bugs/BUG-570.md`.

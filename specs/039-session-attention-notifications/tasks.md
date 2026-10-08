@@ -400,6 +400,60 @@ the connection and `notify_error` stay as they are (issue #569 changes them).
 
 **Bugfix**: 2026-10-06 — BUG-566. Phase 12 (T124–T126) added; no task reopened. See `bugs/BUG-566.md`.
 
+## Phase 14: Bugfix BUG-570 — a Settings save from one window undid another window's change (GitHub #570)
+
+**Goal**: A Settings save changes only the settings the user changed on that page since it was
+opened, in the stored file, in the session service and in the window's own copy. A setting another
+window saved in the meantime keeps its value (FR-026a, US4 scenario 7).
+
+### Tests for BUG-570 (MANDATORY — Constitution Principle I) ⚠️
+
+Each test is written against a stub that compiles, so it fails on its assertion rather than on the
+build.
+
+- [x] T127 [BUG-570] [A49] *(test)* `crates/micold-client/src/main_tests.rs`. The regression test,
+      through `update_inner`, red on `origin/main` (`bugs/BUG-570.md#reproduction`): a window with
+      a daemon outbox and a `FakeSettingsStore` holding both switches on receives `SettingsChanged`
+      with both on, opens Settings, then receives `SettingsChanged` with `desktop_notifications`
+      and `tool_server_enabled` off (another window's save); the test then writes both switches off
+      to the `FakeSettingsStore` too, as that save did, toggles **Show activity for Pi sessions** off and saves. The `SettingsSet` it sends
+      has `pi_activity_component: Some(false)` and `None` for both switches; the store's last save
+      holds both switches off; `app.core.session.desktop_notifications` and
+      `tool_server_enabled` are still `false`.
+- [x] T128 [BUG-570] [U182] [U183] [U184] *(test)* `crates/micold-client/src/main_tests.rs`
+      (`save_and_prepare_check` beside `a_settings_save_keeps_the_stored_pr_status_switch`).
+      U182: for each service-owned field of `SettingsSet` in turn, a save after changing only that
+      field sends `Some` for it and `None` for the others; a save changing no service-owned field
+      (only the theme) sends no `SettingsSet`. U183: a stored document whose theme and sandbox
+      settings differ from what the page was opened with keeps them after a save that changed only
+      the scrollback, and gets the new scrollback. U184: a field retyped to the value it was
+      opened with (scrollback `10000` → `10000`) counts as unchanged.
+
+### Implementation for BUG-570
+
+- [x] T129 [BUG-570] [A49] [U182] [U183] [U184] `crates/micold-client/src/features/settings.rs`
+      (`SettingsDraft` keeps the `Settings` it was seeded from) and
+      `crates/micold-client/src/shell/persist.rs` (`open_settings` records it;
+      `save_and_prepare_check` compares `valid.into_settings()` with it field by field and sends,
+      writes and mirrors only the fields that differ, as `plan.md` § Increment: a save changes only
+      what the user changed). The `update_reporting` closure sets fields on the stored document
+      instead of replacing it. The placement decision (`apply_placement`, the deferred-save
+      confirmation) and the script path check keep their behaviour. No wire change.
+- [x] T130 [BUG-570] `docs/user-guide/settings.md`, beside *Every window at once*: saving Settings
+      changes only what you changed on the page; a setting changed in another window while this
+      page was open keeps that window's value. Reopen Settings to see it.
+
+**Order**: T127, then T128 (both in `main_tests.rs`), then T129, then T130. Then the gate.
+
+**Verify**: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` passes A49,
+U182, U183 and U184; the settings tests of `crates/micold-client/src/features/settings.rs` still
+pass.
+
+**Bugfix**: 2026-10-06 — BUG-570. **Requirements added**: FR-026a and US4 scenario 7 — see
+`spec.md`. `plan.md` gained the increment and the FR-026a coverage row. **No task reopened**: T105
+and T110 did what they say; T105 said a save sends `Some(value)` for every field, which is what
+FR-026a now forbids for a field the user did not change. See `bugs/BUG-570.md`.
+
 ---
 
 ## Dependencies & Execution Order

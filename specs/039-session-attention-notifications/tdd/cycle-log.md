@@ -1332,3 +1332,34 @@ the mutant, and failed at its own assertion; the mutant was then reverted and th
 - green: mutants reverted, same command, `3 passed; 0 failed`.
 - not done: (d) the 2 s bus timeout. The Linux backend reads the session bus address only from the
   environment; a test needs a notifier constructor that takes one (follow-up).
+
+## Cycle 50 — BUG-570: a stale page's save undoes another window's change (A49, FR-026a)
+
+- test: `crates/micold-client/src/main_tests.rs::a_stale_settings_page_saves_only_what_its_user_changed`
+- red (`CARGO_INCREMENTAL=0 cargo test -p micold-client --bins a_stale_settings_page`, on
+  `ce3bf4cd`): `0 passed; 1 failed`; `left: Some((Some(false), Some(true), Some(true)))`,
+  `right: Some((Some(false), None, None))`: the save named both switches as the page opened with
+  them, the reported reason (`bugs/BUG-570.md#reproduction`).
+- green: cycle 48's change; same command passes.
+- refactor: none.
+
+## Cycle 51 — BUG-570: a save sends, writes and mirrors only the fields the user changed (U182–U184)
+
+- tests: `main_tests.rs::script_path_report::a_save_sends_some_only_for_the_service_owned_fields_the_user_changed`
+  (U182), `::a_save_keeps_stored_fields_the_user_did_not_change` (U183),
+  `::a_field_retyped_to_its_opening_value_counts_as_unchanged` (U184)
+- red (`CARGO_INCREMENTAL=0 cargo test -p micold-client --bins -- a_save_sends_some_only
+  a_save_keeps_stored_fields a_field_retyped`): `0 passed; 3 failed`. U182: a scrollback-only
+  save sent `Some` for all nine service-owned fields. U183: the stored theme `Dark`, `pids: 321`
+  and `survive_logout: true` were replaced by the page's opening values. U184: the retyped
+  scrollback was sent as `Some(10000)` beside every other field.
+- green: `SettingsDraft::baseline` (seeded by `from_settings`; `open_settings` records the
+  validated opening draft); `save_and_prepare_check` applies `set_changed` to the stored document
+  and to this window's copy, and sends `service_changes` (nothing when it is empty).
+  `cargo test -p micold-client`: every target passes.
+- Tests that pinned the old overwrite, changed: U143's `saving_with_desktop_notifications_on_…`
+  now `saving_without_touching_desktop_notifications_does_not_name_them` (expects no
+  `SettingsSet`); the binding, desktop-notification and cross-session save tests first give the
+  window a value the edit changes; the spec 035 save fixtures load the store with what the window
+  holds (`as_stored`), so a store and window that disagreed no longer stand in for one document.
+- refactor: `window_settings` shared by `open_settings` and the save's mirror.

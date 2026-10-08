@@ -253,24 +253,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         .settings()
         .map(|store| store.load().settings)
         .unwrap_or_default();
-    let current = Settings {
-        theme: app.core.settings.theme_pref,
-        scrollback_lines: app.scrollback_lines,
-        env_include_enabled: app.env_include_enabled,
-        env_include_script_path: app.env_include_script_path.clone(),
-        env_include_timeout_secs: app.env_include_timeout_secs,
-        daemon: stored.daemon,
-        default_ai_cli: app.core.session.default_ai_cli,
-        pi_activity_component: app.core.session.pi_activity_component,
-        tool_server_enabled: app.core.session.tool_server_enabled,
-        desktop_notifications: app.core.session.desktop_notifications,
-        cross_session_access: app.core.session.cross_session_access,
-        issue_label_types: stored.issue_label_types,
-        pr_status_enabled: stored.pr_status_enabled,
-        notification_kinds: app.core.session.notification_kinds,
-        long_task_threshold_secs: app.core.session.long_task_threshold_secs,
-        diff_layout: stored.diff_layout,
-    };
+    let current = window_settings(app, stored);
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
@@ -284,11 +267,186 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         .sandbox
         .locations()
         .and_then(|l| l.unshared_sign_in.clone());
+    // What a save compares against (BUG-570, FR-026a): the page as opened, in the terms a save
+    // produces, so a field the user did not touch compares equal however its text round-trips.
+    draft.baseline = Some(
+        draft
+            .validate()
+            .map(ValidSettings::into_settings)
+            .unwrap_or(current),
+    );
     app.core.settings.settings_draft = Some(draft);
     crate::shell::env_include::prepare_script_path_check(
         app,
         micold_client::features::settings::CheckOrigin::Opened,
     )
+}
+
+/// The settings as this window holds them, with `stored` supplying the fields it keeps no copy of
+/// (the daemon block, the label-to-type mapping, the pull request switch, the diff layout).
+pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
+    Settings {
+        theme: app.core.settings.theme_pref,
+        scrollback_lines: app.scrollback_lines,
+        env_include_enabled: app.env_include_enabled,
+        env_include_script_path: app.env_include_script_path.clone(),
+        env_include_timeout_secs: app.env_include_timeout_secs,
+        default_ai_cli: app.core.session.default_ai_cli,
+        pi_activity_component: app.core.session.pi_activity_component,
+        tool_server_enabled: app.core.session.tool_server_enabled,
+        desktop_notifications: app.core.session.desktop_notifications,
+        cross_session_access: app.core.session.cross_session_access,
+        notification_kinds: app.core.session.notification_kinds,
+        long_task_threshold_secs: app.core.session.long_task_threshold_secs,
+        ..stored
+    }
+}
+
+/// `saved` when it differs from what the page was opened with, else `None` (BUG-570, FR-026a).
+/// With no opening value, every field counts as changed.
+fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Option<T> {
+    (opened_with != Some(saved)).then(|| saved.clone())
+}
+
+/// Set on `target` each field of `saved` that differs from `baseline`, the settings the page was
+/// opened with, and leave every other field as `target` has it (BUG-570, FR-026a).
+///
+/// The pull request switch and the diff layout are never set: the form holds neither (feature
+/// 040, M4; feature 482, which the service owns). The
+/// destructuring is there so that a field added to `Settings` fails to compile here until a save
+/// says what it does with it.
+fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
+    let Settings {
+        theme: _,
+        scrollback_lines: _,
+        env_include_enabled: _,
+        env_include_script_path: _,
+        env_include_timeout_secs: _,
+        daemon:
+            DaemonConfig {
+                placement: _,
+                sandbox:
+                    micold_core::sandbox::SandboxProfile {
+                        runtime: _,
+                        image: _,
+                        budget:
+                            micold_core::sandbox::ResourceBudget {
+                                cpus_milli: _,
+                                memory_bytes: _,
+                                pids: _,
+                                storage_bytes: _,
+                            },
+                        network: _,
+                        credentials: _,
+                        survive_logout: _,
+                    },
+            },
+        default_ai_cli: _,
+        pi_activity_component: _,
+        tool_server_enabled: _,
+        cross_session_access: _,
+        issue_label_types: _,
+        pr_status_enabled: _,
+        desktop_notifications: _,
+        notification_kinds: _,
+        long_task_threshold_secs: _,
+        diff_layout: _,
+    } = saved;
+    macro_rules! set {
+        ($($field:ident).+) => {
+            if let Some(value) =
+                changed_value(&saved.$($field).+, baseline.map(|b| &b.$($field).+))
+            {
+                target.$($field).+ = value;
+            }
+        };
+    }
+    set!(theme);
+    set!(scrollback_lines);
+    set!(env_include_enabled);
+    set!(env_include_script_path);
+    set!(env_include_timeout_secs);
+    set!(daemon.placement);
+    // The sandbox profile field by field, so a page that changed one limit does not write back
+    // the others as it opened with them (review A, F1).
+    set!(daemon.sandbox.runtime);
+    set!(daemon.sandbox.image);
+    set!(daemon.sandbox.budget.cpus_milli);
+    set!(daemon.sandbox.budget.memory_bytes);
+    set!(daemon.sandbox.budget.pids);
+    set!(daemon.sandbox.budget.storage_bytes);
+    set!(daemon.sandbox.network);
+    set!(daemon.sandbox.credentials);
+    set!(daemon.sandbox.survive_logout);
+    set!(default_ai_cli);
+    set!(pi_activity_component);
+    set!(tool_server_enabled);
+    set!(cross_session_access);
+    set!(issue_label_types);
+    set!(desktop_notifications);
+    set!(notification_kinds);
+    set!(long_task_threshold_secs);
+}
+
+/// The service-owned fields a save changed: what its `SettingsSet` carries as `Some` (W4.1).
+#[derive(Debug, Default, PartialEq)]
+struct ServiceChanges {
+    scrollback_lines: Option<usize>,
+    env_include_enabled: Option<bool>,
+    env_include_script_path: Option<String>,
+    env_include_timeout_secs: Option<u64>,
+    default_ai_cli: Option<micold_core::session::AiCli>,
+    pi_activity_component: Option<bool>,
+    tool_server_enabled: Option<bool>,
+    desktop_notifications: Option<bool>,
+    cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
+    notification_kinds: Option<micold_core::attention::NotificationKinds>,
+    long_task_threshold_secs: Option<u64>,
+}
+
+impl ServiceChanges {
+    fn into_message(self, req: u64) -> ClientMsg {
+        ClientMsg::SettingsSet {
+            req,
+            scrollback_lines: self.scrollback_lines,
+            env_include_enabled: self.env_include_enabled,
+            env_include_script_path: self.env_include_script_path,
+            env_include_timeout_secs: self.env_include_timeout_secs,
+            default_ai_cli: self.default_ai_cli,
+            pi_activity_component: self.pi_activity_component,
+            tool_server_enabled: self.tool_server_enabled,
+            desktop_notifications: self.desktop_notifications,
+            diff_layout: None,
+            cross_session_access: self.cross_session_access,
+            pr_status_enabled: None,
+            notification_kinds: self.notification_kinds,
+            long_task_threshold_secs: self.long_task_threshold_secs,
+        }
+    }
+}
+
+/// The service-owned fields of `saved` that differ from `baseline`, or `None` when none does, so
+/// that a save which changed none of them tells the service nothing (BUG-570).
+fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<ServiceChanges> {
+    macro_rules! changed {
+        ($field:ident) => {
+            changed_value(&saved.$field, baseline.map(|b| &b.$field))
+        };
+    }
+    let changes = ServiceChanges {
+        scrollback_lines: changed!(scrollback_lines),
+        env_include_enabled: changed!(env_include_enabled),
+        env_include_script_path: changed!(env_include_script_path),
+        env_include_timeout_secs: changed!(env_include_timeout_secs),
+        default_ai_cli: changed!(default_ai_cli),
+        pi_activity_component: changed!(pi_activity_component),
+        tool_server_enabled: changed!(tool_server_enabled),
+        desktop_notifications: changed!(desktop_notifications),
+        cross_session_access: changed!(cross_session_access),
+        notification_kinds: changed!(notification_kinds),
+        long_task_threshold_secs: changed!(long_task_threshold_secs),
+    };
+    (changes != ServiceChanges::default()).then_some(changes)
 }
 
 /// Save Settings: validate every section together; on success persist + apply + refresh + close,
@@ -375,41 +533,45 @@ pub(crate) fn save_and_prepare_check(
         .map(|store| store.load().settings.daemon.sandbox.survive_logout)
         .unwrap_or_default();
 
-    app.core.settings.theme_pref = valid.theme;
-    app.scrollback_lines = valid.scrollback_lines;
-    app.env_include_enabled = valid.env_include_enabled;
-    app.env_include_script_path = valid.env_include_script_path.clone();
-    app.env_include_timeout_secs = valid.env_include_timeout_secs;
-
-    // Nothing to validate: the select offers only installed CLIs and the value is a closed enum.
-    // Deliberately **not** re-checked against availability here either -- a default naming a CLI
-    // that has since been uninstalled is kept, not repaired (feature 026, research R11).
-    app.core.session.default_ai_cli = valid.default_ai_cli;
-    app.core.session.pi_activity_component = valid.pi_activity_component;
-    app.core.session.tool_server_enabled = valid.tool_server_enabled;
-    app.core.session.desktop_notifications = valid.desktop_notifications;
-    app.core.session.notification_kinds = valid.notification_kinds;
-    app.core.session.long_task_threshold_secs = valid.long_task_threshold_secs;
-    app.core.session.cross_session_access = valid.cross_session_access;
-
+    // A save changes only what the user changed on the page (BUG-570, FR-026a). The page is not
+    // refreshed while it is open, so a field the user never touched can hold a value another
+    // window has since replaced; writing it back would undo that window's save.
     let settings = valid.into_settings();
+    let baseline = app
+        .core
+        .settings
+        .settings_draft
+        .as_ref()
+        .and_then(|draft| draft.baseline.clone());
+    let changed = |stored: &mut Settings| set_changed(stored, &settings, baseline.as_ref());
+
+    // This window's own copy, for the same fields. Nothing to validate for the AI CLI: the select
+    // offers only installed CLIs and the value is a closed enum. Deliberately **not** re-checked
+    // against availability here either -- a default naming a CLI that has since been uninstalled
+    // is kept, not repaired (feature 026, research R11).
+    let mut window = window_settings(app, Settings::default());
+    changed(&mut window);
+    app.core.settings.theme_pref = window.theme;
+    app.scrollback_lines = window.scrollback_lines;
+    app.env_include_enabled = window.env_include_enabled;
+    app.env_include_script_path = window.env_include_script_path;
+    app.env_include_timeout_secs = window.env_include_timeout_secs;
+    app.core.session.default_ai_cli = window.default_ai_cli;
+    app.core.session.pi_activity_component = window.pi_activity_component;
+    app.core.session.tool_server_enabled = window.tool_server_enabled;
+    app.core.session.desktop_notifications = window.desktop_notifications;
+    app.core.session.cross_session_access = window.cross_session_access;
+    app.core.session.notification_kinds = window.notification_kinds;
+    app.core.session.long_task_threshold_secs = window.long_task_threshold_secs;
+
     let mut written = true;
     if let Some(store) = app.caps.settings() {
-        // The overlay owns every field, so this replaces the document whole — but it still goes
-        // through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
+        // Through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
-        // through the `notify_error` below, which is T160.
-        let write = store.update_reporting(&mut |stored| {
-            // The form does not hold the pull request switch (feature 040, M4) yet, so the
-            // document keeps the value it has.
-            // Nor the diff layout (feature 482), which the service owns.
-            let pr_status_enabled = stored.pr_status_enabled;
-            let diff_layout = stored.diff_layout;
-            *stored = settings.clone();
-            stored.pr_status_enabled = pr_status_enabled;
-            stored.diff_layout = diff_layout;
-        });
+        // through the `notify_error` below, which is T160. The pull request switch, which the form
+        // does not hold (feature 040, M4), is never set, so the document keeps the value it has.
+        let write = store.update_reporting(&mut |stored| changed(stored));
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
             app.core
@@ -424,25 +586,14 @@ pub(crate) fn save_and_prepare_check(
     // `send_op` caller, saving settings already has a fully-functional local-only path (the
     // write above), so there's no "can't do this at all without a daemon" error to raise —
     // the next daemon boot picks up the file regardless.
-    if let Some(daemon) = &app.daemon {
+    //
+    // `Some` only for a field the user changed, `None` for the rest (W4.1), and nothing at all
+    // when the save changed none of them (BUG-570).
+    let told = service_changes(&settings, baseline.as_ref());
+    if let (Some(daemon), Some(told)) = (&app.daemon, told) {
         let req = app.next_req;
         app.next_req += 1;
-        daemon.send(ClientMsg::SettingsSet {
-            req,
-            scrollback_lines: Some(settings.scrollback_lines),
-            env_include_enabled: Some(settings.env_include_enabled),
-            env_include_script_path: Some(settings.env_include_script_path.clone()),
-            env_include_timeout_secs: Some(settings.env_include_timeout_secs),
-            default_ai_cli: Some(settings.default_ai_cli),
-            pi_activity_component: Some(settings.pi_activity_component),
-            tool_server_enabled: Some(settings.tool_server_enabled),
-            desktop_notifications: Some(settings.desktop_notifications),
-            diff_layout: None,
-            cross_session_access: Some(settings.cross_session_access),
-            pr_status_enabled: None,
-            notification_kinds: Some(settings.notification_kinds),
-            long_task_threshold_secs: Some(settings.long_task_threshold_secs),
-        });
+        daemon.send(told.into_message(req));
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
     // The enabled/path/timeout settings themselves changed, so every previously cached
@@ -469,7 +620,14 @@ pub(crate) fn save_and_prepare_check(
     // mechanism (FR-005) the container runtime is the only thing that can arrange it — so the
     // other placements owe the user an explanation instead (FR-014d). Saved first, then reported —
     // the file is what the next launch reads, so this must not lose the user's choice.
-    let survival = match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
+    // The opt-in as the file now holds it: the stored one, unless this page changed it.
+    let mut survival_after = Settings::default();
+    survival_after.daemon.sandbox.survive_logout = survival_before;
+    changed(&mut survival_after);
+    let survival = match survival_step(
+        survival_before,
+        survival_after.daemon.sandbox.survive_logout,
+    ) {
         SurvivalStep::Leave => Task::none(),
         step => {
             // Feature 028, FR-022a: both halves of the opt-in — the restart policy and the idle
