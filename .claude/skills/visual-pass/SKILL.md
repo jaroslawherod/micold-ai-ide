@@ -299,11 +299,18 @@ this replaces 3, 4, 5, 6 and 9.
 wtype or `vptr.py` against the user's own `WAYLAND_DISPLAY` or `SWAYSOCK`: set both explicitly to
 the private ones. `vptr.py` exits non-zero unless its socket is in a `/tmp/vp<name><N>/` directory you own.
 Every command below carries the private env; a bare `swaymsg` or `grim` talks to the user's sway.
-Shell state does not persist: repeat `vp_n`/`vp_run` and these three lines in every call.
+Shell state does not persist: repeat `vp_n`/`vp_run` and these lines in every call.
 
 ```bash
 vp_n=77; vp_run=/tmp/vpw$vp_n                 # the number step 3 claimed
-sock=$vp_run/wayland-1; SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock)   # after sway is up
+sock=$vp_run/wayland-1
+```
+
+After sway is up (not before: an empty `SWAYSOCK` lets swaymsg fall back to another socket):
+
+```bash
+SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock)
+[ -S "$SWAYSOCK" ] || { echo "no private sway socket" >&2; exit 1; }
 PV="env -u DISPLAY SWAYSOCK=$SWAYSOCK WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run"
 ```
 
