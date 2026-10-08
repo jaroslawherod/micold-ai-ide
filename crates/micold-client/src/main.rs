@@ -669,10 +669,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Sidebar(msg));
             shell::runs::run_pending(app)
         }
-        Message::Runs(msg) => {
-            app.core.update(Message::Runs(msg));
-            shell::runs::run_pending(app)
-        }
+        Message::Runs(msg) => shell::runs::update(app, msg),
         Message::Sidebar(msg @ SidebarMsg::ShowAgentWorktreesToggled) => {
             app.core.update(Message::Sidebar(msg));
             shell::daemon_sync::sync_cli_availability(app);

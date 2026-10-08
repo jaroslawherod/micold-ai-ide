@@ -9,6 +9,13 @@ use crate::shell::daemon_sync::{send_op, PendingOp};
 use crate::App;
 use micold_client::app::Message;
 
+/// Apply a `features::runs::Msg` to the core, then run the request it left (shape B, FR-015).
+pub fn update(app: &mut App, msg: micold_client::features::runs::Msg) -> Task<Message> {
+    // `features::runs::Msg` is routed through the root so its overlay and sidebar effects apply.
+    app.core.update(Message::Runs(msg));
+    run_pending(app)
+}
+
 /// Run the request the reducer (or the root, while it opened the dialog) left pending.
 pub fn run_pending(app: &mut App) -> Task<Message> {
     match app.core.runs.pending.take() {

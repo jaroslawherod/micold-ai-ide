@@ -270,6 +270,7 @@ register! {
             crate::features::sidebar::SidebarFilterPanel,
             crate::features::project::ProjectContextMenu,
     },
+    crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
     // the open switcher, and the row list has to stay visible behind it. The same fact

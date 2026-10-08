@@ -10,6 +10,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::app::Message;
+use crate::features::Outcome;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
@@ -248,6 +249,29 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         }
     }
     Effect::None
+}
+
+/// **Run in parallel** was chosen: open the dialog over the active project and leave its branch
+/// listing request for the shell.
+pub fn requested(state: &mut crate::app::State) -> Vec<Outcome> {
+    let project = state.workspace.active.clone().unwrap_or_default();
+    let opening = Opening {
+        offered: state.session.offered_providers(Some(project.as_path())),
+        default_cli: state.session.default_ai_cli,
+        base_branch: None,
+        project,
+    };
+    state.clear_for_dialog();
+    state.runs.pending = Some(update(&mut state.runs, Msg::Opened(opening)));
+    vec![Outcome::SurfaceOpened(ParallelRunDialog.id())]
+}
+
+/// Apply a message and leave the request it makes in [`State::pending`] for the shell.
+pub fn apply(state: &mut State, msg: Msg) {
+    let effect = update(state, msg);
+    if effect != Effect::None {
+        state.pending = Some(effect);
+    }
 }
 
 fn edited(dialog: &mut ParallelDialog, msg: Msg) {

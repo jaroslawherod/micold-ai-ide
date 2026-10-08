@@ -78,6 +78,9 @@ pub const READERS: &[&str] = &[
     // `attach.offer.targets` derives the banner's apply targets from the report; it writes nothing
     // (feature 582).
     "targets",
+    // `session.offered_providers` lists the CLIs a session may run; the Run in parallel dialog
+    // reads it when it opens (feature 483).
+    "offered_providers",
     "all",
     "and_then",
     // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store
