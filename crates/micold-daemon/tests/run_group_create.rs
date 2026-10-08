@@ -440,3 +440,32 @@ async fn every_run_starts_at_the_recorded_base_commit_even_under_a_same_named_ta
         );
     }
 }
+
+/// Review A M1a: a run whose CLI cannot be started fails at its session; it is not
+/// `PromptNotDelivered`, which would make a run whose agent never ran pickable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_run_whose_session_never_starts_fails_at_its_session() {
+    use std::os::unix::fs::PermissionsExt;
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new();
+    let project = s.project();
+    // On PATH, so the provider is offered, but not executable, so its process cannot start.
+    std::fs::set_permissions(
+        s.bin.path().join("claude"),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    let mut client = window(&s.state, &project).await;
+
+    let (answer, _) = request(&mut client, 1, create_msg(1, &project, vec![CLAUDE; 2])).await;
+    let group = settled(&mut client, created(&answer)).await;
+    for run in &group.runs {
+        match &run.status {
+            RunStatus::Failed {
+                step: RunStep::Session,
+                reason,
+            } => assert!(!reason.is_empty(), "run {} gives a reason", run.number),
+            other => panic!("run {} failed at its session: {other:?}", run.number),
+        }
+    }
+}

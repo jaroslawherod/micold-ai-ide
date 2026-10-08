@@ -240,7 +240,7 @@ async fn run_one(
 ) {
     let number = run.number;
     let set = |status: RunStatus, session: Option<SessionId>| {
-        state.set_run_status(&project, group, number, status, session);
+        state.set_run_status(&project, group, number, status, session)
     };
     let mode = CreateMode::NewBranchAt { start: base_commit };
     if let Err(failure) =
@@ -256,7 +256,10 @@ async fn run_one(
         );
         return;
     }
-    set(RunStatus::Starting, None);
+    if !set(RunStatus::Starting, None) {
+        // The group is no longer held (its project was forgotten): start no session for it.
+        return;
+    }
 
     let Some((repo, _)) = state.project_repo(&project) else {
         set(session_failed("the project is no longer known"), None);
@@ -286,12 +289,21 @@ async fn run_one(
     )
     .await;
     match created {
-        Err(err) => set(
-            session_failed(format!("could not create the session: {err}")),
-            None,
-        ),
-        Ok((session, Ok(()))) => set(RunStatus::Prompted, Some(session)),
+        Err(err) => {
+            set(
+                session_failed(format!("could not create the session: {err}")),
+                None,
+            );
+        }
+        Ok((session, Ok(()))) => {
+            set(RunStatus::Prompted, Some(session));
+        }
         Ok((session, Err(why))) => {
+            if matches!(why, ops::FirstPromptUndelivered::NotStarted) {
+                // No agent ran, so there is nothing to pick: the run failed at its session.
+                set(session_failed(why.message(session)), Some(session));
+                return;
+            }
             let reason = match why {
                 // A terminal that went away or refused the write: said as for a CLI never ready,
                 // as the MCP create does.
