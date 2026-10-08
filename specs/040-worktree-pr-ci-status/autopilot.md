@@ -79,6 +79,8 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M3) | 1 | aec34873e2ccf720b22ee7bc0510cecd9d26c1fc:7f3b013ddc67b34868efe9154df411bda4671b68 | CHANGES: 2 MAJOR, 1 MINOR. F1 (stray `}` from the rebase merge in main_tests.rs) fixed; F2, F3 declined (see *Declined review findings*). Verify: `pr_status` 16, `features_pr_status` 16, `pr_status_is_read_only_on_named_events` 4 passed. |
 | Code A (M4) | 1 | 864322b2c7c39c65703a4bd2cad9995c350fb468:700e1e891a74a210e1267993caf2ac875a07811d | CLEAN (3 MINOR; F3 fixed, F1/F2 accepted) |
 | Code B (M4) | 1 | adaaf1d297ab989112ff5b2956eb606bab4821c2:2b07f096f7a0aafe7af690ed3225d26f9f65bb5f | CLEAN; Verify exit 0 |
+| Code A (M5) | 1 | 22fa3c4e0a2a1bac226c39e66d365b59a1cb4bf6:9cc9eafa5e00910aee038aad0e5eac20cfafc45c | CHANGES: 1 MAJOR (T044's scan test was missing: written), 1 MINOR (bidi/zero-width in titles: fixed with a test). |
+| Code B (M5) | 1 | 22fa3c4e0a2a1bac226c39e66d365b59a1cb4bf6:9cc9eafa5e00910aee038aad0e5eac20cfafc45c | CHANGES: 1 BLOCKER (same as A's F1, fixed), 2 MINOR (guard shown red by mutation, logged; menu entry now uses the handler's address function). Verify: five suites and `pr_status_open` (6) passed. |
 
 ## Declined review findings
 

@@ -547,13 +547,12 @@ pub fn view_with<'a>(
                         == micold_core::worktree::WorktreeOwner::Agent
             });
             // Feature 040 (FR-010): the entry is offered exactly when the row shows a pull request.
-            let has_pull_request = state
-                .worktree
-                .worktrees
-                .iter()
-                .find(|w| &w.dir_name == dir)
-                .and_then(|w| w.branch.as_deref())
-                .is_some_and(|branch| state.pr_status.statuses.contains_key(branch));
+            let has_pull_request = crate::features::sidebar::pull_request_address_to_open(
+                &state.worktree.worktrees,
+                &state.pr_status.statuses,
+                dir,
+            )
+            .is_some();
             let items = worktree_menu_items(
                 dir,
                 &state.worktree_display_name(dir),
