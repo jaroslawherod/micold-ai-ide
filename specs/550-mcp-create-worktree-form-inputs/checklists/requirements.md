@@ -10,8 +10,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (one open: branch combined with derived inputs, for the clarify unit)
-- [ ] Requirements are testable and unambiguous (FR-009 waits on the open marker)
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Acceptance scenarios are defined
 - [x] Edge cases are identified
