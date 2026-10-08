@@ -58,7 +58,9 @@ Picked                                    this run won the group (terminal)
 
 `RunStep` is `Worktree | Session`, so the failed step is reportable without parsing the reason
 (FR-005). An undelivered prompt is not a failure: it is `PromptNotDelivered`, which keeps the
-worktree and the session.
+worktree and the session. A session whose process never started (`FirstPromptUndelivered::NotStarted`)
+is `Failed{Session}`: no agent ran, so there is nothing to pick. It keeps its worktree and records
+the session id.
 
 Transitions (the only ones): `Creating → Starting | Failed{Worktree}`;
 `Starting → Prompted | PromptNotDelivered | Failed{Session}`; `Prompted → Picked`;

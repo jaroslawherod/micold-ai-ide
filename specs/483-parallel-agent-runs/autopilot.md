@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M1
-- **Next step**: M1a: review rounds 2 (full: snapshot stale after an amend), full gate, push, PR body
+- **Next step**: M1a: orchestrator opens the PR from the body file, then CI and merge
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | — | in progress |
+| M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | pending (body at scratchpad pr-483-m1a.md) | PR pending |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | — | planned |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
@@ -81,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a review B (conformance, sonnet) | 1 | d2b15e8fe0ecb4b8f9e021a5fe1bda5ace611fae:634a59c6d386d5f1564d6223b4d83269702136a3 | CHANGES: 1 MAJOR (red evidence, fixed by mutation runs in cycle-log), 1 MINOR fixed |
 | M1a review A (code-review high) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CHANGES: 2 fixed (a session that never started is `Failed{Session}`, not pickable; a run stops when its group is gone), 8 declined |
 | M1a review B (conformance, sonnet) | 2 (full, snapshot stale) | e8ce7b374a0e487eb6655918f8450991775f4321:f9cc7ec22c32a6ff5143cde6b720be26e5fdfdfa | CLEAN |
+| M1a review A (code-review, sonnet) | 3 (fix diff) | a919a4e20e57e980b74b417fcc4831d7e9ea4006:b4963b20c7ee533270a1b9a49a98aef4e981498c | both fixes hold; 5 MINOR: spec prose and cycle-log fixed (prose only), 3 to follow-ups |
 
 ## Declined review findings
 
@@ -110,4 +111,5 @@ None.
 
 ## Follow-ups not done
 
+- `run_one` (review A M1a r3): the forgotten-group guard covers only `Starting`. A project forgotten during the session step still gets a session. A worktree created just before is left unowned. The guard's comment names only one of `set_run_status`'s two `false` causes, and no test covers the guard.
 - Runs file: an unreadable (not missing) file loads as no groups and the next save replaces it; `.corrupt` backups overwrite each other (review A M1a, declined for M1a).
