@@ -146,3 +146,13 @@ debug = "line-tables-only"
 # whole `cargo test --workspace` run.
 [profile.test]
 debug = "line-tables-only"
+
+# The stop-time and start-time terminal history work walks every cell of 10,000-line terminals
+# (feature 041: capture and seed). Unoptimised, ten of them take longer than the 3 s stop bound on
+# a two-core CI runner (`ten_busy_sessions_are_all_saved_within_the_bound`, 4.5 s on macOS and
+# Linux), which says nothing about the release build the bound is for. These two crates are
+# optimised in debug and test builds so the tests measure the bound, not the compiler's settings.
+[profile.dev.package.micold-daemon]
+opt-level = 1
+[profile.dev.package.alacritty_terminal]
+opt-level = 2
