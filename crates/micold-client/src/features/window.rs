@@ -141,6 +141,8 @@ pub enum FieldId {
     SettingsSurviveLogout,
     /// Settings: the "report Pi activity" checkbox (feature 029, FR-012e).
     SettingsPiActivityComponent,
+    /// The Terminal page's **Save terminal history** checkbox (feature 041).
+    SettingsSaveTerminalHistory,
     /// The Settings → GitHub pull request status switch (feature 040).
     SettingsPrStatus,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).

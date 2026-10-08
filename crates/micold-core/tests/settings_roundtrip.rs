@@ -725,3 +725,45 @@ fn turning_pull_request_status_on_survives_a_save_and_load_at_the_same_settings_
         "an additive, defaulted field does not move the settings version"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 041 — saving terminal history (FR-026, FR-029)
+// ---------------------------------------------------------------------------------------
+
+/// U86. Saving is on until the user turns it off (FR-026).
+#[test]
+fn saving_terminal_history_is_on_by_default() {
+    assert!(Settings::default().save_terminal_history);
+}
+
+/// U87. A file written before the feature never said no, so it reads as on (FR-029).
+#[test]
+fn a_settings_file_without_the_history_field_reads_as_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{ "settings_version": 4, "theme": "dark", "pi_activity_component": false }"#,
+    )
+    .unwrap();
+
+    let outcome = JsonFileSettingsStore::at(path).load();
+
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(outcome.settings.save_terminal_history);
+}
+
+/// U88. Off survives a save and a load (FR-029).
+#[test]
+fn turning_history_saving_off_survives_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    store
+        .save(&Settings {
+            save_terminal_history: false,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    assert!(!store.load().settings.save_terminal_history);
+}

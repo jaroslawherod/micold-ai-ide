@@ -359,6 +359,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         default_ai_cli: AiCli::ClaudeCode,
         pi_activity_component: true,
+        save_terminal_history: true,
         tool_server_enabled: true,
         desktop_notifications: true,
         notification_kinds: Default::default(),
@@ -1864,6 +1865,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
+            save_terminal_history: true,
         },
         environment: EnvironmentDraft {
             enabled: false,
@@ -2498,6 +2500,7 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
+            save_terminal_history: true,
         },
         environment: EnvironmentDraft {
             enabled: true,
@@ -2537,6 +2540,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
+            save_terminal_history: true,
         },
         // A default `EnvironmentDraft` holds an *empty* timeout, which `validate` rejects —
         // and a save that never validates would pass the assertions below for the wrong
@@ -2738,6 +2742,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 env_include_script_path: "/authoritative/from-daemon.sh".into(),
                 env_include_timeout_secs: 30,
                 pi_activity_component: true,
+                save_terminal_history: true,
                 tool_server_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
@@ -2775,6 +2780,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 env_include_script_path: "/tmp/after.sh".into(),
                 env_include_timeout_secs: 45,
                 pi_activity_component: true,
+                save_terminal_history: true,
                 tool_server_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
@@ -3265,6 +3271,7 @@ fn the_service_answers_with(
                 env_include_script_path: String::new(),
                 env_include_timeout_secs: 30,
                 pi_activity_component: false,
+                save_terminal_history: true,
                 tool_server_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
@@ -4504,6 +4511,7 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: settings.scrollback_lines.to_string(),
+            save_terminal_history: settings.save_terminal_history,
         },
         environment: EnvironmentDraft {
             enabled: settings.env_include_enabled,
@@ -4861,6 +4869,7 @@ mod script_path_report {
         app.env_include_script_path = path.to_string();
         // On, as a connected service reports them by default.
         app.core.session.pi_activity_component = true;
+        app.core.session.save_terminal_history = true;
         app.core.session.tool_server_enabled = true;
         app.core.session.desktop_notifications = true;
         (app, probe)
@@ -5159,6 +5168,7 @@ mod script_path_report {
         env_include_timeout_secs: Option<u64>,
         default_ai_cli: Option<AiCli>,
         pi_activity_component: Option<bool>,
+        save_terminal_history: Option<bool>,
         tool_server_enabled: Option<bool>,
         desktop_notifications: Option<bool>,
         cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
@@ -5207,6 +5217,7 @@ mod script_path_report {
                 env_include_timeout_secs,
                 default_ai_cli,
                 pi_activity_component,
+                save_terminal_history,
                 tool_server_enabled,
                 desktop_notifications,
                 cross_session_access,
@@ -5221,6 +5232,7 @@ mod script_path_report {
                 env_include_timeout_secs,
                 default_ai_cli,
                 pi_activity_component,
+                save_terminal_history,
                 tool_server_enabled,
                 desktop_notifications,
                 cross_session_access,
@@ -5289,6 +5301,14 @@ mod script_path_report {
                 Box::new(|d| d.environment.pi_activity_component = false),
                 Told {
                     pi_activity_component: Some(false),
+                    ..Told::default()
+                },
+            ),
+            (
+                "save terminal history",
+                Box::new(|d| d.terminal.save_terminal_history = false),
+                Told {
+                    save_terminal_history: Some(false),
                     ..Told::default()
                 },
             ),
@@ -5537,6 +5557,7 @@ mod script_path_report {
             env_include_script_path: path.to_string(),
             env_include_timeout_secs: 10,
             pi_activity_component: false,
+            save_terminal_history: true,
             tool_server_enabled: true,
             desktop_notifications: true,
             notification_kinds: Default::default(),

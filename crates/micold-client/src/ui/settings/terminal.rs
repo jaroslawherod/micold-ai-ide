@@ -5,8 +5,8 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::TextField;
-use crate::ui::settings::page;
+use crate::ui::material::{Checkbox, TextField};
+use crate::ui::settings::{field_note, page};
 use iced::Element;
 use micold_core::tokens::Roles;
 
@@ -14,7 +14,10 @@ use micold_core::tokens::Roles;
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("scrollback_lines", "ScrollbackChanged")];
+pub const SETTINGS: &[(&str, &str)] = &[
+    ("scrollback_lines", "ScrollbackChanged"),
+    ("save_terminal_history", "SaveTerminalHistoryToggled"),
+];
 
 /// The Terminal page.
 pub fn view<'a>(
@@ -40,10 +43,24 @@ pub fn view<'a>(
         .on_input(|v| Message::Settings(SettingsMsg::ScrollbackChanged(v)))
         .on_submit(Message::Settings(SettingsMsg::Saved));
 
+    // Feature 041, FR-026, FR-031: the shared checkbox with its note, as the other switches.
+    let save_history = Checkbox::new(
+        "Save terminal history",
+        draft.terminal.save_terminal_history,
+        roles,
+    )
+    .track_focus(FieldId::SettingsSaveTerminalHistory, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::SaveTerminalHistoryToggled(v)));
+    let save_history = field_note(
+        save_history,
+        Some("Terminal output is written to this computer's disk while this is on. Turning it off deletes the saved history."),
+        roles,
+    );
+
     page(
         "Terminal",
         "The terminal embedded in each session.",
-        vec![scrollback.into()],
+        vec![scrollback.into(), save_history],
         roles,
     )
 }

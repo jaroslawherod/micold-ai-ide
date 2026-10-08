@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #577 | M1 | merged | 75fe78b8cda4a3332911eaf184548abd018fcab0 |
 | #578 | M2 | merged | b0100eab588663563b14cee5756e3e511b7f8014 |
 | #601 | M3 | merged | 7681c0f4a9644a988dd2fa3aaa8818acbae5c4e3 |
-| #610 | M4 | open | |
+| #610 | M4 | merged | 031d01c6e7b93f494220a0721fd0e0e9194cf6b7 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | A stop and start of a session shows its earlier output above a "session restarted at" line; nothing on disk | #577 | merged |
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
-| M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | in review |
-| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | pending |
+| M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | merged |
+| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | | in progress |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
@@ -102,7 +102,8 @@ Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5
 
 ## Handover
 
-None.
+M5 (unit over the 150k cap, no PR yet, nothing pushed). Branch reset to origin/main (031d01c6). Done and ticked: T037-T047 and T074 (code + tests, all green when run singly: micold-core store/settings/protocol/schema_hash tests, micold-client lib+bin tests, micold-daemon `history_setting` (9) and `history_timing` (2, SC-005 echo p95 off 0.4 ms / on 0.75 ms)). Layout snapshot fixture regenerated. PROTOCOL_VERSION 35 -> 36. Design: `HistoryStore` gained `with_enabled`, `enabled`, `set_enabled`, `purge`, `retry_deletions`, `DeletionFailure`, `SkipReason::Disabled`; `DaemonState::set_history_store` applies the stored setting and purges when off; `set_save_terminal_history` applies to the store before the broadcast; `Saver` got `retry_due`, `mark_all_due`, `deletion_failed`; `save_due_at` skips capture while off. Stand-in gained a `flood` directive.
+Next: (1) T048 docs: `docs/user-guide/settings.md` and `docs/user-guide/worktrees-and-sessions.md` (FR-032), tick T048; (2) quickstart Part B B6-B8 / visual pass of the new checkbox via `visual-pass` (Terminal page changed look); (3) commit, then gate.md/review.md flow: scoped gate, review A (high) in its shadow, review B (conformance, sonnet), full gate with MICOLD_SKIP_GH_LAUNCH_TEST=1, then pr.md (title `feat(041): ...Save terminal history setting (#485)`, body says saving is on from M2 and removal lands in M7, hold on releases; `Refs #485`). Follow-up carried from M2 review A: store's `last_written` is now cleared by set_enabled(false); M7's delete must clear it too. Review rounds: none run yet.
 
 ## Open escalation
 

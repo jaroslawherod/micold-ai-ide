@@ -13,7 +13,7 @@ use alacritty_terminal::term::Term;
 use alacritty_terminal::vte::ansi::{Attr, ClearMode, Color, Handler, NamedColor, Rgb};
 use chrono::{DateTime, Local};
 use micold_core::session::SessionId;
-use micold_core::terminal_history::schedule::SaveSchedule;
+use micold_core::terminal_history::schedule::{SaveSchedule, SAVE_SPACING};
 use micold_core::terminal_history::text::separator_line;
 use micold_core::terminal_history::{
     HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, StyleFlags, StyleRun,
@@ -329,6 +329,8 @@ pub struct Saver {
     schedules: HashMap<SessionId, Tracked>,
     /// Failures already logged, by session and reason (FR-007).
     logged: HashSet<(SessionId, String)>,
+    /// When the deletions that failed were last tried again (FR-033).
+    last_retry: Option<Instant>,
 }
 
 /// A schedule and the process it is of. A restarted process counts its output from zero again,
@@ -385,6 +387,32 @@ impl Saver {
         if let Some(tracked) = self.schedules.get_mut(&id) {
             tracked.schedule.saved(now, output_count);
         }
+    }
+
+    /// Whether the deletions that failed are to be tried again at `now`: the first time asked, and
+    /// then every [`SAVE_SPACING`] (FR-033).
+    pub fn retry_due(&mut self, now: Instant) -> bool {
+        let due = self
+            .last_retry
+            .is_none_or(|last| now.saturating_duration_since(last) >= SAVE_SPACING);
+        if due {
+            self.last_retry = Some(now);
+        }
+        due
+    }
+
+    /// Saving was turned on: every schedule is due at the next tick, whatever was saved before,
+    /// because the files were deleted (FR-027).
+    pub fn mark_all_due(&mut self) {
+        for tracked in self.schedules.values_mut() {
+            tracked.schedule.mark_due();
+        }
+    }
+
+    /// The deletion of a file of `id` failed for `reason`. Returns whether this is the first time
+    /// the reason is seen for the session, so it is logged once (FR-033).
+    pub fn deletion_failed(&mut self, id: SessionId, reason: &str) -> bool {
+        self.logged.insert((id, format!("deletion: {reason}")))
     }
 
     /// A save of `id` failed at `now` for `reason`: it is due again later. Returns whether this is

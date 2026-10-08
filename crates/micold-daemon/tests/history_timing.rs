@@ -102,3 +102,104 @@ fn u64_a_saved_history_of_ten_thousand_lines_delays_the_start_by_no_more_than_a_
         state.stop_session(id);
     }
 }
+
+/// SC-005 (U131): with ten sessions printing continuously, the time from a keystroke to its echo in
+/// one of them is, at the 95th percentile, at most 20 ms longer with saving on than with saving
+/// off. A thread saves all ten as fast as it can meanwhile (`save_due_at` with the clock moved on
+/// 30 s each time), which is a far heavier load than the one save per 30 s of a real service. Unix
+/// only: the echo is the terminal's.
+#[cfg(unix)]
+#[test]
+fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95() {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Arc;
+
+    use alacritty_terminal::grid::Dimensions;
+    use alacritty_terminal::index::{Column, Line, Point};
+    use micold_core::terminal_history::schedule::SAVE_SPACING;
+
+    const SAMPLES: usize = 200;
+    const ALLOWED_ECHO: Duration = Duration::from_millis(20);
+
+    /// Whether the screen of `state`'s session shows `token`.
+    fn shows(state: &DaemonState, id: SessionId, token: &str) -> bool {
+        let pty = state.primary_pty(id).expect("live");
+        let term = pty.term().lock();
+        let grid = term.grid();
+        (0..grid.screen_lines() as i32).any(|row| {
+            let text: String = (0..grid.columns())
+                .map(|col| grid[Point::new(Line(row), Column(col))].c)
+                .collect();
+            text.contains(token)
+        })
+    }
+
+    /// The echo times of `SAMPLES` keystrokes in `id`, sorted, while a thread saves every session.
+    fn echo_times(state: &Arc<DaemonState>, id: SessionId, label: &str) -> Vec<Duration> {
+        static SERIAL: AtomicU64 = AtomicU64::new(1);
+        static CLOCK: AtomicU64 = AtomicU64::new(1);
+        let base = Instant::now();
+        let stop = Arc::new(AtomicBool::new(false));
+        let saver = {
+            let (state, stop) = (Arc::clone(state), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    let tick = CLOCK.fetch_add(1, Ordering::Relaxed);
+                    state.save_due_at(base + SAVE_SPACING * tick as u32);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            })
+        };
+        let mut times = Vec::with_capacity(SAMPLES);
+        for i in 0..SAMPLES {
+            let token = format!("zq{label}{i}z");
+            let sent = Instant::now();
+            state.session_input(id, SERIAL.fetch_add(1, Ordering::Relaxed), token.as_bytes());
+            while !shows(state, id, &token) {
+                assert!(sent.elapsed() < Duration::from_secs(5), "{token} never echoed");
+                std::thread::sleep(Duration::from_micros(100));
+            }
+            times.push(sent.elapsed());
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        stop.store(true, Ordering::Relaxed);
+        saver.join().unwrap();
+        times.sort();
+        times
+    }
+
+    fake_cli();
+    let project = tempfile::tempdir().unwrap();
+    let saved = tempfile::tempdir().unwrap();
+    let sessions: Vec<_> = (0..10).map(|_| ai_session()).collect();
+    let ids: Vec<_> = sessions.iter().map(|s| s.id).collect();
+    let state = service_saving(project.path(), sessions, saved.path());
+    script(project.path(), "flood busy\n");
+    for id in &ids {
+        state.start_session(*id, LaunchMode::Fresh).expect("starts");
+    }
+    for id in &ids {
+        history::history_once(&state, *id, "output", |lines| lines.len() > 100);
+    }
+
+    state.set_save_terminal_history(false).unwrap();
+    echo_times(&state, ids[0], "w"); // warm up
+    let off = echo_times(&state, ids[0], "a");
+    state.set_save_terminal_history(true).unwrap();
+    let on = echo_times(&state, ids[0], "b");
+    assert!(
+        std::fs::read_dir(saved.path()).unwrap().count() > 0,
+        "the saves happened"
+    );
+    let p95 = |times: &[Duration]| times[times.len() * 95 / 100];
+    println!("echo p95: off {:?}, on {:?}", p95(&off), p95(&on));
+    assert!(
+        p95(&on) <= p95(&off) + ALLOWED_ECHO,
+        "saving delayed the echo: p95 {:?} against {:?} with saving off",
+        p95(&on),
+        p95(&off)
+    );
+    for id in ids {
+        state.stop_session(id);
+    }
+}

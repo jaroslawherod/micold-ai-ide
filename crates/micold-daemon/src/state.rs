@@ -666,7 +666,15 @@ impl DaemonState {
     }
 
     /// Record where terminal histories are saved (feature 041). A no-op if already set.
+    ///
+    /// Takes the stored setting: with saving off, every file in the directory is deleted now,
+    /// before any session is started (feature 041, FR-033). **Blocking** in that case.
     pub fn set_history_store(&self, store: micold_core::terminal_history::HistoryStore) {
+        let enabled = self.lock().catalog.save_terminal_history();
+        let store = store.with_enabled(enabled);
+        if !enabled {
+            self.log_undeleted(&store.purge());
+        }
         let _ = self.history_store.set(store);
     }
 
@@ -1740,6 +1748,46 @@ impl DaemonState {
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
         Ok(())
+    }
+
+    /// Turn terminal history saving on or off, push `SettingsChanged` to every client, and apply it
+    /// to the store before this returns, so the reply that follows is sent after the files are
+    /// gone (feature 041, FR-027, contracts/setting.md §3). **Blocking** while it deletes. Running
+    /// terminals and carried histories are untouched (FR-033); turned on, every running terminal
+    /// is saved at the next tick.
+    pub fn set_save_terminal_history(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_save_terminal_history(on)?;
+            inner.catalog.settings_wire()
+        };
+        if let Some(store) = self.history_store.get() {
+            let failures = store.set_enabled(on);
+            self.log_undeleted(&failures);
+            if on {
+                self.saver
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .mark_all_due();
+            }
+        }
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// One warning per file and reason that could not be deleted (FR-033).
+    fn log_undeleted(&self, failures: &[micold_core::terminal_history::DeletionFailure]) {
+        let mut saver = self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for failure in failures {
+            let reason = failure.error.to_string();
+            let session = failure.session.unwrap_or(SessionId(uuid::Uuid::nil()));
+            if saver.deletion_failed(session, &reason) {
+                tracing::warn!(session = %session.0, %reason, "saved terminal history was not deleted");
+            }
+        }
     }
 
     /// Turn the tool-server binding on or off for sessions started afterwards (feature 034, FR-004).
@@ -4438,6 +4486,18 @@ impl DaemonState {
         let Some(store) = self.history_store.get() else {
             return;
         };
+        if self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retry_due(now)
+        {
+            self.log_undeleted(&store.retry_deletions());
+        }
+        // Nothing is captured while saving is off; turned on, every terminal is marked due.
+        if !store.enabled() {
+            return;
+        }
         let terminals = self.covered_live_terminals();
         let due = self
             .saver
@@ -4479,6 +4539,9 @@ impl DaemonState {
         let Some(store) = self.history_store.get() else {
             return;
         };
+        if !store.enabled() {
+            return;
+        }
         let _gate = self.hold_gate(id);
         if !self
             .primary_pty(id)

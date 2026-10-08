@@ -1175,6 +1175,7 @@ where
                 env_include_timeout_secs,
                 default_ai_cli,
                 pi_activity_component,
+                save_terminal_history,
                 tool_server_enabled,
                 cross_session_access,
                 pr_status_enabled,
@@ -1207,6 +1208,10 @@ where
                 })
                 .and_then(|()| match pi_activity_component {
                     Some(on) => state.set_pi_activity_component(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match save_terminal_history {
+                    Some(on) => state.set_save_terminal_history(on),
                     None => Ok(()),
                 })
                 .and_then(|()| match tool_server_enabled {

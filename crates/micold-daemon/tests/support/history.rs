@@ -28,6 +28,7 @@ const STAND_IN: &str = "claude.exe";
 ///
 /// - `print <text>` writes the text and a line end; `raw <text>` writes it alone; `\e` is ESC;
 /// - `lines <n> <prefix>` writes `<prefix>1` to `<prefix><n>`, each followed by `ESC[0m`;
+/// - `flood <prefix>` writes `<prefix>1`, `<prefix>2`, ... one every 2 ms, for as long as it runs;
 /// - `args` writes `args ` and its own arguments;
 /// - `touch <file>` creates the file once everything before it has been written;
 /// - `detach` starts `sleep 30` in a process group of its own, holding the terminal, and writes
@@ -59,6 +60,13 @@ fn main() {
                 let n: u32 = n.parse().unwrap_or(0);
                 for i in 1..=n {
                     let _ = write!(out, "{prefix}{i}\x1b[0m\r\n");
+                }
+            }
+            "flood" => {
+                for i in 1u64.. {
+                    let _ = write!(out, "{arg}{i}\r\n");
+                    let _ = out.flush();
+                    std::thread::sleep(std::time::Duration::from_millis(2));
                 }
             }
             "touch" => {

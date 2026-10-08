@@ -322,6 +322,9 @@ pub struct AppearanceDraft {
 pub struct TerminalDraft {
     /// The editable scrollback limit (parsed and range-checked on save).
     pub scrollback_lines: String,
+    /// Whether the service saves terminal history to disk (feature 041, FR-026). Holds the value
+    /// only; the default-on comes from `Settings`.
+    pub save_terminal_history: bool,
 }
 
 /// The Environment section's fields (feature 011).
@@ -469,6 +472,8 @@ pub struct ValidSettings {
     pub default_ai_cli: AiCli,
     /// Environment.
     pub pi_activity_component: bool,
+    /// Terminal (feature 041).
+    pub save_terminal_history: bool,
     /// Environment.
     pub tool_server_enabled: bool,
     /// Environment.
@@ -498,6 +503,7 @@ impl ValidSettings {
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
+            save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
             desktop_notifications: self.desktop_notifications,
             cross_session_access: self.cross_session_access,
@@ -617,6 +623,7 @@ impl SettingsDraft {
             env_include_timeout_secs,
             default_ai_cli: self.environment.default_ai_cli,
             pi_activity_component: self.environment.pi_activity_component,
+            save_terminal_history: self.terminal.save_terminal_history,
             tool_server_enabled: self.environment.tool_server_enabled,
             desktop_notifications: self.environment.desktop_notifications,
             notification_kinds: self.environment.notification_kinds,
@@ -929,6 +936,7 @@ impl SettingsDraft {
             },
             terminal: TerminalDraft {
                 scrollback_lines: settings.scrollback_lines.to_string(),
+                save_terminal_history: settings.save_terminal_history,
             },
             environment: EnvironmentDraft {
                 enabled: settings.env_include_enabled,
@@ -1063,6 +1071,8 @@ pub enum Msg {
     DefaultAiCliChanged(AiCli),
     /// The Settings **Pi activity component** switch was toggled (feature 029, FR-012e).
     PiActivityComponentToggled(bool),
+    /// Terminal: the **Save terminal history** checkbox (feature 041, FR-026).
+    SaveTerminalHistoryToggled(bool),
     /// The Settings **Let AI sessions manage worktrees and sessions** switch was toggled
     /// (feature 034, FR-004).
     ToolServerToggled(bool),
@@ -1190,6 +1200,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::EnvIncludeTimeoutChanged(text) => env_include_timeout_changed(state, text),
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
+        Msg::SaveTerminalHistoryToggled(on) => save_terminal_history_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
         Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
         Msg::NotificationKindToggled(kind, on) => notification_kind_toggled(state, kind, on),
@@ -1360,6 +1371,11 @@ pub fn default_ai_cli_changed(state: &mut crate::app::State, which: AiCli) {
 /// Environment: the **Pi activity component** switch was toggled (feature 029, FR-012e).
 pub fn pi_activity_component_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.pi_activity_component = on);
+}
+
+/// Terminal: the **Save terminal history** checkbox was toggled (feature 041, FR-026).
+pub fn save_terminal_history_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.terminal.save_terminal_history = on);
 }
 
 /// Environment: bind new sessions to the service's tool server (feature 034, FR-004).
@@ -1917,6 +1933,7 @@ pub fn diff_layout_set(
         env_include_timeout_secs: None,
         default_ai_cli: None,
         pi_activity_component: None,
+        save_terminal_history: None,
         tool_server_enabled: None,
         cross_session_access: None,
         pr_status_enabled: None,

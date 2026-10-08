@@ -1,6 +1,6 @@
 //! The directory of saved-history files (data-model §5, contracts/saved-history-file.md §1, §3).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -37,6 +37,17 @@ pub enum SaveOutcome {
 pub enum SkipReason {
     /// The directory is absent and this store does not create it (research R15).
     NoDirectory,
+    /// Saving is turned off (feature 041, FR-026).
+    Disabled,
+}
+
+/// A saved file that could not be deleted (FR-033): the session it belongs to, when its name says
+/// which, and why. It stays in the store's retry set until [`HistoryStore::retry_deletions`]
+/// deletes it or a new save replaces it.
+#[derive(Debug)]
+pub struct DeletionFailure {
+    pub session: Option<SessionId>,
+    pub error: io::Error,
 }
 
 /// Where saved histories are kept: `terminal-history` under the per-user local data directory,
@@ -58,8 +69,12 @@ pub struct HistoryStore {
     state: Mutex<State>,
 }
 
-#[derive(Default)]
 struct State {
+    /// The setting (FR-026): off, nothing is saved and nothing is loaded.
+    enabled: bool,
+    /// Files whose deletion failed. Each is retried, never loaded, and leaves the set when it is
+    /// deleted or replaced by a save, also after saving is turned on again (FR-033).
+    undeleted: HashSet<String>,
     /// The checksum of the file last written for each session by this store.
     last_written: HashMap<SessionId, [u8; CHECKSUM_BYTES]>,
 }
@@ -72,8 +87,105 @@ impl HistoryStore {
         HistoryStore {
             dir,
             create_dir,
-            state: Mutex::default(),
+            state: Mutex::new(State {
+                enabled: true,
+                undeleted: HashSet::new(),
+                last_written: HashMap::new(),
+            }),
         }
+    }
+
+    /// The store with saving turned `enabled` from the start; nothing is deleted here (see
+    /// [`Self::purge`]).
+    pub fn with_enabled(self, enabled: bool) -> HistoryStore {
+        self.lock().enabled = enabled;
+        self
+    }
+
+    /// Whether saving is on.
+    pub fn enabled(&self) -> bool {
+        self.lock().enabled
+    }
+
+    /// Turn saving on or off (FR-027). Off deletes every saved file and temporary file in the
+    /// directory before it returns, under the lock a save writes under, so a save in flight has
+    /// either finished and is deleted, or finds saving off and writes nothing (FR-033). On
+    /// restores nothing: a file whose deletion failed stays in the retry set. Returns the
+    /// deletions that failed.
+    pub fn set_enabled(&self, enabled: bool) -> Vec<DeletionFailure> {
+        let mut state = self.lock();
+        state.enabled = enabled;
+        if enabled {
+            return Vec::new();
+        }
+        self.delete_all(&mut state)
+    }
+
+    /// The service starts with saving off: delete every saved file before a session can start
+    /// (FR-033). Leaves saving off.
+    pub fn purge(&self) -> Vec<DeletionFailure> {
+        let mut state = self.lock();
+        state.enabled = false;
+        self.delete_all(&mut state)
+    }
+
+    /// Try the files whose deletion failed again (FR-033). Returns those that still fail.
+    pub fn retry_deletions(&self) -> Vec<DeletionFailure> {
+        let mut state = self.lock();
+        let names: Vec<String> = state.undeleted.iter().cloned().collect();
+        let mut failures = Vec::new();
+        for name in names {
+            match std::fs::remove_file(self.dir.join(&name)) {
+                Ok(()) => {
+                    state.undeleted.remove(&name);
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    state.undeleted.remove(&name);
+                }
+                Err(error) => failures.push(DeletionFailure {
+                    session: session_of(&name),
+                    error,
+                }),
+            }
+        }
+        failures
+    }
+
+    /// Delete every saved and temporary file; the ones that stay go to the retry set.
+    fn delete_all(&self, state: &mut State) -> Vec<DeletionFailure> {
+        state.last_written.clear();
+        let mut failures = Vec::new();
+        let entries = match std::fs::read_dir(&self.dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return failures,
+            Err(error) => {
+                failures.push(DeletionFailure {
+                    session: None,
+                    error,
+                });
+                return failures;
+            }
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !is_history_file(&name) {
+                continue;
+            }
+            match std::fs::remove_file(entry.path()) {
+                Ok(()) => {
+                    state.undeleted.remove(&name);
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    state.undeleted.insert(name.clone());
+                    failures.push(DeletionFailure {
+                        session: session_of(&name),
+                        error,
+                    });
+                }
+            }
+        }
+        failures
     }
 
     /// The directory the files are in.
@@ -85,9 +197,17 @@ impl HistoryStore {
     /// file (contracts/saved-history-file.md §3). Blocks on the disk: call it off the async
     /// runtime.
     pub fn save(&self, id: SessionId, snapshot: &HistorySnapshot) -> io::Result<SaveOutcome> {
+        if !self.lock().enabled {
+            return Ok(SaveOutcome::Skipped(SkipReason::Disabled));
+        }
         let bytes = encode(snapshot);
         let checksum = checksum_of(&bytes);
         let mut state = self.lock();
+        // Checked again under the lock a deletion holds: a save that raced the setting being
+        // turned off writes nothing (FR-033).
+        if !state.enabled {
+            return Ok(SaveOutcome::Skipped(SkipReason::Disabled));
+        }
         if state.last_written.get(&id) == Some(&checksum) {
             return Ok(SaveOutcome::Unchanged);
         }
@@ -95,6 +215,7 @@ impl HistoryStore {
             return Ok(SaveOutcome::Skipped(SkipReason::NoDirectory));
         }
         owner_only::write(&self.dir, &file_name(id), &bytes)?;
+        state.undeleted.remove(&file_name(id));
         state.last_written.insert(id, checksum);
         Ok(SaveOutcome::Saved)
     }
@@ -103,7 +224,11 @@ impl HistoryStore {
     /// a file.
     pub fn load(&self, id: SessionId) -> LoadOutcome {
         let read = {
-            let _state = self.lock();
+            let state = self.lock();
+            // A history that was to be deleted never comes back (story 2 scenario 7).
+            if !state.enabled || state.undeleted.contains(&file_name(id)) {
+                return LoadOutcome::None;
+            }
             read_capped(&self.dir.join(file_name(id)))
         };
         match read {
@@ -126,6 +251,19 @@ impl HistoryStore {
 /// `<session uuid>.history`, the uuid hyphenated and lower-case as the catalog writes it.
 fn file_name(id: SessionId) -> String {
     format!("{}.history", id.0.as_hyphenated())
+}
+
+/// Whether `name` is a saved file or the temporary file a save writes through.
+fn is_history_file(name: &str) -> bool {
+    name.ends_with(".history") || (name.starts_with('.') && name.ends_with(".history.tmp"))
+}
+
+/// The session a saved file's name says it belongs to.
+fn session_of(name: &str) -> Option<SessionId> {
+    let stem = name.strip_prefix('.').unwrap_or(name);
+    let stem = stem.strip_suffix(".tmp").unwrap_or(stem);
+    let stem = stem.strip_suffix(".history")?;
+    uuid::Uuid::parse_str(stem).ok().map(SessionId)
 }
 
 /// The checksum an encoded file ends with: the SHA-256 of everything before it.
