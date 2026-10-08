@@ -192,7 +192,8 @@ fn every_popover_is_in_the_table() {
     // Thirteen with `confirm_discard_pending`, the Changes view's discard question (feature 482).
     // Fourteen with `run_in_parallel`, the dialog that starts a group of runs (feature 483).
     // Fifteen with `confirm_dismiss_run_group`, the question Dismiss group asks (feature 483).
-    const DIALOGS: usize = 15;
+    // Sixteen with `confirm_pick_run`, the question Pick this one asks (feature 483).
+    const DIALOGS: usize = 16;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

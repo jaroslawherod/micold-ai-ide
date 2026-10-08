@@ -212,6 +212,18 @@ fn dialogs() -> Vec<Dialog> {
                 });
             },
         },
+        // Pick this one's question (feature 483, G6).
+        Dialog {
+            id: "confirm_pick_run",
+            cancel: Message::Runs(micold_client::features::runs::Msg::PickCancelled),
+            open: |state| {
+                state.runs.pick_target = Some(micold_client::features::runs::PickTarget {
+                    group: micold_core::runs::GroupId(uuid::Uuid::from_u128(1)),
+                    project: std::path::PathBuf::from("/p"),
+                    run: 1,
+                });
+            },
+        },
         // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
         // without answering; the daemon keeps waiting for another window or times out.
         Dialog {
@@ -332,17 +344,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483).
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483).
     assert_eq!(
         dialogs().len(),
-        15,
+        16,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        32,
-        "fifteen dialogs plus nothing open, each with the filter panel open and closed"
+        34,
+        "sixteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()

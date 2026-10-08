@@ -209,7 +209,7 @@ fn a_dirty_checkout_the_merge_would_overwrite_is_refused_and_left_as_it_was() {
 }
 
 #[test]
-fn a_merge_left_in_progress_is_aborted() {
+fn a_conflicting_merge_is_undone_by_the_call_that_started_it() {
     let dir = repo();
     let p = dir.path();
     commit(p, "a.txt", "run\n");
@@ -217,9 +217,10 @@ fn a_merge_left_in_progress_is_aborted() {
     commit(p, "a.txt", "main\n");
     let g = GitCli::new();
     assert!(g.merge_in_checkout(p, "run").is_err(), "conflicts");
-    assert!(p.join(".git/MERGE_HEAD").exists());
-    g.merge_abort(p).unwrap();
-    assert!(!p.join(".git/MERGE_HEAD").exists());
+    assert!(
+        !p.join(".git/MERGE_HEAD").exists(),
+        "nothing left in progress"
+    );
     assert_eq!(fs::read_to_string(p.join("a.txt")).unwrap(), "main\n");
     g.merge_abort(p).unwrap(); // nothing in progress: nothing to do
 }
@@ -240,4 +241,35 @@ fn a_run_with_no_changes_integrates_with_the_base_unchanged() {
     let before = refs(p);
     g.update_ref_cas(p, "main", &run, &base).unwrap();
     assert_eq!(refs(p), before);
+}
+
+#[test]
+fn a_merge_the_user_left_in_progress_is_refused_and_kept() {
+    let dir = repo();
+    let p = dir.path();
+    commit(p, "a.txt", "run\n");
+    git(p, &["checkout", "-q", "main"]);
+    commit(p, "a.txt", "main\n");
+    git(p, &["branch", "other", "run"]);
+    let g = GitCli::new();
+    // The user's own conflicted merge, resolved halfway.
+    let started = std::process::Command::new("git")
+        .arg("-C")
+        .arg(p)
+        .args(["merge", "--no-edit", "other"])
+        .output()
+        .unwrap();
+    assert!(!started.status.success(), "conflicts");
+    assert!(p.join(".git/MERGE_HEAD").exists());
+    fs::write(p.join("a.txt"), "half resolved\n").unwrap();
+    let err = g.merge_in_checkout(p, "run").unwrap_err();
+    assert!(err.to_string().contains("already in progress"), "{err}");
+    assert!(
+        p.join(".git/MERGE_HEAD").exists(),
+        "the merge is still theirs"
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("a.txt")).unwrap(),
+        "half resolved\n"
+    );
 }
