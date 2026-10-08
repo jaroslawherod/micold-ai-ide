@@ -775,11 +775,6 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Runs(msg) => {
-                // Feature 483, C1: Compare takes the Changes view's place, so opening it closes
-                // the Changes view. The root writes it: that state is another feature's.
-                if matches!(msg, crate::features::runs::Msg::CompareOpened { .. }) {
-                    self.changes.open = None;
-                }
                 let outcomes = crate::features::runs::routed(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
@@ -993,6 +988,12 @@ pub fn interpret(
                 },
             );
             state.changes.pending = Some(effect);
+        }
+        Outcome::ChangesClosedForCompare => {
+            let _ = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::SessionSelected,
+            );
         }
         Outcome::RunInParallelRequested => return crate::features::runs::requested(state),
         Outcome::WorktreeCreated(worktree) => {

@@ -70,6 +70,9 @@ pub enum Outcome {
     /// The sidebar owns the row menu that asks; the view is `changes`'s, and the menu is
     /// `worktree`'s, so the root opens the one and closes the other.
     ChangesRequested(micold_core::session::SessionLocation),
+    /// Compare opened (feature 483, C1): it takes the Changes view's place, so the root closes
+    /// that view. `runs` owns Compare and `changes` owns the view.
+    ChangesClosedForCompare,
     /// **Run in parallel** was chosen (feature 483): the root opens the dialog.
     RunInParallelRequested,
     /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).
