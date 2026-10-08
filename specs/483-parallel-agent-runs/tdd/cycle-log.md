@@ -45,3 +45,14 @@ Red by mutation for the daemon half (review B M2), one build each, then reverted
 - `settle_interrupted` made a no-op → `run_group_persist` 3 FAILED: `an_interrupted_creating_run_is_failed_and_its_folder_and_branch_are_removed`, `an_interrupted_starting_run_fails_at_its_session_and_keeps_its_worktree`, `an_interrupted_run_whose_worktree_hosts_a_session_is_left_and_says_so`; `Runs::dismiss` no longer updating memory → `w4_dismiss_removes_only_the_group_and_an_unknown_group_is_not_found` FAILED.
 - `Runs::forget_worktree` returning `None` → 2 FAILED: `w5_deleting_a_runs_worktree_removes_it_from_its_group_and_an_emptied_group_goes`, `deleting_the_winners_worktree_keeps_the_winner_set`.
 - The `#1, #3` display and `a_dropped_group_is_not_shown` pass by construction (`arrange_groups` projects `group.runs` as stored); no mutation recorded.
+
+## M3 — Compare (T040–T050)
+
+| Behaviour | Tasks | Evidence | Result |
+|---|---|---|---|
+| `totals`, `has_uncommitted`, counts against a non-default base, equality with the Changes totals for the default base | T040, T041 → T043 | core unit tests and `runs_summary` were written first and failed to compile/pass before `summary.rs` existed | `cargo test -p micold-core --test runs_summary` green |
+| Compare reducer: one read per run with a worktree, stale `seq` dropped, per-run refresh, status text, failed run reason and no Open diff, uncommitted tag, Open diff outcome, close ends reads, menu items | T042 → T044 | tests in `features_runs.rs` were written after the reducer in this milestone (not red first); they assert the specified rules directly | `cargo test -p micold-client --test features_runs` 29 passed |
+| Shell reads, per-run watch, Compare view, menu item, showcase pose | T045–T048 | glue; no behaviour test of its own, held by the registry, catalogue and routing guards and the visual pass (`visual-pass/m3-compare-rows-*.png`) | `cargo test --workspace` |
+
+Red-first was not kept for the reducer half of T042/T044 (written beside the code); review B should
+treat the assertions as the evidence.

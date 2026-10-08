@@ -5,6 +5,7 @@ pub(crate) mod attach_dialog;
 pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
+pub mod compare;
 pub(crate) mod confirm_agent_request;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
@@ -348,9 +349,17 @@ pub fn view_with<'a>(
         .showing(main_content_key(state))
         .into()
     } else if state.workspace.active_project().is_some() {
+        let compare = if state.changes.open.is_none() {
+            compare::view(state, scheme)
+        } else {
+            None
+        };
         let main_inner: Element<'a, Message> = if let Some(view) = state.changes.open.as_ref() {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open.
             changes::view(state, view, scheme, composer)
+        } else if let Some(compare) = compare {
+            // Feature 483, C1: Compare stands there too; the Changes view sits over it.
+            compare
         } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
             terminal::pane(state, grid, selection, display_offset, scheme, link_context)
@@ -572,17 +581,28 @@ pub fn view_with<'a>(
                 .into()
         });
 
-    // The run group row's right-click menu (feature 483, G4): **Dismiss group** only. Same anchor
-    // rule and clamping as the worktree menu above.
+    // The run group row's right-click menu (feature 483, G4): **Compare**, then **Dismiss group**.
+    // Same anchor rule and clamping as the worktree menu above.
     let group_menu: Option<cdk::overlay::Surface<'a, Message>> = state.runs.menu.map(|menu| {
-        let items = vec![material::MenuItem::new(
-            Icon::Close,
-            crate::features::runs::GROUP_MENU_ITEMS[0],
-            Message::Runs(crate::features::runs::Msg::DismissAsked {
-                group: menu.group,
-                project: state.workspace.active.clone().unwrap_or_default(),
-            }),
-        )];
+        let project = state.workspace.active.clone().unwrap_or_default();
+        let items = vec![
+            material::MenuItem::new(
+                Icon::Git,
+                crate::features::runs::GROUP_MENU_ITEMS[0],
+                Message::Runs(crate::features::runs::Msg::CompareOpened {
+                    group: menu.group,
+                    project: project.clone(),
+                }),
+            ),
+            material::MenuItem::new(
+                Icon::Close,
+                crate::features::runs::GROUP_MENU_ITEMS[1],
+                Message::Runs(crate::features::runs::Msg::DismissAsked {
+                    group: menu.group,
+                    project,
+                }),
+            ),
+        ];
         let (x, y) = crate::features::project::clamp_menu_anchor(
             menu.anchor,
             material::menu_panel_size(items.len()),
@@ -992,6 +1012,10 @@ fn main_content_key(state: &State) -> u64 {
     // Feature 482: opening and closing the Changes view crossfades like any other content switch.
     if state.changes.open.is_some() {
         return u64::MAX - 1;
+    }
+    // Feature 483: Compare crossfades in and out the same way.
+    if state.runs.compare.is_some() {
+        return u64::MAX - 2;
     }
     match (state.workspace.active_project(), state.session.active) {
         (None, _) => 0,

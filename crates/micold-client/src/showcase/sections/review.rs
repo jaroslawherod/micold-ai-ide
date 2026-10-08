@@ -87,13 +87,57 @@ pub fn virtual_rows<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
             .on_scroll(|offset, viewport| Message::RowsScrolled { offset, viewport })
             .into();
     arrange(
-        vec![posed(
-            "2,000 rows",
-            container(list).height(Length::Fixed(PANE_HEIGHT)),
-            roles,
-        )],
+        vec![
+            posed(
+                "2,000 rows",
+                container(list).height(Length::Fixed(PANE_HEIGHT)),
+                roles,
+            ),
+            compare_rows_pose(roles),
+        ],
         Layout::FullWidth,
     )
+}
+
+/// The Compare view's rows (feature 483, C2–C5): a working run, a waiting one with uncommitted
+/// changes, one still reading, and a failed one with its reason and no diff.
+fn compare_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
+    use crate::features::runs::{CompareRow, RunCounts};
+    use micold_core::runs::RunSummary;
+    use micold_core::session::AiCli;
+    let counts = |files, added, removed, uncommitted| {
+        RunCounts::Ready(RunSummary {
+            files,
+            added,
+            removed,
+            uncommitted,
+        })
+    };
+    let row = |number, status, reason: Option<&str>, counts, can_open_diff| CompareRow {
+        number,
+        provider: AiCli::ClaudeCode,
+        status,
+        reason: reason.map(str::to_string),
+        counts,
+        can_open_diff,
+    };
+    let rows = [
+        row(1, "Working", None, counts(4, 120, 30, false), true),
+        row(2, "Waiting for input", None, counts(2, 15, 3, true), true),
+        row(3, "Starting", None, RunCounts::Loading, true),
+        row(
+            4,
+            "Failed",
+            Some("The worktree could not be created."),
+            RunCounts::None,
+            false,
+        ),
+    ];
+    let mut list = column![].spacing(spacing::SM);
+    for row in &rows {
+        list = list.push(crate::ui::compare::run_row(row, roles, |_| Message::NoOp));
+    }
+    posed("Compare rows", list, roles)
 }
 
 /// A short Rust diff: a hunk header with its section, context, a removed and two added lines.

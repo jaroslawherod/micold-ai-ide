@@ -123,6 +123,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if let Some(view) = &app.core.changes.open {
         subs.extend(crate::shell::changes_watch::watch(app, &view.entry));
     }
+    // Compare's per-run watches (483 R11), likewise only while the view is open.
+    subs.extend(crate::shell::runs_watch::watches(app));
     if probe_config().is_some() {
         subs.push(iced::window::frames().map(|_| Message::NoOp));
     }

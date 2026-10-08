@@ -417,6 +417,8 @@ impl State {
             // The Changes view replaces the terminal pane too (feature 482, V1); without this
             // `KeyboardElsewhere` strips the review composer's focus while a session is selected.
             && self.changes.open.is_none()
+            // Feature 483: so does Compare.
+            && self.runs.compare.is_none()
     }
 
     /// What decides which session this window has in view (feature 039, FR-002).
@@ -435,6 +437,7 @@ impl State {
             window_focused: window.focused,
             main_area_taken: self.settings.settings_draft.is_some()
                 || self.changes.open.is_some()
+                || self.runs.compare.is_some()
                 || !window.holds_project,
             selected: self.session.active,
         }

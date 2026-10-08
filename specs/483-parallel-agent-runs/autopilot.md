@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M3
-- **Next step**: M3: continue from Handover (shell glue T045/T046, UI T047, showcase T048, docs T049, visual pass T050, reviews, gate, PR file)
+- **Next step**: M3: reviews A and B, full gate, push, PR file (pr-483-m3.md); tasks T040–T050 done
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | #650 | merged |
-| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | in progress |
+| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | in review |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
 | M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
 
@@ -114,41 +114,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 started on a branch reset to origin/main (0d356a56). Done and passing (not yet committed before this
-handover commit): core T040, T041, T043 (`runs::summary::{totals, has_uncommitted, read}`,
-`Git::review_base_against`, `RunStatus::has_worktree`); client reducer part of T042/T044 in
-`features/runs.rs` (CompareView, `Effect::ReadSummaries(Vec<SummaryRead>)` instead of one
-`ReadSummary` per effect, `Msg::{CompareOpened, CompareClosed, SummaryRead, RunChanged, DiffOpened}`,
-`status_text`, `compare_rows`, `open_diff`, `routed` closes the Changes view on CompareOpened and
-turns DiffOpened into `Outcome::ChangesRequested`); tests in `tests/features_runs.rs` (29 pass; the G4
-menu test lives there as `GROUP_MENU_ITEMS == ["Compare", "Dismiss group"]`, no features_sidebar test).
-The reducer tests were written after the code, not red first (core unit tests were red first).
-
-Next, in order (T044 stays unticked until the menu item is drawn):
-1. `ui/mod.rs` ~line 575: the group menu builds only the Dismiss item; add **Compare** first
-   (`Msg::CompareOpened { group, project: state.workspace.active }`), using `GROUP_MENU_ITEMS[0]`/`[1]`.
-2. T045 `shell/runs.rs`: handle `Effect::ReadSummaries` (currently an empty arm): per read, dir =
-   `crate::shell::changes::entry_dir(app, &SessionLocation::Worktree(dir_name))`, git =
-   `app.caps.shared_git()`, `spawn_blocking(runs::summary::read(&*git, &dir, &base_branch))`, answer
-   `Message::Runs(Msg::SummaryRead{seq, run, result})`; batch the tasks. Also `update` must call
-   `shell::changes::run_pending(app)` after `DiffOpened` (the Changes read the outcome left), and
-   `daemon_sync.rs` ~1446 (`RunGroupsChanged`) must batch `shell::runs::run_pending(app)` into `follow_up`.
-3. T046 `shell/runs_watch.rs` (new, declare in shell/mod.rs): generalize `changes_watch::run` to take the
-   message to send (a `Message` wake value; Key hash = root + run) and register one subscription per
-   run of the open Compare view with a worktree in `shell/subscriptions.rs` beside the changes one.
-4. App-level: `app.rs` `view_facts().main_area_taken` and `terminal_focused()` also consider
-   `runs.compare.is_some()`; `main.rs` ~763 (`SessionMsg::Selected`) closes Compare (`Msg::CompareClosed`);
-   `ui/mod.rs` `main_content_key` gets a key for Compare and the main area shows `ui::compare::view`
-   when `runs.compare.is_some()` and `changes.open` is none (Changes sits over Compare, so closing it
-   returns to Compare).
-5. T047 `ui/compare.rs`: header (name, base branch, clamped prompt with tooltip, Close), one row per
-   `compare_rows` entry (`#n`, provider display name, status, `<files> files +a −r` with U+2212, an
-   `uncommitted` Tag, reason in place of counts, **Open diff** only when `can_open_diff`). Pick this one
-   (C6–C8) is M4: not here.
-6. T048 showcase pose, T049 user-guide section (`docs/user-guide/parallel-runs.md`), T050 visual pass
-   (quickstart B8–B11; Xvfb; the cloud container has no fixture daemon, so poses only as in M1b),
-   tick T044–T050, then scoped gate, review A (`high`), review B (sonnet), full gate (raw commands,
-   CARGO_INCREMENTAL=0), the gate stamp, push, PR file `pr-483-m3.md` in the scratchpad.
+None.
 
 ## Open escalation
 

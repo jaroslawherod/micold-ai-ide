@@ -665,7 +665,7 @@ pub const COMPONENTS: &[Entry] = &[
         component: "VirtualRows",
         variants: &[],
         density: &[],
-        posed: &["2,000 rows"],
+        posed: &["2,000 rows", "Compare rows"],
         live: &["scroll — rows are built as they come into view"],
         interactive: true,
         section: Section::Components,
