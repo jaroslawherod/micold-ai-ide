@@ -462,25 +462,27 @@ pub(crate) mod tests {
     #[test]
     fn only_the_data_model_transitions_are_allowed() {
         use RunStatus::*;
-        let allowed = |from: &RunStatus, to: &RunStatus| match (from, to) {
-            (Creating, Starting) => true,
-            (
-                Creating,
-                Failed {
-                    step: RunStep::Worktree,
-                    ..
-                },
-            ) => true,
-            (Starting, Prompted | PromptNotDelivered { .. }) => true,
-            (
-                Starting,
-                Failed {
-                    step: RunStep::Session,
-                    ..
-                },
-            ) => true,
-            (Prompted | PromptNotDelivered { .. }, Picked) => true,
-            _ => false,
+        let allowed = |from: &RunStatus, to: &RunStatus| {
+            matches!(
+                (from, to),
+                (Creating, Starting)
+                    | (
+                        Creating,
+                        Failed {
+                            step: RunStep::Worktree,
+                            ..
+                        }
+                    )
+                    | (Starting, Prompted | PromptNotDelivered { .. })
+                    | (
+                        Starting,
+                        Failed {
+                            step: RunStep::Session,
+                            ..
+                        }
+                    )
+                    | (Prompted | PromptNotDelivered { .. }, Picked)
+            )
         };
         let statuses = every_status();
         let mut seen_allowed = 0;
