@@ -68,7 +68,13 @@ them).
 
 ### §B — Linux (recorded per milestone)
 
-(filled by the implementing milestones)
+**M1b (2026-10-08, Xvfb, showcase, light and dark):** B23 for the M1b poses: the Run in parallel
+dialog (3 runs, mixed providers, derived names `feat/login-page-1..3`, Start runs enabled), its
+invalid pose, and the group row expanded (`#1`, `#2`, failed `#3` with its `failed` tag) and
+collapsed (`3 runs`, `1 failed`) are readable in both schemes. B1–B6 on the live client were not
+driven (no fixture daemon in this container); the reducer, sidebar and dialog rules they check are
+covered by `features_runs`, `features_sidebar` and the gallery gates, and B1–B6 stay for the
+milestone that wires the daemon end to end.
 
 ### §C — macOS and Windows
 
