@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #550
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
-- **Phase**: plan
-- **Next step**: tasks unit.
+- **Phase**: tasks
+- **Next step**: commit and open design PR; then M1.
 
 ## Pull requests
 
@@ -22,6 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | - | pending |
+| M2 | T010-T012 | full | Refusals and collision hint | - | pending |
+| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
 
 ## Decisions
 
@@ -58,3 +61,8 @@ None. <or: the banner as sent, and when>
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+
+## Tasks review
+
+- analyze: 0 CRITICAL/HIGH; C1-C5 fixed (tasks, contract). Declined: C7-C10 (prose/plan nits, LOW).
+- Review round 1 (snapshot 04276a7d198a9fcc175ede45f27a434d9d112e6e:091c5a0defd667af6b269ec6b10d2e41fa445ac4): F1 checklist ticked, F2 github_issue guard added to M1, F3 T010 reworded as characterisation, F4 T018 folded into T020, F5 recorded here. Structure-only fixes; checked by me.

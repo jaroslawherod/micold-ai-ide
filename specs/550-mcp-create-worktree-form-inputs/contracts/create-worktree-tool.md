@@ -22,6 +22,7 @@ existing branch is refused with advice to use `branch` + `mode`.
 |---|---|
 | `branch`/`mode`/`remote` with `type`/`ticket`/`github_issue` | literal and derived inputs are alternatives |
 | nothing given | say what to provide |
+| `mode` or `remote` without `branch` | invalid input: they require `branch` |
 | `type` not in list | names the allowed values |
 | derived, no type (after issue resolution) | "Select a type" |
 | name slugifies to nothing | "Enter a name (letters or digits)" |
