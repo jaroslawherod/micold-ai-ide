@@ -114,7 +114,9 @@ the grouping is unchanged.
    left disappears.
 5. **Given** the app is closed while a group's runs are still being created, **When** it starts
    again, **Then** the runs that finished are intact, every unfinished run shows as failed
-   ("interrupted"), and no half-created branch or folder of those runs remains.
+   ("interrupted"), and no half-created branch or folder of those runs remains (a run whose
+   worktree was fully created before the app closed keeps it, like a run whose prompt was not
+   delivered).
 6. **Given** a group, **When** the user dismisses it, **Then** the group row goes away and its
    worktrees, branches and sessions stay as ordinary sidebar entries, unchanged.
 
@@ -139,9 +141,11 @@ view shows for that worktree, and that opening a run opens its Changes view.
    order, each with its number, provider, status, changed-file count, added lines and removed lines.
 2. **Given** a run changed 4 files with 120 added and 30 removed lines against the base branch,
    counting committed and uncommitted changes, **When** Compare shows it, **Then** it reads 4 files,
-   +120, −30, the same totals the run's Changes view shows with both toggles on.
-3. **Given** Compare is open, **When** a run's files change, **Then** that run's counts and status
-   update within 2 seconds without reopening Compare.
+   +120, −30, the same totals the run's Changes view shows with both toggles on when the base
+   branch is the repository's default branch.
+3. **Given** Compare is open, **When** a run's files change, **Then** that run's counts update
+   within 2 seconds without reopening Compare, and its status follows its session as the sidebar's
+   does.
 4. **Given** Compare is open, **When** the user opens a run's diff, **Then** that run's Changes view
    opens.
 5. **Given** a failed run, **When** Compare shows it, **Then** it shows the failure reason instead
@@ -202,15 +206,16 @@ confirmed separately.
   run, with the same message the New worktree form gives; the dialog shows the derived names before
   confirming so the user can rename first. Collision checks treat names that differ only in letter
   case as the same name on platforms whose file systems do.
-- **Base branch missing**: a base branch deleted between opening the dialog and confirming fails
-  every run with that reason and creates nothing.
+- **Base branch missing**: a base branch deleted between opening the dialog and confirming refuses
+  the whole group with that reason; no group, run, worktree or branch is created.
 - **Provider not installed**: a run whose provider is not available where sessions run is refused
   in the dialog; if it disappears between confirming and starting, only that run fails.
 - **Prompt not delivered**: a run whose provider asks about trusting the folder or is not ready in
   time is marked "prompt not delivered" with the reason; its session stays, and the user can type
   into it.
 - **App closed during creation**: on the next start, runs that were not finished are shown as failed
-  ("interrupted"), no half-created branch or folder remains, and the finished runs are intact.
+  ("interrupted"), no half-created branch or folder remains (a worktree whose creation completed is
+  kept), and the finished runs are intact.
 - **Two windows**: every window open on the project shows the same group as runs are created and
   change; two windows picking in the same group at once integrate exactly one run, and the other
   window is told the group already has a winner.
@@ -264,8 +269,11 @@ confirmed separately.
   provider, status (creating, starting, working, waiting for input, failed with reason, prompt not
   delivered, picked), changed-file count, added-line count and removed-line count against the base
   branch, counting committed and uncommitted changes.
-- **FR-010**: Compare's counts MUST equal the totals the run's Changes view shows with both toggles
-  on, and MUST refresh within 2 seconds of a change in the run's worktree.
+- **FR-010**: Compare's counts MUST come from the same reader as the Changes view's, so they equal
+  the totals the run's Changes view shows with both toggles on whenever the group's base branch is
+  the repository's default branch (the Changes view's own base); for another base branch they are
+  counted against the group's base branch, and the user guide says so. They MUST refresh within 2
+  seconds of a change in the run's worktree.
 - **FR-011**: Compare MUST open a run's Changes view from that run's row.
 - **FR-012**: **Pick this one** MUST integrate the chosen run's branch into the base branch using
   a merge: a fast-forward when the base branch's tip is an ancestor of the run's branch, otherwise
@@ -290,7 +298,8 @@ confirmed separately.
 - **FR-018**: A group MUST accept at most one pick; a second pick, from any window, MUST be refused
   with the reason that the group already has a winner.
 - **FR-019**: Runs interrupted by the app closing during creation MUST be shown as failed
-  ("interrupted") after restart, with no half-created branch or folder left behind.
+  ("interrupted") after restart, with no half-created branch or folder left behind; a run whose
+  worktree creation had completed keeps its worktree and branch.
 - **FR-020**: Dismissing a group MUST remove only the grouping; its worktrees, branches and sessions
   stay as ordinary sidebar entries.
 - **FR-021**: Each run's session MUST be an ordinary session of its worktree (same terminal,
@@ -317,7 +326,8 @@ confirmed separately.
   session and its prompt.
 - **SC-003**: Every run of a group is shown under its group row in 100% of sidebar views, including
   after a restart.
-- **SC-004**: Compare's file and line counts match the run's Changes view totals in 100% of runs.
+- **SC-004**: For groups based on the repository's default branch, Compare's file and line counts
+  match the run's Changes view totals in 100% of runs.
 - **SC-005**: 0 worktrees with uncommitted changes are removed by a pick without the user's explicit
   second confirmation.
 - **SC-006**: A conflicting pick leaves the base branch and every run's branch and files

@@ -196,7 +196,7 @@ per-group mutex (a second lock ordering against the worktree gate, for no gain).
 
 **Decision**: a run's status is persisted. On the daemon's first read of a project's runs file, any
 run persisted as `Creating` or `Starting` becomes `Failed { step, reason: "interrupted" }`, and a
-`Creating` run is reconciled on disk: when its worktree directory exists, is registered as
+`Creating` run is reconciled on disk (a `Starting` run's worktree finished creating, so it is kept): when its worktree directory exists, is registered as
 app-created provenance and hosts no session, it is removed exactly as a rolled-back create would
 remove it (`worktree::remove_worktree` + directory removal + branch delete), and its branch is
 deleted when it exists and the removal succeeded. Anything else is left alone and reported in the
