@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M6 (T048–T054) implemented; scoped gate, reviews A and B, full gate, then the PR. Visual pass B1-B7 not run (no Xvfb/xdotool): M8 records it.
+- **Next step**: M6 (T048–T054) done, reviews A and B clean, full gate green at HEAD. Not pushed: ssh to github.com timed out. Rebase on origin/main, push, open the PR (body drafted in the unit scratchpad), record the number.
 
 ## Pull requests
 
