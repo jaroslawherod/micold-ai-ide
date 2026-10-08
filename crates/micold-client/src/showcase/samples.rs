@@ -63,6 +63,12 @@ pub const WORKTREES: &[(&str, u16)] = &[
     ("fix/scrollback-clamp", 1),
 ];
 
+/// An invented Run in parallel group name (feature 483).
+pub const GROUP: &str = "feat/login-page";
+
+/// Why the pose's third run has no worktree (feature 483).
+pub const RUN_FAILED_REASON: &str = "The branch feat/login-page-3 already exists";
+
 /// Invented known projects: `(display name, running session count, unread session count,
 /// available)`. One row with both counts and one with the unread count alone, so both of a
 /// switcher row's trailing arrangements are on the page (feature 039, FR-030).
