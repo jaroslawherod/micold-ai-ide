@@ -13,6 +13,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use super::errors::OpError;
+use crate::naming::{ConventionalType, WorktreeNaming};
 use crate::project::{validate_rename, RenameError};
 use crate::session::AiCli;
 use crate::worktree::CreateMode;
@@ -158,12 +159,9 @@ pub enum Operation {
         session: SessionRef,
         text: NonEmptyText,
     },
-    /// A new worktree on `branch`, in directory `name` (derived from the branch when absent).
-    CreateWorktree {
-        branch: String,
-        name: Option<String>,
-        mode: CreateMode,
-    },
+    /// A new worktree: on a literal `branch`, or on the branch and directory the New worktree
+    /// form derives from type, ticket and name (feature 550).
+    CreateWorktree(CreateWorktreeRequest),
     /// A new session in `worktree`, started, optionally typed a first prompt (FR-017). The prompt
     /// is input text: it is never logged (FR-018).
     CreateSession {
@@ -207,6 +205,69 @@ pub enum Operation {
         stop_sessions: bool,
         delete_branch: bool,
     },
+}
+
+/// What `create_worktree` was asked for. Built only by the parser (feature 550, data-model.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreateWorktreeRequest {
+    /// A literal branch, in directory `name` (derived from the branch when absent).
+    Literal {
+        branch: String,
+        name: Option<String>,
+        mode: CreateMode,
+    },
+    /// The form's inputs: at least one of the four fields, never a `branch`, `mode` or `remote`.
+    /// `name` is the description the branch and directory are derived from.
+    Derived {
+        type_: Option<ConventionalType>,
+        ticket: Option<String>,
+        name: Option<String>,
+        github_issue: Option<u32>,
+    },
+}
+
+impl CreateWorktreeRequest {
+    /// The form's inputs of a derived request, as `naming::derive` takes them; `None` for a
+    /// literal one. A missing name derives as blank, which `derive` refuses as the form does.
+    pub fn naming(&self) -> Option<WorktreeNaming> {
+        match self {
+            CreateWorktreeRequest::Literal { .. } => None,
+            CreateWorktreeRequest::Derived {
+                type_,
+                ticket,
+                name,
+                ..
+            } => Some(WorktreeNaming {
+                type_: *type_,
+                ticket: ticket.clone(),
+                name: name.clone().unwrap_or_default(),
+            }),
+        }
+    }
+
+    /// The target an audit line names: the branch, the name, or `#<issue>`. Never a ticket's or
+    /// description's free text beyond what the caller named as the target.
+    pub fn audit_target(&self) -> String {
+        match self {
+            CreateWorktreeRequest::Literal { branch, name, .. } => {
+                name.clone().unwrap_or_else(|| branch.clone())
+            }
+            CreateWorktreeRequest::Derived {
+                type_,
+                ticket,
+                name,
+                github_issue,
+            } => match (name, github_issue) {
+                (Some(name), _) => name.clone(),
+                (None, Some(issue)) => format!("#{issue}"),
+                (None, None) => ticket
+                    .clone()
+                    .filter(|t| !t.trim().is_empty())
+                    .or_else(|| type_.map(|t| t.as_str().to_string()))
+                    .unwrap_or_else(|| "(derived)".to_string()),
+            },
+        }
+    }
 }
 
 impl Operation {
@@ -255,9 +316,7 @@ impl Operation {
             | Operation::StopSession { session }
             | Operation::InterruptSession { session }
             | Operation::DeleteSession { session } => session.0.to_string(),
-            Operation::CreateWorktree { branch, name, .. } => {
-                name.clone().unwrap_or_else(|| branch.clone())
-            }
+            Operation::CreateWorktree(request) => request.audit_target(),
             Operation::CreateSession { worktree, .. }
             | Operation::RenameWorktree { worktree, .. }
             | Operation::DeleteWorktree { worktree, .. } => worktree.as_str().to_string(),
@@ -408,25 +467,44 @@ const TOOLS: &[Tool] = &[
         name: "create_worktree",
         description: "Create a worktree exactly as the app's create-worktree dialog does: under \
             the project's .claude/worktrees/, recorded as created by the app, shown in every \
-            window. mode new_branch (default) starts a new branch at HEAD; existing_local checks \
-            out a local branch no worktree holds; track_remote starts a local branch from \
-            <remote>/<branch>. name is the directory name (default: derived from the branch). \
-            Any session may create a worktree, one running in the project root (Default) too; \
+            window. Two alternatives. (1) A literal branch: branch, with mode new_branch (default, \
+            starts a new branch at HEAD), existing_local (checks out a local branch no worktree \
+            holds) or track_remote (starts a local branch from <remote>/<branch>), and name as the \
+            directory name (default: derived from the branch). (2) The form's inputs: type (feat, \
+            fix, chore, docs, refactor, test, build, ci, perf, style), ticket and name (the \
+            description) give the branch type/ticket_name and the directory type-ticket_name, as \
+            the form does, with the sidebar's type and issue tags; github_issue (a GitHub issue \
+            number) will fill them from the issue but is not yet available. Pass branch, mode or \
+            remote, or the derived inputs, never both. A derived name that collides with an \
+            existing branch is refused: use branch with mode instead. The result carries the \
+            worktree row plus branch, directory, and for derived inputs type and ticket. Any \
+            session may create a worktree, one running in the project root (Default) too; \
             renaming and deleting a worktree are refused from there.",
         properties: || {
             json!({
                 "branch": {"type": "string", "minLength": 1,
-                    "description": "The branch the worktree checks out."},
+                    "description": "The literal branch the worktree checks out. Required unless \
+                        type, ticket or name derive one."},
                 "name": {"type": "string", "minLength": 1,
-                    "description": "The worktree's directory name."},
+                    "description": "With branch: the worktree's directory name. Without branch: \
+                        the description the branch and directory are derived from."},
                 "mode": {"type": "string",
                     "enum": ["new_branch", "existing_local", "track_remote"],
-                    "default": "new_branch"},
+                    "default": "new_branch",
+                    "description": "Literal only: requires branch."},
                 "remote": {"type": "string", "minLength": 1,
-                    "description": "The remote to track; required with track_remote."},
+                    "description": "The remote to track; required with track_remote. Literal only."},
+                "type": {"type": "string",
+                    "enum": ConventionalType::ALL.iter().map(|t| t.as_str()).collect::<Vec<_>>(),
+                    "description": "Derived only: the Conventional-Commits type."},
+                "ticket": {"type": "string",
+                    "description": "Derived only: a ticket reference, slugified as the form does; \
+                        blank means none."},
+                "github_issue": {"type": "integer", "minimum": 1,
+                    "description": "Derived only: a GitHub issue number. Not yet available."},
             })
         },
-        required: &["branch"],
+        required: &[],
         read_only: false,
         destructive: false,
         shipped: true,
@@ -649,11 +727,7 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
             session: required_session(args, "session")?,
             text: non_empty_text(args, "text")?,
         },
-        "create_worktree" => Operation::CreateWorktree {
-            branch: required_string(args, "branch")?,
-            name: optional_string(args, "name")?,
-            mode: create_mode(args)?,
-        },
+        "create_worktree" => Operation::CreateWorktree(create_worktree_request(args)?),
         "create_session" => Operation::CreateSession {
             worktree: optional_worktree(args, "worktree")?.ok_or_else(|| {
                 OpError::invalid_input(
@@ -699,6 +773,88 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         },
         _ => unreachable!("every catalog entry is parsed above"),
     })
+}
+
+/// The largest issue number the form accepts (a GitHub issue number is a 32-bit integer).
+const MAX_GITHUB_ISSUE: u64 = 2_147_483_647;
+
+/// `create_worktree`'s arguments (contracts/create-worktree-tool.md): a literal `branch` (with
+/// `name`, `mode`, `remote`) or the derived inputs (`type`, `ticket`, `github_issue`, `name`).
+fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRequest, OpError> {
+    let present = |key: &str| !matches!(args.get(key), None | Some(Value::Null));
+    let literal = ["branch", "mode", "remote"]
+        .into_iter()
+        .filter(|k| present(k))
+        .collect::<Vec<_>>();
+    let derived = ["type", "ticket", "github_issue"]
+        .into_iter()
+        .filter(|k| present(k))
+        .collect::<Vec<_>>();
+    if !literal.is_empty() && !derived.is_empty() {
+        return Err(OpError::invalid_input(format!(
+            "{} and {} are alternatives: pass a literal branch (with mode and remote), or the \
+             derived inputs type, ticket and github_issue with name as the description, not both",
+            literal.join(", "),
+            derived.join(", ")
+        )));
+    }
+    if present("branch") {
+        return Ok(CreateWorktreeRequest::Literal {
+            branch: required_string(args, "branch")?,
+            name: optional_string(args, "name")?,
+            mode: create_mode(args)?,
+        });
+    }
+    if present("mode") || present("remote") {
+        return Err(OpError::invalid_input(
+            "mode and remote need a branch: pass branch, or use type, ticket and name instead",
+        ));
+    }
+    let type_ = match optional_string(args, "type")? {
+        None => None,
+        Some(token) => Some(ConventionalType::from_token(&token).ok_or_else(|| {
+            let allowed: Vec<&str> = ConventionalType::ALL.iter().map(|t| t.as_str()).collect();
+            OpError::invalid_input(format!(
+                "type must be one of {}, not \"{token}\"",
+                allowed.join(", ")
+            ))
+        })?),
+    };
+    let ticket = optional_text(args, "ticket")?;
+    let name = optional_string(args, "name")?;
+    let github_issue = github_issue(args)?;
+    if type_.is_none() && ticket.is_none() && name.is_none() && github_issue.is_none() {
+        return Err(OpError::invalid_input(
+            "provide a branch, or type, ticket and name (or github_issue) to derive one",
+        ));
+    }
+    if github_issue.is_some() {
+        return Err(OpError::invalid_input("github_issue is not supported yet"));
+    }
+    Ok(CreateWorktreeRequest::Derived {
+        type_,
+        ticket,
+        name,
+        github_issue,
+    })
+}
+
+fn github_issue(args: &Map<String, Value>) -> Result<Option<u32>, OpError> {
+    match args.get("github_issue") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .filter(|n| (1..=MAX_GITHUB_ISSUE).contains(n))
+            .map(|n| Some(n as u32))
+            .ok_or_else(github_issue_invalid),
+        Some(_) => Err(github_issue_invalid()),
+    }
+}
+
+fn github_issue_invalid() -> OpError {
+    OpError::invalid_input(format!(
+        "github_issue must be a whole number from 1 to {MAX_GITHUB_ISSUE}"
+    ))
 }
 
 /// The default and the largest `limit` of `list_resumable_sessions`.

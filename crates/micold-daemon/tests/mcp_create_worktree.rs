@@ -415,3 +415,174 @@ async fn a_default_session_gets_the_dialogs_refusals_too() {
     );
     f.assert_unchanged(&before).await;
 }
+
+// ---- Feature 550: the form's inputs (type, ticket, name) ----
+
+/// US1 s1, s3, FR-003, FR-012, FR-013, SC-003: type, ticket and name give the form's branch,
+/// directory and sidebar tags, and the result reports them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn type_ticket_and_name_create_the_forms_worktree() {
+    use micold_core::naming::{parse_tags, ConventionalType, Tag};
+
+    let f = Fixture::new().await;
+    let row = f
+        .ok(
+            sid(3),
+            json!({"type": "fix", "ticket": "#123", "name": "login crash"}),
+        )
+        .await;
+    assert_eq!(row["ref"], "fix-123_login-crash");
+    assert_eq!(row["branch"], "fix/123_login-crash");
+    assert_eq!(row["directory"], "fix-123_login-crash");
+    assert_eq!(row["type"], "fix");
+    assert_eq!(row["ticket"], "123");
+    assert_eq!(
+        row["path"],
+        native(f.repo().join(".claude/worktrees/fix-123_login-crash"))
+    );
+    assert_eq!(
+        parse_tags(row["ref"].as_str().unwrap()),
+        vec![Tag::Type(ConventionalType::Fix), Tag::Issue("#123".into())],
+        "the sidebar derives the form's tags from the directory"
+    );
+    assert!(f
+        .repo()
+        .join(".claude/worktrees/fix-123_login-crash/.git")
+        .exists());
+    let (records, _) = f.state.provenance(f.repo());
+    assert!(records.contains("fix-123_login-crash"));
+    assert!(f
+        .listed()
+        .await
+        .contains(&"fix-123_login-crash".to_string()));
+}
+
+/// US1 s2: no ticket means no ticket segment, no issue tag and no `ticket` in the result.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn without_a_ticket_there_is_no_ticket_segment_or_tag() {
+    use micold_core::naming::{parse_tags, ConventionalType, Tag};
+
+    let f = Fixture::new().await;
+    let row = f
+        .ok(sid(3), json!({"type": "feat", "name": "Dark mode"}))
+        .await;
+    let empty = f
+        .ok(
+            sid(3),
+            json!({"type": "feat", "ticket": "", "name": "Dark mode two"}),
+        )
+        .await;
+    assert_eq!(empty["branch"], "feat/dark-mode-two");
+    assert!(empty.get("ticket").is_none(), "{empty}");
+    assert_eq!(row["branch"], "feat/dark-mode");
+    assert_eq!(row["directory"], "feat-dark-mode");
+    assert_eq!(row["type"], "feat");
+    assert!(row.get("ticket").is_none(), "{row}");
+    assert_eq!(
+        parse_tags("feat-dark-mode"),
+        vec![Tag::Type(ConventionalType::Feat)]
+    );
+}
+
+/// FR-004: the form's own refusals, and nothing is created.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_forms_naming_refusals_apply() {
+    let f = Fixture::new().await;
+    let before = f.snapshot().await;
+    let no_type = f.err(sid(3), json!({"name": "x"})).await;
+    assert_eq!(no_type["category"], "invalid_input", "{no_type}");
+    assert_eq!(no_type["message"], NamingError::NoType.to_string());
+    let no_name = f.err(sid(3), json!({"type": "fix", "name": "!!!"})).await;
+    assert_eq!(no_name["category"], "invalid_input", "{no_name}");
+    assert_eq!(
+        no_name["message"],
+        NamingError::EmptyNameAfterSlug.to_string()
+    );
+    let no_name = f.err(sid(3), json!({"type": "fix"})).await;
+    assert_eq!(
+        no_name["message"],
+        NamingError::EmptyNameAfterSlug.to_string()
+    );
+    f.assert_unchanged(&before).await;
+}
+
+/// A derived branch that exists locally, only on a remote, or in a worktree is a conflict that
+/// creates nothing (the wording is pinned in M2).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_derived_branch_that_already_exists_is_a_conflict() {
+    let f = Fixture::new().await;
+    git(f.repo(), &["branch", "fix/local-one"]);
+    git(f.repo(), &["branch", "fix/held-one"]);
+    let elsewhere = tempfile::tempdir().unwrap();
+    let held = elsewhere.path().join("held").display().to_string();
+    git(f.repo(), &["worktree", "add", "-q", &held, "fix/held-one"]);
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "-q", "--bare", "."]);
+    git(
+        f.repo(),
+        &[
+            "remote",
+            "add",
+            "origin",
+            &remote.path().display().to_string(),
+        ],
+    );
+    git(f.repo(), &["branch", "fix/remote-one"]);
+    git(f.repo(), &["push", "-q", "origin", "fix/remote-one"]);
+    git(f.repo(), &["branch", "-q", "-D", "fix/remote-one"]);
+    git(f.repo(), &["fetch", "-q", "origin"]);
+
+    let before = f.snapshot().await;
+    for name in ["local one", "remote one", "held one"] {
+        let error = f.err(sid(3), json!({"type": "fix", "name": name})).await;
+        assert_eq!(error["category"], "conflict", "{name}: {error}");
+        assert!(
+            error["message"].as_str().unwrap().contains("fix/"),
+            "{name}: {error}"
+        );
+        f.assert_unchanged(&before).await;
+    }
+    let branches = std::process::Command::new("git")
+        .current_dir(f.repo())
+        .args(["branch", "--list", "fix/remote-one"])
+        .output()
+        .unwrap();
+    assert!(branches.stdout.is_empty(), "no local branch was created");
+}
+
+/// US4 s1: literal call shapes behave as before, with no derived fields.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn literal_calls_are_unchanged() {
+    let f = Fixture::new().await;
+    let row = f
+        .ok(sid(3), json!({"branch": "feat-lit", "name": "lit"}))
+        .await;
+    assert_eq!(row["ref"], "lit");
+    assert_eq!(row["branch"], "feat-lit");
+    assert!(row.get("type").is_none() && row.get("ticket").is_none());
+    let mixed = f
+        .err(sid(3), json!({"branch": "feat-no", "type": "fix"}))
+        .await;
+    assert_eq!(mixed["category"], "invalid_input", "{mixed}");
+    assert!(!f.on_disk().contains(&"feat-no".to_string()));
+}
+
+/// The Default session may create a derived worktree, as it may a literal one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_default_session_may_create_a_derived_worktree() {
+    let f = Fixture::new().await;
+    let row = f
+        .ok(sid(1), json!({"type": "docs", "name": "guide update"}))
+        .await;
+    assert_eq!(row["branch"], "docs/guide-update");
+}
+
+/// A literal `github_issue` is refused until the lookup ships, and nothing is created.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn github_issue_is_refused_and_creates_nothing() {
+    let f = Fixture::new().await;
+    let before = f.snapshot().await;
+    let error = f.err(sid(3), json!({"github_issue": 12})).await;
+    assert_eq!(error["category"], "invalid_input", "{error}");
+    f.assert_unchanged(&before).await;
+}

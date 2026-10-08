@@ -5,9 +5,10 @@
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::jsonrpc::{parse, route, Route};
 use micold_core::mcp::tools::{
-    catalog, is_mutating_tool, parse_call, parse_operation, LineCount, NonEmptyText, Operation,
-    SessionRef, WorktreeRef,
+    catalog, is_mutating_tool, parse_call, parse_operation, CreateWorktreeRequest, LineCount,
+    NonEmptyText, Operation, SessionRef, WorktreeRef,
 };
+use micold_core::naming::ConventionalType;
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
@@ -211,10 +212,130 @@ fn worktree_ref_default_is_the_project_root_and_anything_else_is_named() {
 }
 
 fn create_worktree(branch: &str, name: Option<&str>, mode: CreateMode) -> Operation {
-    Operation::CreateWorktree {
+    Operation::CreateWorktree(CreateWorktreeRequest::Literal {
         branch: branch.into(),
         name: name.map(str::to_string),
         mode,
+    })
+}
+
+fn derived(type_: Option<ConventionalType>, ticket: Option<&str>, name: Option<&str>) -> Operation {
+    Operation::CreateWorktree(CreateWorktreeRequest::Derived {
+        type_,
+        ticket: ticket.map(str::to_string),
+        name: name.map(str::to_string),
+        github_issue: None,
+    })
+}
+
+#[test]
+fn create_worktree_schema_lists_the_derived_inputs() {
+    let listing = micold_core::mcp::tools::list_result();
+    let tool = listing["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "create_worktree")
+        .unwrap();
+    let schema = &tool["inputSchema"];
+    assert_eq!(schema["required"], json!([]));
+    let props = &schema["properties"];
+    let allowed: Vec<&str> = ConventionalType::ALL.iter().map(|t| t.as_str()).collect();
+    assert_eq!(props["type"]["enum"], json!(allowed));
+    assert_eq!(props["ticket"]["type"], "string");
+    assert_eq!(props["github_issue"]["type"], "integer");
+    assert_eq!(props["github_issue"]["minimum"], 1);
+    assert!(props["github_issue"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("Not yet available"));
+    let description = tool["description"].as_str().unwrap();
+    assert!(description.contains("branch") && description.contains("type"));
+    assert!(description.contains("never both"), "{description}");
+}
+
+#[test]
+fn derived_inputs_parse_to_a_derived_request() {
+    assert_eq!(
+        parse_call(
+            "create_worktree",
+            &json!({"type": "fix", "ticket": "#123", "name": "login crash"})
+        )
+        .unwrap(),
+        derived(
+            Some(ConventionalType::Fix),
+            Some("#123"),
+            Some("login crash")
+        )
+    );
+    assert_eq!(
+        parse_call("create_worktree", &json!({"name": "dark mode"})).unwrap(),
+        derived(None, None, Some("dark mode"))
+    );
+    assert_eq!(
+        parse_call("create_worktree", &json!({"branch": "feat-x", "name": "x"})).unwrap(),
+        create_worktree("feat-x", Some("x"), CreateMode::NewBranch)
+    );
+}
+
+#[test]
+fn literal_and_derived_inputs_are_alternatives() {
+    for args in [
+        json!({"branch": "b", "type": "fix"}),
+        json!({"branch": "b", "ticket": "1"}),
+        json!({"branch": "b", "github_issue": 3}),
+        json!({"branch": "b", "mode": "existing_local", "type": "fix"}),
+        json!({"mode": "new_branch", "type": "fix"}),
+        json!({"remote": "origin", "ticket": "1"}),
+    ] {
+        let message = invalid("create_worktree", args.clone());
+        assert!(message.contains("alternatives"), "{args}: {message}");
+    }
+}
+
+#[test]
+fn mode_or_remote_without_a_branch_is_refused() {
+    for args in [
+        json!({"mode": "new_branch"}),
+        json!({"remote": "origin"}),
+        json!({"mode": "existing_local", "name": "x"}),
+    ] {
+        let message = invalid("create_worktree", args.clone());
+        assert!(message.contains("need a branch"), "{args}: {message}");
+    }
+}
+
+#[test]
+fn an_empty_create_worktree_says_what_to_provide() {
+    let message = invalid("create_worktree", json!({}));
+    assert!(message.contains("provide a branch"), "{message}");
+}
+
+#[test]
+fn an_unknown_type_names_the_allowed_values() {
+    let message = invalid("create_worktree", json!({"type": "hotfix", "name": "x"}));
+    for t in ConventionalType::ALL {
+        assert!(message.contains(t.as_str()), "{message}");
+    }
+    invalid("create_worktree", json!({"type": "FIX", "name": "x"}));
+    invalid("create_worktree", json!({"type": 3}));
+}
+
+/// Until the lookup ships, a valid `github_issue` is refused and nothing is created; a malformed
+/// one is refused as malformed.
+#[test]
+fn github_issue_is_refused_for_now_and_validated() {
+    let message = invalid("create_worktree", json!({"github_issue": 12}));
+    assert!(message.contains("not supported yet"), "{message}");
+    for bad in [
+        json!(0),
+        json!(-1),
+        json!(1.5),
+        json!("7"),
+        json!(2147483648u64),
+    ] {
+        let message = invalid("create_worktree", json!({"github_issue": bad}));
+        assert!(message.contains("whole number"), "{bad}: {message}");
     }
 }
 
@@ -270,8 +391,7 @@ fn create_worktree_offers_no_way_to_overwrite_a_branch() {
 }
 
 #[test]
-fn create_worktree_needs_a_branch() {
-    invalid("create_worktree", json!({}));
+fn create_worktree_rejects_a_malformed_branch() {
     invalid("create_worktree", json!({"branch": ""}));
     invalid("create_worktree", json!({"branch": 7}));
 }
