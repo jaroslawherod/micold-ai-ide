@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M3
-- **Next step**: M3: reviews A and B, full gate, push, PR file (pr-483-m3.md); tasks T040–T050 done
+- **Next step**: M3 PR (title and body in the scratchpad pr-483-m3.md) opened by the orchestrator; then M4
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | #650 | merged |
-| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | in review |
+| M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | (orchestrator opens) | pushed, PR pending |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
 | M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
 
