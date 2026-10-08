@@ -360,6 +360,14 @@ fn with_pull_requests(width: u16) -> State {
     state
 }
 
+/// [`with_pull_requests`], and the merged pull request's branch holds nothing newer: its row carries
+/// the **can be removed** chip beside the indicator (feature 040 US3).
+fn with_removable_pull_request(width: u16) -> State {
+    let mut state = with_pull_requests(width);
+    state.pr_status.removable.insert("fix/a-bug".to_string());
+    state
+}
+
 /// Record every worktree in `state` as one this app created (feature 029, FR-001).
 ///
 /// Under provenance a worktree inside the managed root is listed only if there is a record saying
@@ -1613,6 +1621,19 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "main-shell-sidebar-pull-request-indicator-narrowest",
             build: || StateUnderTest::new(with_pull_requests(SIDEBAR_MIN_WIDTH)),
+            anchors: &[],
+        },
+        // Feature 040 US3 (UI §6, U128): the same, with the third row's merged pull request
+        // removable, so its row carries the indicator and the **can be removed** chip together.
+        CoveredState {
+            name: "main-shell-sidebar-pull-request-removable",
+            build: || StateUnderTest::new(with_removable_pull_request(260)),
+            anchors: &[],
+        },
+        // The same at the narrowest sidebar: both stay inside the row and clear of the name.
+        CoveredState {
+            name: "main-shell-sidebar-pull-request-removable-narrowest",
+            build: || StateUnderTest::new(with_removable_pull_request(SIDEBAR_MIN_WIDTH)),
             anchors: &[],
         },
         // An agent's destructive request (feature 034, FR-014, U213): the confirmation every

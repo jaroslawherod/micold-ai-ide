@@ -52,3 +52,15 @@ fn a_row_without_a_pull_request_has_todays_menu() {
     with.retain(|l| l != "Open pull request");
     assert_eq!(with, labels("feat-a", true, true, false));
 }
+
+/// FR-016 (A26): a removable row is a merged row with a pull request, and the menu has no input for
+/// the mark: **Delete** stays the last entry, and the menu is the one a pull request row has.
+#[test]
+fn the_menu_of_a_removable_row_offers_delete_last_and_nothing_to_remove_it_by() {
+    let items = labels("feat-a", false, false, true);
+    assert_eq!(items.last().map(String::as_str), Some("Delete"));
+    assert!(
+        !items.iter().any(|l| l.to_lowercase().contains("remov")),
+        "{items:?}"
+    );
+}

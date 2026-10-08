@@ -123,6 +123,16 @@ pub enum PendingOp {
         branches: Vec<String>,
         started: u64,
     },
+    /// The `MergedBranchCheck` a pull request reading ends with when a pull request was merged
+    /// (feature 040, reading-and-wire §2 step 4). Carries the reading's statuses, which wait for the
+    /// answer, and the branches asked about in the order asked, so the answer needs nothing
+    /// recomputed.
+    MergedBranchCheck {
+        seq: u64,
+        asked: Vec<String>,
+        statuses: std::collections::BTreeMap<String, micold_core::pull_request::PullRequestStatus>,
+        started: u64,
+    },
     /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
     /// client has no git view of the daemon's filesystem (feature 027, research R2 part 2).
     /// Carries the folder it was asked about, so an answer that outlived the question (the user
@@ -192,6 +202,7 @@ impl PendingOp {
             PendingOp::RemoteList { .. } | PendingOp::PrStatusRemotes { .. } => {
                 "read the repository's remotes".into()
             }
+            PendingOp::MergedBranchCheck { .. } => "check the merged branches".into(),
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
             }
@@ -388,7 +399,7 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             }
             // Feature 040: the reading ended with the hold, above; no failure of a reading is
             // ever a notice (FR-025, SC-004).
-            PendingOp::PrStatusRemotes { .. } => {}
+            PendingOp::PrStatusRemotes { .. } | PendingOp::MergedBranchCheck { .. } => {}
             _ => app.core.notify_error(text),
         }
     }
@@ -981,6 +992,22 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     app, project, seq, branches, started, remotes,
                 );
             }
+            // Feature 040: the answer to a reading's question about its merged branches. Whether it
+            // is still wanted is `on_merged_branches`' question.
+            Some(PendingOp::MergedBranchCheck {
+                seq,
+                asked,
+                statuses,
+                started,
+            }) => {
+                let answers = match result {
+                    OperationResult::MergedBranchCheck { answers } => Some(answers),
+                    _ => None,
+                };
+                follow_up = crate::shell::pr_status::on_merged_branches(
+                    app, seq, asked, statuses, started, answers,
+                );
+            }
             // Feature 027 (research R2 part 2): the open-project gate, answered by the side
             // that has a filesystem view of the project. The path is compared, not assumed —
             // see `workspace::on_repo_root_answer`.
@@ -1150,6 +1177,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 }) => {
                     return crate::shell::pr_status::on_remotes(
                         app, project, seq, branches, started, None,
+                    );
+                }
+                // Feature 040: a refused question applies the statuses with no suggestion, and is
+                // never a notice (FR-017, FR-025).
+                Some(PendingOp::MergedBranchCheck {
+                    seq,
+                    asked,
+                    statuses,
+                    started,
+                }) => {
+                    return crate::shell::pr_status::on_merged_branches(
+                        app, seq, asked, statuses, started, None,
                     );
                 }
                 // Feature 029: the failure notice is the generic one below — "Couldn't refresh

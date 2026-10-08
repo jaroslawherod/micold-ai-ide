@@ -140,6 +140,22 @@ above **Delete**. It opens in your default browser; nothing else changes (select
 the sidebar stay as they were), and only a `https://github.com/` address is ever opened. A row
 without an indicator has no such entry.
 
+#### A merged pull request
+
+When the pull request shown for a worktree was merged, and the worktree's branch has no commits
+beyond the ones the pull request merged, the row also carries the chip **can be removed**, and its
+tooltip ends with `Cleanup: merged — this worktree can be removed (right-click, Delete)`. The
+application works this out from your local repository at every reading; it fetches nothing.
+
+The mark is only a suggestion. Nothing is removed on its own: remove the worktree as you always
+have, with **Delete** in the row's right-click menu, and its confirmation appears as it does for any
+worktree.
+
+No mark appears when the branch has commits made after the merged ones, when the pull request was
+closed without merging, when the branch has a newer open pull request (the indicator then shows
+that one), or when the pull request's last commits were never fetched into your repository, since
+the application cannot then tell that the branch holds nothing newer.
+
 #### Which pull request, and which worktrees
 
 - **Which pull request:** the one for the worktree's branch, in the project's own GitHub

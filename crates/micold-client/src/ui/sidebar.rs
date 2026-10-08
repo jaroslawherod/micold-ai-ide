@@ -627,6 +627,7 @@ fn build_items(
         let row_pr = crate::features::sidebar::row_pull_request(
             &entry,
             &state.pr_status.statuses,
+            &state.pr_status.removable,
             state.pr_status.read_at,
             now,
         );
@@ -667,6 +668,12 @@ fn build_items(
         // rows is absolute rather than project-relative.
         if wt.included {
             tags.push(("outside this app".to_string(), r.secondary));
+        }
+        // Feature 040 (FR-015, FR-016): a merged pull request that holds all of the branch's work
+        // says so, as a label-only chip in the same slot. It has no press action: removing the
+        // worktree is the row menu's **Delete** and its confirmation, unchanged.
+        if row_pr.is_some_and(|row| row.removable) {
+            tags.push(("can be removed".to_string(), r.secondary));
         }
         let dir = wt.dir_name.clone();
 

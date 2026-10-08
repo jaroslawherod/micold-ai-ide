@@ -912,6 +912,7 @@ fn a_worktree_row_whose_branch_has_a_status_projects_it_with_its_age() {
     let row = row_pull_request(
         &worktree_entry("a", vec![], vec![]),
         &held,
+        &BTreeSet::new(),
         Some(1_000),
         1_090,
     )
@@ -927,6 +928,7 @@ fn a_worktree_row_whose_branch_has_a_status_projects_it_with_its_age() {
     let other = row_pull_request(
         &worktree_entry("b", vec![], vec![]),
         &held,
+        &BTreeSet::new(),
         Some(1_000),
         1_000,
     )
@@ -944,6 +946,7 @@ fn a_clock_before_the_reading_gives_age_zero() {
     let row = row_pull_request(
         &worktree_entry("a", vec![], vec![]),
         &held,
+        &BTreeSet::new(),
         Some(2_000),
         1_000,
     )
@@ -955,7 +958,14 @@ fn a_clock_before_the_reading_gives_age_zero() {
 #[test]
 fn a_branch_without_an_entry_projects_none() {
     let held = statuses(&[("feat/other", 7)]);
-    assert!(row_pull_request(&worktree_entry("a", vec![], vec![]), &held, Some(1), 2).is_none());
+    assert!(row_pull_request(
+        &worktree_entry("a", vec![], vec![]),
+        &held,
+        &BTreeSet::new(),
+        Some(1),
+        2
+    )
+    .is_none());
 }
 
 /// U99 (FR-007): a detached worktree has no branch to look up, whatever the map holds.
@@ -972,7 +982,7 @@ fn a_detached_worktree_projects_none() {
         shown_for_current_session: false,
     });
     let held = statuses(&[("feat/a", 7), ("", 9)]);
-    assert!(row_pull_request(&entry, &held, Some(1), 2).is_none());
+    assert!(row_pull_request(&entry, &held, &BTreeSet::new(), Some(1), 2).is_none());
 }
 
 /// U99 (FR-007): the "Default" entry never has one, whichever branch the project root has checked
@@ -980,7 +990,9 @@ fn a_detached_worktree_projects_none() {
 #[test]
 fn the_default_entry_projects_none() {
     let held = statuses(&[("main", 1), ("master", 2), ("Default", 3), ("feat/a", 4)]);
-    assert!(row_pull_request(&default_entry(vec![]), &held, Some(1), 2).is_none());
+    assert!(
+        row_pull_request(&default_entry(vec![]), &held, &BTreeSet::new(), Some(1), 2).is_none()
+    );
 }
 
 /// U100 (FR-001, FR-011): with nothing held every row projects as it did before the feature.
@@ -992,7 +1004,7 @@ fn with_no_statuses_every_row_projects_none() {
         worktree_entry("a", vec![], vec![]),
         worktree_entry("b", vec![Tag::Type(ConventionalType::Feat)], vec![]),
     ] {
-        assert!(row_pull_request(&entry, &none, None, 5).is_none());
+        assert!(row_pull_request(&entry, &none, &BTreeSet::new(), None, 5).is_none());
     }
 }
 
@@ -1006,6 +1018,7 @@ fn tip_with(status: &PullRequestStatus) -> String {
         Some(RowPullRequest {
             status,
             age_secs: 30,
+            removable: false,
         }),
     )
 }
@@ -1197,4 +1210,78 @@ fn the_tooltip_holds_no_address() {
     let tip = tip_with(&status);
     assert!(!tip.contains("http"), "got {tip:?}");
     assert!(!tip.contains(&status.url), "got {tip:?}");
+}
+
+// --- Feature 040 US3: the removal mark (contract pull-request-ui §2–3; U126, U127) ------------
+
+const CLEANUP: &str = "merged — this worktree can be removed (right-click, Delete)";
+
+fn merged_status() -> PullRequestStatus {
+    with_state(PrState::Merged, ReviewState::None)
+}
+
+fn tip_removable(status: &PullRequestStatus, removable: bool) -> String {
+    worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-a"),
+        "Feat a",
+        Some(RowPullRequest {
+            status,
+            age_secs: 30,
+            removable,
+        }),
+    )
+}
+
+/// U126 (A25, FR-015): the projection says removable for a branch in the set and not for one outside.
+#[test]
+fn the_projection_follows_the_removable_set() {
+    let held = BTreeMap::from([
+        ("feat/a".to_string(), merged_status()),
+        ("feat/b".to_string(), merged_status()),
+    ]);
+    let removable = BTreeSet::from(["feat/a".to_string()]);
+    let project = |dir: &str| {
+        row_pull_request(
+            &worktree_entry(dir, vec![], vec![]),
+            &held,
+            &removable,
+            Some(1),
+            2,
+        )
+        .expect("listed")
+        .removable
+    };
+    assert!(project("a"));
+    assert!(!project("b"));
+}
+
+/// U126 (A25, A26): the `Cleanup:` line is the tooltip's last, and only for a removable row.
+#[test]
+fn the_cleanup_line_is_last_and_only_for_a_removable_row() {
+    let status = merged_status();
+    let tip = tip_removable(&status, true);
+    assert_eq!(
+        tip.lines().last(),
+        Some(format!("Cleanup: {CLEANUP}").as_str())
+    );
+    assert_eq!(line(&tip, "Cleanup").as_deref(), Some(CLEANUP));
+    assert_eq!(labels(&tip).last(), Some(&"Cleanup"));
+}
+
+/// U127 (A26, FR-017): a merged row that is not removable has no `Cleanup:` line, and neither has
+/// any other row.
+#[test]
+fn a_row_that_is_not_removable_has_no_cleanup_line() {
+    let merged = merged_status();
+    assert_eq!(line(&tip_removable(&merged, false), "Cleanup"), None);
+    let open = with_state(
+        PrState::Open {
+            checks: CheckStatus::Passing,
+        },
+        ReviewState::None,
+    );
+    assert_eq!(line(&tip_removable(&open, false), "Cleanup"), None);
+    // The text of a row that is not removable is what it was before the mark existed.
+    assert_eq!(tip_removable(&merged, false), tip_with(&merged));
 }
