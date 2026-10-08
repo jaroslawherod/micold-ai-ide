@@ -1855,6 +1855,12 @@ fn turning_the_binding_toggle_off_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
     app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     let _ = update_inner(
         &mut app,
@@ -1952,6 +1958,12 @@ fn turning_desktop_notifications_off_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
     app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     let _ = update_inner(
         &mut app,
@@ -1974,10 +1986,10 @@ fn turning_desktop_notifications_off_and_saving_tells_the_service() {
     );
 }
 
-/// U143: a save that leaves the switch on names it too, as `Some(true)`: the form holds the
-/// field, so every save sends its value.
+/// U143, narrowed by BUG-570 (FR-026a): a save that leaves the switch as the page opened with it
+/// does not name it, so it cannot undo another window's change.
 #[test]
-fn saving_with_desktop_notifications_on_tells_the_service_they_are_on() {
+fn saving_without_touching_desktop_notifications_does_not_name_them() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
     app.daemon = Some(micold_client::daemon::Outbox::new(tx));
@@ -1999,9 +2011,8 @@ fn saving_with_desktop_notifications_on_tells_the_service_they_are_on() {
         _ => None,
     });
     assert_eq!(
-        told,
-        Some(Some(true)),
-        "the service must be told the switch's position: {sent:?}"
+        told, None,
+        "a save that changed nothing tells the service nothing: {sent:?}"
     );
 }
 
@@ -2037,6 +2048,89 @@ fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() 
     }
 }
 
+/// A49 (BUG-570, FR-026a, US4 scenario 7): a page opened before another window turned both
+/// switches off, then saved after changing only another setting, must not turn them back on: not
+/// at the service, not in the file, not in this window.
+#[test]
+fn a_stale_settings_page_saves_only_what_its_user_changed() {
+    use micold_core::settings::SettingsStore as _;
+
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(
+        micold_core::settings::Settings::default(),
+    ));
+    let mut app = base_app();
+    app.caps = app.caps.clone().with_settings(store.clone());
+    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+    // Window A's save, echoed by the service to every window and written to the file.
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                desktop_notifications: false,
+                tool_server_enabled: false,
+                ..quiet_settings()
+            },
+        },
+    );
+    store
+        .save(&micold_core::settings::Settings {
+            desktop_notifications: false,
+            tool_server_enabled: false,
+            ..store.load().settings
+        })
+        .expect("the fake store saves");
+    let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::PiActivityComponentToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let told = sent.iter().find_map(|msg| match msg {
+        ClientMsg::SettingsSet {
+            pi_activity_component,
+            desktop_notifications,
+            tool_server_enabled,
+            ..
+        } => Some((
+            *pi_activity_component,
+            *desktop_notifications,
+            *tool_server_enabled,
+        )),
+        _ => None,
+    });
+    assert_eq!(
+        told,
+        Some((Some(false), None, None)),
+        "the service is told the one change, and nothing about the switches: {sent:?}"
+    );
+    let saved = store.saves().last().cloned().expect("the save is written");
+    assert_eq!(
+        (
+            saved.pi_activity_component,
+            saved.desktop_notifications,
+            saved.tool_server_enabled
+        ),
+        (false, false, false),
+        "the file gets the change and keeps the other window's switches"
+    );
+    assert!(
+        !app.core.session.desktop_notifications && !app.core.session.tool_server_enabled,
+        "this window's own copy keeps the switches off"
+    );
+}
+
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
 /// sessions" and saving tells the connected service, which reads it on every tool request.
 #[test]
@@ -2051,6 +2145,12 @@ fn choosing_a_cross_session_value_and_saving_tells_the_service() {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        // The window holds another value, so choosing this one is a change to save.
+        app.core.session.cross_session_access = if chosen == CrossSessionAccess::Off {
+            CrossSessionAccess::Auto
+        } else {
+            CrossSessionAccess::Off
+        };
         let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
         let _ = update_inner(
             &mut app,
@@ -4471,7 +4571,16 @@ mod script_path_report {
         app.caps = app.caps.clone().with_script_path_probe(probe.clone());
         app.env_include_enabled = false;
         app.env_include_script_path = path.to_string();
+        // On, as a connected service reports them by default.
+        app.core.session.pi_activity_component = true;
+        app.core.session.tool_server_enabled = true;
+        app.core.session.desktop_notifications = true;
         (app, probe)
+    }
+
+    /// The settings this window holds, as a store that has them would load them.
+    fn as_stored(app: &App) -> micold_core::settings::Settings {
+        crate::shell::persist::window_settings(app, micold_core::settings::Settings::default())
     }
 
     /// Open Settings through the shell and let its check land.
@@ -4640,18 +4749,19 @@ mod script_path_report {
     // --- M2: the save-time notification (contracts/settings-indication.md §1 S5–S7, §3 T2) ---
 
     /// Environment include off, `path` stored, a probe that finds nothing there, a recording
-    /// settings store, and a resolver that sources nothing: a save with the feature on must not
-    /// run a real shell over the shared temp directory. Settings is open and its check has landed.
+    /// settings store `store` makes from what the window holds, and a resolver that sources
+    /// nothing: a save with the feature on must not run a real shell over the shared temp
+    /// directory. Settings is open and its check has landed.
     fn saving_app(
         path: &str,
-        store: micold_core::settings::FakeSettingsStore,
+        store: impl FnOnce(micold_core::settings::Settings) -> micold_core::settings::FakeSettingsStore,
     ) -> (
         App,
         Arc<FakeScriptPathProbe>,
         Arc<micold_core::settings::FakeSettingsStore>,
     ) {
         let (mut app, probe) = app_with(path, ProbeAnswer::Missing);
-        let store = Arc::new(store);
+        let store = Arc::new(store(as_stored(&app)));
         app.caps = app
             .caps
             .clone()
@@ -4696,7 +4806,7 @@ mod script_path_report {
     {
         let path = stored_path();
         let (mut app, _probe, store) =
-            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
+            saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
         let notice = micold_core::notify::Notification::new(
             micold_core::notify::Level::Info,
             format!("The environment-include script was not found: {path}"),
@@ -4736,14 +4846,12 @@ mod script_path_report {
     #[test]
     fn a_settings_save_keeps_the_stored_pr_status_switch() {
         let path = stored_path();
-        let stored = micold_core::settings::Settings {
-            pr_status_enabled: true,
-            ..Default::default()
-        };
-        let (mut app, _probe, store) = saving_app(
-            &path,
-            micold_core::settings::FakeSettingsStore::loaded(stored),
-        );
+        let (mut app, _probe, store) = saving_app(&path, |window| {
+            micold_core::settings::FakeSettingsStore::loaded(micold_core::settings::Settings {
+                pr_status_enabled: true,
+                ..window
+            })
+        });
 
         save_and_check(&mut app);
 
@@ -4754,11 +4862,281 @@ mod script_path_report {
         );
     }
 
+    /// What one save told the connected service: the fields of its `SettingsSet`.
+    #[derive(Debug, Default, Clone, PartialEq)]
+    struct Told {
+        scrollback_lines: Option<usize>,
+        env_include_enabled: Option<bool>,
+        env_include_script_path: Option<String>,
+        env_include_timeout_secs: Option<u64>,
+        default_ai_cli: Option<AiCli>,
+        pi_activity_component: Option<bool>,
+        tool_server_enabled: Option<bool>,
+        desktop_notifications: Option<bool>,
+        cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
+        pr_status_enabled: Option<bool>,
+        notification_kinds: Option<micold_core::attention::NotificationKinds>,
+        long_task_threshold_secs: Option<u64>,
+    }
+
+    /// A [`saving_app`] over `store`, connected to a service whose messages land in the receiver.
+    fn connected_saving_app(
+        path: &str,
+        store: impl FnOnce(micold_core::settings::Settings) -> micold_core::settings::FakeSettingsStore,
+    ) -> (
+        App,
+        Arc<micold_core::settings::FakeSettingsStore>,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (mut app, _probe, store) = saving_app(path, store);
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        (app, store, rx)
+    }
+
+    /// Open Settings, edit the draft with `edit`, save, and return the `SettingsSet` the save
+    /// sent, or `None` when it sent none.
+    fn save_edited(
+        app: &mut App,
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        edit: impl FnOnce(&mut SettingsDraft),
+    ) -> Option<Told> {
+        let _ = open_and_check(app);
+        let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+        edit(
+            app.core
+                .settings
+                .settings_draft
+                .as_mut()
+                .expect("Settings is open"),
+        );
+        save_and_check(app);
+        std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
+            ClientMsg::SettingsSet {
+                scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
+                default_ai_cli,
+                pi_activity_component,
+                tool_server_enabled,
+                desktop_notifications,
+                cross_session_access,
+                pr_status_enabled,
+                notification_kinds,
+                long_task_threshold_secs,
+                ..
+            } => Some(Told {
+                scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
+                default_ai_cli,
+                pi_activity_component,
+                tool_server_enabled,
+                desktop_notifications,
+                cross_session_access,
+                pr_status_enabled,
+                notification_kinds,
+                long_task_threshold_secs,
+            }),
+            _ => None,
+        })
+    }
+
+    /// One edit of the open draft.
+    type Edit = dyn FnOnce(&mut SettingsDraft);
+
+    /// U182 (BUG-570, FR-026a): a save tells the service each service-owned field the user
+    /// changed and `None` for every other; a save that changed none of them sends nothing.
+    #[test]
+    fn a_save_sends_some_only_for_the_service_owned_fields_the_user_changed() {
+        use micold_core::mcp::policy::CrossSessionAccess;
+        let path = stored_path();
+        let (mut app, _store, mut rx) =
+            connected_saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
+        let cases: Vec<(&str, Box<Edit>, Told)> = vec![
+            (
+                "scrollback",
+                Box::new(|d| d.terminal.scrollback_lines = "777".into()),
+                Told {
+                    scrollback_lines: Some(777),
+                    ..Told::default()
+                },
+            ),
+            (
+                "environment include on",
+                Box::new(|d| d.environment.enabled = true),
+                Told {
+                    env_include_enabled: Some(true),
+                    ..Told::default()
+                },
+            ),
+            (
+                "script path",
+                Box::new(|d| d.environment.script_path = "/elsewhere/env.sh".into()),
+                Told {
+                    env_include_script_path: Some("/elsewhere/env.sh".into()),
+                    ..Told::default()
+                },
+            ),
+            (
+                "timeout",
+                Box::new(|d| d.environment.timeout_secs = "17".into()),
+                Told {
+                    env_include_timeout_secs: Some(17),
+                    ..Told::default()
+                },
+            ),
+            (
+                "default AI CLI",
+                Box::new(|d| d.environment.default_ai_cli = AiCli::Copilot),
+                Told {
+                    default_ai_cli: Some(AiCli::Copilot),
+                    ..Told::default()
+                },
+            ),
+            (
+                "Pi activity component",
+                Box::new(|d| d.environment.pi_activity_component = false),
+                Told {
+                    pi_activity_component: Some(false),
+                    ..Told::default()
+                },
+            ),
+            (
+                "tool server",
+                Box::new(|d| d.environment.tool_server_enabled = false),
+                Told {
+                    tool_server_enabled: Some(false),
+                    ..Told::default()
+                },
+            ),
+            (
+                "desktop notifications",
+                Box::new(|d| d.environment.desktop_notifications = false),
+                Told {
+                    desktop_notifications: Some(false),
+                    ..Told::default()
+                },
+            ),
+            (
+                "cross-session access",
+                Box::new(|d| d.environment.cross_session_access = CrossSessionAccess::Off),
+                Told {
+                    cross_session_access: Some(CrossSessionAccess::Off),
+                    ..Told::default()
+                },
+            ),
+            (
+                "notification kinds",
+                Box::new(|d| d.environment.notification_kinds.session_error = false),
+                Told {
+                    notification_kinds: Some(micold_core::attention::NotificationKinds {
+                        session_error: false,
+                        ..micold_core::attention::NotificationKinds::default()
+                    }),
+                    ..Told::default()
+                },
+            ),
+            (
+                "long-task threshold",
+                Box::new(|d| d.environment.long_task_threshold_secs = "321".into()),
+                Told {
+                    long_task_threshold_secs: Some(321),
+                    ..Told::default()
+                },
+            ),
+        ];
+
+        for (field, edit, expected) in cases {
+            assert_eq!(
+                save_edited(&mut app, &mut rx, edit),
+                Some(expected),
+                "a save that changed only the {field}"
+            );
+        }
+        assert_eq!(
+            save_edited(&mut app, &mut rx, |d| {
+                d.appearance.theme = micold_core::theme::ThemePreference::Dark
+            }),
+            None,
+            "a save that changed only the theme tells the service nothing"
+        );
+    }
+
+    /// U183 (BUG-570, FR-026a): a save sets only the fields the user changed on the stored
+    /// document, so a theme and sandbox settings another window stored meanwhile are kept.
+    #[test]
+    fn a_save_keeps_stored_fields_the_user_did_not_change() {
+        let path = stored_path();
+        let (mut app, store, mut rx) =
+            connected_saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
+        let _ = open_and_check(&mut app);
+
+        // Another window's save, while this page is open.
+        let mut elsewhere = micold_core::settings::SettingsStore::load(&*store).settings;
+        elsewhere.theme = micold_core::theme::ThemePreference::Dark;
+        elsewhere.daemon.sandbox.survive_logout = !elsewhere.daemon.sandbox.survive_logout;
+        elsewhere.daemon.sandbox.budget.pids = Some(321);
+        micold_core::settings::SettingsStore::save(&*store, &elsewhere).expect("saves");
+
+        let draft = app
+            .core
+            .settings
+            .settings_draft
+            .as_mut()
+            .expect("Settings is open");
+        draft.terminal.scrollback_lines = "4321".into();
+        // Another limit of the same sandbox profile (review A, F1).
+        draft.daemon.memory_mib = "1234".into();
+        save_and_check(&mut app);
+        let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+
+        let saved = store.saves().last().cloned().expect("the save is written");
+        let mut expected = micold_core::settings::Settings {
+            scrollback_lines: 4321,
+            ..elsewhere.clone()
+        };
+        expected.daemon.sandbox.budget.memory_bytes = saved.daemon.sandbox.budget.memory_bytes;
+        assert_ne!(
+            saved.daemon.sandbox.budget.memory_bytes, elsewhere.daemon.sandbox.budget.memory_bytes,
+            "the new memory limit is written"
+        );
+        assert_eq!(
+            saved, expected,
+            "the file gets the new scrollback and memory limit and keeps everything else as stored"
+        );
+    }
+
+    /// U184 (BUG-570, FR-026a): a field retyped to the value the page opened with is unchanged.
+    #[test]
+    fn a_field_retyped_to_its_opening_value_counts_as_unchanged() {
+        let path = stored_path();
+        let (mut app, _store, mut rx) =
+            connected_saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
+        let opened_with = app.scrollback_lines.to_string();
+
+        let told = save_edited(&mut app, &mut rx, |d| {
+            d.terminal.scrollback_lines = format!(" {opened_with}");
+            d.environment.desktop_notifications = false;
+        });
+
+        assert_eq!(
+            told,
+            Some(Told {
+                desktop_notifications: Some(false),
+                ..Told::default()
+            }),
+            "the scrollback was retyped, not changed, so the service is not told it"
+        );
+    }
+
     #[test]
     fn a_save_checks_the_saved_path_even_when_the_path_did_not_change() {
         let path = stored_path();
         let (mut app, probe, _store) =
-            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
+            saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
         let before = probe.calls().len();
 
         let valid = valid_draft(&app);
@@ -4794,7 +5172,7 @@ mod script_path_report {
     fn a_save_with_a_missing_path_writes_exactly_the_drafted_settings_and_nothing_of_the_check() {
         let path = stored_path();
         let (mut app, _probe, store) =
-            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
+            saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
         let expected = valid_draft(&app).into_settings();
 
         save_and_check(&mut app);
@@ -4810,11 +5188,10 @@ mod script_path_report {
     #[test]
     fn a_save_whose_write_failed_posts_no_notice_about_the_path() {
         let path = stored_path();
-        let (mut app, _probe, _store) = saving_app(
-            &path,
-            micold_core::settings::FakeSettingsStore::new()
-                .failing_save(std::io::ErrorKind::PermissionDenied),
-        );
+        let (mut app, _probe, _store) = saving_app(&path, |window| {
+            micold_core::settings::FakeSettingsStore::loaded(window)
+                .failing_save(std::io::ErrorKind::PermissionDenied)
+        });
 
         save_and_check(&mut app);
 
@@ -5102,7 +5479,7 @@ mod script_path_report {
         Arc<micold_core::settings::FakeSettingsStore>,
     ) {
         let (mut app, probe, store) =
-            saving_app(path, micold_core::settings::FakeSettingsStore::new());
+            saving_app(path, micold_core::settings::FakeSettingsStore::loaded);
         assert_eq!(
             app.core.settings.script_check,
             ScriptCheck::Done(CheckedScriptPath {
@@ -5210,9 +5587,11 @@ mod script_path_report {
     fn nothing_recovers_on_its_own_only_the_users_draft_is_saved() {
         let path = stored_path();
         let mut app = on_and_missing(&path);
-        let store = Arc::new(micold_core::settings::FakeSettingsStore::new());
-        app.caps = app.caps.clone().with_settings(store.clone());
         app.env_include_timeout_secs = 7;
+        let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(as_stored(
+            &app,
+        )));
+        app.caps = app.caps.clone().with_settings(store.clone());
         let stored = |app: &App| {
             (
                 app.env_include_enabled,
@@ -5297,7 +5676,7 @@ mod script_path_report {
     fn saving_settings_hands_back_work_that_runs_the_saves_check() {
         let path = stored_path();
         let (mut app, probe, _store) =
-            saving_app(&path, micold_core::settings::FakeSettingsStore::new());
+            saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
         let before = probe.calls().len();
 
         let work = crate::shell::persist::on_settings_saved(&mut app);

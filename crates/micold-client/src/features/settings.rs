@@ -528,6 +528,10 @@ pub struct SettingsDraft {
     pub github: GithubDraft,
     /// The last validation failure shown after a rejected save.
     pub error: Option<FieldError>,
+    /// The settings the page was opened with, which a save compares against so that it changes
+    /// only what the user changed (BUG-570, FR-026a). `None` for a draft not seeded from stored
+    /// settings: every field then counts as changed.
+    pub baseline: Option<Settings>,
 }
 
 /// A processor share as the field shows it: cores, with no trailing zeros.
@@ -891,6 +895,7 @@ impl SettingsDraft {
                 entries: settings.issue_label_types.clone(),
             },
             error: None,
+            baseline: Some(settings.clone()),
         }
     }
 

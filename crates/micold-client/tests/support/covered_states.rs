@@ -986,6 +986,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     daemon: DaemonDraft::default(),
                     error: None,
+                    baseline: None,
                 };
                 draft
                     .daemon
@@ -1051,6 +1052,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     daemon: DaemonDraft::default(),
                     error: None,
+                    baseline: None,
                 };
                 // The badge again, for the reason the state above states it: collapsed, a badge
                 // has nowhere to be a chip and becomes a tint on the glyph, so a rail without one
@@ -1509,6 +1511,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     daemon: DaemonDraft::default(),
                     error: None,
+                    baseline: None,
                 });
                 StateUnderTest::new(state)
             },
@@ -1550,6 +1553,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         section: SettingsSection::GithubIssues,
                         message: "“bug” is already mapped above.".to_string(),
                     }),
+                    baseline: None,
                 });
                 StateUnderTest::new(state)
             },

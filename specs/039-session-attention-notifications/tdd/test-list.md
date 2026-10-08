@@ -91,6 +91,7 @@ ticked by `speckit-implement`.
 | A46 | `desktop_notifications: false` survives a restart of the service | US4-4, FR-026 | example | DONE | T104 | T121 |
 | A47 | After the setting is turned on the next event is granted, and events made while it was off are never granted | US4-5, FR-027 | example | DONE | T104 | T121 |
 | A48 | The settings hold one notification field and none per AI CLI, and the grant rule is the same for a session of each of the three | US4-6, FR-028 | example | DONE | T101, T104 | T121 |
+| A49 | A page opened before another window turned both switches off, saved after changing another setting, sends `None` for both switches, leaves them off in the store and in the window, and changes the other setting (BUG-570) | US4-7, FR-026a | example | DONE | T127 | T129 |
 
 ## Inner loop: unit behaviors
 
@@ -347,8 +348,11 @@ the same kind.
 | id | behavior | traces | kind | state | tasks |
 | --- | --- | --- | --- | --- | --- |
 | U142 | The draft holds `desktop_notifications`, and its message changes the draft | FR-026, US4-1 | example | DONE | T105 / T110 |
-| U143 | Saving sends `SettingsSet` with `Some(value)` | FR-027 | example | DONE | T105 / T110 |
+| U143 | Saving sends `SettingsSet` with `Some(value)` when the user changed the switch on the page (narrowed by BUG-570: `None` otherwise, U182) | FR-027 | example | DONE | T105 / T110 |
 | U144 | `SettingsChanged` updates the value the draft is built from | FR-027, US4-3 | example | DONE | T105 / T110 |
+| U182 | A save sends `Some` for each service-owned field the user changed and `None` for every other; a save changing none sends no `SettingsSet` (BUG-570) | FR-026a | example | DONE | T128 / T129 |
+| U183 | A save sets only the changed fields on the stored document: a theme and sandbox settings another window stored are kept (BUG-570) | FR-026a | example | DONE | T128 / T129 |
+| U184 | A field retyped to the value the page opened with counts as unchanged (BUG-570) | FR-026a | example | DONE | T128 / T129 |
 
 ### `crates/micold-client/src/ui/material/`: `UnreadMark` and its hosts
 
