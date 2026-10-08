@@ -1172,6 +1172,19 @@ fn control_characters_in_a_title_become_spaces() {
     assert_eq!(tip.lines().count(), 7, "one line per fact: {tip:?}");
 }
 
+/// U114: invisible format characters that reorder or hide text become spaces too.
+#[test]
+fn bidi_and_zero_width_characters_in_a_title_become_spaces() {
+    let status = PullRequestStatus {
+        title: "a\u{202E}b\u{200B}c\u{2028}d".into(),
+        ..pull_request(9)
+    };
+    assert_eq!(
+        line(&tip_with(&status), "Pull request").as_deref(),
+        Some("#9 a b c d")
+    );
+}
+
 /// U114 (FR-013): the address is not in the tooltip.
 #[test]
 fn the_tooltip_holds_no_address() {
