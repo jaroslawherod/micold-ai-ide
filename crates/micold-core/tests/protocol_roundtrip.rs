@@ -1451,6 +1451,8 @@ fn the_run_group_messages_round_trip_on_both_wires() {
     for msg in &daemon {
         json_roundtrip(msg);
         postcard_roundtrip(msg);
+    }
+}
 
 /// U89, U90, U91 (feature 041, contracts/setting.md §2): the setting reaches the window as the
 /// service holds it, `SettingsSet` carries the choice, and `None` leaves it.
