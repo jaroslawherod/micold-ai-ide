@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
 - **Phase**: milestone M2 (gate and reviews)
-- **Next step**: M2 gate, reviews, PR; then M3.
+- **Next step**: orchestrator merges M2 PR #648; then M3.
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #638 | Design (spec ships in it) | merged | 71d7195264cd757f40baf342ca3052ff7d541d8e |
 | #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
+| #648 | M2 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
-| M2 | T010-T012 | full | Refusals and collision hint | - | gate green, PR open |
+| M2 | T010-T012 | full | Refusals and collision hint | #648 | gate green, PR open |
 | M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
 
 ## Decisions
