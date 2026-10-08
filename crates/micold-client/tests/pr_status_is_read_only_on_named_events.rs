@@ -52,12 +52,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "S4: a list refresh ended: acknowledged, refused, or timed out (not the disconnect drain).",
     ),
     (
-        "shell::pr_status::tick(",
-        MAIN,
-        1,
-        "S3: `Message::PrStatusTick`, the interval subscription's tick.",
-    ),
-    (
         "shell::pr_status::on_remotes(",
         SYNC,
         2,
@@ -67,7 +61,7 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "shell::pr_status::update(",
         MAIN,
         1,
-        "`main.rs` routes `Message::PrStatus` (the reducer's own messages) to the shell.",
+        "`main.rs` routes `Message::PrStatus` (the reducer's own messages, including S3's `Tick`) to the shell.",
     ),
 ];
 

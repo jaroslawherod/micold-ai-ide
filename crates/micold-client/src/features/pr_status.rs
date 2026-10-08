@@ -81,6 +81,9 @@ pub const ABANDON_AFTER_SECS: u64 = 60;
 /// What this feature is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
+    /// The 5-minute interval's tick (S3). The shell stamps it with the time and turns it into
+    /// `Trigger { Interval }`; to this reducer it changes nothing.
+    Tick,
     /// The interval elapsed (S3) or a list refresh ended (S4).
     Trigger {
         /// Which of the two.
@@ -276,7 +279,8 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state.read_at = None;
             Effect::None
         }
-        Msg::RemotesTimedOut { .. }
+        Msg::Tick
+        | Msg::RemotesTimedOut { .. }
         | Msg::StatusesRead { .. }
         | Msg::MergedCheckTimedOut { .. } => Effect::None,
     }

@@ -40,6 +40,7 @@ use iced::Subscription;
 
 use micold_client::app::Message;
 use micold_client::features::notifications::Msg as NotificationsMsg;
+use micold_client::features::pr_status::Msg as PrStatusMsg;
 use micold_client::features::window::Msg as WindowMsg;
 
 use crate::shell::os_theme::detect_system_scheme;
@@ -106,7 +107,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // and this window holds its project**. A window that reads nothing must not be woken for it,
     // and with the switch off nothing may be sent to GitHub or scheduled at all.
     if app.core.pr_status.enabled && app.core.pr_status.held {
-        subs.push(every(PR_STATUS_INTERVAL).map(|_| Message::PrStatusTick));
+        subs.push(every(PR_STATUS_INTERVAL).map(|_| Message::PrStatus(PrStatusMsg::Tick)));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).

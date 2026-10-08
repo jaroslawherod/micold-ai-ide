@@ -8608,14 +8608,14 @@ mod pr_status {
         // The task is the 30-second bound; it is dropped, not waited for.
         let _ = shell::daemon_sync::on_worktree_refresh_requested(&mut rig.app);
         assert!(rig.app.core.worktree.refreshing, "the control is busy");
-        let refresh = sent(rig)
-            .into_iter()
-            .find_map(|msg| match msg {
-                ClientMsg::WorktreeRefresh { req, .. } => Some(req),
-                _ => None,
-            })
-            .expect("the press asks the daemon to refresh");
-        // Notices from before the press are not what is asserted on afterwards.
+        let _ = sent(rig);
+        let refresh = *rig
+            .app
+            .pending_ops
+            .iter()
+            .find(|(_, op)| matches!(op, PendingOp::WorktreeRefresh))
+            .expect("the press asks the daemon to refresh")
+            .0;
         refresh
     }
 
@@ -8722,7 +8722,7 @@ mod pr_status {
     #[test]
     fn pr_status_tick_starts_a_reading() {
         let mut rig = holding();
-        let _ = update_inner(&mut rig.app, Message::PrStatusTick);
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
         assert_eq!(remote_lists(&mut rig).len(), 1);
         assert!(matches!(
             rig.app.core.pr_status.phase,
@@ -8735,7 +8735,7 @@ mod pr_status {
         let mut rig = holding();
         let _ = shell::pr_status::enabled_changed(&mut rig.app, false);
         let _ = sent(&mut rig);
-        let _ = update_inner(&mut rig.app, Message::PrStatusTick);
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
         assert!(sent(&mut rig).is_empty());
         assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
     }

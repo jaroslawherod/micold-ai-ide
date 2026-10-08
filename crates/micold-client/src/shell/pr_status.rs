@@ -9,8 +9,8 @@
 //!
 //! [`start`] is the only path to the pull request source, and it runs only when the reducer
 //! answers `Effect::Read`: the first listing after the window came to hold its project (S1), the
-//! switch turning on (S2), the interval (S3) or a list refresh ending (S4). `tests/pr_status_is_read_only_on_named_events.rs` counts the
-//! callers. A repository without a GitHub remote, and a machine without `gh`, end the reading
+//! switch turning on (S2), the interval (S3) or a list refresh ending (S4).
+//! `tests/pr_status_is_read_only_on_named_events.rs` counts the callers. A repository without a GitHub remote, and a machine without `gh`, end the reading
 //! before anything is sent (FR-026).
 //!
 //! # Why no failure is reported
@@ -60,6 +60,11 @@ fn now() -> u64 {
 /// Apply a pull request status message, and start the reading when the reducer asks for one.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let msg = match msg {
+        // S3: the interval's tick, stamped with the time here because the reducer has no clock.
+        Msg::Tick => Msg::Trigger {
+            cause: Cause::Interval,
+            now: now(),
+        },
         // The 10-second bound on the remotes ran out. Still unanswered: the reading ends as a
         // passing failure. Answered meanwhile: the entry is gone and there is nothing to do.
         Msg::RemotesTimedOut { seq, req } => {
@@ -131,18 +136,6 @@ pub fn open_requested(app: &App, dir: &str) -> Task<Message> {
         Some(address) => crate::shell::links::perform(app, OpenRequest::Url(address)),
         None => Task::none(),
     }
-}
-
-/// The interval elapsed (S3, FR-018): read again, unless a reading is under way, the switch is off,
-/// the project is not held or GitHub's request limit holds readings back.
-pub fn tick(app: &mut App) -> Task<Message> {
-    update(
-        app,
-        Msg::Trigger {
-            cause: Cause::Interval,
-            now: now(),
-        },
-    )
 }
 
 /// A list refresh ended (S4, FR-018a): read the branches the updated listing shows. The control's
