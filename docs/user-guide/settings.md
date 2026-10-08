@@ -186,7 +186,8 @@ neither notify you nor mark the session unread.
   window from the moment you save, and every window's Settings shows the same value.
 - **A save changes only what you changed.** Saving Settings changes only the settings you changed
   on the page. A setting changed in another window while this page was open keeps that window's
-  value, for these switches and every other setting. Reopen Settings to see it.
+  value, for these switches and every other setting. An open Settings page shows that change in
+  every field you have not edited; a field you edited keeps your edit.
 - **Nothing to restart.** A change to the master switch, a kind switch or the threshold applies to
   the next event, also for sessions that are already running.
 - **Nothing after the fact.** When you turn a switch on again, the next event of that kind while you

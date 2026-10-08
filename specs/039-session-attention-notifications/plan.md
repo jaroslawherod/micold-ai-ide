@@ -134,6 +134,7 @@ Unchanged. The design added no storage outside the two existing files, no OS bra
 | FR-025 | Catalog file and local connection only | R1 |
 | FR-026 | `Settings::desktop_notifications`, default `true` | R8; W4.1 |
 | FR-026a | The draft keeps the settings it was seeded with; a save sends and writes only the fields that differ from them (BUG-570) | W4.1 |
+| FR-026b | `SettingsChanged` refreshes an open draft's untouched fields against its baseline, which then becomes the settings in force (BUG-475) | W4.1 |
 | FR-027 | The grant is refused while off, and events while off are recorded as granted | R8; W4.2 |
 | FR-028 | One field, no per-CLI field | R8 |
 | FR-029 | Three backends behind one trait | R4; contract Backends |
@@ -286,8 +287,14 @@ validated settings (`ValidSettings::into_settings`) with that baseline field by 
 - **The window's own copy** (`app.scrollback_lines`, `app.env_include_*`, `app.core.session.*`,
   the theme): set only for the fields that differ. The service's `SettingsChanged` echo stays what
   applies a service-owned value everywhere (FR-011 of 010).
-- An open page is not refreshed by another window's save: what it shows for a field the user did
-  not touch can be out of date until it is opened again, but a save no longer writes it.
+- An open page is refreshed by another window's save (BUG-475, FR-026b): on `SettingsChanged`,
+  `SettingsDraft::refresh_untouched` sets each field that still equals the page as opened (the
+  draft built from its baseline) to the value now in force, seeded as opening seeds it (the
+  service's values from the window, the rest from the store), and makes those settings the new
+  baseline. A field the user edited keeps the edit, and a save still sends only that field.
 
 **Bugfix**: 2026-10-06 — BUG-570. Section and the FR-026a coverage row added; nothing else
 changed. See `bugs/BUG-570.md`.
+
+**Bugfix**: 2026-10-08 — BUG-475. The open-page bullet of this section and the FR-026b coverage
+row; nothing else changed. See `bugs/BUG-475.md`.
