@@ -289,6 +289,7 @@ register! {
             crate::features::help::HelpMenu,
             crate::features::sidebar::SidebarFilterPanel,
             crate::features::worktree::WorktreeContextMenu,
+            crate::features::runs::GroupContextMenu,
     },
     crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
     crate::features::project::ProjectSwitcher {

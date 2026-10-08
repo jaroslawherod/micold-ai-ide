@@ -27,6 +27,7 @@
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::runs::Msg as RunsMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -43,26 +44,48 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // project row menu.
     (
         "help_menu",
-        &["project_switcher", "sidebar_filter", "project_menu"],
+        &[
+            "project_switcher",
+            "sidebar_filter",
+            "project_menu",
+            "run_group_menu",
+        ],
     ),
     (
         "project_switcher",
-        &["help_menu", "sidebar_filter", "project_menu"],
+        &[
+            "help_menu",
+            "sidebar_filter",
+            "project_menu",
+            "run_group_menu",
+        ],
     ),
     (
         "sidebar_filter",
-        &["help_menu", "project_switcher", "project_menu"],
+        &[
+            "help_menu",
+            "project_switcher",
+            "project_menu",
+            "run_group_menu",
+        ],
     ),
     // The project row menu closes two of the three panels and the other context menu. **Not the
     // switcher**: it is opened by right-clicking a row inside the open switcher, and the row list
     // has to stay visible behind it.
     (
         "project_menu",
-        &["help_menu", "sidebar_filter", "worktree_menu"],
+        &[
+            "help_menu",
+            "sidebar_filter",
+            "worktree_menu",
+            "run_group_menu",
+        ],
     ),
     // The two context menus replace each other. A panel popover open elsewhere in the window is
     // unaffected by a right-click in the sidebar.
-    ("worktree_menu", &["project_menu"]),
+    ("worktree_menu", &["project_menu", "run_group_menu"]),
+    // Feature 483's run group row menu is a third row menu and replaces the other two.
+    ("run_group_menu", &["project_menu", "worktree_menu"]),
     // None of these has ever closed anything, and this is the first test to say so.
     ("session_menu", &[]),
     ("terminal_context_menu", &[]),
@@ -85,6 +108,10 @@ fn opener(id: &str) -> Message {
         "sidebar_filter" => Message::Sidebar(SidebarMsg::FilterMenuToggled),
         "project_menu" => Message::Project(ProjectMsg::MenuToggled(PathBuf::from("/a"), (10, 10))),
         "worktree_menu" => Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (20, 20))),
+        "run_group_menu" => Message::Runs(RunsMsg::MenuToggled(
+            micold_core::runs::GroupId(uuid::Uuid::from_u128(1)),
+            (25, 25),
+        )),
         "session_menu" => Message::Session(SessionMsg::MenuToggled(SessionId::new(), (30, 30))),
         "terminal_context_menu" => Message::Session(SessionMsg::TerminalContextMenuOpened {
             x: 10,
@@ -164,7 +191,8 @@ fn every_popover_is_in_the_table() {
     // Twelve with `attach_worktrees`, the dialog that attaches provider worktrees (feature 582).
     // Thirteen with `confirm_discard_pending`, the Changes view's discard question (feature 482).
     // Fourteen with `run_in_parallel`, the dialog that starts a group of runs (feature 483).
-    const DIALOGS: usize = 14;
+    // Fifteen with `confirm_dismiss_run_group`, the question Dismiss group asks (feature 483).
+    const DIALOGS: usize = 15;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),
