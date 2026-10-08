@@ -92,6 +92,7 @@ ticked by `speckit-implement`.
 | A47 | After the setting is turned on the next event is granted, and events made while it was off are never granted | US4-5, FR-027 | example | DONE | T104 | T121 |
 | A48 | The settings hold one notification field and none per AI CLI, and the grant rule is the same for a session of each of the three | US4-6, FR-028 | example | DONE | T101, T104 | T121 |
 | A49 | A page opened before another window turned both switches off, saved after changing another setting, sends `None` for both switches, leaves them off in the store and in the window, and changes the other setting (BUG-570) | US4-7, FR-026a | example | DONE | T127 | T129 |
+| A50 | An open Settings page shows another window's save in every field its user has not edited, and keeps the field they edited (BUG-475) | US4-8, FR-026b | example | DONE | T137 | T138 |
 
 ## Inner loop: unit behaviors
 

@@ -124,6 +124,7 @@ A developer who shares their screen, or who finds the notifications distracting,
 5. **Given** desktop notifications are off, **When** the user turns them on, **Then** the next session not in view that changes to awaiting input raises one desktop notification; sessions that changed while it was off raise none after the fact.
 6. **Given** sessions of Claude Code, GitHub Copilot and Pi Coding Agent, **When** the user looks at Settings, **Then** there is one **Desktop notifications** switch and no switch per AI CLI; with it on, a session of any of the three that changes to awaiting input while not in view raises a notification, and with it off none does.
 7. **Given** two windows show Settings and the user turns desktop notifications off in one and saves, **When** they change another setting in the other window and save there without reopening the page, **Then** desktop notifications stay off, and the other setting is changed (FR-026a). *(Added 2026-10-06 — BUG-570.)*
+8. **Given** two windows show Settings and the user has edited one field in the first, **When** the second window saves a change to other fields, **Then** the first window's page shows the second window's values in every field its user has not edited, and keeps the edited field as the user left it (FR-026b). *(Added 2026-10-08 — BUG-475.)*
 
 ---
 
@@ -152,7 +153,7 @@ A developer who shares their screen, or who finds the notifications distracting,
 - **Forged or out-of-date click reports** (Linux): another program on the user's desktop session can send what looks like the service's report of a click, and a restarted notification service numbers its notifications from the start again. Neither opens a session (FR-015b). *(Added 2026-10-06 — BUG-566.)*
 - **Stale notifications**: a notification for a session the user has since opened is not withdrawn by the application. Clicking it opens the session again, which changes nothing.
 - **Several windows**: one change raises one desktop notification, not one per window (FR-006a). The unread state of a session is the same in every window.
-- **Settings saved in two windows**: a save changes only the settings the user changed on that window's page since it was opened. A setting another window saved in the meantime keeps that window's value, whatever the page that was opened earlier still shows (FR-026a). *(Added 2026-10-06 — BUG-570.)*
+- **Settings saved in two windows**: a save changes only the settings the user changed on that window's page since it was opened. A setting another window saved in the meantime keeps that window's value, whatever the page that was opened earlier still shows (FR-026a). *(Added 2026-10-06 — BUG-570.)* A page that is open when another window saves shows that window's values in every field its user has not edited (FR-026b). *(Added 2026-10-08 — BUG-475.)*
 - **Screen sharing and lock screens**: the notification's text is limited to the three names (FR-004). A session's name comes from its AI CLI's title for the conversation, so it may hint at the work; the Settings switch turns notifications off.
 - **Settings file unreadable**: the application runs on default settings as it does today, so desktop notifications are on.
 - **Cross-platform** (Principle VI): the issue asks for Linux and macOS; the constitution requires parity, so Windows behaves the same (FR-029). Where an operating system asks the user to allow notifications from the application, that prompt is the system's own.
@@ -203,6 +204,7 @@ A developer who shares their screen, or who finds the notifications distracting,
 
 - **FR-026**: Settings MUST offer one **Desktop notifications** switch, on by default, stored with the application's other settings and kept across restarts.
 - **FR-026a**: Saving Settings MUST change only the settings the user changed on that page since it was opened, in the stored settings and in the session service alike. Every other setting MUST keep the value it has when the save happens, including one another window changed while this page was open. This holds for every setting on the page, not only **Desktop notifications**. *(Added 2026-10-06 — BUG-570.)*
+- **FR-026b**: When another window saves Settings while this window's Settings page is open, each field on the page that the user has not edited since the page showed its current values MUST show the value now in force; a field the user edited MUST keep the user's edit. *(Added 2026-10-08 — BUG-475.)*
 - **FR-027**: While the switch is off, the application MUST NOT raise any desktop notification this feature defines. Turning it off or on MUST take effect for the next change to awaiting input, for sessions already running, without a restart. Changes that happened while it was off MUST NOT be notified afterwards.
 - **FR-028**: The **Desktop notifications** switch MUST apply alike to sessions of every AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent). The application MUST NOT offer a separate notification switch per AI CLI; that choice is out of scope.
 
@@ -274,3 +276,7 @@ the attention state is retried) changes no requirement; see `bugs/BUG-567.md`.
 **Bugfix**: 2026-10-06 — BUG-570 (GitHub #570). FR-026a, US4 scenario 7 and the edge case
 *Settings saved in two windows* added: a Settings save from a page opened before another window's
 save wrote that page's old values over the other window's change. See `bugs/BUG-570.md`.
+
+**Bugfix**: 2026-10-08 — BUG-475 (GitHub #475). FR-026b and US4 scenario 8 added, and the edge case
+*Settings saved in two windows* extended: an open page kept showing the values it opened with after
+another window saved. See `bugs/BUG-475.md`.

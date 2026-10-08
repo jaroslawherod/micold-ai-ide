@@ -454,6 +454,35 @@ pass.
 and T110 did what they say; T105 said a save sends `Some(value)` for every field, which is what
 FR-026a now forbids for a field the user did not change. See `bugs/BUG-570.md`.
 
+## Phase 15: Bugfix BUG-475 — an open Settings page kept stale values after another window saved (GitHub #475)
+
+**Goal**: Another window's save shows on an open Settings page in every field its user has not
+edited; an edited field keeps the edit (FR-026b, US4 scenario 8).
+
+### Tests for BUG-475 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T137 [BUG-475] [A50] *(test)* `crates/micold-client/src/main_tests.rs`. Red on `origin/main`
+      (`bugs/BUG-475.md#reproduction`): a window opens Settings, edits the scrollback, then receives
+      `SettingsChanged` with notifications off, a new script path and another scrollback. The draft
+      shows notifications off and the new path, and keeps the edited scrollback.
+
+### Implementation for BUG-475
+
+- [x] T138 [BUG-475] [A50] `crates/micold-client/src/features/settings.rs`
+      (`SettingsDraft::refresh_untouched`) and `crates/micold-client/src/shell/daemon_sync.rs`
+      (`on_settings_changed` calls `refresh_open_settings`), as `plan.md` describes. No wire change.
+- [x] T139 [BUG-475] `docs/user-guide/settings.md`, *A save changes only what you changed*: an open
+      page shows another window's save in the fields you have not edited.
+
+**Order**: T137, then T138, then T139. Then the gate.
+
+**Verify**: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide settings` passes
+A50 and A49.
+
+**Bugfix**: 2026-10-08 — BUG-475. **Requirements added**: FR-026b and US4 scenario 8 — see
+`spec.md`. **No task reopened**: T129 left an open page unrefreshed on purpose and said so in
+`plan.md`. See `bugs/BUG-475.md`.
+
 ---
 
 ## Dependencies & Execution Order
