@@ -44,6 +44,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::NotificationRaised(_)
         | Outcome::WorktreesReplaced(_)
         | Outcome::ChangesRequested(_)
+        | Outcome::ChangesClosedForCompare
         | Outcome::RunInParallelRequested
         | Outcome::WorktreeCreated(_)
         | Outcome::LocationOpened(_)

@@ -807,10 +807,9 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             crate::features::surface_opened(state.runs.menu.is_some(), GroupContextMenu::ID)
         }
         Msg::CompareOpened { .. } => {
-            // Compare takes the Changes view's place; the root closes the Changes view
-            // (`State::update`), since that is another feature's state.
+            // Compare takes the Changes view's place; the root closes that view (C1).
             apply(&mut state.runs, msg);
-            Vec::new()
+            vec![Outcome::ChangesClosedForCompare]
         }
         Msg::DiffOpened { run } => open_diff(&state.runs, run),
         Msg::DismissAsked { .. } => {
