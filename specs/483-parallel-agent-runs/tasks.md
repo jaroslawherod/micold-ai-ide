@@ -240,12 +240,13 @@ close unit does it.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
+T068–T070 (Polish) change no code and are left to the close unit (milestones rule 4).
 
 ### M1 — Start N prompted runs from one dialog, shown as a group 🎯 MVP
 
 - **Tasks**: T001–T027
 - **Deliverable**: project menu → **Run in parallel** creates N worktrees on `feat/<name>-1..N` from the base branch, each with a session of its provider that received the prompt once; the runs appear under one collapsible group row with run and failed counts, and a failing run fails alone with its reason shown on its row
-- **Satisfies**: US1 acceptance scenarios 1–5, US2 acceptance scenarios 1–2; FR-001–FR-007, FR-008 (persisted and pushed to every window), FR-021, FR-022 (dialog and group-row parts); SC-002; protocol v36
+- **Satisfies**: US1 acceptance scenarios 1–5, US2 acceptance scenarios 1–2; FR-001–FR-007, FR-008 (persisted and pushed to every window), FR-021, FR-022 (dialog and group-row parts); SC-001, SC-002; protocol v36
 - **Verify**: `cargo test -p micold-core --all-targets runs`, `cargo test -p micold-core --test protocol_roundtrip --test schema_hash`, `cargo test -p micold-daemon --test run_group_create --test run_group_persist`, `cargo test -p micold-client --test features_runs --test features_sidebar`; quickstart B1–B6
 - **Depends on**: —
 - **Tier**: full
