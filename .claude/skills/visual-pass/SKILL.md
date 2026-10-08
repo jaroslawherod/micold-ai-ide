@@ -1,6 +1,6 @@
 ---
 name: visual-pass
-description: Run a spec's manual visual pass (quickstart Part B) against the real GUI without a human — launch the component showcase or the client on a private Xvfb display (or, with no Xvfb, a private headless sway: see "Wayland"), drive it with xdotool (or a virtual pointer), screenshot with import (or grim), and look at the result. Use whenever a task says "needs eyes at a display", "record the pass", "run quickstart §B", or when a change alters how something *looks* and the geometry gates cannot see it (colour, weight, elevation, glyph collisions, state layers, floated labels, active indicators).
+description: Run a spec's manual visual pass (quickstart Part B) against the real GUI without a human — launch the component showcase or the client on a private Xvfb display (or, with no Xvfb, a private headless sway, see Wayland below), drive it with xdotool (or a virtual pointer), screenshot with import (or grim), and look at the result. Use whenever a task says "needs eyes at a display", "record the pass", "run quickstart §B", or when a change alters how something *looks* and the geometry gates cannot see it (colour, weight, elevation, glyph collisions, state layers, floated labels, active indicators).
 context: fork
 model: sonnet
 background: false
@@ -288,17 +288,29 @@ Everything else (data home, screenshots) can live in the scratchpad as usual.
 
 ## Wayland: when there is no Xvfb
 
-Verified once, 2026-10-08, sway 1.11, headless + pixman + lavapipe (the #430 pass, checks 1-6).
+Verified once, 2026-10-08, sway 1.11, headless + pixman + lavapipe (the #430 pass, checks 1-6), with
+a first-draft pointer client. The committed `vptr.py` was then rewritten and checked live only for
+attach (`get_seats` capabilities 0 to 1), `abs`, `click`, bad-command handling and `quit`; it has not
+run a full pass.
 Use it when Xvfb or xdotool is absent, or the user prefers it. Steps 1, 2, 7 and 8 are unchanged;
 this replaces 3, 4, 5, 6 and 9.
 
 **Hard rules.** Never ydotool/uinput: it moves the user's real pointer. Never run grim, swaymsg,
 wtype or `vptr.py` against the user's own `WAYLAND_DISPLAY` or `SWAYSOCK`: set both explicitly to
-the private ones. `vptr.py` exits non-zero unless its socket is under `/tmp/vp*`.
+the private ones. `vptr.py` exits non-zero unless its socket is in a `/tmp/vp<name><N>/` directory you own.
+Every command below carries the private env; a bare `swaymsg` or `grim` talks to the user's sway.
+Shell state does not persist: repeat `vp_n`/`vp_run` and these three lines in every call.
+
+```bash
+vp_n=77; vp_run=/tmp/vpw$vp_n                 # the number step 3 claimed
+sock=$vp_run/wayland-1; SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock)   # after sway is up
+PV="env -u DISPLAY SWAYSOCK=$SWAYSOCK WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run"
+```
 
 **3. Private sway.** Claim `/tmp/vpwN` as in step 3 (`mkdir` is the lock). Config:
 `output HEADLESS-1 resolution 1600x1200`. Start with `WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1
-WLR_RENDERER=pixman XDG_RUNTIME_DIR=/tmp/vpwN setsid nohup sway -c <config>`. "Could not find config
+WLR_RENDERER=pixman XDG_RUNTIME_DIR=/tmp/vpwN setsid nohup sway -c <config>`, behind
+`env -u SWAYSOCK -u DISPLAY -u WAYLAND_DISPLAY` so it cannot nest in the user's session. "Could not find config
 for output HEADLESS-1" is harmless. Sway's pid is the number in the socket name
 `sway-ipc.UID.PID.sock`; `$!` is setsid's, not sway's. Record that pid.
 
@@ -307,15 +319,16 @@ for output HEADLESS-1" is harmless. Sway's pid is the number in the socket name
 `wl_seat` pointer capability appear and vanish within microseconds. Use a persistent client:
 
 ```bash
-sock=$vp_run/wayland-1   # sway's socket: ls $vp_run
-mkfifo "$vp_run/ptr"; WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run \
-  setsid nohup python3 .claude/skills/visual-pass/vptr.py "$vp_run/ptr" > ptr.log 2>&1 &
-exec 3<>"$vp_run/ptr"   # hold it open; later: echo "abs 800 600" >&3
+mkfifo "$vp_run/ptr"
+$PV setsid nohup python3 .claude/skills/visual-pass/vptr.py "$vp_run/ptr" > ptr.log 2>&1 &
+timeout 5 sh -c 'echo "abs 800 600" > "$1"' _ "$vp_run/ptr"   # one write per command, any call
 ```
 
+Each write reopens the FIFO, which `vptr.py` expects. Use `timeout 5`: a write blocks forever if
+`vptr.py` has died (check `ptr.log`). Malformed or unknown lines are warned about in `ptr.log`.
+
 Commands: `abs X Y`, `rel`, `click`, `down`, `up`, `scroll N`, `quit` (absolute motion uses
-1600x1200 extents, so no corner trick). Start it **before** the app, then `swaymsg -t get_seats`
-shows capabilities 1; an app already running must be restarted. That check only proves the pointer
+1600x1200 extents, so no corner trick). Start it **before** the app, then `$PV swaymsg -t get_seats` shows capabilities 1; an app already running must be restarted. That check only proves the pointer
 exists: confirm a hover or scroll took effect by a pixel diff (`magick compare -metric AE a.png b.png`).
 
 **4. Launch.** As step 4, but its own short runtime dir (`XDG_RUNTIME_DIR=/tmp/vpwN/app`, so
@@ -323,20 +336,20 @@ exists: confirm a hover or scroll took effect by a pixel diff (`magick compare -
 a private `XDG_DATA_HOME`, no `DISPLAY`, and `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`
 (Fedora's name; `lvp_icd.json` does not exist there).
 
-**5. Capture.** `grim -o HEADLESS-1 shot.png` (grim does not draw the cursor). Window content starts
+**5. Capture.** `$PV grim -o HEADLESS-1 shot.png` (grim does not draw the cursor). Window content starts
 near x=2, y=27 (27 px title bar); grim and sway coordinates are identical. Crop directly with
-`grim -g "X,Y WxH" crop.png` (a space, not a comma). Downscale with `magick`, not the deprecated `convert`.
+`$PV grim -g "X,Y WxH" crop.png` (a space, not a comma). Downscale with `magick`, not the deprecated `convert`.
 
 **6. Driving.** Scroll units are 1 px: use big values (`scroll -30000` for the top). Park the pointer
 at the right margin (x about 1590) so a scroll over the terminal pane is not captured. The page is
 long: find sections by catalogue order (Tooltip is just before Ripple and Motion). Edge-flip checks
-need a narrow window: `swaymsg 'floating enable, resize set width 520 px height 900 px, move position 0 0'`.
+need a narrow window: `$PV swaymsg 'floating enable, resize set width 520 px height 900 px, move position 0 0'`.
 At 520 px the delay triggers are clipped, so `floating disable` for delay checks. For the bottom
 edge, scroll so the trigger runs past the window bottom.
 
 **9. Clean up.** Sway's `/proc/<pid>/environ` is unreadable, so step 9's environ test cannot
 identify it: kill it by the pid recorded in step 3. Kill the app and daemon by the environ test
-(runtime dir `/tmp/vpwN/app`), send `quit` to the pointer client, then `rm -rf` the runtime dir.
+(runtime dir `/tmp/vpwN/app`), send `quit` to the pointer client (it removes its FIFO), then `rm -rf` the runtime dir.
 
 **Traps.** A Bash call containing `rm -rf $S/...png` is blocked by the safety check, and a denied
 call runs nothing, kills in the same call included: use literal paths or `cd "$S" && rm -f ...`.
