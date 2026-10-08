@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use micold_core::git::GitCli;
+use micold_core::git::{Git, GitCli};
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
@@ -642,6 +642,7 @@ async fn create_derived_worktree(
     let naming = request.naming().expect("a derived request has form inputs");
     let names = naming::derive(&naming).map_err(|e| OpError::invalid_input(e.to_string()))?;
     let checked = names.branch.clone();
+    let probe_repo = repo.clone();
     blocking(move || {
         GitCli::new()
             .check_branch_name(&repo, &checked)
@@ -652,10 +653,24 @@ async fn create_derived_worktree(
     match ops::branch_situation(state, &project.path, &names).await {
         Some(Ok(BranchSituation::Free)) => {}
         Some(Ok(situation)) => {
+            let probed = names.branch.clone();
+            let branch_taken = match situation {
+                BranchSituation::DirectoryTaken { .. } => {
+                    blocking(move || {
+                        GitCli::new()
+                            .branch_exists(&probe_repo, &probed)
+                            .map_err(|e| {
+                                OpError::service_error(format!("could not check the branch: {e}"))
+                            })
+                    })
+                    .await?
+                }
+                _ => true,
+            };
             return Err(OpError::new(
                 ErrorCategory::Conflict,
-                describe_situation(&names.branch, &situation),
-            ))
+                describe_derived_collision(&names.branch, &situation, branch_taken),
+            ));
         }
         Some(Err(e)) => {
             return Err(OpError::service_error(format!(
@@ -1403,6 +1418,34 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
         BranchSituation::Blocked { branch, reason } => reason.explain(branch),
         BranchSituation::DirectoryTaken { dir } => explain_directory_taken(dir).to_string(),
     }
+}
+
+/// A derived request found its branch taken (FR-011): the message names the branch and says to
+/// retry with `branch` and `mode` `existing_local` or `track_remote`. A taken directory with a
+/// free branch keeps the dialog's own text; the branch wins when both are taken.
+fn describe_derived_collision(
+    branch: &str,
+    situation: &BranchSituation,
+    branch_taken: bool,
+) -> String {
+    let fact = match situation {
+        BranchSituation::DirectoryTaken { dir } if !branch_taken => {
+            return explain_directory_taken(dir).to_string()
+        }
+        BranchSituation::RemoteOnly { remotes, .. } => {
+            format!(
+                "Branch '{branch}' exists only on the remote(s) {}.",
+                remotes.join(", ")
+            )
+        }
+        BranchSituation::Blocked { reason, .. } => reason.explain(branch),
+        _ => format!("Branch '{branch}' already exists."),
+    };
+    format!(
+        "{fact} create_worktree will not reuse or overwrite it. To use it, retry with branch \
+         \"{branch}\" and mode existing_local (a local branch) or track_remote (a remote one); \
+         otherwise choose a different name"
+    )
 }
 
 /// A create the shared operation refused or could not complete.
