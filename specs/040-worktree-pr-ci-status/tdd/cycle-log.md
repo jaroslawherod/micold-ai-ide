@@ -537,3 +537,6 @@ existed and failed before the implementation.
   `features::sidebar::pull_request_address_to_open` (the `https://github.com/` guard, pure so no `.url` read in the two scanned files),
   `links::perform` made `pub(crate)`, the user guide
 - commit: the commit that adds this entry
+- review B F2 retired: with the `starts_with` guard of `pull_request_address_to_open` replaced by `starts_with("")`,
+  `pr_status_open_opens_nothing_for_an_address_that_is_not_github` failed (5 passed, 1 failed); restored. The read-only
+  scan test of T044 was added after Review A and B found it missing; it passed on first run (a scan over existing code).
