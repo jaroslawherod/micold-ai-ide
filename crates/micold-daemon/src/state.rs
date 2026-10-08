@@ -448,8 +448,8 @@ fn with_launch_env(mut env: Vec<(String, String)>, provider: AiCli) -> Vec<(Stri
 /// The `PATH` in a session's resolved variables, or this process's own when they carry none
 /// (environment-include off, or a script that left `PATH` alone). Matched without regard to case,
 /// because Windows spells it `Path`.
-fn session_path(vars: Vec<(String, String)>) -> std::ffi::OsString {
-    vars.into_iter()
+fn session_path(vars: &[(String, String)]) -> std::ffi::OsString {
+    vars.iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
         .map(|(_, value)| std::ffi::OsString::from(value))
         .unwrap_or_else(micold_core::provider::process_path)
@@ -1039,7 +1039,7 @@ impl DaemonState {
     /// never call it under the state lock. Matched without regard
     /// to case, because Windows spells it `Path`.
     fn spawn_path_for(&self, cwd: &Path) -> std::ffi::OsString {
-        session_path(self.env_include_vars_for(cwd))
+        session_path(&self.env_include_vars_for(cwd))
     }
 
     /// Whether `cli`, started in `cwd`, would first ask the user to trust that folder (feature
@@ -1077,7 +1077,7 @@ impl DaemonState {
     pub fn availability_in(&self, cwd: &Path) -> (Vec<AiCli>, SpawnEnv) {
         let resolved = self.spawn_env_for(cwd);
         (
-            micold_core::provider::available_in(&session_path(resolved.vars)),
+            micold_core::provider::available_in(&session_path(&resolved.vars)),
             resolved.env,
         )
     }
@@ -3403,11 +3403,10 @@ impl DaemonState {
         // One resolution serves the check and the spawn (#441): looked up twice, an invalidation
         // landing in between (a Settings save, a worktree delete) gave the spawn another
         // environment than the one the CLI was found in, and re-ran the script.
-        let mut ai_cli_env = None;
-        if plan.mode == TerminalMode::AiCli {
+        let ai_cli_env = if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
             let resolved = self.spawn_env_for(&plan.cwd);
-            if !provider.is_available(&session_path(resolved.vars.clone())) {
+            if !provider.is_available(&session_path(&resolved.vars)) {
                 // Is there a folder to have looked in (037 M2 review F2)? The script cannot be
                 // sourced in a directory that does not exist, and `env_include::resolve` reports
                 // that attempt as timed out. Without this a session whose folder was deleted was
@@ -3477,8 +3476,10 @@ impl DaemonState {
                     return Err(io::Error::new(io::ErrorKind::NotFound, reason));
                 }
             }
-            ai_cli_env = Some(with_launch_env(resolved.vars, plan.provider));
-        }
+            Some(with_launch_env(resolved.vars, plan.provider))
+        } else {
+            None
+        };
 
         let size = self.desired_size(id);
         let cwd = plan.cwd.clone();
@@ -3492,9 +3493,8 @@ impl DaemonState {
                     session_id: id.0,
                     provider: plan.provider,
                     mode: launch,
-                    // Always set for an AI-CLI start by the gate above; the lookup is a fallback.
                     env: ai_cli_env
-                        .unwrap_or_else(|| self.ai_cli_env_for(&plan.cwd, plan.provider)),
+                        .expect("the launch gate resolves every AI-CLI start's environment"),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand

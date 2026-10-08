@@ -162,6 +162,16 @@ fn runs(log: &Path) -> usize {
         .unwrap_or(0)
 }
 
+/// Opens the script's gate when dropped, so a test that fails before it releases the script does
+/// not leave the script, and the start blocked on it, running past the test.
+struct OpenOnDrop<'a>(&'a Path);
+
+impl Drop for OpenOnDrop<'_> {
+    fn drop(&mut self) {
+        let _ = std::fs::write(self.0, "");
+    }
+}
+
 fn wait_for_runs(log: &Path, n: usize) {
     let deadline = Instant::now() + PATIENCE;
     while runs(log) < n {
@@ -184,6 +194,7 @@ fn an_ai_cli_start_spawns_with_the_environment_its_path_check_saw() {
     std::fs::write(&gated.marker, "new").unwrap();
     let state = service(project.path(), store.path(), &gated.script);
 
+    let _release = OpenOnDrop(&gated.gate);
     let starter = Arc::clone(&state);
     let start = std::thread::spawn(move || starter.start_session(session_id(), LaunchMode::Fresh));
     wait_for_runs(&gated.runs, 1); // the start's resolve is in progress and has read "new"
