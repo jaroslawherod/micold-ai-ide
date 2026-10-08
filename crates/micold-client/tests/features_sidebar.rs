@@ -1377,7 +1377,7 @@ mod parallel_runs {
     }
 
     #[test]
-    fn the_project_menu_offers_run_in_parallel_right_after_new_worktree() {
+    fn the_header_offers_run_in_parallel_right_after_new_worktree() {
         assert_eq!(
             HEADER_ACTIONS,
             [HeaderAction::NewWorktree, HeaderAction::RunInParallel]
@@ -1461,7 +1461,7 @@ mod parallel_runs {
             run(3, AiCli::ClaudeCode, RunStatus::Prompted),
         ]);
         let entries = vec![default_entry(), node("feat-login-1"), node("feat-login-3")];
-        let collapsed = arrange_groups(entries.clone(), &[g.clone()], |_| false);
+        let collapsed = arrange_groups(entries.clone(), std::slice::from_ref(&g), |_| false);
         let expanded = arrange_groups(entries, &[g], |_| true);
         let c = group_of(&collapsed);
         assert!(!c.expanded);
