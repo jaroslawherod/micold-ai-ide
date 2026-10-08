@@ -675,7 +675,6 @@ pub(crate) fn on_settings_changed(
     settings: micold_core::protocol::messages::DaemonSettings,
 ) -> Option<crate::shell::env_include::ScriptPathCheckJob> {
     adopt_daemon_settings(app, settings);
-    refresh_open_settings(app);
     // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
     // holds, so a change to it re-asks every answer. Compared against what the answers were
     // asked under, not against `app`'s fields — this window's own save overwrote those
@@ -698,12 +697,10 @@ fn refresh_open_settings(app: &mut App) {
     if app.core.settings.settings_draft.is_none() {
         return;
     }
-    let stored = app
-        .caps
-        .settings()
-        .map(|store| store.load().settings)
-        .unwrap_or_default();
-    let now = crate::shell::persist::window_settings(app, stored);
+    let mut now = crate::shell::persist::settings_in_force(app);
+    // Called on the service's own push, so its switch is the value in force even before this
+    // window counts as connected.
+    now.pr_status_enabled = app.core.pr_status.enabled;
     if let Some(draft) = app.core.settings.settings_draft.as_mut() {
         draft.refresh_untouched(&now);
     }
@@ -792,6 +789,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 follow_up,
                 crate::shell::pr_status::enabled_changed(app, pr_status_enabled),
             ]);
+            // After the switch's value is in force, so the page is brought up to all of it
+            // (BUG-475, FR-026b).
+            refresh_open_settings(app);
         }
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
         DaemonMsg::ScrollbackResponse {
@@ -1413,6 +1413,8 @@ pub fn on_connected(
     // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it), so
     // this starts no reading; the `Attached` and listing that follow do (S1).
     let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
+    // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
+    refresh_open_settings(app);
     reconcile_catalog(&mut app.core, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on

@@ -470,7 +470,10 @@ edited; an edited field keeps the edit (FR-026b, US4 scenario 8).
 
 - [x] T138 [BUG-475] [A50] `crates/micold-client/src/features/settings.rs`
       (`SettingsDraft::refresh_untouched`) and `crates/micold-client/src/shell/daemon_sync.rs`
-      (`on_settings_changed` calls `refresh_open_settings`), as `plan.md` describes. No wire change.
+      (`refresh_open_settings`, after `SettingsChanged` and after a reconnect's `Welcome`, once the
+      pull request switch is in force), `crates/micold-client/src/shell/pr_status.rs`
+      (`enabled_changed` leaves a switch the user changed on the page), as `plan.md` describes. No
+      wire change.
 - [x] T139 [BUG-475] `docs/user-guide/settings.md`, *A save changes only what you changed*: an open
       page shows another window's save in the fields you have not edited.
 
