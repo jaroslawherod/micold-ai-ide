@@ -132,6 +132,38 @@ impl Fixture {
     }
 }
 
+/// FR-011: the refusal names the branch and says to retry with `branch` and `mode`
+/// `existing_local` or `track_remote`.
+fn assert_retry_hint(error: &Value, branch: &str) {
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap();
+    for needle in [
+        branch,
+        "existing_local",
+        "track_remote",
+        "retry with branch",
+    ] {
+        assert!(message.contains(needle), "missing {needle:?}: {message}");
+    }
+}
+
+/// A non-empty folder under the managed root, which the pre-flight reports as taken.
+fn occupy(f: &Fixture, dir: &str) {
+    let dir = f.repo().join(".claude").join("worktrees").join(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("keep"), "x").unwrap();
+}
+
+fn git_out(repo: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .expect("git runs");
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
 fn native(path: PathBuf) -> String {
     path.display().to_string()
 }
@@ -541,10 +573,7 @@ async fn a_derived_branch_that_already_exists_is_a_conflict() {
     for name in ["local one", "remote one", "held one"] {
         let error = f.err(sid(3), json!({"type": "fix", "name": name})).await;
         assert_eq!(error["category"], "conflict", "{name}: {error}");
-        assert!(
-            error["message"].as_str().unwrap().contains("fix/"),
-            "{name}: {error}"
-        );
+        assert_retry_hint(&error, &format!("fix/{}", name.replace(' ', "-")));
         f.assert_unchanged(&before).await;
     }
     let branches = std::process::Command::new("git")
@@ -590,4 +619,96 @@ async fn github_issue_is_refused_and_creates_nothing() {
     let error = f.err(sid(3), json!({"github_issue": 12})).await;
     assert_eq!(error["category"], "invalid_input", "{error}");
     f.assert_unchanged(&before).await;
+}
+
+/// SC-002, US2 s1-s3: each invalid input is refused with its reason and leaves nothing behind.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn each_invalid_input_is_refused_with_its_reason_and_leaves_nothing() {
+    let f = Fixture::new().await;
+    let before = f.snapshot().await;
+    let bad_type = f.err(sid(3), json!({"type": "feature", "name": "x"})).await;
+    assert_eq!(bad_type["category"], "invalid_input", "{bad_type}");
+    let message = bad_type["message"].as_str().unwrap();
+    assert!(
+        message.contains("feature") && message.contains("fix"),
+        "{message}"
+    );
+    let empty = f.err(sid(3), json!({"type": "fix", "name": "???"})).await;
+    assert_eq!(
+        empty["message"],
+        NamingError::EmptyNameAfterSlug.to_string()
+    );
+    let no_type = f.err(sid(3), json!({"name": "thing"})).await;
+    assert_eq!(no_type["message"], NamingError::NoType.to_string());
+    f.assert_unchanged(&before).await;
+    let branches = git_out(f.repo(), &["branch", "--list", "fix/*", "feature/*"]);
+    assert!(branches.trim().is_empty(), "no branch left: {branches}");
+}
+
+/// US2 s4, FR-011: the same inputs twice; the second names the branch and says how to reuse it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_same_inputs_twice_refuse_with_the_retry_hint() {
+    let f = Fixture::new().await;
+    let args = json!({"type": "fix", "ticket": "7", "name": "again"});
+    f.ok(sid(3), args.clone()).await;
+    let before = f.snapshot().await;
+    let second = f.err(sid(3), args).await;
+    assert_retry_hint(&second, "fix/7_again");
+    f.assert_unchanged(&before).await;
+}
+
+/// Plan Design 5: with only the directory taken the directory text wins, with the branch also
+/// taken the branch message wins.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn directory_taken_gives_the_directory_text_unless_the_branch_exists() {
+    let f = Fixture::new().await;
+    occupy(&f, "fix-only-dir");
+    let error = f
+        .err(sid(3), json!({"type": "fix", "name": "only dir"}))
+        .await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("fix-only-dir"), "{message}");
+    assert!(!message.contains("track_remote"), "{message}");
+
+    git(f.repo(), &["branch", "fix/both"]);
+    occupy(&f, "fix-both");
+    let error = f.err(sid(3), json!({"type": "fix", "name": "both"})).await;
+    assert_retry_hint(&error, "fix/both");
+}
+
+/// Two concurrent identical requests: one wins and no partial worktree is left.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_concurrent_identical_requests_leave_one_worktree() {
+    let f = Arc::new(Fixture::new().await);
+    let calls: Vec<_> = [10, 11]
+        .into_iter()
+        .map(|n| {
+            let f = Arc::clone(&f);
+            tokio::spawn(async move {
+                f.call(sid(n), json!({"type": "feat", "name": "race"}))
+                    .await
+            })
+        })
+        .collect();
+    let mut ok = 0;
+    let mut conflicts = 0;
+    for call in calls {
+        let result = call.await.unwrap();
+        if result["isError"] == json!(false) {
+            ok += 1;
+        } else if result["structuredContent"]["error"]["category"] == "conflict" {
+            conflicts += 1;
+        } else {
+            panic!("neither a success nor a conflict: {result}");
+        }
+    }
+    assert_eq!((ok, conflicts), (1, 1));
+    assert_eq!(f.on_disk(), ["b", "feat-race"]);
+    assert_eq!(
+        git_out(f.repo(), &["branch", "--list", "feat/race"])
+            .lines()
+            .count(),
+        1
+    );
 }

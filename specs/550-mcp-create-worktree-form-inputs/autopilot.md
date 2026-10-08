@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #550
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
-- **Phase**: milestone M1 (gate and reviews)
-- **Next step**: orchestrator merges M1 PR; then M2.
+- **Phase**: milestone M2 (gate and reviews)
+- **Next step**: M2 gate, reviews, PR; then M3.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #638 | Design (spec ships in it) | merged | 71d7195264cd757f40baf342ca3052ff7d541d8e |
+| #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | gate green, PR open |
-| M2 | T010-T012 | full | Refusals and collision hint | - | pending |
+| M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
+| M2 | T010-T012 | full | Refusals and collision hint | - | implemented (red 3 failing, then green 23/23), in gate and review |
 | M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
 
 ## Decisions
