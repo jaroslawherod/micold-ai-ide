@@ -304,6 +304,27 @@ impl RunGroup {
         Ok(())
     }
 
+    /// Mark the runs a restart found half done as failed "interrupted" (FR-019, research R10): a
+    /// `Creating` run becomes `Failed { Worktree }`, a `Starting` one `Failed { Session }`; every
+    /// other status is kept. Returns each run changed with the step it failed at, so the caller
+    /// can clean up after a `Creating` one.
+    pub fn interrupted_on_load(&mut self) -> Vec<(u8, RunStep)> {
+        let mut changed = Vec::new();
+        for run in &mut self.runs {
+            let step = match run.status {
+                RunStatus::Creating => RunStep::Worktree,
+                RunStatus::Starting => RunStep::Session,
+                _ => continue,
+            };
+            run.status = RunStatus::Failed {
+                step,
+                reason: "interrupted".into(),
+            };
+            changed.push((run.number, step));
+        }
+        changed
+    }
+
     /// How many runs failed.
     pub fn failed_count(&self) -> usize {
         self.runs
@@ -513,6 +534,58 @@ pub(crate) mod tests {
             serde_json::to_value(id).expect("serialises"),
             serde_json::to_value(session).expect("serialises"),
             "a group id is shaped as a session id"
+        );
+    }
+
+    #[test]
+    fn a_creating_run_that_a_restart_finds_is_failed_interrupted_at_its_worktree() {
+        let mut group = loaded(&[1], None);
+        assert_eq!(group.interrupted_on_load(), vec![(1, RunStep::Worktree)]);
+        assert_eq!(
+            group.runs[0].status,
+            RunStatus::Failed {
+                step: RunStep::Worktree,
+                reason: "interrupted".into()
+            }
+        );
+    }
+
+    #[test]
+    fn a_starting_run_that_a_restart_finds_is_failed_interrupted_at_its_session() {
+        let mut group = loaded(&[1], None);
+        group.runs[0].status = RunStatus::Starting;
+        assert_eq!(group.interrupted_on_load(), vec![(1, RunStep::Session)]);
+        assert_eq!(
+            group.runs[0].status,
+            RunStatus::Failed {
+                step: RunStep::Session,
+                reason: "interrupted".into()
+            }
+        );
+    }
+
+    #[test]
+    fn a_restart_leaves_every_other_status_alone_and_names_only_what_it_changed() {
+        let mut group = loaded(&[1, 2, 3, 4, 5], None);
+        let kept = [
+            RunStatus::Prompted,
+            RunStatus::PromptNotDelivered { reason: "x".into() },
+            RunStatus::Failed {
+                step: RunStep::Session,
+                reason: "boom".into(),
+            },
+            RunStatus::Picked,
+        ];
+        for (run, status) in group.runs.iter_mut().skip(1).zip(kept.clone()) {
+            run.status = status;
+        }
+        assert_eq!(group.interrupted_on_load(), vec![(1, RunStep::Worktree)]);
+        for (run, status) in group.runs.iter().skip(1).zip(kept) {
+            assert_eq!(run.status, status);
+        }
+        assert!(
+            group.interrupted_on_load().is_empty(),
+            "a second load changes nothing"
         );
     }
 }

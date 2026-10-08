@@ -17,7 +17,9 @@ use micold_core::runs::naming::derive_group;
 use micold_core::runs::store::RunsFile;
 use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus, RunStep, MAX_RUNS, MIN_RUNS};
 use micold_core::session::{AiCli, SessionId};
-use micold_core::worktree::{explain_directory_taken, CreateError, CreateMode};
+use micold_core::worktree::{
+    explain_directory_taken, remove_worktree, remove_worktree_dir, CreateError, CreateMode,
+};
 
 use crate::catalog::Catalog;
 use crate::ops;
@@ -32,14 +34,27 @@ pub struct Runs {
 
 impl Runs {
     /// `project`'s groups, read from its runs file on first use.
-    fn project(&mut self, catalog: &Catalog, project: &Path) -> &mut Vec<RunGroup> {
-        self.projects
-            .entry(project.to_path_buf())
-            .or_insert_with(|| catalog.load_runs(project).groups)
+    ///
+    /// The first read also settles what a restart found half done (FR-019, research R10), and
+    /// writes that before anything is pushed.
+    fn project(&mut self, catalog: &mut Catalog, project: &Path) -> &mut Vec<RunGroup> {
+        if !self.projects.contains_key(project) {
+            let mut groups = catalog.load_runs(project).groups;
+            if settle_interrupted(catalog, project, &mut groups) {
+                let file = RunsFile {
+                    groups: groups.clone(),
+                };
+                if let Err(err) = catalog.save_runs(project, &file) {
+                    tracing::warn!(project = %project.display(), %err, "interrupted runs not written");
+                }
+            }
+            self.projects.insert(project.to_path_buf(), groups);
+        }
+        self.projects.entry(project.to_path_buf()).or_default()
     }
 
     /// The `RunGroupsChanged` that carries `project`'s whole list now.
-    pub fn changed(&mut self, catalog: &Catalog, project: &Path) -> DaemonMsg {
+    pub fn changed(&mut self, catalog: &mut Catalog, project: &Path) -> DaemonMsg {
         DaemonMsg::RunGroupsChanged {
             project: project.to_path_buf(),
             groups: self.project(catalog, project).clone(),
@@ -49,7 +64,7 @@ impl Runs {
     /// Add `group` to `project`: written first, then held (W5). On a refusal nothing changed.
     pub fn add(
         &mut self,
-        catalog: &Catalog,
+        catalog: &mut Catalog,
         project: &Path,
         group: RunGroup,
     ) -> Result<(), Refusal> {
@@ -75,7 +90,7 @@ impl Runs {
     /// even when the file cannot be written; the next successful write catches the file up.
     pub fn set_run(
         &mut self,
-        catalog: &Catalog,
+        catalog: &mut Catalog,
         project: &Path,
         group: GroupId,
         number: u8,
@@ -106,10 +121,147 @@ impl Runs {
         Some(self.changed(catalog, project))
     }
 
+    /// Remove group `group` of `project` and nothing else (W4, FR-020): written first, then held.
+    /// Its worktrees, branches and sessions are not touched.
+    pub fn dismiss(
+        &mut self,
+        catalog: &mut Catalog,
+        project: &Path,
+        group: GroupId,
+    ) -> Result<(), Refusal> {
+        let groups = self.project(catalog, project);
+        if !groups.iter().any(|g| g.id == group) {
+            return Err(Refusal::new(ErrorKind::NotFound, "no such run group"));
+        }
+        let mut next = groups.clone();
+        next.retain(|g| g.id != group);
+        let file = RunsFile { groups: next };
+        catalog.save_runs(project, &file).map_err(|err| {
+            tracing::warn!(project = %project.display(), %group, %err, "run group not dismissed");
+            Refusal::new(
+                ErrorKind::IoFailed,
+                format!("the run group could not be dismissed: {err}"),
+            )
+        })?;
+        *groups = file.groups;
+        tracing::info!(project = %project.display(), %group, "run group dismissed");
+        Ok(())
+    }
+
+    /// Worktree `dir_name` of `project` was deleted: its run leaves its group, the others keep
+    /// their numbers, an emptied group is dropped and a winner stays set (W5, FR-008). The list to
+    /// push, or `None` when no run had that worktree.
+    pub fn forget_worktree(
+        &mut self,
+        catalog: &mut Catalog,
+        project: &Path,
+        dir_name: &str,
+    ) -> Option<DaemonMsg> {
+        let groups = self.project(catalog, project);
+        let at = groups
+            .iter()
+            .position(|g| g.runs.iter().any(|run| run.names.dir_name == dir_name))?;
+        groups[at].runs.retain(|run| run.names.dir_name != dir_name);
+        if groups[at].runs.is_empty() {
+            groups.remove(at);
+        }
+        let file = RunsFile {
+            groups: groups.clone(),
+        };
+        if let Err(err) = catalog.save_runs(project, &file) {
+            tracing::warn!(project = %project.display(), worktree = dir_name, %err, "deleted worktree's run not removed from its group on disk");
+        }
+        Some(self.changed(catalog, project))
+    }
+
     /// Forget `project`'s groups; the catalog removes its runs file (W5).
     pub fn forget_project(&mut self, project: &Path) {
         self.projects.remove(project);
     }
+}
+
+/// Mark the runs a restart found half done as interrupted, and clean up after a `Creating` one.
+/// `true` when anything changed.
+fn settle_interrupted(catalog: &mut Catalog, project: &Path, groups: &mut [RunGroup]) -> bool {
+    let mut changed = false;
+    for group in groups {
+        for (number, step) in group.interrupted_on_load() {
+            changed = true;
+            if step != RunStep::Worktree {
+                // A `Starting` run's worktree finished creating: kept.
+                continue;
+            }
+            let Some(run) = group.runs.iter_mut().find(|run| run.number == number) else {
+                continue;
+            };
+            if let Some(note) = clean_half_created(catalog, project, &run.names) {
+                run.status = RunStatus::Failed {
+                    step: RunStep::Worktree,
+                    reason: format!("interrupted: {note}"),
+                };
+            }
+        }
+    }
+    changed
+}
+
+/// Remove the folder and branch an interrupted create may have left (research R10): only an
+/// app-created worktree that hosts no session. `None` when nothing is left behind; otherwise what
+/// was left, for the run's reason.
+fn clean_half_created(
+    catalog: &mut Catalog,
+    project: &Path,
+    names: &micold_core::naming::DerivedNames,
+) -> Option<String> {
+    let dir = &names.dir_name;
+    let folder = project.join(".claude/worktrees").join(dir);
+    if !folder.exists() {
+        return None;
+    }
+    if !catalog
+        .workspace()
+        .user_created_worktrees(project)
+        .contains(dir)
+    {
+        return Some(format!(
+            "the folder {dir} was left because this app did not record creating it"
+        ));
+    }
+    // Any record counts, a closed session too: a worktree somebody worked in is not leftover.
+    let hosts_session = catalog
+        .workspace()
+        .sessions
+        .get(project)
+        .is_some_and(|list| list.iter().any(|s| s.location.is_worktree(dir)));
+    if hosts_session {
+        return Some(format!(
+            "the folder {dir} was left because a session runs in it"
+        ));
+    }
+    let git = GitCli::new();
+    let mut left = Vec::new();
+    match remove_worktree(&git, project, &folder, Some(&names.branch)) {
+        Ok(outcome) if outcome.branch_delete_failed => {
+            left.push(format!("the branch {} could not be removed", names.branch));
+        }
+        Ok(_) => {}
+        Err(err) => {
+            // Not a registered worktree (killed before git finished): remove what is there.
+            tracing::info!(project = %project.display(), worktree = %dir, %err, "interrupted run: removing the folder by hand");
+            let _ = git.worktree_prune(project);
+            if git.branch_delete(project, &names.branch).is_err()
+                && git.branch_tip(project, &names.branch).is_some()
+            {
+                left.push(format!("the branch {} could not be removed", names.branch));
+            }
+        }
+    }
+    if !remove_worktree_dir(&folder).is_empty() {
+        left.push(format!("part of the folder {dir} could not be removed"));
+    } else if let Err(err) = catalog.forget_worktree_provenance(project, dir) {
+        tracing::warn!(project = %project.display(), worktree = %dir, %err, "could not forget the removed worktree's provenance");
+    }
+    (!left.is_empty()).then(|| left.join("; "))
 }
 
 /// What a `RunGroupCreate` asks for (W1).

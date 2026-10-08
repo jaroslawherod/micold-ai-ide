@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: milestone M1
-- **Next step**: M1b: continue from Handover (state + tests first)
+- **Phase**: milestone M2
+- **Next step**: M2: continue from Handover (client T030/T036/T037, docs T038, visual pass T039)
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #643 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged | adfee3b1c820e9393c4c7824855cc1090efeeac0 |
 | #644 | M1a (core, protocol v36, daemon) | merged (rebase) | 8d574eb591164a3e7ea3d01866461409023c46a8 |
+| #647 | M1b (Run in parallel dialog, group row) | merged (rebase) | a90e7642e50390aad3665af07f95d32d34152e49 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
-| M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | — | planned |
+| M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
@@ -33,9 +34,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Decisions
 
 - Clarify US4 scenario 9: a picked run with uncommitted changes is refused, naming the files;
-  nothing changes. _(default, pending user confirmation)_
+  nothing changes. _(decided by user)_
 - Clarify FR-012: a pick always merges (fast-forward when possible, else a merge commit); the run's
-  branch is never rewritten. _(default, pending user confirmation)_
+  branch is never rewritten. _(decided by user)_
 - Clarify round 2: no critical ambiguities left; clarify done.
 - Tasks: M1 = Setup + Foundational + US1 + US2 Part A (group row, s1–s2), 27 tasks, over the ~10
   guideline: US2 Part A rides with US1 because the group row is the only place a run that failed
@@ -106,7 +107,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit 1 (restarted the branch from origin/main a90e7642; the two clarify marks are now `_(decided by user)_` in spec.md and here). Done and committed: T028, T029, T031–T035 (core `interrupted_on_load`; daemon restart cleanup in `runs.rs` `settle_interrupted`/`clean_half_created`, `Runs::dismiss`, `Runs::forget_worktree`, `DaemonState::dismiss_run_group`/`forget_run_worktree`, the `RunGroupDismiss` arm in `server.rs`, `ops::delete_worktree` call; attach reads the groups in `spawn_blocking`). `run_group_persist` (12) and `run_group_create` (10) pass; clippy of core and daemon is clean. Daemon notes: a `Creating` run's folder is left (reason says so) when it has no provenance record or any session record (closed too) names the worktree; tests were written beside the code, not red first (record this in tdd/cycle-log.md for M2).
+Next: T030 (failing client tests in `tests/features_runs.rs`, `features_sidebar.rs`: group menu = Dismiss group only; confirm names that worktrees, branches, sessions stay; confirm emits one `RunGroupDismiss`; cancel emits nothing; shrunk group shows `#1, #3`), T036 (`features/sidebar.rs`, `features/runs.rs`: add a `dismiss_target: Option<GroupId>` and Msg `DismissAsked/DismissConfirmed/DismissCancelled`, plus a group context-menu surface modelled on `features/worktree.rs` `WorktreeContextMenu` and the confirm dialog on `features/project.rs` `ConfirmForgetProjectDialog` / `ui/confirm_forget.rs`), T037 (`ui/sidebar.rs` `group_items` right-click menu, `overlay/registry.rs`), T038 (`docs/user-guide/parallel-runs.md`), T039 (visual pass B7, B21, B22, results in quickstart.md § Results § B). Then tick T030, T036–T039, the M2 cycle-log section, scoped gate in the shadow of review A (high), review B (sonnet), full gate (raw commands of mise.toml `gate`, CARGO_INCREMENTAL=0), PR file `pr-483-m2.md` in the scratchpad.
 
 ## Open escalation
 

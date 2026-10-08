@@ -730,7 +730,18 @@ where
                             },
                         );
                         // Feature 483: the project's run groups, once, right after `Attached`.
-                        state.send(id, state.run_groups_on_attach(&project));
+                        // The first read of the file may clean up after an interrupted create (git, disk),
+                        // so it runs off the connection loop.
+                        let groups = {
+                            let (state, project) = (Arc::clone(state), project.clone());
+                            tokio::task::spawn_blocking(move || {
+                                state.run_groups_on_attach(&project)
+                            })
+                            .await
+                        };
+                        if let Ok(groups) = groups {
+                            state.send(id, groups);
+                        }
                         // Feature 482: the project's stored comments, one push per entry.
                         for msg in state.review_pushes_on_attach(&project) {
                             state.send(id, msg);
@@ -1263,18 +1274,42 @@ where
                     }
                 });
             }
-            // Feature 483: picking (T058) and dismissing (T035) come in later milestones.
-            ClientMsg::RunGroupPick { req, .. } | ClientMsg::RunGroupDismiss { req, .. } => state
-                .send(
+            // Feature 483 (W4): the grouping goes; worktrees, branches and sessions stay.
+            ClientMsg::RunGroupDismiss {
+                req,
+                project,
+                group,
+            } => match state.dismiss_run_group(&project, group) {
+                Ok(()) => {
+                    state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::Ack,
+                        },
+                    );
+                    state.broadcast_run_groups(&project);
+                }
+                Err(refusal) => state.send(
                     id,
                     DaemonMsg::OperationError {
                         req,
-                        kind: micold_core::protocol::messages::ErrorKind::Refused,
-                        message: "run groups cannot be picked from or dismissed in this build"
-                            .into(),
+                        kind: refusal.kind,
+                        message: refusal.message,
                         detail: None,
                     },
                 ),
+            },
+            // Feature 483: picking comes in a later milestone (T058).
+            ClientMsg::RunGroupPick { req, .. } => state.send(
+                id,
+                DaemonMsg::OperationError {
+                    req,
+                    kind: micold_core::protocol::messages::ErrorKind::Refused,
+                    message: "run groups cannot be picked from in this build".into(),
+                    detail: None,
+                },
+            ),
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,
