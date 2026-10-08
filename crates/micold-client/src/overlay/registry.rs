@@ -269,6 +269,7 @@ register! {
             crate::features::project::ProjectSwitcher,
             crate::features::sidebar::SidebarFilterPanel,
             crate::features::project::ProjectContextMenu,
+            crate::features::runs::GroupContextMenu,
     },
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
     crate::features::runs::ConfirmDismissGroupDialog => crate::ui::confirm_dismiss_group::dialog,
@@ -295,6 +296,7 @@ register! {
             crate::features::help::HelpMenu,
             crate::features::sidebar::SidebarFilterPanel,
             crate::features::project::ProjectContextMenu,
+            crate::features::runs::GroupContextMenu,
     },
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
     crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
@@ -314,6 +316,7 @@ register! {
             crate::features::help::HelpMenu,
             crate::features::project::ProjectSwitcher,
             crate::features::project::ProjectContextMenu,
+            crate::features::runs::GroupContextMenu,
     },
     crate::features::worktree::ConfirmWorktreeDeleteDialog => crate::ui::confirm_delete::dialog,
     // The project row menu and nothing else: the two context menus replace each other, and a panel
