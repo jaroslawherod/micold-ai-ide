@@ -191,6 +191,7 @@ fn other_writers_preserve_the_mapping() {
             "notification_kinds",
             "pi_activity_component",
             "pr_status_enabled",
+            "save_terminal_history",
             "scrollback_lines",
             "settings_version",
             "theme",
