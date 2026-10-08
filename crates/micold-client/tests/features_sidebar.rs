@@ -1019,6 +1019,7 @@ fn tip_with(status: &PullRequestStatus) -> String {
         Some(RowPullRequest {
             status,
             age_secs: 30,
+            stale: false,
             removable: false,
         }),
     )
@@ -1229,6 +1230,7 @@ fn tip_removable(status: &PullRequestStatus, removable: bool) -> String {
         Some(RowPullRequest {
             status,
             age_secs: 30,
+            stale: false,
             removable,
         }),
     )
@@ -1531,4 +1533,76 @@ mod parallel_runs {
         assert_eq!(g.run_count, 3);
         assert!(g.runs.iter().all(|r| matches!(r.row, RunRow::NoWorktree)));
     }
+}
+
+// --- Feature 040 US4: the stale form (data-model §4, contract pull-request-ui §3; U146, U147, U149) --
+
+fn tip_aged(status: &PullRequestStatus, age_secs: u64, stale: bool, removable: bool) -> String {
+    worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-a"),
+        "Feat a",
+        Some(RowPullRequest {
+            status,
+            age_secs,
+            stale,
+            removable,
+        }),
+    )
+}
+
+/// U146 (FR-019): a reading is stale only when more than 600 s old.
+#[test]
+fn the_projection_marks_a_reading_older_than_ten_minutes_stale() {
+    let held = BTreeMap::from([("feat/a".to_string(), pull_request(7))]);
+    let project = |now: u64| {
+        row_pull_request(
+            &worktree_entry("a", vec![], vec![]),
+            &held,
+            &BTreeSet::new(),
+            Some(1_000),
+            now,
+        )
+        .expect("the branch has a status")
+    };
+    assert!(!project(1_600).stale);
+    assert_eq!(project(1_600).age_secs, 600);
+    assert!(project(1_601).stale);
+}
+
+/// U147: a stale row's tooltip says how long ago, after the review line.
+#[test]
+fn a_stale_tooltip_gains_a_read_line_in_minutes_then_hours() {
+    let status = with_state(PrState::Merged, ReviewState::Approved);
+    let tip = tip_aged(&status, 11 * 60 + 5, true, false);
+    let lines: Vec<&str> = tip.lines().collect();
+    let review = lines
+        .iter()
+        .position(|l| *l == "Review: approved")
+        .expect("review line");
+    assert_eq!(lines[review + 1], "Read: 11 min ago");
+    assert_eq!(lines.len(), review + 2, "nothing follows it here");
+
+    assert!(tip_aged(&status, 119 * 60, true, false).ends_with("Read: 119 min ago"));
+    assert!(tip_aged(&status, 120 * 60, true, false).ends_with("Read: 2 h ago"));
+    assert!(tip_aged(&status, 5 * 3600 + 59, true, false).ends_with("Read: 5 h ago"));
+}
+
+/// U147: a current reading adds no such line.
+#[test]
+fn a_current_tooltip_has_no_read_line() {
+    let status = pull_request(7);
+    assert!(!tip_aged(&status, 30, false, false).contains("Read:"));
+}
+
+/// U149 (UI §3 rows 5 and 6): on a removable row the `Read:` line stands before `Cleanup:`, which
+/// stays last.
+#[test]
+fn the_read_line_stands_before_the_cleanup_line() {
+    let status = merged_status();
+    let tip = tip_aged(&status, 20 * 60, true, true);
+    let lines: Vec<&str> = tip.lines().collect();
+    let n = lines.len();
+    assert_eq!(lines[n - 2], "Read: 20 min ago");
+    assert_eq!(lines[n - 1], format!("Cleanup: {CLEANUP}"));
 }

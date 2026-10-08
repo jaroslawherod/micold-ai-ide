@@ -440,3 +440,157 @@ fn unavailable_and_released_empty_the_removable_branches() {
     update(&mut st, Msg::Released);
     assert!(st.removable.is_empty());
 }
+
+// --- Feature 040 US4: the interval, the refresh trigger, the pause (U132–U139) ---------------
+
+use micold_client::features::pr_status::Cause;
+
+fn trigger(cause: Cause, now: u64) -> Msg {
+    Msg::Trigger { cause, now }
+}
+
+/// Switch on, held, listed and the first reading finished: `Idle` with statuses, ready to be
+/// triggered.
+fn idle_and_held() -> State {
+    holding_statuses()
+}
+
+#[test]
+fn an_interval_or_refresh_trigger_reads_from_idle() {
+    for cause in [Cause::Interval, Cause::Refresh] {
+        let mut st = idle_and_held();
+        let Effect::Read { seq } = update(&mut st, trigger(cause, LATER)) else {
+            panic!("{cause:?} from Idle with the switch on and the project held must read");
+        };
+        assert!(
+            matches!(st.phase, Phase::Reading { seq: s, again: false, started: LATER } if s == seq)
+        );
+    }
+}
+
+#[test]
+fn a_trigger_reads_nothing_while_off_not_held_awaiting_the_listing_or_paused() {
+    for cause in [Cause::Interval, Cause::Refresh] {
+        let mut off = State::default();
+        update(&mut off, Msg::Held);
+        assert_eq!(update(&mut off, trigger(cause, LATER)), Effect::None);
+        assert_eq!(off.phase, Phase::Idle);
+
+        let mut not_held = enabled();
+        assert_eq!(update(&mut not_held, trigger(cause, LATER)), Effect::None);
+        assert_eq!(not_held.phase, Phase::Idle);
+
+        let mut awaiting = enabled();
+        update(&mut awaiting, Msg::Held);
+        assert_eq!(update(&mut awaiting, trigger(cause, LATER)), Effect::None);
+        assert_eq!(awaiting.phase, Phase::Idle);
+
+        let mut paused = idle_and_held();
+        paused.pause_until = Some(UNTIL);
+        assert_eq!(update(&mut paused, trigger(cause, LATER)), Effect::None);
+        assert_eq!(paused.phase, Phase::Idle);
+    }
+}
+
+#[test]
+fn three_refreshes_during_a_reading_cause_exactly_one_further_reading() {
+    let mut st = idle_and_held();
+    let Effect::Read { seq } = update(&mut st, trigger(Cause::Refresh, LATER)) else {
+        panic!("reads");
+    };
+    for offset in 1..=3 {
+        assert_eq!(
+            update(&mut st, trigger(Cause::Refresh, LATER + offset)),
+            Effect::None
+        );
+    }
+    let Effect::Read { seq: second } = finish(&mut st, seq, ok(LATER)) else {
+        panic!("the pending refreshes cause a further reading");
+    };
+    assert_ne!(second, seq);
+    // And only one: ending that one starts nothing.
+    assert_eq!(finish(&mut st, second, ok(LATER)), Effect::None);
+}
+
+#[test]
+fn an_interval_during_a_reading_causes_no_further_reading() {
+    let mut st = idle_and_held();
+    let Effect::Read { seq } = update(&mut st, trigger(Cause::Refresh, LATER)) else {
+        panic!("reads");
+    };
+    assert_eq!(
+        update(&mut st, trigger(Cause::Interval, LATER + 1)),
+        Effect::None
+    );
+    assert_eq!(finish(&mut st, seq, ok(LATER)), Effect::None);
+}
+
+#[test]
+fn a_rate_limit_pauses_every_trigger_until_the_reset_time_and_drops_a_pending_again() {
+    let mut st = idle_and_held();
+    let Effect::Read { seq } = update(&mut st, trigger(Cause::Refresh, LATER)) else {
+        panic!("reads");
+    };
+    update(&mut st, trigger(Cause::Refresh, LATER + 1));
+    let ended = finish(
+        &mut st,
+        seq,
+        Outcome::Err(ReadingFailure::RateLimited { until: UNTIL }),
+    );
+    assert_eq!(ended, Effect::None, "a pending again is dropped");
+    for cause in [Cause::Interval, Cause::Refresh] {
+        assert_eq!(update(&mut st, trigger(cause, UNTIL - 1)), Effect::None);
+    }
+    assert!(matches!(
+        update(&mut st, trigger(Cause::Interval, UNTIL)),
+        Effect::Read { .. }
+    ));
+}
+
+#[test]
+fn the_pause_survives_a_release_and_a_new_hold() {
+    let mut st = idle_and_held();
+    let Effect::Read { seq } = update(&mut st, trigger(Cause::Interval, LATER)) else {
+        panic!("reads");
+    };
+    finish(
+        &mut st,
+        seq,
+        Outcome::Err(ReadingFailure::RateLimited { until: UNTIL }),
+    );
+    update(&mut st, Msg::Released);
+    update(&mut st, Msg::Held);
+    assert_eq!(
+        update(&mut st, Msg::ListingArrived { now: UNTIL - 1 }),
+        Effect::None
+    );
+    assert_eq!(
+        update(&mut st, trigger(Cause::Interval, UNTIL - 1)),
+        Effect::None
+    );
+    assert!(matches!(
+        update(&mut st, trigger(Cause::Interval, UNTIL)),
+        Effect::Read { .. }
+    ));
+}
+
+#[test]
+fn a_trigger_sixty_seconds_after_a_reading_started_abandons_it() {
+    let mut st = idle_and_held();
+    let Effect::Read { seq: old } = update(&mut st, trigger(Cause::Interval, LATER)) else {
+        panic!("reads");
+    };
+    // 59 s: still under way.
+    assert_eq!(
+        update(&mut st, trigger(Cause::Interval, LATER + 59)),
+        Effect::None
+    );
+    let Effect::Read { seq: new } = update(&mut st, trigger(Cause::Interval, LATER + 60)) else {
+        panic!("a reading 60 s old is abandoned and a new one starts");
+    };
+    assert_ne!(new, old);
+    // The old answer is dropped.
+    let before = st.clone();
+    assert_eq!(finish(&mut st, old, ok(LATER)), Effect::None);
+    assert_eq!(st, before);
+}

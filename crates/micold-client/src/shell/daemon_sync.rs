@@ -1157,6 +1157,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 app.core
                     .update(Message::Worktree(WorktreeMsg::RefreshFinished));
                 app.core.notify_info("Worktree list refreshed.");
+                // Feature 040, S4: the control is idle and its notice shown; now the pull request
+                // status follows the listing the refresh produced (FR-018a, FR-027).
+                follow_up = crate::shell::pr_status::refresh_ended(app);
             }
             Some(PendingOp::AttachOfferApply) => match result {
                 OperationResult::AttachApplied { results } => {
@@ -1294,6 +1297,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                         .update(Message::Worktree(WorktreeMsg::RefreshFinished));
                     app.core
                         .notify_error(format!("Couldn't refresh the worktree list: {message}"));
+                    // Feature 040, S4: a refresh that failed still ends; the list may have changed.
+                    follow_up = crate::shell::pr_status::refresh_ended(app);
                 }
                 // Feature 582: both belong to a modal dialog, which shows the reason itself.
                 Some(PendingOp::AttachDiscover { .. }) => {
@@ -2570,7 +2575,8 @@ pub fn on_worktree_refresh_timed_out(app: &mut App, req: u64) -> Task<Message> {
     );
     app.core
         .update(Message::Worktree(WorktreeMsg::RefreshTimedOut(req)));
-    Task::none()
+    // Feature 040, S4: the refresh ended without an answer; the pull request status follows.
+    crate::shell::pr_status::refresh_ended(app)
 }
 
 pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message> {

@@ -57,6 +57,10 @@ const OS_THEME_POLL: Duration = Duration::from_millis(500);
 /// "within 1 second" holds whether or not the window happens to hold focus.
 const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
 
+/// How often pull request status is read again while the window holds its project (feature 040,
+/// FR-018, SC-003, SC-006): at most 12 readings an hour, 30 requests at most each.
+const PR_STATUS_INTERVAL: Duration = Duration::from_secs(300);
+
 /// How often the snackbar's countdown ticks while one is visible.
 ///
 /// Coarse on purpose: the durations it serves are 4s and 10s, so a quarter-second tick is
@@ -97,6 +101,12 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subs.push(every(SNACKBAR_TICK).map(|_| {
             Message::Notifications(NotificationsMsg::Advanced(SNACKBAR_TICK.as_millis() as u32))
         }));
+    }
+    // Feature 040 (FR-018, SC-006): the pull request status interval, **only while the switch is on
+    // and this window holds its project**. A window that reads nothing must not be woken for it,
+    // and with the switch off nothing may be sent to GitHub or scheduled at all.
+    if app.core.pr_status.enabled && app.core.pr_status.held {
+        subs.push(every(PR_STATUS_INTERVAL).map(|_| Message::PrStatusTick));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).

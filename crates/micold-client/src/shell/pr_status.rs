@@ -8,8 +8,8 @@
 //! # When GitHub is contacted, and why only then
 //!
 //! [`start`] is the only path to the pull request source, and it runs only when the reducer
-//! answers `Effect::Read`: the first listing after the window came to hold its project (S1), or
-//! the switch turning on (S2). `tests/pr_status_is_read_only_on_named_events.rs` counts the
+//! answers `Effect::Read`: the first listing after the window came to hold its project (S1), the
+//! switch turning on (S2), the interval (S3) or a list refresh ending (S4). `tests/pr_status_is_read_only_on_named_events.rs` counts the
 //! callers. A repository without a GitHub remote, and a machine without `gh`, end the reading
 //! before anything is sent (FR-026).
 //!
@@ -28,7 +28,7 @@ use std::time::Duration;
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::pr_status::Msg;
-use micold_client::features::pr_status::{Effect, Outcome, Phase};
+use micold_client::features::pr_status::{Cause, Effect, Outcome, Phase};
 use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
@@ -131,6 +131,30 @@ pub fn open_requested(app: &App, dir: &str) -> Task<Message> {
         Some(address) => crate::shell::links::perform(app, OpenRequest::Url(address)),
         None => Task::none(),
     }
+}
+
+/// The interval elapsed (S3, FR-018): read again, unless a reading is under way, the switch is off,
+/// the project is not held or GitHub's request limit holds readings back.
+pub fn tick(app: &mut App) -> Task<Message> {
+    update(
+        app,
+        Msg::Trigger {
+            cause: Cause::Interval,
+            now: now(),
+        },
+    )
+}
+
+/// A list refresh ended (S4, FR-018a): read the branches the updated listing shows. The control's
+/// busy state and its notice were settled before this runs and are not touched by it (FR-027).
+pub fn refresh_ended(app: &mut App) -> Task<Message> {
+    update(
+        app,
+        Msg::Trigger {
+            cause: Cause::Refresh,
+            now: now(),
+        },
+    )
 }
 
 /// A listing arrived from the daemon (`CatalogChanged`).

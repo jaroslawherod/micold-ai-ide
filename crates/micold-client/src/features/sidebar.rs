@@ -674,6 +674,11 @@ pub fn worktree_tooltip(
     // is untouched (FR-011). Held facts only: nothing here reads a disk or asks GitHub (FR-012).
     if let Some(row) = pull_request {
         lines.extend(pull_request_lines(row.status));
+        // After the review line (UI §3, line 5): how old the reading is, only once it is stale
+        // (FR-019). A fresh reading adds nothing.
+        if row.stale {
+            lines.push(format!("Read: {}", read_age(row.age_secs)));
+        }
         // Last (UI §3, line 6): the removal suggestion, only for a merged pull request that the
         // repository shows holds all of the branch's work (FR-015, FR-017). It says how to remove
         // the worktree by the route that exists; nothing is removed by it (FR-016).
@@ -685,6 +690,16 @@ pub fn worktree_tooltip(
     }
 
     lines.join("\n")
+}
+
+/// How long ago a reading was made, in words: whole minutes, and from 120 minutes whole hours.
+fn read_age(age_secs: u64) -> String {
+    let minutes = age_secs / 60;
+    if minutes >= 120 {
+        format!("{} h ago", minutes / 60)
+    } else {
+        format!("{minutes} min ago")
+    }
 }
 
 /// The longest title the tooltip shows, in characters, the last being `…` when it was cut.
@@ -763,6 +778,9 @@ pub struct RowPullRequest<'a> {
     pub status: &'a PullRequestStatus,
     /// Seconds since the reading that produced it started.
     pub age_secs: u64,
+    /// The reading is older than two refresh intervals (FR-019): the indicator is drawn in its
+    /// lower-emphasis form and the tooltip says how long ago it was read.
+    pub stale: bool,
     /// The pull request was merged and the branch holds nothing newer (FR-015): the row suggests
     /// removing the worktree.
     pub removable: bool,
@@ -783,9 +801,11 @@ pub fn row_pull_request<'a>(
     };
     let branch = node.worktree.branch.as_deref()?;
     let status = statuses.get(branch)?;
+    let read = read_at.unwrap_or(now);
     Some(RowPullRequest {
         status,
-        age_secs: now.saturating_sub(read_at.unwrap_or(now)),
+        age_secs: now.saturating_sub(read),
+        stale: micold_core::pull_request::is_stale(read, now),
         removable: removable.contains(branch),
     })
 }

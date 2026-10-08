@@ -148,6 +148,9 @@ pub enum Message {
     /// its entry is `shell/pr_status.rs`, which reaches the reducer through
     /// [`State::update_pr_status`]. `State::update` declines it.
     PrStatus(crate::features::pr_status::Msg),
+    /// The pull request status interval elapsed (feature 040, S3, FR-018): from the 5-minute
+    /// subscription, which exists only while the switch is on and the window holds its project.
+    PrStatusTick,
 
     // ---- Feature 482: the Changes view of a worktree or the project root ----
     /// The Changes view's messages (feature 482); see [`crate::features::changes::Msg`].
@@ -746,6 +749,7 @@ impl State {
             Message::Connection(_)
             | Message::Sandbox(_)
             | Message::PrStatus(_)
+            | Message::PrStatusTick
             | Message::Changes(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
