@@ -1910,6 +1910,7 @@ fn a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing(
             // No activity component: this is about finding the CLI, and the component would be
             // materialised under the real data directory.
             pi_activity_component: false,
+            save_terminal_history: false,
             ..Settings::default()
         })
         .unwrap();
@@ -1970,6 +1971,7 @@ fn a_restart_after_the_script_is_fixed_sources_it_again_and_starts() {
     let settings = Settings {
         // No activity component: it would be materialised under the real data directory.
         pi_activity_component: false,
+        save_terminal_history: false,
         ..include_settings(store.path(), &SCRIPT_FAILS)
     };
     JsonFileSettingsStore::at(store.path().join("settings.json"))

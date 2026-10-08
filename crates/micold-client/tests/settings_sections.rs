@@ -718,3 +718,14 @@ fn the_github_page_is_titled_github_and_claims_the_pull_request_switch() {
         "the page declares the switch it renders"
     );
 }
+
+/// Feature 041, FR-026, FR-031: the Terminal page claims the save-history switch, and its message.
+#[test]
+fn the_terminal_page_claims_the_save_terminal_history_switch() {
+    let claims = claims();
+    assert_eq!(
+        claims.get("save_terminal_history").map(Vec::as_slice),
+        Some(["terminal".to_string()].as_slice()),
+        "{claims:#?}"
+    );
+}

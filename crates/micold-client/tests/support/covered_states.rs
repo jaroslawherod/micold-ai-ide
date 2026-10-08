@@ -1013,6 +1013,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
+                        save_terminal_history: true,
                     },
                     environment: EnvironmentDraft {
                         enabled: true,
@@ -1079,6 +1080,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
+                        save_terminal_history: true,
                     },
                     environment: EnvironmentDraft {
                         enabled: true,
@@ -1538,6 +1540,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
+                        save_terminal_history: true,
                     },
                     environment: EnvironmentDraft {
                         enabled: true,
@@ -1590,6 +1593,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     appearance: AppearanceDraft::default(),
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
+                        save_terminal_history: true,
                     },
                     environment: EnvironmentDraft::default(),
                     daemon: DaemonDraft::default(),

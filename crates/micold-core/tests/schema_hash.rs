@@ -250,7 +250,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 36 → 37 for feature 484's terminal panes (contracts/wire.md): `process` on `GridFrame`,
 /// `SessionInput` and `SessionResize`, `SetViewedTerminals`, `SetPaneLayout` and
 /// `ProjectSnapshot::pane_layout`, in one edit.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 37;
+///
+/// And 37 → 38 for feature 041's `save_terminal_history` on `DaemonSettings` and `SettingsSet`
+/// (contracts/setting.md §2): the service holds whether terminal history is saved, for every
+/// window. An older peer cannot decode either.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 38;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

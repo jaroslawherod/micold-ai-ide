@@ -472,3 +472,155 @@ fn on_windows_the_history_directory_is_local_and_not_in_the_roaming_profile() {
         "not under the roaming data directory {roaming:?}"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 041 M5 — the setting (T039; U92–U97; data-model §5, contracts/setting.md §3)
+// ---------------------------------------------------------------------------------------
+
+/// A store with two sessions saved.
+fn two_saved(root: &Path) -> (HistoryStore, PathBuf) {
+    let store = store_in(root);
+    store.save(session(), &snapshot(&["one"])).unwrap();
+    store.save(other_session(), &snapshot(&["two"])).unwrap();
+    (store, root.join("terminal-history"))
+}
+
+// U92.
+#[test]
+fn with_saving_off_a_save_is_skipped_and_a_load_finds_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    assert!(store.set_enabled(false).is_empty());
+
+    assert_eq!(
+        store.save(session(), &snapshot(&["secret"])).unwrap(),
+        SaveOutcome::Skipped(SkipReason::Disabled)
+    );
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+    assert_eq!(store.load(session()), LoadOutcome::None);
+    assert!(!store.enabled());
+}
+
+// U93.
+#[test]
+fn turning_saving_off_deletes_every_saved_and_temporary_file() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    std::fs::write(dir.join(format!(".{SESSION_FILE}.tmp")), b"half").unwrap();
+
+    let failures = store.set_enabled(false);
+
+    assert!(failures.is_empty(), "none left: {failures:?}");
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+}
+
+// U94, U95.
+#[cfg(unix)]
+#[test]
+fn a_file_that_cannot_be_deleted_is_reported_retried_and_never_loaded() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    let locked = |on: bool| {
+        let mode = if on { 0o500 } else { 0o700 };
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    locked(true);
+    if std::fs::File::create(dir.join("probe")).is_ok() {
+        // Running as root: a read-only directory stops nothing, so there is nothing to test.
+        locked(false);
+        return;
+    }
+
+    let failures = store.set_enabled(false);
+    assert_eq!(failures.len(), 2, "both files stay: {failures:?}");
+    assert!(failures.iter().any(|f| f.session == Some(session())));
+    assert_eq!(store.retry_deletions().len(), 2, "still not deletable");
+
+    // Turned on again: the file is still there, and is not shown.
+    assert!(store.set_enabled(true).is_empty());
+    assert_eq!(store.load(session()), LoadOutcome::None);
+    assert_eq!(entries(&dir).len(), 2);
+
+    locked(false);
+    assert!(store.retry_deletions().is_empty());
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+}
+
+// U95: a save replaces the file whose deletion failed and it is shown again.
+#[cfg(unix)]
+#[test]
+fn a_new_save_replaces_a_file_whose_deletion_failed() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let rooted = std::fs::File::create(dir.join("probe")).is_ok();
+    let failures = store.set_enabled(false);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    if rooted {
+        return;
+    }
+    assert_eq!(failures.len(), 2);
+    store.set_enabled(true);
+
+    let fresh = snapshot(&["after"]);
+    assert_eq!(store.save(session(), &fresh).unwrap(), SaveOutcome::Saved);
+
+    assert_eq!(store.load(session()), LoadOutcome::History(fresh));
+    // The other session's file is still to delete, and now can be; this session's is kept.
+    assert!(store.retry_deletions().is_empty());
+    assert_eq!(entries(&dir).len(), 1);
+    assert_eq!(store.load(session()), LoadOutcome::History(snapshot(&["after"])));
+}
+
+// U96.
+#[test]
+fn purge_deletes_everything_and_leaves_saving_off() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+
+    assert!(store.purge().is_empty());
+
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+    assert!(!store.enabled());
+}
+
+#[test]
+fn turning_saving_on_restores_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    store.set_enabled(false);
+    store.set_enabled(true);
+
+    assert_eq!(store.load(session()), LoadOutcome::None);
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+    // An equal snapshot is written again: the record of the last write went with the files.
+    assert_eq!(
+        store.save(session(), &snapshot(&["one"])).unwrap(),
+        SaveOutcome::Saved
+    );
+}
+
+// U97 (FR-033): a save racing the setting being turned off leaves no file.
+#[test]
+fn a_save_racing_turning_saving_off_leaves_no_file() {
+    for round in 0..50 {
+        let root = tempfile::tempdir().unwrap();
+        let store = std::sync::Arc::new(store_in(root.path()));
+        let dir = root.path().join("terminal-history");
+        let saver = {
+            let store = std::sync::Arc::clone(&store);
+            std::thread::spawn(move || {
+                for n in 0..20 {
+                    let _ = store.save(session(), &snapshot(&[&format!("{round}-{n}")]));
+                }
+            })
+        };
+        let failures = store.set_enabled(false);
+        saver.join().unwrap();
+        assert!(failures.is_empty());
+        let left: Vec<_> = if dir.is_dir() { entries(&dir) } else { vec![] };
+        assert_eq!(left, Vec::<PathBuf>::new(), "round {round}");
+    }
+}

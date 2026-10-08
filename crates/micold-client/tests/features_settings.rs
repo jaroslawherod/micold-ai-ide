@@ -358,6 +358,34 @@ fn turning_the_pi_activity_switch_off_is_a_choice_not_a_fault() {
 }
 
 // ---------------------------------------------------------------------------------------
+// Feature 041 — Save terminal history (T041; U101–U105; FR-026, FR-031)
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn the_draft_holds_the_save_terminal_history_setting_of_the_service() {
+    assert!(SettingsDraft::from_settings(&Settings::default()).terminal.save_terminal_history);
+    let off = Settings {
+        save_terminal_history: false,
+        ..Settings::default()
+    };
+    assert!(!SettingsDraft::from_settings(&off).terminal.save_terminal_history);
+}
+
+#[test]
+fn turning_save_terminal_history_off_reaches_what_save_writes() {
+    let mut draft = valid();
+    draft.show(SettingsSection::Terminal);
+    draft.terminal.save_terminal_history = false;
+
+    assert!(draft.error.is_none());
+    let saved = draft
+        .validate()
+        .expect("an off switch is a valid setting")
+        .into_settings();
+    assert!(!saved.save_terminal_history);
+}
+
+// ---------------------------------------------------------------------------------------
 // The tool server's binding toggle (feature 034, T025 — FR-004)
 // ---------------------------------------------------------------------------------------
 
@@ -1796,6 +1824,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             env_include_timeout_secs,
             default_ai_cli,
             pi_activity_component,
+            save_terminal_history,
             tool_server_enabled,
             cross_session_access,
             pr_status_enabled,
@@ -1812,6 +1841,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && env_include_timeout_secs.is_none()
                     && default_ai_cli.is_none()
                     && pi_activity_component.is_none()
+                    && save_terminal_history.is_none()
                     && tool_server_enabled.is_none()
                     && cross_session_access.is_none()
                     && pr_status_enabled.is_none()

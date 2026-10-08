@@ -265,6 +265,7 @@ async fn sets(
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            save_terminal_history: None,
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,

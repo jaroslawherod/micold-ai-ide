@@ -161,6 +161,7 @@ impl Catalog {
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
             default_ai_cli: self.settings.default_ai_cli,
             pi_activity_component: self.settings.pi_activity_component,
+            save_terminal_history: self.settings.save_terminal_history,
             tool_server_enabled: self.settings.tool_server_enabled,
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
@@ -315,6 +316,7 @@ impl Catalog {
                 on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
                 on_disk.pi_activity_component = self.settings.pi_activity_component;
+                on_disk.save_terminal_history = self.settings.save_terminal_history;
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
@@ -384,6 +386,18 @@ impl Catalog {
     /// Applies to the next Pi session started; a running one keeps what it was launched with.
     pub fn set_pi_activity_component(&mut self, on: bool) -> io::Result<()> {
         self.settings.pi_activity_component = on;
+        self.persist_service_settings()
+    }
+
+    /// Whether terminal history is saved to disk (feature 041, FR-026). Service-owned: the
+    /// service writes the files.
+    pub fn save_terminal_history(&self) -> bool {
+        self.settings.save_terminal_history
+    }
+
+    /// Turn terminal history saving on or off, persisting atomically (feature 041, FR-029).
+    pub fn set_save_terminal_history(&mut self, on: bool) -> io::Result<()> {
+        self.settings.save_terminal_history = on;
         self.persist_service_settings()
     }
 

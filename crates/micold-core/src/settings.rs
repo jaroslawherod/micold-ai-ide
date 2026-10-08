@@ -174,6 +174,11 @@ pub struct Settings {
     /// service is what spawns the session and so the only side that acts on it.
     #[serde(default = "default_pi_activity_component")]
     pub pi_activity_component: bool,
+    /// Whether the service saves terminal output to disk so a service restart keeps it
+    /// (feature 041, FR-026). On by default; off, the saved histories are deleted and nothing more
+    /// is written. Service-owned: the service is what writes the files.
+    #[serde(default = "default_save_terminal_history")]
+    pub save_terminal_history: bool,
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     #[serde(default = "default_tool_server_enabled")]
     pub tool_server_enabled: bool,
@@ -234,6 +239,11 @@ fn default_pi_activity_component() -> bool {
     true
 }
 
+/// The switch's default when a file predates it: on (feature 041, FR-026, FR-029).
+fn default_save_terminal_history() -> bool {
+    true
+}
+
 /// Desktop notifications when a file predates the switch, or cannot be read: on (feature 039,
 /// FR-026).
 fn default_desktop_notifications() -> bool {
@@ -251,6 +261,7 @@ impl Default for Settings {
             daemon: DaemonConfig::default(),
             default_ai_cli: AiCli::default(),
             pi_activity_component: default_pi_activity_component(),
+            save_terminal_history: default_save_terminal_history(),
             tool_server_enabled: default_tool_server_enabled(),
             cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
@@ -464,6 +475,10 @@ struct StoredSettings {
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_pi_activity_component")]
     pi_activity_component: bool,
+    /// Missing in pre-041 files → on (FR-026, FR-029). Additive and defaulted, so
+    /// `settings_version` does not move for it either.
+    #[serde(default = "default_save_terminal_history")]
+    save_terminal_history: bool,
     /// Missing in pre-034 files → on, the requirement's default (FR-004). Additive and defaulted,
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_tool_server_enabled")]
@@ -531,6 +546,7 @@ impl StoredSettings {
             daemon: settings.daemon.clone(),
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
+            save_terminal_history: settings.save_terminal_history,
             tool_server_enabled: settings.tool_server_enabled,
             cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
@@ -567,6 +583,7 @@ impl StoredSettings {
             // which is the user's choice to keep (research R11).
             default_ai_cli: self.default_ai_cli,
             pi_activity_component: self.pi_activity_component,
+            save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,

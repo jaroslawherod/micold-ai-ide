@@ -310,6 +310,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_timeout_secs: Some(20),
             default_ai_cli: Some(AiCli::Copilot),
             pi_activity_component: Some(false),
+            save_terminal_history: Some(false),
             // Feature 034 (FR-004): turning the binding off must cross the wire as `false`.
             tool_server_enabled: Some(false),
             // Feature 034 (FR-016): the option crosses the wire as the value chosen.
@@ -336,6 +337,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            save_terminal_history: None,
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
@@ -471,6 +473,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_timeout_secs: 10,
                 default_ai_cli: AiCli::ClaudeCode,
                 pi_activity_component: true,
+                save_terminal_history: true,
                 tool_server_enabled: true,
                 cross_session_access: CrossSessionAccess::Auto,
                 pr_status_enabled: true,
@@ -538,6 +541,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_timeout_secs: 5,
                 default_ai_cli: AiCli::Pi,
                 pi_activity_component: false,
+                save_terminal_history: false,
                 tool_server_enabled: false,
                 cross_session_access: CrossSessionAccess::Off,
                 pr_status_enabled: false,
@@ -874,6 +878,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             env_include_timeout_secs: 10,
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            save_terminal_history: true,
             tool_server_enabled: true,
             cross_session_access: access,
             pr_status_enabled: false,
@@ -896,6 +901,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            save_terminal_history: None,
             tool_server_enabled: None,
             cross_session_access: Some(access),
             pr_status_enabled: None,
@@ -938,6 +944,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             env_include_timeout_secs: 10,
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            save_terminal_history: true,
             tool_server_enabled: true,
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: on,
@@ -964,6 +971,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            save_terminal_history: None,
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: chosen,
@@ -1275,6 +1283,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             env_include_timeout_secs: 10,
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            save_terminal_history: true,
             tool_server_enabled: true,
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
@@ -1300,6 +1309,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             env_include_timeout_secs: None,
             default_ai_cli: None,
             pi_activity_component: None,
+            save_terminal_history: None,
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
@@ -1441,6 +1451,37 @@ fn the_run_group_messages_round_trip_on_both_wires() {
     for msg in &daemon {
         json_roundtrip(msg);
         postcard_roundtrip(msg);
+
+/// U89, U90, U91 (feature 041, contracts/setting.md §2): the setting reaches the window as the
+/// service holds it, `SettingsSet` carries the choice, and `None` leaves it.
+#[test]
+fn the_save_terminal_history_setting_round_trips_on_the_wire() {
+    for chosen in [Some(false), Some(true), None] {
+        let asked = ClientMsg::SettingsSet {
+            req: 1,
+            scrollback_lines: None,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            save_terminal_history: chosen,
+            tool_server_enabled: None,
+            cross_session_access: None,
+            pr_status_enabled: None,
+            desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
+            diff_layout: None,
+        };
+        let json = serde_json::to_string(&asked).unwrap();
+        match serde_json::from_str::<ClientMsg>(&json).unwrap() {
+            ClientMsg::SettingsSet {
+                save_terminal_history,
+                ..
+            } => assert_eq!(save_terminal_history, chosen),
+            other => panic!("expected SettingsSet, got {other:?}"),
+        }
     }
 }
 

@@ -191,6 +191,9 @@ pub struct State {
     /// Service-owned and mirrored exactly like [`Self::default_ai_cli`]: written only from the
     /// daemon's settings or the boot-time settings load.
     pub pi_activity_component: bool,
+    /// Whether the service saves terminal history to disk (feature 041, FR-026). Service-owned and
+    /// mirrored like [`Self::pi_activity_component`].
+    pub save_terminal_history: bool,
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     /// Service-owned and mirrored like [`Self::pi_activity_component`].
     pub tool_server_enabled: bool,

@@ -638,6 +638,8 @@ pub enum ClientMsg {
         /// Load Pi's activity component into new Pi sessions, or `None` to leave unchanged
         /// (feature 029, FR-012e).
         pi_activity_component: Option<bool>,
+        /// Save terminal history to disk, or `None` to leave unchanged (feature 041, FR-026).
+        save_terminal_history: Option<bool>,
         /// Bind new sessions to the service's tool server, or `None` to leave unchanged
         /// (feature 034, FR-004).
         tool_server_enabled: Option<bool>,
@@ -1406,6 +1408,9 @@ pub struct DaemonSettings {
     /// Whether a Pi session is started with this application's activity component loaded
     /// (feature 029, FR-012e). Service-owned like the default CLI, because the spawn reads it.
     pub pi_activity_component: bool,
+    /// Whether the service saves terminal history to disk (feature 041, FR-026). Service-owned:
+    /// it writes the files and deletes them when this is turned off.
+    pub save_terminal_history: bool,
     /// Whether new sessions are bound to the service's tool server (feature 034, FR-004).
     /// Service-owned for the same reason: the spawn reads it, and running sessions keep theirs.
     pub tool_server_enabled: bool,
@@ -1821,6 +1826,7 @@ mod desktop_notifications_wire_tests {
             env_include_timeout_secs: 10,
             default_ai_cli: AiCli::ClaudeCode,
             pi_activity_component: true,
+            save_terminal_history: true,
             tool_server_enabled: true,
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
@@ -1860,6 +1866,7 @@ mod desktop_notifications_wire_tests {
                 env_include_timeout_secs: None,
                 default_ai_cli: None,
                 pi_activity_component: None,
+                save_terminal_history: None,
                 tool_server_enabled: None,
                 cross_session_access: None,
                 pr_status_enabled: None,
