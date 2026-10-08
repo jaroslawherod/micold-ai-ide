@@ -104,27 +104,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1b unit 1 stopped early (context ~95k after orientation). Branch restarted from origin/main (8d574eb5).
-Done: T021 and T026 (docs/user-guide/parallel-runs.md + links in SUMMARY.md, README.md,
-worktrees-and-sessions.md; uncommitted at handover time, committed with this ledger). No code written.
-Next: T012+T013+T022 failing tests, then T017/T018/T023, then UI T019/T020/T024/T025, T027, verify.md flow.
-Findings from orientation (save re-reading):
-- There is NO project menu with "New worktree": the project right-click menu (ui/mod.rs ~490) has only
-  "Forget project"; New worktree is the sidebar header IconButton (ui/sidebar.rs ~78, Message::WorktreeForm(FormMsg::Opened)).
-  Decision: add a header action "Run in parallel" right after it (docs say so); T013 test = pure
-  header-action order + Msg yielding an Outcome that opens the dialog. Record deviation in the PR body.
-- Pattern to copy: features/changes.rs (`update(&mut State,Msg)->Effect`, root `state.changes.pending`,
-  `shell/changes.rs::run_pending`, `Outcome::ChangesRequested` in app.rs ~966). Effect::Send(ClientMsg) must be
-  sent by the shell via `shell/daemon_sync.rs::send_op(app, PendingOp, |req| ClientMsg::RunGroupCreate{req,..})`
-  (add a PendingOp variant + describe()); BranchList answered via PendingOp::BranchList -> FormMsg::BranchesListed (mirror for dialog).
-- Client has no handling of DaemonMsg::RunGroupsChanged yet: add an arm in shell/daemon_sync.rs next to ReviewChanged (~1407)
-  feeding runs Msg::GroupsChanged. OperationOk(RunGroupCreated) result also needs a PendingOp arm (~829).
-- Validation inputs: `State::offered_providers(dir)`, `default_ai_cli` in features/session.rs ~2048; naming via
-  micold_core::runs::naming::derive_group(&WorktreeNaming,count); consts MIN_RUNS/DEFAULT_RUNS/MAX_RUNS in micold_core::runs.
-  Root's current branch is not yet known in client state (grep found none): take it from BranchList candidates or add a read.
-- Sidebar: SidebarEntry has Worktree/Default only (features/sidebar.rs 128); add Group(GroupNode); update row_heights (319),
-  scroll_target (380), current_session_row (350), sidebar_entries (874), ui/sidebar.rs render. tests/features_sidebar.rs builds entries by hand.
-- Dialog UI template: ui/worktree_form.rs (Select, TextField, Surface+dialog::body, track_focus FieldId); register in overlay/registry.rs.
+M1b unit 2 stopped at ~150k context. Branch claude/project-thread-wysm57, 2 unmerged commits (T021/T026 docs; code below). Not pushed, no PR.
+Done and green (`cargo test -p micold-client --test features_runs --test features_sidebar` pass; `cargo check --tests` clean; fmt applied):
+- T012/T017: `features/runs.rs` (State, Msg, Effect::Send, ParallelDialog, Invalid, Opening, `ParallelRunDialog` FloatingSurface+Registered with SurfaceId "run_in_parallel"), `Message::Runs`, `State.runs`, `Outcome::RunInParallelRequested` interpreted in app.rs (opens dialog, leaves BranchList in `runs.pending`), `shell/runs.rs::run_pending`, PendingOp::{RunGroupCreate,RunBranchList}, DaemonMsg::RunGroupsChanged arm, main.rs routes.
+- T013/T018/T022/T023/T024: `HEADER_ACTIONS`, `run_in_parallel()`, `SidebarEntry::Group(GroupNode{RunNode,RunRow})`, `arrange_groups`, heights/current_session_row/unread; `ui/sidebar.rs` header IconButton (Icon::AiCli, after New worktree) and `group_items`; build_items now takes depth and run label. Tests ticked in tasks.md.
+Deviation to record in PR body: no project menu has "New worktree" (it is a header IconButton), so Run in parallel is a header IconButton beside it.
+Remaining: T019 `ui/parallel_dialog.rs` (fn dialog(state,scheme,_)->Option<Element>, copy ui/worktree_form.rs modal: Surface+material::dialog::fields/body, Select for type/base branch/providers via ConventionalType::ALL and dialog.branches/offered, TextField for ticket/name; use TextField for the prompt (TextArea needs a binary-owned text_editor Content like app.composer: record as follow-up unless cheap), Add run Button, remove IconButton, derived names via `derived_names()`, Start runs disabled unless `validate().is_ok()`, error text from `dialog.error`; FieldId variants in features/window.rs for track_focus), declare in ui/mod.rs, register `crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog` in overlay/registry.rs (gates material_builder_api, composite_call_sites, overlay_registration, field_focus_call_sites). Then T020/T025 showcase poses (showcase/sections/surfaces.rs, catalogue.rs), T027 visual pass + quickstart Results B, tick T019 T020 T025 T027, full `cargo test -p micold-client`, then verify.md, review (code-review high + conformance), gate, PR text in the scratchpad (pr-483-m1b.md), push.
+Not yet run: whole client test suite (guards such as features_are_render_free, overlay_registration, sidebar_*), clippy.
 
 ## Open escalation
 
