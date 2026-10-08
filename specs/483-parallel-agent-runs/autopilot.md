@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: tasks unit (continue from Handover: tasks review round 1)
 
 ## Pull requests
 
@@ -69,7 +69,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Tasks unit, handed over at 161k context. Done: branch-start (rebased onto origin/main ec102904),
+speckit-tasks (tasks.md T001–T070, `## Milestones` M1–M5, all full tier), speckit-analyze run once
+and every HIGH (I1–I4) and the MEDIUM/LOW it named fixed in spec, plan, data-model, contracts,
+research and quickstart (see Decisions), committed e9cc8d6f. Next: tasks.md step 2's fresh reviewer,
+round 1 (rubrics/tasks.md, snapshot 6a04f8064c1ab9b25b64c6bc524a600ebe368371:e9cc8d6f13feaa1c4ce1536dc51d9470185fbab8;
+the spec-artifact edits from analyze are behaviour-bearing, so the reviewer should check them too);
+then step 3 close `checklists/requirements.md`, step 4 Specs-only gate, step 5 design PR (cloud
+override: PR body to the scratchpad file, orchestrator opens it). No open findings. No PR yet.
 
 ## Open escalation
 
