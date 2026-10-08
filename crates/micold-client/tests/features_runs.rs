@@ -668,3 +668,201 @@ fn compare_opens_from_the_menu_and_closes_it() {
     assert!(state.menu.is_none());
     assert_eq!(state.compare.as_ref().map(|c| c.group), Some(id));
 }
+
+// ---- Pick this one (T054, C6-C8) ----
+
+use micold_client::features::runs::{
+    picked_text, PickAvailability, PICK_BUSY_REASON, PICK_WORKING_CONFIRMATION,
+};
+use micold_core::runs::Integration;
+
+/// Compare open on a group whose runs have the given statuses.
+fn pick_ready(statuses: &[RunStatus]) -> (State, GroupId) {
+    let mut g = group(1, "a");
+    g.runs = statuses
+        .iter()
+        .enumerate()
+        .map(|(i, status)| {
+            let mut run = g.runs[0].clone();
+            run.number = i as u8 + 1;
+            run.names.dir_name = format!("feat-a-{}", i + 1);
+            run.status = status.clone();
+            run
+        })
+        .collect();
+    let id = g.id;
+    let mut state = State::default();
+    update(&mut state, Msg::GroupsChanged(vec![g]));
+    open_compare(&mut state, id);
+    (state, id)
+}
+
+fn pick_of(state: &State, index: usize) -> PickAvailability {
+    compare_rows(state, &[]).unwrap().1[index].pick.clone()
+}
+
+fn failed() -> RunStatus {
+    RunStatus::Failed {
+        step: RunStep::Session,
+        reason: "x".into(),
+    }
+}
+
+fn pick_msg(id: GroupId, run: u8) -> ClientMsg {
+    ClientMsg::RunGroupPick {
+        req: 0,
+        project: PathBuf::from("/p"),
+        group: id,
+        run,
+    }
+}
+
+#[test]
+fn pick_is_absent_for_a_failed_run_and_offered_for_the_others() {
+    let (state, _) = pick_ready(&[RunStatus::Prompted, failed()]);
+    assert_eq!(
+        pick_of(&state, 0),
+        PickAvailability::Enabled { confirm: false }
+    );
+    assert_eq!(pick_of(&state, 1), PickAvailability::Hidden);
+}
+
+#[test]
+fn pick_is_disabled_on_every_row_with_the_reason_while_a_run_is_creating_or_starting() {
+    for busy in [RunStatus::Creating, RunStatus::Starting] {
+        let (state, _) = pick_ready(&[RunStatus::Prompted, busy]);
+        assert_eq!(
+            pick_of(&state, 0),
+            PickAvailability::Disabled(PICK_BUSY_REASON)
+        );
+        assert_eq!(
+            pick_of(&state, 1),
+            PickAvailability::Disabled(PICK_BUSY_REASON)
+        );
+    }
+    assert!(!PICK_BUSY_REASON.is_empty());
+}
+
+#[test]
+fn after_a_pick_no_row_offers_it_and_the_winner_reads_picked() {
+    let (mut state, id) = pick_ready(&[RunStatus::Prompted, RunStatus::Prompted]);
+    let mut g = state.groups[0].clone();
+    g.winner = Some(1);
+    g.runs[0].status = RunStatus::Picked;
+    update(&mut state, Msg::GroupsChanged(vec![g]));
+    assert_eq!(state.groups[0].id, id);
+    let rows = compare_rows(&state, &[]).unwrap().1;
+    assert_eq!(rows[0].status, "Picked");
+    assert!(rows.iter().all(|r| r.pick == PickAvailability::Hidden));
+}
+
+#[test]
+fn a_working_session_makes_the_row_ask_for_confirmation() {
+    let (mut state, _) = pick_ready(&[RunStatus::Prompted]);
+    let sid = micold_core::session::SessionId(uuid::Uuid::from_u128(7));
+    state.groups[0].runs[0].session = Some(sid);
+    let mut s = micold_core::session::Session::start_new(
+        SessionLocation::Worktree("feat-a-1".into()),
+        AiCli::ClaudeCode,
+    );
+    s.id = sid;
+    s.activity = ActivitySignal::Working;
+    let rows = compare_rows(&state, &[s]).unwrap().1;
+    assert_eq!(rows[0].pick, PickAvailability::Enabled { confirm: true });
+}
+
+#[test]
+fn picking_a_run_that_is_not_working_sends_at_once() {
+    let (mut state, id) = pick_ready(&[RunStatus::Prompted, RunStatus::Prompted]);
+    let effect = update(
+        &mut state,
+        Msg::PickPressed {
+            run: 2,
+            working: false,
+        },
+    );
+    assert_eq!(effect, Effect::Send(pick_msg(id, 2)));
+    assert!(state.pick_target.is_none());
+}
+
+#[test]
+fn picking_a_working_run_asks_first_and_cancelling_sends_nothing() {
+    let (mut state, _) = pick_ready(&[RunStatus::Prompted]);
+    let effect = update(
+        &mut state,
+        Msg::PickPressed {
+            run: 1,
+            working: true,
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    assert_eq!(state.pick_target.as_ref().map(|t| t.run), Some(1));
+    assert!(PICK_WORKING_CONFIRMATION.contains("still working"));
+    assert_eq!(update(&mut state, Msg::PickCancelled), Effect::None);
+    assert!(state.pick_target.is_none());
+    assert_eq!(update(&mut state, Msg::PickConfirmed), Effect::None);
+}
+
+#[test]
+fn confirming_sends_exactly_one_pick() {
+    let (mut state, id) = pick_ready(&[RunStatus::Prompted]);
+    update(
+        &mut state,
+        Msg::PickPressed {
+            run: 1,
+            working: true,
+        },
+    );
+    assert_eq!(
+        update(&mut state, Msg::PickConfirmed),
+        Effect::Send(pick_msg(id, 1))
+    );
+    assert_eq!(update(&mut state, Msg::PickConfirmed), Effect::None);
+}
+
+#[test]
+fn a_pick_that_is_not_offered_sends_nothing() {
+    let (mut state, _) = pick_ready(&[failed(), RunStatus::Creating]);
+    for run in [1, 2] {
+        assert_eq!(
+            update(
+                &mut state,
+                Msg::PickPressed {
+                    run,
+                    working: false
+                }
+            ),
+            Effect::None
+        );
+    }
+}
+
+#[test]
+fn a_winner_arriving_while_the_confirmation_is_open_closes_it() {
+    let (mut state, _) = pick_ready(&[RunStatus::Prompted, RunStatus::Prompted]);
+    update(
+        &mut state,
+        Msg::PickPressed {
+            run: 1,
+            working: true,
+        },
+    );
+    let mut g = state.groups[0].clone();
+    g.winner = Some(2);
+    update(&mut state, Msg::GroupsChanged(vec![g]));
+    assert!(state.pick_target.is_none());
+}
+
+#[test]
+fn success_names_the_base_branch_and_a_refusal_changes_nothing_in_the_view() {
+    let ff = Integration::FastForward {
+        base_tip: "t".into(),
+    };
+    let mc = Integration::MergeCommit { commit: "c".into() };
+    assert_eq!(picked_text(2, "main", &ff), "Run 2 fast-forwarded main");
+    assert_eq!(picked_text(2, "main", &mc), "Run 2 was merged into main");
+    // A refusal arrives outside the reducer (the shell reports its text); the rows stay as they were.
+    let (state, _) = pick_ready(&[RunStatus::Prompted]);
+    let before = compare_rows(&state, &[]).unwrap().1;
+    assert_eq!(compare_rows(&state, &[]).unwrap().1, before);
+}

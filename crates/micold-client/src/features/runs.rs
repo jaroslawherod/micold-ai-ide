@@ -20,7 +20,7 @@ use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs::naming::derive_group;
 use micold_core::runs::{
-    GroupId, RunGroup, RunStatus, RunSummary, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
+    GroupId, Integration, Run, RunGroup, RunStatus, RunSummary, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
 };
 use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{BlockReason, BranchCandidate, BranchOrigin};
@@ -38,6 +38,8 @@ pub struct State {
     pub menu: Option<GroupMenu>,
     /// The group awaiting the Dismiss group confirmation (G5); present only while it is shown.
     pub dismiss_target: Option<DismissTarget>,
+    /// The pick awaiting the still-working confirmation (C7); present only while it is shown.
+    pub pick_target: Option<PickTarget>,
     /// The open Compare view (C1–C5); present only while it is shown.
     pub compare: Option<CompareView>,
     /// The next summary read's sequence number.
@@ -96,6 +98,24 @@ pub struct DismissTarget {
     /// The project that owns it.
     pub project: PathBuf,
 }
+
+/// The pick a still-working confirmation is about (C7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickTarget {
+    /// The group.
+    pub group: GroupId,
+    /// The project that owns it.
+    pub project: PathBuf,
+    /// The run to pick.
+    pub run: u8,
+}
+
+/// What the still-working confirmation says (C7).
+pub const PICK_WORKING_CONFIRMATION: &str = "This run's session is still working. Picking it \
+integrates the work it has committed so far; anything it changes afterwards is not included.";
+
+/// The tooltip of a disabled **Pick this one** (C6).
+pub const PICK_BUSY_REASON: &str = "Wait until every run has finished starting.";
 
 /// The entries of a group row's menu, in order (G4).
 pub const GROUP_MENU_ITEMS: [&str; 2] = ["Compare", "Dismiss group"];
@@ -310,6 +330,17 @@ pub enum Msg {
     DismissConfirmed,
     /// The dismiss confirmation was cancelled.
     DismissCancelled,
+    /// **Pick this one** on run `run`; `working` is whether its session is still working (C7).
+    PickPressed {
+        /// The run.
+        run: u8,
+        /// Whether the run's session is working, so a confirmation comes first.
+        working: bool,
+    },
+    /// The still-working confirmation was confirmed.
+    PickConfirmed,
+    /// The still-working confirmation was cancelled.
+    PickCancelled,
 }
 
 /// What the shell must do after a message.
@@ -346,13 +377,26 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if state.dismiss_target.as_ref().is_some_and(|t| gone(t.group)) {
                 state.dismiss_target = None;
             }
+            let decided = |t: &PickTarget| {
+                state
+                    .groups
+                    .iter()
+                    .find(|g| g.id == t.group)
+                    .is_none_or(|g| g.winner.is_some())
+            };
+            if state.pick_target.as_ref().is_some_and(decided) {
+                state.pick_target = None;
+            }
             return compare_groups_changed(state);
         }
         Msg::CompareOpened { group, project } => {
             state.menu = None;
             return compare_opened(state, group, project);
         }
-        Msg::CompareClosed => state.compare = None,
+        Msg::CompareClosed => {
+            state.compare = None;
+            state.pick_target = None;
+        }
         Msg::SummaryRead { seq, run, result } => return summary_read(state, seq, run, result),
         Msg::RunChanged { run } => return request_read(state, run),
         // The root turns it into an outcome (`open_diff`); nothing to remember here.
@@ -375,6 +419,18 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                     req: 0,
                     project: target.project,
                     group: target.group,
+                });
+            }
+        }
+        Msg::PickPressed { run, working } => return pick_pressed(state, run, working),
+        Msg::PickCancelled => state.pick_target = None,
+        Msg::PickConfirmed => {
+            if let Some(target) = state.pick_target.take() {
+                return Effect::Send(ClientMsg::RunGroupPick {
+                    req: 0,
+                    project: target.project,
+                    group: target.group,
+                    run: target.run,
                 });
             }
         }
@@ -570,6 +626,8 @@ pub struct CompareRow {
     pub counts: RunCounts,
     /// Whether the row offers **Open diff**: the run has a worktree (C3, C4).
     pub can_open_diff: bool,
+    /// Whether the row offers **Pick this one** (C6).
+    pub pick: PickAvailability,
 }
 
 /// The status text of a run (C2): Creating and Starting from the run, Working and Waiting for
@@ -629,10 +687,90 @@ pub fn compare_rows<'a>(
                 reason,
                 counts,
                 can_open_diff: run.status.has_worktree(),
+                pick: pick_availability(
+                    group,
+                    run,
+                    matches!(activity, Some(ActivitySignal::Working)),
+                ),
             }
         })
         .collect();
     Some((group, rows))
+}
+
+/// Whether a row offers **Pick this one** (C6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickAvailability {
+    /// No button: the run has no branch, or the group already has a winner.
+    Hidden,
+    /// The button is shown but cannot be pressed, for this reason (the tooltip).
+    Disabled(&'static str),
+    /// The button works; `confirm` is whether a still-working confirmation comes first (C7).
+    Enabled {
+        /// The run's session is still working.
+        confirm: bool,
+    },
+}
+
+fn pick_availability(group: &RunGroup, run: &Run, working: bool) -> PickAvailability {
+    if group.winner.is_some() || matches!(run.status, RunStatus::Failed { .. } | RunStatus::Picked)
+    {
+        PickAvailability::Hidden
+    } else if group
+        .runs
+        .iter()
+        .any(|r| matches!(r.status, RunStatus::Creating | RunStatus::Starting))
+    {
+        PickAvailability::Disabled(PICK_BUSY_REASON)
+    } else {
+        PickAvailability::Enabled { confirm: working }
+    }
+}
+
+/// **Pick this one** was pressed on `run`: ask first when its session is working (C7), else send.
+fn pick_pressed(state: &mut State, run: u8, working: bool) -> Effect {
+    let Some(view) = &state.compare else {
+        return Effect::None;
+    };
+    let Some(group) = state.groups.iter().find(|g| g.id == view.group) else {
+        return Effect::None;
+    };
+    let eligible = group
+        .runs
+        .iter()
+        .find(|r| r.number == run)
+        .is_some_and(|r| {
+            matches!(
+                pick_availability(group, r, working),
+                PickAvailability::Enabled { .. }
+            )
+        });
+    if !eligible {
+        return Effect::None;
+    }
+    let target = PickTarget {
+        group: group.id,
+        project: view.project.clone(),
+        run,
+    };
+    if working {
+        state.pick_target = Some(target);
+        return Effect::None;
+    }
+    Effect::Send(ClientMsg::RunGroupPick {
+        req: 0,
+        project: target.project,
+        group: target.group,
+        run,
+    })
+}
+
+/// What a successful pick says (integration.md I7).
+pub fn picked_text(run: u8, base: &str, integration: &Integration) -> String {
+    match integration {
+        Integration::FastForward { .. } => format!("Run {run} fast-forwarded {base}"),
+        Integration::MergeCommit { .. } => format!("Run {run} was merged into {base}"),
+    }
 }
 
 /// **Open diff** on `run`: the run's Changes view opens (C4); a run with no worktree opens nothing.
@@ -798,6 +936,34 @@ impl Registered for ConfirmDismissGroupDialog {
     }
 }
 
+/// The still-working confirmation, as a floating surface (C7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmPickRunDialog;
+
+impl FloatingSurface for ConfirmPickRunDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_pick_run")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::PickCancelled))
+    }
+}
+
+impl Registered for ConfirmPickRunDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .runs
+            .pick_target
+            .as_ref()
+            .map(|_| ConfirmPickRunDialog)
+    }
+}
+
 /// Route a message through the root: the two that open a surface say so, and the dialog closes
 /// the other surfaces first.
 pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
@@ -812,7 +978,7 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             vec![Outcome::ChangesClosedForCompare]
         }
         Msg::DiffOpened { run } => open_diff(&state.runs, run),
-        Msg::DismissAsked { .. } => {
+        Msg::DismissAsked { .. } | Msg::PickPressed { working: true, .. } => {
             state.clear_for_dialog();
             apply(&mut state.runs, msg);
             Vec::new()

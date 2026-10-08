@@ -120,6 +120,7 @@ fn compare_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
         reason: reason.map(str::to_string),
         counts,
         can_open_diff,
+        pick: crate::features::runs::PickAvailability::Enabled { confirm: false },
     };
     let rows = [
         row(1, "Working", None, counts(4, 120, 30, false), true),
@@ -135,7 +136,12 @@ fn compare_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
     ];
     let mut list = column![].spacing(spacing::SM);
     for row in &rows {
-        list = list.push(crate::ui::compare::run_row(row, roles, |_| Message::NoOp));
+        list = list.push(crate::ui::compare::run_row(
+            row,
+            roles,
+            |_| Message::NoOp,
+            |_, _| Message::NoOp,
+        ));
     }
     posed("Compare rows", list, roles)
 }

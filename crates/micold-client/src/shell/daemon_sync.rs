@@ -168,6 +168,11 @@ pub enum PendingOp {
     /// A `RunGroupDismiss` (feature 483, W4): the list arrives as `RunGroupsChanged`; this exists
     /// so a refusal reaches the user.
     RunGroupDismiss,
+    /// A `RunGroupPick` of run `run` (feature 483, C6–C8): the group arrives as `RunGroupsChanged`;
+    /// this says what the pick did, or the refusal's own text.
+    RunGroupPick {
+        run: u8,
+    },
     /// The `BranchList` the Run in parallel dialog's base-branch select reads (feature 483, D1).
     RunBranchList {
         project: PathBuf,
@@ -206,6 +211,7 @@ impl PendingOp {
             PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
+            PendingOp::RunGroupPick { .. } => "pick the run".into(),
             PendingOp::RunBranchList { .. } => "list the branches".into(),
             PendingOp::WorktreeCreate { dir_name, .. } => {
                 format!("create the worktree \"{dir_name}\"")
@@ -840,6 +846,21 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // nothing to do; a `SessionCreate` additionally names the daemon-assigned id so we
         // select + view it.
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
+            Some(PendingOp::RunGroupPick { run }) => {
+                if let OperationResult::RunPicked {
+                    group, integration, ..
+                } = result
+                {
+                    if let Some(group) = app.core.runs.groups.iter().find(|g| g.id == group) {
+                        let text = micold_client::features::runs::picked_text(
+                            run,
+                            &group.base_branch,
+                            &integration,
+                        );
+                        app.core.notify_info(text);
+                    }
+                }
+            }
             // Feature 482 (S2): the comments' new state arrives as `ReviewChanged`; this says
             // where they went.
             Some(PendingOp::ReviewSend { count }) => {
@@ -1244,6 +1265,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     app.core
                         .update(Message::Attach(AttachMsg::OfferApplyFailed(message)));
                 }
+                // Feature 483 (C8): the refusal's own text, the view unchanged.
+                Some(PendingOp::RunGroupPick { .. }) => app.core.notify_error(message),
                 Some(op) => app
                     .core
                     .notify_error(format!("Couldn't {}: {message}", op.describe())),

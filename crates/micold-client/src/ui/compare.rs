@@ -10,7 +10,7 @@ use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
 
 use crate::app::{Message, State};
-use crate::features::runs::{compare_rows, CompareRow, Msg, RunCounts};
+use crate::features::runs::{compare_rows, CompareRow, Msg, PickAvailability, RunCounts};
 use crate::icons::Icon;
 use crate::ui::material::{Button, Tag, Text, Tooltip, TypeRole};
 
@@ -65,9 +65,12 @@ pub fn view<'a>(state: &'a State, scheme: ColorScheme) -> Option<Element<'a, Mes
 
     let mut list = column![].spacing(spacing::SM);
     for row in &rows {
-        list = list.push(run_row(row, r, |run| {
-            Message::Runs(Msg::DiffOpened { run })
-        }));
+        list = list.push(run_row(
+            row,
+            r,
+            |run| Message::Runs(Msg::DiffOpened { run }),
+            |run, working| Message::Runs(Msg::PickPressed { run, working }),
+        ));
     }
     Some(
         container(
@@ -88,6 +91,7 @@ pub fn run_row<'a, M: Clone + 'a>(
     row_: &CompareRow,
     r: Roles,
     open_diff: impl Fn(u8) -> M,
+    pick: impl Fn(u8, bool) -> M,
 ) -> Element<'a, M> {
     let detail: Element<'a, M> = match (&row_.reason, &row_.counts) {
         (Some(reason), _) => Text::new(reason.clone(), TypeRole::Body, r)
@@ -123,6 +127,20 @@ pub fn run_row<'a, M: Clone + 'a>(
     }
     if row_.can_open_diff {
         line = line.push(Button::text("Open diff", r).on_press(open_diff(row_.number)));
+    }
+    match &row_.pick {
+        PickAvailability::Hidden => {}
+        PickAvailability::Disabled(reason) => {
+            line = line.push(Tooltip::new(
+                Button::text("Pick this one", r),
+                (*reason).to_string(),
+                r,
+            ));
+        }
+        PickAvailability::Enabled { confirm } => {
+            line =
+                line.push(Button::text("Pick this one", r).on_press(pick(row_.number, *confirm)));
+        }
     }
     line.into()
 }

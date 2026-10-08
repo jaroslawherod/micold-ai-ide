@@ -273,6 +273,7 @@ register! {
     },
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
     crate::features::runs::ConfirmDismissGroupDialog => crate::ui::confirm_dismiss_group::dialog,
+    crate::features::runs::ConfirmPickRunDialog => crate::ui::confirm_pick_run::dialog,
     // The group row's menu replaces the other row menus, as they replace each other.
     crate::features::runs::GroupContextMenu {
         displaces:
