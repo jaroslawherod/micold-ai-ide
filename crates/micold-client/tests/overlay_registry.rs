@@ -201,6 +201,17 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // Dismiss group's question (feature 483, G5).
+        Dialog {
+            id: "confirm_dismiss_run_group",
+            cancel: Message::Runs(micold_client::features::runs::Msg::DismissCancelled),
+            open: |state| {
+                state.runs.dismiss_target = Some(micold_client::features::runs::DismissTarget {
+                    group: micold_core::runs::GroupId(uuid::Uuid::from_u128(1)),
+                    project: std::path::PathBuf::from("/p"),
+                });
+            },
+        },
         // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
         // without answering; the daemon keeps waiting for another window or times out.
         Dialog {
@@ -321,17 +332,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483).
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483).
     assert_eq!(
         dialogs().len(),
-        14,
+        15,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        30,
-        "fourteen dialogs plus nothing open, each with the filter panel open and closed"
+        32,
+        "fifteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
