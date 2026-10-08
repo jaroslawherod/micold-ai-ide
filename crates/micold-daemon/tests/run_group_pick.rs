@@ -1,6 +1,10 @@
 //! Pick this one on the service (feature 483, contracts/run-group-wire.md W3, integration.md): the
 //! refusals in contract order, each changing nothing; a fast-forward and a merge commit; a base
 //! branch that is checked out; and two windows picking at once.
+
+// unix-only: the stand-in CLI is a `#!/bin/sh` script, as in `run_group_create.rs`.
+#![cfg(unix)]
+
 #[path = "support/runs.rs"]
 mod runs_support;
 
