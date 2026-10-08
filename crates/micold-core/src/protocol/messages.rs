@@ -27,6 +27,8 @@ use crate::mcp::policy::CrossSessionAccess;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, ReviewComment};
 use crate::review::Side;
+use crate::naming::WorktreeNaming;
+use crate::runs::{GroupId, Integration, RunGroup};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::settings::DiffLayout;
 use crate::theme::ColorScheme;
@@ -649,6 +651,45 @@ pub enum ClientMsg {
         outdated: Vec<CommentId>,
     },
 
+    // --- Parallel runs (feature 483, contracts/run-group-wire.md) ---
+    /// Run one prompt across several agents: one worktree and one session per provider, kept as
+    /// one group (W1). Answered `OperationOk(RunGroupCreated)` once the group is recorded; each
+    /// run then progresses on its own and is reported by [`DaemonMsg::RunGroupsChanged`] (W2).
+    RunGroupCreate {
+        /// Correlation id.
+        req: u64,
+        /// The project.
+        project: PathBuf,
+        /// Type, optional ticket and name the runs' names are derived from.
+        naming: WorktreeNaming,
+        /// The prompt every run's session receives once, as its first input.
+        prompt: String,
+        /// The local branch every run starts from.
+        base_branch: String,
+        /// One provider per run, in run order; `MIN_RUNS..=MAX_RUNS` of them.
+        providers: Vec<AiCli>,
+    },
+    /// Pick a group's run: integrate its branch into the group's base branch (W3).
+    RunGroupPick {
+        /// Correlation id.
+        req: u64,
+        /// The project.
+        project: PathBuf,
+        /// The group.
+        group: GroupId,
+        /// The run's number.
+        run: u8,
+    },
+    /// Forget a group, leaving its worktrees, branches and sessions as they are (W4).
+    RunGroupDismiss {
+        /// Correlation id.
+        req: u64,
+        /// The project.
+        project: PathBuf,
+        /// The group.
+        group: GroupId,
+    },
+
     // --- AI CLIs ---
     /// Ask which AI CLIs exist **where sessions run** (feature 027, FR-023c).
     ///
@@ -842,6 +883,14 @@ pub enum DaemonMsg {
         comments: Vec<ReviewComment>,
         /// A send is in progress for this entry: sending, editing and deleting are unavailable.
         sending: bool,
+    },
+    /// A project's run groups changed (feature 483): the whole list, pushed to every client
+    /// attached to `project` after `Attached` and after every change. Idempotent.
+    RunGroupsChanged {
+        /// The project.
+        project: PathBuf,
+        /// Every group of the project, oldest first.
+        groups: Vec<RunGroup>,
     },
 
     // --- Terminal-originated notifications ---
@@ -1472,6 +1521,20 @@ pub enum OperationResult {
     WorktreeExcluded {
         /// The path that is no longer shown.
         path: PathBuf,
+    },
+    /// A run group was recorded (feature 483, W1); its runs progress on their own.
+    RunGroupCreated {
+        /// The new group.
+        group: GroupId,
+    },
+    /// A group's run was picked and integrated into the base branch (feature 483, W3).
+    RunPicked {
+        /// The group.
+        group: GroupId,
+        /// The picked run's number.
+        run: u8,
+        /// What the pick did to the base branch.
+        integration: Integration,
     },
     /// The answer to [`ClientMsg::RepoRootQuery`] (feature 027, research R2 part 2).
     ///

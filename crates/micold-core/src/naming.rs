@@ -76,10 +76,12 @@ impl fmt::Display for ConventionalType {
     }
 }
 
-/// The raw form inputs before derivation (FR-005).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The raw form inputs before derivation (FR-005). Serialisable since feature 483, whose run
+/// groups carry what their runs' names were derived from on the wire and in the runs file.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WorktreeNaming {
     /// Selected Conventional-Commits type (required).
+    #[serde(rename = "type")]
     pub type_: Option<ConventionalType>,
     /// Optional ticket reference; omitted from output when absent/blank (FR-005b).
     pub ticket: Option<String>,
@@ -88,7 +90,7 @@ pub struct WorktreeNaming {
 }
 
 /// The derived, validated names ready to hand to git.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DerivedNames {
     /// Directory component under `.claude/worktrees/`: `${type}-${ticket}-${name}`.
     pub dir_name: String,

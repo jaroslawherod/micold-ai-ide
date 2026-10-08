@@ -42,6 +42,7 @@ pub mod protocol;
 pub mod provider;
 pub mod pull_request;
 pub mod review;
+pub mod runs;
 pub mod sandbox;
 pub mod script_path_check;
 pub mod selector;
