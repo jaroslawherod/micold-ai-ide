@@ -17,7 +17,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | Section | What it holds |
 | --- | --- |
 | [Appearance](#appearance) | The theme |
-| [Terminal](#terminal) | The embedded terminal's scrollback limit |
+| [Terminal](#terminal) | The embedded terminal's scrollback limit, and whether its history is saved to disk |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 | [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
@@ -47,6 +47,19 @@ scrollback](./worktrees-and-sessions.md)).
 - The value is **saved on your machine** and restored the next time you open the app.
 - A changed limit applies to sessions started **after** the change; already-running terminals
   keep their current buffer.
+- A very large value makes each saved history larger, because a saved history holds up to this many
+  lines per session.
+
+**Save terminal history** keeps each session's scrollback on disk, so it is still there after the
+background service or the computer restarts (see [Worktrees & sessions → Earlier output after a
+stop and start](./worktrees-and-sessions.md#earlier-output-after-a-stop-and-start)).
+
+- **Default**: on.
+- Turning it **off** deletes every saved history at once, without asking, and nothing is written
+  until you turn it back on. It takes effect when you press **Save**.
+- With it off, a stop and start still shows the earlier output in the terminal; only a restart of
+  the background service or the computer loses it.
+- If a file cannot be deleted at that moment, the service retries until it succeeds.
 
 ## Environment
 
