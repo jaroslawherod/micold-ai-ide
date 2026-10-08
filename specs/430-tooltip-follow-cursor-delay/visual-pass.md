@@ -21,7 +21,7 @@ idle-power behaviour, and the pointer on the cursor image (grim does not draw it
 
 ## Pass 2, 2026-10-08 (steps 4, 5 and 7 PASS)
 
-Headless sway + pixman + lavapipe, not a real display. HEAD b905b1c3 (M1 #600, M2 #607), pointer by
+Headless sway + pixman + lavapipe, not a real display. worktree HEAD b905b1c3 (contains M1 #600 and M2 #607: `git merge-base --is-ancestor cddd3ce5 b905b1c3`; the exact build sha of the pinned binary was not recorded), pointer by
 the committed `vptr.py`, screenshots by grim.
 
 | Step | Verdict | Evidence |
@@ -35,12 +35,22 @@ under the build lock. 30 s samples after a 10 s settle, no hover, same scroll of
 bottom, 1600x1200 window. CPU % = utime+stime of the process over 30 s; commits from
 `WAYLAND_DEBUG=client`.
 
-| Build | CPU % (4 samples) | Mean | wl_surface commits/s |
+| Build | CPU % (4 samples; first two dbg=0, last two dbg=1) | Mean | wl_surface commits/s (dbg=1 runs only) |
 |---|---|---|---|
-| Baseline 47ae6297 | 159.7, 178.6, 171.5, 170.6 | 170.1 | 60.2, 60.2 |
-| Current | 185.3, 189.8, 166.9, 177.2 | 179.8 | 60.4, 60.3 |
+| Baseline 47ae6297 | 159.7, 178.6 / 171.5, 170.6 | 170.1 | 60.3, 60.2 |
+| Current | 185.3, 189.8 / 166.9, 177.2 | 179.8 | 60.4, 60.3 |
 
-+5.7% against a baseline run-to-run spread of ~11%: within noise.
+dbg=1 means a `WAYLAND_DEBUG=client` run; dbg=0 is a plain run. Per mode (mean CPU %):
+
+| Mode | Baseline | Current | Difference |
+|---|---|---|---|
+| dbg=0 | 169.2 | 187.6 | +10.9% |
+| dbg=1 | 171.1 | 172.1 | +0.6% |
+
+Overall +5.7% against a baseline run-to-run spread of ~11%: within noise. In dbg=1 the difference is
+negligible; in dbg=0 it is +10.9%, at the edge of that spread (baseline samples 159.7 and 178.6 differ
+by 11.2%), so the verdict is "no evidence of added work", not "identical". Commit rates are equal, and
+were counted only in the dbg=1 runs (the dbg=0 runs kept no log); the recount is in the raw file.
 
 Caveats:
 - The showcase redraws continuously at ~60 Hz in BOTH builds with nothing open. This shows the feature
