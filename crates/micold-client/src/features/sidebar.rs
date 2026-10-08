@@ -478,6 +478,14 @@ pub fn worktree_tooltip(
     // is untouched (FR-011). Held facts only: nothing here reads a disk or asks GitHub (FR-012).
     if let Some(row) = pull_request {
         lines.extend(pull_request_lines(row.status));
+        // Last (UI §3, line 6): the removal suggestion, only for a merged pull request that the
+        // repository shows holds all of the branch's work (FR-015, FR-017). It says how to remove
+        // the worktree by the route that exists; nothing is removed by it (FR-016).
+        if row.removable {
+            lines.push(
+                "Cleanup: merged — this worktree can be removed (right-click, Delete)".into(),
+            );
+        }
     }
 
     lines.join("\n")
@@ -559,6 +567,9 @@ pub struct RowPullRequest<'a> {
     pub status: &'a PullRequestStatus,
     /// Seconds since the reading that produced it started.
     pub age_secs: u64,
+    /// The pull request was merged and the branch holds nothing newer (FR-015): the row suggests
+    /// removing the worktree.
+    pub removable: bool,
 }
 
 /// The pull request `entry`'s row shows, if any (FR-001, FR-007). Only a worktree with a branch
@@ -567,16 +578,19 @@ pub struct RowPullRequest<'a> {
 pub fn row_pull_request<'a>(
     entry: &SidebarEntry,
     statuses: &'a BTreeMap<String, PullRequestStatus>,
+    removable: &BTreeSet<String>,
     read_at: Option<u64>,
     now: u64,
 ) -> Option<RowPullRequest<'a>> {
     let SidebarEntry::Worktree(node) = entry else {
         return None;
     };
-    let status = statuses.get(node.worktree.branch.as_deref()?)?;
+    let branch = node.worktree.branch.as_deref()?;
+    let status = statuses.get(branch)?;
     Some(RowPullRequest {
         status,
         age_secs: now.saturating_sub(read_at.unwrap_or(now)),
+        removable: removable.contains(branch),
     })
 }
 

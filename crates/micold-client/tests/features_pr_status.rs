@@ -372,3 +372,71 @@ fn no_sequence_yields_two_reads_without_an_end_between_them() {
         }
     }
 }
+
+// ---- U119–U121: the removal mark (feature 040 US3, data-model §3 invariant 5) ----
+
+/// A merged status for `number`.
+fn merged(number: u64) -> PullRequestStatus {
+    PullRequestStatus {
+        state: PrState::Merged,
+        ..status(number)
+    }
+}
+
+fn finish_ok(statuses: BTreeMap<String, PullRequestStatus>, removable: &[&str]) -> State {
+    let mut st = enabled();
+    let seq = reading(&mut st);
+    let removable = removable.iter().map(|b| (*b).to_string()).collect();
+    finish(
+        &mut st,
+        seq,
+        Outcome::Ok {
+            statuses,
+            removable,
+            started_at: NOW,
+        },
+    );
+    st
+}
+
+/// U119 (FR-015): a reading's `removable` is stored with its statuses.
+#[test]
+fn finished_ok_stores_the_removable_branches() {
+    let st = finish_ok(
+        BTreeMap::from([("feat/a".to_string(), merged(7))]),
+        &["feat/a"],
+    );
+    assert_eq!(st.removable, BTreeSet::from(["feat/a".to_string()]));
+}
+
+/// U120 (FR-017, DM §3 invariant 5): a branch that is not merged, or has no status, is dropped.
+#[test]
+fn a_removable_branch_that_is_not_merged_or_not_listed_is_dropped() {
+    let st = finish_ok(
+        BTreeMap::from([
+            ("feat/open".to_string(), status(1)),
+            ("feat/merged".to_string(), merged(2)),
+        ]),
+        &["feat/open", "feat/merged", "feat/unknown"],
+    );
+    assert_eq!(st.removable, BTreeSet::from(["feat/merged".to_string()]));
+}
+
+/// U121 (FR-025, FR-029): `Unavailable` and `Released` empty it.
+#[test]
+fn unavailable_and_released_empty_the_removable_branches() {
+    let held = || {
+        finish_ok(
+            BTreeMap::from([("feat/a".to_string(), merged(7))]),
+            &["feat/a"],
+        )
+    };
+    let mut st = held();
+    let seq = reading_again(&mut st);
+    finish(&mut st, seq, Outcome::Err(ReadingFailure::Unavailable));
+    assert!(st.removable.is_empty());
+
+    let mut st = held();
+    update(&mut st, Msg::Released);
+    assert!(st.removable.is_empty());
+}

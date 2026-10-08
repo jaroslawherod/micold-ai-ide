@@ -6,7 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use micold_core::pull_request::{PullRequestStatus, ReadingFailure};
+use micold_core::protocol::messages::BranchContainment;
+use micold_core::pull_request::{PrState, PullRequestStatus, ReadingFailure};
 
 /// Whether a reading is under way.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -92,6 +93,25 @@ pub enum Msg {
     },
     /// The hold ended: project switched or forgotten, displaced, refused, disconnected.
     Released,
+    /// Reading `seq`'s pull request source answered. The shell answers it, by asking the daemon
+    /// which merged branches hold nothing newer (RW §2 step 4) and then finishing the reading; to
+    /// this reducer it changes nothing.
+    StatusesRead {
+        /// The reading it belongs to.
+        seq: u64,
+        /// Branch → status.
+        statuses: BTreeMap<String, PullRequestStatus>,
+        /// Unix seconds at which the reading started.
+        started_at: u64,
+    },
+    /// The shell's 10-second bound on reading `seq`'s `MergedBranchCheck` (request `req`) ran out.
+    /// The shell answers it; to this reducer it changes nothing.
+    MergedCheckTimedOut {
+        /// The reading that asked.
+        seq: u64,
+        /// The request that was asked.
+        req: u64,
+    },
     /// The shell's 10-second bound on reading `seq`'s `RemoteList` (request `req`) ran out. The
     /// shell answers it; to this reducer it changes nothing.
     RemotesTimedOut {
@@ -172,8 +192,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                     removable,
                     started_at,
                 } => {
+                    // Invariant 5: only a merged pull request's branch is ever removable (FR-017).
+                    state.removable = removable
+                        .into_iter()
+                        .filter(|branch| {
+                            matches!(
+                                statuses.get(branch).map(|status| status.state),
+                                Some(PrState::Merged)
+                            )
+                        })
+                        .collect();
                     state.statuses = statuses;
-                    state.removable = removable;
                     state.read_at = Some(started_at);
                     state.pause_until = None;
                 }
@@ -203,8 +232,25 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state.read_at = None;
             Effect::None
         }
-        Msg::RemotesTimedOut { .. } => Effect::None,
+        Msg::RemotesTimedOut { .. }
+        | Msg::StatusesRead { .. }
+        | Msg::MergedCheckTimedOut { .. } => Effect::None,
     }
+}
+
+/// The branches the daemon answered [`BranchContainment::Contained`] for, given the branches it was
+/// asked about, in order (RW §3). An answer list of another length is no answer: nothing is
+/// suggested (FR-017).
+pub fn removable_from(asked: &[String], answers: &[BranchContainment]) -> BTreeSet<String> {
+    if asked.len() != answers.len() {
+        return BTreeSet::new();
+    }
+    asked
+        .iter()
+        .zip(answers)
+        .filter(|(_, answer)| **answer == BranchContainment::Contained)
+        .map(|(branch, _)| branch.clone())
+        .collect()
 }
 
 /// Whether readings are held back by GitHub's request limit at `now` (FR-024).

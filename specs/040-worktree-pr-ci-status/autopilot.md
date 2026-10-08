@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: PR #637 (M5) open, gate green. Wait for CI, merge, then M6. Visual pass B1-B5 not run (no Xvfb/xdotool): M8 records it.
+- **Next step**: M6 (T048–T054) implemented; scoped gate, reviews A and B, full gate, then the PR. Visual pass B1-B7 not run (no Xvfb/xdotool): M8 records it.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #547 | M2 | merged | 2e688bf3d01bed2c3ae63681ecd05be8e6db3648 |
 | #611 | M3 | merged | ef56a970339f2a77a0f8642a6c4dcc848a00b1ce |
 | #619 | M4 | merged | f354cd21fe15d5c76cff5c5c8dac414e9cda0dea |
-| #637 | M5 | open (gate green) | |
+| #637 | M5 | merged | 88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | merged |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | #611 | merged |
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | #619 | merged |
-| M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | #637 | open |
-| M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | pending |
+| M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | #637 | merged |
+| M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | in progress |
 | M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | | pending |
 | M8 | T066–T068 | full | Architecture page and the recorded quickstart §B pass | | pending |
 

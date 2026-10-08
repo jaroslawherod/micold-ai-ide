@@ -540,3 +540,15 @@ existed and failed before the implementation.
 - review B F2 retired: with the `starts_with` guard of `pull_request_address_to_open` replaced by `starts_with("")`,
   `pr_status_open_opens_nothing_for_an_address_that_is_not_github` failed (5 passed, 1 failed); restored. The read-only
   scan test of T044 was added after Review A and B found it missing; it passed on first run (a scan over existing code).
+
+### M6 cycle: U119–U128, A25–A30 — the removal suggestion (T048–T054)
+
+- test: written before the code. `removable` reducer tests ran red on their assertion (U120: the reducer kept `feat/open` and
+  `feat/unknown`; 1 of 3 failed, U119 and U121 already held because M3 stored and cleared `removable`). The shell tests
+  (`pr_status_merged_*`), the sidebar tests (`RowPullRequest.removable`, a fifth `row_pull_request` argument, `Cleanup:`) were written
+  against the new API and did not compile until it existed (compile-red, not seen failing on an assertion: deviation).
+- green: `features/pr_status.rs` (`removable` filtered to merged branches, `removable_from`, `Msg::StatusesRead` /
+  `MergedCheckTimedOut`), `shell/pr_status.rs` (`on_statuses_read`, `on_merged_branches`, 10 s bound),
+  `PendingOp::MergedBranchCheck`, the `Cleanup:` line, the **can be removed** chip, two covered states, the regenerated
+  layout snapshot, the user guide
+- commit: the commit that adds this entry

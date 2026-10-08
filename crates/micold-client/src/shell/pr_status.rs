@@ -2,8 +2,8 @@
 //!
 //! The reducer (`features/pr_status.rs`) decides when a reading starts and what its answer
 //! changes. What is left here is the reading itself (contracts/reading-and-wire.md §2, "What one
-//! reading does"): ask the daemon for the repository's remotes, locate `gh`, and read the pull
-//! requests off the update thread.
+//! reading does"): ask the daemon for the repository's remotes, locate `gh`, read the pull
+//! requests off the update thread, and ask the daemon which merged branches hold nothing newer.
 //!
 //! # When GitHub is contacted, and why only then
 //!
@@ -21,7 +21,7 @@
 //! "not connected" notice cannot appear, and its pending entry is dropped silently on a
 //! disconnect.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -32,8 +32,8 @@ use micold_client::features::pr_status::{Effect, Outcome, Phase};
 use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
-use micold_core::protocol::messages::ClientMsg;
-use micold_core::pull_request::ReadingFailure;
+use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
+use micold_core::pull_request::{PrState, PullRequestStatus, ReadingFailure};
 
 use crate::shell::daemon_sync::{send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -41,6 +41,14 @@ use crate::App;
 
 /// How long the daemon may take to answer the reading's `RemoteList` (FR-021).
 pub(crate) const REMOTES_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long the daemon may take to answer the reading's `MergedBranchCheck` (FR-021).
+pub(crate) const MERGED_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The most branches one `MergedBranchCheck` asks about; the daemon refuses a longer list. A
+/// reading covers a project's worktrees, so more merged branches than this is far beyond the
+/// ordinary: the rest get no removal suggestion rather than a refusal of all of them.
+const MERGED_CHECK_LIMIT: usize = 50;
 
 /// Unix seconds now. The reducer has no clock; every message that needs the time carries this.
 fn now() -> u64 {
@@ -65,6 +73,37 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             app.pending_ops.remove(&req);
             finished(seq, Outcome::Err(ReadingFailure::Passing))
         }
+        // The 10-second bound on the merged-branch question ran out. Still unanswered: the
+        // statuses are applied with no suggestion. Answered meanwhile: the entry is gone.
+        Msg::MergedCheckTimedOut { seq, req } => {
+            let unanswered = matches!(
+                app.pending_ops.get(&req),
+                Some(PendingOp::MergedBranchCheck { seq: asked, .. }) if *asked == seq
+            );
+            if !unanswered {
+                return Task::none();
+            }
+            let Some(PendingOp::MergedBranchCheck {
+                statuses, started, ..
+            }) = app.pending_ops.remove(&req)
+            else {
+                return Task::none();
+            };
+            finished(
+                seq,
+                Outcome::Ok {
+                    statuses,
+                    removable: BTreeSet::new(),
+                    started_at: started,
+                },
+            )
+        }
+        // The source answered: ask which merged branches hold nothing newer, or end the reading.
+        Msg::StatusesRead {
+            seq,
+            statuses,
+            started_at,
+        } => return on_statuses_read(app, seq, statuses, started_at),
         other => other,
     };
     if let Msg::Finished { seq, outcome, .. } = &msg {
@@ -162,26 +201,111 @@ pub fn on_remotes(
                     resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
                 });
                 let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
-                    return Outcome::Err(ReadingFailure::Unavailable);
+                    return finished(seq, Outcome::Err(ReadingFailure::Unavailable));
                 };
                 match (tooling.pull_requests)(gh).read(&repo, &branches, now()) {
-                    Ok(statuses) => Outcome::Ok {
+                    Ok(statuses) => Msg::StatusesRead {
+                        seq,
                         statuses,
-                        removable: BTreeSet::new(),
                         started_at: started,
                     },
-                    Err(failure) => Outcome::Err(failure),
+                    Err(failure) => finished(seq, Outcome::Err(failure)),
                 }
             })
             .await
         },
         move |joined| {
-            Message::PrStatus(finished(
-                seq,
-                joined.unwrap_or(Outcome::Err(ReadingFailure::Passing)),
-            ))
+            Message::PrStatus(
+                joined.unwrap_or_else(|_| finished(seq, Outcome::Err(ReadingFailure::Passing))),
+            )
         },
     )
+}
+
+/// The source of reading `seq` answered `statuses`. Asks the daemon, once, which of the merged
+/// pull requests' branches hold nothing newer (reading-and-wire §2 step 4); with no merged one the
+/// reading ends here and the daemon is not asked (FR-023). An answer that outlived its reading is
+/// dropped. The daemon is read-only for this question, so nothing it is asked changes anything.
+fn on_statuses_read(
+    app: &mut App,
+    seq: u64,
+    statuses: BTreeMap<String, PullRequestStatus>,
+    started: u64,
+) -> Task<Message> {
+    let awaited =
+        matches!(app.core.pr_status.phase, Phase::Reading { seq: current, .. } if current == seq);
+    if !awaited {
+        return Task::none();
+    }
+    // A merged pull request is asked about only while it is the branch's shown one: a branch with a
+    // newer open pull request holds that one, and is not asked about (story 3 scenario 6).
+    let queries: Vec<MergedBranchQuery> = statuses
+        .iter()
+        .filter(|(_, status)| status.state == PrState::Merged)
+        .map(|(branch, status)| MergedBranchQuery {
+            branch: branch.clone(),
+            head: status.head.clone(),
+        })
+        .take(MERGED_CHECK_LIMIT)
+        .collect();
+    let project = app.core.workspace.active.clone();
+    let (Some(project), false, true) = (project, queries.is_empty(), app.daemon.is_some()) else {
+        let outcome = Outcome::Ok {
+            statuses,
+            removable: BTreeSet::new(),
+            started_at: started,
+        };
+        return update(app, finished(seq, outcome));
+    };
+    let asked = queries.iter().map(|query| query.branch.clone()).collect();
+    let req = app.next_req;
+    send_op(
+        app,
+        PendingOp::MergedBranchCheck {
+            seq,
+            asked,
+            statuses,
+            started,
+        },
+        move |req| ClientMsg::MergedBranchCheck {
+            req,
+            project,
+            checks: queries,
+        },
+    );
+    // Built inside the future: the timer needs the runtime the task runs on.
+    Task::perform(
+        async move { tokio::time::sleep(MERGED_CHECK_TIMEOUT).await },
+        move |()| Message::PrStatus(Msg::MergedCheckTimedOut { seq, req }),
+    )
+}
+
+/// The daemon answered the reading's `MergedBranchCheck`: `None` when it was refused or failed.
+/// Ends the reading with the statuses it waited with; `removable` holds the branches answered
+/// `Contained`, and nothing when there is no usable answer (FR-017).
+pub fn on_merged_branches(
+    app: &mut App,
+    seq: u64,
+    asked: Vec<String>,
+    statuses: BTreeMap<String, PullRequestStatus>,
+    started: u64,
+    answers: Option<Vec<BranchContainment>>,
+) -> Task<Message> {
+    // An answer that outlived its reading: the project was switched, or the hold was lost.
+    let awaited =
+        matches!(app.core.pr_status.phase, Phase::Reading { seq: current, .. } if current == seq);
+    if !awaited {
+        return Task::none();
+    }
+    let removable = answers.map_or_else(BTreeSet::new, |answers| {
+        micold_client::features::pr_status::removable_from(&asked, &answers)
+    });
+    let outcome = Outcome::Ok {
+        statuses,
+        removable,
+        started_at: started,
+    };
+    update(app, finished(seq, outcome))
 }
 
 /// Reading `seq` ended with `outcome`, now.

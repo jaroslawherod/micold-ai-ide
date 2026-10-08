@@ -8768,6 +8768,314 @@ mod pr_status {
             assert!(rig.app.core.worktree_form.worktree_error.is_none());
         }
     }
+
+    // ---- Feature 040, T049: the merged-branch question (reading-and-wire §2 step 4, §3) --------
+    //
+    // The 10-second bound on the daemon's answer is a task the source's end returns. These tests
+    // run the source's task themselves and drop that timer, as the helpers above drop the remotes'
+    // one, and send the timer's message where they want the bound to run out.
+
+    use micold_core::protocol::messages::{BranchContainment, ErrorKind, MergedBranchQuery};
+
+    fn head(c: char) -> String {
+        c.to_string().repeat(40)
+    }
+
+    fn with_state(state: PrState, head_char: char) -> PullRequestStatus {
+        PullRequestStatus {
+            state,
+            head: head(head_char),
+            ..status(1)
+        }
+    }
+
+    /// One branch per kind of pull request: only `feat/m` is merged.
+    fn mixed() -> BTreeMap<String, PullRequestStatus> {
+        BTreeMap::from([
+            ("feat/m".to_string(), with_state(PrState::Merged, 'b')),
+            (
+                "feat/o".to_string(),
+                with_state(
+                    PrState::Open {
+                        checks: CheckStatus::None,
+                    },
+                    'c',
+                ),
+            ),
+            (
+                "feat/d".to_string(),
+                with_state(
+                    PrState::Draft {
+                        checks: CheckStatus::None,
+                    },
+                    'd',
+                ),
+            ),
+            ("feat/c".to_string(), with_state(PrState::Closed, 'e')),
+        ])
+    }
+
+    fn mixed_listing() -> micold_core::protocol::messages::CatalogSnapshot {
+        listing(&[
+            ("m", Some("feat/m")),
+            ("o", Some("feat/o")),
+            ("d", Some("feat/d")),
+            ("c", Some("feat/c")),
+        ])
+    }
+
+    /// Run the reading up to the point where the source has answered: the remotes answered, the
+    /// source's task run, its message handled and its timer dropped.
+    fn read_to_source_end(rig: &mut Rig, req: u64) {
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RemoteList {
+                    remotes: github_remote(),
+                },
+            },
+        );
+        for message in messages(work) {
+            let _ = update_inner(&mut rig.app, message);
+        }
+    }
+
+    /// A rig whose reading of `answer` has ended at the source and, if it asked, now waits for the
+    /// daemon. Returns it with the `MergedBranchCheck` it sent, if any.
+    fn waiting_for_merged_check(
+        answer: BTreeMap<String, PullRequestStatus>,
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+    ) -> (Rig, Option<(u64, Vec<MergedBranchQuery>)>) {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_answer(answer),
+        );
+        attached(&mut rig.app);
+        listed(&mut rig.app, catalog);
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1);
+        read_to_source_end(&mut rig, asked[0]);
+        let mut checks: Vec<(u64, Vec<MergedBranchQuery>)> = sent(&mut rig)
+            .into_iter()
+            .filter_map(|msg| match msg {
+                ClientMsg::MergedBranchCheck {
+                    req,
+                    project,
+                    checks,
+                } => {
+                    assert_eq!(project, PathBuf::from(DEMO));
+                    Some((req, checks))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(checks.len() <= 1, "at most one question per reading");
+        let check = checks.pop();
+        (rig, check)
+    }
+
+    fn answer_check(rig: &mut Rig, req: u64, answers: Vec<BranchContainment>) {
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::MergedBranchCheck { answers },
+            },
+        );
+        settle(&mut rig.app, work);
+    }
+
+    fn removable(rig: &Rig) -> Vec<&str> {
+        rig.app
+            .core
+            .pr_status
+            .removable
+            .iter()
+            .map(String::as_str)
+            .collect()
+    }
+
+    /// The reading ended with the statuses applied and nothing suggested, and said nothing.
+    fn assert_applied_without_a_suggestion(rig: &Rig) {
+        assert_eq!(rig.app.core.pr_status.statuses, mixed());
+        assert!(removable(rig).is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // A25, A27, A29, U122 (FR-015): one query per merged branch with its `head`, none for an open,
+    // draft or closed one; and nothing but the question is sent (SC-010).
+    #[test]
+    fn pr_status_merged_asks_one_query_per_merged_branch() {
+        let (rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (_, queries) = check.expect("a merged branch is asked about");
+        assert_eq!(
+            queries,
+            vec![MergedBranchQuery {
+                branch: "feat/m".into(),
+                head: head('b'),
+            }]
+        );
+        // The statuses wait for the answer: the reading is not over.
+        assert!(matches!(
+            rig.app.core.pr_status.phase,
+            Phase::Reading { .. }
+        ));
+    }
+
+    // A27 (FR-016, SC-010): a reading that ends with a removable branch sent no message that
+    // deletes anything, and the mark removes nothing.
+    #[test]
+    fn pr_status_merged_sends_nothing_that_deletes() {
+        let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (req, _) = check.expect("asked");
+        answer_check(&mut rig, req, vec![BranchContainment::Contained]);
+        assert_eq!(removable(&rig), ["feat/m"]);
+        let after: Vec<ClientMsg> = sent(&mut rig);
+        assert!(
+            !after.iter().any(|msg| matches!(
+                msg,
+                ClientMsg::WorktreeDelete { .. }
+                    | ClientMsg::SessionDelete { .. }
+                    | ClientMsg::WorktreeRename { .. }
+            )),
+            "{after:?}"
+        );
+        assert_eq!(rig.app.core.worktree.worktrees.len(), 4);
+    }
+
+    // U123 (FR-023): with no merged branch the daemon is not asked, and the reading ends at once.
+    #[test]
+    fn pr_status_merged_is_not_sent_without_a_merged_branch() {
+        let mut open_only = mixed();
+        open_only.retain(|_, status| !matches!(status.state, PrState::Merged));
+        let (rig, check) = waiting_for_merged_check(open_only.clone(), mixed_listing());
+        assert!(check.is_none());
+        assert_eq!(rig.app.core.pr_status.statuses, open_only);
+        assert!(removable(&rig).is_empty());
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+    }
+
+    // A30 (story 3 scenario 6): a branch with a merged pull request and a newer open one is held as
+    // the open one, so it is not asked about and not removable.
+    #[test]
+    fn pr_status_merged_a_branch_with_a_newer_open_pull_request_is_not_asked_about() {
+        let newer = BTreeMap::from([(
+            "feat/m".to_string(),
+            with_state(
+                PrState::Open {
+                    checks: CheckStatus::Passing,
+                },
+                'f',
+            ),
+        )]);
+        let (rig, check) = waiting_for_merged_check(newer, mixed_listing());
+        assert!(check.is_none());
+        assert!(removable(&rig).is_empty());
+    }
+
+    // A25, A28, U124 (FR-015, FR-017): `Contained` marks the branch; `Beyond` and `Unknown` do not.
+    #[test]
+    fn pr_status_merged_only_contained_marks_the_branch() {
+        for (answer, marked) in [
+            (BranchContainment::Contained, true),
+            (BranchContainment::Beyond, false),
+            (BranchContainment::Unknown, false),
+        ] {
+            let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+            let (req, _) = check.expect("asked");
+            answer_check(&mut rig, req, vec![answer]);
+            assert_eq!(rig.app.core.pr_status.statuses, mixed(), "{answer:?}");
+            assert_eq!(removable(&rig) == ["feat/m"], marked, "{answer:?}");
+            assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+            assert!(nothing_was_reported(&rig.app));
+        }
+    }
+
+    // U125 (FR-021): no answer within the bound applies the statuses with no suggestion; the answer
+    // arriving after all is nobody's.
+    #[test]
+    fn pr_status_merged_unanswered_for_ten_seconds_applies_the_statuses_without_a_suggestion() {
+        let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (req, _) = check.expect("asked");
+        let seq = seq_under_way(&rig.app);
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::MergedCheckTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert_applied_without_a_suggestion(&rig);
+
+        answer_check(&mut rig, req, vec![BranchContainment::Contained]);
+        assert!(removable(&rig).is_empty());
+    }
+
+    // U125: the timer of a question that was answered in time changes nothing.
+    #[test]
+    fn pr_status_merged_the_timer_of_an_answered_question_changes_nothing() {
+        let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (req, _) = check.expect("asked");
+        let seq = seq_under_way(&rig.app);
+        answer_check(&mut rig, req, vec![BranchContainment::Contained]);
+        let before = rig.app.core.pr_status.clone();
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::MergedCheckTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(rig.app.core.pr_status, before);
+    }
+
+    // U125: a refusal applies the statuses with no suggestion, and raises nothing.
+    #[test]
+    fn pr_status_merged_a_refusal_applies_the_statuses_without_a_suggestion() {
+        let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (req, _) = check.expect("asked");
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::InvalidInput,
+                message: "not a repository".into(),
+                detail: None,
+            },
+        );
+        settle(&mut rig.app, work);
+        assert_applied_without_a_suggestion(&rig);
+    }
+
+    // U125: an answer list of another length is no answer.
+    #[test]
+    fn pr_status_merged_an_answer_list_of_another_length_applies_no_suggestion() {
+        for answers in [
+            vec![],
+            vec![BranchContainment::Contained, BranchContainment::Contained],
+        ] {
+            let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+            let (req, _) = check.expect("asked");
+            answer_check(&mut rig, req, answers);
+            assert_applied_without_a_suggestion(&rig);
+        }
+    }
+
+    // An answer for a project no longer active is nobody's: the hold ended meanwhile.
+    #[test]
+    fn pr_status_merged_an_answer_after_the_hold_ended_changes_nothing() {
+        let (mut rig, check) = waiting_for_merged_check(mixed(), mixed_listing());
+        let (req, _) = check.expect("asked");
+        daemon(
+            &mut rig.app,
+            DaemonMsg::Displaced {
+                project: PathBuf::from(DEMO),
+                by: other_window(),
+            },
+        );
+        answer_check(&mut rig, req, vec![BranchContainment::Contained]);
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert!(removable(&rig).is_empty());
+        assert!(nothing_was_reported(&rig.app));
+    }
 }
 
 /// Feature 613, T035 (S3, W5.4): toggling one kind changes only that kind in the draft, and the
