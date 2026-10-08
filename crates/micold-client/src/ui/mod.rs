@@ -349,15 +349,10 @@ pub fn view_with<'a>(
         .showing(main_content_key(state))
         .into()
     } else if state.workspace.active_project().is_some() {
-        let compare = if state.changes.open.is_none() {
-            compare::view(state, scheme)
-        } else {
-            None
-        };
         let main_inner: Element<'a, Message> = if let Some(view) = state.changes.open.as_ref() {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open.
             changes::view(state, view, scheme, composer)
-        } else if let Some(compare) = compare {
+        } else if let Some(compare) = compare::view(state, scheme) {
             // Feature 483, C1: Compare stands there too; the Changes view sits over it.
             compare
         } else if state.session.active.is_some() {
