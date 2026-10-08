@@ -122,18 +122,21 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
     const SAMPLES: usize = 200;
     const ALLOWED_ECHO: Duration = Duration::from_millis(20);
 
-    /// Whether the screen of `state`'s session shows `token`.
-    fn shows(state: &DaemonState, id: SessionId, token: &str) -> bool {
+    /// The text of the screen of `state`'s session, rows joined: a token can wrap across the end
+    /// of a row.
+    fn screen(state: &DaemonState, id: SessionId) -> String {
         let pty = state.primary_pty(id).expect("live");
         let term = pty.term().lock();
         let grid = term.grid();
-        // The rows joined, because the echoes pile up on one line and a token can wrap across the
-        // end of a row (it is not split by anything else).
-        let text: String = (0..grid.screen_lines() as i32)
+        (0..grid.screen_lines() as i32)
             .flat_map(|row| (0..grid.columns()).map(move |col| Point::new(Line(row), Column(col))))
             .map(|point| grid[point].c)
-            .collect();
-        text.contains(token)
+            .collect()
+    }
+
+    /// Whether the screen of `state`'s session shows `token`.
+    fn shows(state: &DaemonState, id: SessionId, token: &str) -> bool {
+        screen(state, id).contains(token)
     }
 
     /// The echo times of `SAMPLES` keystrokes in `id`, sorted, while a thread saves every session.
@@ -155,12 +158,18 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
         let mut times = Vec::with_capacity(SAMPLES);
         for i in 0..SAMPLES {
             let token = format!("zq{label}{i}z");
+            // Each token ends its line: unterminated, the terminal's input line grows until it is
+            // full (1024 bytes on macOS, the first byte over is dropped without an echo), which
+            // is where "zqw162z" was lost on the macOS runner: the tokens before it add up to
+            // exactly 1024 bytes.
+            let line = format!("{token}\n");
             let sent = Instant::now();
-            state.session_input(id, SERIAL.fetch_add(1, Ordering::Relaxed), token.as_bytes());
+            state.session_input(id, SERIAL.fetch_add(1, Ordering::Relaxed), line.as_bytes());
             while !shows(state, id, &token) {
                 assert!(
                     sent.elapsed() < Duration::from_secs(5),
-                    "{token} never echoed"
+                    "{token} never echoed; the screen shows {:?}",
+                    screen(state, id)
                 );
                 std::thread::sleep(Duration::from_micros(100));
             }
@@ -182,10 +191,13 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
     // The session whose echo is timed is quiet (it only records its input): in a flooding one the
     // flood's lines are written between the echoed characters or scroll the token off the screen
     // before it is looked for, which is the test's race, not a lost echo. The other nine flood.
-    script(project.path(), "wait\n");
+    // The stand-in reads its script when the process starts, which is after `start_session`
+    // returns: the script is changed only once the first has printed, or this one would flood too.
+    script(project.path(), "print quiet\nwait\n");
     state
         .start_session(ids[0], LaunchMode::Fresh)
         .expect("starts");
+    history::history_once(&state, ids[0], "output", |lines| !lines.is_empty());
     script(project.path(), "flood busy\n");
     for id in &ids[1..] {
         state.start_session(*id, LaunchMode::Fresh).expect("starts");
