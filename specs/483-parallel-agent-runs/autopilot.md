@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M1
-- **Next step**: M1a: write T011 (`run_group_persist.rs`), then reviews A+B, full gate, push, PR body (see Handover)
+- **Next step**: M1a: review rounds 2 (full: snapshot stale after an amend), full gate, push, PR body
 
 ## Pull requests
 
@@ -77,37 +77,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | 8c96629cfa543d92ed3e94d0ecb58df2b625fe8a:4a403ba28452cbfef1e57944050a01b8beb435f0 | CLEAN |
 | Plan review | 1 | 397f8015f2341c2338e28f4f9a517db315d1fee5:6b5fe648c01176305a208e5fdbacadc4af60fe29 | CLEAN: 3 MINOR (all fixed, prose only) |
 | Tasks review | 1 | c61c9b57176ad6134bb9d4cd0fe376dc69bb33bc:d689b0660d22190b4db34f3feb4c401a7a4b8b4d | CLEAN: 3 MINOR (all fixed, prose only) |
+| M1a review A (code-review high) | 1 | d2b15e8fe0ecb4b8f9e021a5fe1bda5ace611fae:634a59c6d386d5f1564d6223b4d83269702136a3 | CHANGES: 1 fixed (runs start at base_commit, regression test), 9 declined |
+| M1a review B (conformance, sonnet) | 1 | d2b15e8fe0ecb4b8f9e021a5fe1bda5ace611fae:634a59c6d386d5f1564d6223b4d83269702136a3 | CHANGES: 1 MAJOR (red evidence, fixed by mutation runs in cycle-log), 1 MINOR fixed |
 
 ## Declined review findings
 
-| Milestone | Review | Finding | Why declined |
-|---|---|---|---|
+- M1a A: restart leaves `Creating`/`Starting` runs: M2 scope (T028–T039, interrupted runs cleaned).
+- M1a A: `load_runs` treats an unreadable file as no groups, and a later save replaces it; `.corrupt` names are not unique: mirrors 482's review-file load (data-model "never fails"); follow-up recorded.
+- M1a A: worktree path rebuilt in `run_one` from `.claude/worktrees/<dir>`: same layout `ops::create_worktree` uses; taste (MINOR).
+- M1a A: `RunGroupsChanged` broadcast to every client: same as every other catalog-level push (`broadcast_locked`); W2 pushes on every change, not per attachment.
+- M1a A: runs-file write under the state lock: as the catalog and 482's review file; W5 requires the write before the group is held.
+- M1a A: `NewBranchAt` refuses `RemoteOnly`: plan Decision, a run's branch must be new; the reason names the branch.
+- M1a A: no up-front name preflight: US1 s3 / FR-006 require the taken run to fail alone, the others to run.
+- M1a A: `Debug` derives hold the prompt: no log line formats them; `w2_the_prompt_is_never_logged` guards W2.
 
 ## Handover
 
-M1 unit 3 handed over at ~155k context (milestone unit; no PR open). Stay on branch
-`claude/project-thread-wysm57` (skip `branch-start.sh`; `gh` unauthenticated; no `mise`). Run cargo
-detached via `$SCRATCHPAD/bg.sh <name> scripts/build-lock.sh cargo …` (sets `CARGO_INCREMENTAL=0`,
-log ends `JOB_EXIT=`), wait with `scripts/autopilot/hold.sh <log>`.
-Done (committed "feat(483): M1a core, NewBranchAt, daemon run groups"): T001–T010, T014–T016
-green; `cargo test -p micold-core` passes except the 4 root-only permission tests;
-`run_group_create` 8/8; `worktree_create` 17/17. tasks.md split into M1a/M1b (see Decisions).
-Next step (M1a only):
-1. Write T011 `crates/micold-daemon/tests/run_group_persist.rs` on `tests/support/runs.rs`
-   (`#[path = "support/runs.rs"] mod runs_support;`, `#![cfg(unix)]`, `ENV` guard): file holds the
-   group at the first push and only `<id>.json` remains in `<store>/runs` after settling (temp
-   files are `<name>.<pid>.<n>.tmp`); W5 failing write = regular file at `<store>/runs` →
-   `OperationError` (IoFailed), no worktree/branch/push, a fresh attach gets empty groups; two
-   windows get the same push; frame right after `Attached` is the one `RunGroupsChanged`;
-   `ClientMsg::ProjectRemove` removes the runs file. It should pass on the current code (record
-   red as "passes on arrival" honestly in tdd/cycle-log.md). Tick T011.
-2. Review A (`code-review` high) on `origin/main...HEAD` + scoped gate; review B (conformance,
-   sonnet) via `claude -p --agent autopilot-reviewer`. 3. Full gate (raw commands of mise.toml
-   `gate`, CARGO_INCREMENTAL=0; 6 root-permission failures only → `echo <sha> >>
-   .git/autopilot-gate-ok`, own Bash call), push `--force-with-lease -u origin
-   claude/project-thread-wysm57`, PR body to `$SCRATCHPAD/pr-483-m1a.md` (title "#483: Run one
-   prompt across several agents in parallel worktrees and pick the best result (M1a)", ends
-   `Refs #483`); return `PR: pending (body at …)`.
+None.
 
 ## Open escalation
 
@@ -115,4 +101,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Runs file: an unreadable (not missing) file loads as no groups and the next save replaces it; `.corrupt` backups overwrite each other (review A M1a, declined for M1a).

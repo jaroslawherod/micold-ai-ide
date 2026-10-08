@@ -5,7 +5,7 @@ are the test list. Reds run against the stubs of commit `9f82d331` (they compile
 "nothing": `can_become` false, `RunGroup::new` Err, `validate` Ok, `derive_group` empty,
 `RunsFile::to_json` empty / `from_json` Err, `JsonFileStore` runs methods no-ops).
 
-## M1 — start N runs, group row (T001–T027)
+## M1a — core, protocol and daemon (T001–T011, T014–T016)
 
 | Behaviour | Tasks | Red (stub) | Green |
 |---|---|---|---|
@@ -13,6 +13,8 @@ are the test list. Reds run against the stubs of commit `9f82d331` (they compile
 | `derive_group` | T004 → T005 | `runs::naming::tests`: 4 of 5 FAILED (stub `Ok(vec![])`); the case-only test passes on the stub by construction (empty equals empty) || `runs::naming::tests` 5 of 5 pass (T005) |
 | `RunsFile` JSON, `runs_path`, load/save/remove | T006 → T007 | `runs::store::tests`: 7 of 7 FAILED || `runs::store::tests` 7 of 7 pass (T007; FakeProjectStore keeps a runs map) |
 | Wire delta v36 | T008 → T009 | `protocol_roundtrip` did not compile before the wire edit (no `micold_core::runs`, no `RunGroupCreate`/`RunGroupPick`/`RunGroupDismiss`/`RunGroupsChanged`/`RunGroupCreated`/`RunPicked`; warm build log) || `protocol_roundtrip`, `schema_hash` pass (T009) |
-| `CreateMode::NewBranchAt` (Decision: a run's branch starts at the base branch) | fix → test | written with the fix, not red first: `worktree_create` 3 new tests | `worktree_create` 17 passed |
+| `CreateMode::NewBranchAt` (Decision: a run's branch starts at the base branch) | fix → test | written with the fix, not red first: `worktree_create` 3 new tests. Red shown afterwards by mutation (review B M1a): `NewBranchAt` creating at HEAD instead of `start` FAILED `run_group_create` `us1_s1_s2_…` ("run 1's branch starts at the base branch's tip") | `worktree_create` 17 passed |
 | Daemon create, per-run tasks, routing | T010 → T014–T016 | `run_group_create` did not compile before `micold_daemon::runs`; with the routing in place `w1_a_project_that_is_not_a_repository_is_refused` FAILED (NotFound, cached repo flag) | `run_group_create` 8 of 8 pass |
 | Runs file before push, whole writes, failing write, two windows, attach push, forget | T011 | passes on arrival: written after T010 and T014–T016 were green (a unit handover), so no red was observed; the failing write uses a regular file at `<store>/runs` instead of a read-only directory, because the container runs as root and root ignores directory modes | `run_group_persist` 5 of 5 pass |
+| Red for T011, shown by mutation (review B M1a) | T011 | one build with: the create's `save_runs` skipped, `forget_project`'s `remove_runs` skipped, the attach's `RunGroupsChanged` not sent → `run_group_persist` 4 of 5 FAILED: `w5_the_runs_file_holds_…` ("the runs file holds the group by its first push: []"), `w5_a_failing_write_…` ("refused with IoFailed: Ok(RunGroupCreated …)"), `w5_forgetting_…` ("its runs file is gone"), `w2_an_attach_…` ("RunGroupsChanged follows Attached: Some(CatalogChanged …)"). `w2_two_windows_…` and the whole-file reader were not mutated: the push is the shared `broadcast_locked`, the write the existing `write_then_rename` | mutations reverted; 5 of 5 pass |
+| Runs start at the recorded base commit, not the bare branch name (review A M1a) | fix | `run_group_create` `every_run_starts_at_the_recorded_base_commit_even_under_a_same_named_tag` FAILED with the old `start: base_branch`: "fatal: ambiguous object name: 'base'" | passes with `start: base_commit` |
