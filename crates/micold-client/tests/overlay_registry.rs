@@ -179,6 +179,28 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // Run in parallel (feature 483).
+        Dialog {
+            id: "run_in_parallel",
+            cancel: Message::Runs(micold_client::features::runs::Msg::Dismissed),
+            open: |state| {
+                state.runs.dialog = Some(micold_client::features::runs::ParallelDialog {
+                    project: std::path::PathBuf::from("/p"),
+                    naming: micold_core::naming::WorktreeNaming {
+                        type_: None,
+                        ticket: None,
+                        name: String::new(),
+                    },
+                    prompt: String::new(),
+                    base_branch: String::new(),
+                    branches: Vec::new(),
+                    runs: Vec::new(),
+                    offered: Vec::new(),
+                    default_cli: micold_core::session::AiCli::ClaudeCode,
+                    error: None,
+                })
+            },
+        },
         // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
         // without answering; the daemon keeps waiting for another window or times out.
         Dialog {
@@ -299,17 +321,17 @@ fn every_dialog_is_in_the_list() {
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
     // count coming back up is not that decision reversed: `confirm_placement` is the question the
     // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482).
+    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483).
     assert_eq!(
         dialogs().len(),
-        13,
+        14,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        28,
-        "thirteen dialogs plus nothing open, each with the filter panel open and closed"
+        30,
+        "fourteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()

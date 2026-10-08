@@ -163,7 +163,8 @@ fn every_popover_is_in_the_table() {
     // Eleven with `confirm_agent_request`, an agent's destructive request (034 FR-014).
     // Twelve with `attach_worktrees`, the dialog that attaches provider worktrees (feature 582).
     // Thirteen with `confirm_discard_pending`, the Changes view's discard question (feature 482).
-    const DIALOGS: usize = 13;
+    // Fourteen with `run_in_parallel`, the dialog that starts a group of runs (feature 483).
+    const DIALOGS: usize = 14;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

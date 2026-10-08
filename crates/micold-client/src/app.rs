@@ -771,12 +771,7 @@ impl State {
                 let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::Runs(msg) => {
-                let effect = crate::features::runs::update(&mut self.runs, msg);
-                if effect != crate::features::runs::Effect::None {
-                    self.runs.pending = Some(effect);
-                }
-            }
+            Message::Runs(msg) => crate::features::runs::apply(&mut self.runs, msg),
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
@@ -988,26 +983,7 @@ pub fn interpret(
             );
             state.changes.pending = Some(effect);
         }
-        Outcome::RunInParallelRequested => {
-            let project = state.workspace.active.clone().unwrap_or_default();
-            let opening = crate::features::runs::Opening {
-                offered: state.session.offered_providers(Some(project.as_path())),
-                default_cli: state.session.default_ai_cli,
-                base_branch: None,
-                project,
-            };
-            state.clear_for_dialog();
-            let effect = crate::features::runs::update(
-                &mut state.runs,
-                crate::features::runs::Msg::Opened(opening),
-            );
-            state.runs.pending = Some(effect);
-            return vec![Outcome::SurfaceOpened(
-                <crate::features::runs::ParallelRunDialog as crate::overlay::FloatingSurface>::id(
-                    &crate::features::runs::ParallelRunDialog,
-                ),
-            )];
-        }
+        Outcome::RunInParallelRequested => return crate::features::runs::requested(state),
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)
         }

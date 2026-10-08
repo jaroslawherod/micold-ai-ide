@@ -114,6 +114,12 @@ pub enum FieldId {
     AddWorktreeTicket,
     /// The add-worktree form's branch-name field.
     AddWorktreeName,
+    /// The Run in parallel dialog's prompt field.
+    RunPrompt,
+    /// The Run in parallel dialog's optional ticket field.
+    RunTicket,
+    /// The Run in parallel dialog's name field.
+    RunName,
     /// Settings: the terminal scrollback limit.
     SettingsScrollback,
     /// The confirm-worktree-delete dialog's "also delete the branch" checkbox.
