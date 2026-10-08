@@ -624,13 +624,13 @@ fn build_items(
         // Feature 040 (FR-001): the pull request of this row's branch, as the marks the shared
         // indicator draws. `None` for every row when nothing is held, and the row is then built
         // exactly as it was.
-        let pull_request = crate::features::sidebar::row_pull_request(
+        let row_pr = crate::features::sidebar::row_pull_request(
             &entry,
             &state.pr_status.statuses,
             state.pr_status.read_at,
             now,
-        )
-        .map(|row| indicator_marks(&row.status.state));
+        );
+        let pull_request = row_pr.map(|row| indicator_marks(&row.status.state));
         // The location's attention indicator (feature 575, FR-001/002): its unread sessions, not
         // closed and not the one in view, counted whether the row is expanded or not (FR-003).
         let unread = entry.unread_count(in_view);
@@ -697,7 +697,12 @@ fn build_items(
         item = item
             .unread_count(unread)
             .row_tooltip(crate::features::sidebar::with_unread_line(
-                crate::features::sidebar::worktree_tooltip(project_root, wt, &node.display_name),
+                crate::features::sidebar::worktree_tooltip(
+                    project_root,
+                    wt,
+                    &node.display_name,
+                    row_pr,
+                ),
                 unread,
             ));
 

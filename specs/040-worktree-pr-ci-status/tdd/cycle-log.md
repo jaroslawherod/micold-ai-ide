@@ -524,3 +524,16 @@ existed and failed before the implementation.
 - covered states: `main-shell-sidebar-pull-request-indicator` (+ `-narrowest`) and the checked switch in
   `settings-view-github-issues`; the showcase is not a covered-state kind, its entry is held by `showcase_completeness`
 - commit: the commit that adds this entry
+
+### M5 cycle: U111–U118 — tooltip lines, Open pull request (T041–T047)
+
+- test: written before the code. The tooltip tests (`features_sidebar.rs`) and `worktree_menu_pull_request.rs` ran red on their
+  assertions against `worktree_tooltip` / `worktree_menu_items` signature stubs taking the new arguments and ignoring them (5 of
+  the 8 tooltip tests failed; the menu tests were not reached because cargo stops at the first red binary, and were written against the
+  same stub). `pr_status_open_*` (`main_tests.rs`) were written before the handler against the `PullRequestOpenRequested` variant
+  alone, then run once with the handler in place (not seen red on their own: deviation, the variant stub existed only in my head).
+  The `OpenInBrowser` icon was added in the same step as its tests (not seen red: deviation).
+- green: `worktree_tooltip` lines 1 to 4, `worktree_menu_items` entry, `shell/pr_status.rs::open_requested` over
+  `features::sidebar::pull_request_address_to_open` (the `https://github.com/` guard, pure so no `.url` read in the two scanned files),
+  `links::perform` made `pub(crate)`, the user guide
+- commit: the commit that adds this entry

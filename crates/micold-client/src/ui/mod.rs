@@ -546,8 +546,21 @@ pub fn view_with<'a>(
                     && micold_core::worktree::classify_owner(w, &state.provenance_view())
                         == micold_core::worktree::WorktreeOwner::Agent
             });
-            let items =
-                worktree_menu_items(dir, &state.worktree_display_name(dir), included, claimable);
+            // Feature 040 (FR-010): the entry is offered exactly when the row shows a pull request.
+            let has_pull_request = state
+                .worktree
+                .worktrees
+                .iter()
+                .find(|w| &w.dir_name == dir)
+                .and_then(|w| w.branch.as_deref())
+                .is_some_and(|branch| state.pr_status.statuses.contains_key(branch));
+            let items = worktree_menu_items(
+                dir,
+                &state.worktree_display_name(dir),
+                included,
+                claimable,
+                has_pull_request,
+            );
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
@@ -742,11 +755,12 @@ pub fn view_with<'a>(
 /// being special-cased for an agent row and 029 FR-015 restates it: a revealed row offers exactly
 /// the same actions as any other, none hidden, reordered or given an extra confirmation. Adding an
 /// action to the cluster for one class of row is precisely what both forbid.
-fn worktree_menu_items(
+pub fn worktree_menu_items(
     dir: &str,
     display_name: &str,
     included: bool,
     claimable: bool,
+    has_pull_request: bool,
 ) -> Vec<material::MenuItem<Message>> {
     let mut items = vec![
         review_changes_item(micold_core::session::SessionLocation::Worktree(
@@ -785,6 +799,15 @@ fn worktree_menu_items(
             Icon::ActiveMarker,
             "Claim as mine",
             Message::Worktree(WorktreeMsg::ClaimRequested(dir.to_string())),
+        ));
+    }
+    // Feature 040 (FR-010, contract §4): for a row that shows a pull request, directly above Delete
+    // for the same reason as the claim above. No confirmation: it only opens a page (R15).
+    if has_pull_request {
+        items.push(material::MenuItem::new(
+            Icon::OpenInBrowser,
+            "Open pull request",
+            Message::Worktree(WorktreeMsg::PullRequestOpenRequested(dir.to_string())),
         ));
     }
     items.push(material::MenuItem::new(

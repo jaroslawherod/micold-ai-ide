@@ -50,7 +50,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::overlay::Layer;
-use micold_core::pull_request::PullRequestStatus;
+use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::session::{Session, SessionId, SessionLocation};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
@@ -430,6 +430,7 @@ pub fn worktree_tooltip(
     project_root: Option<&Path>,
     worktree: &Worktree,
     display_name: &str,
+    pull_request: Option<RowPullRequest<'_>>,
 ) -> String {
     let mut lines: Vec<String> = Vec::new();
 
@@ -473,7 +474,72 @@ pub fn worktree_tooltip(
         lines.push(format!("Status: {status}"));
     }
 
+    // Feature 040 (FR-010), after everything the tooltip has today, so a row with no pull request
+    // is untouched (FR-011). Held facts only: nothing here reads a disk or asks GitHub (FR-012).
+    if let Some(row) = pull_request {
+        lines.extend(pull_request_lines(row.status));
+    }
+
     lines.join("\n")
+}
+
+/// The longest title the tooltip shows, in characters, the last being `…` when it was cut.
+const TITLE_LIMIT: usize = 72;
+
+/// The tooltip lines for a pull request (contract pull-request-ui §3, lines 1 to 4): the number
+/// and title, the state, the check status when it has one, and the review decision when GitHub
+/// reports one. A fact the pull request does not have is an absent line.
+fn pull_request_lines(status: &PullRequestStatus) -> Vec<String> {
+    let (state, checks) = match status.state {
+        PrState::Open { checks } => ("open", Some(checks)),
+        PrState::Draft { checks } => ("draft", Some(checks)),
+        PrState::Merged => ("merged", None),
+        PrState::Closed => ("closed", None),
+    };
+    let mut lines = vec![
+        format!(
+            "Pull request: #{} {}",
+            status.number,
+            tooltip_title(&status.title)
+        ),
+        format!("PR state: {state}"),
+    ];
+    let checks = match checks {
+        Some(CheckStatus::Passing) => Some("passing"),
+        Some(CheckStatus::Pending) => Some("pending"),
+        Some(CheckStatus::Failing) => Some("failing"),
+        Some(CheckStatus::None) | None => None,
+    };
+    if let Some(checks) = checks {
+        lines.push(format!("Checks: {checks}"));
+    }
+    let review = match status.review {
+        ReviewState::Approved => Some("approved"),
+        ReviewState::ChangesRequested => Some("changes requested"),
+        ReviewState::ReviewRequired => Some("review required"),
+        ReviewState::None => None,
+    };
+    if let Some(review) = review {
+        lines.push(format!("Review: {review}"));
+    }
+    lines
+}
+
+/// A pull request's title as one tooltip line: control characters and line breaks become spaces (a
+/// title is typed by someone else and must not add lines or escape sequences), and a title of more
+/// than [`TITLE_LIMIT`] characters is cut so its last character is `…`. The number comes first on
+/// the line, so it is what stays readable (story 2 scenario 6).
+fn tooltip_title(title: &str) -> String {
+    let flat: String = title
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if flat.chars().count() <= TITLE_LIMIT {
+        return flat;
+    }
+    let mut cut: String = flat.chars().take(TITLE_LIMIT - 1).collect();
+    cut.push('…');
+    cut
 }
 
 /// What the row of a worktree shows of its pull request (feature 040, data-model §4): the status
@@ -503,6 +569,31 @@ pub fn row_pull_request<'a>(
         status,
         age_secs: now.saturating_sub(read_at.unwrap_or(now)),
     })
+}
+
+/// Where an address GitHub reported must start for **Open pull request** to open it (FR-014): a
+/// pull request's address comes from a program's answer, and a browser is handed it, so nothing
+/// else than a GitHub page is.
+pub const GITHUB_ADDRESS_PREFIX: &str = "https://github.com/";
+
+/// The address **Open pull request** opens for the worktree `dir_name`, or `None` when nothing
+/// should be opened: the row is gone, has no branch, has lost its status, or the address GitHub
+/// reported does not start with [`GITHUB_ADDRESS_PREFIX`]. It is the held address, never one
+/// built from the number (FR-014).
+pub fn pull_request_address_to_open(
+    worktrees: &[Worktree],
+    statuses: &BTreeMap<String, PullRequestStatus>,
+    dir_name: &str,
+) -> Option<String> {
+    let branch = worktrees
+        .iter()
+        .find(|w| w.dir_name == dir_name)?
+        .branch
+        .as_deref()?;
+    let address = &statuses.get(branch)?.url;
+    address
+        .starts_with(GITHUB_ADDRESS_PREFIX)
+        .then(|| address.clone())
 }
 
 /// The tooltip line that states a location's unread count in words (feature 575, FR-005).

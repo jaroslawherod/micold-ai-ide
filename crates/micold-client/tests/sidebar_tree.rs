@@ -224,7 +224,7 @@ fn worktree_node_display_name_derived_when_no_override() {
 fn worktree_location_label_is_relative_to_project_root() {
     let root = PathBuf::from("/repo");
     let wt = worktree("feat-a", WorktreeStatus::Valid);
-    let tip = micold_client::features::sidebar::worktree_tooltip(Some(&root), &wt, "Feat a");
+    let tip = micold_client::features::sidebar::worktree_tooltip(Some(&root), &wt, "Feat a", None);
     assert!(
         tip.lines()
             .any(|l| l == "Location: .claude/worktrees/feat-a"),

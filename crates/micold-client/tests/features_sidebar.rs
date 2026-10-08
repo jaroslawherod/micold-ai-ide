@@ -14,8 +14,8 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter,
-    WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
+    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, RowPullRequest, SidebarEntry,
+    TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
@@ -102,7 +102,7 @@ fn the_untyped_filter_selects_the_rows_the_type_filters_cannot_reach() {
 
 #[test]
 fn a_worktrees_location_reads_relative_to_the_project_it_belongs_to() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
     let location = line(&tip, "Location").expect("a worktree under a known root has a location");
 
     assert!(
@@ -119,7 +119,7 @@ fn a_worktree_outside_the_project_still_gets_a_label() {
 
     assert_eq!(
         line(
-            &worktree_tooltip(Some(Path::new("/p")), &stray, "Feat a"),
+            &worktree_tooltip(Some(Path::new("/p")), &stray, "Feat a", None),
             "Location"
         )
         .as_deref(),
@@ -134,7 +134,7 @@ fn a_worktree_outside_the_project_still_gets_a_label() {
 #[test]
 fn the_tooltip_leads_with_the_name_the_row_had_to_shorten() {
     let long = "a-worktree-whose-name-is-far-wider-than-any-sidebar-will-ever-be";
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), long);
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), long, None);
 
     assert_eq!(
         tip.lines().next(),
@@ -146,7 +146,7 @@ fn the_tooltip_leads_with_the_name_the_row_had_to_shorten() {
 
 #[test]
 fn the_name_line_survives_an_unknown_project_root() {
-    let tip = worktree_tooltip(None, &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(None, &worktree("feat-a"), "Feat a", None);
 
     assert_eq!(
         line(&tip, "Name").as_deref(),
@@ -166,6 +166,7 @@ fn the_name_is_the_one_the_row_renders_not_a_re_derivation() {
         Some(Path::new("/p")),
         &worktree("feat-a"),
         "Renamed by hand",
+        None,
     );
 
     assert_eq!(
@@ -179,7 +180,7 @@ fn the_name_is_the_one_the_row_renders_not_a_re_derivation() {
 
 #[test]
 fn a_bound_branch_is_named_verbatim() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
 
     assert_eq!(
         line(&tip, "Branch").as_deref(),
@@ -194,7 +195,7 @@ fn a_worktree_with_no_branch_has_no_branch_line() {
     let mut orphan = worktree("feat-a");
     orphan.branch = None;
 
-    let tip = worktree_tooltip(Some(Path::new("/p")), &orphan, "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &orphan, "Feat a", None);
 
     assert_eq!(
         line(&tip, "Branch"),
@@ -214,6 +215,7 @@ fn the_folder_on_disk_is_named_when_it_differs_from_the_displayed_name() {
         Some(Path::new("/p")),
         &worktree("feat-abc-123_login-page"),
         "Login page",
+        None,
     );
 
     assert_eq!(
@@ -226,7 +228,7 @@ fn the_folder_on_disk_is_named_when_it_differs_from_the_displayed_name() {
 
 #[test]
 fn a_folder_that_is_already_the_displayed_name_is_not_repeated() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("scratch"), "scratch");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("scratch"), "scratch", None);
 
     assert_eq!(
         line(&tip, "Folder"),
@@ -242,6 +244,7 @@ fn the_lines_appear_in_one_fixed_order() {
         Some(Path::new("/p")),
         &worktree("feat-abc-123_login-page"),
         "Login page",
+        None,
     );
 
     assert_eq!(
@@ -262,7 +265,7 @@ fn an_unhealthy_worktree_says_so_in_the_same_word_its_chip_uses() {
     ] {
         let mut wt = worktree("feat-a");
         wt.status = status;
-        let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a");
+        let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a", None);
 
         assert_eq!(
             line(&tip, "Status").as_deref(),
@@ -275,7 +278,7 @@ fn an_unhealthy_worktree_says_so_in_the_same_word_its_chip_uses() {
 
 #[test]
 fn a_healthy_worktree_has_no_status_line() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
 
     assert!(
         !tip.contains("Status"),
@@ -288,7 +291,7 @@ fn a_healthy_worktree_has_no_status_line() {
 fn the_status_line_comes_last() {
     let mut wt = worktree("feat-abc-123_login-page");
     wt.status = WorktreeStatus::Missing;
-    let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Login page");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Login page", None);
 
     assert_eq!(
         labels(&tip),
@@ -305,7 +308,7 @@ fn a_worktree_from_outside_this_app_says_so_beside_its_path() {
 
     assert_eq!(
         line(
-            &worktree_tooltip(Some(Path::new("/p")), &outside, "Feat a"),
+            &worktree_tooltip(Some(Path::new("/p")), &outside, "Feat a", None),
             "Location"
         )
         .as_deref(),
@@ -317,14 +320,14 @@ fn a_worktree_from_outside_this_app_says_so_beside_its_path() {
 
 #[test]
 fn a_worktree_this_app_created_carries_no_such_note() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
 
     assert!(!tip.contains("outside this app"), "got {tip:?}");
 }
 
 #[test]
 fn the_location_is_a_labelled_line_rather_than_a_bare_path() {
-    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
 
     assert!(
         labels(&tip).contains(&"Location"),
@@ -337,8 +340,8 @@ fn the_location_is_a_labelled_line_rather_than_a_bare_path() {
 #[test]
 fn an_unknown_project_root_drops_the_location_line_and_nothing_else() {
     let wt = worktree("feat-a");
-    let rooted = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a");
-    let rootless = worktree_tooltip(None, &wt, "Feat a");
+    let rooted = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a", None);
+    let rootless = worktree_tooltip(None, &wt, "Feat a", None);
 
     assert_eq!(
         line(&rootless, "Location"),
@@ -991,4 +994,189 @@ fn with_no_statuses_every_row_projects_none() {
     ] {
         assert!(row_pull_request(&entry, &none, None, 5).is_none());
     }
+}
+
+// --- Feature 040 US2: the tooltip's pull request lines (contract pull-request-ui §3; U111–U114) ----
+
+fn tip_with(status: &PullRequestStatus) -> String {
+    worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-a"),
+        "Feat a",
+        Some(RowPullRequest {
+            status,
+            age_secs: 30,
+        }),
+    )
+}
+
+fn with_state(state: PrState, review: ReviewState) -> PullRequestStatus {
+    PullRequestStatus {
+        state,
+        review,
+        ..pull_request(7)
+    }
+}
+
+/// U111 (A15, FR-011): without a pull request the tooltip is today's, byte for byte.
+#[test]
+fn a_tooltip_without_a_pull_request_is_todays_text() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a", None);
+    assert_eq!(
+        tip,
+        "Name: Feat a\nBranch: feat/feat-a\nFolder: feat-a\nLocation: .claude/worktrees/feat-a"
+    );
+}
+
+/// U111 (A16, A17): the pull request lines follow today's, in the contract's order.
+#[test]
+fn the_pull_request_lines_follow_todays_lines_in_order() {
+    let status = with_state(
+        PrState::Open {
+            checks: CheckStatus::Failing,
+        },
+        ReviewState::Approved,
+    );
+    let tip = tip_with(&status);
+    assert_eq!(
+        labels(&tip),
+        [
+            "Name",
+            "Branch",
+            "Folder",
+            "Location",
+            "Pull request",
+            "PR state",
+            "Checks",
+            "Review"
+        ],
+        "got {tip:?}"
+    );
+    assert_eq!(
+        line(&tip, "Pull request").as_deref(),
+        Some("#7 Pull request 7")
+    );
+    assert_eq!(line(&tip, "PR state").as_deref(), Some("open"));
+    assert_eq!(line(&tip, "Checks").as_deref(), Some("failing"));
+    assert_eq!(line(&tip, "Review").as_deref(), Some("approved"));
+}
+
+/// U112 (A18): each state and check status is said in words.
+#[test]
+fn the_state_and_check_status_are_said_in_words() {
+    for (state, word) in [
+        (
+            PrState::Open {
+                checks: CheckStatus::Passing,
+            },
+            "open",
+        ),
+        (
+            PrState::Draft {
+                checks: CheckStatus::Pending,
+            },
+            "draft",
+        ),
+        (PrState::Merged, "merged"),
+        (PrState::Closed, "closed"),
+    ] {
+        let tip = tip_with(&with_state(state, ReviewState::None));
+        assert_eq!(line(&tip, "PR state").as_deref(), Some(word), "got {tip:?}");
+    }
+    for (checks, word) in [
+        (CheckStatus::Passing, "passing"),
+        (CheckStatus::Pending, "pending"),
+        (CheckStatus::Failing, "failing"),
+    ] {
+        let tip = tip_with(&with_state(PrState::Open { checks }, ReviewState::None));
+        assert_eq!(line(&tip, "Checks").as_deref(), Some(word), "got {tip:?}");
+    }
+}
+
+/// U112 (A18, FR-003): a merged or closed pull request, or one with no checks, has no `Checks:` line.
+#[test]
+fn no_checks_line_for_merged_closed_or_no_checks() {
+    for state in [
+        PrState::Merged,
+        PrState::Closed,
+        PrState::Open {
+            checks: CheckStatus::None,
+        },
+        PrState::Draft {
+            checks: CheckStatus::None,
+        },
+    ] {
+        let tip = tip_with(&with_state(state, ReviewState::None));
+        assert_eq!(line(&tip, "Checks"), None, "{state:?}: got {tip:?}");
+        assert!(!tip.contains("Checks"), "no label without a value: {tip:?}");
+    }
+}
+
+/// U113 (A20): the review decision is said in words, and no decision is no line.
+#[test]
+fn the_review_line_names_the_decision_and_is_absent_without_one() {
+    let open = PrState::Open {
+        checks: CheckStatus::None,
+    };
+    for (review, word) in [
+        (ReviewState::Approved, "approved"),
+        (ReviewState::ChangesRequested, "changes requested"),
+        (ReviewState::ReviewRequired, "review required"),
+    ] {
+        let tip = tip_with(&with_state(open, review));
+        assert_eq!(line(&tip, "Review").as_deref(), Some(word), "got {tip:?}");
+    }
+    let tip = tip_with(&with_state(open, ReviewState::None));
+    assert!(!tip.contains("Review"), "got {tip:?}");
+}
+
+/// U114 (A24): a long title is cut to 72 characters ending in `…`, the number before it.
+#[test]
+fn a_long_title_is_cut_to_72_characters_and_the_number_stays_first() {
+    let status = PullRequestStatus {
+        title: "x".repeat(200),
+        ..pull_request(1234)
+    };
+    let tip = tip_with(&status);
+    let value = line(&tip, "Pull request").expect("the line");
+    let title = value.strip_prefix("#1234 ").expect("number first");
+    assert_eq!(title.chars().count(), 72, "got {value:?}");
+    assert!(title.ends_with('…'), "got {value:?}");
+    assert_eq!(&title[..71], "x".repeat(71));
+
+    let exact = PullRequestStatus {
+        title: "y".repeat(72),
+        ..pull_request(5)
+    };
+    assert_eq!(
+        line(&tip_with(&exact), "Pull request").as_deref(),
+        Some(format!("#5 {}", "y".repeat(72)).as_str()),
+        "a title of exactly 72 is not cut"
+    );
+}
+
+/// U114: control characters and line breaks in a title become spaces; the tooltip keeps its lines.
+#[test]
+fn control_characters_in_a_title_become_spaces() {
+    let status = PullRequestStatus {
+        title: "a\nb\r\nc\td\u{7}e".into(),
+        ..pull_request(9)
+    };
+    let tip = tip_with(&status);
+    assert_eq!(
+        line(&tip, "Pull request").as_deref(),
+        Some("#9 a b  c d e"),
+        "got {tip:?}"
+    );
+    assert!(!tip.chars().any(|c| c != '\n' && c.is_control()));
+    assert_eq!(tip.lines().count(), 7, "one line per fact: {tip:?}");
+}
+
+/// U114 (FR-013): the address is not in the tooltip.
+#[test]
+fn the_tooltip_holds_no_address() {
+    let status = pull_request(7);
+    let tip = tip_with(&status);
+    assert!(!tip.contains("http"), "got {tip:?}");
+    assert!(!tip.contains(&status.url), "got {tip:?}");
 }

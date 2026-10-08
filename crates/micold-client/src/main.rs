@@ -677,6 +677,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Worktree(WorktreeMsg::ClaimRequested(dir_name)) => {
             shell::daemon_sync::on_worktree_claim_requested(app, dir_name)
         }
+        // Feature 040 (FR-014): opens the held address and changes nothing else; the reducer has
+        // nothing to apply, so the message is not passed on.
+        Message::Worktree(WorktreeMsg::PullRequestOpenRequested(dir)) => {
+            shell::pr_status::open_requested(app, &dir)
+        }
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }

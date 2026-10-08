@@ -29,6 +29,7 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::pr_status::Msg;
 use micold_client::features::pr_status::{Effect, Outcome, Phase};
+use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
 use micold_core::protocol::messages::ClientMsg;
@@ -72,6 +73,24 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     match app.core.update_pr_status(msg) {
         Effect::Read { seq } => start(app, seq),
         Effect::None => Task::none(),
+    }
+}
+
+/// **Open pull request** was chosen on the row `dir` (contract pull-request-ui §4).
+///
+/// Hands the address the reading found to the link opener, the way an activated link is, so an
+/// opener failure is reported as a link's is (feature 031). Nothing is opened when the row lost its
+/// status, or when the address is not a GitHub one (FR-014); nothing is sent to GitHub and the
+/// application's state is not touched.
+pub fn open_requested(app: &App, dir: &str) -> Task<Message> {
+    let address = micold_client::features::sidebar::pull_request_address_to_open(
+        &app.core.worktree.worktrees,
+        &app.core.pr_status.statuses,
+        dir,
+    );
+    match address {
+        Some(address) => crate::shell::links::perform(app, OpenRequest::Url(address)),
+        None => Task::none(),
     }
 }
 
