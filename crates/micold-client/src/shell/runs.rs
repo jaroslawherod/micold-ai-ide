@@ -63,6 +63,19 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
                 }
             })
         }
+        Some(Effect::Send(ClientMsg::RunGroupPick {
+            project,
+            group,
+            run,
+            ..
+        })) => send_op(app, PendingOp::RunGroupPick { run }, move |req| {
+            ClientMsg::RunGroupPick {
+                req,
+                project,
+                group,
+                run,
+            }
+        }),
         // The reducer sends nothing else; a new request needs a route above.
         Some(Effect::Send(_)) => {}
         Some(Effect::ReadSummaries(reads)) => {

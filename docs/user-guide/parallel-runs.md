@@ -98,7 +98,34 @@ Right-click a group row and choose **Dismiss group**. The app asks first. Dismis
 grouping: the worktrees, branches and sessions of its runs stay, and appear as ordinary rows.
 **Cancel** changes nothing.
 
+## Picking a run
+
+**Pick this one** on a run's row in Compare merges that run into the group's base branch. If the base
+has not moved since the runs started, it is fast-forwarded to the run. Otherwise the app writes a merge
+commit on the base named `Merge run <n> of <group name> into <base>`. The run's branch is never
+rewritten, and nothing is pushed.
+
+- **One winner per group.** Once a run is picked it shows **Picked**, and no other run in the group can
+  be.
+- **A run still working.** If the run's session is still working, the app asks you to confirm before it
+  merges.
+- **Where the merge happens.** If the base branch is checked out somewhere, for example in the project
+  root, the merge is made in that checkout, so sessions there see the new files.
+- **Git 2.38 or newer** is needed.
+
+**Unavailable.** A run that failed has no pick. While any run in the group is still being created or
+started, every row's pick is disabled, with the reason.
+
+**Refused.** The app refuses, and says why, when:
+
+- the run has uncommitted changes (the files are listed);
+- the merge would conflict (the files are listed);
+- the base branch moved while you were deciding;
+- the base branch's checkout has local changes git will not overwrite;
+- the group already has a winner.
+
+A refusal changes nothing: no branch, worktree or file is touched.
+
 ## Coming later
 
-**Pick this one** and the offer to clean up the other runs come in later
-releases of this feature.
+The offer to clean up the other runs comes in a later release of this feature.
