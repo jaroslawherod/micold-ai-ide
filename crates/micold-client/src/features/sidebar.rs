@@ -532,7 +532,16 @@ fn pull_request_lines(status: &PullRequestStatus) -> Vec<String> {
 fn tooltip_title(title: &str) -> String {
     let flat: String = title
         .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            // Cc, plus the invisible format and line-separator characters that reorder or hide
+            // text (zero-width, bidi marks and overrides, U+2028/2029, BOM).
+            let hides = matches!(c, '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}');
+            if c.is_control() || hides {
+                ' '
+            } else {
+                c
+            }
+        })
         .collect();
     if flat.chars().count() <= TITLE_LIMIT {
         return flat;

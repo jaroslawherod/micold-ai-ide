@@ -314,3 +314,60 @@ fn a_pull_requests_title_and_address_are_never_logged() {
         );
     }
 }
+
+/// The text of the free function `name` in `file`, comments dropped: from its signature to the
+/// first lone `}` at column 0.
+fn function_body(file: &str, name: &str) -> String {
+    let text = fs::read_to_string(repo_root().join(file))
+        .unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
+    let start = text
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("`fn {name}(` moved out of {file}"));
+    let rest = &text[start..];
+    let end = rest
+        .find("\n}\n")
+        .unwrap_or_else(|| panic!("the end of `fn {name}` not found in {file}"));
+    rest[..end]
+        .lines()
+        .filter(|l| !is_comment(l))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// FR-012, SC-008: what a hover draws and what a right-click offers is worked out from what the
+/// window already holds. No builder may reach the shell, where the reading, the disk and the
+/// opener live; opening the address is a message the shell handles afterwards.
+#[test]
+fn the_tooltip_and_the_menu_builder_call_nothing_in_the_shell() {
+    for (file, name) in [
+        (
+            "crates/micold-client/src/features/sidebar.rs",
+            "worktree_tooltip",
+        ),
+        (
+            "crates/micold-client/src/features/sidebar.rs",
+            "pull_request_lines",
+        ),
+        (
+            "crates/micold-client/src/features/sidebar.rs",
+            "tooltip_title",
+        ),
+        ("crates/micold-client/src/ui/mod.rs", "worktree_menu_items"),
+    ] {
+        let body = function_body(file, name);
+        assert!(!body.is_empty());
+        for needle in [
+            "shell::",
+            "std::fs",
+            "std::process",
+            "Command::",
+            "LinkOpener",
+            "Task::",
+        ] {
+            assert!(
+                !body.contains(needle),
+                "`{name}` in {file} must not reach `{needle}` (FR-012, SC-008)"
+            );
+        }
+    }
+}
