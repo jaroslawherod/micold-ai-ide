@@ -30,6 +30,17 @@ pub trait Git {
     /// (`git worktree add -b <branch> <path> HEAD`) (FR-006).
     fn worktree_add_new_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()>;
 
+    /// Create `branch` at `start` and add a worktree bound to it at `path`, in one step
+    /// (`git worktree add -b <branch> <path> <start>`) (feature 483: a run starts at its group's
+    /// base branch, not at the repository's HEAD).
+    fn worktree_add_new_branch_at(
+        &self,
+        repo: &Path,
+        branch: &str,
+        start: &str,
+        path: &Path,
+    ) -> io::Result<()>;
+
     /// Every local and remote-tracking branch ref, one full refname per line, for
     /// [`crate::worktree::parse_branch_refs`] (feature 016, FR-011).
     ///
@@ -316,6 +327,17 @@ impl Git for GitCli {
     fn worktree_add_new_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()> {
         let path = path.to_string_lossy();
         run_git(repo, &["worktree", "add", "-b", branch, &path, "HEAD"]).map(|_| ())
+    }
+
+    fn worktree_add_new_branch_at(
+        &self,
+        repo: &Path,
+        branch: &str,
+        start: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let path = path.to_string_lossy();
+        run_git(repo, &["worktree", "add", "-b", branch, &path, start]).map(|_| ())
     }
 
     fn list_branch_refs(&self, repo: &Path) -> io::Result<String> {
@@ -998,6 +1020,17 @@ impl Git for FakeGit {
             .or_default()
             .push((path.to_path_buf(), branch.to_string()));
         Ok(())
+    }
+
+    fn worktree_add_new_branch_at(
+        &self,
+        repo: &Path,
+        branch: &str,
+        _start: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        // The fake keeps no commits, so where the branch starts is not observable here.
+        self.worktree_add_new_branch(repo, branch, path)
     }
 
     fn list_branch_refs(&self, repo: &Path) -> io::Result<String> {

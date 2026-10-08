@@ -6,8 +6,16 @@ use crate::naming::{DerivedNames, NamingError, WorktreeNaming};
 /// The names of runs `1..=count`, in order: the group's naming with `-<number>` appended to the
 /// name part, through [`crate::naming::derive`] so every rule of a single worktree's name holds.
 pub fn derive_group(naming: &WorktreeNaming, count: u8) -> Result<Vec<DerivedNames>, NamingError> {
-    let _ = (naming, count);
-    Ok(Vec::new())
+    // The group's own name first, so an invalid one is refused with the single worktree's error.
+    crate::naming::derive(naming)?;
+    (1..=count)
+        .map(|number| {
+            crate::naming::derive(&WorktreeNaming {
+                name: format!("{} {number}", naming.name.trim()),
+                ..naming.clone()
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -30,11 +38,19 @@ mod tests {
         let dirs: Vec<_> = names.iter().map(|n| n.dir_name.as_str()).collect();
         assert_eq!(
             branches,
-            ["feat/login-page-1", "feat/login-page-2", "feat/login-page-3"]
+            [
+                "feat/login-page-1",
+                "feat/login-page-2",
+                "feat/login-page-3"
+            ]
         );
         assert_eq!(
             dirs,
-            ["feat-login-page-1", "feat-login-page-2", "feat-login-page-3"]
+            [
+                "feat-login-page-1",
+                "feat-login-page-2",
+                "feat-login-page-3"
+            ]
         );
     }
 
@@ -67,15 +83,23 @@ mod tests {
         let upper = derive_group(&naming("Login Page", None), 2).expect("valid");
         let lower = derive_group(&naming("login page", None), 2).expect("valid");
         assert_eq!(upper, lower, "a case-only difference is the same name");
-        assert!(upper
-            .iter()
-            .all(|n| n.branch == n.branch.to_lowercase() && n.dir_name == n.dir_name.to_lowercase()));
+        assert!(upper.iter().all(
+            |n| n.branch == n.branch.to_lowercase() && n.dir_name == n.dir_name.to_lowercase()
+        ));
     }
 
     #[test]
     fn every_name_is_a_valid_ref_and_a_portable_folder() {
         const RESERVED: &[&str] = &["con", "prn", "aux", "nul", "com1", "lpt1"];
-        for raw in ["con", "a.lock", "x..y", "über straße", "@{1}", "name~1^2:3", "nul"] {
+        for raw in [
+            "con",
+            "a.lock",
+            "x..y",
+            "über straße",
+            "@{1}",
+            "name~1^2:3",
+            "nul",
+        ] {
             let names = derive_group(&naming(raw, Some("T 1")), 8).expect("slugs to something");
             assert_eq!(names.len(), 8);
             for n in names {
@@ -85,9 +109,10 @@ mod tests {
                     n.branch
                 );
                 assert!(
-                    n.dir_name
-                        .chars()
-                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+                    n.dir_name.chars().all(|c| c.is_ascii_lowercase()
+                        || c.is_ascii_digit()
+                        || c == '-'
+                        || c == '_'),
                     "{} holds only portable characters",
                     n.dir_name
                 );

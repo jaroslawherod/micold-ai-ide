@@ -152,8 +152,12 @@ async fn w1_a_project_that_is_not_a_repository_is_refused() {
     let s = Sandbox::new();
     std::fs::remove_dir_all(s.project().join(".git")).unwrap();
     let mut client = runs_support::connect(&s.state).await;
-    let (answer, pushes) =
-        request(&mut client, 1, create_msg(1, &s.project(), vec![CLAUDE, CLAUDE])).await;
+    let (answer, pushes) = request(
+        &mut client,
+        1,
+        create_msg(1, &s.project(), vec![CLAUDE, CLAUDE]),
+    )
+    .await;
     let (kind, message) = answer.expect_err("not a repository");
     assert_eq!(kind, ErrorKind::InvalidInput, "{message}");
     assert!(pushes.is_empty());
@@ -170,8 +174,7 @@ async fn us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once(
     let base_tip = git(&project, &["rev-parse", "base"]);
     let mut client = window(&s.state, &project).await;
 
-    let (answer, pushes) =
-        request(&mut client, 1, create_msg(1, &project, vec![CLAUDE; 3])).await;
+    let (answer, pushes) = request(&mut client, 1, create_msg(1, &project, vec![CLAUDE; 3])).await;
     let id = created(&answer);
     let first = match pushes.first() {
         Some(groups) => groups.clone(),
@@ -179,7 +182,10 @@ async fn us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once(
             .await
             .expect("the accepted group is pushed"),
     };
-    let group = first.iter().find(|g| g.id == id).expect("the group is pushed");
+    let group = first
+        .iter()
+        .find(|g| g.id == id)
+        .expect("the group is pushed");
     assert_eq!(group.base_branch, "base");
     assert_eq!(group.base_commit, base_tip, "the base tip at create time");
     assert!(
@@ -197,7 +203,10 @@ async fn us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once(
         assert_eq!(run.status, RunStatus::Prompted, "run {n}");
         assert_eq!(run.names.branch, format!("feat/login-page-{n}"));
         assert_eq!(run.names.dir_name, format!("feat-login-page-{n}"));
-        assert!(s.worktree(&run.names.dir_name).is_dir(), "run {n}'s worktree");
+        assert!(
+            s.worktree(&run.names.dir_name).is_dir(),
+            "run {n}'s worktree"
+        );
         assert_eq!(
             git(&project, &["rev-parse", &run.names.branch]),
             base_tip,
@@ -223,10 +232,18 @@ async fn us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once(
     }
     tokio::time::sleep(QUIET).await;
     let inputs = s.inputs();
-    assert_eq!(inputs.len(), 3, "exactly the three runs' sessions read input");
+    assert_eq!(
+        inputs.len(),
+        3,
+        "exactly the three runs' sessions read input"
+    );
     for (session, typed) in inputs {
         assert!(sessions.contains(&session));
-        assert_eq!(typed, submitted(PROMPT), "nothing more was typed into a run");
+        assert_eq!(
+            typed,
+            submitted(PROMPT),
+            "nothing more was typed into a run"
+        );
     }
 }
 
@@ -262,7 +279,12 @@ async fn us1_s3_a_run_whose_worktree_cannot_be_created_fails_alone() {
         "the existing branch is untouched"
     );
     for n in [0, 2] {
-        assert_eq!(statuses[n], RunStatus::Prompted, "run {} is prompted", n + 1);
+        assert_eq!(
+            statuses[n],
+            RunStatus::Prompted,
+            "run {} is prompted",
+            n + 1
+        );
         let session = group.runs[n].session.expect("a session");
         s.typed_holds(session, PROMPT).await;
     }
@@ -320,7 +342,11 @@ async fn us1_s4_a_cli_never_ready_leaves_the_prompt_undelivered_and_keeps_the_ru
             }
             other => panic!("run {} is not delivered: {other:?}", run.number),
         }
-        assert!(run.session.is_some(), "run {} keeps its session", run.number);
+        assert!(
+            run.session.is_some(),
+            "run {} keeps its session",
+            run.number
+        );
         assert!(s.worktree(&run.names.dir_name).is_dir());
     }
     tokio::time::sleep(Duration::from_secs(3) + QUIET).await;

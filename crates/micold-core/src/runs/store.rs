@@ -53,14 +53,65 @@ struct StoredRuns {
 impl RunsFile {
     /// The file's JSON text.
     pub fn to_json(&self) -> String {
-        String::new()
+        let stored = StoredRuns {
+            version: RUNS_FILE_VERSION,
+            groups: self.groups.iter().map(StoredGroup::from).collect(),
+        };
+        serde_json::to_string_pretty(&stored).expect("a runs file always serialises")
     }
 
     /// Read the file's JSON text; an error for anything unparseable, of another version, or
     /// holding a group that breaks [`RunGroup::validate`].
     pub fn from_json(text: &str) -> Result<Self, String> {
-        let _ = text;
-        Err(String::new())
+        let stored: StoredRuns = serde_json::from_str(text).map_err(|err| err.to_string())?;
+        if stored.version != RUNS_FILE_VERSION {
+            return Err(format!(
+                "runs file version {} is not {RUNS_FILE_VERSION}",
+                stored.version
+            ));
+        }
+        let groups = stored
+            .groups
+            .into_iter()
+            .map(|group| {
+                let group = RunGroup::from(group);
+                group.validate().map_err(|err| err.to_string())?;
+                Ok(group)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        Ok(Self { groups })
+    }
+}
+
+impl From<&RunGroup> for StoredGroup {
+    fn from(group: &RunGroup) -> Self {
+        Self {
+            id: group.id,
+            name: group.name.clone(),
+            naming: group.naming.clone(),
+            prompt: group.prompt.clone(),
+            base_branch: group.base_branch.clone(),
+            base_commit: group.base_commit.clone(),
+            created: group.created,
+            runs: group.runs.iter().map(StoredRun::from).collect(),
+            winner: group.winner,
+        }
+    }
+}
+
+impl From<StoredGroup> for RunGroup {
+    fn from(group: StoredGroup) -> Self {
+        Self {
+            id: group.id,
+            name: group.name,
+            naming: group.naming,
+            prompt: group.prompt,
+            base_branch: group.base_branch,
+            base_commit: group.base_commit,
+            created: group.created,
+            runs: group.runs.into_iter().map(Run::from).collect(),
+            winner: group.winner,
+        }
     }
 }
 
@@ -162,7 +213,10 @@ mod tests {
         assert_eq!(first["number"], json!(1));
         assert_eq!(first["dir_name"], json!("feat-login-page-1"));
         assert_eq!(first["branch"], json!("feat/login-page-1"));
-        assert!(first.get("names").is_none(), "the names are flat on the run");
+        assert!(
+            first.get("names").is_none(),
+            "the names are flat on the run"
+        );
     }
 
     #[test]
@@ -176,8 +230,7 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_ignored_on_read() {
-        let mut value: serde_json::Value =
-            serde_json::from_str(&sample().to_json()).expect("JSON");
+        let mut value: serde_json::Value = serde_json::from_str(&sample().to_json()).expect("JSON");
         value["later"] = json!(true);
         value["groups"][0]["later"] = json!({ "x": 1 });
         value["groups"][0]["runs"][0]["later"] = json!("y");
@@ -191,8 +244,7 @@ mod tests {
     fn garbage_another_version_or_an_invalid_group_is_refused() {
         assert!(RunsFile::from_json("{ not json").is_err());
         assert!(RunsFile::from_json(r#"{ "version": 2, "groups": [] }"#).is_err());
-        let mut value: serde_json::Value =
-            serde_json::from_str(&sample().to_json()).expect("JSON");
+        let mut value: serde_json::Value = serde_json::from_str(&sample().to_json()).expect("JSON");
         value["groups"][0]["runs"] = json!([]);
         assert!(
             RunsFile::from_json(&value.to_string()).is_err(),
@@ -207,9 +259,19 @@ mod tests {
         let project = Path::new("/work/app");
         let runs = store.runs_path(project);
         let reviews = store.reviews_path(project);
-        assert_eq!(runs.parent().and_then(Path::file_name), Some("runs".as_ref()));
-        assert_eq!(runs.parent().and_then(Path::parent), reviews.parent().and_then(Path::parent));
-        assert_eq!(runs.file_name(), reviews.file_name(), "addressed by the project id");
+        assert_eq!(
+            runs.parent().and_then(Path::file_name),
+            Some("runs".as_ref())
+        );
+        assert_eq!(
+            runs.parent().and_then(Path::parent),
+            reviews.parent().and_then(Path::parent)
+        );
+        assert_eq!(
+            runs.file_name(),
+            reviews.file_name(),
+            "addressed by the project id"
+        );
     }
 
     #[test]
@@ -224,7 +286,10 @@ mod tests {
         assert_eq!(store.load_runs(project), RunsFile::default());
         let mut aside = path.as_os_str().to_os_string();
         aside.push(".corrupt");
-        assert!(Path::new(&aside).exists(), "the unreadable file is kept aside");
+        assert!(
+            Path::new(&aside).exists(),
+            "the unreadable file is kept aside"
+        );
         assert!(!path.exists());
     }
 
@@ -237,6 +302,8 @@ mod tests {
         assert_eq!(store.load_runs(project), sample());
         store.remove_runs(project).expect("removed");
         assert!(!store.runs_path(project).exists());
-        store.remove_runs(project).expect("removing an absent file is success");
+        store
+            .remove_runs(project)
+            .expect("removing an absent file is success");
     }
 }

@@ -777,27 +777,45 @@ impl JsonFileStore {
 
     /// A project's runs file, addressed by [`project_id`]. `pub` so tests can find it.
     pub fn runs_path(&self, project_path: &Path) -> PathBuf {
-        let _ = project_path;
         self.runs_dir()
+            .join(format!("{}.json", project_id(project_path)))
     }
 
     /// Load a project's run groups (feature 483). Never fails: a missing file is no groups; an
     /// unparseable one is kept aside as `<name>.corrupt` and no groups load.
     pub fn load_runs(&self, project_path: &Path) -> RunsFile {
-        let _ = project_path;
-        RunsFile::default()
+        let path = self.runs_path(project_path);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            // Missing, or unreadable for now: no groups, and the file is left where it is.
+            Err(_) => return RunsFile::default(),
+        };
+        match RunsFile::from_json(&text) {
+            Ok(file) => file,
+            Err(_) => {
+                let mut aside = path.as_os_str().to_os_string();
+                aside.push(".corrupt");
+                let _ = std::fs::rename(&path, PathBuf::from(aside));
+                RunsFile::default()
+            }
+        }
     }
 
     /// Write a project's run groups atomically (temp file, then rename).
     pub fn save_runs(&self, project_path: &Path, file: &RunsFile) -> io::Result<()> {
-        let _ = (project_path, file);
-        Ok(())
+        let path = self.runs_path(project_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_then_rename(&temp_path_for(&path), &path, &file.to_json())
     }
 
     /// Delete a project's runs file (feature 483, W5). An already-absent file is success.
     pub fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
-        let _ = project_path;
-        Ok(())
+        match std::fs::remove_file(self.runs_path(project_path)) {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
     }
 
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
@@ -1087,6 +1105,8 @@ struct FakeStoreState {
     fail_next_save: Option<io::ErrorKind>,
     /// Review comments per project, as `save_reviews` left them.
     reviews: BTreeMap<PathBuf, ReviewFile>,
+    /// Run groups per project, as `save_runs` left them.
+    runs: BTreeMap<PathBuf, RunsFile>,
 }
 
 impl FakeProjectStore {
@@ -1190,6 +1210,34 @@ impl ProjectStore for FakeProjectStore {
             .lock()
             .expect("fake lock")
             .reviews
+            .remove(project_path);
+        Ok(())
+    }
+
+    fn load_runs(&self, project_path: &Path) -> RunsFile {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .runs
+            .get(project_path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn save_runs(&self, project_path: &Path, file: &RunsFile) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .runs
+            .insert(project_path.to_path_buf(), file.clone());
+        Ok(())
+    }
+
+    fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .runs
             .remove(project_path);
         Ok(())
     }

@@ -729,6 +729,8 @@ where
                                 sessions: state.sessions_for(&project),
                             },
                         );
+                        // Feature 483: the project's run groups, once, right after `Attached`.
+                        state.send(id, state.run_groups_on_attach(&project));
                         // Feature 482: the project's stored comments, one push per entry.
                         for msg in state.review_pushes_on_attach(&project) {
                             state.send(id, msg);
@@ -1218,18 +1220,61 @@ where
                     state.send(id, answer);
                 });
             }
-            // Feature 483: run groups are not served yet.
-            ClientMsg::RunGroupCreate { req, .. }
-            | ClientMsg::RunGroupPick { req, .. }
-            | ClientMsg::RunGroupDismiss { req, .. } => state.send(
-                id,
-                DaemonMsg::OperationError {
-                    req,
-                    kind: micold_core::protocol::messages::ErrorKind::Refused,
-                    message: "run groups are not available in this build".into(),
-                    detail: None,
-                },
-            ),
+            // Feature 483 (W1): checked and recorded off the connection loop (the base branch's
+            // tip is read from git), answered, pushed, and only then are the runs started.
+            ClientMsg::RunGroupCreate {
+                req,
+                project,
+                naming,
+                prompt,
+                base_branch,
+                providers,
+            } => {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let request = crate::runs::CreateRequest {
+                        project: project.clone(),
+                        naming,
+                        prompt,
+                        base_branch,
+                        providers,
+                    };
+                    match crate::runs::create(&state, request).await {
+                        Ok(group) => {
+                            state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::RunGroupCreated { group: group.id },
+                                },
+                            );
+                            state.broadcast_run_groups(&project);
+                            crate::runs::spawn_runs(&state, &project, &group);
+                        }
+                        Err(refusal) => state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: refusal.kind,
+                                message: refusal.message,
+                                detail: None,
+                            },
+                        ),
+                    }
+                });
+            }
+            // Feature 483: picking (T058) and dismissing (T035) come in later milestones.
+            ClientMsg::RunGroupPick { req, .. } | ClientMsg::RunGroupDismiss { req, .. } => state
+                .send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: micold_core::protocol::messages::ErrorKind::Refused,
+                        message: "run groups cannot be picked from or dismissed in this build"
+                            .into(),
+                        detail: None,
+                    },
+                ),
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,

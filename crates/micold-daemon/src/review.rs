@@ -26,7 +26,8 @@ pub struct Refusal {
 }
 
 impl Refusal {
-    fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+    /// A refusal of `kind` saying `message`.
+    pub(crate) fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),

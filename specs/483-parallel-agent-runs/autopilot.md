@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M1
-- **Next step**: implement M1 (T001–T027): continue from Handover (core green T003/T005/T007)
+- **Next step**: M1a: write T011 (`run_group_persist.rs`), then reviews A+B, full gate, push, PR body (see Handover)
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T027 | full | Run in parallel starts N prompted runs, shown under a group row with failures and reasons | — | in progress |
+| M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | — | in progress |
+| M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | — | planned |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
@@ -56,6 +57,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
+- M1 split (orchestrator, part 3): M1a = core + protocol + daemon (T001–T011, T014–T016), M1b =
+  client (T012, T013, T017–T027); tasks.md § Milestones carries both blocks.
+- Daemon: a run's worktree uses a new daemon-only `CreateMode::NewBranchAt { start }`
+  (`#[serde(skip)]`, compatible with `BranchSituation::Free` only, rollback owns the branch) and
+  `Git::worktree_add_new_branch_at`, because `NewBranch` starts at HEAD, not the base branch. An
+  existing run branch → `SituationChanged` → `Failed { Worktree, "the branch <b> already exists" }`.
+- Daemon: a run transition whose runs-file write fails still changes memory (the worktree or session
+  already exists); logged, and the next write catches the file up. A new group's write failing
+  refuses the create (W5).
+- Daemon: `RunGroupsChanged` is sent to an attaching client right after `Attached` (before review
+  pushes); `RunGroupCreate` answers `OperationOk` before the first push, then spawns the runs.
+
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
@@ -72,40 +85,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 handed over at ~150k context (milestone unit; no PR open). Stay on branch
-`claude/project-thread-wysm57` as it is (skip `branch-start.sh`; `gh` unauthenticated). Cloud: no
-`mise`; run cargo through `scripts/build-lock.sh` with `CARGO_INCREMENTAL=0`, detached (helper
-`$SCRATCHPAD/bg.sh <name> <cmd…>` writes `<name>.log` ending `JOB_EXIT=`; hold with `hold.sh`).
-Done since unit 1 (committed as "wip(483): M1 reds recorded, daemon run-group tests"):
-- Core reds run and recorded in `specs/483-parallel-agent-runs/tdd/cycle-log.md` (T002, T004,
-  T006, T008 rows; Green column empty).
-- T010 test written: `crates/micold-daemon/tests/run_group_create.rs` + shared harness
-  `crates/micold-daemon/tests/support/runs.rs` (JsonFileStore catalog, stand-in `claude`, no
-  `copilot`, repo on `main` with branch `base` one commit ahead; creates use base `base`). Not yet
-  compiled. T011 (`run_group_persist.rs`) NOT written: plan it on the same harness; for W5's
-  failing write put a regular file at `<store>/runs` (root ignores read-only dirs; six permission
-  tests already fail as root).
-Next step: implement T003 (`can_become`, `RunGroup::new`, `validate` in core runs/mod.rs), T005
-(`derive_group`: `naming::derive` first for the error, then append `-<n>` to `dir_name` and
-`branch`), T007 (RunsFile to/from JSON via StoredRuns, version check, validate each group; store.rs
-runs_path = runs_dir/<project_id>.json, load/save/remove as the reviews trio; FakeProjectStore
-needs a runs map); run `cargo test -p micold-core --lib runs` and the protocol/schema tests green;
-fill the Green column. Then T011, T014–T027.
-Findings for the daemon (T014–T016):
-- `CreateMode::NewBranch` runs `git worktree add -b <branch> <path> HEAD`: it starts at the repo's
-  HEAD, not the base branch. Decision proposed: add a daemon-only `CreateMode::NewBranchAt { start }`
-  marked `#[serde(skip)]` (compatible with `BranchSituation::Free` only; rollback owns the branch),
-  a `Git::worktree_add_new_branch_at` with a default impl calling `worktree_add_new_branch` (FakeGit)
-  and a real one in `GitCli` passing `start`; `create_command_line` arm. Record it in Decisions.
-- An existing run branch with NewBranch(At) gives `CreateError::SituationChanged` (no rollback, the
-  branch is untouched) → `Failed { step: Worktree, reason: err.to_string() }`.
-- Model `micold-daemon/src/runs.rs` on `review.rs` (`Reviews` map + `Refusal`), state handle as
-  `inner.reviews` (state.rs:242, 643, 2150–2160), attach push beside
-  `review_pushes_on_attach` (server.rs:733, before the attach's CatalogChanged — the harness's
-  `attach` reads up to it), catalog `load_runs`/`save_runs` beside catalog.rs:417–433 and
-  `remove_runs` beside catalog.rs:1028. Run task: `ops::create_worktree` → `ops::cli_unavailable`
-  (Failed Session) → `ops::create_session_with_prompt(… FirstPrompt { require_bracketed: true })`
-  → map `Typing(_)` like mcp/tools.rs:1340. Answer the create before broadcasting.
+M1 unit 3 handed over at ~155k context (milestone unit; no PR open). Stay on branch
+`claude/project-thread-wysm57` (skip `branch-start.sh`; `gh` unauthenticated; no `mise`). Run cargo
+detached via `$SCRATCHPAD/bg.sh <name> scripts/build-lock.sh cargo …` (sets `CARGO_INCREMENTAL=0`,
+log ends `JOB_EXIT=`), wait with `scripts/autopilot/hold.sh <log>`.
+Done (committed "feat(483): M1a core, NewBranchAt, daemon run groups"): T001–T010, T014–T016
+green; `cargo test -p micold-core` passes except the 4 root-only permission tests;
+`run_group_create` 8/8; `worktree_create` 17/17. tasks.md split into M1a/M1b (see Decisions).
+Next step (M1a only):
+1. Write T011 `crates/micold-daemon/tests/run_group_persist.rs` on `tests/support/runs.rs`
+   (`#[path = "support/runs.rs"] mod runs_support;`, `#![cfg(unix)]`, `ENV` guard): file holds the
+   group at the first push and only `<id>.json` remains in `<store>/runs` after settling (temp
+   files are `<name>.<pid>.<n>.tmp`); W5 failing write = regular file at `<store>/runs` →
+   `OperationError` (IoFailed), no worktree/branch/push, a fresh attach gets empty groups; two
+   windows get the same push; frame right after `Attached` is the one `RunGroupsChanged`;
+   `ClientMsg::ProjectRemove` removes the runs file. It should pass on the current code (record
+   red as "passes on arrival" honestly in tdd/cycle-log.md). Tick T011.
+2. Review A (`code-review` high) on `origin/main...HEAD` + scoped gate; review B (conformance,
+   sonnet) via `claude -p --agent autopilot-reviewer`. 3. Full gate (raw commands of mise.toml
+   `gate`, CARGO_INCREMENTAL=0; 6 root-permission failures only → `echo <sha> >>
+   .git/autopilot-gate-ok`, own Bash call), push `--force-with-lease -u origin
+   claude/project-thread-wysm57`, PR body to `$SCRATCHPAD/pr-483-m1a.md` (title "#483: Run one
+   prompt across several agents in parallel worktrees and pick the best result (M1a)", ends
+   `Refs #483`); return `PR: pending (body at …)`.
 
 ## Open escalation
 

@@ -781,6 +781,10 @@ pub enum CreateMode {
     Overwrite,
     /// Start a local branch at `<remote>/<branch>` and track it (FR-017).
     TrackRemote { remote: String },
+    /// Create a fresh branch at `start` rather than HEAD (feature 483: a run of a group starts at
+    /// the group's base branch). The daemon's own mode, never sent by a client.
+    #[serde(skip)]
+    NewBranchAt { start: String },
 }
 
 impl CreateMode {
@@ -798,6 +802,8 @@ impl CreateMode {
     pub fn is_compatible_with(&self, situation: &BranchSituation) -> bool {
         match (self, situation) {
             (CreateMode::NewBranch, BranchSituation::Free) => true,
+            // A run's branch is new or the run fails: never an existing or remote branch.
+            (CreateMode::NewBranchAt { .. }, BranchSituation::Free) => true,
             // The deliberate "start fresh at HEAD" answer to a remote-only name (FR-018).
             (CreateMode::NewBranch, BranchSituation::RemoteOnly { .. }) => true,
             (CreateMode::ReuseLocal, BranchSituation::LocalAvailable { .. }) => true,
@@ -1275,7 +1281,9 @@ impl CreateStage {
         match self {
             Self::PreflightCheck => "Checking for naming conflicts",
             Self::CreatingWorktree => match mode {
-                CreateMode::NewBranch => "Creating branch and worktree",
+                CreateMode::NewBranch | CreateMode::NewBranchAt { .. } => {
+                    "Creating branch and worktree"
+                }
                 CreateMode::ReuseLocal => "Checking out existing branch",
                 CreateMode::Overwrite => "Replacing branch and creating worktree",
                 CreateMode::TrackRemote { .. } => "Creating tracking branch and worktree",
@@ -1362,6 +1370,9 @@ pub fn create_worktree(
     });
     let added = match mode {
         CreateMode::NewBranch => git.worktree_add_new_branch(repo, &names.branch, target_path),
+        CreateMode::NewBranchAt { start } => {
+            git.worktree_add_new_branch_at(repo, &names.branch, start, target_path)
+        }
         CreateMode::ReuseLocal => {
             git.worktree_add_existing_branch(repo, &names.branch, target_path)
         }
@@ -1427,6 +1438,9 @@ fn create_command_line(mode: &CreateMode, branch: &str, target_path: &Path) -> S
     let path = target_path.display();
     match mode {
         CreateMode::NewBranch => format!("$ git worktree add -b {branch} {path} HEAD"),
+        CreateMode::NewBranchAt { start } => {
+            format!("$ git worktree add -b {branch} {path} {start}")
+        }
         CreateMode::ReuseLocal => format!("$ git worktree add {path} {branch}"),
         CreateMode::Overwrite => format!("$ git worktree add -B {branch} {path} HEAD"),
         CreateMode::TrackRemote { remote } => {

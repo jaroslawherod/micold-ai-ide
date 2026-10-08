@@ -124,10 +124,16 @@ impl Sandbox {
         git(repo.path(), &["init", "-q", "-b", "main"]);
         git(repo.path(), &["config", "user.email", "t@t.test"]);
         git(repo.path(), &["config", "user.name", "T"]);
-        git(repo.path(), &["commit", "-q", "--allow-empty", "-m", "root"]);
+        git(
+            repo.path(),
+            &["commit", "-q", "--allow-empty", "-m", "root"],
+        );
         git(repo.path(), &["branch", "base"]);
         git(repo.path(), &["checkout", "-q", "base"]);
-        git(repo.path(), &["commit", "-q", "--allow-empty", "-m", "ahead"]);
+        git(
+            repo.path(),
+            &["commit", "-q", "--allow-empty", "-m", "ahead"],
+        );
         git(repo.path(), &["checkout", "-q", "main"]);
         let trust = serde_json::json!({"projects": {repo.path().to_str().unwrap(): {"hasTrustDialogAccepted": true}}});
         std::fs::write(home.path().join(".claude.json"), trust.to_string()).unwrap();
@@ -338,7 +344,11 @@ pub type Answer = Result<OperationResult, (ErrorKind, String)>;
 
 /// Send `msg` (carrying `req`) and wait for its answer, collecting the `RunGroupsChanged` pushes
 /// seen meanwhile.
-pub async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (Answer, Vec<Vec<RunGroup>>) {
+pub async fn request(
+    client: &mut Client,
+    req: u64,
+    msg: ClientMsg,
+) -> (Answer, Vec<Vec<RunGroup>>) {
     client.send(Frame::Control(msg)).await.unwrap();
     let mut seen = Vec::new();
     let answered = async {
