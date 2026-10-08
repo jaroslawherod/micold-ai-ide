@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4 committed locally, gate green; push and PR were denied by the permission classifier. Push, open the PR, wait for CI, merge, then M5. Visual pass B1-B3 not run (no Xvfb/xdotool): M8 records it.
+- **Next step**: PR #619 (M4) rebased onto origin/main and force-pushed, gate green. Wait for CI, merge, then M5. Visual pass B1-B3 not run (no Xvfb/xdotool): M8 records it.
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #541 | M1 | merged | e496e95c63b9a776ac22921f78ee100ea6b505b1 |
 | #547 | M2 | merged | 2e688bf3d01bed2c3ae63681ecd05be8e6db3648 |
 | #611 | M3 | merged | ef56a970339f2a77a0f8642a6c4dcc848a00b1ce |
+| #619 | M4 | open (rebased onto origin/main; gate green) | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | `micold-core` reads pull requests through `gh` and turns recorded answers into per-branch statuses and failure kinds (US1 core; no UI) | #541 | merged |
 | M2 | T014–T022 | full | Protocol 22 (039 took 21): the daemon stores and broadcasts `pr_status_enabled` and answers `MergedBranchCheck` (no UI) | #547 | merged |
 | M3 | T023–T029 | full | The holding window reads pull request status on the listing after `Attached` and on switch-on, and holds it in memory (no UI) | #611 | merged |
-| M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | | pending |
+| M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | #619 | open |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | | pending |
 | M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | | pending |
 | M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | | pending |
