@@ -95,9 +95,10 @@ pub fn modal<'a>(
             .placeholder("Provider")
         ]
         .spacing(spacing::SM);
-        if dialog.runs.len() > MIN_RUNS {
-            line = line.push(Button::outlined("Remove", r).on_press(msg(Msg::RunRemoved(index))));
-        }
+        line =
+            line.push(Button::outlined("Remove", r).on_press_maybe(
+                (dialog.runs.len() > MIN_RUNS).then_some(msg(Msg::RunRemoved(index))),
+            ));
         fields = fields.push(line);
     }
     fields = fields.push(
