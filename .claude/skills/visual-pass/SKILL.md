@@ -288,10 +288,8 @@ Everything else (data home, screenshots) can live in the scratchpad as usual.
 
 ## Wayland: when there is no Xvfb
 
-Verified once, 2026-10-08, sway 1.11, headless + pixman + lavapipe (the #430 pass, checks 1-6), with
-a first-draft pointer client. The committed `vptr.py` was then rewritten and checked live only for
-attach (`get_seats` capabilities 0 to 1), `abs`, `click`, bad-command handling and `quit`; it has not
-run a full pass.
+Verified twice on 2026-10-08, sway 1.11, headless + pixman + lavapipe (the #430 passes), including a
+full pass with the committed `vptr.py`.
 Use it when Xvfb or xdotool is absent, or the user prefers it. Steps 1, 2, 7 and 8 are unchanged;
 this replaces 3, 4, 5, 6 and 9.
 
@@ -299,27 +297,31 @@ this replaces 3, 4, 5, 6 and 9.
 wtype or `vptr.py` against the user's own `WAYLAND_DISPLAY` or `SWAYSOCK`: set both explicitly to
 the private ones. `vptr.py` exits non-zero unless its socket is in a `/tmp/vp<name><N>/` directory you own.
 Every command below carries the private env; a bare `swaymsg` or `grim` talks to the user's sway.
-Shell state does not persist: repeat `vp_n`/`vp_run` and these lines in every call.
+Shell state does not persist: put the variables in one `env.sh` in the scratchpad and `source` it
+at the top of every call, instead of repeating them.
 
 ```bash
+# env.sh
 vp_n=77; vp_run=/tmp/vpw$vp_n                 # the number step 3 claimed
+VP=$PWD/.visual-pass                          # bins, before-src, logs
 sock=$vp_run/wayland-1
-```
-
-After sway is up (not before: an empty `SWAYSOCK` lets swaymsg fall back to another socket):
-
-```bash
-SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock)
-[ -S "$SWAYSOCK" ] || { echo "no private sway socket" >&2; exit 1; }
+# only once sway is up (an empty SWAYSOCK lets swaymsg fall back to another socket):
+SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock 2>/dev/null)
+[ -S "$SWAYSOCK" ] || { echo "no private sway socket" >&2; return 1 2>/dev/null || exit 1; }
 PV="env -u DISPLAY SWAYSOCK=$SWAYSOCK WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run"
 ```
+
+Before sway exists, source only the first lines (split the file in two).
 
 **3. Private sway.** Claim `/tmp/vpwN` as in step 3 (`mkdir` is the lock). Config:
 `output HEADLESS-1 resolution 1600x1200`. Start with `WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1
 WLR_RENDERER=pixman XDG_RUNTIME_DIR=/tmp/vpwN setsid nohup sway -c <config>`, behind
 `env -u SWAYSOCK -u DISPLAY -u WAYLAND_DISPLAY` so it cannot nest in the user's session. "Could not find config
 for output HEADLESS-1" is harmless. Sway's pid is the number in the socket name
-`sway-ipc.UID.PID.sock`; `$!` is setsid's, not sway's. Record that pid.
+`sway-ipc.UID.PID.sock`; `$!` is setsid's, not sway's. Record that pid. Same for `vptr.py`: `$!` after
+`setsid nohup` is the wrapper's pid, and `pgrep -f vptr.py` matches your own shell, so find it with
+`pgrep -xf 'python3 .*vptr.py .*'` from a call that does not contain that text, or `pgrep -n -f` right
+after launch, and write the pid to a file.
 
 **Pointer.** Headless sway has no input devices, so `swaymsg seat - cursor ...` does nothing, and
 `wlrctl` cannot hover: its virtual pointer lives only while the command runs, so the app sees
@@ -354,6 +356,26 @@ need a narrow window: `$PV swaymsg 'floating enable, resize set width 520 px hei
 At 520 px the delay triggers are clipped, so `floating disable` for delay checks. For the bottom
 edge, scroll so the trigger runs past the window bottom.
 
+**Baseline build.** To judge a change relative to the build before it, export that commit to
+`$VP/before-src` (`git archive <sha> | tar -x -C "$VP/before-src"`). `.visual-pass` is inside the
+worktree's git tree, so the build lock and the shared target dir resolve from there. Copy each binary
+out under a distinct name; the process name of a pinned copy is its file name, so use it for the
+step 9 environ test and `pgrep -x`:
+
+```bash
+top=$(git rev-parse --show-toplevel)
+cd "$VP/before-src" && "$top/scripts/build-lock.sh" bash -c \
+  'cargo build -p <crate> --bin <bin> && cp "$CARGO_TARGET_DIR/debug/<bin>" "$1/bin/<bin>-before"' _ "$VP"
+```
+
+Do the same for the current tree (`<bin>-after`).
+
+**Counting idle work.** Launch the app with `WAYLAND_DEBUG=client` (stderr to a file). Count lines
+matching `wl_surface#N.commit(` (the client log says `#N`, not `@N`) by their `[HH:MM:SS.us]`
+timestamps over the sample, e.g. 30 s after a 10 s settle. CPU: sum fields 14 and 15 (utime, stime,
+clock ticks) of `/proc/<pid>/stat` at the start and end, divided by `getconf CLK_TCK` and the elapsed
+seconds, times 100.
+
 **9. Clean up.** Sway's `/proc/<pid>/environ` is unreadable, so step 9's environ test cannot
 identify it: kill it by the pid recorded in step 3. Kill the app and daemon by the environ test
 (runtime dir `/tmp/vpwN/app`), send `quit` to the pointer client (it removes its FIFO), then `rm -rf` the runtime dir.
@@ -364,8 +386,10 @@ Builds queue behind other worktrees' lock: wait on the binary's existence with a
 `until` loop or `scripts/autopilot/hold.sh`, not a `pgrep` watcher (it mis-fired).
 
 **Cannot judge here, beyond the limits above.** Timing is good to about +-100 ms (grim latency).
-Not smoothness or frame pacing, real GPU behaviour, idle power (an idle CPU of ~170% was seen with
-no tooltip open and could not be attributed without a baseline), the cursor image, or mid-animation frames.
+Not smoothness or frame pacing, real GPU behaviour, absolute idle power, the cursor image, or
+mid-animation frames. Idle CPU can be judged relative to a pre-change baseline (see above). The
+showcase redraws at ~60 Hz and ~170% CPU in both builds with nothing open, so a match shows the change
+adds no idle work, not that the app is idle; say so. Real-client idleness needs its own test.
 
 ## What this still cannot answer
 

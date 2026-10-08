@@ -39,7 +39,7 @@ Paths: `core` = `crates/micold-core`, `client` = `crates/micold-client`, `cdk` =
 - [x] T015 [US2] Test (red): `idle_requests_no_frames.rs` and `material_builder_api.rs`: a waiting delay requests exactly one timed wake and no frame; none without a waiting or open tooltip; `show_delay` is a builder step (US2.5, FR-007)
 - [x] T016 [US2] Implement `Wait::Delay`, `Tooltip::show_delay` in `cdk`, `State.show`, reset in `describe`; the delay's wake through `motion::wake_at`; `material::Tooltip::show_delay` (T013 to T015 green)
 - [x] T017 [P] [US2] Add the "show delay" and "show delay and follow" poses to the showcase `floating.rs`
-- [ ] T018 [US2] (steps 4 and 5 PASS 2026-10-08; step 7 idle NOT JUDGED, left open, SC-005 stays on `idle_requests_no_frames`) Run quickstart §B steps 4, 5 and 7 through the `visual-pass` skill; append the evidence to `specs/430-tooltip-follow-cursor-delay/visual-pass.md` (NOT RUN: no Xvfb/xdotool; recorded in visual-pass.md)
+- [x] T018 [US2] (steps 4, 5 and 7 PASS 2026-10-08; step 7 judged against a pre-430 baseline, the showcase redraws at 60 Hz in both builds; SC-005 stays on `idle_requests_no_frames`) Run quickstart §B steps 4, 5 and 7 through the `visual-pass` skill; append the evidence to `specs/430-tooltip-follow-cursor-delay/visual-pass.md` (recorded in visual-pass.md)
 
 ## Dependencies
 

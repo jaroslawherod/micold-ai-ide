@@ -1,0 +1,17 @@
+pid=1408366
+b0a bin=before dbg=0 elapsed=30.006182607 cpu%=159.7 commits/s=0 threads=56
+pid=1438888
+a0a bin=after dbg=0 elapsed=30.051887501 cpu%=185.3 commits/s=0 threads=56
+pid=1458027
+b0b bin=before dbg=0 elapsed=30.011724316 cpu%=178.6 commits/s=0 threads=56
+pid=1473461
+a0b bin=after dbg=0 elapsed=30.015369019 cpu%=189.8 commits/s=0 threads=56
+pid=1493779
+b1a bin=before dbg=1 elapsed=30.565377242 cpu%=171.5 commits/s=0 threads=55
+pid=1507343
+a1a bin=after dbg=1 elapsed=30.043988928 cpu%=166.9 commits/s=0 threads=56
+pid=1514746
+b1b bin=before dbg=1 elapsed=30.007526272 cpu%=170.6 commits/s=0 threads=56
+pid=1524109
+a1b bin=after dbg=1 elapsed=30.007871211 cpu%=177.2 commits/s=0 threads=56
+FIN
