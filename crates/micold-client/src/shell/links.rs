@@ -46,7 +46,7 @@ fn sandbox_is_live(app: &App) -> bool {
 }
 
 /// Hand `request` to the opener on a blocking task, with nothing in between (SC-003).
-fn perform(app: &App, request: OpenRequest) -> Task<Message> {
+pub(crate) fn perform(app: &App, request: OpenRequest) -> Task<Message> {
     let opener = app.caps.link_opener();
     match request {
         OpenRequest::Url(address) => Task::perform(

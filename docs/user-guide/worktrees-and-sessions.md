@@ -122,6 +122,26 @@ A merged or closed pull request, and one with no checks, shows the state alone. 
 status has its own shape, so none depends on colour. The indicator keeps its size however wide the
 sidebar is.
 
+#### The tooltip and opening the pull request
+
+Hover a row with an indicator and its tooltip adds these lines after the ones it already has:
+
+- `Pull request: #<number> <title>`: a title longer than 72 characters is cut and ends in `…`.
+- `PR state:` `open`, `draft`, `merged` or `closed`.
+- `Checks:` `passing`, `pending` or `failing`, for an open or draft pull request that has checks.
+- `Review:` `approved`, `changes requested` or `review required`, when GitHub reports a decision;
+  without one there is no line.
+
+Hovering reads nothing from GitHub or the disk: the tooltip shows what the last reading found, and
+a row without an indicator has the tooltip it always had.
+
+To see the pull request on GitHub, right-click the row and choose **Open pull request**, directly
+above **Delete**. It opens in your default browser; nothing else changes (selection, sessions and
+the sidebar stay as they were), and only a `https://github.com/` address is ever opened. A row
+without an indicator has no such entry.
+
+#### Which pull request, and which worktrees
+
 - **Which pull request:** the one for the worktree's branch, in the project's own GitHub
   repository. When a branch has several, an open or draft one is shown if there is any, otherwise the most
   recently created; among several open ones, the most recently created.

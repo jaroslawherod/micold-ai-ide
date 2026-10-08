@@ -59,6 +59,24 @@ fn the_seven_pull_request_glyphs_are_in_the_font_and_distinct() {
     );
 }
 
+/// **Open pull request**'s icon (feature 040, §4) is Material's `open_in_new`, is in the shipped
+/// font, and is no other variant's glyph.
+#[test]
+fn open_in_browser_is_open_in_new_and_distinct() {
+    assert_eq!(Icon::OpenInBrowser.glyph(), '\u{e89e}');
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let id = face
+        .glyph_index(Icon::OpenInBrowser.glyph())
+        .expect("open_in_new is in the shipped font");
+    for &other in Icon::ALL.iter().filter(|i| **i != Icon::OpenInBrowser) {
+        assert_ne!(
+            face.glyph_index(other.glyph()),
+            Some(id),
+            "{other:?} draws the same glyph as OpenInBrowser"
+        );
+    }
+}
+
 #[test]
 fn font_advertises_the_pinned_family_name() {
     let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");

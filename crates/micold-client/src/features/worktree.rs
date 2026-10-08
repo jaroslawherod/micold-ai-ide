@@ -675,6 +675,10 @@ pub enum Msg {
     /// Offered only on a row that classifies `Agent`, which — since a hidden worktree draws no row
     /// — means only while the reveal control is on. There is no inverse (FR-024).
     ClaimRequested(String),
+    /// Open the pull request of a worktree's branch in the browser (feature 040, FR-014), by
+    /// `dir_name`. The address is read from the held status by the shell, which is the side that
+    /// opens it; the reducer has nothing to change, so the application's state is untouched.
+    PullRequestOpenRequested(String),
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
@@ -720,6 +724,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::Hovered(dir) => hovered(state, dir),
         Msg::Unhovered(dir) => unhovered(state, dir),
         Msg::ClaimRequested(dir) => claim_requested(state, dir),
+        Msg::PullRequestOpenRequested(_) => {}
     }
     Vec::new()
 }

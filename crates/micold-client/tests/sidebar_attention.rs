@@ -379,6 +379,7 @@ fn with_unread_line_appends_after_a_multi_line_worktree_tooltip() {
         Some(Path::new(REPO)),
         &worktree(FEATURE_X, WorktreeStatus::Missing),
         "x",
+        None,
     );
     assert!(
         tooltip.lines().count() > 1,

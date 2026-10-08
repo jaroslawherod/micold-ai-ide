@@ -130,6 +130,8 @@ pub enum Icon {
     /// A check of the pull request failed — `cancel` (contract §1 said `close`, which is
     /// [`Icon::Close`]'s codepoint; D13).
     ChecksFailing,
+    /// **Open pull request** in a worktree row's menu (feature 040, §4) — `open_in_new`.
+    OpenInBrowser,
 }
 
 impl Icon {
@@ -181,6 +183,7 @@ impl Icon {
         Icon::ChecksPassing,
         Icon::ChecksPending,
         Icon::ChecksFailing,
+        Icon::OpenInBrowser,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -245,6 +248,7 @@ impl Icon {
             Icon::ChecksPassing => '\u{e5ca}',
             Icon::ChecksPending => '\u{e8b5}',
             Icon::ChecksFailing => '\u{e5c9}',
+            Icon::OpenInBrowser => '\u{e89e}',
         }
     }
 }

@@ -9193,3 +9193,180 @@ fn a_window_that_takes_its_project_back_reports_the_session_in_view_again() {
 
     assert_eq!(window_views(&mut rx), vec![(true, Some(session))]);
 }
+
+/// Feature 040, story 2 (contract pull-request-ui §4): **Open pull request** hands the address
+/// GitHub reported to the link opener, and only when it is a GitHub address (FR-014; U116, U117).
+mod pr_status_open {
+    use super::*;
+    use std::sync::Mutex;
+    use crate::shell::link_opener::LinkOpener;
+    use micold_client::features::OpenFailure;
+    use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+    use micold_core::worktree::WorktreeStatus::Valid;
+
+    #[derive(Default)]
+    struct Recording {
+        opened: Mutex<Vec<String>>,
+        fail: bool,
+    }
+
+    impl LinkOpener for Recording {
+        fn open(&self, target: &str) -> Result<(), OpenFailure> {
+            self.opened.lock().unwrap().push(target.to_string());
+            if self.fail {
+                Err(OpenFailure::LaunchFailed("no launcher".into()))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn reveal(&self, _path: &std::path::Path) -> Result<(), OpenFailure> {
+            Ok(())
+        }
+    }
+
+    fn status(url: &str) -> PullRequestStatus {
+        PullRequestStatus {
+            number: 7,
+            title: "A title".into(),
+            url: url.into(),
+            state: PrState::Open {
+                checks: CheckStatus::Failing,
+            },
+            review: ReviewState::None,
+            head: "abc".into(),
+        }
+    }
+
+    /// A window on `/repo/demo` whose `feat-a` row holds a pull request at `url`.
+    fn app_holding(url: &str, opener: &Arc<Recording>) -> App {
+        let mut app = app_on_demo(&[("feat-a", Valid, true)]);
+        app.caps = app.caps.clone().with_link_opener(opener.clone());
+        app.core
+            .pr_status
+            .statuses
+            .insert("feat/feat-a".to_string(), status(url));
+        app
+    }
+
+    fn open(app: &mut App, dir: &str) -> Vec<Message> {
+        messages(update_inner(
+            app,
+            Message::Worktree(WorktreeMsg::PullRequestOpenRequested(dir.to_string())),
+        ))
+    }
+
+    fn opened(opener: &Recording) -> Vec<String> {
+        opener.opened.lock().unwrap().clone()
+    }
+
+    #[test]
+    fn pr_status_open_hands_the_stored_address_to_the_opener_once() {
+        let url = "https://github.com/o/r/pull/7";
+        let opener = Arc::new(Recording::default());
+        let mut app = app_holding(url, &opener);
+
+        let _ = open(&mut app, "feat-a");
+
+        assert_eq!(opened(&opener), vec![url.to_string()]);
+    }
+
+    #[test]
+    fn pr_status_open_opens_nothing_for_an_address_that_is_not_github() {
+        for url in [
+            "http://github.com/o/r/pull/7",
+            "https://github.com.evil.example/o/r/pull/7",
+            "https://evilgithub.com/o/r/pull/7",
+            "https://example.com/o/r/pull/7",
+            "https://github.com",
+            "HTTPS://GITHUB.COM/o/r/pull/7",
+            " https://github.com/o/r/pull/7",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "",
+        ] {
+            let opener = Arc::new(Recording::default());
+            let mut app = app_holding(url, &opener);
+
+            let messages = open(&mut app, "feat-a");
+
+            assert!(opened(&opener).is_empty(), "{url:?} must not be opened");
+            assert!(messages.is_empty(), "{url:?} must raise nothing");
+        }
+    }
+
+    #[test]
+    fn pr_status_open_opens_nothing_when_the_row_lost_its_status() {
+        let opener = Arc::new(Recording::default());
+        let mut app = app_holding("https://github.com/o/r/pull/7", &opener);
+        app.core.pr_status.statuses.clear();
+
+        let _ = open(&mut app, "feat-a");
+        let _ = open(&mut app, "no-such-row");
+
+        assert!(opened(&opener).is_empty());
+    }
+
+    #[test]
+    fn pr_status_open_opens_the_address_of_the_rows_own_branch() {
+        let opener = Arc::new(Recording::default());
+        let mut app = app_holding("https://github.com/o/r/pull/7", &opener);
+        app.core.pr_status.statuses.insert(
+            "feat/other".to_string(),
+            status("https://github.com/o/r/pull/99"),
+        );
+
+        let _ = open(&mut app, "feat-a");
+
+        assert_eq!(opened(&opener), vec!["https://github.com/o/r/pull/7"]);
+    }
+
+    /// FR-014: selection, sessions and the sidebar are what they were.
+    #[test]
+    fn pr_status_open_changes_no_application_state() {
+        let opener = Arc::new(Recording::default());
+        let mut app = app_holding("https://github.com/o/r/pull/7", &opener);
+        let before = format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            app.core.session.active,
+            app.core.workspace.sessions,
+            app.core.sidebar,
+            app.core.worktree.worktrees
+        );
+
+        let _ = open(&mut app, "feat-a");
+
+        assert_eq!(opened(&opener).len(), 1, "fixture check: it did open");
+        let after = format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            app.core.session.active,
+            app.core.workspace.sessions,
+            app.core.sidebar,
+            app.core.worktree.worktrees
+        );
+        assert_eq!(before, after);
+    }
+
+    /// The opener's failure goes the way every opened link's does (feature 031).
+    #[test]
+    fn pr_status_open_reports_an_opener_failure_as_a_link_is() {
+        let url = "https://github.com/o/r/pull/7";
+        let opener = Arc::new(Recording {
+            fail: true,
+            ..Recording::default()
+        });
+        let mut app = app_holding(url, &opener);
+
+        let messages = open(&mut app, "feat-a");
+
+        assert_eq!(
+            messages,
+            vec![Message::Session(
+                micold_client::features::session::Msg::LinkOpenFinished {
+                    address: url.to_string(),
+                    result: Err(OpenFailure::LaunchFailed("no launcher".into())),
+                }
+            )]
+        );
+    }
+}
