@@ -583,9 +583,9 @@ check "batching: speaks again after eight more requests" 0 'autopilot batching: 
 check "batching: a batched message ends the run" 0 '^$' chook b2
 { tuse a 90000 "$gr"; tuse b 90000 "$wr"; tuse c 90000 "$gr"; tuse e 90000 "$rd"; } > "$sub/agent-b3.jsonl"
 check "batching: a build is not a read" 0 '^$' chook b3
-{ tuse a 30000 "$gr"; tuse b 30000 "$gr"; tuse c 30000 "$gr"; } > "$sub/agent-b4.jsonl"
+{ tuse a 20000 "$gr"; tuse b 20000 "$gr"; tuse c 20000 "$gr"; } > "$sub/agent-b4.jsonl"
 check "batching: silent while the context is small" 0 '^$' chook b4
-check "batching: honours the context setting" 0 'autopilot batching' env AUTOPILOT_BATCH_CTX=20000 bash -c "$(declare -f chook); d='$d' C='$C' chook b4"
+check "batching: honours the context setting" 0 'autopilot batching' env AUTOPILOT_BATCH_CTX=10000 bash -c "$(declare -f chook); d='$d' C='$C' chook b4"
 { tuse a 90000 "$gr"; tuse b 90000 "$gr"; } > "$sub/agent-b5.jsonl"
 check "batching: honours the run setting" 0 'your last 2 calls' env AUTOPILOT_BATCH_RUN=2 bash -c "$(declare -f chook); d='$d' C='$C' chook b5"
 { tuse a 170000 "$gr"; tuse b 170000 "$gr"; tuse c 170000 "$gr"; } > "$sub/agent-b6.jsonl"

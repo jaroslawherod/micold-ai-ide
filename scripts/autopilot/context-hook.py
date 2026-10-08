@@ -15,7 +15,7 @@ call. The cap is AUTOPILOT_CONTEXT_CAP, default 150000, as in context.py.
 Batching: in measured runs, a lone read-only call right after another cost 3.8M and 5.9M cost_eq a
 run, a tenth of it, at about 100k of context each. When the caller's last AUTOPILOT_BATCH_RUN
 requests (default 3) each made exactly one read-only tool call, and its context is at least
-AUTOPILOT_BATCH_CTX (default 60000), the hook says so once, and not again for the next 8 requests.
+AUTOPILOT_BATCH_CTX (default 30000), the hook says so once, and not again for the next 8 requests.
 What counts as read-only is autopilot-tokens.py's `unbatched` rule.
 """
 
@@ -126,7 +126,7 @@ def main():
     msgs = []
 
     run_min = int(os.environ.get("AUTOPILOT_BATCH_RUN", "3"))
-    if ctx >= int(os.environ.get("AUTOPILOT_BATCH_CTX", "60000")) and len(requests) >= run_min:
+    if ctx >= int(os.environ.get("AUTOPILOT_BATCH_CTX", "30000")) and len(requests) >= run_min:
         read_only = read_only_rule()
         run = lone_reads(requests, read_only) if read_only else 0
         state = Path(tempfile.gettempdir()) / f"autopilot-batch-{who}"
