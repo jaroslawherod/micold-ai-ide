@@ -290,7 +290,7 @@ What the two 034 runs still show, and what changed for it:
   `Bash` (a `grep`, then the next `grep`). 14 and 25 chains ran six or more such calls. The batch rules in
   `unit.md` did not stop it; the converge and visual-pass subagents, which never read `unit.md`,
   did it too. `context-hook.py` now also counts: after three requests in a row with one read-only
-  call each, at 60k of context or more, it tells the caller once to batch its probes or send the
+  call each, at 30k of context or more, it tells the caller once to batch its probes or send the
   search to an `Explore` subagent, and stays quiet for the next eight requests. The rule for
   "read-only" is the report's own (`read_only` in `autopilot-tokens.py`), so the hook warns about
   exactly what the `unbatched` column counts.
