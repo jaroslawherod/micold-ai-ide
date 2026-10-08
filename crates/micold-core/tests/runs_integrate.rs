@@ -32,6 +32,7 @@ fn repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     git(p, &["init", "-q", "-b", "main"]);
+    git(p, &["config", "core.autocrlf", "false"]);
     git(p, &["config", "user.email", "t@t.test"]);
     git(p, &["config", "user.name", "t"]);
     commit(p, "a.txt", "one\n");
