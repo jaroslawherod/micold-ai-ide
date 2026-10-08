@@ -61,18 +61,24 @@ def done(*_):
 signal.signal(signal.SIGTERM, done); signal.signal(signal.SIGINT, done)
 
 print('ready', flush=True)
-while True:
-    for line in open(fifo):
-        a = line.split()
-        if not a: continue
-        try:
-            if a[0] == 'abs': msg(5, 1, struct.pack('<IIIII', t(), int(a[1]), int(a[2]), 1600, 1200)); frame()
-            elif a[0] == 'rel': msg(5, 0, struct.pack('<Iii', t(), fx(float(a[1])), fx(float(a[2])))); frame()
-            elif a[0] == 'down': button(True)
-            elif a[0] == 'up': button(False)
-            elif a[0] == 'click': button(True); time.sleep(.05); button(False)
-            elif a[0] == 'scroll': msg(5, 3, struct.pack('<IIi', t(), 0, fx(float(a[1])))); frame()
-            elif a[0] == 'quit': done()
-            else: print('unknown command:', line.strip(), file=sys.stderr, flush=True)
-        except (ValueError, IndexError, struct.error):
-            print('bad command:', line.strip(), file=sys.stderr, flush=True)
+try:
+    while True:
+        for line in open(fifo):
+            a = line.split()
+            if not a: continue
+            try:
+                if a[0] == 'abs': msg(5, 1, struct.pack('<IIIII', t(), int(a[1]), int(a[2]), 1600, 1200)); frame()
+                elif a[0] == 'rel': msg(5, 0, struct.pack('<Iii', t(), fx(float(a[1])), fx(float(a[2])))); frame()
+                elif a[0] == 'down': button(True)
+                elif a[0] == 'up': button(False)
+                elif a[0] == 'click': button(True); time.sleep(.05); button(False)
+                elif a[0] == 'scroll': msg(5, 3, struct.pack('<IIi', t(), 0, fx(float(a[1])))); frame()
+                elif a[0] == 'quit': done()
+                else: print('unknown command:', line.strip(), file=sys.stderr, flush=True)
+            except (ValueError, IndexError, struct.error):
+                print('bad command:', line.strip(), file=sys.stderr, flush=True)
+except OSError as e:
+    print('vptr: I/O error:', e, file=sys.stderr, flush=True)
+    try: os.unlink(fifo)
+    except FileNotFoundError: pass
+    sys.exit(1)
