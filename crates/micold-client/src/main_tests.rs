@@ -2100,6 +2100,60 @@ fn an_open_settings_page_shows_another_windows_save_and_keeps_its_own_edits() {
     );
 }
 
+/// A50, the service-held switch (BUG-475, FR-026b, review A): the pull request switch follows the
+/// service on an open page only while its user has not switched it there. Another window's save
+/// of some other setting neither resets their edit nor, when untouched, leaves it stale.
+#[test]
+fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouched_one() {
+    let mut app = base_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::PrStatusToggled(true)),
+    );
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                desktop_notifications: false,
+                ..quiet_settings()
+            },
+        },
+    );
+    let draft = app.core.settings.settings_draft.as_ref().expect("open");
+    assert!(
+        draft.github.pr_status_enabled,
+        "another window's save of another setting keeps this page's edit"
+    );
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                pr_status_enabled: true,
+                ..quiet_settings()
+            },
+        },
+    );
+    let draft = app.core.settings.settings_draft.as_ref().expect("open");
+    assert!(
+        draft.github.pr_status_enabled,
+        "an untouched switch shows the value another window saved"
+    );
+    assert_eq!(
+        draft.baseline.as_ref().map(|b| b.pr_status_enabled),
+        Some(true),
+        "and counts as unchanged, so a save does not send it"
+    );
+}
+
 /// A49 (BUG-570, FR-026a, US4 scenario 7): a page opened before another window turned both
 /// switches off, then saved after changing only another setting, must not turn them back on: not
 /// at the service, not in the file, not in this window.

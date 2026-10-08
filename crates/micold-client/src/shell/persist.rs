@@ -248,12 +248,7 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
     // connection subscription and never kept.
     // The label-to-type mapping, too, comes from the store: `App` keeps no copy of it, because an
     // issue pick reads the store at the moment of the pick (feature 034, FR-014a).
-    let stored = app
-        .caps
-        .settings()
-        .map(|store| store.load().settings)
-        .unwrap_or_default();
-    let current = window_settings(app, stored);
+    let current = settings_in_force(app);
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
@@ -280,6 +275,17 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         app,
         micold_client::features::settings::CheckOrigin::Opened,
     )
+}
+
+/// The settings a Settings page shows: this window's values, with the store supplying the rest
+/// ([`window_settings`]). Opening the page and refreshing it (BUG-475) seed from the same value.
+pub(crate) fn settings_in_force(app: &App) -> Settings {
+    let stored = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings)
+        .unwrap_or_default();
+    window_settings(app, stored)
 }
 
 /// The settings as this window holds them, with `stored` supplying the fields it keeps no copy of
@@ -541,9 +547,11 @@ pub(crate) fn save_and_prepare_check(
         .map(|store| store.load().settings.daemon.sandbox.survive_logout)
         .unwrap_or_default();
 
-    // A save changes only what the user changed on the page (BUG-570, FR-026a). The page is not
-    // refreshed while it is open, so a field the user never touched can hold a value another
-    // window has since replaced; writing it back would undo that window's save.
+    // A save changes only what the user changed on the page (BUG-570, FR-026a). The baseline is
+    // the page as last seeded: when it opened, or when another window's save refreshed it
+    // (BUG-475). A field the store or the service changed since, with no refresh to show it here
+    // (a save of file-only settings sends nothing to the service), would be undone by writing it
+    // back.
     let settings = valid.into_settings();
     let baseline = app
         .core

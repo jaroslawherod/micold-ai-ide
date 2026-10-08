@@ -82,9 +82,16 @@ pub fn listing_arrived(app: &mut App) -> Task<Message> {
 
 /// The live value of the switch, from `Welcome` or `SettingsChanged`.
 pub fn enabled_changed(app: &mut App, enabled: bool) -> Task<Message> {
-    // An open Settings page follows the service's value (feature 040, FR-029).
+    // An open Settings page follows the service's value (feature 040, FR-029), unless its user
+    // has switched it on this page: their edit stays until they save (BUG-475, FR-026b).
     if let Some(draft) = &mut app.core.settings.settings_draft {
-        draft.github.pr_status_enabled = enabled;
+        let untouched = draft
+            .baseline
+            .as_ref()
+            .is_none_or(|opened| opened.pr_status_enabled == draft.github.pr_status_enabled);
+        if untouched {
+            draft.github.pr_status_enabled = enabled;
+        }
     }
     update(
         app,
