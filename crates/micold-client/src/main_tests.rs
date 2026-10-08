@@ -2183,7 +2183,8 @@ fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-    assert_eq!(pr_status_told(&mut rx), Some(None));
+    // A save that changed nothing the service owns tells it nothing at all (BUG-570).
+    assert_eq!(pr_status_told(&mut rx), None);
 }
 
 /// U105: turning it off when the service has it on is a change, and is sent as `Some(false)`.
