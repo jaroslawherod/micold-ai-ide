@@ -438,7 +438,12 @@ async fn type_ticket_and_name_create_the_forms_worktree() {
     assert_eq!(row["ticket"], "123");
     assert_eq!(
         row["path"],
-        native(f.repo().join(".claude/worktrees/fix-123_login-crash"))
+        native(
+            f.repo()
+                .join(".claude")
+                .join("worktrees")
+                .join("fix-123_login-crash")
+        )
     );
     assert_eq!(
         parse_tags(row["ref"].as_str().unwrap()),
