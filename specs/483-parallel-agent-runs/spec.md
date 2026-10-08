@@ -36,6 +36,17 @@ worktree with uncommitted changes without asking. Depends on #482 for the compar
   optionally removing the other runs.
 - **Loser**: every run of a group other than the picked one.
 
+## Clarifications
+
+### Session 2026-10-08
+
+- Q: When the picked run has uncommitted changes, what does the pick do? → A: It refuses the pick,
+  naming the uncommitted files, until the user commits them; nothing changes. _(default, pending
+  user confirmation)_
+- Q: How does Pick this one integrate the run's branch into the base branch? → A: Always a merge:
+  a fast-forward when the base branch has not moved since the run's branch left it, otherwise a
+  merge commit; the run's branch is never rewritten. _(default, pending user confirmation)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Start N runs from one dialog (Priority: P1)
@@ -177,9 +188,8 @@ confirmed separately.
 8. **Given** a run whose session is still working, **When** the user picks it, **Then** the app
    asks for confirmation, saying the session is still working, before integrating anything.
 9. **Given** the picked run itself has uncommitted changes, **When** the user picks it, **Then**
-   [NEEDS CLARIFICATION: what happens to the winner's uncommitted changes, which a branch
-   integration does not carry: refuse the pick until they are committed, offer to commit them as
-   part of the pick, or integrate only the committed work and warn?].
+   the pick is refused with the reason and the list of uncommitted files, and nothing changes
+   until the user commits them (for example in the run's session or terminal) and picks again.
 
 ---
 
@@ -212,6 +222,8 @@ confirmed separately.
 - **Base branch checked out with uncommitted changes**: if the base branch is checked out somewhere
   (for example the project root) with uncommitted changes that integrating would overwrite, the
   pick is refused with that reason and nothing changes.
+- **Winner with uncommitted changes**: the pick is refused, naming the uncommitted files, and
+  nothing changes; the user commits them and picks again.
 - **Run with no changes**: Compare shows 0 files, +0, −0; it can still be picked, and integrating it
   leaves the base branch unchanged.
 - **Large or binary changes**: counts come from the same rules as the Changes view; binary files
@@ -256,9 +268,10 @@ confirmed separately.
   on, and MUST refresh within 2 seconds of a change in the run's worktree.
 - **FR-011**: Compare MUST open a run's Changes view from that run's row.
 - **FR-012**: **Pick this one** MUST integrate the chosen run's branch into the base branch using
-  [NEEDS CLARIFICATION: how the integration is chosen: always a merge, always a rebase of the run
-  onto the base followed by a fast-forward, or the user chooses merge or rebase in the pick
-  dialog (and which is the default)?].
+  a merge: a fast-forward when the base branch's tip is an ancestor of the run's branch, otherwise
+  a merge commit on the base branch; the run's branch MUST NOT be rewritten. A run whose worktree
+  holds uncommitted changes MUST NOT be picked: the pick MUST be refused, naming the uncommitted
+  files, and change nothing.
 - **FR-013**: When integration cannot complete (conflicts, or the base branch is checked out with
   uncommitted changes it would overwrite), the pick MUST change nothing and MUST tell the user why,
   naming the conflicting files when there are conflicts.
