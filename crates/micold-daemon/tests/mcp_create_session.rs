@@ -240,6 +240,16 @@ fn trust_project(home: &Path, project: &Path) {
     .unwrap();
 }
 
+/// The first-prompt bound for tests whose CLI does become ready and must get its prompt (#617).
+///
+/// Readiness by the output-settled rule takes [`SETTLE_AFTER`] (1.5 s) of quiet after the CLI
+/// starts, so a 3 s bound left a slow CI runner 1.5 s to create the worktree, spawn the CLI and
+/// start reading it, and a busy macOS runner missed it. The call returns as soon as the CLI is
+/// ready, so a generous bound costs a passing run nothing; it only caps how long a failure takes.
+/// It stays well under the 30 s Pi delay `pi_without_its_event_is_ready_once_its_output_settles`
+/// relies on, so that test still proves readiness came from the settled output.
+const READY_BOUND: Duration = Duration::from_secs(15);
+
 /// A stand-in CLI: records its launch; `draws` makes it print a prompt; Pi reports `session_start`
 /// through the component's log after `<bin>/pi.delay` seconds (0.3 by default). Everything typed
 /// into it is appended to `<bin>/<command>.input`.
@@ -475,7 +485,7 @@ async fn without_a_prompt_the_call_does_not_wait_for_readiness() {
 async fn a_ready_signal_inside_the_bound_delivers_the_prompt() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    s.state.set_first_prompt_bound(Duration::from_secs(3));
+    s.state.set_first_prompt_bound(READY_BOUND);
     let out = s
         .ok(json!({"worktree": "b", "ai_cli": "copilot", "prompt": PROMPT}))
         .await;
@@ -681,7 +691,7 @@ async fn pi_gets_its_first_prompt_without_a_trust_record() {
 async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    s.state.set_first_prompt_bound(Duration::from_secs(5));
+    s.state.set_first_prompt_bound(READY_BOUND);
     let before = s.session_ids();
     let addr = s.addr;
     let credential = credential(&s.state, sid(3));
@@ -740,7 +750,7 @@ async fn pi_without_its_event_is_ready_once_its_output_settles() {
     let s = Sandbox::new().await;
     install_cli(s.bin.path(), "pi", true);
     s.set_pi_delay(30.0);
-    s.state.set_first_prompt_bound(Duration::from_secs(5));
+    s.state.set_first_prompt_bound(READY_BOUND);
     let out = s
         .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
         .await;
