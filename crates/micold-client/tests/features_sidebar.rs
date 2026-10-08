@@ -808,6 +808,7 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
             .flat_map(|e| match e {
                 SidebarEntry::Default(node) => node.sessions.clone(),
                 SidebarEntry::Worktree(node) => node.sessions.clone(),
+                SidebarEntry::Group(_) => Vec::new(),
             })
             .map(|s| s.provider)
             .collect::<Vec<_>>(),
@@ -1284,4 +1285,228 @@ fn a_row_that_is_not_removable_has_no_cleanup_line() {
     assert_eq!(line(&tip_removable(&open, false), "Cleanup"), None);
     // The text of a row that is not removable is what it was before the mark existed.
     assert_eq!(tip_removable(&merged, false), tip_with(&merged));
+}
+
+// ---- Feature 483: Run in parallel and the group row (T013, T022) ----
+
+mod parallel_runs {
+    use super::*;
+    use micold_client::features::sidebar::{
+        arrange_groups, run_in_parallel, GroupNode, HeaderAction, RunRow, HEADER_ACTIONS,
+    };
+    use micold_client::features::Outcome;
+    use micold_core::naming::{DerivedNames, WorktreeNaming};
+    use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus, RunStep};
+
+    fn node(dir: &str) -> SidebarEntry {
+        SidebarEntry::Worktree(WorktreeNode {
+            worktree: worktree(dir),
+            display_name: dir.into(),
+            tags: vec![Tag::Type(ConventionalType::Feat)],
+            expanded: false,
+            sessions: vec![],
+            shown_for_current_session: false,
+        })
+    }
+
+    fn default_entry() -> SidebarEntry {
+        SidebarEntry::Default(DefaultNode {
+            display_name: "Default",
+            expanded: false,
+            sessions: vec![],
+        })
+    }
+
+    fn run(number: u8, provider: AiCli, status: RunStatus) -> Run {
+        Run {
+            number,
+            provider,
+            names: DerivedNames {
+                dir_name: format!("feat-login-{number}"),
+                branch: format!("feat/login-{number}"),
+            },
+            session: None,
+            status,
+        }
+    }
+
+    fn group(runs: Vec<Run>) -> RunGroup {
+        RunGroup::new(NewGroup {
+            id: GroupId(uuid::Uuid::from_u128(7)),
+            name: "login".into(),
+            naming: WorktreeNaming {
+                type_: Some(ConventionalType::Feat),
+                ticket: None,
+                name: "login".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs,
+        })
+        .expect("valid group")
+    }
+
+    fn three_runs() -> RunGroup {
+        group(vec![
+            run(1, AiCli::ClaudeCode, RunStatus::Prompted),
+            run(2, AiCli::Copilot, RunStatus::Prompted),
+            run(3, AiCli::ClaudeCode, RunStatus::Prompted),
+        ])
+    }
+
+    fn group_of(entries: &[SidebarEntry]) -> &GroupNode {
+        let mut found = entries.iter().filter_map(|e| match e {
+            SidebarEntry::Group(g) => Some(g),
+            _ => None,
+        });
+        let g = found.next().expect("one group row");
+        assert!(found.next().is_none(), "only one group row");
+        g
+    }
+
+    fn dirs(entries: &[SidebarEntry]) -> Vec<String> {
+        entries
+            .iter()
+            .filter_map(|e| match e {
+                SidebarEntry::Worktree(n) => Some(n.worktree.dir_name.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_project_menu_offers_run_in_parallel_right_after_new_worktree() {
+        assert_eq!(
+            HEADER_ACTIONS,
+            [HeaderAction::NewWorktree, HeaderAction::RunInParallel]
+        );
+        assert_eq!(
+            run_in_parallel(),
+            vec![Outcome::RunInParallelRequested],
+            "choosing it opens the dialog"
+        );
+    }
+
+    #[test]
+    fn a_group_of_three_sits_among_two_unrelated_worktrees() {
+        let entries = vec![
+            default_entry(),
+            node("alpha"),
+            node("feat-login-1"),
+            node("feat-login-2"),
+            node("feat-login-3"),
+            node("omega"),
+        ];
+        let arranged = arrange_groups(entries, &[three_runs()], |_| true);
+        assert_eq!(
+            dirs(&arranged),
+            ["alpha", "omega"],
+            "G3: runs never appear ungrouped"
+        );
+        let g = group_of(&arranged);
+        assert_eq!(g.name, "login");
+        assert_eq!(
+            g.runs.iter().map(|r| r.number).collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+        assert_eq!(
+            g.runs.iter().map(|r| r.provider).collect::<Vec<_>>(),
+            [AiCli::ClaudeCode, AiCli::Copilot, AiCli::ClaudeCode]
+        );
+        assert!(g.runs.iter().all(|r| matches!(r.row, RunRow::Worktree(_))));
+        assert_eq!((g.run_count, g.failed_count), (3, 0));
+        // The group sits where its first run sat: after alpha, before omega.
+        let position = arranged
+            .iter()
+            .position(|e| matches!(e, SidebarEntry::Group(_)))
+            .unwrap();
+        assert_eq!(position, 2);
+    }
+
+    #[test]
+    fn a_run_without_a_worktree_is_still_a_child_row_with_its_reason() {
+        let failed = RunStatus::Failed {
+            step: RunStep::Worktree,
+            reason: "the branch is taken".into(),
+        };
+        let g = group(vec![
+            run(1, AiCli::ClaudeCode, RunStatus::Prompted),
+            run(2, AiCli::Copilot, failed),
+            run(3, AiCli::ClaudeCode, RunStatus::Prompted),
+        ]);
+        let entries = vec![default_entry(), node("feat-login-1"), node("feat-login-3")];
+        let arranged = arrange_groups(entries, &[g], |_| true);
+        let g = group_of(&arranged);
+        assert_eq!(g.runs.len(), 3);
+        assert_eq!((g.run_count, g.failed_count), (3, 1));
+        let second = &g.runs[1];
+        assert_eq!(second.number, 2);
+        assert_eq!(second.provider, AiCli::Copilot);
+        assert!(matches!(second.row, RunRow::NoWorktree));
+        assert!(second.failed());
+        assert_eq!(second.reason(), Some("the branch is taken"));
+    }
+
+    #[test]
+    fn a_collapsed_group_hides_its_runs_and_keeps_both_counts() {
+        let failed = RunStatus::Failed {
+            step: RunStep::Worktree,
+            reason: "x".into(),
+        };
+        let g = group(vec![
+            run(1, AiCli::ClaudeCode, RunStatus::Prompted),
+            run(2, AiCli::Copilot, failed),
+            run(3, AiCli::ClaudeCode, RunStatus::Prompted),
+        ]);
+        let entries = vec![default_entry(), node("feat-login-1"), node("feat-login-3")];
+        let collapsed = arrange_groups(entries.clone(), &[g.clone()], |_| false);
+        let expanded = arrange_groups(entries, &[g], |_| true);
+        let c = group_of(&collapsed);
+        assert!(!c.expanded);
+        assert_eq!((c.run_count, c.failed_count), (3, 1));
+        let heights_collapsed = row_heights(&collapsed);
+        let heights_expanded = row_heights(&expanded);
+        assert_eq!(heights_collapsed.len(), 2, "Default and the group row");
+        assert_eq!(
+            heights_expanded.len(),
+            5,
+            "Default, the group, and three runs"
+        );
+    }
+
+    #[test]
+    fn row_heights_and_scroll_target_account_for_the_group_row() {
+        let entries = vec![
+            default_entry(),
+            node("feat-login-1"),
+            node("feat-login-2"),
+            node("zeta"),
+        ];
+        let g = group(vec![
+            run(1, AiCli::ClaudeCode, RunStatus::Prompted),
+            run(2, AiCli::Copilot, RunStatus::Prompted),
+        ]);
+        let arranged = arrange_groups(entries, &[g], |_| true);
+        let heights = row_heights(&arranged);
+        // Default, group, run 1, run 2, zeta.
+        assert_eq!(heights.len(), 5);
+        assert!(
+            heights[1] < heights[2],
+            "a group row is one line; a tagged run is two"
+        );
+        // The last row (zeta) is below a short viewport: scrolling reaches it.
+        assert!(scroll_target(&heights, 4, 40.0, 0.0).is_some());
+        assert_eq!(current_session_row(&arranged, None), None);
+    }
+
+    #[test]
+    fn runs_of_a_group_whose_worktrees_are_hidden_still_count() {
+        // Filtered out of the tree (e.g. by a tag filter): the run is a leaf, not a stray row.
+        let arranged = arrange_groups(vec![default_entry()], &[three_runs()], |_| true);
+        let g = group_of(&arranged);
+        assert_eq!(g.run_count, 3);
+        assert!(g.runs.iter().all(|r| matches!(r.row, RunRow::NoWorktree)));
+    }
 }

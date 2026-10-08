@@ -162,6 +162,13 @@ pub enum PendingOp {
     /// actually applies it — this variant exists only so a failure reaches the user and a
     /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
     SettingsSet,
+    /// A `RunGroupCreate` (feature 483, W1): the group arrives as `RunGroupsChanged`; this exists
+    /// so a refusal reaches the user (the dialog has closed by then, D5).
+    RunGroupCreate,
+    /// The `BranchList` the Run in parallel dialog's base-branch select reads (feature 483, D1).
+    RunBranchList {
+        project: PathBuf,
+    },
     /// A `ReviewEdit` (feature 482): the result arrives as `ReviewChanged`; this exists so a
     /// refusal or a failed write reaches the user.
     ReviewEdit,
@@ -194,6 +201,8 @@ impl PendingOp {
         match self {
             PendingOp::CreateSession => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
+            PendingOp::RunGroupCreate => "start the runs".into(),
+            PendingOp::RunBranchList { .. } => "list the branches".into(),
             PendingOp::WorktreeCreate { dir_name, .. } => {
                 format!("create the worktree \"{dir_name}\"")
             }
@@ -965,6 +974,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             }
             // Feature 034: the remotes decide whether the GitHub issue source can be chosen. The same
             // staleness guard as the branch listing.
+            Some(PendingOp::RunBranchList { project: asked_for }) => {
+                if let OperationResult::BranchList { candidates } = result {
+                    if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
+                        app.core.update(Message::Runs(
+                            micold_client::features::runs::Msg::BranchesListed(candidates),
+                        ));
+                    }
+                }
+            }
             Some(PendingOp::RemoteList { project: asked_for }) => {
                 if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
                     // Any other answer would leave the form checking forever: say so instead.
@@ -1418,6 +1436,15 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     comments,
                     sending,
                 });
+        }
+        // Feature 483 (W2): the whole group list of a project, pushed after `Attached` and every
+        // change; only the active project's list is shown.
+        DaemonMsg::RunGroupsChanged { project, groups } => {
+            if app.core.workspace.active.as_deref() == Some(project.as_path()) {
+                app.core.update(Message::Runs(
+                    micold_client::features::runs::Msg::GroupsChanged(groups),
+                ));
+            }
         }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
