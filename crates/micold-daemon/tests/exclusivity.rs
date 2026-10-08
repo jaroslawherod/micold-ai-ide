@@ -203,7 +203,10 @@ async fn a_displaced_client_is_not_terminated() {
                 assert_eq!(nonce, 7);
                 break;
             }
-            Frame::Control(DaemonMsg::CatalogChanged { .. }) | Frame::Grid(_) => continue,
+            Frame::Control(
+                DaemonMsg::CatalogChanged { .. } | DaemonMsg::RunGroupsChanged { .. },
+            )
+            | Frame::Grid(_) => continue,
             other => panic!("expected Pong, got {other:?}"),
         }
     }

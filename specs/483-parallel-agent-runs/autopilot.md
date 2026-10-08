@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M2
-- **Next step**: M2: continue from Handover (client T030/T036/T037, docs T038, visual pass T039)
+- **Next step**: M2: PR written (pr-483-m2.md); orchestrator opens it, waits on CI and merges; then M3
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
-| M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
+| M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | pending | PR written |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
 | M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
@@ -86,6 +86,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a review A (code-review, sonnet) | 3 (fix diff) | a919a4e20e57e980b74b417fcc4831d7e9ea4006:b4963b20c7ee533270a1b9a49a98aef4e981498c | both fixes hold; 5 MINOR: spec prose and cycle-log fixed (prose only), 3 to follow-ups |
 | M1b review A (code-review high, fresh) | 1 | 80164d66f8f40785e3b73921cf40b5c06e7b46b4:e710b37db81f20266b2754d01e834d9eb39a6d6f | CLEAN: 3 MINOR (Remove disabled instead of hidden fixed; single-line prompt and silent BranchList failure to follow-ups) |
 | M1b review B (conformance, sonnet) | 1 | 80164d66f8f40785e3b73921cf40b5c06e7b46b4:e710b37db81f20266b2754d01e834d9eb39a6d6f | CHANGES: 2 MAJOR (cycle-log M1b section added; T027 re-scoped to B23, B1-B6 live pass deferred), 1 MINOR (placement prose and test name fixed) |
+| M2 review A (code-review high) | 1 | (see commit 6bf8796c) | CHANGES: 4 fixed (forget_worktree owner, displaces lists, attach log, popover/registry tables), 4 declined |
+| M2 review B (conformance, sonnet) | 1 | (see commit eefde392) | CHANGES: process findings only (Verify not runnable in reviewer sandbox: ran by the unit, all green; red evidence in cycle-log mutation section; stale handover); no re-run |
 
 ## Declined review findings
 
@@ -111,9 +113,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 2 (context 138k). Done and committed on claude/project-thread-wysm57 (4 commits ahead of origin/main, not pushed): T028–T038 ticked. Client: `features/runs.rs` (GroupMenu, DismissTarget, Msg MenuToggled/MenuDismissed/DismissAsked/DismissConfirmed/DismissCancelled, `routed`, `GroupContextMenu`, `ConfirmDismissGroupDialog`), `ui/confirm_dismiss_group.rs`, group menu in `ui/mod.rs`, right-press in `ui/sidebar.rs`, registry + `shell/runs.rs` + `PendingOp::RunGroupDismiss`; docs `parallel-runs.md`; cycle-log M2 section with mutation red. Review A (high) ran once: fixed forget_worktree owning-run check, displaces lists, attach log. Review B (sonnet) round 1: CHANGES — F1 (could not run Verify: reviewer sandbox denied commands; I ran them: run_group_persist 12, run_group_create 10, features_runs 18, features_sidebar 72, all `micold-client` tests pass), F2 (red evidence: answered by the mutation section), F3 stale handover (this rewrite). Full gate run 3 (before the last two commits): only the six root-only failures plus `popover_displacement` (mine; fixed in the test-table commit, `cargo test -p micold-client` is now green).
-Uncommitted: showcase pose "Dismiss group dialog" (`showcase/catalogue.rs`, `showcase/sections/surfaces.rs`, `modal(name, roles)` in `ui/confirm_dismiss_group.rs`); `cargo test -p micold-client` green with it. Commit it.
-Next: (1) T039: build `micold-showcase` (`cargo build -p micold-client --bin micold-showcase`, copy to `.visual-pass/`), Xvfb, screenshot the TreeView section's poses (run group rows, Dismiss group dialog) light and dark; B7/B21/B22 need a live daemon, which this container cannot drive: record that, citing `run_group_persist`/`run_group_create`, in quickstart.md § Results § B; tick T039. (2) Re-run the full gate on the final tree (scratchpad `gate.sh` has the raw commands; `rm -rf target-shared` is approved if the disk fills: it holds ~30G after a gate; the six expected root failures are `a_directory_that_cannot_be_emptied_names_what_survived`, `the_leftover_report_is_capped`, `a_refused_write_is_logged_as_a_failure_with_the_reason`, `a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched`, `a_service_write_over_an_unreadable_settings_file_is_refused`, `worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports`), then `scripts/tests/*.test.sh`, then the gate-ok echo alone in its own Bash call, push `--force-with-lease -u origin claude/project-thread-wysm57`. (3) No second review B needed (F1/F2 were not code defects); record in Review rounds. (4) Write `pr-483-m2.md` in the scratchpad (title line 1 per the prompt; body per tasks/pr.md; Review A: 8 findings, 4 fixed (forget_worktree owner, displaces, attach log, popover/registry tables), 4 declined as below; Review B: CHANGES on process findings, answered). Then return DONE.
+None.
 
 ## Open escalation
 
