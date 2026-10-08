@@ -165,7 +165,8 @@ pub trait Git {
     fn merge_in_checkout(&self, checkout: &Path, branch: &str) -> io::Result<()>;
 
     /// `git -C <checkout> merge --abort` when a merge is left in progress (`MERGE_HEAD` present);
-    /// nothing otherwise (I5).
+    /// nothing otherwise (I5). `merge_in_checkout` already undoes its own failed merge and refuses
+    /// one the user left in progress, so a caller has no need of this after it.
     fn merge_abort(&self, checkout: &Path) -> io::Result<()>;
 
     /// The review base of the worktree at `dir`: the merge-base of `HEAD` and the default branch,
@@ -271,6 +272,17 @@ pub fn containment(tip: Option<&str>, head: &str, ancestor: Option<bool>) -> Bra
 pub struct GitCli;
 
 impl GitCli {
+    /// Whether `checkout` has a merge left in progress (`MERGE_HEAD` present).
+    fn merge_in_progress(&self, checkout: &Path) -> io::Result<bool> {
+        Ok(local_only(no_window(&mut Command::new("git")))
+            .arg("-C")
+            .arg(checkout)
+            .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+            .output()?
+            .status
+            .success())
+    }
+
     /// Create a git-CLI boundary.
     pub fn new() -> Self {
         Self
@@ -635,6 +647,13 @@ impl Git for GitCli {
         if !crate::naming::is_valid_branch(branch) {
             return Err(io::Error::other(format!("{branch} is not a branch name")));
         }
+        // A merge the user left in progress is theirs: refuse it by name and leave it alone, so
+        // the abort below only ever undoes the merge this call started.
+        if self.merge_in_progress(checkout)? {
+            return Err(io::Error::other(
+                "a merge is already in progress in the checkout; finish or abort it first",
+            ));
+        }
         // `refs/heads/` makes a same-named tag or a path unable to stand in for the branch.
         let output = local_only(no_window(&mut Command::new("git")))
             .arg("-C")
@@ -650,18 +669,13 @@ impl Git for GitCli {
         if message.is_empty() {
             message = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         }
+        // A conflict leaves this merge in progress; undo it so a refusal changes nothing.
+        let _ = self.merge_abort(checkout);
         Err(io::Error::other(message))
     }
 
     fn merge_abort(&self, checkout: &Path) -> io::Result<()> {
-        let in_progress = local_only(no_window(&mut Command::new("git")))
-            .arg("-C")
-            .arg(checkout)
-            .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
-            .output()?
-            .status
-            .success();
-        if in_progress {
+        if self.merge_in_progress(checkout)? {
             run_git(checkout, &["merge", "--abort"]).map(drop)
         } else {
             Ok(())

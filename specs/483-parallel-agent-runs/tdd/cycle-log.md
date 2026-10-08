@@ -59,3 +59,20 @@ Red by mutation for the reducer half (review B M3), one build each, then reverte
 - the stale-`seq` check always true → `an_answer_shows_and_a_stale_answer_is_dropped` FAILED
 - `Msg::RunChanged` a no-op → `a_change_re_reads_only_that_run_and_keeps_the_old_counts_meanwhile` and `changes_while_a_read_runs_coalesce_into_one_more_read` FAILED
 - `open_diff` without the worktree filter → `a_failed_run_shows_its_reason_and_has_no_diff_without_a_worktree` FAILED
+
+## M4 — Pick this one (T051–T061)
+
+| Behaviour | Tasks | Evidence | Result |
+|---|---|---|---|
+| Pick plan (fast-forward / merge commit / merge in the checkout), conflicted paths, merge message, git-too-old classification | T051 → T052 | unit tests and `runs_integrate` written with the module; the pure module and the client reducer were written before their tests in this milestone (not red first), so red is shown by mutation below | `cargo test -p micold-core --test runs_integrate` 9 passed |
+| Daemon pick: refusals (unknown, busy, failed), uncommitted files named, conflicts named, fast-forward records the winner, busy checkout, two concurrent picks integrate one | T053, T057, T058 | `run_group_pick` (8 tests) | `cargo test -p micold-daemon --test run_group_pick` green |
+| Client: pick offered/hidden/disabled, confirm when working, one pick sent, refusal keeps the view | T054, T059 | `features_runs` pick tests | `cargo test -p micold-client --test features_runs` green |
+| A merge the user left in progress in the base checkout is refused and kept (review A M4 F1) | fix | test written first for the fix; mutation below | `runs_integrate` |
+
+Red by mutation (one build each, then reverted):
+
+- `plan` fast-forward branch inverted (`None if !is_ancestor`) → `the_plan_fast_forwards_when_the_base_tip_is_an_ancestor` and `the_plan_writes_a_merge_commit_when_the_base_moved_on` FAILED
+- merge message reworded → `the_merge_message_names_the_run_the_group_and_the_base` FAILED
+- in-progress-merge check removed from `merge_in_checkout` → `a_merge_the_user_left_in_progress_is_refused_and_kept` and `a_conflicting_merge_is_undone_by_the_call_that_started_it` FAILED
+- Creating/Starting runs no longer disable Pick → `pick_is_disabled_on_every_row_with_the_reason_while_a_run_is_creating_or_starting` and `a_pick_that_is_not_offered_sends_nothing` FAILED
+- uncommitted-files refusal skipped in `ops::pick_run` → `w3_uncommitted_changes_refuse_naming_the_files_until_committed` FAILED

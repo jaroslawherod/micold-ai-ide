@@ -113,25 +113,50 @@ fn compare_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
             uncommitted,
         })
     };
-    let row = |number, status, reason: Option<&str>, counts, can_open_diff| CompareRow {
+    use crate::features::runs::PickAvailability as Pick;
+    // A style pose: one row per look of Pick this one (asks first, plain, disabled with its
+    // tooltip, absent). The real rule never shows a disabled button beside enabled ones.
+    let row = |number, status, reason: Option<&str>, counts, can_open_diff, pick| CompareRow {
         number,
         provider: AiCli::ClaudeCode,
         status,
         reason: reason.map(str::to_string),
         counts,
         can_open_diff,
-        pick: crate::features::runs::PickAvailability::Enabled { confirm: false },
+        pick,
     };
     let rows = [
-        row(1, "Working", None, counts(4, 120, 30, false), true),
-        row(2, "Waiting for input", None, counts(2, 15, 3, true), true),
-        row(3, "Starting", None, RunCounts::Loading, true),
+        row(
+            1,
+            "Working",
+            None,
+            counts(4, 120, 30, false),
+            true,
+            Pick::Enabled { confirm: true },
+        ),
+        row(
+            2,
+            "Waiting for input",
+            None,
+            counts(2, 15, 3, true),
+            true,
+            Pick::Enabled { confirm: false },
+        ),
+        row(
+            3,
+            "Starting",
+            None,
+            RunCounts::Loading,
+            true,
+            Pick::Disabled(crate::features::runs::PICK_BUSY_REASON),
+        ),
         row(
             4,
             "Failed",
             Some("The worktree could not be created."),
             RunCounts::None,
             false,
+            Pick::Hidden,
         ),
     ];
     let mut list = column![].spacing(spacing::SM);

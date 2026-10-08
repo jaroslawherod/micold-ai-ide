@@ -860,7 +860,6 @@ fn integrate_pick(
                 return Err(PickRefusal::BaseMoved);
             }
             if let Err(err) = git.merge_in_checkout(&path, &job.branch) {
-                let _ = git.merge_abort(&path);
                 return Err(PickRefusal::BaseBusy(err.to_string()));
             }
             let new_tip = git

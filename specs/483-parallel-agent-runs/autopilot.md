@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M4
-- **Next step**: M4 handover: gate, reviews, mutation evidence, visual pass, PR text (see Handover)
+- **Next step**: M4 PR opened by the orchestrator; then M5
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | #647 | merged |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | #650 | merged |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | #651 | merged |
-| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | (orchestrator opens) | implemented, not yet gated/reviewed |
+| M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | (orchestrator opens) | gated, reviewed, PR text written |
 | M5 | T062–T067 | full | Cleanup offer removes selected losers; uncommitted needs second confirmation | — | planned |
 
 ## Decisions
@@ -92,6 +92,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review B (conformance, sonnet) | 1 | (see commit eefde392) | CHANGES: process findings only (Verify not runnable in reviewer sandbox: ran by the unit, all green; red evidence in cycle-log mutation section; stale handover); no re-run |
 | M3 review A (code-review high, sonnet reviewer) | 1 | ab8cf27d772af2bb17fb4bef7534e340ba477502:680acdffa53531475dabe73ad702b0efb639c54e | CLEAN: 1 MINOR (declined) |
 | M3 review B (conformance, sonnet) | 1 | ab8cf27d772af2bb17fb4bef7534e340ba477502:680acdffa53531475dabe73ad702b0efb639c54e | CHANGES: 2 MAJOR (red by mutation recorded in cycle-log; T050 re-scoped to the showcase pose, B8-B11 live deferred as for T027), 2 MINOR fixed (Compare view built lazily; task text names the real files) |
+| M4 review A (code-review high, sonnet reviewer) | 1 | f59ac801b29efe14bac3fe591b0b3b191a5f7611:5c277d598d45b5b481d31cfb4a68cd7763d98a15 | CHANGES: 1 MAJOR fixed (a merge the user left in progress in the base checkout is refused and kept; `merge_in_checkout` aborts only its own), 1 MINOR declined |
+| M4 review B (conformance, sonnet) | 1 | 6f532084659d7e8843a5697dd2d1a7aba4ecfaba:5c277d598d45b5b481d31cfb4a68cd7763d98a15 | CHANGES: Verify not runnable in the reviewer sandbox (run by the unit in the gate, all green); red evidence by mutation recorded in the cycle-log; uncommitted tree committed; T053/T057 text records the deviations |
 
 ## Declined review findings
 
@@ -115,14 +117,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1a A r2: `validate()` does not check the winner is `Picked`: winners are set by pick, M4 (T051–T061).
 - M1a A r2: unused public types and empty `integrate.rs`/`summary.rs`: T001 creates them for M3/M4.
 - M3 A F1 (MINOR): a `Failed` read is not retried on a group push, only on the watch's next change; retrying every push would re-read a persistently failing run on each push.
+- M4 A F2 (MINOR): the `MergeInCheckout` base check is check-then-act, not a compare-and-swap: `git merge` of the run branch never rewrites history and a conflict or overwrite is refused and undone, so a base that moves in the window still ends consistent; the contract's I1 observe-once stands.
+- M4 B F1: Verify refused by the reviewer's sandbox, not a test failure; run by the unit (gate). B F2: red evidence by mutation, as M2 and M3 (precedent accepted). B F4: BaseMoved daemon race test and snackbar test: BaseMoved is held by the core CAS test, amended in T053 text; snackbars are glue held by the visual pass.
 
 ## Handover
 
-M4 branch restarted from origin/main (2d07a5ac). Done and committed (2 commits, NOT pushed): core `runs::integrate` (pure) + `Git` trait methods + `summary::read_uncommitted_files` (T051/52/55/56, core tests green), daemon `ops::pick_run`, `Runs::group/pick`, server arm (T053/57/58, run_group_pick + run_group_create green; the placeholder test was removed), client `features/runs.rs` pick availability/confirm/refusal + `ui/confirm_pick_run.rs` (T054/59, features_runs 39 green, clippy client clean), user guide section (T060). T051–T060 ticked; T061 open.
-
-Deviations to record in the PR: `base_branch_is_checked_out` (T057) is not in state.rs: the checkout is read live with `git worktree list` per contract I1 (cache can be stale). `integrate::plan` takes (run_tip, is_ancestor, checkout) without base_tip. A run already contained in the base is a no-op `FastForward{base_tip}`. BaseMoved is covered by the core CAS test only (no daemon race test).
-
-Known gaps for next unit: (1) tests were written AFTER code for the pure integrate module and the client (no red phase): add red-by-mutation evidence to specs/483-parallel-agent-runs/tdd/cycle-log.md as M2/M3 did (review B flagged this in M3). (2) Refusal/success snackbars live in `shell/daemon_sync.rs`, untested. (3) Full gate was started: `cargo` raw commands, log `scratchpad/gate-m4.log` (use `--no-fail-fast`; expect only the 6 root permission failures); rerun if the tree changed. (4) Not yet run: review A (code-review high on origin/main...HEAD), review B (conformance rubric, sonnet, `claude -p --agent autopilot-reviewer`; run review-snapshot.sh first and record it), visual pass B12–B16, B20 (T061, record under quickstart.md § Results § B), write PR text to scratchpad/pr-483-m4.md, gate stamp + push.
+None.
 
 ## Open escalation
 
