@@ -19,3 +19,14 @@ are the test list. Reds run against the stubs of commit `9f82d331` (they compile
 | Red for T011, shown by mutation (review B M1a) | T011 | one build with: the create's `save_runs` skipped, `forget_project`'s `remove_runs` skipped, the attach's `RunGroupsChanged` not sent → `run_group_persist` 4 of 5 FAILED: `w5_the_runs_file_holds_…` ("the runs file holds the group by its first push: []"), `w5_a_failing_write_…` ("refused with IoFailed: Ok(RunGroupCreated …)"), `w5_forgetting_…` ("its runs file is gone"), `w2_an_attach_…` ("RunGroupsChanged follows Attached: Some(CatalogChanged …)"). `w2_two_windows_…` and the whole-file reader were not mutated: the push is the shared `broadcast_locked`, the write the existing `write_then_rename` | mutations reverted; 5 of 5 pass |
 | Runs start at the recorded base commit, not the bare branch name (review A M1a) | fix | `run_group_create` `every_run_starts_at_the_recorded_base_commit_even_under_a_same_named_tag` FAILED with the old `start: base_branch`: "fatal: ambiguous object name: 'base'" | passes with `start: base_commit` |
 | A session that never started fails at its session, not `PromptNotDelivered` (review A M1a r2) | fix | `run_group_create` `a_run_whose_session_never_starts_fails_at_its_session` FAILED before the fix: "run 1 failed at its session: PromptNotDelivered { reason: \"the session did not start, so the prompt was not typed\" }" | passes. Separately, a run whose group is no longer held now stops before its session (`set_run_status` returns whether it applied). No test covers that guard (review A r3) |
+
+## M1b — client dialog and group rows (T012, T013, T017–T027)
+
+| Behaviour | Task | Evidence | Result |
+|---|---|---|---|
+| Dialog reducer: open, edit, validation order, add/remove bounds, derived names, branch listing, confirm sends `RunGroupCreate`, dismiss | T012 → T017 | `features_runs.rs` written with the reducer in one step (not red first: the reducer and its test grew together in unit 1). Red by mutation: see below | `features_runs` passed |
+| Header action beside New worktree, group tree, run rows, counts, failed run with no worktree, collapse | T013, T022 → T018, T023, T024 | `features_sidebar.rs` tests written with `arrange_groups`; not red first | `features_sidebar` passed |
+| Dialog view, registry, focus, showcase poses | T019, T020, T025 | no behaviour test of its own: held by the guards `overlay_registry`, `popover_displacement`, `feature_registration_cost`, `root_is_routing_only`, `surface_registration_cost`, `showcase_*`, `layout_snapshot`. Each failed on the first full run after T019 (missing registration, counts, shell half, root arm) and passed once fixed | full `cargo test -p micold-client` green |
+
+Red by mutation was not recorded for T012/T013/T022 in this milestone's units; the tests assert the
+specified rules directly (`validate()` order, bounds, counts), and review B M1b flagged the gap.

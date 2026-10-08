@@ -5,7 +5,7 @@ labelled item is what the quickstart's visual pass checks.
 
 ## D — Run in parallel dialog (FR-001 to FR-003)
 
-Opened from the sidebar's project menu, beside **New worktree**. A `Modal` + `dialog::body`.
+Opened from the sidebar header's **Run in parallel** action, beside **New worktree** (no project menu offers New worktree, so the header action is the placement). A `Modal` + `dialog::body`.
 
 - **D1** Heading "Run in parallel"; fields in order: prompt (`TextArea`, multi-line, required),
   type (`Select`, the Conventional types, required), ticket (`TextField`, optional), name

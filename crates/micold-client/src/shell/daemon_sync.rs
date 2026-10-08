@@ -1439,12 +1439,12 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         }
         // Feature 483 (W2): the whole group list of a project, pushed after `Attached` and every
         // change; only the active project's list is shown.
-        DaemonMsg::RunGroupsChanged { project, groups } => {
-            if app.core.workspace.active.as_deref() == Some(project.as_path()) {
-                app.core.update(Message::Runs(
-                    micold_client::features::runs::Msg::GroupsChanged(groups),
-                ));
-            }
+        DaemonMsg::RunGroupsChanged { project, groups }
+            if app.core.workspace.active.as_deref() == Some(project.as_path()) =>
+        {
+            app.core.update(Message::Runs(
+                micold_client::features::runs::Msg::GroupsChanged(groups),
+            ));
         }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
