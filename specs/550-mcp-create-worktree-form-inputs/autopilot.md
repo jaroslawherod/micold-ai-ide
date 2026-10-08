@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | PR | gate green, PR open |
+| M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | gate green, PR open |
 | M2 | T010-T012 | full | Refusals and collision hint | - | pending |
 | M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
 
