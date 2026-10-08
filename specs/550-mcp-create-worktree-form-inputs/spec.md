@@ -75,7 +75,7 @@ An agent that calls `create_worktree` with `branch`, `mode`, `remote` and option
 **Acceptance Scenarios**:
 
 1. **Given** the call shapes accepted today, **When** they are replayed, **Then** results and errors are unchanged apart from the additional derived fields in the result.
-2. **Given** `branch`, `mode` or `remote` together with `type`, `ticket`, `github_issue`, or with `name` meant as a description, **When** the agent calls the tool, **Then** [NEEDS CLARIFICATION: refuse as ambiguous (derived inputs always mean a new branch, `mode`/`remote` rejected), or let `mode` (and `remote` with `track_remote`) apply to the derived branch so the collision hint can be followed with the same inputs?]
+2. **Given** `branch`, `mode` or `remote` together with `type`, `ticket` or `github_issue`, **When** the agent calls the tool, **Then** it is refused as invalid input saying that a literal `branch` (with `mode`, `remote`) and the derived inputs (`type`, `ticket`, `github_issue`) are alternatives, and nothing is created. `name` alongside `branch` keeps its directory-name meaning; `name` with no `branch` is the description of a derived request.
 
 ### Edge Cases
 
@@ -104,7 +104,7 @@ An agent that calls `create_worktree` with `branch`, `mode`, `remote` and option
 - **FR-006**: An explicit `type`, `ticket` or `name` passed with `github_issue` MUST replace the value taken from the issue.
 - **FR-007**: A `github_issue` that is not an open issue (closed, a pull request, or missing), or cannot be looked up (no GitHub remote, no tooling, no sign-in, no access, no network, rate limit, no answer within 10 seconds), MUST be refused with the form's plain-language reason and create nothing.
 - **FR-008**: The lookup MUST use the user's existing GitHub sign-in and MUST NOT ask for, store or return credentials; it MUST happen only when `github_issue` is passed. Every other call MUST work with no network and no sign-in.
-- **FR-009**: Combining the literal `branch`, `mode` or `remote` with the derived inputs MUST follow the rule decided in User Story 4, scenario 2, and the FR-011 hint MUST be actionable under that rule.
+- **FR-009**: Combining the literal `branch`, `mode` or `remote` with the derived inputs MUST be refused as invalid input (User Story 4, scenario 2); the FR-011 hint is actionable because the retry drops the derived inputs and passes the named branch with `mode` (and `remote`).
 - **FR-010**: Calls that use only `branch`, `name`, `mode` and `remote` MUST behave as before.
 - **FR-011**: When the derived branch already exists, the call MUST be refused with a reason that names the branch and tells the agent to retry with `branch` and `mode` `existing_local` or `track_remote`; it MUST NOT overwrite or reuse silently. The tool MUST continue to offer no overwrite mode.
 - **FR-012**: The result MUST report the derived type, ticket (omitted when none), branch and directory in addition to the fields it returns today.
@@ -128,6 +128,13 @@ An agent that calls `create_worktree` with `branch`, `mode`, `remote` and option
 - **SC-003**: A worktree created by the tool shows the same type and issue tags in the sidebar as one created by the form from the same inputs, in 100% of compared cases.
 - **SC-004**: All acceptance scenarios of the shipped `create_worktree` (feature 034-daemon-mcp-server) pass unchanged.
 - **SC-005**: A call without `github_issue` makes no network request.
+
+## Clarifications
+
+### Session 2026-10-08
+
+- Q: Are `branch`/`mode`/`remote` combined with derived inputs refused or applied to the derived branch? → A: Refused as ambiguous; derived inputs always mean a new branch and `branch` calls are literal. FR-011's retry (drop derived inputs, pass `branch` + `mode`) is then complete, and refusal is the additive-safe choice (no existing call shape combines them). _(agent-resolved: specs/550-mcp-create-worktree-form-inputs/spec.md#Functional Requirements FR-010, FR-011)_
+- Planning concern (not a spec change): GitHub issue lookup and label mapping live only in micold-client; the daemon has no GitHub code. The plan must settle where the lookup runs (move the issue source to a shared crate, or the daemon calls it); FR-007/FR-008 and the Assumptions already require reuse of the form's source.
 
 ## Assumptions
 

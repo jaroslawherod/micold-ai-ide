@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #550
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
-- **Phase**: spec
-- **Next step**: Clarify unit: resolve the open [NEEDS CLARIFICATION] in spec.md (US4 scenario 2: `branch` combined with type/ticket/name/github_issue)
+- **Phase**: clarify
+- **Next step**: Plan unit. Settle where the GitHub lookup/label mapping runs (only in micold-client today; daemon has none).
 
 ## Pull requests
 
