@@ -61,6 +61,50 @@ impl Runs {
         }
     }
 
+    /// A copy of group `group` of `project`.
+    pub fn group(
+        &mut self,
+        catalog: &mut Catalog,
+        project: &Path,
+        group: GroupId,
+    ) -> Option<RunGroup> {
+        self.project(catalog, project)
+            .iter()
+            .find(|g| g.id == group)
+            .cloned()
+    }
+
+    /// Record that run `number` of `group` won: the winner and the run's `Picked` status, written
+    /// after the base branch moved (W3). Memory follows the ref even when the file cannot be
+    /// written; the next successful write catches the file up. The list to push, or `None` when
+    /// the group or run is gone or the group already has a winner.
+    pub fn pick(
+        &mut self,
+        catalog: &mut Catalog,
+        project: &Path,
+        group: GroupId,
+        number: u8,
+    ) -> Option<DaemonMsg> {
+        let groups = self.project(catalog, project);
+        let held = groups.iter_mut().find(|g| g.id == group)?;
+        if held.winner.is_some() {
+            return None;
+        }
+        let run = held.runs.iter_mut().find(|run| run.number == number)?;
+        if !run.status.can_become(&RunStatus::Picked) {
+            return None;
+        }
+        run.status = RunStatus::Picked;
+        held.winner = Some(number);
+        let file = RunsFile {
+            groups: groups.clone(),
+        };
+        if let Err(err) = catalog.save_runs(project, &file) {
+            tracing::warn!(project = %project.display(), %group, run = number, %err, "winner not written");
+        }
+        Some(self.changed(catalog, project))
+    }
+
     /// Add `group` to `project`: written first, then held (W5). On a refusal nothing changed.
     pub fn add(
         &mut self,

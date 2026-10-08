@@ -33,19 +33,41 @@ pub fn has_uncommitted(list: &ChangeList) -> bool {
         .any(|file| matches!(file.origin, Origin::Uncommitted | Origin::Both))
 }
 
+/// The paths of the rows of `list` that hold uncommitted changes, in the list's order (FR-012).
+pub fn uncommitted_files(list: &ChangeList) -> Vec<crate::review::RelPath> {
+    list.files
+        .iter()
+        .filter(|file| matches!(file.origin, Origin::Uncommitted | Origin::Both))
+        .map(|file| file.path.clone())
+        .collect()
+}
+
 /// Read the summary of the run whose worktree is `dir`, started from local branch `base_branch`
 /// (R7). When `base_branch` is the default branch the Changes view compares with, the Changes
 /// view's own base is used, so the two agree to the line (FR-010, SC-004); any other base branch
 /// is counted against the merge-base with that branch. One read with both kinds of change on, so
 /// the counts and the `uncommitted` tag come from the same answer.
 pub fn read(git: &dyn Git, dir: &Path, base_branch: &str) -> io::Result<RunSummary> {
+    Ok(totals(&change_list(git, dir, base_branch)?))
+}
+
+/// The uncommitted files of the run whose worktree is `dir`, read as [`read`] reads them (a pick
+/// is refused naming them, FR-012).
+pub fn read_uncommitted_files(
+    git: &dyn Git,
+    dir: &Path,
+    base_branch: &str,
+) -> io::Result<Vec<crate::review::RelPath>> {
+    Ok(uncommitted_files(&change_list(git, dir, base_branch)?))
+}
+
+fn change_list(git: &dyn Git, dir: &Path, base_branch: &str) -> io::Result<ChangeList> {
     let view_base = git.review_base(dir);
     let base = match &view_base {
         Base::MergeBase { branch, .. } if short_name(branch) == base_branch => view_base,
         _ => git.review_base_against(dir, base_branch),
     };
-    let list = git.change_list(dir, ReviewScope::Worktree { base }, Toggles::default())?;
-    Ok(totals(&list))
+    git.change_list(dir, ReviewScope::Worktree { base }, Toggles::default())
 }
 
 /// A branch as the user names it: `origin/main` is `main`.

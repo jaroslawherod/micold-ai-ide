@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use micold_core::naming::WorktreeNaming;
 use micold_core::protocol::messages::{ClientMsg, ErrorKind};
-use micold_core::runs::{GroupId, RunStatus, RunStep};
+use micold_core::runs::{RunStatus, RunStep};
 use micold_core::session::AiCli;
 use runs_support::{
     branch_exists, create_msg, created, git, next_runs_push, request, settled, submitted, window,
@@ -380,28 +380,6 @@ async fn w2_the_prompt_is_never_logged() {
         !text.contains("secret-sauce-483"),
         "the prompt is in no log line"
     );
-}
-
-/// Pick is not served in this milestone (T058 retires this); dismiss is (T035, run_group_persist.rs).
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn pick_is_refused_for_now() {
-    let _guard = ENV.lock().await;
-    let s = Sandbox::new();
-    let project = s.project();
-    let mut client = window(&s.state, &project).await;
-    let (answer, _) = request(
-        &mut client,
-        1,
-        ClientMsg::RunGroupPick {
-            req: 1,
-            project: project.clone(),
-            group: GroupId::new(),
-            run: 1,
-        },
-    )
-    .await;
-    let (kind, _) = answer.expect_err("not served yet");
-    assert_eq!(kind, ErrorKind::Refused);
 }
 
 #[path = "support/mcp.rs"]

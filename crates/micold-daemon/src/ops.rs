@@ -703,3 +703,235 @@ pub async fn create_session_with_prompt(
         .map_err(FirstPromptUndelivered::Typing);
     Ok((session, typed))
 }
+
+/// Pick run `number` of `group`: integrate its branch into the group's base branch and record the
+/// winner (feature 483, W3, contracts/integration.md). Taken under the project's worktree gate, so
+/// two picks of one group run one after the other and the second finds the winner (FR-018). Each
+/// refusal changes nothing; the winner is recorded only after the base branch moved. The caller
+/// answers, then pushes the project's run groups.
+pub async fn pick_run(
+    state: &Arc<DaemonState>,
+    project: PathBuf,
+    group: micold_core::runs::GroupId,
+    number: u8,
+) -> Result<micold_core::runs::Integration, crate::review::Refusal> {
+    use crate::review::Refusal;
+    use micold_core::protocol::messages::ErrorKind;
+    use micold_core::runs::RunStatus;
+
+    let Some((repo, true)) = state.project_repo(&project) else {
+        return Err(Refusal::new(
+            ErrorKind::InvalidInput,
+            format!("{} is not a known git repository", project.display()),
+        ));
+    };
+    let gate = state.worktree_gate(&project);
+    let _serialized = gate.lock().await;
+    let Some(held) = state.run_group(&project, group) else {
+        return Err(Refusal::new(ErrorKind::NotFound, "no such run group"));
+    };
+    if held.winner.is_some() {
+        return Err(Refusal::new(
+            ErrorKind::Refused,
+            "this group already has a winner",
+        ));
+    }
+    if let Some(run) = held
+        .runs
+        .iter()
+        .find(|run| matches!(run.status, RunStatus::Creating | RunStatus::Starting))
+    {
+        return Err(Refusal::new(
+            ErrorKind::Busy,
+            format!("run {} is still being created or started", run.number),
+        ));
+    }
+    let Some(run) = held.runs.iter().find(|run| run.number == number) else {
+        return Err(Refusal::new(ErrorKind::NotFound, "no such run"));
+    };
+    match &run.status {
+        RunStatus::Failed { reason, .. } => {
+            return Err(Refusal::new(
+                ErrorKind::Refused,
+                format!("run {number} failed and has nothing to pick: {reason}"),
+            ))
+        }
+        RunStatus::Picked => {
+            return Err(Refusal::new(
+                ErrorKind::Refused,
+                "this group already has a winner",
+            ))
+        }
+        _ => {}
+    }
+    let job = PickJob {
+        repo: repo.clone(),
+        worktree: repo.join(".claude/worktrees").join(&run.names.dir_name),
+        base: held.base_branch.clone(),
+        branch: run.names.branch.clone(),
+        number,
+        group_name: held.name.clone(),
+    };
+    let integration = tokio::task::spawn_blocking(move || integrate_pick(&GitCli::new(), &job))
+        .await
+        .map_err(|err| {
+            Refusal::new(
+                ErrorKind::Refused,
+                format!("the pick did not finish: {err}"),
+            )
+        })?
+        .map_err(|refusal| pick_refusal(number, &held.base_branch, refusal))?;
+    if !state.record_pick(&project, group, number) {
+        tracing::warn!(project = %project.display(), %group, run = number, "pick not recorded: the group is gone");
+    }
+    tracing::info!(project = %project.display(), %group, run = number, "run picked");
+    Ok(integration)
+}
+
+/// What [`integrate_pick`] needs, read before the blocking work starts.
+struct PickJob {
+    repo: PathBuf,
+    worktree: PathBuf,
+    base: String,
+    branch: String,
+    number: u8,
+    group_name: String,
+}
+
+/// W3 steps 5 to 8 and the integration of contracts/integration.md. Changes nothing unless it
+/// returns `Ok`.
+fn integrate_pick(
+    git: &dyn micold_core::git::Git,
+    job: &PickJob,
+) -> Result<micold_core::runs::Integration, micold_core::runs::PickRefusal> {
+    use micold_core::git::MergeTree;
+    use micold_core::runs::integrate::{self, Plan};
+    use micold_core::runs::{Integration, PickRefusal};
+
+    let git_err = |err: io::Error| PickRefusal::Git(err.to_string());
+    let files = micold_core::runs::summary::read_uncommitted_files(git, &job.worktree, &job.base)
+        .map_err(git_err)?;
+    if !files.is_empty() {
+        return Err(PickRefusal::Uncommitted { files });
+    }
+    // I1: observed once.
+    let base_tip = git
+        .branch_tip(&job.repo, &job.base)
+        .ok_or_else(|| PickRefusal::Git(format!("no local branch {}", job.base)))?;
+    let run_tip = git
+        .branch_tip(&job.repo, &job.branch)
+        .ok_or_else(|| PickRefusal::RunUnavailable(format!("no branch {}", job.branch)))?;
+    let records = git
+        .worktree_list_porcelain(&job.repo)
+        .map(|raw| micold_core::worktree::parse_worktrees(&raw))
+        .map_err(git_err)?;
+    let checkout = records
+        .iter()
+        .find(|record| record.branch.as_deref() == Some(job.base.as_str()))
+        .map(|record| record.path.clone());
+    // I2: nothing is written by the pre-check.
+    let tree = match git.merge_tree_write_tree(&job.repo, &base_tip, &run_tip) {
+        Ok(MergeTree::Clean { tree }) => tree,
+        Ok(MergeTree::Conflicts { files }) => return Err(PickRefusal::Conflicts { files }),
+        Err(err) => return Err(integrate::classify_stderr(&err.to_string())),
+    };
+    // A run whose work the base branch already holds has nothing to integrate.
+    if git.is_ancestor(&job.repo, &run_tip, &base_tip) == Some(true) {
+        return Ok(Integration::FastForward { base_tip });
+    }
+    let is_ancestor = git
+        .is_ancestor(&job.repo, &base_tip, &run_tip)
+        .ok_or_else(|| PickRefusal::Git("git could not compare the two branches".into()))?;
+    match integrate::plan(&run_tip, is_ancestor, checkout.as_deref()) {
+        Plan::FastForward { run_tip } => {
+            move_base(git, job, &run_tip, &base_tip)?;
+            Ok(Integration::FastForward { base_tip: run_tip })
+        }
+        Plan::MergeCommit => {
+            let message = integrate::merge_message(job.number, &job.group_name, &job.base);
+            let commit = git
+                .commit_tree_merge(&job.repo, &tree, &base_tip, &run_tip, &message)
+                .map_err(git_err)?;
+            move_base(git, job, &commit, &base_tip)?;
+            Ok(Integration::MergeCommit { commit })
+        }
+        Plan::MergeInCheckout { path } => {
+            if git.branch_tip(&job.repo, &job.base).as_deref() != Some(base_tip.as_str()) {
+                return Err(PickRefusal::BaseMoved);
+            }
+            if let Err(err) = git.merge_in_checkout(&path, &job.branch) {
+                let _ = git.merge_abort(&path);
+                return Err(PickRefusal::BaseBusy(err.to_string()));
+            }
+            let new_tip = git
+                .branch_tip(&job.repo, &job.base)
+                .ok_or_else(|| PickRefusal::Git(format!("no local branch {}", job.base)))?;
+            Ok(if new_tip == run_tip {
+                Integration::FastForward { base_tip: new_tip }
+            } else {
+                Integration::MergeCommit { commit: new_tip }
+            })
+        }
+    }
+}
+
+/// I5 without a checkout: the compare-and-swap. A failure with the branch no longer at `old` is
+/// `BaseMoved`; any other is git's.
+fn move_base(
+    git: &dyn micold_core::git::Git,
+    job: &PickJob,
+    new: &str,
+    old: &str,
+) -> Result<(), micold_core::runs::PickRefusal> {
+    use micold_core::runs::PickRefusal;
+    match git.update_ref_cas(&job.repo, &job.base, new, old) {
+        Ok(()) => Ok(()),
+        Err(err) if git.branch_tip(&job.repo, &job.base).as_deref() != Some(old) => {
+            tracing::debug!(%err, "base branch moved during a pick");
+            Err(PickRefusal::BaseMoved)
+        }
+        Err(err) => Err(PickRefusal::Git(err.to_string())),
+    }
+}
+
+/// A refusal in words the user can act on; every one says nothing changed or what to do.
+fn pick_refusal(
+    number: u8,
+    base: &str,
+    refusal: micold_core::runs::PickRefusal,
+) -> crate::review::Refusal {
+    use micold_core::protocol::messages::ErrorKind;
+    use micold_core::runs::PickRefusal as R;
+    fn list(files: &[micold_core::review::RelPath]) -> String {
+        const SHOWN: usize = 20;
+        let mut text = files
+            .iter()
+            .take(SHOWN)
+            .map(|f| f.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        if files.len() > SHOWN {
+            text.push_str(&format!(" and {} more", files.len() - SHOWN));
+        }
+        text
+    }
+    let message = match refusal {
+        R::AlreadyPicked => "this group already has a winner".to_owned(),
+        R::RunUnavailable(why) => format!("run {number} cannot be picked: {why}"),
+        R::Uncommitted { files } => format!(
+            "run {number} has uncommitted changes in {}. Commit them (for example in the run's session or terminal) and pick again.",
+            list(&files)
+        ),
+        R::Conflicts { files } => format!(
+            "run {number} conflicts with {base} in {}. Nothing was changed.",
+            list(&files)
+        ),
+        R::BaseBusy(why) => format!(
+            "{base} is checked out and git refused the merge, so nothing was changed: {why}"
+        ),
+        R::BaseMoved => format!("{base} moved while run {number} was being picked. Nothing was changed; pick again."),
+        R::GitTooOld => "picking needs git 2.38 or newer. Nothing was changed.".to_owned(),
+        R::Git(why) => format!("git failed, so nothing was changed: {why}"),
+    };
+    crate::review::Refusal::new(ErrorKind::Refused, message)
+}

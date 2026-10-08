@@ -2181,6 +2181,34 @@ impl DaemonState {
         inner.runs.add(&mut inner.catalog, project, group)
     }
 
+    /// A copy of run group `group` of `project` (feature 483).
+    pub fn run_group(
+        &self,
+        project: &Path,
+        group: micold_core::runs::GroupId,
+    ) -> Option<micold_core::runs::RunGroup> {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner.runs.group(&mut inner.catalog, project, group)
+    }
+
+    /// Record run `number` as `group`'s winner once the base branch moved (feature 483, W3). Pushes
+    /// nothing: the caller answers first, then [`Self::broadcast_run_groups`]. `false` when nothing
+    /// changed.
+    pub fn record_pick(
+        &self,
+        project: &Path,
+        group: micold_core::runs::GroupId,
+        number: u8,
+    ) -> bool {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        inner
+            .runs
+            .pick(&mut inner.catalog, project, group, number)
+            .is_some()
+    }
+
     /// Dismiss run group `group` of `project`, leaving its worktrees, branches and sessions
     /// (feature 483, W4). Pushes nothing: the caller answers first, then
     /// [`Self::broadcast_run_groups`].
