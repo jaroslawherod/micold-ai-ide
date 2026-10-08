@@ -93,7 +93,8 @@ and nothing is gained since the gate serializes creation anyway).
 **Decision**: reuse `ops::create_session_with_prompt(state, NewSession { … }, Some(FirstPrompt {
 text, asked, require_bracketed: true }))` unchanged. Its `FirstPromptUndelivered` variants are
 exactly the spec's failure vocabulary: `NotStarted`, `AsksTrust` (Edge "Provider not installed" /
-folder trust), `NotReady` (US1 s4), `Typing`.
+folder trust), `NotReady` (US1 s4), `Typing`. `NotStarted` maps to `Failed{Session}`. The others map
+to `PromptNotDelivered`.
 
 `require_bracketed: true` because a group prompt is one text the user typed into a multi-line field
 and a non-bracketed terminal would split it into several submissions; the run is then marked "prompt
