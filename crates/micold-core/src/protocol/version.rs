@@ -119,7 +119,11 @@
 /// decode either.
 /// And 34 → 35 for `CatalogSnapshot::env_include_failures` (feature 011 BUG-454, FR-022): the
 /// service reports each session directory whose environment-include resolution failed.
-pub const PROTOCOL_VERSION: u32 = 35;
+/// Bumped 35 → 36 for feature 483's run groups in one edit (contracts/run-group-wire.md):
+/// `ClientMsg::{RunGroupCreate, RunGroupPick, RunGroupDismiss}`, `DaemonMsg::RunGroupsChanged`
+/// and `OperationResult::{RunGroupCreated, RunPicked}`. An older peer would fail to decode any of
+/// them.
+pub const PROTOCOL_VERSION: u32 = 36;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

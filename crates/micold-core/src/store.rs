@@ -19,6 +19,7 @@
 
 use crate::project::{Availability, Project};
 use crate::review::store::ReviewFile;
+use crate::runs::store::RunsFile;
 use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -108,6 +109,24 @@ pub trait ProjectStore {
     /// Delete a project's review comments when the project is forgotten (feature 482, W11). The
     /// default, for stores that persist nothing, has nothing to delete and succeeds.
     fn remove_reviews(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// A project's run groups (feature 483, FR-008). The default, for stores that persist
+    /// nothing, is no groups.
+    fn load_runs(&self, _project_path: &Path) -> RunsFile {
+        RunsFile::default()
+    }
+
+    /// Persist a project's run groups. The default, for stores that persist nothing, keeps
+    /// nothing and succeeds.
+    fn save_runs(&self, _project_path: &Path, _file: &RunsFile) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// Delete a project's run groups when the project is forgotten (feature 483, W5). The
+    /// default, for stores that persist nothing, has nothing to delete and succeeds.
+    fn remove_runs(&self, _project_path: &Path) -> io::Result<()> {
         Ok(())
     }
 }
@@ -748,6 +767,39 @@ impl JsonFileStore {
         }
     }
 
+    /// Directory holding every project's run groups (feature 483): `runs/` beside `reviews/`.
+    fn runs_dir(&self) -> PathBuf {
+        match self.path.parent() {
+            Some(parent) => parent.join("runs"),
+            None => PathBuf::from("runs"),
+        }
+    }
+
+    /// A project's runs file, addressed by [`project_id`]. `pub` so tests can find it.
+    pub fn runs_path(&self, project_path: &Path) -> PathBuf {
+        let _ = project_path;
+        self.runs_dir()
+    }
+
+    /// Load a project's run groups (feature 483). Never fails: a missing file is no groups; an
+    /// unparseable one is kept aside as `<name>.corrupt` and no groups load.
+    pub fn load_runs(&self, project_path: &Path) -> RunsFile {
+        let _ = project_path;
+        RunsFile::default()
+    }
+
+    /// Write a project's run groups atomically (temp file, then rename).
+    pub fn save_runs(&self, project_path: &Path, file: &RunsFile) -> io::Result<()> {
+        let _ = (project_path, file);
+        Ok(())
+    }
+
+    /// Delete a project's runs file (feature 483, W5). An already-absent file is success.
+    pub fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
+        let _ = project_path;
+        Ok(())
+    }
+
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
     /// FR-005). An already-absent file is success — forgetting a project that never had a state
     /// file (no sessions/overrides) is not an error, and the call is idempotent. Removing this
@@ -775,6 +827,18 @@ impl ProjectStore for JsonFileStore {
 
     fn remove_reviews(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_reviews(self, project_path)
+    }
+
+    fn load_runs(&self, project_path: &Path) -> RunsFile {
+        JsonFileStore::load_runs(self, project_path)
+    }
+
+    fn save_runs(&self, project_path: &Path, file: &RunsFile) -> io::Result<()> {
+        JsonFileStore::save_runs(self, project_path, file)
+    }
+
+    fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_runs(self, project_path)
     }
 
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).

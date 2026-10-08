@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR from the scratchpad body, waits on CI and merges; then milestone M1
+- **Phase**: milestone M1
+- **Next step**: implement M1 (T001–T027)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | Design PR (spec, clarifications, plan, research, contracts, tasks) | body written, orchestrator opens | — |
+| #643 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged | adfee3b1c820e9393c4c7824855cc1090efeeac0 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T027 | full | Run in parallel starts N prompted runs, shown under a group row with failures and reasons | — | planned |
+| M1 | T001–T027 | full | Run in parallel starts N prompted runs, shown under a group row with failures and reasons | — | in progress |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
 | M4 | T051–T061 | full | Pick this one: fast-forward or merge commit, refusals change nothing | — | planned |
@@ -72,7 +72,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at 155k context (milestone unit; no PR open yet). Branch reset to
+origin/main (adfee3b1) by hand: `gh` is unauthenticated in this container, so `branch-start.sh`
+cannot check #643; the orchestrator confirmed it merged. The next unit continues on this branch
+as it is (skip `branch-start.sh`).
+
+Done, uncommitted-then-committed as WIP (commit "wip(483): M1 core stubs and failing tests"):
+- T001 module tree: `crates/micold-core/src/runs/{mod,naming,store,summary,integrate}.rs`,
+  `pub mod runs;` in lib.rs. NOT yet: empty `crates/micold-daemon/src/runs.rs` + its `mod`.
+- T002/T004/T006 tests written beside **stubs** (`can_become` false, `RunGroup::new` Err,
+  `validate` Ok, `derive_group` empty, `RunsFile::to_json/from_json` empty/Err,
+  `JsonFileStore::{runs_path, load_runs, save_runs, remove_runs}` stubbed in store.rs, ProjectStore
+  defaults + JsonFileStore delegation done; FakeProjectStore has no runs map yet).
+  `WorktreeNaming`/`DerivedNames` gained serde (`type_` renamed `"type"`).
+- T008 test `the_run_group_messages_round_trip_on_both_wires` appended to protocol_roundtrip.rs;
+  T009 wire delta done (messages.rs variants, version 36 + doc line, schema_hash pin 36 + anchor
+  test `the_run_group_messages_are_in_the_hashed_source`, server.rs placeholder arm refusing all
+  three). Client has a `_ => {}` arm for DaemonMsg; other exhaustive matches unchecked.
+
+Next step: run `cargo test -p micold-core --lib runs` and the two wire tests against the stubs,
+record each red in a new `specs/483-parallel-agent-runs/tdd/cycle-log.md` (482's log format: no
+test-list was derived; tasks.md's test-first pairs are the list), then implement T003/T005/T007
+until green, then T010–T027. Daemon findings so far: `ops::create_worktree(state, project, names,
+CreateMode::New?, None)` (ops.rs:119) returns `CreateFailure::{NotARepository, Create(CreateError),
+Task}`; `ops::create_session_with_prompt(state, NewSession{project, worktree_dir, cwd, cli},
+Some(FirstPrompt{text, asked, require_bracketed: true}))` (ops.rs:660); check
+`ops::cli_unavailable(state, cwd, cli)` first for `Failed{Session}` (as state.rs:2025 and
+mcp/tools.rs:1312 do). A warm `cargo test --workspace --no-run` was started detached (log in the
+scratchpad); target-shared is the shared target dir.
 
 ## Open escalation
 

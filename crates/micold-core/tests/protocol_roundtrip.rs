@@ -1275,3 +1275,134 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
         postcard_roundtrip(&set);
     }
 }
+
+/// Feature 483 (contracts/run-group-wire.md): a run group with a run in every status, as the
+/// daemon pushes it.
+fn sample_run_group() -> micold_core::runs::RunGroup {
+    use micold_core::naming::{ConventionalType, DerivedNames, WorktreeNaming};
+    use micold_core::runs::{GroupId, Run, RunGroup, RunStatus, RunStep};
+    let statuses = [
+        RunStatus::Creating,
+        RunStatus::Starting,
+        RunStatus::Prompted,
+        RunStatus::PromptNotDelivered {
+            reason: "the CLI never became ready".into(),
+        },
+        RunStatus::Failed {
+            step: RunStep::Worktree,
+            reason: "the branch exists".into(),
+        },
+        RunStatus::Failed {
+            step: RunStep::Session,
+            reason: "copilot is not installed".into(),
+        },
+        RunStatus::Picked,
+    ];
+    RunGroup {
+        id: GroupId(Uuid::from_u128(0x483)),
+        name: "login page".into(),
+        naming: WorktreeNaming {
+            type_: Some(ConventionalType::Feat),
+            ticket: Some("ABC-1".into()),
+            name: "login page".into(),
+        },
+        prompt: "Add a login page".into(),
+        base_branch: "main".into(),
+        base_commit: "0123456789abcdef0123456789abcdef01234567".into(),
+        created: std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_790_000_000),
+        runs: statuses
+            .into_iter()
+            .enumerate()
+            .map(|(i, status)| Run {
+                number: i as u8 + 1,
+                provider: if i % 2 == 0 {
+                    AiCli::ClaudeCode
+                } else {
+                    AiCli::Copilot
+                },
+                names: DerivedNames {
+                    dir_name: format!("feat-abc-1_login-page-{}", i + 1),
+                    branch: format!("feat/abc-1_login-page-{}", i + 1),
+                },
+                session: (i % 2 == 0).then(sid),
+                status,
+            })
+            .collect(),
+        winner: Some(7),
+    }
+}
+
+/// Feature 483 (T008): the run-group messages and results survive both wires.
+#[test]
+fn the_run_group_messages_round_trip_on_both_wires() {
+    use micold_core::naming::{ConventionalType, WorktreeNaming};
+    use micold_core::runs::{GroupId, Integration};
+    let group = sample_run_group();
+    let client = vec![
+        ClientMsg::RunGroupCreate {
+            req: 60,
+            project: PathBuf::from("/a"),
+            naming: WorktreeNaming {
+                type_: Some(ConventionalType::Feat),
+                ticket: None,
+                name: "login page".into(),
+            },
+            prompt: "Add a login page".into(),
+            base_branch: "main".into(),
+            providers: vec![AiCli::ClaudeCode, AiCli::ClaudeCode, AiCli::Copilot],
+        },
+        ClientMsg::RunGroupPick {
+            req: 61,
+            project: PathBuf::from("/a"),
+            group: group.id,
+            run: 2,
+        },
+        ClientMsg::RunGroupDismiss {
+            req: 62,
+            project: PathBuf::from("/a"),
+            group: GroupId(Uuid::from_u128(1)),
+        },
+    ];
+    for msg in &client {
+        json_roundtrip(msg);
+        postcard_roundtrip(msg);
+    }
+    let daemon = vec![
+        DaemonMsg::RunGroupsChanged {
+            project: PathBuf::from("/a"),
+            groups: vec![group.clone()],
+        },
+        DaemonMsg::RunGroupsChanged {
+            project: PathBuf::from("/a"),
+            groups: vec![],
+        },
+        DaemonMsg::OperationOk {
+            req: 60,
+            result: OperationResult::RunGroupCreated { group: group.id },
+        },
+        DaemonMsg::OperationOk {
+            req: 61,
+            result: OperationResult::RunPicked {
+                group: group.id,
+                run: 2,
+                integration: Integration::FastForward {
+                    base_tip: "aaaa".into(),
+                },
+            },
+        },
+        DaemonMsg::OperationOk {
+            req: 61,
+            result: OperationResult::RunPicked {
+                group: group.id,
+                run: 3,
+                integration: Integration::MergeCommit {
+                    commit: "bbbb".into(),
+                },
+            },
+        },
+    ];
+    for msg in &daemon {
+        json_roundtrip(msg);
+        postcard_roundtrip(msg);
+    }
+}

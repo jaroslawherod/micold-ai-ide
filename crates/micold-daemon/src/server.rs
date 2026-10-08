@@ -1218,6 +1218,18 @@ where
                     state.send(id, answer);
                 });
             }
+            // Feature 483: run groups are not served yet.
+            ClientMsg::RunGroupCreate { req, .. }
+            | ClientMsg::RunGroupPick { req, .. }
+            | ClientMsg::RunGroupDismiss { req, .. } => state.send(
+                id,
+                DaemonMsg::OperationError {
+                    req,
+                    kind: micold_core::protocol::messages::ErrorKind::Refused,
+                    message: "run groups are not available in this build".into(),
+                    detail: None,
+                },
+            ),
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,

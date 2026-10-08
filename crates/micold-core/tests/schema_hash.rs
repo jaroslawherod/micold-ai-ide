@@ -242,7 +242,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 34 → 35 for feature 011 BUG-454's `CatalogSnapshot::env_include_failures`: the service
 /// reports each session directory whose environment-include resolution failed.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 35;
+///
+/// And 35 → 36 for feature 483's run groups (contracts/run-group-wire.md): `RunGroupCreate`,
+/// `RunGroupPick`, `RunGroupDismiss`, `RunGroupsChanged`, `RunGroupCreated` and `RunPicked`, in one
+/// edit.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 36;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -469,4 +473,27 @@ fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
     }
     // The number itself is pinned once, by `FEATURE_026_PROTOCOL_VERSION` above: BUG-454 took 35
     // after this, so this test checks only what version 34 added.
+}
+
+#[test]
+fn the_run_group_messages_are_in_the_hashed_source() {
+    // Feature 483 (version 36, contracts/run-group-wire.md). Read from the text `build.rs` hashes.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    let messages = canonicalize(&messages);
+    for anchor in [
+        "RunGroupCreate {",
+        "providers: Vec<AiCli>,",
+        "RunGroupPick {",
+        "RunGroupDismiss {",
+        "RunGroupsChanged {",
+        "groups: Vec<RunGroup>,",
+        "RunGroupCreated {",
+        "RunPicked {",
+        "integration: Integration,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 36's hash does not cover the run groups"
+        );
+    }
 }
