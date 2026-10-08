@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
-| M2 | T010-T012 | full | Refusals and collision hint | - | implemented (red 3 failing, then green 23/23), in gate and review |
+| M2 | T010-T012 | full | Refusals and collision hint | - | gate green, PR open |
 | M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
 
 ## Decisions
@@ -36,6 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M2 review A (code-review high) | 1 | befafbebc762204b57527b9eed16963c0657e4ab:13fd79b788db693ec37a762b4692dd5f1e1a38b0 | CLEAN (2 MINOR, not fixed: no hint on a lost race; test flake risk unproven) |
+| M2 review B (conformance) | 1 | same | CLEAN, Verify 23 passed |
 | Spec 550 | 1 | f31f875a52be3358279732b0a75b9977257c181c:99a3408db8a1672da2f13b0e7f9528a6525f6d6c | CHANGES: 1 MAJOR, 3 MINOR (fixed; MAJOR re-reviewed) |
 | Spec 550 | 2 | 3106c30901864866deda136a173dde76eda2c26f:99a3408db8a1672da2f13b0e7f9528a6525f6d6c | CLEAN (1 MINOR, fixed) |
 | Plan 550 | 1 | 9627256cc0e1e9592a0f44b0ea4d28d51d9fb12f:eec3ae7f613a1dd6bd22aafa9f79034f8063ae77 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
