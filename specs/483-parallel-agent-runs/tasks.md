@@ -87,7 +87,7 @@ repeat with one provider unavailable and see the others complete.
 - [ ] T018 [US1] Add **Run in parallel** to the project menu in `crates/micold-client/src/features/sidebar.rs` and its rendering in `crates/micold-client/src/ui/sidebar.rs`, opening the dialog and requesting `ClientMsg::BranchList` for the base branch select, until T013 passes
 - [ ] T019 [US1] Compose the dialog in `crates/micold-client/src/ui/parallel_dialog.rs` (new) per parallel-surfaces D1–D5 from existing `ui/material` builders (`Modal` + `dialog::body`, `TextArea`, `Select`, `TextField`, `IconButton`, `Button`), declare it in `crates/micold-client/src/ui/mod.rs` and register it in `crates/micold-client/src/overlay/registry.rs`; the existing builder and call-site gates (`material_builder_api.rs`, `composite_call_sites.rs`, `overlay_registration.rs`) stay green
 - [ ] T020 [P] [US1] Add a showcase pose of the Run in parallel dialog (3 runs, mixed providers, derived names shown; and one with a validation error) in `crates/micold-client/src/showcase/sections/surfaces.rs` and `crates/micold-client/src/showcase/catalogue.rs`; the showcase completeness and determinism tests pass
-- [ ] T021 [P] [US1] Write `docs/user-guide/parallel-runs.md` (new): what Run in parallel does, the dialog's fields, the derived branch and folder names, what happens when one run fails or its prompt is not delivered; link it from `docs/SUMMARY.md`, `docs/README.md` and `docs/user-guide/worktrees-and-sessions.md` (FR-022 part)
+- [x] T021 [P] [US1] Write `docs/user-guide/parallel-runs.md` (new): what Run in parallel does, the dialog's fields, the derived branch and folder names, what happens when one run fails or its prompt is not delivered; link it from `docs/SUMMARY.md`, `docs/README.md` and `docs/user-guide/worktrees-and-sessions.md` (FR-022 part)
 
 ---
 
@@ -105,7 +105,7 @@ the 3 runs under it and the 2 others outside; restart and see the same.
 - [ ] T023 [US2] Add `SidebarEntry::Group(GroupNode)` with its runs as children (worktree-backed runs wrap their usual worktree node; a run with no worktree is a leaf), its counts and expansion, and its place in `row_heights` and `scroll_target` in `crates/micold-client/src/features/sidebar.rs`, fed from `features::runs` state, until T022 passes
 - [ ] T024 [US2] Render the group row (`TreeItem::expandable`, the group's name, `3 runs` and `1 failed` `Tag`s), the run rows' `#<n>` and provider, and the no-worktree run row with its reason as tooltip in `crates/micold-client/src/ui/sidebar.rs` (parallel-surfaces G1, G1a, G2, G3)
 - [ ] T025 [P] [US2] Add showcase poses of the group row (expanded with 3 runs, one failed with no worktree; collapsed with `3 runs` and `1 failed`) in `crates/micold-client/src/showcase/sections/surfaces.rs` and `crates/micold-client/src/showcase/catalogue.rs`
-- [ ] T026 [P] [US2] Add to `docs/user-guide/parallel-runs.md` the group row: its runs, counts and collapsing, and how a failed run is shown (FR-022 part)
+- [x] T026 [P] [US2] Add to `docs/user-guide/parallel-runs.md` the group row: its runs, counts and collapsing, and how a failed run is shown (FR-022 part)
 - [ ] T027 [US2] Run the visual pass for quickstart B1–B6 (`visual-pass` skill) and record the results under quickstart.md § Results § B
 
 ### Part B — Restart, delete and dismiss (US2 s3–s6)

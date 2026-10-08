@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M1
-- **Next step**: M1a: orchestrator opens the PR from the body file, then CI and merge
+- **Next step**: M1b: continue from Handover (state + tests first)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #643 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged | adfee3b1c820e9393c4c7824855cc1090efeeac0 |
+| #644 | M1a (core, protocol v36, daemon) | merged (rebase) | 8d574eb591164a3e7ea3d01866461409023c46a8 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | pending (body at scratchpad pr-483-m1a.md) | PR pending |
+| M1a | T001–T011, T014–T016 | full | Service starts N prompted runs as one persisted, pushed group; a failing run fails alone | #644 | merged |
 | M1b | T012, T013, T017–T027 | full | Run in parallel dialog and the group row with failures and reasons | — | planned |
 | M2 | T028–T039 | full | Groups survive restarts (interrupted runs cleaned), follow deletes, Dismiss group | — | planned |
 | M3 | T040–T050 | full | Compare lists runs with status and counts, live refresh, Open diff | — | planned |
@@ -103,7 +104,27 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1b unit 1 stopped early (context ~95k after orientation). Branch restarted from origin/main (8d574eb5).
+Done: T021 and T026 (docs/user-guide/parallel-runs.md + links in SUMMARY.md, README.md,
+worktrees-and-sessions.md; uncommitted at handover time, committed with this ledger). No code written.
+Next: T012+T013+T022 failing tests, then T017/T018/T023, then UI T019/T020/T024/T025, T027, verify.md flow.
+Findings from orientation (save re-reading):
+- There is NO project menu with "New worktree": the project right-click menu (ui/mod.rs ~490) has only
+  "Forget project"; New worktree is the sidebar header IconButton (ui/sidebar.rs ~78, Message::WorktreeForm(FormMsg::Opened)).
+  Decision: add a header action "Run in parallel" right after it (docs say so); T013 test = pure
+  header-action order + Msg yielding an Outcome that opens the dialog. Record deviation in the PR body.
+- Pattern to copy: features/changes.rs (`update(&mut State,Msg)->Effect`, root `state.changes.pending`,
+  `shell/changes.rs::run_pending`, `Outcome::ChangesRequested` in app.rs ~966). Effect::Send(ClientMsg) must be
+  sent by the shell via `shell/daemon_sync.rs::send_op(app, PendingOp, |req| ClientMsg::RunGroupCreate{req,..})`
+  (add a PendingOp variant + describe()); BranchList answered via PendingOp::BranchList -> FormMsg::BranchesListed (mirror for dialog).
+- Client has no handling of DaemonMsg::RunGroupsChanged yet: add an arm in shell/daemon_sync.rs next to ReviewChanged (~1407)
+  feeding runs Msg::GroupsChanged. OperationOk(RunGroupCreated) result also needs a PendingOp arm (~829).
+- Validation inputs: `State::offered_providers(dir)`, `default_ai_cli` in features/session.rs ~2048; naming via
+  micold_core::runs::naming::derive_group(&WorktreeNaming,count); consts MIN_RUNS/DEFAULT_RUNS/MAX_RUNS in micold_core::runs.
+  Root's current branch is not yet known in client state (grep found none): take it from BranchList candidates or add a read.
+- Sidebar: SidebarEntry has Worktree/Default only (features/sidebar.rs 128); add Group(GroupNode); update row_heights (319),
+  scroll_target (380), current_session_row (350), sidebar_entries (874), ui/sidebar.rs render. tests/features_sidebar.rs builds entries by hand.
+- Dialog UI template: ui/worktree_form.rs (Select, TextField, Surface+dialog::body, track_focus FieldId); register in overlay/registry.rs.
 
 ## Open escalation
 

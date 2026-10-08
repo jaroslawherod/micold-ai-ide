@@ -567,6 +567,9 @@ loaded issues failed —" followed by one of the reasons above, with a **Retry**
 same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
 retry.
 
+To send one prompt to several AI CLIs at once, each in its own new worktree, use **Run in
+parallel** beside **Add a worktree**; see [Running a prompt in parallel](parallel-runs.md).
+
 ## Working from an existing branch
 
 Work doesn't always start in this app. You might have begun a branch in a terminal, pushed one
