@@ -96,7 +96,13 @@ fn endpoint_in(dir: &Path) -> micold_core::endpoint::Endpoint {
 }
 
 /// Wait until something is listening at `endpoint`, so a test never races the daemon's startup.
-async fn wait_until_listening(endpoint: &micold_core::endpoint::Endpoint, timeout: Duration) {
+/// A daemon that never listens is reported with what it logged under `dir`, so a CI failure shows
+/// why (#617).
+async fn wait_until_listening(
+    dir: &Path,
+    endpoint: &micold_core::endpoint::Endpoint,
+    timeout: Duration,
+) {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if matches!(
@@ -107,7 +113,10 @@ async fn wait_until_listening(endpoint: &micold_core::endpoint::Endpoint, timeou
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    panic!("the daemon never started listening at {endpoint:?}");
+    panic!(
+        "the daemon never started listening at {endpoint:?}; its log:\n{}",
+        read_log(dir)
+    );
 }
 
 /// FR-008, §3.7: nobody connected for the whole window ⇒ the service stops itself.
@@ -142,7 +151,7 @@ async fn a_daemon_with_one_client_connected_never_exits() {
     // reaches it and the wait below reports it never listened (#617).
     let mut daemon = spawn_daemon(dir.path(), "1s");
     let endpoint = endpoint_in(dir.path());
-    wait_until_listening(&endpoint, Duration::from_secs(30)).await;
+    wait_until_listening(dir.path(), &endpoint, Duration::from_secs(30)).await;
 
     // Hold a real, handshaked connection open across many windows.
     let held = micold_core::connect::connect(&endpoint, "idle-stop-test")
