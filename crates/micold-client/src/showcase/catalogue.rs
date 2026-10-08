@@ -585,6 +585,7 @@ pub const COMPONENTS: &[Entry] = &[
             "run group, collapsed",
             "Run in parallel dialog",
             "Run in parallel dialog, invalid",
+            "Dismiss group dialog",
         ],
         live: &["hover", "pressed", "right-press"],
         interactive: true,

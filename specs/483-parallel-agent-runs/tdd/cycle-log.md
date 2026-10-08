@@ -39,3 +39,9 @@ specified rules directly (`validate()` order, bounds, counts), and review B M1b 
 | Group menu = Dismiss group only; ask first naming what stays; confirm sends one `RunGroupDismiss`; cancel sends nothing; menu and confirmation go with a vanished group | T030 → T036 | `features_runs.rs` written first: the new tests did not compile (`GROUP_MENU_ITEMS`, `Msg::MenuToggled`, `DismissAsked`, `DISMISS_CONFIRMATION` missing) | `features_runs` 18 passed |
 | A shrunk group shows `#1, #3`; a dropped group is not shown | T030 | passes on arrival: `arrange_groups` already projected `group.runs` as is (M1b) | `features_sidebar` 72 passed |
 | Menu render, dialog render, registry, shell route | T037 | no behaviour test of its own; held by the registry and routing guards | `cargo test --workspace` (see gate) |
+
+Red by mutation for the daemon half (review B M2), one build each, then reverted:
+
+- `settle_interrupted` made a no-op → `run_group_persist` 3 FAILED: `an_interrupted_creating_run_is_failed_and_its_folder_and_branch_are_removed`, `an_interrupted_starting_run_fails_at_its_session_and_keeps_its_worktree`, `an_interrupted_run_whose_worktree_hosts_a_session_is_left_and_says_so`; `Runs::dismiss` no longer updating memory → `w4_dismiss_removes_only_the_group_and_an_unknown_group_is_not_found` FAILED.
+- `Runs::forget_worktree` returning `None` → 2 FAILED: `w5_deleting_a_runs_worktree_removes_it_from_its_group_and_an_emptied_group_goes`, `deleting_the_winners_worktree_keeps_the_winner_set`.
+- The `#1, #3` display and `a_dropped_group_is_not_shown` pass by construction (`arrange_groups` projects `group.runs` as stored); no mutation recorded.

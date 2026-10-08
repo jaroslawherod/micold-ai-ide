@@ -385,6 +385,11 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
                 roles,
             ),
             posed(
+                "Dismiss group dialog",
+                crate::ui::confirm_dismiss_group::modal("login page", roles).map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
                 "a worktree tree",
                 material::TreeView::new(items, roles)
                     // The selected row's heavier label (feature 024, FR-003a). Posed here because it is
