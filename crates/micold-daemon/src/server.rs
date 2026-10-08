@@ -1303,16 +1303,42 @@ where
                     },
                 ),
             },
-            // Feature 483: picking comes in a later milestone (T058).
-            ClientMsg::RunGroupPick { req, .. } => state.send(
-                id,
-                DaemonMsg::OperationError {
-                    req,
-                    kind: micold_core::protocol::messages::ErrorKind::Refused,
-                    message: "run groups cannot be picked from in this build".into(),
-                    detail: None,
-                },
-            ),
+            // Feature 483 (W3): integrate the run's branch into the base branch.
+            ClientMsg::RunGroupPick {
+                req,
+                project,
+                group,
+                run,
+            } => {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    match crate::ops::pick_run(&state, project.clone(), group, run).await {
+                        Ok(integration) => {
+                            state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::RunPicked {
+                                        group,
+                                        run,
+                                        integration,
+                                    },
+                                },
+                            );
+                            state.broadcast_run_groups(&project);
+                        }
+                        Err(refusal) => state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: refusal.kind,
+                                message: refusal.message,
+                                detail: None,
+                            },
+                        ),
+                    }
+                });
+            }
             // --- US3: worktree management through the daemon (T053) ---
             ClientMsg::WorktreeCreate {
                 req,

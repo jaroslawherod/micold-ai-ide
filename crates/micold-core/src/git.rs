@@ -134,6 +134,40 @@ pub trait Git {
     /// commit ids; the caller checks the one that arrives from outside.
     fn is_ancestor(&self, repo: &Path, tip: &str, head: &str) -> Option<bool>;
 
+    /// `git merge-tree --write-tree -z --name-only <base_tip> <run_tip>` (feature 483, I2): the
+    /// merged tree, or the conflicted paths. Writes only unreachable objects. An `Err` carries
+    /// git's stderr (`runs::integrate::classify_stderr` reads it).
+    fn merge_tree_write_tree(
+        &self,
+        repo: &Path,
+        base_tip: &str,
+        run_tip: &str,
+    ) -> io::Result<MergeTree>;
+
+    /// `git commit-tree <tree> -p <base_tip> -p <run_tip> -m <message>` (I4): the merge commit's
+    /// id. No ref moves.
+    fn commit_tree_merge(
+        &self,
+        repo: &Path,
+        tree: &str,
+        base_tip: &str,
+        run_tip: &str,
+        message: &str,
+    ) -> io::Result<String>;
+
+    /// `git update-ref refs/heads/<branch> <new> <old>` (I5): moves the branch only while it still
+    /// points at `old`, so `Err` means it moved and nothing changed.
+    fn update_ref_cas(&self, repo: &Path, branch: &str, new: &str, old: &str) -> io::Result<()>;
+
+    /// `git -C <checkout> merge --no-edit --no-stat <branch>` (I5), where `<branch>` is a run's
+    /// branch. git refuses, changing nothing, when local changes are in the way; `Err` carries its
+    /// message.
+    fn merge_in_checkout(&self, checkout: &Path, branch: &str) -> io::Result<()>;
+
+    /// `git -C <checkout> merge --abort` when a merge is left in progress (`MERGE_HEAD` present);
+    /// nothing otherwise (I5).
+    fn merge_abort(&self, checkout: &Path) -> io::Result<()>;
+
     /// The review base of the worktree at `dir`: the merge-base of `HEAD` and the default branch,
     /// or why there is none (feature 482, research R7). Read-only.
     fn review_base(&self, dir: &Path) -> crate::review::base::Base;
@@ -255,6 +289,21 @@ impl GitCli {
         }
         Ok(())
     }
+}
+
+/// What `git merge-tree --write-tree` found (feature 483, I2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MergeTree {
+    /// The merge is clean; its tree.
+    Clean {
+        /// The merged tree's id.
+        tree: String,
+    },
+    /// The merge conflicts in these files; nothing was written to the repository's refs or files.
+    Conflicts {
+        /// The conflicted files.
+        files: Vec<crate::review::RelPath>,
+    },
 }
 
 /// Keep a read-only question to local objects (040 FR-016): in a partial clone git 2.44 and later
@@ -518,6 +567,104 @@ impl Git for GitCli {
             Some(1) => Some(false),
             // 128 for a commit the repository does not hold; anything else is as little an answer.
             _ => None,
+        }
+    }
+
+    fn merge_tree_write_tree(
+        &self,
+        repo: &Path,
+        base_tip: &str,
+        run_tip: &str,
+    ) -> io::Result<MergeTree> {
+        let output = local_only(no_window(&mut Command::new("git")))
+            .arg("-C")
+            .arg(repo)
+            .args(["merge-tree", "--write-tree", "-z", "--name-only"])
+            .args([base_tip, run_tip])
+            .output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        match output.status.code() {
+            Some(0) => Ok(MergeTree::Clean {
+                tree: stdout.split('\0').next().unwrap_or_default().to_owned(),
+            }),
+            Some(1) => Ok(MergeTree::Conflicts {
+                files: crate::runs::integrate::parse_merge_tree_conflicts(&stdout),
+            }),
+            _ => Err(io::Error::other(
+                String::from_utf8_lossy(&output.stderr).into_owned(),
+            )),
+        }
+    }
+
+    fn commit_tree_merge(
+        &self,
+        repo: &Path,
+        tree: &str,
+        base_tip: &str,
+        run_tip: &str,
+        message: &str,
+    ) -> io::Result<String> {
+        let out = run_git(
+            repo,
+            &[
+                "commit-tree",
+                tree,
+                "-p",
+                base_tip,
+                "-p",
+                run_tip,
+                "-m",
+                message,
+            ],
+        )?;
+        Ok(out.trim().to_owned())
+    }
+
+    fn update_ref_cas(&self, repo: &Path, branch: &str, new: &str, old: &str) -> io::Result<()> {
+        if !crate::naming::is_valid_branch(branch) {
+            return Err(io::Error::other(format!("{branch} is not a branch name")));
+        }
+        run_git(
+            repo,
+            &["update-ref", &format!("refs/heads/{branch}"), new, old],
+        )
+        .map(drop)
+    }
+
+    fn merge_in_checkout(&self, checkout: &Path, branch: &str) -> io::Result<()> {
+        if !crate::naming::is_valid_branch(branch) {
+            return Err(io::Error::other(format!("{branch} is not a branch name")));
+        }
+        // `refs/heads/` makes a same-named tag or a path unable to stand in for the branch.
+        let output = local_only(no_window(&mut Command::new("git")))
+            .arg("-C")
+            .arg(checkout)
+            .args(["merge", "--no-edit", "--no-stat"])
+            .arg(format!("refs/heads/{branch}"))
+            .output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+        // git says why on stderr; on some refusals (a conflict) it uses stdout.
+        let mut message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if message.is_empty() {
+            message = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        }
+        Err(io::Error::other(message))
+    }
+
+    fn merge_abort(&self, checkout: &Path) -> io::Result<()> {
+        let in_progress = local_only(no_window(&mut Command::new("git")))
+            .arg("-C")
+            .arg(checkout)
+            .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+            .output()?
+            .status
+            .success();
+        if in_progress {
+            run_git(checkout, &["merge", "--abort"]).map(drop)
+        } else {
+            Ok(())
         }
     }
 
@@ -1239,6 +1386,50 @@ impl Git for FakeGit {
             .get(repo)
             .and_then(|pairs| pairs.get(&(tip.to_string(), head.to_string())))
             .copied()
+    }
+
+    fn merge_tree_write_tree(
+        &self,
+        _repo: &Path,
+        _base_tip: &str,
+        _run_tip: &str,
+    ) -> io::Result<MergeTree> {
+        Ok(MergeTree::Clean {
+            tree: "fake-tree".into(),
+        })
+    }
+
+    fn commit_tree_merge(
+        &self,
+        _repo: &Path,
+        _tree: &str,
+        base_tip: &str,
+        run_tip: &str,
+        _message: &str,
+    ) -> io::Result<String> {
+        Ok(format!("merge-{base_tip}-{run_tip}"))
+    }
+
+    fn update_ref_cas(&self, repo: &Path, branch: &str, new: &str, old: &str) -> io::Result<()> {
+        let mut inner = self.inner.borrow_mut();
+        let tip = inner
+            .branch_tips
+            .get_mut(repo)
+            .and_then(|tips| tips.get_mut(branch))
+            .ok_or_else(|| io::Error::other(format!("no branch {branch}")))?;
+        if tip != old {
+            return Err(io::Error::other(format!("{branch} is not at {old}")));
+        }
+        *tip = new.to_owned();
+        Ok(())
+    }
+
+    fn merge_in_checkout(&self, _checkout: &Path, _branch: &str) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn merge_abort(&self, _checkout: &Path) -> io::Result<()> {
+        Ok(())
     }
 
     fn submodule_update_init_recursive(
