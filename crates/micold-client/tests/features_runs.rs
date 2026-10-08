@@ -4,15 +4,21 @@
 
 use std::path::PathBuf;
 
+use micold_client::features::changes::Load;
 use micold_client::features::runs::{
-    update, Effect, Invalid, Msg, Opening, State, GROUP_MENU_ITEMS,
+    compare_rows, open_diff, status_text, update, Effect, Invalid, Msg, Opening, RunCounts, State,
+    SummaryRead, GROUP_MENU_ITEMS,
 };
+use micold_client::features::Outcome;
 use micold_core::naming::{ConventionalType, NamingError};
+use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs::{
     GroupId, NewGroup, Run, RunGroup, RunStatus, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
 };
+use micold_core::runs::{RunStep, RunSummary};
 use micold_core::session::AiCli;
+use micold_core::session::SessionLocation;
 
 fn opening() -> Opening {
     Opening {
@@ -285,8 +291,8 @@ fn with_group() -> (State, GroupId) {
 }
 
 #[test]
-fn the_group_rows_menu_is_dismiss_group_only() {
-    assert_eq!(GROUP_MENU_ITEMS, ["Dismiss group"]);
+fn the_group_rows_menu_holds_compare_and_dismiss_group() {
+    assert_eq!(GROUP_MENU_ITEMS, ["Compare", "Dismiss group"]);
 }
 
 #[test]
@@ -382,4 +388,283 @@ fn a_group_that_goes_away_takes_its_menu_and_confirmation_with_it() {
     );
     update(&mut state, Msg::GroupsChanged(vec![]));
     assert!(state.menu.is_none() && state.dismiss_target.is_none());
+}
+
+// ---- Compare (feature 483, T042, contracts/parallel-surfaces.md C1–C5) ----
+
+fn summary(files: u32, added: u32, removed: u32) -> RunSummary {
+    RunSummary {
+        files,
+        added,
+        removed,
+        uncommitted: false,
+    }
+}
+
+/// A state whose group 1 has run 1 prompted, run 2 failed creating its worktree and run 3 failed
+/// starting its session.
+fn compare_ready() -> (State, GroupId) {
+    let mut g = group(1, "a");
+    g.runs[0].status = RunStatus::Prompted;
+    g.runs[1].status = RunStatus::Failed {
+        step: RunStep::Worktree,
+        reason: "the branch exists".into(),
+    };
+    let mut third = g.runs[0].clone();
+    third.number = 3;
+    third.names.dir_name = "feat-a-3".into();
+    third.status = RunStatus::Failed {
+        step: RunStep::Session,
+        reason: "no cli".into(),
+    };
+    g.runs.push(third);
+    let id = g.id;
+    let mut state = State::default();
+    update(&mut state, Msg::GroupsChanged(vec![g]));
+    (state, id)
+}
+
+fn open_compare(state: &mut State, id: GroupId) -> Vec<SummaryRead> {
+    let effect = update(
+        state,
+        Msg::CompareOpened {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    match effect {
+        Effect::ReadSummaries(reads) => reads,
+        other => panic!("expected reads, got {other:?}"),
+    }
+}
+
+#[test]
+fn opening_compare_asks_for_one_read_per_run_with_a_worktree_and_reads_nothing_itself() {
+    let (mut state, id) = compare_ready();
+    let reads = open_compare(&mut state, id);
+    assert_eq!(
+        reads.iter().map(|r| r.run).collect::<Vec<_>>(),
+        vec![1, 3],
+        "run 2 never got a worktree"
+    );
+    assert_eq!(reads[0].dir_name, "feat-a-1");
+    assert_eq!(reads[0].base_branch, "main");
+    assert_ne!(reads[0].seq, reads[1].seq);
+    let rows = compare_rows(&state, &[]).expect("open").1;
+    assert_eq!(rows[0].counts, RunCounts::Loading, "nothing read yet");
+    assert_eq!(rows[1].counts, RunCounts::None);
+}
+
+#[test]
+fn an_answer_shows_and_a_stale_answer_is_dropped() {
+    let (mut state, id) = compare_ready();
+    let reads = open_compare(&mut state, id);
+    let seq = reads[0].seq;
+    let effect = update(
+        &mut state,
+        Msg::SummaryRead {
+            seq: seq + 100,
+            run: 1,
+            result: Ok(summary(9, 9, 9)),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    assert_eq!(
+        compare_rows(&state, &[]).unwrap().1[0].counts,
+        RunCounts::Loading
+    );
+    update(
+        &mut state,
+        Msg::SummaryRead {
+            seq,
+            run: 1,
+            result: Ok(summary(4, 120, 30)),
+        },
+    );
+    assert_eq!(
+        compare_rows(&state, &[]).unwrap().1[0].counts,
+        RunCounts::Ready(summary(4, 120, 30))
+    );
+}
+
+#[test]
+fn changes_while_a_read_runs_coalesce_into_one_more_read() {
+    let (mut state, id) = compare_ready();
+    let seq = open_compare(&mut state, id)[0].seq;
+    for _ in 0..5 {
+        assert_eq!(update(&mut state, Msg::RunChanged { run: 1 }), Effect::None);
+    }
+    let Effect::ReadSummaries(again) = update(
+        &mut state,
+        Msg::SummaryRead {
+            seq,
+            run: 1,
+            result: Ok(summary(1, 1, 1)),
+        },
+    ) else {
+        panic!("one more read follows");
+    };
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].run, 1);
+    assert_ne!(again[0].seq, seq);
+}
+
+#[test]
+fn a_change_re_reads_only_that_run_and_keeps_the_old_counts_meanwhile() {
+    let (mut state, id) = compare_ready();
+    let reads = open_compare(&mut state, id);
+    for read in &reads {
+        update(
+            &mut state,
+            Msg::SummaryRead {
+                seq: read.seq,
+                run: read.run,
+                result: Ok(summary(2, 3, 4)),
+            },
+        );
+    }
+    let Effect::ReadSummaries(reread) = update(&mut state, Msg::RunChanged { run: 1 }) else {
+        panic!("a read");
+    };
+    assert_eq!(reread.iter().map(|r| r.run).collect::<Vec<_>>(), vec![1]);
+    assert_eq!(
+        compare_rows(&state, &[]).unwrap().1[0].counts,
+        RunCounts::Ready(summary(2, 3, 4)),
+        "the old counts stay on screen"
+    );
+    assert_eq!(
+        update(&mut state, Msg::RunChanged { run: 2 }),
+        Effect::None,
+        "run 2 has no worktree"
+    );
+}
+
+#[test]
+fn status_text_follows_the_run_and_the_sessions_activity() {
+    let prompted = RunStatus::Prompted;
+    assert_eq!(status_text(&RunStatus::Creating, None), "Creating");
+    assert_eq!(status_text(&RunStatus::Starting, None), "Starting");
+    assert_eq!(
+        status_text(&prompted, Some(&ActivitySignal::Working)),
+        "Working"
+    );
+    assert_eq!(
+        status_text(&prompted, Some(&ActivitySignal::AwaitingInput)),
+        "Waiting for input"
+    );
+    assert_ne!(
+        status_text(&prompted, Some(&ActivitySignal::Unknown)),
+        "Waiting for input",
+        "unknown is never shown as waiting (A1)"
+    );
+    let undelivered = RunStatus::PromptNotDelivered { reason: "x".into() };
+    assert_eq!(status_text(&undelivered, None), "Prompt not delivered");
+    let failed = RunStatus::Failed {
+        step: RunStep::Session,
+        reason: "x".into(),
+    };
+    assert_eq!(status_text(&failed, None), "Failed");
+    assert_eq!(status_text(&RunStatus::Picked, None), "Picked");
+}
+
+#[test]
+fn a_failed_run_shows_its_reason_and_has_no_diff_without_a_worktree() {
+    let (mut state, id) = compare_ready();
+    open_compare(&mut state, id);
+    let rows = compare_rows(&state, &[]).unwrap().1;
+    assert_eq!(rows[1].reason.as_deref(), Some("the branch exists"));
+    assert_eq!(rows[1].counts, RunCounts::None);
+    assert!(!rows[1].can_open_diff, "no worktree, no Open diff");
+    assert_eq!(rows[2].reason.as_deref(), Some("no cli"));
+    assert!(rows[2].can_open_diff, "its worktree was created");
+    assert!(open_diff(&state, 2).is_empty());
+}
+
+#[test]
+fn open_diff_asks_for_that_runs_changes_view() {
+    let (mut state, id) = compare_ready();
+    open_compare(&mut state, id);
+    assert_eq!(
+        open_diff(&state, 1),
+        vec![Outcome::ChangesRequested(SessionLocation::Worktree(
+            "feat-a-1".into()
+        ))]
+    );
+}
+
+#[test]
+fn a_run_with_uncommitted_changes_carries_the_tag() {
+    let (mut state, id) = compare_ready();
+    let reads = open_compare(&mut state, id);
+    update(
+        &mut state,
+        Msg::SummaryRead {
+            seq: reads[0].seq,
+            run: 1,
+            result: Ok(RunSummary {
+                uncommitted: true,
+                ..summary(1, 1, 0)
+            }),
+        },
+    );
+    let RunCounts::Ready(got) = compare_rows(&state, &[]).unwrap().1[0].counts.clone() else {
+        panic!("ready");
+    };
+    assert!(got.uncommitted);
+}
+
+#[test]
+fn a_run_that_gains_a_worktree_is_read_and_a_vanished_group_closes_compare() {
+    let mut g = group(1, "a");
+    g.runs[0].status = RunStatus::Creating;
+    g.runs[1].status = RunStatus::Creating;
+    let id = g.id;
+    let mut state = State::default();
+    update(&mut state, Msg::GroupsChanged(vec![g.clone()]));
+    let effect = update(
+        &mut state,
+        Msg::CompareOpened {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    assert_eq!(effect, Effect::None, "nothing to read while creating");
+    g.runs[0].status = RunStatus::Starting;
+    let Effect::ReadSummaries(reads) = update(&mut state, Msg::GroupsChanged(vec![g])) else {
+        panic!("the run now has a worktree");
+    };
+    assert_eq!(reads.iter().map(|r| r.run).collect::<Vec<_>>(), vec![1]);
+    update(&mut state, Msg::GroupsChanged(Vec::new()));
+    assert!(state.compare.is_none(), "its group is gone");
+}
+
+#[test]
+fn closing_compare_ends_its_reads() {
+    let (mut state, id) = compare_ready();
+    let seq = open_compare(&mut state, id)[0].seq;
+    update(&mut state, Msg::CompareClosed);
+    assert!(state.compare.is_none());
+    assert_eq!(
+        update(
+            &mut state,
+            Msg::SummaryRead {
+                seq,
+                run: 1,
+                result: Ok(summary(1, 1, 1))
+            }
+        ),
+        Effect::None
+    );
+    assert_eq!(update(&mut state, Msg::RunChanged { run: 1 }), Effect::None);
+    assert!(compare_rows(&state, &[]).is_none());
+    let _ = Load::<RunSummary>::Idle;
+}
+
+#[test]
+fn compare_opens_from_the_menu_and_closes_it() {
+    let (mut state, id) = compare_ready();
+    update(&mut state, Msg::MenuToggled(id, (1, 2)));
+    open_compare(&mut state, id);
+    assert!(state.menu.is_none());
+    assert_eq!(state.compare.as_ref().map(|c| c.group), Some(id));
 }

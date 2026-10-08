@@ -5,20 +5,24 @@
 //! then pushes the whole group list (`RunGroupsChanged`), which [`Msg::GroupsChanged`] stores for
 //! the sidebar to project. The shell turns [`Effect::Send`] into a correlated request.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
 
 use crate::app::Message;
+use crate::features::changes::Load;
 use crate::features::Outcome;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
 use micold_core::overlay::Layer;
+use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs::naming::derive_group;
-use micold_core::runs::{GroupId, RunGroup, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS};
-use micold_core::session::AiCli;
+use micold_core::runs::{
+    GroupId, RunGroup, RunStatus, RunSummary, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
+};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{BlockReason, BranchCandidate, BranchOrigin};
 
 /// What this feature remembers.
@@ -34,9 +38,38 @@ pub struct State {
     pub menu: Option<GroupMenu>,
     /// The group awaiting the Dismiss group confirmation (G5); present only while it is shown.
     pub dismiss_target: Option<DismissTarget>,
+    /// The open Compare view (C1–C5); present only while it is shown.
+    pub compare: Option<CompareView>,
+    /// The next summary read's sequence number.
+    pub next_seq: u64,
     /// The request the root left for the shell while it interpreted an outcome (opening the
     /// dialog), taken once right after the message that caused it.
     pub pending: Option<Effect>,
+}
+
+/// The open Compare view: which group, and each run's change counts as last read (data-model §
+/// Client state).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompareView {
+    /// The group shown.
+    pub group: GroupId,
+    /// The project that owns it.
+    pub project: PathBuf,
+    /// Each run's counts by run number; a run with no worktree has no entry.
+    pub reads: BTreeMap<u8, Load<RunSummary>>,
+}
+
+/// One summary read the shell must run (T045).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SummaryRead {
+    /// The read's sequence number; the answer carries it back.
+    pub seq: u64,
+    /// The run read.
+    pub run: u8,
+    /// The run's worktree folder name.
+    pub dir_name: String,
+    /// The group's base branch the counts are against.
+    pub base_branch: String,
 }
 
 impl State {
@@ -64,8 +97,8 @@ pub struct DismissTarget {
     pub project: PathBuf,
 }
 
-/// The entries of a group row's menu, in order (G4; Compare joins it in feature 483's US3).
-pub const GROUP_MENU_ITEMS: [&str; 1] = ["Dismiss group"];
+/// The entries of a group row's menu, in order (G4).
+pub const GROUP_MENU_ITEMS: [&str; 2] = ["Compare", "Dismiss group"];
 
 /// What the Dismiss group confirmation says is left alone (G5, W4).
 pub const DISMISS_CONFIRMATION: &str = "This forgets the grouping only. The worktrees, branches \
@@ -238,6 +271,34 @@ pub enum Msg {
     MenuToggled(GroupId, (u16, u16)),
     /// The group row's menu was dismissed.
     MenuDismissed,
+    /// **Compare** was picked: open the group's Compare view (C1).
+    CompareOpened {
+        /// The group.
+        group: GroupId,
+        /// The project that owns it.
+        project: PathBuf,
+    },
+    /// Compare's close action.
+    CompareClosed,
+    /// Summary read `seq` of run `run` ended.
+    SummaryRead {
+        /// The read's sequence number.
+        seq: u64,
+        /// The run read.
+        run: u8,
+        /// Its counts, or why git could not give them.
+        result: Result<RunSummary, String>,
+    },
+    /// Files changed in run `run`'s worktree (the watch): read its counts again (C5).
+    RunChanged {
+        /// The run whose worktree changed.
+        run: u8,
+    },
+    /// **Open diff** on run `run`'s row (C4).
+    DiffOpened {
+        /// The run.
+        run: u8,
+    },
     /// **Dismiss group** was picked: ask first.
     DismissAsked {
         /// The group.
@@ -258,6 +319,9 @@ pub enum Effect {
     None,
     /// Send this request; its `req` is assigned by the shell.
     Send(ClientMsg),
+    /// Read these runs' change counts off the UI thread; each answers [`Msg::SummaryRead`] with its
+    /// own `seq` (the read is the shell's, never `update`'s).
+    ReadSummaries(Vec<SummaryRead>),
 }
 
 /// Apply a message.
@@ -282,7 +346,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if state.dismiss_target.as_ref().is_some_and(|t| gone(t.group)) {
                 state.dismiss_target = None;
             }
+            return compare_groups_changed(state);
         }
+        Msg::CompareOpened { group, project } => {
+            state.menu = None;
+            return compare_opened(state, group, project);
+        }
+        Msg::CompareClosed => state.compare = None,
+        Msg::SummaryRead { seq, run, result } => return summary_read(state, seq, run, result),
+        Msg::RunChanged { run } => return request_read(state, run),
+        // The root turns it into an outcome (`open_diff`); nothing to remember here.
+        Msg::DiffOpened { .. } => {}
         Msg::MenuToggled(group, anchor) => {
             state.menu = match state.menu {
                 Some(open) if open.group == group => None,
@@ -343,6 +417,237 @@ pub fn apply(state: &mut State, msg: Msg) {
     let effect = update(state, msg);
     if effect != Effect::None {
         state.pending = Some(effect);
+    }
+}
+
+/// Open Compare on `group`: one read per run that has a worktree (C5, US3 s1).
+fn compare_opened(state: &mut State, group: GroupId, project: PathBuf) -> Effect {
+    if !state.groups.iter().any(|g| g.id == group) {
+        return Effect::None;
+    }
+    state.compare = Some(CompareView {
+        group,
+        project,
+        reads: BTreeMap::new(),
+    });
+    request_missing(state)
+}
+
+/// The group list changed while Compare is open: close it when its group is gone, drop the counts
+/// of runs that left, and read runs that gained a worktree (US3 s3: status follows the catalog).
+fn compare_groups_changed(state: &mut State) -> Effect {
+    let Some(view) = &mut state.compare else {
+        return Effect::None;
+    };
+    let Some(group) = state.groups.iter().find(|g| g.id == view.group) else {
+        state.compare = None;
+        return Effect::None;
+    };
+    view.reads
+        .retain(|number, _| group.runs.iter().any(|run| run.number == *number));
+    request_missing(state)
+}
+
+/// Start a read for every run with a worktree and no counts yet.
+fn request_missing(state: &mut State) -> Effect {
+    let Some(view) = &state.compare else {
+        return Effect::None;
+    };
+    let wanted: Vec<u8> = state
+        .groups
+        .iter()
+        .find(|g| g.id == view.group)
+        .into_iter()
+        .flat_map(|g| &g.runs)
+        .filter(|run| run.status.has_worktree() && !view.reads.contains_key(&run.number))
+        .map(|run| run.number)
+        .collect();
+    let reads: Vec<SummaryRead> = wanted
+        .into_iter()
+        .filter_map(|run| start_read(state, run))
+        .collect();
+    if reads.is_empty() {
+        Effect::None
+    } else {
+        Effect::ReadSummaries(reads)
+    }
+}
+
+/// Read `run` again: now, or once the read under way ends (refreshes coalesce).
+fn request_read(state: &mut State, run: u8) -> Effect {
+    match start_read(state, run) {
+        Some(read) => Effect::ReadSummaries(vec![read]),
+        None => Effect::None,
+    }
+}
+
+fn start_read(state: &mut State, number: u8) -> Option<SummaryRead> {
+    let view = state.compare.as_mut()?;
+    let group = state.groups.iter().find(|g| g.id == view.group)?;
+    let run = group.runs.iter().find(|r| r.number == number)?;
+    if !run.status.has_worktree() {
+        return None;
+    }
+    if let Some(Load::Loading { again, .. }) = view.reads.get_mut(&number) {
+        *again = true;
+        return None;
+    }
+    let seq = state.next_seq;
+    state.next_seq += 1;
+    let last = match view.reads.remove(&number) {
+        Some(Load::Ready(summary)) => Some(summary),
+        _ => None,
+    };
+    view.reads.insert(
+        number,
+        Load::Loading {
+            seq,
+            again: false,
+            last,
+        },
+    );
+    Some(SummaryRead {
+        seq,
+        run: number,
+        dir_name: run.names.dir_name.clone(),
+        base_branch: group.base_branch.clone(),
+    })
+}
+
+/// Read `seq` ended: show it unless a newer read replaced it, then run a queued read.
+fn summary_read(
+    state: &mut State,
+    seq: u64,
+    run: u8,
+    result: Result<RunSummary, String>,
+) -> Effect {
+    let Some(view) = &mut state.compare else {
+        return Effect::None;
+    };
+    let again = match view.reads.get(&run) {
+        Some(Load::Loading { seq: s, again, .. }) if *s == seq => *again,
+        _ => return Effect::None,
+    };
+    view.reads.insert(
+        run,
+        match result {
+            Ok(summary) => Load::Ready(summary),
+            Err(message) => Load::Failed(message),
+        },
+    );
+    if again {
+        request_read(state, run)
+    } else {
+        Effect::None
+    }
+}
+
+/// What a run's change counts say in its Compare row (C2, C3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunCounts {
+    /// The run has no worktree to count.
+    None,
+    /// The first read is under way.
+    Loading,
+    /// The counts.
+    Ready(RunSummary),
+    /// Git could not be read, with its message.
+    Failed(String),
+}
+
+/// One row of the Compare view (C2–C5), ready to draw.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompareRow {
+    /// The run's number.
+    pub number: u8,
+    /// Its provider.
+    pub provider: AiCli,
+    /// The status text (C2).
+    pub status: &'static str,
+    /// Why the run failed or its prompt was not delivered, shown in place of the counts (C3).
+    pub reason: Option<String>,
+    /// The change counts.
+    pub counts: RunCounts,
+    /// Whether the row offers **Open diff**: the run has a worktree (C3, C4).
+    pub can_open_diff: bool,
+}
+
+/// The status text of a run (C2): Creating and Starting from the run, Working and Waiting for
+/// input from its session, the rest from the run's status. A prompted run whose session gives no
+/// signal yet says Prompted rather than guessing.
+pub fn status_text(status: &RunStatus, activity: Option<&ActivitySignal>) -> &'static str {
+    match status {
+        RunStatus::Creating => "Creating",
+        RunStatus::Starting => "Starting",
+        RunStatus::Prompted => match activity {
+            Some(ActivitySignal::Working) => "Working",
+            Some(ActivitySignal::AwaitingInput) => "Waiting for input",
+            Some(ActivitySignal::Ended { .. }) => "Ended",
+            Some(ActivitySignal::Unknown) | None => "Prompted",
+        },
+        RunStatus::PromptNotDelivered { .. } => "Prompt not delivered",
+        RunStatus::Failed { .. } => "Failed",
+        RunStatus::Picked => "Picked",
+    }
+}
+
+/// The open Compare view's group and its rows in run order; `sessions` are the project's sessions,
+/// where each run's activity comes from.
+pub fn compare_rows<'a>(
+    state: &'a State,
+    sessions: &[Session],
+) -> Option<(&'a RunGroup, Vec<CompareRow>)> {
+    let view = state.compare.as_ref()?;
+    let group = state.groups.iter().find(|g| g.id == view.group)?;
+    let rows = group
+        .runs
+        .iter()
+        .map(|run| {
+            let activity = run
+                .session
+                .and_then(|id| sessions.iter().find(|s| s.id == id))
+                .map(|s| &s.activity);
+            let reason = match &run.status {
+                RunStatus::Failed { reason, .. } | RunStatus::PromptNotDelivered { reason } => {
+                    Some(reason.clone())
+                }
+                _ => None,
+            };
+            let counts = match view.reads.get(&run.number) {
+                _ if !run.status.has_worktree() => RunCounts::None,
+                None | Some(Load::Idle) => RunCounts::Loading,
+                Some(Load::Loading { last: Some(s), .. }) | Some(Load::Ready(s)) => {
+                    RunCounts::Ready(*s)
+                }
+                Some(Load::Loading { last: None, .. }) => RunCounts::Loading,
+                Some(Load::Failed(message)) => RunCounts::Failed(message.clone()),
+            };
+            CompareRow {
+                number: run.number,
+                provider: run.provider,
+                status: status_text(&run.status, activity),
+                reason,
+                counts,
+                can_open_diff: run.status.has_worktree(),
+            }
+        })
+        .collect();
+    Some((group, rows))
+}
+
+/// **Open diff** on `run`: the run's Changes view opens (C4); a run with no worktree opens nothing.
+pub fn open_diff(state: &State, run: u8) -> Vec<Outcome> {
+    let found = state
+        .compare
+        .as_ref()
+        .and_then(|view| state.groups.iter().find(|g| g.id == view.group))
+        .and_then(|group| group.runs.iter().find(|r| r.number == run))
+        .filter(|run| run.status.has_worktree());
+    match found {
+        Some(run) => vec![Outcome::ChangesRequested(SessionLocation::Worktree(
+            run.names.dir_name.clone(),
+        ))],
+        None => Vec::new(),
     }
 }
 
@@ -501,6 +806,13 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             apply(&mut state.runs, msg);
             crate::features::surface_opened(state.runs.menu.is_some(), GroupContextMenu::ID)
         }
+        Msg::CompareOpened { .. } => {
+            // Compare takes the Changes view's place.
+            state.changes.open = None;
+            apply(&mut state.runs, msg);
+            Vec::new()
+        }
+        Msg::DiffOpened { run } => open_diff(&state.runs, run),
         Msg::DismissAsked { .. } => {
             state.clear_for_dialog();
             apply(&mut state.runs, msg);

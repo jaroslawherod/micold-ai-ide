@@ -293,6 +293,22 @@ impl GitCli {
         }
     }
 
+    /// The merge-base of `HEAD` and local branch `branch` (feature 483, R7): the base a run is
+    /// counted against when its group started from `branch`.
+    pub fn review_base_against(&self, dir: &Path, branch: &str) -> Base {
+        let reference = format!("refs/heads/{branch}");
+        if run_git(dir, &["rev-parse", "--verify", "--quiet", &reference]).is_err() {
+            return Base::Unavailable(BaseUnavailable::NoDefaultBranch);
+        }
+        match run_git(dir, &["merge-base", "HEAD", &reference]) {
+            Ok(commit) if !commit.trim().is_empty() => Base::MergeBase {
+                branch: branch.to_owned(),
+                commit: commit.trim().to_owned(),
+            },
+            _ => Base::Unavailable(BaseUnavailable::NoCommonHistory),
+        }
+    }
+
     /// The files changed in `dir` under `toggles` (R1, FR-002, FR-004, FR-005): one row per path,
     /// sorted, each classified against the R8 limits.
     pub fn change_list(
