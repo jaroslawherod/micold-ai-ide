@@ -54,5 +54,8 @@ Red by mutation for the daemon half (review B M2), one build each, then reverted
 | Compare reducer: one read per run with a worktree, stale `seq` dropped, per-run refresh, status text, failed run reason and no Open diff, uncommitted tag, Open diff outcome, close ends reads, menu items | T042 → T044 | tests in `features_runs.rs` were written after the reducer in this milestone (not red first); they assert the specified rules directly | `cargo test -p micold-client --test features_runs` 29 passed |
 | Shell reads, per-run watch, Compare view, menu item, showcase pose | T045–T048 | glue; no behaviour test of its own, held by the registry, catalogue and routing guards and the visual pass (`visual-pass/m3-compare-rows-*.png`) | `cargo test --workspace` |
 
-Red-first was not kept for the reducer half of T042/T044 (written beside the code); review B should
-treat the assertions as the evidence.
+Red by mutation for the reducer half (review B M3), one build each, then reverted:
+
+- the stale-`seq` check always true → `an_answer_shows_and_a_stale_answer_is_dropped` FAILED
+- `Msg::RunChanged` a no-op → `a_change_re_reads_only_that_run_and_keeps_the_old_counts_meanwhile` and `changes_while_a_read_runs_coalesce_into_one_more_read` FAILED
+- `open_diff` without the worktree filter → `a_failed_run_shows_its_reason_and_has_no_diff_without_a_worktree` FAILED

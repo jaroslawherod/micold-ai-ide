@@ -89,6 +89,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1b review B (conformance, sonnet) | 1 | 80164d66f8f40785e3b73921cf40b5c06e7b46b4:e710b37db81f20266b2754d01e834d9eb39a6d6f | CHANGES: 2 MAJOR (cycle-log M1b section added; T027 re-scoped to B23, B1-B6 live pass deferred), 1 MINOR (placement prose and test name fixed) |
 | M2 review A (code-review high) | 1 | (see commit 6bf8796c) | CHANGES: 4 fixed (forget_worktree owner, displaces lists, attach log, popover/registry tables), 4 declined |
 | M2 review B (conformance, sonnet) | 1 | (see commit eefde392) | CHANGES: process findings only (Verify not runnable in reviewer sandbox: ran by the unit, all green; red evidence in cycle-log mutation section; stale handover); no re-run |
+| M3 review A (code-review high, sonnet reviewer) | 1 | ab8cf27d772af2bb17fb4bef7534e340ba477502:680acdffa53531475dabe73ad702b0efb639c54e | CLEAN: 1 MINOR (declined) |
+| M3 review B (conformance, sonnet) | 1 | ab8cf27d772af2bb17fb4bef7534e340ba477502:680acdffa53531475dabe73ad702b0efb639c54e | CHANGES: 2 MAJOR (red by mutation recorded in cycle-log; T050 re-scoped to the showcase pose, B8-B11 live deferred as for T027), 2 MINOR fixed (Compare view built lazily; task text names the real files) |
 
 ## Declined review findings
 
@@ -111,6 +113,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1a A r2: one invalid group sets the whole file aside; whole list cloned per transition: as round 1's declined store and lock findings.
 - M1a A r2: `validate()` does not check the winner is `Picked`: winners are set by pick, M4 (T051–T061).
 - M1a A r2: unused public types and empty `integrate.rs`/`summary.rs`: T001 creates them for M3/M4.
+- M3 A F1 (MINOR): a `Failed` read is not retried on a group push, only on the watch's next change; retrying every push would re-read a persistently failing run on each push.
 
 ## Handover
 

@@ -2,7 +2,8 @@
 //! correlated request to the service.
 
 use iced::Task;
-use micold_client::features::runs::{Effect, Msg, SummaryRead};
+use micold_client::features::runs::Msg;
+use micold_client::features::runs::{Effect, SummaryRead};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs;
 use micold_core::session::SessionLocation;

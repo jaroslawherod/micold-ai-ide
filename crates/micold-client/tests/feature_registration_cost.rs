@@ -79,6 +79,13 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "runs",
+        "changes",
+        "Load — Compare's per-run counts use the Changes view's loading value (idle, loading with \
+         its last answer, ready, failed), a pure type; a second one here would say the same \
+         thing twice (feature 483, T044)",
+    ),
+    (
         "sidebar",
         "worktree",
         "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \
