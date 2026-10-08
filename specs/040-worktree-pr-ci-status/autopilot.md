@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M7 in progress (tests first).
+- **Next step**: PR for M7 open; wait for CI, merge, then M8.
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | #619 | merged |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | #637 | merged |
 | M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | #641 | merged |
-| M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | | pending |
+| M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | (this PR) | in review |
 | M8 | T066–T068 | full | Architecture page and the recorded quickstart §B pass | | pending |
 
 ## Decisions
@@ -85,6 +85,8 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M5) | 1 | 22fa3c4e0a2a1bac226c39e66d365b59a1cb4bf6:9cc9eafa5e00910aee038aad0e5eac20cfafc45c | CHANGES: 1 BLOCKER (same as A's F1, fixed), 2 MINOR (guard shown red by mutation, logged; menu entry now uses the handler's address function). Verify: five suites and `pr_status_open` (6) passed. |
 | Code A (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | No BLOCKER or MAJOR; 6 MINOR/notes, none needed a round. |
 | Code B (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | CLEAN; 1 MINOR (compile-red, already logged as a deviation). Verify suites passed. |
+| Code A (M7) | 1 | 0563917214b2f047089872edc572454c318c36bc:20faec254d53d87606f34cdbbe79e3abf32cab9a | CLEAN |
+| Review B (M7) | 1 | same | CHANGES: F1 cycle-log entry missing (fixed, entry added), F2 doc wrap (fixed, prose only) |
 
 ## Declined review findings
 

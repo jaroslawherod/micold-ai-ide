@@ -552,3 +552,18 @@ existed and failed before the implementation.
   `PendingOp::MergedBranchCheck`, the `Cleanup:` line, the **can be removed** chip, two covered states, the regenerated
   layout snapshot, the user guide
 - commit: the commit that adds this entry
+
+### M7 cycle: U129–U149, A22, A32–A39 — the interval, the refresh trigger, the pause, the stale form (T055–T065)
+
+- test: written before the code, all seven files. `pull_request_stale.rs` (U129–U131), the `Trigger` / `Cause` cases of
+  `features_pr_status.rs` (U132–U139), the guard test of `idle_subscriptions.rs` (U140–U142), the `pr_status_refresh_*` /
+  `pr_status_tick_*` shell tests (A32–A39), the stale projection and `Read:` tooltip tests of `features_sidebar.rs`
+  (U146, U147, U149) and the stale covered state (U148) did not compile until `is_stale`, `Cause`, `Msg::Trigger`, `Msg::Tick`
+  and `RowPullRequest.stale` existed (compile-red, not seen failing on an assertion: deviation). Seen red on an assertion: the
+  first run of the four shell tests, which failed because the new tests waited on the shell's 10 s timers (a test bug, fixed by
+  dropping the timer tasks, not by changing the code).
+- green: `micold_core::pull_request::is_stale`, `Msg::Trigger` / `Msg::Tick` with `again`, the pause and the 60 s abandon rule,
+  `shell::pr_status::refresh_ended`, the guarded 300 s subscription, the refresh hooks in `daemon_sync.rs`, `RowPullRequest.stale`,
+  the `Read:` line, `.stale(row.stale)`, the regenerated layout snapshot, the user guide. The tick is `Message::PrStatus(Msg::Tick)`,
+  not a root `Message::PrStatusTick`: `root_vocabulary_is_cross_cutting` rejects a root variant one feature answers.
+- commit: the commit that adds this entry
