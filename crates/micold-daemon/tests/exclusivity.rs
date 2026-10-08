@@ -70,7 +70,9 @@ async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
 async fn next_control(client: &mut Client) -> DaemonMsg {
     loop {
         match client.next().await.unwrap().unwrap() {
+            // Each attach is also owed its run groups (feature 483); not what these tests check.
             Frame::Control(DaemonMsg::CatalogChanged { .. })
+            | Frame::Control(DaemonMsg::RunGroupsChanged { .. })
             | Frame::Control(DaemonMsg::Pong { .. }) => continue,
             Frame::Control(msg) => return msg,
             Frame::Grid(_) => continue,

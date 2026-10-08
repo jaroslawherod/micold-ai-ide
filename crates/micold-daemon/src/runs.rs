@@ -211,7 +211,7 @@ pub async fn create(state: &Arc<DaemonState>, request: CreateRequest) -> Result<
     Ok(group)
 }
 
-/// Start one task per run of `group` (W2): its worktree from the base branch, then its session
+/// Start one task per run of `group` (W2): its worktree at the base commit, then its session
 /// with the prompt as first input. Each reports its own transitions.
 pub fn spawn_runs(state: &Arc<DaemonState>, project: &Path, group: &RunGroup) {
     let prompt: Arc<str> = Arc::from(group.prompt.as_str());
@@ -220,7 +220,9 @@ pub fn spawn_runs(state: &Arc<DaemonState>, project: &Path, group: &RunGroup) {
             Arc::clone(state),
             project.to_path_buf(),
             group.id,
-            group.base_branch.clone(),
+            // The tip recorded at create time, not the branch name: every run starts at the same
+            // commit even if the branch moves meanwhile or a tag shares its name.
+            group.base_commit.clone(),
             Arc::clone(&prompt),
             run.clone(),
         ));
@@ -232,7 +234,7 @@ async fn run_one(
     state: Arc<DaemonState>,
     project: PathBuf,
     group: GroupId,
-    base_branch: String,
+    base_commit: String,
     prompt: Arc<str>,
     run: Run,
 ) {
@@ -240,7 +242,7 @@ async fn run_one(
     let set = |status: RunStatus, session: Option<SessionId>| {
         state.set_run_status(&project, group, number, status, session);
     };
-    let mode = CreateMode::NewBranchAt { start: base_branch };
+    let mode = CreateMode::NewBranchAt { start: base_commit };
     if let Err(failure) =
         ops::create_worktree(&state, project.clone(), run.names.clone(), mode, None).await
     {

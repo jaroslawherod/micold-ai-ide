@@ -412,3 +412,31 @@ async fn pick_and_dismiss_are_refused_for_now() {
 #[path = "support/mcp.rs"]
 #[allow(unused_imports)]
 mod runs_support_log;
+
+/// Review A M1a: every run starts at the base commit recorded at create time, even when a tag
+/// shares the base branch's name (git resolves a bare `base` to the tag first).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn every_run_starts_at_the_recorded_base_commit_even_under_a_same_named_tag() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new();
+    let project = s.project();
+    git(&project, &["tag", "base", "main"]);
+    let base_tip = git(&project, &["rev-parse", "refs/heads/base"]);
+    let mut client = window(&s.state, &project).await;
+
+    let (answer, _) = request(&mut client, 1, create_msg(1, &project, vec![CLAUDE; 2])).await;
+    let group = settled(&mut client, created(&answer)).await;
+    assert_eq!(group.base_commit, base_tip);
+    for run in &group.runs {
+        assert_eq!(run.status, RunStatus::Prompted, "run {}", run.number);
+        assert_eq!(
+            git(
+                &project,
+                &["rev-parse", &format!("refs/heads/{}", run.names.branch)]
+            ),
+            base_tip,
+            "run {} starts at the base branch's tip, not the tag",
+            run.number
+        );
+    }
+}

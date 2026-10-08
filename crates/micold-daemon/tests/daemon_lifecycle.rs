@@ -337,10 +337,12 @@ async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
         other => panic!("expected Attached after force, got {other:?}"),
     }
     // A also has a targeted `CatalogChanged` queued from its own successful attach (the daemon sends
-    // the attaching client the refreshed catalog + worktrees, T053) — skip past it to the Displaced.
+    // the attaching client the refreshed catalog + worktrees, T053) and its run groups (feature 483)
+    // — skip past them to the Displaced.
     loop {
         match a.next().await.unwrap().unwrap() {
-            Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
+            Frame::Control(DaemonMsg::CatalogChanged { .. })
+            | Frame::Control(DaemonMsg::RunGroupsChanged { .. }) => continue,
             Frame::Control(DaemonMsg::Displaced { project: p, by }) => {
                 assert_eq!(p, project);
                 assert_eq!(by.build, "client-b");
