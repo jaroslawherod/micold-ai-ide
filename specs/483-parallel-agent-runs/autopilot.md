@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: spec
-- **Next step**: clarify unit: apply the user's answers to the two Open escalation questions, then run clarify round 2
+- **Next step**: plan unit (the two clarify defaults await user confirmation; revisit if the user answers otherwise)
 
 ## Pull requests
 
@@ -24,6 +24,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify US4 scenario 9: a picked run with uncommitted changes is refused, naming the files;
+  nothing changes. _(default, pending user confirmation)_
+- Clarify FR-012: a pick always merges (fast-forward when possible, else a merge commit); the run's
+  branch is never rewritten. _(default, pending user confirmation)_
+- Clarify round 2: no critical ambiguities left; clarify done.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -45,17 +50,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (category 1, product decision the repo does not settle; the app has no git
-commit, merge or rebase code today: grep of crates/ and docs/user-guide finds none).
-
-1. US4 scenario 9: the picked run has uncommitted changes. Options: (A, Recommended) refuse the
-   pick, naming the uncommitted files, until the user commits them in the run's session or
-   terminal; (B) offer to commit them as part of the pick; (C) integrate only committed work and
-   warn.
-2. FR-012: how the pick integrates. Options: (A, Recommended) always merge: fast-forward when the
-   base has not moved, otherwise a merge commit; the run's branch is never rewritten; (B) always
-   rebase the run onto the base, then fast-forward; (C) the user chooses merge or rebase in the
-   pick dialog, merge by default.
+None.
 
 ## Follow-ups not done
 
