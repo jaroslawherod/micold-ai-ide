@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-       "Bash(echo * >> .git/autopilot-gate-ok)"
+      "Bash(echo * >> .git/autopilot-gate-ok)",
+      "mcp__github__merge_pull_request",
+      "Bash(scripts/autopilot/handoff-check.sh *)",
+      "Bash(scripts/autopilot/issue.sh done *)"
     ]
   },
   "extraKnownMarketplaces": {
