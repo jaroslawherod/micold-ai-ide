@@ -43,6 +43,43 @@ fn kinds(roles: Roles) -> Vec<(&'static str, SurfaceKind)> {
     ]
 }
 
+/// The Run in parallel dialog (feature 483), posed with three runs on mixed providers and the names
+/// they will get, and again with a validation error. Held in statics: the element borrows it.
+fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::ParallelDialog {
+    use micold_core::session::AiCli;
+    use std::sync::OnceLock;
+    static VALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
+    static INVALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
+    let make = |error: bool| crate::features::runs::ParallelDialog {
+        project: std::path::PathBuf::from("/p"),
+        naming: micold_core::naming::WorktreeNaming {
+            type_: Some(ConventionalType::Feat),
+            ticket: None,
+            name: if error {
+                String::new()
+            } else {
+                "login page".to_string()
+            },
+        },
+        prompt: if error {
+            String::new()
+        } else {
+            "Add a login page".to_string()
+        },
+        base_branch: "main".to_string(),
+        branches: vec!["main".to_string(), "develop".to_string()],
+        runs: vec![AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi],
+        offered: AiCli::ALL.to_vec(),
+        default_cli: AiCli::ClaudeCode,
+        error: error.then(|| "Enter a prompt".to_string()),
+    };
+    if error {
+        INVALID.get_or_init(|| make(true))
+    } else {
+        VALID.get_or_init(|| make(false))
+    }
+}
+
 /// `Surface` — one instance per kind, each holding the same label so the difference is the surface.
 pub fn surface<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
@@ -299,16 +336,64 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
             item
         })
         .collect();
+    // The Run in parallel group row (feature 483, parallel-surfaces G1–G3): expanded with a failed
+    // run that has no worktree, and collapsed with its counts.
+    let group = |expanded: bool| {
+        let mut items = vec![material::TreeItem::new(0, samples::GROUP, roles.on_surface)
+            .with_icon(Icon::Git)
+            .tags(vec![
+                ("3 runs".to_string(), roles.secondary),
+                ("1 failed".to_string(), roles.error),
+            ])
+            .expandable(expanded, Message::NoOp)];
+        if expanded {
+            items.push(
+                material::TreeItem::new(1, "#1", roles.on_surface)
+                    .with_icon(Icon::Git)
+                    .annotation("claude", roles.on_surface_variant)
+                    .on_press(Message::NoOp),
+            );
+            items.push(
+                material::TreeItem::new(1, "#2", roles.on_surface)
+                    .with_icon(Icon::Git)
+                    .annotation("copilot", roles.on_surface_variant)
+                    .on_press(Message::NoOp),
+            );
+            items.push(
+                material::TreeItem::new(1, "#3", roles.error)
+                    .annotation("pi", roles.on_surface_variant)
+                    .tags(vec![("failed".to_string(), roles.error)])
+                    .row_tooltip(samples::RUN_FAILED_REASON),
+            );
+        }
+        material::TreeView::new(items, roles)
+    };
     arrange(
-        vec![posed(
-            "a worktree tree",
-            material::TreeView::new(items, roles)
-                // The selected row's heavier label (feature 024, FR-003a). Posed here because it is
-                // the half of a selected row that a colour-blind reader, or a greyscale screenshot,
-                // has to rely on — and the gallery is where that is checked.
-                .selected_label_role(material::TypeRole::Label),
-            roles,
-        )],
+        vec![
+            posed("run group, expanded", group(true), roles),
+            posed("run group, collapsed", group(false), roles),
+            posed(
+                "Run in parallel dialog",
+                crate::ui::parallel_dialog::modal(parallel_dialog_pose(false), roles, None)
+                    .map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
+                "Run in parallel dialog, invalid",
+                crate::ui::parallel_dialog::modal(parallel_dialog_pose(true), roles, None)
+                    .map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
+                "a worktree tree",
+                material::TreeView::new(items, roles)
+                    // The selected row's heavier label (feature 024, FR-003a). Posed here because it is
+                    // the half of a selected row that a colour-blind reader, or a greyscale screenshot,
+                    // has to rely on — and the gallery is where that is checked.
+                    .selected_label_role(material::TypeRole::Label),
+                roles,
+            ),
+        ],
         Layout::FullWidth,
     )
 }

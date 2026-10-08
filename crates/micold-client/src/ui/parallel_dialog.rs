@@ -23,11 +23,9 @@ fn msg(m: Msg) -> Message {
 /// transition.
 pub fn modal<'a>(
     dialog: &'a ParallelDialog,
-    scheme: ColorScheme,
+    r: Roles,
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
-    let r = tokens::roles(scheme);
-
     let mut fields =
         material::dialog::fields(column![Text::new("Run in parallel", TypeRole::Headline, r)]);
 
@@ -140,5 +138,5 @@ pub fn dialog<'a>(
         .runs
         .dialog
         .as_ref()
-        .map(|d| modal(d, scheme, state.window.focused_field))
+        .map(|d| modal(d, tokens::roles(scheme), state.window.focused_field))
 }
