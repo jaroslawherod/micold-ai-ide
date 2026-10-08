@@ -45,6 +45,15 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
                 providers,
             }
         }),
+        Some(Effect::Send(ClientMsg::RunGroupDismiss { project, group, .. })) => {
+            send_op(app, PendingOp::RunGroupDismiss, move |req| {
+                ClientMsg::RunGroupDismiss {
+                    req,
+                    project,
+                    group,
+                }
+            })
+        }
         // The reducer sends nothing else; a new request needs a route above.
         Some(Effect::Send(_)) => {}
     }

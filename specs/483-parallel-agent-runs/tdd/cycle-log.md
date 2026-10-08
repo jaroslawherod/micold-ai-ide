@@ -30,3 +30,12 @@ are the test list. Reds run against the stubs of commit `9f82d331` (they compile
 
 Red by mutation was not recorded for T012/T013/T022 in this milestone's units; the tests assert the
 specified rules directly (`validate()` order, bounds, counts), and review B M1b flagged the gap.
+
+## M2 — restart, delete, Dismiss group (T028–T039)
+
+| Behaviour | Tasks | Evidence | Result |
+|---|---|---|---|
+| Interrupted runs on load (`interrupted_on_load`), daemon restart cleanup, delete follow, `Runs::dismiss` | T028, T029 → T031–T035 | written beside the code, not red first (unit 1): `run_group_persist` (12) and `run_group_create` (10) cover them | pass |
+| Group menu = Dismiss group only; ask first naming what stays; confirm sends one `RunGroupDismiss`; cancel sends nothing; menu and confirmation go with a vanished group | T030 → T036 | `features_runs.rs` written first: the new tests did not compile (`GROUP_MENU_ITEMS`, `Msg::MenuToggled`, `DismissAsked`, `DISMISS_CONFIRMATION` missing) | `features_runs` 18 passed |
+| A shrunk group shows `#1, #3`; a dropped group is not shown | T030 | passes on arrival: `arrange_groups` already projected `group.runs` as is (M1b) | `features_sidebar` 72 passed |
+| Menu render, dialog render, registry, shell route | T037 | no behaviour test of its own; held by the registry and routing guards | `cargo test --workspace` (see gate) |

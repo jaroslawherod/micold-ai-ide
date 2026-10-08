@@ -271,6 +271,13 @@ register! {
             crate::features::project::ProjectContextMenu,
     },
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
+    crate::features::runs::ConfirmDismissGroupDialog => crate::ui::confirm_dismiss_group::dialog,
+    // The group row's menu replaces the other row menus, as they replace each other.
+    crate::features::runs::GroupContextMenu {
+        displaces:
+            crate::features::project::ProjectContextMenu,
+            crate::features::worktree::WorktreeContextMenu,
+    },
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
     // the open switcher, and the row list has to stay visible behind it. The same fact
@@ -312,7 +319,9 @@ register! {
     // The project row menu and nothing else: the two context menus replace each other, and a panel
     // popover open elsewhere in the window is unaffected by a right-click in the sidebar.
     crate::features::worktree::WorktreeContextMenu {
-        displaces: crate::features::project::ProjectContextMenu,
+        displaces:
+            crate::features::project::ProjectContextMenu,
+            crate::features::runs::GroupContextMenu,
     },
     crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
     crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,

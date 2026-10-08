@@ -4,7 +4,9 @@
 
 use std::path::PathBuf;
 
-use micold_client::features::runs::{update, Effect, Invalid, Msg, Opening, State};
+use micold_client::features::runs::{
+    update, Effect, Invalid, Msg, Opening, State, GROUP_MENU_ITEMS,
+};
 use micold_core::naming::{ConventionalType, NamingError};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs::{
@@ -273,4 +275,111 @@ fn a_group_can_be_collapsed_and_expanded_again() {
     assert!(!state.is_expanded(id));
     update(&mut state, Msg::GroupToggled(id));
     assert!(state.is_expanded(id));
+}
+
+fn with_group() -> (State, GroupId) {
+    let mut state = State::default();
+    update(&mut state, Msg::GroupsChanged(vec![group(1, "a")]));
+    let id = state.groups[0].id;
+    (state, id)
+}
+
+#[test]
+fn the_group_rows_menu_is_dismiss_group_only() {
+    assert_eq!(GROUP_MENU_ITEMS, ["Dismiss group"]);
+}
+
+#[test]
+fn the_group_menu_opens_at_the_press_point_and_toggles_shut() {
+    let (mut state, id) = with_group();
+    update(&mut state, Msg::MenuToggled(id, (10, 20)));
+    let menu = state.menu.as_ref().expect("open");
+    assert_eq!((menu.group, menu.anchor), (id, (10, 20)));
+    update(&mut state, Msg::MenuToggled(id, (10, 20)));
+    assert!(state.menu.is_none());
+    update(&mut state, Msg::MenuToggled(id, (1, 2)));
+    update(&mut state, Msg::MenuDismissed);
+    assert!(state.menu.is_none());
+}
+
+#[test]
+fn dismiss_group_asks_first_and_sends_nothing_yet() {
+    let (mut state, id) = with_group();
+    update(&mut state, Msg::MenuToggled(id, (1, 2)));
+    let effect = update(
+        &mut state,
+        Msg::DismissAsked {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    assert!(state.menu.is_none(), "the pick closes the menu");
+    assert_eq!(state.dismiss_target.as_ref().map(|t| t.group), Some(id));
+}
+
+#[test]
+fn the_confirmation_names_that_worktrees_branches_and_sessions_stay() {
+    let text = micold_client::features::runs::DISMISS_CONFIRMATION;
+    for word in ["worktrees", "branches", "sessions"] {
+        assert!(text.contains(word), "{text}");
+    }
+    assert!(text.contains("stay"), "{text}");
+}
+
+#[test]
+fn confirming_sends_exactly_one_dismiss_and_closes_the_dialog() {
+    let (mut state, id) = with_group();
+    update(
+        &mut state,
+        Msg::DismissAsked {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    let effect = update(&mut state, Msg::DismissConfirmed);
+    assert_eq!(
+        effect,
+        Effect::Send(ClientMsg::RunGroupDismiss {
+            req: 0,
+            project: PathBuf::from("/p"),
+            group: id
+        })
+    );
+    assert!(state.dismiss_target.is_none());
+    assert_eq!(
+        update(&mut state, Msg::DismissConfirmed),
+        Effect::None,
+        "a second confirm has nothing to send"
+    );
+}
+
+#[test]
+fn cancelling_emits_nothing_and_keeps_the_group() {
+    let (mut state, id) = with_group();
+    update(
+        &mut state,
+        Msg::DismissAsked {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    assert_eq!(update(&mut state, Msg::DismissCancelled), Effect::None);
+    assert!(state.dismiss_target.is_none());
+    assert_eq!(state.groups.len(), 1);
+}
+
+#[test]
+fn a_group_that_goes_away_takes_its_menu_and_confirmation_with_it() {
+    let (mut state, id) = with_group();
+    update(&mut state, Msg::MenuToggled(id, (1, 2)));
+    update(
+        &mut state,
+        Msg::DismissAsked {
+            group: id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    update(&mut state, Msg::GroupsChanged(vec![]));
+    assert!(state.menu.is_none() && state.dismiss_target.is_none());
 }

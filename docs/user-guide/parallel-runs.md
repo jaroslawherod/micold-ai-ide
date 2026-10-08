@@ -51,6 +51,27 @@ The other runs carry on; one failure never stops the rest.
   session and says "prompt not delivered" with the reason. You can open the session and paste the
   prompt yourself.
 
+## Restarting the app
+
+Groups are remembered. After a restart every group, its runs and the run order are as they were.
+
+A run that was still being created when the app (or the service) stopped cannot finish by itself.
+It reads **Failed** with the reason "interrupted", and the half-made folder or branch of that run is
+removed. Runs that had finished are untouched. A folder is left alone, and the reason says so, when
+it holds something the app did not make for that run (a session record names it, for example).
+
+## Deleting a run
+
+Delete a run's worktree from its own row, as for any worktree. The run leaves the group and the
+group keeps the rest. A group with no runs left disappears. A group that lost run #2 shows `#1` and
+`#3`; numbers are never reused.
+
+## Dismiss group
+
+Right-click a group row and choose **Dismiss group**. The app asks first. Dismissing forgets only the
+grouping: the worktrees, branches and sessions of its runs stay, and appear as ordinary rows.
+**Cancel** changes nothing.
+
 ## Coming later
 
 Comparing the runs, **Pick this one**, and the offer to clean up the other runs come in later

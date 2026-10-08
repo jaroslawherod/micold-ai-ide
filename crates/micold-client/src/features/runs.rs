@@ -30,6 +30,10 @@ pub struct State {
     pub groups: Vec<RunGroup>,
     /// Groups the user collapsed in the sidebar (G2); every other group is expanded.
     pub collapsed: BTreeSet<GroupId>,
+    /// The group row's open right-click menu (G4).
+    pub menu: Option<GroupMenu>,
+    /// The group awaiting the Dismiss group confirmation (G5); present only while it is shown.
+    pub dismiss_target: Option<DismissTarget>,
     /// The request the root left for the shell while it interpreted an outcome (opening the
     /// dialog), taken once right after the message that caused it.
     pub pending: Option<Effect>,
@@ -41,6 +45,31 @@ impl State {
         !self.collapsed.contains(&id)
     }
 }
+
+/// A group row's right-click menu: which group, and where the press landed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupMenu {
+    /// The group the menu acts on.
+    pub group: GroupId,
+    /// The press point in window pixels.
+    pub anchor: (u16, u16),
+}
+
+/// The group a Dismiss group confirmation is about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DismissTarget {
+    /// The group.
+    pub group: GroupId,
+    /// The project that owns it.
+    pub project: PathBuf,
+}
+
+/// The entries of a group row's menu, in order (G4; Compare joins it in feature 483's US3).
+pub const GROUP_MENU_ITEMS: [&str; 1] = ["Dismiss group"];
+
+/// What the Dismiss group confirmation says is left alone (G5, W4).
+pub const DISMISS_CONFIRMATION: &str = "This forgets the grouping only. The worktrees, branches \
+and sessions of its runs stay exactly as they are.";
 
 /// What the dialog opens with, gathered by the root from the rest of the state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +234,21 @@ pub enum Msg {
     GroupsChanged(Vec<RunGroup>),
     /// A group row's chevron.
     GroupToggled(GroupId),
+    /// Open (or close, when already open on it) the group row's menu at the press point.
+    MenuToggled(GroupId, (u16, u16)),
+    /// The group row's menu was dismissed.
+    MenuDismissed,
+    /// **Dismiss group** was picked: ask first.
+    DismissAsked {
+        /// The group.
+        group: GroupId,
+        /// The project that owns it.
+        project: PathBuf,
+    },
+    /// The dismiss confirmation was confirmed.
+    DismissConfirmed,
+    /// The dismiss confirmation was cancelled.
+    DismissCancelled,
 }
 
 /// What the shell must do after a message.
@@ -231,6 +275,34 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 .collapsed
                 .retain(|id| groups.iter().any(|group| group.id == *id));
             state.groups = groups;
+            let gone = |id: GroupId| !state.groups.iter().any(|group| group.id == id);
+            if state.menu.is_some_and(|menu| gone(menu.group)) {
+                state.menu = None;
+            }
+            if state.dismiss_target.as_ref().is_some_and(|t| gone(t.group)) {
+                state.dismiss_target = None;
+            }
+        }
+        Msg::MenuToggled(group, anchor) => {
+            state.menu = match state.menu {
+                Some(open) if open.group == group => None,
+                _ => Some(GroupMenu { group, anchor }),
+            };
+        }
+        Msg::MenuDismissed => state.menu = None,
+        Msg::DismissAsked { group, project } => {
+            state.menu = None;
+            state.dismiss_target = Some(DismissTarget { group, project });
+        }
+        Msg::DismissCancelled => state.dismiss_target = None,
+        Msg::DismissConfirmed => {
+            if let Some(target) = state.dismiss_target.take() {
+                return Effect::Send(ClientMsg::RunGroupDismiss {
+                    req: 0,
+                    project: target.project,
+                    group: target.group,
+                });
+            }
         }
         Msg::GroupToggled(id) => {
             if !state.collapsed.remove(&id) {
@@ -360,5 +432,83 @@ impl FloatingSurface for ParallelRunDialog {
 impl Registered for ParallelRunDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
         state.runs.dialog.as_ref().map(|_| ParallelRunDialog)
+    }
+}
+
+/// The group row's right-click menu, as a floating surface (G4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupContextMenu;
+
+impl GroupContextMenu {
+    /// This surface's identity.
+    pub const ID: SurfaceId = SurfaceId::new("run_group_menu");
+}
+
+impl FloatingSurface for GroupContextMenu {
+    fn id(&self) -> SurfaceId {
+        Self::ID
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::Runs(Msg::MenuDismissed))
+    }
+}
+
+impl Registered for GroupContextMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.runs.menu.map(|_| GroupContextMenu)
+    }
+}
+
+/// The Dismiss group confirmation, as a floating surface (G5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmDismissGroupDialog;
+
+impl FloatingSurface for ConfirmDismissGroupDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_dismiss_run_group")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::DismissCancelled))
+    }
+}
+
+impl Registered for ConfirmDismissGroupDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .runs
+            .dismiss_target
+            .as_ref()
+            .map(|_| ConfirmDismissGroupDialog)
+    }
+}
+
+/// Route a message through the root: the two that open a surface say so, and the dialog closes
+/// the other surfaces first.
+pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
+    match msg {
+        Msg::MenuToggled(..) => {
+            apply(&mut state.runs, msg);
+            crate::features::surface_opened(state.runs.menu.is_some(), GroupContextMenu::ID)
+        }
+        Msg::DismissAsked { .. } => {
+            state.clear_for_dialog();
+            apply(&mut state.runs, msg);
+            Vec::new()
+        }
+        other => {
+            apply(&mut state.runs, other);
+            Vec::new()
+        }
     }
 }

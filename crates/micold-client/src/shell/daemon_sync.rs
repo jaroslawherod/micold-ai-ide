@@ -165,6 +165,9 @@ pub enum PendingOp {
     /// A `RunGroupCreate` (feature 483, W1): the group arrives as `RunGroupsChanged`; this exists
     /// so a refusal reaches the user (the dialog has closed by then, D5).
     RunGroupCreate,
+    /// A `RunGroupDismiss` (feature 483, W4): the list arrives as `RunGroupsChanged`; this exists
+    /// so a refusal reaches the user.
+    RunGroupDismiss,
     /// The `BranchList` the Run in parallel dialog's base-branch select reads (feature 483, D1).
     RunBranchList {
         project: PathBuf,
@@ -202,6 +205,7 @@ impl PendingOp {
             PendingOp::CreateSession => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
+            PendingOp::RunGroupDismiss => "dismiss the group".into(),
             PendingOp::RunBranchList { .. } => "list the branches".into(),
             PendingOp::WorktreeCreate { dir_name, .. } => {
                 format!("create the worktree \"{dir_name}\"")
