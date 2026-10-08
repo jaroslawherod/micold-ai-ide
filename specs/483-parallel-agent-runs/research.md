@@ -137,6 +137,11 @@ the pure dialog state (so the user is told in the dialog, FR-002) and again in t
 **Rationale**: the spec fixes the numbers (Assumptions). Validating twice follows the project's
 existing shape: the form decides what the user may ask for, the daemon decides what it will do.
 
+**Alternatives rejected**: no upper cap (a slip of the keyboard could start dozens of agents and
+worktrees at once); a cap read from a setting (a new setting for a number the spec fixes, with no
+user asking for it); validating in the daemon only (the user would learn of a bad count only after
+submitting, against FR-002).
+
 ## R7 — Compare's file and line counts
 
 **Decision**: reuse feature 482's core reader. For each run, `GitCli::change_list(run root,

@@ -90,9 +90,11 @@ Post-design re-check: unchanged, all PASS.
   methods.
 
 The I/O half lands in `crates/micold-core/src/git.rs`: the `Git` trait gains
-`branch_tip_local`, `is_ancestor_commits`, `merge_tree_write_tree`, `commit_tree_merge`,
-`update_ref_cas` and `merge_in_checkout` (and `merge_abort`), each a thin `run_git` call through
-`no_window`/`local_only`, with the `FakeGit` arms the existing tests' fake needs.
+`merge_tree_write_tree`, `commit_tree_merge`, `update_ref_cas` and `merge_in_checkout` (and
+`merge_abort`), each a thin `run_git` call through `no_window`/`local_only`, with the `FakeGit`
+arms the existing tests' fake needs. Branch tips and ancestry reuse feature 040's existing
+`Git::branch_tip` (local `refs/heads/` only) and `Git::is_ancestor` (commit ids): they already
+answer what the pick needs, so no new methods for them.
 
 ### D2 — Protocol v36 — contracts/run-group-wire.md
 
@@ -148,7 +150,7 @@ confirmation. Showcase poses in `showcase/sections/` + `catalogue.rs`. User guid
 | FR | Where | Research / contract |
 |---|---|---|
 | FR-001 | D4 dialog state, D6 `ui/parallel_dialog.rs`, sidebar menu | parallel-surfaces D1 |
-| FR-002 | D4 `ParallelDialog::validate`, `offered_providers` | R6; D2, D4 |
+| FR-002 | D4 `ParallelDialog::validate`, `offered_providers` | R6; run-group-wire W1, parallel-surfaces D |
 | FR-003 | D1 `naming::derive_group`, D6 D3 | R5; D3 |
 | FR-004 | D3 per-run tasks, `create_session_with_prompt` | R3, R4; W1, W2 |
 | FR-005 | D3 one task per run, `set_run_status` | R3; W2 |
