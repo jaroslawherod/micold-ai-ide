@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: tasks
-- **Next step**: tasks unit (continue from Handover: tasks review round 1)
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR from the scratchpad body, waits on CI and merges; then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | Design PR (spec, clarifications, plan, research, contracts, tasks) | body written, orchestrator opens | — |
 
 ## Milestones
 
@@ -49,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
   `RunStep::Prompt` dropped (never produced); CleanupOffer treats an unknown loser state as
   uncommitted and re-reads before deleting (I4, parallel-surfaces K3/K4); new G1a for a run with no
   worktree; W3 order/wording; plan test-table rows moved; quickstart module list.
+- Tasks review round 1: CLEAN; MINORs fixed prose only (checklist note, SC-001 on M1, T068–T070 left to close unit). Checklist requirements.md: all 16 items ticked. Specs-only gate (check-criteria-observables) passed.
 - speckit-analyze A1 (the two clarify defaults) left to the user's pending confirmation; C1 (shell
   glue untested) recorded as glue per plan Constitution row I in tasks.md's header.
 | # | Phase | Question | Answer | By | Evidence |
@@ -61,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | db71250366df0d22ca0ef7ddd4040b1d4304ac11:88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec review | 2 | 8c96629cfa543d92ed3e94d0ecb58df2b625fe8a:4a403ba28452cbfef1e57944050a01b8beb435f0 | CLEAN |
 | Plan review | 1 | 397f8015f2341c2338e28f4f9a517db315d1fee5:6b5fe648c01176305a208e5fdbacadc4af60fe29 | CLEAN: 3 MINOR (all fixed, prose only) |
+| Tasks review | 1 | c61c9b57176ad6134bb9d4cd0fe376dc69bb33bc:d689b0660d22190b4db34f3feb4c401a7a4b8b4d | CLEAN: 3 MINOR (all fixed, prose only) |
 
 ## Declined review findings
 
@@ -69,14 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Tasks unit, handed over at 161k context. Done: branch-start (rebased onto origin/main ec102904),
-speckit-tasks (tasks.md T001–T070, `## Milestones` M1–M5, all full tier), speckit-analyze run once
-and every HIGH (I1–I4) and the MEDIUM/LOW it named fixed in spec, plan, data-model, contracts,
-research and quickstart (see Decisions), committed e9cc8d6f. Next: tasks.md step 2's fresh reviewer,
-round 1 (rubrics/tasks.md, snapshot 6a04f8064c1ab9b25b64c6bc524a600ebe368371:e9cc8d6f13feaa1c4ce1536dc51d9470185fbab8;
-the spec-artifact edits from analyze are behaviour-bearing, so the reviewer should check them too);
-then step 3 close `checklists/requirements.md`, step 4 Specs-only gate, step 5 design PR (cloud
-override: PR body to the scratchpad file, orchestrator opens it). No open findings. No PR yet.
+None.
 
 ## Open escalation
 

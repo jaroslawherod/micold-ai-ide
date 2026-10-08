@@ -31,6 +31,6 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers are left for the clarify unit: the winner's own uncommitted
-  changes at pick time (User Story 4, scenario 9) and how integration is chosen, merge or rebase
-  (FR-012). Every other item passes.
+- The clarify unit resolved both [NEEDS CLARIFICATION] markers: the winner's own uncommitted
+  changes at pick time (User Story 4, scenario 9) and how integration is chosen (FR-012); see the
+  spec's Clarifications. Every item passes.
