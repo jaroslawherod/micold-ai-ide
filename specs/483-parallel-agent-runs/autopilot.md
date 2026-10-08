@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: spec
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers (US4 scenario 9, FR-012)
+- **Next step**: clarify unit: apply the user's answers to the two Open escalation questions, then run clarify round 2
 
 ## Pull requests
 
@@ -45,7 +45,17 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1 (category 1, product decision the repo does not settle; the app has no git
+commit, merge or rebase code today: grep of crates/ and docs/user-guide finds none).
+
+1. US4 scenario 9: the picked run has uncommitted changes. Options: (A, Recommended) refuse the
+   pick, naming the uncommitted files, until the user commits them in the run's session or
+   terminal; (B) offer to commit them as part of the pick; (C) integrate only committed work and
+   warn.
+2. FR-012: how the pick integrates. Options: (A, Recommended) always merge: fast-forward when the
+   base has not moved, otherwise a merge commit; the run's branch is never rewritten; (B) always
+   rebase the run onto the base, then fast-forward; (C) the user chooses merge or rebase in the
+   pick dialog, merge by default.
 
 ## Follow-ups not done
 
