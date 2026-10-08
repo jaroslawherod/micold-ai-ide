@@ -571,7 +571,10 @@ fn a_new_save_replaces_a_file_whose_deletion_failed() {
     // The other session's file is still to delete, and now can be; this session's is kept.
     assert!(store.retry_deletions().is_empty());
     assert_eq!(entries(&dir).len(), 1);
-    assert_eq!(store.load(session()), LoadOutcome::History(snapshot(&["after"])));
+    assert_eq!(
+        store.load(session()),
+        LoadOutcome::History(snapshot(&["after"]))
+    );
 }
 
 // U96.

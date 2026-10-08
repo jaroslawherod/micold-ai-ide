@@ -156,7 +156,10 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
             let sent = Instant::now();
             state.session_input(id, SERIAL.fetch_add(1, Ordering::Relaxed), token.as_bytes());
             while !shows(state, id, &token) {
-                assert!(sent.elapsed() < Duration::from_secs(5), "{token} never echoed");
+                assert!(
+                    sent.elapsed() < Duration::from_secs(5),
+                    "{token} never echoed"
+                );
                 std::thread::sleep(Duration::from_micros(100));
             }
             times.push(sent.elapsed());
