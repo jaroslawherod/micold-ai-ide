@@ -1,3 +1,10 @@
+# Raw per-run output of the pass-2 step-7 sampler (30 s, 10 s settle). The commits/s=0 field was
+# not measured by the sampler (it is a placeholder, kept as emitted). Commit rates come only from
+# the four WAYLAND_DEBUG=client runs (dbg=1), recounted from their logs:
+#   wl_surface#N.commit( lines with [HH:MM:SS.us] timestamps in the last 30 s of each log
+#   b1a 1808 (60.3/s)  b1b 1806 (60.2/s)  a1a 1811 (60.4/s)  a1b 1809 (60.3/s)
+# The dbg=0 runs (b0a, b0b, a0a, a0b) have no commit count: no debug log was kept.
+# b = baseline 47ae6297, a = current. The logs (2.4 MB each) are not committed.
 pid=1408366
 b0a bin=before dbg=0 elapsed=30.006182607 cpu%=159.7 commits/s=0 threads=56
 pid=1438888

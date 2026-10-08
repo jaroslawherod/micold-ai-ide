@@ -301,17 +301,23 @@ Shell state does not persist: put the variables in one `env.sh` in the scratchpa
 at the top of every call, instead of repeating them.
 
 ```bash
-# env.sh
+# env.sh: fails closed. Never leaves the user's SWAYSOCK in place; PV stays `false` until the check passes.
+unset SWAYSOCK PV
+PV=false
 vp_n=77; vp_run=/tmp/vpw$vp_n                 # the number step 3 claimed
 VP=$PWD/.visual-pass                          # bins, before-src, logs
 sock=$vp_run/wayland-1
 # only once sway is up (an empty SWAYSOCK lets swaymsg fall back to another socket):
-SWAYSOCK=$(ls $vp_run/sway-ipc.*.sock 2>/dev/null)
-[ -S "$SWAYSOCK" ] || { echo "no private sway socket" >&2; return 1 2>/dev/null || exit 1; }
-PV="env -u DISPLAY SWAYSOCK=$SWAYSOCK WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run"
+socks=$(ls $vp_run/sway-ipc.*.sock 2>/dev/null)
+if [ "$(printf %s "$socks" | grep -c .)" = 1 ] && [ -S "$socks" ]; then
+  SWAYSOCK=$socks
+  PV="env -u DISPLAY SWAYSOCK=$SWAYSOCK WAYLAND_DISPLAY=$sock XDG_RUNTIME_DIR=$vp_run"
+else
+  echo "need exactly one private sway socket in $vp_run (stale ones?); PV=false" >&2
+fi
 ```
 
-Before sway exists, source only the first lines (split the file in two).
+Sourced before sway is up, `$PV swaymsg ...` runs `false` and does nothing. Source it again once sway is up.
 
 **3. Private sway.** Claim `/tmp/vpwN` as in step 3 (`mkdir` is the lock). Config:
 `output HEADLESS-1 resolution 1600x1200`. Start with `WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1
@@ -319,9 +325,8 @@ WLR_RENDERER=pixman XDG_RUNTIME_DIR=/tmp/vpwN setsid nohup sway -c <config>`, be
 `env -u SWAYSOCK -u DISPLAY -u WAYLAND_DISPLAY` so it cannot nest in the user's session. "Could not find config
 for output HEADLESS-1" is harmless. Sway's pid is the number in the socket name
 `sway-ipc.UID.PID.sock`; `$!` is setsid's, not sway's. Record that pid. Same for `vptr.py`: `$!` after
-`setsid nohup` is the wrapper's pid, and `pgrep -f vptr.py` matches your own shell, so find it with
-`pgrep -xf 'python3 .*vptr.py .*'` from a call that does not contain that text, or `pgrep -n -f` right
-after launch, and write the pid to a file.
+`setsid nohup` is the wrapper's pid, and `pgrep -f vptr.py` matches your own shell. Have the launcher
+write its own pid: `setsid nohup sh -c 'echo $$ >"$vp_run/vptr.pid"; exec python3 .claude/skills/visual-pass/vptr.py ...'`.
 
 **Pointer.** Headless sway has no input devices, so `swaymsg seat - cursor ...` does nothing, and
 `wlrctl` cannot hover: its virtual pointer lives only while the command runs, so the app sees
@@ -370,9 +375,10 @@ cd "$VP/before-src" && "$top/scripts/build-lock.sh" bash -c \
 
 Do the same for the current tree (`<bin>-after`).
 
-**Counting idle work.** Launch the app with `WAYLAND_DEBUG=client` (stderr to a file). Count lines
-matching `wl_surface#N.commit(` (the client log says `#N`, not `@N`) by their `[HH:MM:SS.us]`
-timestamps over the sample, e.g. 30 s after a 10 s settle. CPU: sum fields 14 and 15 (utime, stime,
+**Counting idle work.** Launch the app with `WAYLAND_DEBUG=client`, stderr to `$VP/logs/<run>.log`
+(gitignored, inside the worktree; never under `specs/`; about 2.4 MB per minute at 60 commits/s). Count lines
+matching `wl_surface#N.commit(` (the client log says `#N`, not `@N`) by their timestamps, which in this
+setup read `[06:47:35.658108]` (wall-clock `HH:MM:SS.us`), over the sample, e.g. 30 s after a 10 s settle. CPU: sum fields 14 and 15 (utime, stime,
 clock ticks) of `/proc/<pid>/stat` at the start and end, divided by `getconf CLK_TCK` and the elapsed
 seconds, times 100.
 
