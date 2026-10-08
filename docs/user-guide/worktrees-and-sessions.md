@@ -1544,6 +1544,10 @@ the scrollback limit is dropped, oldest lines first.
   folder: `~/.local/share/micold-ai-ide` on Linux, `~/Library/Application Support/micold-ai-ide`
   on macOS, and `%LOCALAPPDATA%\micold-ai-ide\data` on Windows (the local profile, never the
   roaming one, so Windows does not copy it to other computers). Only you can read them.
+- **Settings → Terminal → Save terminal history** turns the saving off (see
+  [Settings](./settings.md#terminal)). With it off, a stop and start still shows the earlier
+  output above the line; a restart of the background service or of the computer does not, and the
+  files already saved are deleted.
 - **Regular Terminal** instances are not covered: a stopped and started shell starts with an empty
   terminal.
 - An AI CLI that draws full-screen (Claude Code and Copilot CLI do by default) repaints its whole
