@@ -30,7 +30,11 @@ pub fn watch(app: &App, entry: &SessionLocation) -> Option<Subscription<Message>
     let root = crate::shell::changes::entry_dir(app, entry)?;
     let git = app.caps.shared_git()?;
     Some(Subscription::run_with(Key { root, git }, |key| {
-        run(key.root.clone(), key.git.clone())
+        run(
+            key.root.clone(),
+            key.git.clone(),
+            Message::Changes(Msg::Changed),
+        )
     }))
 }
 
@@ -60,7 +64,11 @@ fn targets(root: &Path, git_dirs: &[PathBuf]) -> Vec<(PathBuf, RecursiveMode)> {
 }
 
 /// Watch `root` until the subscription is dropped (the view closed or moved to another entry).
-fn run(root: PathBuf, git: Arc<dyn Git + Send + Sync>) -> impl Stream<Item = Message> {
+pub(crate) fn run(
+    root: PathBuf,
+    git: Arc<dyn Git + Send + Sync>,
+    wake: Message,
+) -> impl Stream<Item = Message> {
     iced::stream::channel(1, |mut output: mpsc::Sender<Message>| async move {
         // Canonical paths, as the watcher reports them (`/private/var` on macOS).
         let resolve = {
@@ -130,7 +138,7 @@ fn run(root: PathBuf, git: Arc<dyn Git + Send + Sync>) -> impl Stream<Item = Mes
             };
             // A failed check counts the change, as in `counts`.
             let counts = tokio::task::spawn_blocking(check).await.unwrap_or(true);
-            if counts && output.send(Message::Changes(Msg::Changed)).await.is_err() {
+            if counts && output.send(wake.clone()).await.is_err() {
                 return;
             }
         }
@@ -139,7 +147,7 @@ fn run(root: PathBuf, git: Arc<dyn Git + Send + Sync>) -> impl Stream<Item = Mes
 
 /// Whether `batch` holds a change the view shows: a git state file, or a worktree file git does
 /// not ignore. A failed ignore check counts the change (a needless read beats a missed one).
-fn counts(
+pub(crate) fn counts(
     git: &(dyn Git + Send + Sync),
     root: &Path,
     git_dirs: &[PathBuf],

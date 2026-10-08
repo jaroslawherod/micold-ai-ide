@@ -66,6 +66,32 @@ Delete a run's worktree from its own row, as for any worktree. The run leaves th
 group keeps the rest. A group with no runs left disappears. A group that lost run #2 shows `#1` and
 `#3`; numbers are never reused.
 
+## Comparing the runs
+
+Right-click a group row and choose **Compare**. The view takes the terminal pane's place and shows
+the group's name, its base branch, the prompt (cut short; hover it for the whole text) and one row
+per run, in order:
+
+- the run's number and AI CLI;
+- its **status**: Creating, Starting, Working or Waiting for input (as the run's session shows in
+  the sidebar), Prompt not delivered, Failed or Picked;
+- its changes, as `<files> files +<added> −<removed>`;
+- an `uncommitted` tag when the run's worktree holds changes that are not committed yet;
+- **Open diff**, which opens that run's Changes view. Close the Changes view and Compare is still
+  there. A run without a worktree has no **Open diff**.
+
+A failed run shows its reason in place of the counts.
+
+**Which base the counts use.** They compare the run with the group's base branch, committed and
+uncommitted changes together. When that branch is the repository's default branch, they equal the
+totals the run's Changes view shows with both toggles on. For any other base branch they count
+against that branch, so they can differ from the Changes view, which compares with the default
+branch.
+
+**Live refresh.** While Compare is open, a change in a run's worktree updates that run's counts
+within about 2 seconds, and its status follows its session. Closing Compare (or selecting a
+session) stops the watching.
+
 ## Dismiss group
 
 Right-click a group row and choose **Dismiss group**. The app asks first. Dismissing forgets only the
@@ -74,5 +100,5 @@ grouping: the worktrees, branches and sessions of its runs stay, and appear as o
 
 ## Coming later
 
-Comparing the runs, **Pick this one**, and the offer to clean up the other runs come in later
+**Pick this one** and the offer to clean up the other runs come in later
 releases of this feature.

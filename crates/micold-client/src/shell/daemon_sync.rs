@@ -1449,6 +1449,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.core.update(Message::Runs(
                 micold_client::features::runs::Msg::GroupsChanged(groups),
             ));
+            follow_up = Task::batch([follow_up, crate::shell::runs::run_pending(app)]);
         }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}

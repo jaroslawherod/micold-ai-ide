@@ -145,13 +145,13 @@ Open diff opens that view.
 ### Implementation for User Story 3
 
 - [x] T043 [US3] Implement `totals` and `has_uncommitted` in `crates/micold-core/src/runs/summary.rs` over feature 482's `review::changes::ChangedFile` until T040 and T041 pass
-- [ ] T044 [US3] Implement Compare state in `crates/micold-client/src/features/runs.rs` (`CompareView`: open group id, per-run `Load<RunSummary>`, read sequence numbers dropping stale answers as `features/changes.rs` does) and the **Compare** item of the group menu in `crates/micold-client/src/features/sidebar.rs` until T042 passes
-- [ ] T045 [US3] Implement `crates/micold-client/src/shell/runs.rs` (new, glue): `Effect::ReadSummary` in `spawn_blocking` through `review::git` + `runs::summary`, declared in `crates/micold-client/src/shell/mod.rs`
-- [ ] T046 [US3] Implement `crates/micold-client/src/shell/runs_watch.rs` (new, glue): one `Subscription` per run root while Compare is open, reusing `review::watch::{relevant_paths, Debouncer}` and `notify::RecommendedWatcher`, emitting `Msg::RunChanged { run }`; register it in `crates/micold-client/src/shell/subscriptions.rs` only while Compare is open (R11, FR-010)
-- [ ] T047 [US3] Compose Compare in `crates/micold-client/src/ui/compare.rs` (new) per parallel-surfaces C1–C5 from existing components, shown by `crates/micold-client/src/ui/mod.rs` in the place of the Changes view while open
-- [ ] T048 [P] [US3] Add a showcase pose of Compare (a working, a waiting, a failed and an uncommitted run) in `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
-- [ ] T049 [P] [US3] Add to `docs/user-guide/parallel-runs.md` the Compare view: its columns and statuses, which base it compares with (the group's base branch, committed and uncommitted together; equal to the Changes view's totals when that is the default branch, R7), live refresh, and Open diff (FR-022 part)
-- [ ] T050 [US3] Run the visual pass for quickstart B8–B11 and record the results under quickstart.md § Results § B
+- [x] T044 [US3] Implement Compare state in `crates/micold-client/src/features/runs.rs` (`CompareView`: open group id, per-run `Load<RunSummary>`, read sequence numbers dropping stale answers as `features/changes.rs` does) and the **Compare** item of the group menu in `crates/micold-client/src/features/sidebar.rs` until T042 passes
+- [x] T045 [US3] Implement `crates/micold-client/src/shell/runs.rs` (new, glue): `Effect::ReadSummary` in `spawn_blocking` through `review::git` + `runs::summary`, declared in `crates/micold-client/src/shell/mod.rs`
+- [x] T046 [US3] Implement `crates/micold-client/src/shell/runs_watch.rs` (new, glue): one `Subscription` per run root while Compare is open, reusing `review::watch::{relevant_paths, Debouncer}` and `notify::RecommendedWatcher`, emitting `Msg::RunChanged { run }`; register it in `crates/micold-client/src/shell/subscriptions.rs` only while Compare is open (R11, FR-010)
+- [x] T047 [US3] Compose Compare in `crates/micold-client/src/ui/compare.rs` (new) per parallel-surfaces C1–C5 from existing components, shown by `crates/micold-client/src/ui/mod.rs` in the place of the Changes view while open
+- [x] T048 [P] [US3] Add a showcase pose of Compare (a working, a waiting, a failed and an uncommitted run) in `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
+- [x] T049 [P] [US3] Add to `docs/user-guide/parallel-runs.md` the Compare view: its columns and statuses, which base it compares with (the group's base branch, committed and uncommitted together; equal to the Changes view's totals when that is the default branch, R7), live refresh, and Open diff (FR-022 part)
+- [x] T050 [US3] Run the visual pass for quickstart B8–B11 and record the results under quickstart.md § Results § B
 
 **Checkpoint**: the user can compare the runs and read each diff.
 

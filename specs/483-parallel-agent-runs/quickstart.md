@@ -86,6 +86,15 @@ and run order, interrupted runs read Failed "interrupted", half-created folders 
 `run_group_create` (delete follows, Dismiss group leaves worktrees and sessions, an emptied group
 disappears) and `features_runs` (menu and confirmation).
 
+**M3 (2026-10-08, Xvfb, showcase, light and dark):** the Compare rows pose (`#1` Working `4 files
++120 −30`, `#2` Waiting for input `2 files +15 −3` with the `uncommitted` tag, `#3` Starting with
+"Reading changes…", `#4` Failed with its reason in red, no **Open diff**) is readable in both
+schemes (`visual-pass/m3-compare-rows-light.png`, `-dark.png`). B8–B11 on the live client were not
+driven (no fixture daemon in this container); their rules are covered by `runs_summary` (counts
+equal the Changes totals for the default base, exclude the base's own commits otherwise) and
+`features_runs` (rows, stale-answer drop, per-run refresh, Open diff, failed run), and the live
+refresh by the shared `changes_watch` debounce. They stay for a pass with a display.
+
 ### §C — macOS and Windows
 
 (filled when run, or recorded as not run with what CI covers instead)

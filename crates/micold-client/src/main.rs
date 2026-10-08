@@ -761,6 +761,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::Selected(id)) => {
             // Feature 482, V2: the terminal takes the main area back. Closing reads nothing.
             let _ = app.core.update_changes(ChangesMsg::SessionSelected);
+            // Feature 483: and so does Compare (C1).
+            app.core.update(Message::Runs(
+                micold_client::features::runs::Msg::CompareClosed,
+            ));
             shell::daemon_sync::on_session_selected(app, id)
         }
         Message::Session(SessionMsg::CloseRequested(id)) => {
