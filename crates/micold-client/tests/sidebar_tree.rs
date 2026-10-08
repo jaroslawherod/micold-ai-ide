@@ -538,7 +538,7 @@ fn hidden_worktrees_are_not_reachable_as_action_targets() {
         .iter()
         .filter_map(|e| match e {
             SidebarEntry::Worktree(n) => Some(n.worktree.dir_name.clone()),
-            SidebarEntry::Default(_) => None,
+            SidebarEntry::Default(_) | SidebarEntry::Group(_) => None,
         })
         .collect();
     assert!(
@@ -836,7 +836,7 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
         .into_iter()
         .any(|entry| match entry {
             SidebarEntry::Default(node) => node.expanded,
-            SidebarEntry::Worktree(_) => false,
+            SidebarEntry::Worktree(_) | SidebarEntry::Group(_) => false,
         });
     assert!(
         default_open,

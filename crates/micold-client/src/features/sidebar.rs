@@ -51,7 +51,8 @@ use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::overlay::Layer;
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
-use micold_core::session::{Session, SessionId, SessionLocation};
+use micold_core::runs::{GroupId, RunGroup, RunStatus};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::{BTreeMap, BTreeSet};
@@ -130,6 +131,149 @@ pub enum SidebarEntry {
     Worktree(WorktreeNode),
     /// The single project-root row (constitution v1.3.0, Principle III exception).
     Default(DefaultNode),
+    /// A run group's row with its runs one level in (feature 483, G1–G3).
+    Group(GroupNode),
+}
+
+/// A run group's row (feature 483, parallel-surfaces G1, G2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupNode {
+    /// The group.
+    pub id: GroupId,
+    /// The group's name, shown on its row.
+    pub name: String,
+    /// Whether its runs are shown (G2).
+    pub expanded: bool,
+    /// How many runs it has, shown whether or not it is expanded.
+    pub run_count: usize,
+    /// How many of them failed, shown whether or not it is expanded.
+    pub failed_count: usize,
+    /// The runs, in run order.
+    pub runs: Vec<RunNode>,
+}
+
+/// One run under its group row (G1, G1a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunNode {
+    /// The run's number.
+    pub number: u8,
+    /// The run's provider.
+    pub provider: AiCli,
+    /// Where the run got to.
+    pub status: RunStatus,
+    /// Its worktree row, or a leaf when it has none.
+    pub row: RunRow,
+}
+
+/// What a run row is made of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunRow {
+    /// The run's worktree, with the usual tags and session children.
+    Worktree(WorktreeNode),
+    /// The run has no worktree row: it failed while creating it, or is still creating it, or the
+    /// sidebar's filters hide it. A leaf with no worktree menu (G1a).
+    NoWorktree,
+}
+
+impl RunNode {
+    /// Whether the run failed (the `failed` tag).
+    pub fn failed(&self) -> bool {
+        self.status.is_failed()
+    }
+
+    /// Why the run failed or its prompt was not delivered: the row's tooltip.
+    pub fn reason(&self) -> Option<&str> {
+        match &self.status {
+            RunStatus::Failed { reason, .. } | RunStatus::PromptNotDelivered { reason } => {
+                Some(reason)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The sidebar header's actions, in order (parallel-surfaces D: **Run in parallel** beside
+/// **New worktree**).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderAction {
+    /// Opens the add-worktree form.
+    NewWorktree,
+    /// Opens the Run in parallel dialog.
+    RunInParallel,
+}
+
+/// The header's actions, left to right.
+pub const HEADER_ACTIONS: [HeaderAction; 2] =
+    [HeaderAction::NewWorktree, HeaderAction::RunInParallel];
+
+/// **Run in parallel** was chosen: the root opens the dialog for the active project.
+pub fn run_in_parallel() -> Vec<crate::features::Outcome> {
+    vec![crate::features::Outcome::RunInParallelRequested]
+}
+
+/// Put the runs of `groups` under their group rows (feature 483, G1–G3).
+///
+/// `entries` is the Default row and the worktree rows. A worktree that is a run's leaves the
+/// worktree level and becomes that run's child; the group row sits where its first such worktree
+/// sat, or after every row when none is listed. A run with no row of its own is still a child, as
+/// a leaf (G1a). Unrelated rows keep their order.
+pub fn arrange_groups(
+    entries: Vec<SidebarEntry>,
+    groups: &[RunGroup],
+    expanded: impl Fn(GroupId) -> bool,
+) -> Vec<SidebarEntry> {
+    let mut entries: Vec<Option<SidebarEntry>> = entries.into_iter().map(Some).collect();
+    let mut placed: Vec<(usize, SidebarEntry)> = Vec::new();
+    for group in groups {
+        let mut first = None;
+        let runs = group
+            .runs
+            .iter()
+            .map(|run| {
+                let at = entries.iter().position(|e| {
+                    matches!(e, Some(SidebarEntry::Worktree(n)) if n.worktree.dir_name == run.names.dir_name)
+                });
+                let row = match at.and_then(|i| entries[i].take().map(|e| (i, e))) {
+                    Some((i, SidebarEntry::Worktree(node))) => {
+                        first = Some(first.map_or(i, |f: usize| f.min(i)));
+                        RunRow::Worktree(node)
+                    }
+                    _ => RunRow::NoWorktree,
+                };
+                RunNode {
+                    number: run.number,
+                    provider: run.provider,
+                    status: run.status.clone(),
+                    row,
+                }
+            })
+            .collect();
+        placed.push((
+            first.unwrap_or(usize::MAX),
+            SidebarEntry::Group(GroupNode {
+                id: group.id,
+                name: group.name.clone(),
+                expanded: expanded(group.id),
+                run_count: group.runs.len(),
+                failed_count: group.failed_count(),
+                runs,
+            }),
+        ));
+    }
+    let mut out = Vec::new();
+    for (index, entry) in entries.into_iter().enumerate() {
+        for (_, group) in placed.iter().filter(|(at, _)| *at == index) {
+            out.push(group.clone());
+        }
+        out.extend(entry);
+    }
+    out.extend(
+        placed
+            .into_iter()
+            .filter(|(at, _)| *at == usize::MAX)
+            .map(|(_, group)| group),
+    );
+    out
 }
 
 /// The "Default" (project-root) sidebar row, joined with its sessions (feature 010, FR-001,
@@ -180,6 +324,18 @@ impl SidebarEntry {
         let sessions = match self {
             SidebarEntry::Worktree(node) => &node.sessions,
             SidebarEntry::Default(node) => &node.sessions,
+            SidebarEntry::Group(group) => {
+                return group
+                    .runs
+                    .iter()
+                    .filter_map(|run| match &run.row {
+                        RunRow::Worktree(node) => Some(&node.sessions),
+                        RunRow::NoWorktree => None,
+                    })
+                    .flatten()
+                    .filter(|session| micold_core::attention::counts_as_unread(session, in_view))
+                    .count();
+            }
         };
         sessions
             .iter()
@@ -338,6 +494,27 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
                     heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
                 }
             }
+            SidebarEntry::Group(group) => {
+                heights.push(one_line);
+                if group.expanded {
+                    for run in &group.runs {
+                        match &run.row {
+                            RunRow::Worktree(node) => {
+                                heights.push(if node.tags.is_empty() {
+                                    one_line
+                                } else {
+                                    two_line
+                                });
+                                if node.expanded {
+                                    heights
+                                        .extend(std::iter::repeat_n(one_line, node.sessions.len()));
+                                }
+                            }
+                            RunRow::NoWorktree => heights.push(one_line),
+                        }
+                    }
+                }
+            }
         }
     }
     heights
@@ -354,6 +531,25 @@ pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>)
         let (expanded, sessions) = match entry {
             SidebarEntry::Default(node) => (node.expanded, &node.sessions),
             SidebarEntry::Worktree(node) => (node.expanded, &node.sessions),
+            SidebarEntry::Group(group) => {
+                row += 1;
+                if group.expanded {
+                    for run in &group.runs {
+                        row += 1;
+                        if let RunRow::Worktree(node) = &run.row {
+                            if node.expanded {
+                                for session in &node.sessions {
+                                    if session.id == current {
+                                        return Some(row);
+                                    }
+                                    row += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
         };
         row += 1;
         if expanded {
@@ -891,7 +1087,7 @@ impl crate::app::State {
                 .into_iter()
                 .map(SidebarEntry::Worktree),
         );
-        entries
+        arrange_groups(entries, &self.runs.groups, |id| self.runs.is_expanded(id))
     }
 
     /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
@@ -1074,6 +1270,8 @@ pub enum Msg {
     DragMoved(u16),
     /// **Review changes** on a worktree row's or the Default row's menu (feature 482, V1).
     ReviewChangesRequested(SessionLocation),
+    /// **Run in parallel** on the sidebar header (feature 483, D).
+    RunInParallelRequested,
 }
 
 /// **Review changes** was chosen for `entry` (feature 482, V1): the root opens the Changes view.
@@ -1101,6 +1299,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::Toggled => toggled(state),
         Msg::DragMoved(x) => drag_moved(state, x),
         Msg::ReviewChangesRequested(entry) => return review_changes(entry),
+        Msg::RunInParallelRequested => return run_in_parallel(),
     }
     Vec::new()
 }

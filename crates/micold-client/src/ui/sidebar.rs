@@ -83,6 +83,21 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         "Add a worktree (new git branch)",
         r,
     );
+    // Feature 483 (D): Run in parallel, directly after New worktree (`HEADER_ACTIONS`).
+    let run_in_parallel = Tooltip::new(
+        IconButton::new(Icon::AiCli, r)
+            .compact()
+            .tint(r.primary)
+            .on_press_maybe(
+                state
+                    .workspace
+                    .active
+                    .is_some()
+                    .then_some(Message::Sidebar(SidebarMsg::RunInParallelRequested)),
+            ),
+        "Run in parallel…",
+        r,
+    );
     // Feature 582: offered only with a project open, where there is something to look in. The
     // label is the tooltip; the glyph is the folder the "open project" action already uses.
     let attach_existing = Tooltip::new(
@@ -113,6 +128,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         refresh,
         attach_existing,
         add_worktree,
+        run_in_parallel,
         hide,
     ]
     .align_y(Alignment::Center)
@@ -183,7 +199,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         None
     };
 
-    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r), r)
+    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, 0, None, r), r)
         // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
         // the worktree count visible without scrolling does not drop. A named step on the shared
         // density scale, not a bespoke shrink (FR-026c).
@@ -612,6 +628,8 @@ fn row_actions_cluster(
 fn build_items(
     state: &State,
     entries: Vec<crate::features::sidebar::SidebarEntry>,
+    depth: u16,
+    run: Option<(u8, micold_core::session::AiCli)>,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
@@ -641,6 +659,10 @@ fn build_items(
                 continue;
             }
             crate::features::sidebar::SidebarEntry::Worktree(node) => node,
+            crate::features::sidebar::SidebarEntry::Group(group) => {
+                items.extend(group_items(state, group, r));
+                continue;
+            }
         };
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
@@ -677,7 +699,7 @@ fn build_items(
         }
         let dir = wt.dir_name.clone();
 
-        let mut item = TreeItem::new(0, node.display_name.clone(), tint)
+        let mut item = TreeItem::new(depth, node.display_name.clone(), tint)
             .tags(tags)
             .on_right_press({
                 let dir = dir.clone();
@@ -746,15 +768,90 @@ fn build_items(
             }
             None => cluster,
         });
+        // A run's row says which run and provider it is (G1).
+        if let Some((number, provider)) = run {
+            item = item.annotation(
+                format!("#{number} {}", provider.provider().command()),
+                r.on_surface_variant,
+            );
+        }
         items.push(item);
 
         if node.expanded {
             for session in &node.sessions {
-                items.push(session_tree_item(session, state.session.active, in_view, r));
+                items.push(session_tree_item(
+                    depth + 1,
+                    session,
+                    state.session.active,
+                    in_view,
+                    r,
+                ));
             }
         }
     }
 
+    items
+}
+
+/// A run group's row and, when it is expanded, its runs (feature 483, G1, G1a, G2, G3).
+fn group_items(
+    state: &State,
+    group: crate::features::sidebar::GroupNode,
+    r: Roles,
+) -> Vec<TreeItem<'static, Message>> {
+    use crate::features::sidebar::{RunRow, SidebarEntry};
+    let mut tags = vec![(
+        match group.run_count {
+            1 => "1 run".to_string(),
+            n => format!("{n} runs"),
+        },
+        r.secondary,
+    )];
+    if group.failed_count > 0 {
+        tags.push((format!("{} failed", group.failed_count), r.error));
+    }
+    let mut items = vec![TreeItem::new(0, group.name.clone(), r.on_surface)
+        .tags(tags)
+        .row_tooltip(group.name.clone())
+        .expandable(
+            group.expanded,
+            Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
+        )];
+    if !group.expanded {
+        return items;
+    }
+    for run in group.runs {
+        let (number, provider) = (run.number, run.provider);
+        match run.row {
+            RunRow::Worktree(node) => items.extend(build_items(
+                state,
+                vec![SidebarEntry::Worktree(node)],
+                1,
+                Some((number, provider)),
+                r,
+            )),
+            RunRow::NoWorktree => {
+                let failed = run.status.is_failed();
+                let mut item = TreeItem::new(
+                    1,
+                    format!("#{number}"),
+                    if failed {
+                        r.error
+                    } else {
+                        r.on_surface_variant
+                    },
+                )
+                .annotation(provider.provider().command(), r.on_surface_variant);
+                if failed {
+                    item = item.tags(vec![("failed".to_string(), r.error)]);
+                }
+                if let Some(reason) = run.reason() {
+                    item = item.row_tooltip(reason.to_string());
+                }
+                items.push(item);
+            }
+        }
+    }
     items
 }
 
@@ -787,6 +884,7 @@ fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
 /// One session sub-item, depth 1 — shared by worktree rows and the "Default" row (feature 010)
 /// so the two locations render their sessions identically (FR-005 lifecycle parity).
 fn session_tree_item(
+    depth: u16,
     session: &micold_core::session::Session,
     active_session: Option<micold_core::session::SessionId>,
     in_view: Option<micold_core::session::SessionId>,
@@ -807,7 +905,7 @@ fn session_tree_item(
     // varied with session state, so it read as "done / OK" on a failed or interrupted session while
     // competing with the dot that does vary (BUG-005). Lifecycle still reaches the user: `tint`
     // above colours the label itself, not just a glyph.
-    TreeItem::new(1, session.label.display().to_string(), tint)
+    TreeItem::new(depth, session.label.display().to_string(), tint)
         // The derived activity dot beside the name (feature 010 US2, FR-016d): Working/AwaitingInput
         // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2) in a slot that stays
         // the same width either way, so names stay aligned as signals change (FR-016f).
@@ -897,7 +995,13 @@ fn build_default_item(
     if node.expanded {
         let in_view = crate::features::attention::in_view(&state.attention);
         for session in &node.sessions {
-            items.push(session_tree_item(session, state.session.active, in_view, r));
+            items.push(session_tree_item(
+                1,
+                session,
+                state.session.active,
+                in_view,
+                r,
+            ));
         }
     }
 
@@ -946,7 +1050,7 @@ mod tests {
             SessionLifecycle::InterruptedResumable,
         ] {
             let s = session(ActivitySignal::Unknown, lifecycle.clone());
-            let item: TreeItem<'_, Message> = session_tree_item(&s, None, None, r);
+            let item: TreeItem<'_, Message> = session_tree_item(1, &s, None, None, r);
             assert!(
                 item.icon.is_none(),
                 "session row for {lifecycle:?} still carries a leading icon"
@@ -963,7 +1067,8 @@ mod tests {
     #[test]
     fn lifecycle_still_reaches_the_row_through_the_tint() {
         let r = tokens::roles(ColorScheme::Dark);
-        let tint = |l| session_tree_item(&session(ActivitySignal::Unknown, l), None, None, r).tint;
+        let tint =
+            |l| session_tree_item(1, &session(ActivitySignal::Unknown, l), None, None, r).tint;
 
         assert_eq!(tint(failed()), r.error);
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);

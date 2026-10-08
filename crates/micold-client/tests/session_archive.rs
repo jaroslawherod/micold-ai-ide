@@ -61,7 +61,7 @@ fn archived_sessions_are_hidden_from_the_sidebar() {
         .into_iter()
         .find_map(|entry| match entry {
             SidebarEntry::Default(node) => Some(node),
-            SidebarEntry::Worktree(_) => None,
+            SidebarEntry::Worktree(_) | SidebarEntry::Group(_) => None,
         })
         .expect("a Default entry is always present when a project is active");
 

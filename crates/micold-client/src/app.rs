@@ -157,6 +157,12 @@ pub enum Message {
     /// [`State::update_changes`]. `State::update` declines it.
     Changes(crate::features::changes::Msg),
 
+    // ---- Feature 483: Run in parallel ----
+    /// The Run in parallel dialog's and the group list's messages; see
+    /// [`crate::features::runs::Msg`]. The request a message makes is left in `runs.pending` for
+    /// the shell (`shell::runs::run_pending`).
+    Runs(crate::features::runs::Msg),
+
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
     /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
@@ -253,6 +259,8 @@ pub struct State {
     pub pr_status: crate::features::pr_status::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
+    /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
+    pub runs: crate::features::runs::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -763,6 +771,12 @@ impl State {
                 let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::Runs(msg) => {
+                let effect = crate::features::runs::update(&mut self.runs, msg);
+                if effect != crate::features::runs::Effect::None {
+                    self.runs.pending = Some(effect);
+                }
+            }
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
@@ -973,6 +987,26 @@ pub fn interpret(
                 },
             );
             state.changes.pending = Some(effect);
+        }
+        Outcome::RunInParallelRequested => {
+            let project = state.workspace.active.clone().unwrap_or_default();
+            let opening = crate::features::runs::Opening {
+                offered: state.session.offered_providers(Some(project.as_path())),
+                default_cli: state.session.default_ai_cli,
+                base_branch: None,
+                project,
+            };
+            state.clear_for_dialog();
+            let effect = crate::features::runs::update(
+                &mut state.runs,
+                crate::features::runs::Msg::Opened(opening),
+            );
+            state.runs.pending = Some(effect);
+            return vec![Outcome::SurfaceOpened(
+                <crate::features::runs::ParallelRunDialog as crate::overlay::FloatingSurface>::id(
+                    &crate::features::runs::ParallelRunDialog,
+                ),
+            )];
         }
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)
