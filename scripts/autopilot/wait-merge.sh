@@ -12,7 +12,9 @@
 #                                       reason: conflicting | action_required <run-ids> | no-run
 #   MERGE-FAILED <pr> <message>      4  green, but `gh pr merge` refused
 #   CLOSED <pr>                      5  the PR was closed while waiting
-#   TIMEOUT <pr> <what>              6  no result within AUTOPILOT_MAX_WAIT seconds (gh failing, CI stuck)
+#   TIMEOUT <pr> <what>              6  no result within AUTOPILOT_MAX_WAIT seconds (default 6 h; gh failing, CI stuck).
+#                                       Each wake after a timeout re-writes the orchestrator's cache (about 170k cost_eq at 100k of
+#                                       context): a 2 h cap woke it four times in one run while CI sat queued for 2 h 44 min.
 #
 # Never approves runs, closes, reopens or pushes: those stay with the caller.
 set -uo pipefail
@@ -21,7 +23,7 @@ pr="${1:?usage: wait-merge.sh <pr> [--no-merge]}"
 merge=1; [ "${2:-}" = --no-merge ] && merge=0
 poll="${AUTOPILOT_POLL:-20}"
 checkless_after="${AUTOPILOT_CHECKLESS_AFTER:-300}"
-max_wait="${AUTOPILOT_MAX_WAIT:-7200}"
+max_wait="${AUTOPILOT_MAX_WAIT:-21600}"
 logdir="${AUTOPILOT_LOG_DIR:-${TMPDIR:-/tmp}}"
 waited=0
 
