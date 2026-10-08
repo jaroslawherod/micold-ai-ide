@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
 - **Phase**: milestone M1
-- **Next step**: implement M1 (T001–T027)
+- **Next step**: implement M1 (T001–T027): continue from Handover (core green T003/T005/T007)
 
 ## Pull requests
 
@@ -72,34 +72,40 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 handed over at 155k context (milestone unit; no PR open yet). Branch reset to
-origin/main (adfee3b1) by hand: `gh` is unauthenticated in this container, so `branch-start.sh`
-cannot check #643; the orchestrator confirmed it merged. The next unit continues on this branch
-as it is (skip `branch-start.sh`).
-
-Done, uncommitted-then-committed as WIP (commit "wip(483): M1 core stubs and failing tests"):
-- T001 module tree: `crates/micold-core/src/runs/{mod,naming,store,summary,integrate}.rs`,
-  `pub mod runs;` in lib.rs. NOT yet: empty `crates/micold-daemon/src/runs.rs` + its `mod`.
-- T002/T004/T006 tests written beside **stubs** (`can_become` false, `RunGroup::new` Err,
-  `validate` Ok, `derive_group` empty, `RunsFile::to_json/from_json` empty/Err,
-  `JsonFileStore::{runs_path, load_runs, save_runs, remove_runs}` stubbed in store.rs, ProjectStore
-  defaults + JsonFileStore delegation done; FakeProjectStore has no runs map yet).
-  `WorktreeNaming`/`DerivedNames` gained serde (`type_` renamed `"type"`).
-- T008 test `the_run_group_messages_round_trip_on_both_wires` appended to protocol_roundtrip.rs;
-  T009 wire delta done (messages.rs variants, version 36 + doc line, schema_hash pin 36 + anchor
-  test `the_run_group_messages_are_in_the_hashed_source`, server.rs placeholder arm refusing all
-  three). Client has a `_ => {}` arm for DaemonMsg; other exhaustive matches unchecked.
-
-Next step: run `cargo test -p micold-core --lib runs` and the two wire tests against the stubs,
-record each red in a new `specs/483-parallel-agent-runs/tdd/cycle-log.md` (482's log format: no
-test-list was derived; tasks.md's test-first pairs are the list), then implement T003/T005/T007
-until green, then T010–T027. Daemon findings so far: `ops::create_worktree(state, project, names,
-CreateMode::New?, None)` (ops.rs:119) returns `CreateFailure::{NotARepository, Create(CreateError),
-Task}`; `ops::create_session_with_prompt(state, NewSession{project, worktree_dir, cwd, cli},
-Some(FirstPrompt{text, asked, require_bracketed: true}))` (ops.rs:660); check
-`ops::cli_unavailable(state, cwd, cli)` first for `Failed{Session}` (as state.rs:2025 and
-mcp/tools.rs:1312 do). A warm `cargo test --workspace --no-run` was started detached (log in the
-scratchpad); target-shared is the shared target dir.
+M1 unit 2 handed over at ~150k context (milestone unit; no PR open). Stay on branch
+`claude/project-thread-wysm57` as it is (skip `branch-start.sh`; `gh` unauthenticated). Cloud: no
+`mise`; run cargo through `scripts/build-lock.sh` with `CARGO_INCREMENTAL=0`, detached (helper
+`$SCRATCHPAD/bg.sh <name> <cmd…>` writes `<name>.log` ending `JOB_EXIT=`; hold with `hold.sh`).
+Done since unit 1 (committed as "wip(483): M1 reds recorded, daemon run-group tests"):
+- Core reds run and recorded in `specs/483-parallel-agent-runs/tdd/cycle-log.md` (T002, T004,
+  T006, T008 rows; Green column empty).
+- T010 test written: `crates/micold-daemon/tests/run_group_create.rs` + shared harness
+  `crates/micold-daemon/tests/support/runs.rs` (JsonFileStore catalog, stand-in `claude`, no
+  `copilot`, repo on `main` with branch `base` one commit ahead; creates use base `base`). Not yet
+  compiled. T011 (`run_group_persist.rs`) NOT written: plan it on the same harness; for W5's
+  failing write put a regular file at `<store>/runs` (root ignores read-only dirs; six permission
+  tests already fail as root).
+Next step: implement T003 (`can_become`, `RunGroup::new`, `validate` in core runs/mod.rs), T005
+(`derive_group`: `naming::derive` first for the error, then append `-<n>` to `dir_name` and
+`branch`), T007 (RunsFile to/from JSON via StoredRuns, version check, validate each group; store.rs
+runs_path = runs_dir/<project_id>.json, load/save/remove as the reviews trio; FakeProjectStore
+needs a runs map); run `cargo test -p micold-core --lib runs` and the protocol/schema tests green;
+fill the Green column. Then T011, T014–T027.
+Findings for the daemon (T014–T016):
+- `CreateMode::NewBranch` runs `git worktree add -b <branch> <path> HEAD`: it starts at the repo's
+  HEAD, not the base branch. Decision proposed: add a daemon-only `CreateMode::NewBranchAt { start }`
+  marked `#[serde(skip)]` (compatible with `BranchSituation::Free` only; rollback owns the branch),
+  a `Git::worktree_add_new_branch_at` with a default impl calling `worktree_add_new_branch` (FakeGit)
+  and a real one in `GitCli` passing `start`; `create_command_line` arm. Record it in Decisions.
+- An existing run branch with NewBranch(At) gives `CreateError::SituationChanged` (no rollback, the
+  branch is untouched) → `Failed { step: Worktree, reason: err.to_string() }`.
+- Model `micold-daemon/src/runs.rs` on `review.rs` (`Reviews` map + `Refusal`), state handle as
+  `inner.reviews` (state.rs:242, 643, 2150–2160), attach push beside
+  `review_pushes_on_attach` (server.rs:733, before the attach's CatalogChanged — the harness's
+  `attach` reads up to it), catalog `load_runs`/`save_runs` beside catalog.rs:417–433 and
+  `remove_runs` beside catalog.rs:1028. Run task: `ops::create_worktree` → `ops::cli_unavailable`
+  (Failed Session) → `ops::create_session_with_prompt(… FirstPrompt { require_bracketed: true })`
+  → map `Typing(_)` like mcp/tools.rs:1340. Answer the create before broadcasting.
 
 ## Open escalation
 
