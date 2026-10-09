@@ -1647,8 +1647,13 @@ fn write_binding(base: &Path, session_id: Uuid, conversation: &ConversationRef) 
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(path)?;
-    file.write_all(conversation.id.as_bytes())
+        .open(&path)?;
+    let written = file.write_all(conversation.id.as_bytes());
+    if written.is_err() {
+        // An empty or partial file would block every later bind.
+        let _ = std::fs::remove_file(&path);
+    }
+    written
 }
 
 /// OpenAI's Codex CLI (`codex`).
@@ -1826,6 +1831,13 @@ impl AiCliProvider for CodexProvider {
         session_id: Uuid,
         conversation: &ConversationRef,
     ) -> io::Result<()> {
+        // A binding whose conversation is gone from Codex's store points at nothing: replace it
+        // rather than leave the session unable to bind again.
+        if bound_conversation(config_dir, session_id).is_some()
+            && Self::bound_rollout(config_dir, session_id).is_none()
+        {
+            let _ = std::fs::remove_file(binding_path(config_dir, session_id));
+        }
         write_binding(config_dir, session_id, conversation)
     }
 
