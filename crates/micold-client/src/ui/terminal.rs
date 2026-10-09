@@ -508,6 +508,20 @@ pub fn pane<'a>(
         None => body,
     };
 
+    // A refusal with a single pane (closing the last one) has no pane area to sit in: say it above
+    // the terminal, as the multi-pane view does.
+    let body: Element<'a, Message> =
+        match area.and_then(|a| a.refusal).filter(|_| several.is_none()) {
+            Some(reason) => column![
+                container(Text::new(reason, TypeRole::Caption, r))
+                    .width(Length::Fill)
+                    .padding(spacing::SM),
+                body
+            ]
+            .into(),
+            None => body,
+        };
+
     // A slim bottom status bar: the current session name (left) and its attached-process status
     // (right), with the tab strip, the "+" and the AI tab filling the rest and finishing flush
     // against the bar's trailing edge (feature 027 FR-001). A live activity indicator

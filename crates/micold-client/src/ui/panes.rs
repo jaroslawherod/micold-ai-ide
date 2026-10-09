@@ -39,6 +39,10 @@ pub struct PaneArea<'a> {
 /// Width of the accent strip that marks the focused pane's header (FR-010).
 pub const FOCUS_STRIP: f32 = 2.0;
 
+/// Height of the accent strip: a `Fill` height here would make the header take half the pane,
+/// because a row with a `Fill` child is itself `Fill`.
+const STRIP_HEIGHT: f32 = 24.0;
+
 /// The smallest pane, in pixels: `MIN_PANE_COLS` x `MIN_PANE_ROWS` characters.
 pub fn min_pane() -> (f32, f32) {
     let m = CellMetrics::new(TERM_FONT_SIZE);
@@ -155,7 +159,7 @@ fn header<'a>(state: &'a State, pane: &Pane, focused: bool, r: Roles) -> Element
     };
     let mark = container(Space::new())
         .width(FOCUS_STRIP)
-        .height(Length::Fill)
+        .height(STRIP_HEIGHT)
         .style(move |_| container::Style {
             background: strip.map(Into::into),
             ..container::Style::default()
