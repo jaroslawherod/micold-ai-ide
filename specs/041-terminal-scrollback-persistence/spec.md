@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Closed 2026-10-09 — shipped in PRs #531, #540, #577, #578, #601, #610, #639, #666, #669, #672, #676, #678
+**Status**: Closed 2026-10-09 — shipped in PRs #531, #540, #577, #578, #601, #610, #639, #666, #669, #672, #676, #678, #681
 
 **Input**: User description: "Implement GitHub issue #485: Keep terminal scrollback across daemon restarts and reboots. Sessions survive the window closing because the daemon owns them, but a daemon restart, an update or a reboot loses all terminal history. The user cannot scroll back to see what an agent did before the restart. Proposal: the daemon periodically writes each session's scrollback (up to the configured scrollback limit) to its data directory, and on the session's exit. After a daemon restart, a restored or restarted session shows the saved history above a clear separator line (\"session restarted at …\"), before any new output. The saved history is deleted when the session is deleted. A setting turns persistence off for users who do not want terminal output written to disk. Acceptance criteria: scrollback written before a daemon restart is visible after it, including colours and styles. Writes are batched so that a busy terminal does not cause constant disk I/O. Files are written with user-only permissions, and work in the sandboxed runtime's mounted data directory. A corrupt or unreadable saved file is skipped and reported, never blocks the session from starting."
 
