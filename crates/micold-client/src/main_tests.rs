@@ -95,6 +95,7 @@ fn update_inner_applies_window_focus_changed() {
         pane_saved: HashMap::new(),
         pane_restored: Default::default(),
         pane_synced_displayed: None,
+        pane_synced_project: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
@@ -162,6 +163,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         pane_saved: HashMap::new(),
         pane_restored: Default::default(),
         pane_synced_displayed: None,
+        pane_synced_project: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
@@ -806,6 +808,7 @@ pub(crate) fn base_app() -> App {
         pane_saved: HashMap::new(),
         pane_restored: Default::default(),
         pane_synced_displayed: None,
+        pane_synced_project: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
@@ -2811,6 +2814,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         pane_saved: HashMap::new(),
         pane_restored: Default::default(),
         pane_synced_displayed: None,
+        pane_synced_project: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
@@ -10350,6 +10354,53 @@ mod panes {
         pane_msg(&mut app, PaneMsg::Close(first));
         assert_eq!(layout_of(&app).len(), 1);
         assert_eq!(app.pane_refusal, Some("The last pane stays open."));
+    }
+
+    /// T038 (FR-001/FR-002): showing the reason relayouts the panes, and the measurement that
+    /// follows is not a user action; it must not clear the reason it just made room for.
+    #[test]
+    fn a_refusal_survives_the_resize_it_causes() {
+        let (mut app, _ids, _rx) = app_with_sessions(1);
+        let f = layout_of(&app).focused();
+        size_pane(&mut app, f, 4, 2);
+        pane_msg(&mut app, PaneMsg::Split(f, Axis::Vertical));
+        assert!(app.pane_refusal.is_some());
+        size_pane(&mut app, f, 4, 1);
+        assert!(
+            app.pane_refusal.is_some(),
+            "a Resized measurement cleared the refusal"
+        );
+        pane_msg(&mut app, PaneMsg::FocusPane(f));
+        assert_eq!(app.pane_refusal, None, "a user action still clears it");
+    }
+
+    /// T039 (FR-010, FR-016): a focus resting on an empty pane survives a switch away and back.
+    #[test]
+    fn a_focus_on_an_empty_pane_survives_a_project_switch() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let first = layout_of(&app).focused();
+        let empty = split_focused(&mut app, Axis::Vertical);
+        // The new pane opens on no terminal (only one exists, and the first pane shows it).
+        assert_eq!(layout_of(&app).pane(empty).unwrap().terminal(), None);
+        assert_eq!(layout_of(&app).focused(), empty);
+        let home = app.core.workspace.active.clone().unwrap();
+        let other = PathBuf::from("/repo/other");
+        app.core.workspace.projects.push(Project::new(
+            other.clone(),
+            true,
+            Availability::Available,
+        ));
+        app.core.workspace.active = Some(other);
+        app.core.session.active = None;
+        crate::shell::panes::sync(&mut app);
+        app.core.workspace.active = Some(home);
+        app.core.session.active = Some(ids[0]);
+        crate::shell::panes::sync(&mut app);
+        assert_eq!(
+            layout_of(&app).focused(),
+            empty,
+            "the project switch moved focus to pane {first:?}"
+        );
     }
 
     /// FR-009: the close chord closes the focused pane.

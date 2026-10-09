@@ -81,6 +81,8 @@ struct App {
     pane_restored: std::collections::HashSet<PathBuf>,
     /// The displayed terminal as of the last pane sync: the layout moves only when it changes.
     pane_synced_displayed: Option<TerminalRef>,
+    /// The project `pane_synced_displayed` belongs to: a change of it is a project switch.
+    pane_synced_project: Option<PathBuf>,
     /// Each pane's last measured `(cols, rows)` (feature 484, FR-014): a pane's terminal has its own
     /// PTY size, so a split never resizes the terminals beside it.
     pane_sizes: HashMap<(PathBuf, micold_core::pane_layout::PaneId), (u16, u16)>,

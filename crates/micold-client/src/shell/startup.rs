@@ -351,6 +351,7 @@ fn boot() -> (App, Task<Message>) {
             pane_saved: HashMap::new(),
             pane_restored: std::collections::HashSet::new(),
             pane_synced_displayed: None,
+            pane_synced_project: None,
             pane_sizes: HashMap::new(),
             pane_sent: HashMap::new(),
             pane_refusal: None,

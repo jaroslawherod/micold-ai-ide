@@ -56,6 +56,8 @@ pub fn sync(app: &mut App) {
         .collect();
     let seen = app.pane_synced_displayed;
     app.pane_synced_displayed = displayed;
+    let switched = app.pane_synced_project.as_ref() != Some(&project);
+    app.pane_synced_project = Some(project.clone());
     let layout = app
         .pane_layouts
         .entry(project.clone())
@@ -64,7 +66,10 @@ pub fn sync(app: &mut App) {
     // Only a *change* of the displayed terminal moves a pane: focusing an empty pane leaves the
     // selection where it was and must not fill the pane with it.
     if let Some(t) = displayed {
-        if seen != displayed && layout.focused_terminal() != Some(t) {
+        // A focus resting on an empty pane of a split project stays there across a project switch
+        // (FR-016): the other project's selection is not a request to move it.
+        let keeps_empty_focus = switched && layout.len() > 1 && layout.focused_terminal().is_none();
+        if seen != displayed && layout.focused_terminal() != Some(t) && !keeps_empty_focus {
             layout.show_or_focus(t);
         }
     }
@@ -187,7 +192,11 @@ fn send_pane_sizes(app: &mut App) {
 
 /// Apply a pane message (FR-001, FR-004, FR-010, FR-014).
 pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
-    app.pane_refusal = None;
+    // A measurement is not a user action: showing the reason relayouts the panes, and the
+    // `Resized` that follows must not clear what made room for it.
+    if !matches!(msg, PaneMsg::Resized { .. }) {
+        app.pane_refusal = None;
+    }
     if matches!(
         msg,
         PaneMsg::Close(_) | PaneMsg::Split(..) | PaneMsg::Chord(_) | PaneMsg::Show(..)
