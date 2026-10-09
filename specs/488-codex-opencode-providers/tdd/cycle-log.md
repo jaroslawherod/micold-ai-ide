@@ -33,4 +33,4 @@ M5 is characterization (T027/T028): the behaviours already hold since M1, so the
 |---|---|---|
 | Codex in an untrusted folder gets no first prompt (T028, FR-012) | `Codex::folder_trust` → `NeverAsks` | `a_first_prompt_is_never_typed_into_a_trust_question` (prompt delivered when it should be refused) |
 | Unsupported tool-server reason is logged, session starts (T028, FR-011) | log text `no tool server:` renamed | `an_unsupported_tool_server_binding_is_logged_and_the_session_starts` |
-| Badge stays `Unknown` through output and silence (T027, FR-009) | not broken: `Unknown` is the projection's default, so no cheap break exists; the test also asserts Codex/OpenCode `activity_source` is `None` and Claude Code's is not |
+| Badge stays `Unknown` through output and silence (T027, FR-009) | not broken: `Unknown` is the projection's default, so no cheap break exists; the test also asserts Codex/OpenCode `activity_source` is `None` and Claude Code's is not | `the_badge_stays_unknown_through_output_and_silence` (only its `activity_source` assertions can fail; AS2's busy/idle is pinned by `activity_pipeline::hooks_drive_the_projected_activity_signal`) |

@@ -495,16 +495,26 @@ async fn a_first_prompt_is_never_typed_into_a_trust_question() {
                 .create(json!({"worktree": "b", "ai_cli": cli.tool_name(), "prompt": PROMPT}))
                 .await;
             let delivered = cli != AiCli::Codex || trusted;
-            assert_eq!(out["prompt_delivered"], json!(delivered), "{command}: {out}");
+            assert_eq!(
+                out["prompt_delivered"],
+                json!(delivered),
+                "{command}: {out}"
+            );
             if delivered {
                 let deadline = Instant::now() + Duration::from_secs(10);
                 while !typed(&f, command).contains(PROMPT) && Instant::now() < deadline {
                     tokio::time::sleep(Duration::from_millis(25)).await;
                 }
-                assert!(typed(&f, command).contains(PROMPT), "{command} got the prompt");
+                assert!(
+                    typed(&f, command).contains(PROMPT),
+                    "{command} got the prompt"
+                );
             } else {
                 let reason = out["prompt_reason"].as_str().unwrap_or_default();
-                assert!(reason.contains("trust") && reason.contains("Codex"), "{out}");
+                assert!(
+                    reason.contains("trust") && reason.contains("Codex"),
+                    "{out}"
+                );
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 assert_eq!(typed(&f, command), "", "nothing is typed into {command}");
             }

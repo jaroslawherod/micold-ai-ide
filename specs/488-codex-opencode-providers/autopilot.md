@@ -72,6 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 A round 1 (snapshot 78ef01f81aea703b662d10bf1504a13767ac97cb:da63a8225eeafb577113692d3e8f72f482b3b49e): CHANGES, F1 MAJOR (shell peer blocks bind) fixed, F2/F4 fixed, F3 declined (below). Round 2 (snapshot 6caadbfccef19c0db653d5d9a08f26be5a0fe58e:af01facf278a685d91b9d2c4763e39b8d37c0715, sonnet, fix diff): CLEAN.
 - M3 B round 1 (same snapshot, sonnet): CHANGES, F1 MAJOR (no TDD cycle log) fixed with tdd/cycle-log.md, F2/F3 fixed. Round 2: CLEAN, 2 MINOR left (env mutation in the terminal_backend test: that file's other tests use claude/copilot only; test-first order not followed, stated in the cycle log).
 - M3 visual pass: not run, no UI change.
+- M5 A (reviewer, sonnet) round 1 (snapshot cdae90711bbfb1ce934bf3ee8ad715c6fb97e802:940a8f2ad1470dd16f27b9346b69e3806dafaa56): CLEAN, 3 MINOR (cycle-log cell fixed; wrap and 2 s sleep left). M5 B (conformance, sonnet) round 1 (same snapshot): CLEAN, 2 MINOR (cycle-log cell and AS2 mapping fixed). M5 visual pass: not run, no UI change. T029: no code change.
 
 ## Declined review findings
 
