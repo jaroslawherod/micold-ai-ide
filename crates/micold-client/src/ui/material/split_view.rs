@@ -47,6 +47,11 @@ pub fn placement(layout: &PaneLayout, size: Size, min: (f32, f32)) -> Placement 
     layout.place((size.width, size.height), min)
 }
 
+/// The fill behind the notice that says why a pane action was refused.
+pub fn pane_notice_fill(r: Roles) -> iced::Color {
+    style::color(r.surface_container_high)
+}
+
 /// How a pane header shows focus: its fill and the colour of its leading accent strip. Colour is
 /// never the only cue: the strip is a shape, and an unfocused header has none.
 pub fn pane_focus_mark(focused: bool, r: Roles) -> (iced::Color, Option<iced::Color>) {
