@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 open, for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (none in spec.md; verified by grep)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Open markers: text-vs-image clipboard precedence; image paste in regular terminals.
+- Both earlier open markers (text-vs-image precedence; image paste in regular terminals) were resolved on 2026-10-09 (spec.md Clarifications).

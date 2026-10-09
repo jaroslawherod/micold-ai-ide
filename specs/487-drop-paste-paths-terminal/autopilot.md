@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: design PR (body in scratchpad), then M1
 
 ## Pull requests
 
@@ -22,6 +22,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T017 | full | drop files insert quoted paths | | pending |
+| M2 | T018–T024 | full | paste image into AI session | | pending |
+| M3 | T025–T029 | full | sandbox container paths, refusals | | pending |
+| M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
 ## Decisions
 
@@ -53,3 +57,5 @@ None.
 ## Follow-ups not done
 
 None.
+
+- Tasks review (round 1, snapshot 3a1a5833:788b5d57): CHANGES; F1 (paste_source test task) fixed, F2-F4 MINOR fixed; no further round (tasks added, tests-only).
