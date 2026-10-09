@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
 | M2 | T018–T024 | full | paste image into AI session | #667 | merged |
-| M3 | T025–T029 | full | sandbox container paths, refusals | #TBD | gate green except six root-only tests; ready to push |
+| M3 | T025–T029 | full | sandbox container paths, refusals | #TBD | gate green except six root-only tests; PR text in scratchpad pr-487-m3.md |
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
 ## Decisions
