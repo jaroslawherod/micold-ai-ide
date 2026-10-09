@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M9: PR open; orchestrator waits on CI and merges, then M10.
+- **Next step**: M10: PR open; orchestrator waits on CI and merges, then the close unit.
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #666 | M6 | merged | e9a4a16cfbae782230119967052e353f0ef06240 |
 | #669 | M7 | merged | 9ad9a5c384d3220eec2e5b2dba4a14482300a861 |
 | #672 | M8 | merged | 0c39be31be9222549636dc4793f6e7d5d422432d |
-| #676 | M9 | open | |
+| #676 | M9 | merged | 88a6f3602c2bd037e1827e57897202ac41cc13eb |
 
 ## Milestones
 
@@ -39,8 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | merged |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
-| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | in review |
-| M10 | T075–T077 | full | Architecture page, recorded visual pass | | pending |
+| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | merged |
+| M10 | T075–T077 | full | Architecture page, recorded visual pass | | in progress |
 
 ## Decisions
 
