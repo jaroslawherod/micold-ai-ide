@@ -3351,7 +3351,7 @@ impl DaemonState {
             }
             inner.catalog.unarchived_session_ids()
         };
-       self.log_undeleted(&store.sweep(&keep));
+        self.log_undeleted(&store.sweep(&keep));
     }
 
     /// Remove the given session ids from the live registry, returning **every** removed process
