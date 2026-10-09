@@ -381,3 +381,133 @@ async fn a_session_whose_provider_was_removed_keeps_its_provider_in_the_listing(
         assert!(!listed(&restarted, f.project.path()).contains(&cli));
     }
 }
+
+// ---- M5 (US4): honest activity, tool-server and first-prompt behaviour ----
+
+/// A stand-in that draws a prompt, then copies whatever is typed into it to `<command>.input`.
+fn install_typing_cli(bin: &Path, command: &str) {
+    let dir = bin.display();
+    let path = bin.join(command);
+    std::fs::write(
+        &path,
+        format!("#!/bin/sh\nprintf 'ready> '\nexec cat >> '{dir}/{command}.input'\n"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn typed(f: &Fixture, command: &str) -> String {
+    std::fs::read_to_string(f.bin.path().join(format!("{command}.input"))).unwrap_or_default()
+}
+
+fn badge(f: &Fixture, id: SessionId) -> micold_core::protocol::messages::ActivitySignal {
+    f.state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id == id)
+        .expect("the session is listed")
+        .activity
+}
+
+/// FR-009, AS1: Codex and OpenCode have no reliable activity signal, so the badge reads `Unknown`
+/// while the CLI prints and after it goes quiet. AS2 (a provider with a source follows busy/idle)
+/// is pinned by `activity_pipeline::hooks_drive_the_projected_activity_signal`; here only that
+/// Claude Code still has a source while these two have none.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_badge_stays_unknown_through_output_and_silence() {
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::provider::ActivitySource;
+    let _guard = ENV.lock().await;
+    let (dir, id) = (Path::new("/tmp"), uuid::Uuid::nil());
+    assert!(!matches!(
+        AiCli::ClaudeCode.provider().activity_source(dir, dir, id),
+        ActivitySource::None
+    ));
+    for (cli, command) in PROVIDERS {
+        assert!(matches!(
+            cli.provider().activity_source(dir, dir, id),
+            ActivitySource::None
+        ));
+        let f = Fixture::new().await;
+        install_typing_cli(f.bin.path(), command);
+        let session = created(
+            &f.create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
+                .await,
+        );
+        // Output now, then a stretch of silence longer than the output-settle window.
+        let until = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < until {
+            assert_eq!(badge(&f, session), ActivitySignal::Unknown, "{command}");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+}
+
+/// FR-011: a provider with no verified tool-server binding starts anyway, unbound, and the reason
+/// is logged against the session.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unsupported_tool_server_binding_is_logged_and_the_session_starts() {
+    let _guard = ENV.lock().await;
+    mcp_support::log();
+    for (cli, command) in PROVIDERS {
+        let f = Fixture::new().await;
+        let session = created(
+            &f.create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
+                .await,
+        );
+        f.started_in(command).await;
+        let lines = mcp_support::log_lines_for(session);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("no tool server") && l.contains("no per-launch tool-server")),
+            "{command}: the reason is logged: {lines:?}"
+        );
+    }
+}
+
+/// FR-012: Codex in a folder it has not been told to trust gets no first prompt (typing Enter would
+/// answer its trust question); in a trusted folder it does. OpenCode asks nothing, so it always does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_first_prompt_is_never_typed_into_a_trust_question() {
+    const PROMPT: &str = "print the branch name";
+    let _guard = ENV.lock().await;
+    for (cli, command) in PROVIDERS {
+        for trusted in [false, true] {
+            let f = Fixture::new().await;
+            install_typing_cli(f.bin.path(), command);
+            if trusted && cli == AiCli::Codex {
+                let home = PathBuf::from(std::env::var_os("CODEX_HOME").unwrap());
+                std::fs::create_dir_all(&home).unwrap();
+                let project = f.project.path().canonicalize().unwrap();
+                std::fs::write(
+                    home.join("config.toml"),
+                    format!(
+                        "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
+                        project.display()
+                    ),
+                )
+                .unwrap();
+            }
+            let out = f
+                .create(json!({"worktree": "b", "ai_cli": cli.tool_name(), "prompt": PROMPT}))
+                .await;
+            let delivered = cli != AiCli::Codex || trusted;
+            assert_eq!(out["prompt_delivered"], json!(delivered), "{command}: {out}");
+            if delivered {
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while !typed(&f, command).contains(PROMPT) && Instant::now() < deadline {
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                }
+                assert!(typed(&f, command).contains(PROMPT), "{command} got the prompt");
+            } else {
+                let reason = out["prompt_reason"].as_str().unwrap_or_default();
+                assert!(reason.contains("trust") && reason.contains("Codex"), "{out}");
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                assert_eq!(typed(&f, command), "", "nothing is typed into {command}");
+            }
+        }
+    }
+}

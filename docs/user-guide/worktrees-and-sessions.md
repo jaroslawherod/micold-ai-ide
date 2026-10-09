@@ -912,7 +912,8 @@ ask for them with `ai_cli` set to `codex` or `opencode`.
   bar label it `codex` or `opencode`. Sign in to the CLI yourself first: the app does not carry your
   credentials.
 - **The session remembers its provider** across restarts of the app and the session service. The
-  activity badge of a Codex or OpenCode session reads unknown.
+  activity badge of a Codex or OpenCode session reads unknown, whether the CLI is printing or quiet:
+  neither gives the app a reliable busy or idle signal, so it does not guess.
 - **A restarted Codex session resumes its own conversation.** A little after Codex starts, the app
   finds the conversation it recorded in `~/.codex` (or `$CODEX_HOME`) for that folder and links it
   to the session; restarting the session then runs `codex resume` on that conversation, never on
@@ -936,7 +937,7 @@ ask for them with `ai_cli` set to `codex` or `opencode`.
   then it keeps the usual placeholder name.
 - **Codex asks whether to trust a folder** the first time it runs there. When a tool asks for a
   first prompt in a folder Codex has not been told to trust, the prompt is not typed, so it cannot
-  answer that question for you; run `codex` once in the project folder and accept it.
+  answer that question for you; run `codex` once in the project folder and accept it. OpenCode asks no such question.
 - **A provider whose command is missing says so.** If `codex` or `opencode` is not on the `PATH`
   sessions get, it is not offered as an entry; the note under the list names it and says why a
   session would not find it and what to change. It cannot be started any other way either: a tool

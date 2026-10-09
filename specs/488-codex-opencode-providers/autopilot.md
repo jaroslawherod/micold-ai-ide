@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M4
-- **Next step**: gate green at tree 5995d396 (only the six root-only permission tests fail); the orchestrator pushes and opens the M4 PR from scratchpad/pr-488-m4.md
+- **Phase**: milestone M5
+- **Next step**: M5 gate + reviews, then the orchestrator pushes and opens the PR from scratchpad/pr-488-m5.md
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #680 | M1 | MERGED (rebase) | cf3881fd2bad0e79bc61c9be3669b77f3c6ef2df |
 | #683 | M2 | MERGED (rebase) | eef53e0c7d6e501e7bd3fb0a6184ebade47c8253 |
 | #684 | M3 | MERGED (rebase) | e9abd92efe2c7d8ad097ff82d4a7073477349524 |
-| (orchestrator opens) | M4 | pending | |
+| #690 | M4 | MERGED (rebase) | 26dbd73670583e4e4826b0c80f972359072deaf2 |
+| (orchestrator opens) | M5 | pending | |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | #680 | merged |
 | M2 | T012–T015 | light | Unavailable providers explained | #683 | merged |
 | M3 | T016–T022 | full | Codex resume + naming (seam) | #684 | merged |
-| M4 | T023–T026 | full | OpenCode resume + naming | pending (orchestrator opens) | in progress |
-| M5 | T027–T030 | light | Honest activity, tool-server, first prompt | | todo |
+| M4 | T023–T026 | full | OpenCode resume + naming | #690 | merged |
+| M5 | T027–T030 | light | Honest activity, tool-server, first prompt | pending (orchestrator opens) | in progress |
 | M6 | T031–T034 | full | Sandbox image + sign-in | | todo |
 
 ## Decisions
