@@ -713,3 +713,49 @@ and a suppressed row is indistinguishable from no row. **A green guard is eviden
 proportion to what you have shown it can still fail on.** Probe it by reintroducing a write and
 confirming it fires on the row you expect; for a single-assertion guard, distinctness lives in the
 reported violation, not in the set of failing tests.
+
+## Terminal history across a restart (feature 041)
+
+A covered terminal (an AI CLI session's primary) keeps what it showed when its process ends, so the
+next start shows it above a dim `── session restarted at … ──` line. The history is held in memory
+across a stop and start, and written to disk so it also survives a restart of the session service.
+Contracts: `specs/041-terminal-scrollback-persistence/contracts/`.
+
+| Piece | Where | Owns |
+|---|---|---|
+| `terminal_history` (core) | `crates/micold-core/src/terminal_history/` | Render-free and VT-free. `HistorySnapshot` and its own colour and style numbering (`mod.rs`); the file format, `encode`/`decode` and `DamageReason` (`format.rs`); `HistoryStore`: owner-only files, `save`, `load`, `forget`, `sweep`, `purge`, the setting switch (`store.rs`); `SaveSchedule`, the 30 s rule (`schedule.rs`); the separator and notice lines (`text.rs`) |
+| `history` (daemon) | `crates/micold-daemon/src/history.rs` | The only place that knows `alacritty_terminal`: `capture` a `Term` into a snapshot, `seed` a fresh `Term` from one; `Saver`, the per-session schedule and warning state; `save_all_live` for the stop |
+| `DaemonState` | `crates/micold-daemon/src/state.rs` | The `history_store`, the `carried` map, `carry_history` and the seeding at start, and the deletions: session removal, the setting turned off, the sweep at service start |
+| Saver loop | `spawn_history_saver` in `server.rs` | Ticks, asks `Saver::due`, saves running terminals |
+
+Where each step happens:
+
+- **Capture**: when a covered primary is torn down (`carry_history`), from its `Term`; and from the
+  live `Term` for a periodic save and for the stop.
+- **Carry**: the snapshot is kept in `carried` for the session's next start and dropped with the
+  session. It is kept even with saving off; only the disk is switched.
+- **Save**: at the process end, every 30 s of changed output (the saver loop), and in `unwind`
+  (`save_all_live`, bounded at 3 s). A terminal whose content equals its last file is not written.
+- **Load**: at the session's start, when nothing is carried. A damaged file is skipped with a notice
+  line and one warning; it never stops the start.
+- **Seed**: `history::seed` writes the lines, the separator and the new output's start into the fresh
+  `Term`, within the scrollback limit. The client draws from the same `Term`, so nothing is client-side.
+- **Delete**: removing a session, turning the setting off and the sweep at service start call the store.
+
+Because the daemon can run in a container, the history directory is the host's data directory,
+mounted into the sandbox; the separator uses the host's time zone. See `shell/sandbox.rs`.
+
+### The stop request
+
+An orderly stop saves every terminal first. `platform::stop_requested()` completes once when the
+service is asked to stop; both accept loops select on it beside the idle timer and run
+`unwind(StopReason::Requested)`, the path the idle stop already takes.
+
+| Platform | What raises it |
+|---|---|
+| Linux, macOS, the container | `SIGTERM`, `SIGINT`, `SIGHUP` |
+| Windows | The named event `Local\Micold.Daemon.Stop.<user SID>` (owner-only DACL), or `WM_ENDSESSION` to the service's hidden window, which waits for the unwind |
+
+The senders are `terminate_daemon` (signal on Unix; on Windows the event, then `TerminateProcess`
+after 5 s) and the Windows installer script. A crash, `SIGKILL` or a power loss is not orderly: the
+terminal loses at most its last 60 s.
