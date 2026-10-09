@@ -255,6 +255,33 @@ impl AiCliProvider for MinimalProvider {
     fn id(&self) -> AiCli {
         self.id
     }
+    fn identity(&self) -> micold_core::provider::ConversationIdentity {
+        micold_core::provider::ConversationIdentity::AppAssigned
+    }
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        self.launch_args(session_id, mode)
+    }
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<micold_core::provider::ConversationRef> {
+        Vec::new()
+    }
+    fn bind(
+        &self,
+        _config_dir: &Path,
+        _session_id: Uuid,
+        _conversation: &micold_core::provider::ConversationRef,
+    ) -> std::io::Result<()> {
+        Ok(())
+    }
     fn display_name(&self) -> &'static str {
         self.display_name
     }

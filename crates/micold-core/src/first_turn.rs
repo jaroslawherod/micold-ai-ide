@@ -32,10 +32,15 @@ const ELLIPSIS: &str = "…";
 /// dropped, never parsed. `None` for a file that cannot be opened or read: a label read never fails
 /// the session (FR-011).
 pub fn read_prefix(path: &Path) -> Option<Vec<u8>> {
+    read_prefix_bounded(path, LABEL_BUDGET_BYTES)
+}
+
+/// [`read_prefix`] with the caller's own budget.
+pub fn read_prefix_bounded(path: &Path, budget: u64) -> Option<Vec<u8>> {
     let mut prefix = Vec::new();
     std::fs::File::open(path)
         .ok()?
-        .take(LABEL_BUDGET_BYTES)
+        .take(budget)
         .read_to_end(&mut prefix)
         .ok()?;
     prefix.truncate(complete_len(&prefix));
@@ -125,6 +130,44 @@ pub fn copilot_first_turn(prefix: &[u8]) -> Option<String> {
         .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
         .filter_map(|record| copilot_turn_text(&record))
         .find_map(|text| shape_label(&text))
+}
+
+/// The first typed turn of a Codex rollout prefix, shaped, or `None` (feature 488, FR-008).
+///
+/// The record of what the user typed is an `event_msg` whose payload is a `user_message`. Failing
+/// that, a `response_item` user message counts unless its text is context Codex inserted itself
+/// (`<environment_context>`, `# AGENTS.md instructions`). Line shapes are from Codex's source and
+/// unconfirmed against a signed-in session (research V8): an unrecognised file yields `None`.
+pub fn codex_first_turn(prefix: &[u8]) -> Option<String> {
+    let records: Vec<Value> = complete_lines(prefix)
+        .filter_map(|line| serde_json::from_slice(line).ok())
+        .collect();
+    let typed = records.iter().find_map(|record| {
+        let payload = record.get("payload")?;
+        (record.get("type")?.as_str()? == "event_msg"
+            && payload.get("type")?.as_str()? == "user_message")
+            .then(|| payload.get("message")?.as_str().and_then(shape_label))
+            .flatten()
+    });
+    typed.or_else(|| {
+        records.iter().find_map(|record| {
+            let payload = record.get("payload")?;
+            if record.get("type")?.as_str()? != "response_item"
+                || payload.get("type")?.as_str()? != "message"
+                || payload.get("role")?.as_str()? != "user"
+            {
+                return None;
+            }
+            payload
+                .get("content")?
+                .as_array()?
+                .iter()
+                .filter_map(|part| part.get("text")?.as_str())
+                .map(str::trim)
+                .find(|text| !text.starts_with('<') && !text.starts_with("# AGENTS.md"))
+                .and_then(shape_label)
+        })
+    })
 }
 
 /// A Copilot turn's label source, or `None` when the record is not a turn (C4.1, C4.2).

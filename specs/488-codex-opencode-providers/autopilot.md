@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M2
-- **Next step**: M2 reviews, visual pass, gate, push; orchestrator opens the PR from scratchpad/pr-488-m2.md
+- **Phase**: milestone M3
+- **Next step**: M3 gate, reviews A and B, push; orchestrator opens the PR from scratchpad/pr-488-m3.md
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #679 | Design (spec, plan, tasks) | MERGED (rebase) | 96f85d69d1e0d335f23e44fc93097483b913a5d7 |
 | #680 | M1 | MERGED (rebase) | cf3881fd2bad0e79bc61c9be3669b77f3c6ef2df |
-| (orchestrator opens) | M2 | pending | |
+| #683 | M2 | MERGED (rebase) | eef53e0c7d6e501e7bd3fb0a6184ebade47c8253 |
+| (orchestrator opens) | M3 | pending | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | #680 | merged |
-| M2 | T012–T015 | light | Unavailable providers explained | pending (orchestrator opens) | in progress |
-| M3 | T016–T022 | full | Codex resume + naming (seam) | | todo |
+| M2 | T012–T015 | light | Unavailable providers explained | #683 | merged |
+| M3 | T016–T022 | full | Codex resume + naming (seam) | pending (orchestrator opens) | in progress |
 | M4 | T023–T026 | full | OpenCode resume + naming | | todo |
 | M5 | T027–T030 | light | Honest activity, tool-server, first prompt | | todo |
 | M6 | T031–T034 | full | Sandbox image + sign-in | | todo |
@@ -40,6 +41,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+
+## Decisions (M3)
+
+- M3: seam `launch_args_in` takes `Option<&Path>` config dir; `sole_candidate` (core) is the bind-only-if-one rule; daemon `bind_minted_conversation` polls from `ops::start_session`, refuses to bind while another running same-provider same-cwd session is unbound; Minted providers skip the start-time "conversation gone" refusal (unbound = fresh). Codex naming via `read_title` (`first_turn::codex_first_turn`, 64 KiB); V8 line shape still unconfirmed against a signed-in CLI. Tests written with code, not red-first (honest note). OpenCode is Minted with fresh-only launch until M4.
 
 ## Review rounds
 
@@ -64,7 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 done locally (gate stamped at tree d942c5fa, commits on claude/project-thread-wysm57, PR text in scratchpad/pr-488-m2.md). Push refused (stale info; remote branch deleted after M1 merge): orchestrator pushes, opens the PR.
+None.
 
 ## Open escalation
 

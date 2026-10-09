@@ -396,6 +396,9 @@ pub fn start_session(
             // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
             // has just started — that is what keeps a merely discovered session unwatched.
             worker.open_event_log_tail(session);
+            // A provider that mints its own conversation ids is bound once it has made one
+            // (feature 488, T021); a no-op for the rest.
+            worker.bind_minted_conversation(session);
             Ok::<(), io::Error>(())
         })
         .await;

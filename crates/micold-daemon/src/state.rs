@@ -26,7 +26,7 @@ use micold_core::protocol::messages::{
     EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, TerminalRef, WindowView,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::provider::{ActivitySource, ToolServerSupport};
+use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
     TerminalMode, RESTART_STABLE_AFTER,
@@ -298,6 +298,9 @@ struct AttentionRetry {
 
 /// The first wait after a failed attention write, doubled on each further failure up to
 /// [`ATTENTION_RETRY_MAX`].
+/// How often the bind step polls a minting provider's store, and for how long (research R1).
+const BIND_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+const BIND_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
 const ATTENTION_RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(1);
 const ATTENTION_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -3780,7 +3783,14 @@ impl DaemonState {
             // Reported, not silently started fresh: reusing the id for a new conversation would
             // put the user in an empty session wearing the old one's title (spec clarification
             // 2026-08-16).
-            if launch == LaunchMode::Resume && plan.resumable {
+            //
+            // Not for a provider that mints its own ids (feature 488, FR-006): a session of one
+            // that never recorded a conversation (or whose binding was never made) is not "gone",
+            // it simply starts fresh, which is what its launch arguments already do.
+            if launch == LaunchMode::Resume
+                && plan.resumable
+                && provider.identity() == ConversationIdentity::AppAssigned
+            {
                 let gone = match provider.config_dir() {
                     Some(config) => !provider.has_recorded_conversation(&config, &plan.cwd, id.0),
                     // An unresolvable config directory is ignorance, not evidence of absence —
@@ -3924,6 +3934,118 @@ impl DaemonState {
         // stops the next stop-then-start from re-showing the *old* run's ending (BUG-018).
         inner.ended.remove(&id);
         pty
+    }
+
+    /// After a start, learn which conversation a provider that mints its own ids (Codex, OpenCode)
+    /// created for the session and bind it, so a restart resumes it (feature 488, research R1).
+    ///
+    /// The CLI records the conversation when it likes, so this polls its store every
+    /// [`BIND_POLL`] for [`BIND_WINDOW`] on a thread of its own, then gives up: the session stays
+    /// unbound and a restart starts fresh. **It never guesses** (FR-006): it binds only when
+    /// exactly one unclaimed conversation matches the directory and no other running session of
+    /// the same provider in that directory is still unbound, since either could own it.
+    /// A no-op for a provider that assigns its ids.
+    pub fn bind_minted_conversation(self: &Arc<Self>, id: SessionId) {
+        let Some((provider, cwd)) = ({
+            let inner = self.lock();
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == id && s.mode == TerminalMode::AiCli)
+                        .map(|s| (s.provider, s.location.cwd(project)))
+                })
+        }) else {
+            return;
+        };
+        let handle = provider.provider();
+        if handle.identity() != ConversationIdentity::Minted {
+            return;
+        }
+        let Some(config_dir) = handle.config_dir() else {
+            return;
+        };
+        if handle.has_recorded_conversation(&config_dir, &cwd, id.0) {
+            return; // already bound: a resume
+        }
+        let since = std::time::SystemTime::now();
+        let state = Arc::clone(self);
+        let spawned = std::thread::Builder::new()
+            .name("conversation-bind".into())
+            .spawn(move || {
+                let deadline = std::time::Instant::now() + BIND_WINDOW;
+                loop {
+                    if state.live_session(id).is_none() {
+                        return;
+                    }
+                    if state.try_bind(id, provider, &config_dir, &cwd, since) {
+                        return;
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        tracing::info!(session = %id.0, "no conversation to bind; a restart starts fresh");
+                        return;
+                    }
+                    std::thread::sleep(BIND_POLL);
+                }
+            });
+        if let Err(err) = spawned {
+            tracing::warn!(session = %id.0, %err, "could not start the conversation bind step");
+        }
+    }
+
+    /// One poll of [`Self::bind_minted_conversation`]. `true` when it is over (bound, or refused
+    /// for good), `false` to try again.
+    fn try_bind(
+        &self,
+        id: SessionId,
+        which: AiCli,
+        config_dir: &Path,
+        cwd: &Path,
+        since: std::time::SystemTime,
+    ) -> bool {
+        // One binder at a time in the process: "exactly one candidate" and the write must not
+        // interleave with another session's.
+        static BINDING: Mutex<()> = Mutex::new(());
+        let _one_at_a_time = BINDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let provider = which.provider();
+        let peers: Vec<SessionId> = {
+            let inner = self.lock();
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .flat_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .filter(|s| s.provider == which && s.id != id)
+                        .filter(|s| s.location.cwd(project) == cwd)
+                        .filter(|s| inner.sessions.contains_key(&s.id))
+                        .map(|s| s.id)
+                })
+                .collect()
+        };
+        if peers
+            .iter()
+            .any(|peer| !provider.has_recorded_conversation(config_dir, cwd, peer.0))
+        {
+            return false; // another running session here could own the conversation
+        }
+        let candidates = provider.new_conversations(config_dir, cwd, since);
+        let Some(found) = micold_core::provider::sole_candidate(&candidates) else {
+            return false;
+        };
+        match provider.bind(config_dir, id.0, found) {
+            Ok(()) => tracing::info!(session = %id.0, "bound the session to its conversation"),
+            Err(err) => tracing::warn!(session = %id.0, %err, "could not bind the conversation"),
+        }
+        true
     }
 
     /// Open the event-log tail for a session this daemon has just started (feature 026, T064 —
