@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M4
-- **Next step**: reviews A and B, gate, push; orchestrator opens PR from scratchpad pr-484-m4.md
+- **Phase**: milestone M4 (pushed)
+- **Next step**: orchestrator opens PR from scratchpad pr-484-m4.md, waits CI, merges; then the close unit
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | #656 | merged |
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
 | M3 | T024–T028 | full | Resize, close, rearrange | #658 | merged |
-| M4 | T029–T035 | full | Layout survives restart | — | in progress |
+| M4 | T029–T035 | full | Layout survives restart | PR body in scratchpad pr-484-m4.md | pushed |
 
 ## Decisions
 
@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 visual pass | 1 | real client on Xvfb | pass; fixed header strip height (header took half its pane) and the single-pane refusal text; specs/484-terminal-split-panes/visual-pass-m3.md |
 | M4 diff A | 1 | cca2237b:804ce026 | CLEAN (3 MINOR: restore pruning written back — fixed by recording pruned json as saved; persist failure left memory ahead of disk — fixed with rollback; restore once per run = last writer wins, accepted) |
 | M4 diff B | 1 | cca2237b:804ce026 | CLEAN (2 MINOR: reviewer sandbox could not run Verify, run in the gate; no tdd/ dir; inactive-project prune happens on switch, fine) |
+| M4 visual pass | - | - | not re-run: no view or style changed |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
