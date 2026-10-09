@@ -512,7 +512,13 @@ pub fn process_path() -> OsString {
 /// `cfg(unix)`, and a file on `PATH` under the CLI's own name that is not executable is a broken
 /// installation the spawn will report anyway (FR-010's failure path).
 fn resolves_on_path(command: &str, path: &OsStr) -> bool {
-    let is_file = |candidate: PathBuf| {
+    resolve_on_path(command, path).is_some()
+}
+
+/// The file `command` resolves to on `path` (same rules as [`resolves_on_path`]), so a spawn can
+/// use it directly: `Command::new` would not find a Windows `.cmd` shim by its bare name.
+fn resolve_on_path(command: &str, path: &OsStr) -> Option<PathBuf> {
+    let is_file = |candidate: &PathBuf| {
         std::fs::metadata(candidate)
             .map(|meta| meta.is_file())
             .unwrap_or(false)
@@ -531,11 +537,14 @@ fn resolves_on_path(command: &str, path: &OsStr) -> bool {
     // result, where an empty or partly empty `PATH` is ordinary.
     std::env::split_paths(path)
         .filter(|dir| !dir.as_os_str().is_empty())
-        .any(|dir| {
-            is_file(dir.join(command))
-                || extensions
-                    .iter()
-                    .any(|ext| is_file(dir.join(format!("{command}{ext}"))))
+        .find_map(|dir| {
+            std::iter::once(dir.join(command))
+                .chain(
+                    extensions
+                        .iter()
+                        .map(|ext| dir.join(format!("{command}{ext}"))),
+                )
+                .find(|candidate| is_file(candidate))
         })
 }
 
@@ -1901,9 +1910,87 @@ impl AiCliProvider for CodexProvider {
     }
 }
 
-/// The `opencode` CLI. Same M1 scope as [`CodexProvider`].
+/// The `opencode` CLI.
+///
+/// Its store is a database, so it is read through the CLI itself (`session list`, `export`) with a
+/// bounded call (research R2), never opened, and never written: bindings and archive markers live
+/// beside it under `micold-bindings/`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OpenCodeProvider;
+
+impl OpenCodeProvider {
+    /// A read that takes longer than this is abandoned and yields nothing.
+    const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+    /// Output beyond this is not parsed.
+    const OUTPUT_CAP: usize = 256 * 1024;
+    /// A conversation created longer before the spawn than this is not this session's.
+    const CLOCK_ALLOWANCE: std::time::Duration = std::time::Duration::from_secs(2);
+    /// Sessions asked of `session list`: the newest are the ones that can have just appeared.
+    const LIST_LIMIT: &'static str = "50";
+
+    /// Run `opencode <args>` bounded and return its stdout as JSON, or `None` for anything else:
+    /// no CLI on the `PATH`, a spawn failure, a timeout, a non-zero exit, oversized or bad output.
+    fn run_json(args: &[&str]) -> Option<serde_json::Value> {
+        let path = std::env::var_os("PATH")?;
+        let program = resolve_on_path("opencode", &path)?;
+        let mut cmd = std::process::Command::new(program);
+        crate::process::no_window(&mut cmd)
+            .args(args)
+            .env("OPENCODE_DISABLE_AUTOUPDATE", "1")
+            .stdin(std::process::Stdio::null());
+        match crate::process::run_bounded(cmd, Self::READ_TIMEOUT) {
+            crate::process::RunOutcome::Exited {
+                code: 0, stdout, ..
+            } if stdout.len() <= Self::OUTPUT_CAP => serde_json::from_slice(&stdout).ok(),
+            _ => None,
+        }
+    }
+
+    /// A time field in milliseconds since the epoch.
+    fn millis(value: &serde_json::Value) -> Option<std::time::SystemTime> {
+        let ms = value
+            .as_u64()
+            .or_else(|| value.as_f64().map(|f| f as u64))?;
+        Some(std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms))
+    }
+
+    /// One `session list` entry as a candidate. The creation time is `created` or `time.created`.
+    fn listed(entry: &serde_json::Value) -> Option<ConversationRef> {
+        let id = entry.get("id")?.as_str()?;
+        let created = entry
+            .get("created")
+            .or_else(|| entry.get("time")?.get("created"))
+            .and_then(Self::millis)?;
+        let cwd = PathBuf::from(entry.get("directory")?.as_str()?);
+        valid_conversation_id(id).then(|| ConversationRef {
+            id: id.to_string(),
+            cwd,
+            created,
+        })
+    }
+
+    /// The first typed turn in an `export`: the first non-synthetic text part of the first user
+    /// message that has one.
+    fn first_turn(export: &serde_json::Value) -> Option<String> {
+        export
+            .get("messages")?
+            .as_array()?
+            .iter()
+            .find_map(|message| {
+                if message.get("info")?.get("role")?.as_str()? != "user" {
+                    return None;
+                }
+                message
+                    .get("parts")?
+                    .as_array()?
+                    .iter()
+                    .filter(|part| part.get("type").and_then(|t| t.as_str()) == Some("text"))
+                    .filter(|part| part.get("synthetic").and_then(|s| s.as_bool()) != Some(true))
+                    .filter_map(|part| part.get("text")?.as_str())
+                    .find_map(crate::first_turn::shape_label)
+            })
+    }
+}
 
 impl AiCliProvider for OpenCodeProvider {
     fn id(&self) -> AiCli {
@@ -1933,21 +2020,49 @@ impl AiCliProvider for OpenCodeProvider {
 
     fn launch_args_in(
         &self,
-        _config_dir: Option<&Path>,
+        config_dir: Option<&Path>,
         session_id: Uuid,
         mode: LaunchMode,
     ) -> Vec<String> {
-        // Resume arrives with M4.
+        // Resume only a conversation bound to this session; never `--continue`, which resumes
+        // whichever is newest and may be another session's (FR-006).
+        if mode == LaunchMode::Resume {
+            if let Some(id) = config_dir.and_then(|base| bound_conversation(base, session_id)) {
+                return vec!["--session".to_string(), id];
+            }
+        }
         self.launch_args(session_id, mode)
     }
 
     fn new_conversations(
         &self,
-        _config_dir: &Path,
-        _cwd: &Path,
-        _since: std::time::SystemTime,
+        config_dir: &Path,
+        cwd: &Path,
+        since: std::time::SystemTime,
     ) -> Vec<ConversationRef> {
-        Vec::new()
+        let earliest = since
+            .checked_sub(Self::CLOCK_ALLOWANCE)
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let Some(serde_json::Value::Array(listed)) = Self::run_json(&[
+            "session",
+            "list",
+            "--format",
+            "json",
+            "-n",
+            Self::LIST_LIMIT,
+        ]) else {
+            return Vec::new();
+        };
+        let taken = bound_ids(config_dir);
+        let mut found: Vec<ConversationRef> = listed
+            .iter()
+            .filter_map(Self::listed)
+            .filter(|conversation| conversation.cwd == cwd)
+            .filter(|conversation| conversation.created >= earliest)
+            .filter(|conversation| !taken.contains(&conversation.id))
+            .collect();
+        found.sort_by_key(|conversation| conversation.created);
+        found
     }
 
     fn bind(
@@ -1978,12 +2093,16 @@ impl AiCliProvider for OpenCodeProvider {
         Vec::new()
     }
 
-    fn has_recorded_conversation(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> bool {
-        false
+    fn has_recorded_conversation(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
+        // The binding is the record: asking the CLI would spawn it on every sweep.
+        bound_conversation(config_dir, session_id).is_some()
     }
 
-    fn read_title(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
-        None
+    fn read_title(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> Option<String> {
+        // OpenCode's own title is generated and may be a placeholder, so the name is the first
+        // typed turn, as for Codex. An unbound session has nothing to ask about.
+        let id = bound_conversation(config_dir, session_id)?;
+        Self::first_turn(&Self::run_json(&["export", &id])?)
     }
 
     fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
