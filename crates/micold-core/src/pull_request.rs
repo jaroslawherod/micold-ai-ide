@@ -423,6 +423,17 @@ impl AnswerError {
     fn is_repository_not_found(&self) -> bool {
         self.is("NOT_FOUND") && self.path.len() == 1 && self.path[0] == "repository"
     }
+
+    /// GitHub's answer when the sign-in may read pull requests but not their checks: the field
+    /// comes back `null` with a `FORBIDDEN` error at its path. Recorded in
+    /// `tests/fixtures/gh/pr_checks_forbidden.txt`.
+    fn is_checks_forbidden(&self) -> bool {
+        self.is("FORBIDDEN")
+            && self
+                .path
+                .last()
+                .is_some_and(|last| last == "statusCheckRollup")
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -516,7 +527,8 @@ impl From<RawNode> for PrNode {
 /// [`status_query`]`(branches.len())`.
 ///
 /// The key of an entry is `branches[i]`, never a name taken from the answer. An answer that cannot
-/// be read whole — an `errors` entry, a missing alias, a `null` repository, a pull request state
+/// be read whole — an `errors` entry (but a refused `statusCheckRollup`, whose checks read as none),
+/// a missing alias, a `null` repository, a pull request state
 /// this version does not know, JSON that does not parse — is [`ReadingFailure::Passing`], never a
 /// partial map (FR-019). [`reading_failure`] names the real kind from the whole `gh` run.
 pub fn parse_status(
@@ -525,7 +537,8 @@ pub fn parse_status(
 ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
     const UNREADABLE: ReadingFailure = ReadingFailure::Passing;
     let answer: Answer = serde_json::from_slice(body).map_err(|_| UNREADABLE)?;
-    if !answer.errors.is_empty() {
+    // A refused `statusCheckRollup` leaves the pull request readable: its checks read as none.
+    if !answer.errors.iter().all(AnswerError::is_checks_forbidden) {
         return Err(UNREADABLE);
     }
     let mut repository = answer
@@ -619,6 +632,13 @@ pub fn reading_failure(outcome: &RunOutcome, now: u64) -> ReadingFailure {
     }
 }
 
+/// Whether the body's `errors` are all refusals of `statusCheckRollup` (and there is at least one).
+fn only_checks_forbidden(body: &[u8]) -> bool {
+    serde_json::from_slice::<AnswerErrors>(body).is_ok_and(|answer| {
+        !answer.errors.is_empty() && answer.errors.iter().all(AnswerError::is_checks_forbidden)
+    })
+}
+
 /// The answer of one `gh` run that asked about `branches`: the statuses when `gh` exited 0 with an
 /// HTTP 200 that [`parse_status`] reads, else the kind [`reading_failure`] names.
 pub fn read_outcome(
@@ -626,12 +646,11 @@ pub fn read_outcome(
     branches: &[String],
     now: u64,
 ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
-    if let RunOutcome::Exited {
-        code: 0, stdout, ..
-    } = outcome
-    {
+    if let RunOutcome::Exited { code, stdout, .. } = outcome {
         let read = split_response(stdout)
             .filter(|response| response.status == 200)
+            // `gh` exits 1 for any `errors` entry; only a refused check rollup is read through.
+            .filter(|response| *code == 0 || only_checks_forbidden(response.body))
             .map(|response| parse_status(response.body, branches));
         if let Some(Ok(statuses)) = read {
             return Ok(statuses);

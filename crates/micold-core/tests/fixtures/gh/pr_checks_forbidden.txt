@@ -1,0 +1,22 @@
+HTTP/2.0 200 OK
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning
+Content-Security-Policy: default-src 'none'
+Content-Type: application/json; charset=utf-8
+Date: Fri, 09 Oct 2026 13:12:20 GMT
+Referrer-Policy: origin-when-cross-origin, strict-origin-when-cross-origin
+Server: github.com
+Strict-Transport-Security: max-age=31536000; includeSubdomains; preload
+Vary: Accept-Encoding, Accept, X-Requested-With
+X-Content-Type-Options: nosniff
+X-Frame-Options: deny
+X-Github-Edge-Region: iad
+X-Github-Media-Type: github.v4; format=json
+X-Ratelimit-Limit: 5000
+X-Ratelimit-Remaining: 4999
+X-Ratelimit-Reset: 1791555139
+X-Ratelimit-Resource: graphql
+X-Ratelimit-Used: 1
+X-Xss-Protection: 0
+
+{"data":{"repository":{"o0":{"nodes":[{"number":2,"title":"Scratch pr-open-failing","url":"https://github.com/jaroslawherod/micold-pr-status-scratch/pull/2","state":"OPEN","isDraft":false,"createdAt":"2026-10-09T13:11:11Z","isCrossRepository":false,"headRefOid":"aaa234e21c220c5a1cb25db85162462d044742a5","reviewDecision":null,"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]},"r0":{"nodes":[{"number":2,"title":"Scratch pr-open-failing","url":"https://github.com/jaroslawherod/micold-pr-status-scratch/pull/2","state":"OPEN","isDraft":false,"createdAt":"2026-10-09T13:11:11Z","isCrossRepository":false,"headRefOid":"aaa234e21c220c5a1cb25db85162462d044742a5","reviewDecision":null,"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]},"o1":{"nodes":[]},"r1":{"nodes":[]}},"rateLimit":{"remaining":4999,"resetAt":"2026-10-09T14:12:19Z"}},"errors":[{"type":"FORBIDDEN","path":["repository","o0","nodes",0,"commits","nodes",0,"commit","statusCheckRollup"],"extensions":{"saml_failure":false,"ip_allow_list_failure":false},"locations":[{"line":1,"column":777}],"message":"Resource not accessible by integration"},{"type":"FORBIDDEN","path":["repository","r0","nodes",0,"commits","nodes",0,"commit","statusCheckRollup"],"extensions":{"saml_failure":false,"ip_allow_list_failure":false},"locations":[{"line":1,"column":777}],"message":"Resource not accessible by integration"}]}

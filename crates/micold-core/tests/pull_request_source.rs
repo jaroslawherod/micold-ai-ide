@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use micold_core::github::GithubRepo;
 use micold_core::process::RunOutcome;
 use micold_core::pull_request::{
-    read_in_chunks, read_outcome, FakePullRequestSource, PrState, PullRequestSource,
+    read_in_chunks, read_outcome, CheckStatus, FakePullRequestSource, PrState, PullRequestSource,
     PullRequestStatus, ReadingFailure, ReviewState, BRANCHES_PER_REQUEST,
 };
 
@@ -265,5 +265,61 @@ fn a_failed_run_is_its_failure() {
             until: 1_790_966_100
         }),
         "a RATE_LIMITED answer pauses until the reset, even at exit 0 (FR-024)"
+    );
+}
+
+/// `read_outcome`: a sign-in that reads pull requests but not checks (feature 040 follow-up C2).
+/// `pr_checks_forbidden.txt` is GitHub's real answer to a `GITHUB_TOKEN` holding only
+/// `pull-requests: read`: HTTP 200, the pull request, `statusCheckRollup: null` and one `FORBIDDEN`
+/// error at each `statusCheckRollup` path; `gh` exited 1 with "Resource not accessible by
+/// integration".
+#[test]
+fn a_sign_in_that_cannot_read_checks_still_shows_the_pull_request_without_a_check_status() {
+    let branches = vec!["pr-open-failing".to_string(), "no-pr".to_string()];
+    let outcome = exited(
+        1,
+        fixture("pr_checks_forbidden.txt"),
+        "gh: Resource not accessible by integration\nResource not accessible by integration\n",
+    );
+    let map = read_outcome(&outcome, &branches, NOW)
+        .expect("the pull request was readable; only the checks were refused (FR-025, FR-003)");
+    assert_eq!(
+        map.len(),
+        1,
+        "only the branch with a pull request has a status"
+    );
+    let status = &map["pr-open-failing"];
+    assert_eq!(status.number, 2);
+    assert_eq!(
+        status.state,
+        PrState::Open {
+            checks: CheckStatus::None
+        },
+        "checks that cannot be read are shown as none, never as passing or failing"
+    );
+}
+
+/// `read_outcome`: the tolerance is for the checks only.
+#[test]
+fn a_forbidden_error_elsewhere_than_the_checks_is_still_no_access() {
+    let branches = vec!["pr-open-failing".to_string(), "no-pr".to_string()];
+    let text = String::from_utf8(fixture("pr_checks_forbidden.txt")).expect("UTF-8");
+    let elsewhere = text.replace(
+        "\"commit\",\"statusCheckRollup\"",
+        "\"commit\",\"somethingElse\"",
+    );
+    assert_ne!(elsewhere, text, "the replacement must hit the error paths");
+    assert_eq!(
+        read_outcome(
+            &exited(
+                1,
+                elsewhere.into_bytes(),
+                "gh: Resource not accessible by integration\n"
+            ),
+            &branches,
+            NOW
+        ),
+        Err(ReadingFailure::Unavailable),
+        "a FORBIDDEN error outside statusCheckRollup still means no access (FR-025)"
     );
 }
