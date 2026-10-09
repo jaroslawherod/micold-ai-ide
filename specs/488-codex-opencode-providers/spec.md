@@ -168,9 +168,10 @@ The user guide documents each new provider: how it is detected, what a session d
 
 ## Assumptions
 
-- **Open (needs verification in plan, against the shipped CLIs)**: how each CLI resumes (Codex: `codex resume <id>` from `~/.codex/sessions`; OpenCode: `--session <id>` or `--continue` from its data directory), whether either accepts an externally chosen conversation id, what each records for naming, and which signal could drive activity. These shape FR-006, FR-008 and FR-009 but not the user-visible contract: the fallback for each is fresh start, no label, `Unknown`.
-- **Sign-in locations** (to verify): Codex under `~/.codex` (`CODEX_HOME`), OpenCode under its data directory; shared as the existing providers' are.
-- The existing provider seam is sufficient; no new provider capability is invented unless the plan shows a gap.
+- **Verified in plan (2026-10-09, see `research.md`)**: binaries `codex` / `opencode`; Codex resumes with `codex resume <id>`, OpenCode with `--session <id>`; neither accepts an app-chosen conversation id, so a session binds to the id the CLI minted (research R1); Codex records `~/.codex/sessions/**/rollout-*-<id>.jsonl` with `id` and `cwd` on line one; OpenCode's store is a database read through its own CLI; sign-in is `$CODEX_HOME/auth.json` and `~/.local/share/opencode/auth.json`.
+- **Still assumed (fallback in force)**: first-turn line shapes (no label), OpenCode JSON field names (unbound, no label), activity (`Unknown`), per-launch tool-server binding (unsupported, logged), Codex folder-trust prompt (prompt injection refused as `AsksTrust`).
+- **Correction to the seam assumption**: sandbox sign-in sharing is one claude-only file today, so FR-013 means one read-only sign-in file per provider; the plan adds a required seam method (research R5). The protocol version bump is 38 → 39.
+- The existing provider seam is extended only where the plan shows a gap (conversation identity, per-provider sign-in file), with existing providers returning their old values.
 - A first-turn name is shown only if the CLI's record carries the turn in a form readable without running the CLI.
 
 ## Out of Scope
