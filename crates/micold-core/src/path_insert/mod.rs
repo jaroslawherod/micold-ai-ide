@@ -458,6 +458,8 @@ mod tests {
             assert!(matches!(plan.refused[0], Refusal::OutsideProjects { .. }));
         }
 
+        // Unix only, like the first test: it expects the host path back as the container path.
+        #[cfg(unix)]
         #[test]
         fn a_missing_file_is_judged_by_its_parent() {
             let f = fixture();
@@ -472,6 +474,27 @@ mod tests {
             assert_eq!(plan.accepted.len(), 1);
             assert_eq!(plan.accepted[0].shown, inside);
             assert_eq!(plan.refused.len(), 2);
+        }
+
+        #[test]
+        fn a_missing_file_under_a_mapped_project_gets_its_container_path() {
+            let mut f = fixture();
+            f.mounts.projects[0].container = PathBuf::from("/mnt/host/c/p");
+            let m = vec!["/mnt/host/c/p".to_string()];
+            let plan = plan_insertion(
+                &[
+                    f.root.join("proj").join("not-yet.png"),
+                    f.root.join("nodir").join("x.png"),
+                ],
+                ShellKind::Posix,
+                InsertTarget::Sandbox(&f.mounts, &m),
+            );
+            assert_eq!(plan.accepted.len(), 1);
+            assert_eq!(
+                plan.accepted[0].shown,
+                PathBuf::from("/mnt/host/c/p/not-yet.png")
+            );
+            assert_eq!(plan.refused.len(), 1);
         }
 
         #[test]
