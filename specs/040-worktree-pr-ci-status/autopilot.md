@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: PR #646 (M7) open, gate green; wait for CI, merge, then M8.
+- **Next step**: M8 PR open; wait for CI, merge, then the close unit. T067 stays open (partial pass, see Follow-ups).
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #619 | M4 | merged | f354cd21fe15d5c76cff5c5c8dac414e9cda0dea |
 | #637 | M5 | merged | 88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 |
 | #641 | M6 | merged | 98da2889252f1804c9d3ada474d2d3ecdaf94249 |
-| #646 | M7 | open (gate green) | |
+| #646 | M7 | merged | 599def4097e93879a959079a9f113d7566113bea |
 
 ## Milestones
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T030–T040 | full | MVP: the Settings switch, and the indicator on every worktree row with a pull request | #619 | merged |
 | M5 | T041–T047 | full | Pull request lines in the tooltip; **Open pull request** in the row menu | #637 | merged |
 | M6 | T048–T054 | full | "can be removed" chip and `Cleanup:` line for a merged pull request with nothing newer | #641 | merged |
-| M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | #646 | in review |
+| M7 | T055–T065 | full | 5-minute interval, refresh trigger, one further reading, rate-limit pause, stale form | #646 | merged |
 | M8 | T066–T068 | full | Architecture page and the recorded quickstart §B pass | | pending |
 
 ## Decisions
@@ -114,3 +114,6 @@ None.
 ## Follow-ups not done
 
 - M1 review A, F3 (MINOR, not confirmed against GitHub): a sign-in that may read pull requests but not checks could get a field-level `FORBIDDEN` error on `statusCheckRollup`. Contract PS §5 makes any `errors` entry a failure, and `github::classify` reads "resource not accessible" as no access, so the whole project would show nothing (`Unavailable`). Deciding whether such an error is tolerated (checks read as none) needs a recorded answer from a token of that kind and a contract change.
+
+- M8: T067 left unticked. Quickstart §B ran on headless sway (no Xvfb/xdotool): B1 light and dark, B2, B12 pass; B3-B11, B13-B17 NOT RUN, they need a GitHub scratch repo with pull requests (creating one on the user's account was not authorised). Evidence: `evidence/visual-pass.md`. The close unit or the user must run the rest. `aarch64-apple-darwin` target was added with rustup; check passed; no non-test `cfg` in feature 040 commits.
+- M8 review B (sonnet, snapshot a724c3522b8a4b205847dc8e7b42dec9bbf97d27:599def4097e93879a959079a9f113d7566113bea): CHANGES, 1 MAJOR (doc said `gh pr list`; it is `gh api graphql`), 1 MINOR (protocol 22): both fixed, prose only.

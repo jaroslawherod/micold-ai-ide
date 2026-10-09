@@ -280,9 +280,9 @@ without a successful reading.
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T066 [P] Describe the feature in `docs/development/architecture.md`: the `pull_request` core module, where the reading runs and why (R5), the holding rule (R6), the start events, protocol 21's `MergedBranchCheck` and `pr_status_enabled`.
+- [x] T066 [P] Describe the feature in `docs/development/architecture.md`: the `pull_request` core module, where the reading runs and why (R5), the holding rule (R6), the start events, protocol 22's `MergedBranchCheck` and `pr_status_enabled`.
 - [ ] T067 Run quickstart §B (B1 to B17) with the `visual-pass` skill in both themes and record results and screenshots under `specs/040-worktree-pr-ci-status/evidence/`; fix what it finds under the test-first rule.
-- [ ] T068 Run `mise run gate` on the finished feature and cross-check `cargo check --target aarch64-apple-darwin`; confirm no `cfg` arm was added (FR-034): `git diff <merge-base of M1>..HEAD -- crates/ | grep -n '^+.*cfg[(!]'` prints only `#[cfg(test)]` lines;.
+- [x] T068 Run `mise run gate` on the finished feature and cross-check `cargo check --target aarch64-apple-darwin`; confirm no `cfg` arm was added (FR-034): `git diff <merge-base of M1>..HEAD -- crates/ | grep -n '^+.*cfg[(!]'` prints only `#[cfg(test)]` lines;.
 
 ---
 
