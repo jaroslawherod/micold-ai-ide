@@ -3476,7 +3476,7 @@ impl DaemonState {
     /// them. Does nothing when the catalog did not load, since its sessions are then unknown.
     /// **Blocking**; runs before the accept loop.
     pub fn sweep_pasted_images(&self) {
-        use micold_core::path_insert::{PastedLayout, pasted_roots};
+        use micold_core::path_insert::{pasted_roots, PastedLayout};
         let (live, worktrees) = {
             let inner = self.lock();
             if inner.catalog.load_status() != micold_core::store::LoadStatus::Loaded {
