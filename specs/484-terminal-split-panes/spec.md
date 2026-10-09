@@ -118,7 +118,7 @@ area and its session still runs.
 3. **Given** the last remaining pane, **When** the user closes it, **Then** it is not closed (the
    terminal area always has at least one pane).
 4. **Given** two panes, **When** the user moves the terminal of one pane into the other pane
-   (drag the pane's header onto the target, or the move shortcut), **Then** the target pane shows
+   (drag the pane's header onto the target), **Then** the target pane shows
    that terminal and the source pane shows the target's previous terminal (a swap).
 5. **Given** a divider, **When** the user double-presses it, **Then** the split returns to equal
    sizes.
@@ -183,7 +183,7 @@ confirm each project shows its own.
   panes. Provisional default: at most one, because two views of one PTY would have two sizes.]
 - **Concurrency (Principle II)**: several sessions of one project, and sessions of different
   worktrees, may be shown at once; output from one never appears in another's pane. Two panes
-  receive output simultaneously; a flood in one must not starve the other's redraw.
+  may receive output simultaneously; the plan decides how redraws are shared.
 - **Minimum size**: a split is refused (with a visible reason) when either resulting pane would fall
   below the minimum size. The window shrinking below the layout's total minimum scales dividers
   down instead of clipping a pane.
@@ -201,7 +201,7 @@ confirm each project shows its own.
 - **Very many panes**: the layout caps at 6 panes per project; splitting at the cap is refused with
   a visible reason.
 - **Idle**: unfocused windows and background panes do not poll or redraw more than today's single
-  terminal does (feature 182's focus gating).
+  terminal does (the focus-gated terminal and theme polls recorded in CHANGELOG, `perf: gate terminal/OS-theme polls on window focus`).
 
 ## Requirements *(mandatory)*
 
@@ -241,7 +241,7 @@ confirm each project shows its own.
 - **FR-014**: A layout that is missing, unreadable, from a newer version, or names terminals that no
   longer exist MUST degrade to a single pane or empty panes, never block startup or the project.
 - **FR-015**: Idle CPU with the maximum number of panes open and no output MUST stay within the
-  existing idle budget: no per-pane timers or polls beyond the existing focus-gated ones, and
+  existing idle budget (a single open terminal's idle CPU today): no per-pane timers or polls beyond the existing focus-gated ones, and
   redraw only on output or interaction.
 - **FR-016**: A project's panes MUST be independent of other projects': switching projects switches
   layouts and never shows one project's terminal in another's area.
@@ -265,7 +265,7 @@ confirm each project shows its own.
   actions (one split, one choice), by mouse or keyboard.
 - **SC-002**: In 100% of automated trials across all panes of 2- to 6-pane layouts, a key press
   reaches exactly one terminal, the focused pane's.
-- **SC-003**: In every pane, the PTY's reported rows and columns equal the pane's own, within one
+- **SC-003**: In every pane, the rows and columns the terminal program reports equal the pane's own, within one
   cell, after any split, drag, close or window resize.
 - **SC-004**: Idle CPU with 6 open panes and no output is no more than 10% above the single-pane
   figure on the same machine, and a window without input focus shows no added polls.
