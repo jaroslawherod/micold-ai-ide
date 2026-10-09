@@ -26,6 +26,7 @@ mod install_location;
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
 mod picker_scroll;
+pub mod panes;
 /// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
 ///
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
@@ -294,6 +295,7 @@ pub fn view<'a>(
         connection,
         sandbox,
         None,
+        None,
     )
 }
 
@@ -310,6 +312,7 @@ pub fn view_with<'a>(
     connection: &ConnectionStatus,
     sandbox: &crate::features::sandbox::Sandbox,
     composer: Option<&'a iced::widget::text_editor::Content>,
+    panes: Option<&panes::PaneArea<'a>>,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -358,7 +361,7 @@ pub fn view_with<'a>(
             compare
         } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
-            terminal::pane(state, grid, selection, display_offset, scheme, link_context)
+            terminal::pane(state, panes, grid, selection, display_offset, scheme, link_context)
         } else {
             shell::view(state, scheme)
         };

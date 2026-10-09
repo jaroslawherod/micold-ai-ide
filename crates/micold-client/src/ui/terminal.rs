@@ -410,6 +410,7 @@ pub fn link_context(
 /// `link_context` is what the pane's links resolve against (feature 031, FR-012, FR-018).
 pub fn pane<'a>(
     state: &'a State,
+    area: Option<&crate::ui::panes::PaneArea<'a>>,
     grid: Option<&'a GridCache>,
     selection: Option<&'a crate::selection::Selection>,
     display_offset: usize,
@@ -442,7 +443,12 @@ pub fn pane<'a>(
 
     // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
     // an empty state if the runtime is not yet available (e.g. the session is still starting).
-    let body: Element<'a, Message> = match grid {
+    let several = area.filter(|a| a.layout.len() > 1);
+    let body: Element<'a, Message> = if let Some(area) = several {
+        // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
+        crate::ui::panes::view(state, area, selection, display_offset, scheme, &link_context)
+    } else {
+    match grid {
         Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
             .selection(selection)
             .display_offset(display_offset)
@@ -456,9 +462,14 @@ pub fn pane<'a>(
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into(),
+    }
     };
     // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
-    let body: Element<'a, Message> = GridSizeReporter::new(body).into();
+    let body: Element<'a, Message> = if several.is_some() {
+        body
+    } else {
+        GridSizeReporter::new(body).into()
+    };
 
     // While the right-click context menu is open, float it over the terminal body anchored at the
     // clicked point; choosing Copy/Paste or clicking outside dismisses it (FR-013).
@@ -643,6 +654,13 @@ pub fn pane<'a>(
         .accent_on(marked_beyond)
         .width(Length::Fill),
     );
+    // Feature 484: split the focused pane. Unconditional like its siblings; absent only where no
+    // pane area is passed (a headless test of the bar).
+    if let Some(area) = area {
+        if let Some(p) = area.layout.pane(area.layout.focused()) {
+            bar = bar.push(crate::ui::panes::split_buttons(p, r));
+        }
+    }
     // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005). **Unconditional**
     // since feature 027 FR-004: it used to be drawn only in Regular mode, which was coherent while
     // a mode toggle existed — a session on its AI tab had another way back to a terminal. It has
@@ -706,7 +724,7 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
         .unwrap_or_default()
 }
 
-fn session_title(state: &State, id: SessionId) -> String {
+pub(crate) fn session_title(state: &State, id: SessionId) -> String {
     state
         .active_sessions()
         .iter()
@@ -778,7 +796,7 @@ fn session_status(state: &State, id: SessionId) -> String {
 /// handles the `TerminalMode` split, and is already what decides whether the `restart` control is
 /// there to be pointed at. Deriving both from it is what makes the two *unable* to disagree —
 /// which they did, for exactly as long as they were two readings of one fact.
-fn empty_terminal_message(state: &State, id: SessionId) -> String {
+pub(crate) fn empty_terminal_message(state: &State, id: SessionId) -> String {
     if !attached_process_restartable(state, id) {
         return "Starting…".to_string();
     }

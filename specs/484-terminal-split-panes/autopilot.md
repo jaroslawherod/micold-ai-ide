@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M1
-- **Next step**: M1 in progress (implement)
+- **Next step**: M1 verify (scoped gate, Review A, Review B, visual pass, full gate, PR file)
 
 ## Pull requests
 
@@ -53,15 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 in progress on branch `claude/project-thread-wysm57` (from origin/main 909f4b23). Not pushed, no PR yet. Part 1 commit f7db6d74; part 2 commit follows it.
-
-Done: T001–T008, T006a. Core `pane_layout.rs`, wire 37, daemon multi-terminal streaming (part 1). Part 2 (client state, T008 + most of T009): `App.grids` keyed by `TerminalRef`; `App.pane_layouts` (per project), `viewed_terminals_sent`, `viewed_dirty`, `pane_synced_displayed`; `App::displayed_terminal()` (active session + its selected process); `crates/micold-client/src/shell/panes.rs` with `sync` (called from `update`: layout follows the selection via `show_or_focus`, prunes gone terminals, sends `SetViewedTerminals` only when more than one pane or when leaving that), `split_pane`, `focus_pane`/`follow_focus` (selection follows the focused pane), `layout`. `on_terminal_bytes` names `process: Some(..)` only with several panes. Tests: `main_tests.rs` `mod panes` (6 pass). Whole workspace clippy `-D warnings` clean; `micold-client` tests pass. `split_pane`/`focus_pane` carry `#[allow(dead_code)]` until T013/T016 wire them: remove it then. Disk filled once: `rm -rf target-shared` was done (approved).
-
-Open in T009: `PaneMsg` (Split, Show, FocusPane, Resized) in `features/session.rs`, `App.pane_sizes` replacing `last_grid` (`last_grid` kept so far; `send_pane_size`, `on_terminal_resized` still send `process: None` and the focused size only), per-pane selection/scroll (selection and `display_offset` are still single, for the displayed terminal; a `ScrollbackResponse` names no process so it lands on the displayed terminal's grid).
-
-Next: T009 rest, then T010–T020 (SplitView widget in `ui/material/split_view.rs`, pane rendering in `ui/terminal.rs` with a `terminal_pane` per leaf, pane header split buttons + empty-pane picker, focus mark, key routing and one-press focus, per-pane resize and drag coalescing, docs `docs/user-guide/terminal-panes.md` + `docs/SUMMARY.md` link). T018's daemon half is already in `pane_terminals.rs`. Then verify.md: scoped gate + Review A/B + visual pass + full gate + PR file at the scratchpad path in the prompt.
-
-Open findings: none.
+None.
 
 ## Open escalation
 
@@ -69,4 +61,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test.
+- Empty-pane picker is a list of buttons (one press per choice) rather than the `picker` component; revisit if review asks.

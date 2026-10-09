@@ -996,6 +996,7 @@ mod acceptance {
                     micold_client::ui::terminal::link_context(&self.app.core, &self.app.sandbox);
                 let mut element = micold_client::ui::terminal::pane(
                     &self.app.core,
+                    None,
                     self.app
                         .grids
                         .get(&micold_core::protocol::messages::TerminalRef {

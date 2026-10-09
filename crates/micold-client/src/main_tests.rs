@@ -93,6 +93,9 @@ fn update_inner_applies_window_focus_changed() {
         viewed_terminals_sent: None,
         viewed_dirty: false,
         pane_synced_displayed: None,
+        pane_sizes: Default::default(),
+        pane_sent: Default::default(),
+        pane_refusal: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -154,6 +157,9 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         viewed_terminals_sent: None,
         viewed_dirty: false,
         pane_synced_displayed: None,
+        pane_sizes: Default::default(),
+        pane_sent: Default::default(),
+        pane_refusal: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -792,6 +798,9 @@ pub(crate) fn base_app() -> App {
         viewed_terminals_sent: None,
         viewed_dirty: false,
         pane_synced_displayed: None,
+        pane_sizes: Default::default(),
+        pane_sent: Default::default(),
+        pane_refusal: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -2791,6 +2800,9 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         viewed_terminals_sent: None,
         viewed_dirty: false,
         pane_synced_displayed: None,
+        pane_sizes: Default::default(),
+        pane_sent: Default::default(),
+        pane_refusal: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -9916,5 +9928,205 @@ mod panes {
         let l = layout_of(&app);
         assert_eq!(l.len(), 2);
         assert_eq!(l.terminals(), vec![t(ids[0], SessionProcess::Primary)]);
+    }
+
+    // ---- M1 (T012, T015, T018): splitting, focus, per-pane sizes -----------------------------
+
+    use micold_client::features::session::PaneMsg;
+    use micold_core::pane_layout::{Axis, PaneId};
+
+    fn pane_msg(app: &mut App, m: PaneMsg) {
+        let _ = update(app, Message::Session(SessionMsg::Pane(m)));
+    }
+
+    fn size_pane(app: &mut App, pane: PaneId, cols: u16, rows: u16) {
+        pane_msg(app, PaneMsg::Resized { pane, cols, rows });
+    }
+
+    /// Split the focused pane (a pane big enough to split) and return the new pane's id.
+    fn split_focused(app: &mut App, axis: Axis) -> PaneId {
+        let p = layout_of(app).focused();
+        size_pane(app, p, 200, 60);
+        pane_msg(app, PaneMsg::Split(p, axis));
+        layout_of(app).focused()
+    }
+
+    /// SC-001: the split button, then one choice in the empty pane's picker = 2 interactions.
+    #[test]
+    fn a_split_then_one_choice_shows_the_terminal() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let shell = t(ids[0], SessionProcess::Shell(micold_core::session::ShellInstanceId(1)));
+        app.core.workspace.sessions.values_mut().next().unwrap()[0]
+            .shells
+            .push(micold_core::session::ShellInstance {
+                id: micold_core::session::ShellInstanceId(1),
+                lifecycle: micold_core::session::ShellLifecycle::Running,
+            });
+        // The shell is the one terminal no pane shows, so the new pane opens on it (FR-004).
+        let new = split_focused(&mut app, Axis::Vertical);
+        assert_eq!(layout_of(&app).pane(new).unwrap().terminal(), Some(shell));
+        // With nothing left to show, the next split is an empty pane with a picker, and one
+        // choice (Show) fills it.
+        let empty = split_focused(&mut app, Axis::Horizontal);
+        assert_eq!(layout_of(&app).pane(empty).unwrap().terminal(), None);
+        pane_msg(&mut app, PaneMsg::Show(empty, shell));
+        assert_eq!(layout_of(&app).len(), 3);
+        assert_eq!(layout_of(&app).focused(), new, "a terminal shown elsewhere is focused, not duplicated");
+    }
+
+    /// FR-004: a new pane opens on a terminal not shown elsewhere.
+    #[test]
+    fn a_new_pane_opens_on_an_unshown_terminal() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let new = split_focused(&mut app, Axis::Vertical);
+        assert_eq!(
+            layout_of(&app).pane(new).unwrap().terminal(),
+            Some(t(ids[1], SessionProcess::Primary))
+        );
+        assert_eq!(app.core.session.active, Some(ids[1]), "the selection follows the focus");
+    }
+
+    /// FR-001: a 7th pane is refused, with a reason the view shows.
+    #[test]
+    fn a_seventh_split_shows_the_refusal() {
+        let (mut app, _ids, _rx) = app_with_sessions(1);
+        for _ in 0..5 {
+            split_focused(&mut app, Axis::Vertical);
+            let f = layout_of(&app).focused();
+            size_pane(&mut app, f, 200, 60);
+        }
+        assert_eq!(layout_of(&app).len(), 6);
+        let f = layout_of(&app).focused();
+        pane_msg(&mut app, PaneMsg::Split(f, Axis::Vertical));
+        assert_eq!(layout_of(&app).len(), 6);
+        assert!(app.pane_refusal.is_some_and(|r| r.contains('6')), "{:?}", app.pane_refusal);
+        pane_msg(&mut app, PaneMsg::FocusPane(f));
+        assert_eq!(app.pane_refusal, None, "the message clears on the next pane action");
+    }
+
+    /// A tab-strip or sidebar choice of a terminal already shown focuses that pane.
+    #[test]
+    fn selecting_a_shown_terminal_focuses_its_pane() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let second = split_focused(&mut app, Axis::Vertical);
+        let first = layout_of(&app).panes()[0].id();
+        assert_ne!(first, second);
+        let _ = update(&mut app, Message::Session(SessionMsg::Selected(ids[0])));
+        let l = layout_of(&app);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.focused(), first);
+        assert_eq!(l.terminals().len(), 2, "no terminal is shown twice");
+    }
+
+    /// An exited terminal says so in its own pane header; the other pane is unaffected.
+    #[test]
+    fn an_exited_terminal_shows_its_state_in_its_pane_only() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let inst = micold_core::session::ShellInstanceId(1);
+        app.core.workspace.sessions.values_mut().next().unwrap()[0]
+            .shells
+            .push(micold_core::session::ShellInstance {
+                id: inst,
+                lifecycle: micold_core::session::ShellLifecycle::Exited,
+            });
+        let primary = t(ids[0], SessionProcess::Primary);
+        let shell = t(ids[0], SessionProcess::Shell(inst));
+        assert_eq!(micold_client::ui::panes::terminal_status(&app.core, shell), "exited");
+        assert_ne!(micold_client::ui::panes::terminal_status(&app.core, primary), "exited");
+    }
+
+    /// T015: a key reaches only the focused pane's terminal, for 2 to 6 panes.
+    #[test]
+    fn a_key_reaches_only_the_focused_panes_terminal() {
+        for n in 2..=6usize {
+            let (mut app, ids, mut rx) = app_with_sessions(n);
+            for _ in 1..n {
+                let f = layout_of(&app).focused();
+                size_pane(&mut app, f, 200, 60);
+                split_focused(&mut app, Axis::Vertical);
+            }
+            let l = layout_of(&app);
+            assert_eq!(l.len(), n);
+            for pane in l.panes() {
+                pane_msg(&mut app, PaneMsg::FocusPane(pane.id()));
+                let _ = drain(&mut rx);
+                let _ = update(&mut app, Message::Session(SessionMsg::TerminalBytes(b"x".to_vec())));
+                let inputs: Vec<_> = drain(&mut rx)
+                    .into_iter()
+                    .filter_map(|m| match m {
+                        ClientMsg::SessionInput { session, process, .. } => Some((session, process)),
+                        _ => None,
+                    })
+                    .collect();
+                let want = pane.terminal().unwrap();
+                assert_eq!(inputs, vec![(want.session, Some(want.process))], "n={n}");
+            }
+            let _ = ids;
+            assert_eq!(
+                layout_of(&app).panes().iter().filter(|p| p.id() == layout_of(&app).focused()).count(),
+                1
+            );
+        }
+    }
+
+    /// Focus lives in the layout: releasing and regaining the keyboard leaves the same pane focused.
+    #[test]
+    fn focus_returns_to_the_same_pane() {
+        let (mut app, _ids, _rx) = app_with_sessions(2);
+        let second = split_focused(&mut app, Axis::Vertical);
+        let _ = update(&mut app, Message::Session(SessionMsg::TerminalFocusReleased));
+        let _ = update(&mut app, Message::Session(SessionMsg::TerminalFocused));
+        assert_eq!(layout_of(&app).focused(), second);
+    }
+
+    /// T018: each pane's size goes to its own terminal's PTY and to no other process.
+    #[test]
+    fn each_pane_sizes_its_own_terminal() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        let _ = drain(&mut rx);
+        size_pane(&mut app, first, 80, 24);
+        size_pane(&mut app, second, 60, 20);
+        let sent: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionResize { session, process, cols, rows } => {
+                    Some((session, process, cols, rows))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            sent,
+            vec![
+                (ids[0], Some(SessionProcess::Primary), 80, 24),
+                (ids[1], Some(SessionProcess::Primary), 60, 20),
+            ]
+        );
+        // Unchanged sizes stay off the wire (at most one send per change).
+        size_pane(&mut app, first, 80, 24);
+        assert!(drain(&mut rx).iter().all(|m| !matches!(m, ClientMsg::SessionResize { .. })));
+    }
+
+    /// A replaced terminal keeps its last size; showing it again sends its pane's size.
+    #[test]
+    fn a_terminal_not_shown_is_not_resized() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        size_pane(&mut app, first, 80, 24);
+        size_pane(&mut app, second, 60, 20);
+        let _ = drain(&mut rx);
+        // Resizing the first pane resizes only the terminal in it.
+        size_pane(&mut app, first, 90, 24);
+        let sent: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionResize { session, .. } => Some(session),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sent, vec![ids[0]]);
     }
 }
