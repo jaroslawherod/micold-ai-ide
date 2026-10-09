@@ -86,14 +86,15 @@ pub struct TermMode {
     pub alt_screen: bool,
 }
 
-/// A pane shortcut (feature 484, FR-009). The close chord (`Ctrl/Cmd+Shift+W`) joins in M3, once a
-/// pane can be closed.
+/// A pane shortcut (feature 484, FR-009).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaneAction {
     /// Split the focused pane side by side.
     SplitVertical,
     /// Split the focused pane stacked.
     SplitHorizontal,
+    /// Close the focused pane (its session keeps running).
+    Close,
     /// Move focus to the neighbouring pane.
     Focus(micold_core::pane_layout::Direction),
 }
@@ -217,7 +218,7 @@ fn is_new_terminal_chord(key: &Key, mods: Mods) -> bool {
     }
 }
 
-/// Pane chords (macOS `Cmd+Shift+D/H/Arrow`, else `Ctrl+Shift+D/H/Arrow`), built like
+/// Pane chords (macOS `Cmd+Shift+D/H/W/Arrow`, else `Ctrl+Shift+D/H/W/Arrow`), built like
 /// [`is_release_chord`] (contracts/keybindings.md).
 fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {
     use micold_core::pane_layout::Direction;
@@ -235,6 +236,7 @@ fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {
         Key::Char(c) => match c.to_ascii_lowercase() {
             'd' => Some(PaneAction::SplitVertical),
             'h' => Some(PaneAction::SplitHorizontal),
+            'w' => Some(PaneAction::Close),
             _ => None,
         },
         Key::Named(NamedKey::ArrowLeft) => Some(PaneAction::Focus(Direction::Left)),

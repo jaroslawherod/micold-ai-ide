@@ -78,11 +78,11 @@
 
 **Independent test**: drag, double press, close, swap; sessions keep running (SC-005).
 
-- [ ] T024 [P] [US4] Write failing unit tests in `crates/micold-core/src/pane_layout.rs`: `close` refuses the last pane, sibling replaces the parent, focus → nearest surviving leaf; `swap(a, b)`; `set_ratio` clamped by minimum sizes; `reset_equal`.
-- [ ] T025 [US4] Implement `close`, `swap`, `set_ratio`, `reset_equal` in `crates/micold-core/src/pane_layout.rs`. Make T024 pass.
-- [ ] T026 [P] [US4] Write failing tests: `SplitView` divider drag (pattern of `resize_handle.rs`, widget sees all mouse events once dragging), double press → equal, no pane below the minimum (geometry gate); client tests in `main_tests.rs`: dragging a header onto another pane swaps; closing a pane or replacing its terminal sends no stop / restart / detach message and the session stays in tab strip and sidebar (FR-007, SC-005); closing the focused pane moves focus; closing the last pane is refused with a visible reason.
-- [ ] T027 [US4] Implement divider drag and double press in `crates/micold-client/src/ui/material/split_view.rs`, pane header close button and drag-to-swap in `crates/micold-client/src/ui/terminal.rs`, and the `Ctrl/Cmd+Shift+W` chord in `crates/micold-client/src/keymap.rs`. Make T026 pass.
-- [ ] T028 [US4] Docs: add resize, close and swap to `docs/user-guide/terminal-panes.md`.
+- [x] T024 [P] [US4] Write failing unit tests in `crates/micold-core/src/pane_layout.rs`: `close` refuses the last pane, sibling replaces the parent, focus → nearest surviving leaf; `swap(a, b)`; `set_ratio` clamped by minimum sizes; `reset_equal`.
+- [x] T025 [US4] Implement `close`, `swap`, `set_ratio`, `reset_equal` in `crates/micold-core/src/pane_layout.rs`. Make T024 pass.
+- [x] T026 [P] [US4] Write failing tests: `SplitView` divider drag (pattern of `resize_handle.rs`, widget sees all mouse events once dragging), double press → equal, no pane below the minimum (geometry gate); client tests in `main_tests.rs`: dragging a header onto another pane swaps; closing a pane or replacing its terminal sends no stop / restart / detach message and the session stays in tab strip and sidebar (FR-007, SC-005); closing the focused pane moves focus; closing the last pane is refused with a visible reason.
+- [x] T027 [US4] Implement divider drag and double press in `crates/micold-client/src/ui/material/split_view.rs`, pane header close button and drag-to-swap in `crates/micold-client/src/ui/terminal.rs`, and the `Ctrl/Cmd+Shift+W` chord in `crates/micold-client/src/keymap.rs`. Make T026 pass.
+- [x] T028 [US4] Docs: add resize, close and swap to `docs/user-guide/terminal-panes.md`.
 
 ## Phase 8: User Story 6 - The layout survives a restart (P2)
 

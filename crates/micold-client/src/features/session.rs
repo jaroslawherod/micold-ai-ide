@@ -1498,6 +1498,10 @@ pub enum PaneMsg {
         micold_core::pane_layout::PaneId,
         micold_core::pane_layout::Axis,
     ),
+    /// Close `pane` (its header's close button, FR-006); the session keeps running (FR-007).
+    Close(micold_core::pane_layout::PaneId),
+    /// A divider drag, double press or header drop (FR-005, FR-008).
+    Gesture(crate::ui::SplitEvent),
     /// Show `terminal` in `pane` (the empty-pane picker, FR-004).
     Show(
         micold_core::pane_layout::PaneId,

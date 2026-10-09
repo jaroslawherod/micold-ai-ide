@@ -100,6 +100,8 @@ pub enum Refusal {
     TooSmall,
     /// No such pane.
     UnknownPane,
+    /// The last pane cannot be closed (the area always has one).
+    LastPane,
 }
 
 impl Refusal {
@@ -109,6 +111,7 @@ impl Refusal {
             Refusal::TooManyPanes => "At most 6 panes fit.",
             Refusal::TooSmall => "This pane is too small to split.",
             Refusal::UnknownPane => "That pane is gone.",
+            Refusal::LastPane => "The last pane stays open.",
         }
     }
 }
@@ -129,6 +132,8 @@ pub struct Rect {
 /// The line between two siblings.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Divider {
+    /// The whole area of the split this line divides (its two children together).
+    pub area: Rect,
     /// `Vertical`: a vertical line between side-by-side children.
     pub axis: Axis,
     /// Where the line is; `w` or `h` is zero along the axis, the other spans the split's extent.
@@ -176,6 +181,70 @@ fn find_leaf_mut(node: &mut PaneNode, id: PaneId) -> Option<&mut PaneNode> {
             find_leaf_mut(first, id).or_else(move || find_leaf_mut(second, id))
         }
     }
+}
+
+/// The `n`th split in tree (pre-)order, counting down.
+fn split_at_mut<'a>(node: &'a mut PaneNode, n: &mut usize) -> Option<&'a mut PaneNode> {
+    if matches!(node, PaneNode::Leaf(_)) {
+        return None;
+    }
+    if *n == 0 {
+        return Some(node);
+    }
+    *n -= 1;
+    let PaneNode::Split { first, second, .. } = node else {
+        return None;
+    };
+    split_at_mut(first, n).or_else(move || split_at_mut(second, n))
+}
+
+/// Panes `node` shows side by side along `axis`: what an equal share is measured in.
+fn panes_along(node: &PaneNode, axis: Axis) -> usize {
+    match node {
+        PaneNode::Leaf(_) => 1,
+        PaneNode::Split {
+            axis: a,
+            first,
+            second,
+            ..
+        } => {
+            let (f, s) = (panes_along(first, axis), panes_along(second, axis));
+            if *a == axis {
+                f + s
+            } else {
+                f.max(s)
+            }
+        }
+    }
+}
+
+/// The surviving leaf nearest a closed one: the sibling's edge that touched it.
+fn nearest_leaf(node: &PaneNode, from_first_side: bool) -> PaneId {
+    match node {
+        PaneNode::Leaf(p) => p.id,
+        PaneNode::Split { first, second, .. } => nearest_leaf(
+            if from_first_side { first } else { second },
+            from_first_side,
+        ),
+    }
+}
+
+/// Remove leaf `id` from `node`: its sibling takes the parent's place. Returns the leaf focus
+/// should move to when `id` was found.
+fn close_in(node: &mut PaneNode, id: PaneId) -> Option<PaneId> {
+    let PaneNode::Split { first, second, .. } = node else {
+        return None;
+    };
+    let closed_first = matches!(&**first, PaneNode::Leaf(p) if p.id == id);
+    let closed_second = matches!(&**second, PaneNode::Leaf(p) if p.id == id);
+    if closed_first || closed_second {
+        let keep = if closed_first { second } else { first };
+        let keep = std::mem::replace(&mut **keep, PaneNode::Leaf(Pane { id, terminal: None }));
+        let near = nearest_leaf(&keep, closed_first);
+        *node = keep;
+        return Some(near);
+    }
+    close_in(first, id).or_else(|| close_in(second, id))
 }
 
 /// Smallest extent `node` needs along `axis`.
@@ -256,6 +325,7 @@ fn place_node(node: &PaneNode, r: Rect, min: (f32, f32), out: &mut Placement) {
                 ),
             };
             out.dividers.push(Divider {
+                area: r,
                 axis: *axis,
                 rect: line,
             });
@@ -452,6 +522,121 @@ impl PaneLayout {
     pub fn show_or_focus(&mut self, t: TerminalRef) {
         let at = self.focused;
         let _ = self.show(at, t);
+    }
+
+    /// Close `pane`: its sibling takes the freed space (FR-006). The terminal it showed is only
+    /// no longer shown; nothing here touches the session. When the focused pane closes, focus
+    /// moves to the nearest surviving pane. The last pane is refused.
+    pub fn close(&mut self, pane: PaneId) -> Result<(), Refusal> {
+        if self.pane(pane).is_none() {
+            return Err(Refusal::UnknownPane);
+        }
+        if self.len() < 2 {
+            return Err(Refusal::LastPane);
+        }
+        let near = close_in(&mut self.root, pane).ok_or(Refusal::UnknownPane)?;
+        if self.focused == pane {
+            self.focused = near;
+        }
+        Ok(())
+    }
+
+    /// Swap the terminals of `a` and `b` (FR-008) and focus `b`, where the moved terminal now is.
+    pub fn swap(&mut self, a: PaneId, b: PaneId) -> Result<(), Refusal> {
+        let (Some(ta), Some(tb)) = (
+            self.pane(a).map(Pane::terminal),
+            self.pane(b).map(Pane::terminal),
+        ) else {
+            return Err(Refusal::UnknownPane);
+        };
+        if let Some(PaneNode::Leaf(p)) = find_leaf_mut(&mut self.root, a) {
+            p.terminal = tb;
+        }
+        if let Some(PaneNode::Leaf(p)) = find_leaf_mut(&mut self.root, b) {
+            p.terminal = ta;
+        }
+        self.focused = b;
+        Ok(())
+    }
+
+    /// Set the `index`th divider (the order of [`Placement::dividers`]) to `ratio` of its split,
+    /// kept within both children's minimum sizes for an area of `total`. False when there is no
+    /// such divider.
+    pub fn set_ratio(
+        &mut self,
+        index: usize,
+        ratio: f32,
+        total: (f32, f32),
+        min: (f32, f32),
+    ) -> bool {
+        let area = self.place(total, min).dividers.get(index).map(|d| d.area);
+        let mut n = index;
+        let Some(PaneNode::Split {
+            axis,
+            ratio: r,
+            first,
+            second,
+        }) = split_at_mut(&mut self.root, &mut n)
+        else {
+            return false;
+        };
+        let Some(area) = area else {
+            return false;
+        };
+        let extent = match axis {
+            Axis::Vertical => area.w,
+            Axis::Horizontal => area.h,
+        };
+        let (fm, sm) = (
+            min_extent(first, *axis, min),
+            min_extent(second, *axis, min),
+        );
+        let mut lo = RATIO_MIN;
+        let mut hi = RATIO_MAX;
+        if extent > 0.0 && extent >= fm + sm {
+            lo = lo.max(fm / extent);
+            hi = hi.min(1.0 - sm / extent);
+        }
+        *r = ratio.clamp(lo, hi.max(lo));
+        true
+    }
+
+    /// The `index`th divider's share for its first child.
+    pub fn ratio(&self, index: usize) -> Option<f32> {
+        fn nth(n: &PaneNode, i: &mut usize) -> Option<f32> {
+            let PaneNode::Split {
+                ratio,
+                first,
+                second,
+                ..
+            } = n
+            else {
+                return None;
+            };
+            if *i == 0 {
+                return Some(*ratio);
+            }
+            *i -= 1;
+            nth(first, i).or_else(|| nth(second, i))
+        }
+        nth(&self.root, &mut { index })
+    }
+
+    /// Give the `index`th divider's two sides equal pane shares (FR-005, the double press).
+    pub fn reset_equal(&mut self, index: usize) -> bool {
+        let mut n = index;
+        let Some(PaneNode::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        }) = split_at_mut(&mut self.root, &mut n)
+        else {
+            return false;
+        };
+        let (f, s) = (panes_along(first, *axis), panes_along(second, *axis));
+        *ratio = f as f32 / (f + s) as f32;
+        true
     }
 
     /// Empty every pane whose terminal `live` rejects. Never removes a pane.
@@ -748,5 +933,91 @@ mod tests {
             invariants(&l);
             tiles(&l, (900.0, 700.0));
         }
+    }
+
+    #[test]
+    fn closing_a_pane_gives_its_space_to_the_sibling_and_moves_focus_to_the_nearest_survivor() {
+        let (mut l, a, b, c) = grid();
+        assert_eq!(l.focused(), c);
+        l.close(c).unwrap();
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.focused(), b, "the sibling that touched the closed pane");
+        let rects = l.rects(BIG, MIN);
+        assert_eq!(rects[1].1.h, BIG.1, "b fills the freed height");
+        l.close(a).unwrap();
+        assert_eq!(l.len(), 1);
+        assert_eq!(l.focused(), b, "focus unchanged when another pane closed");
+        assert_eq!(l.close(b), Err(Refusal::LastPane));
+        assert_eq!(l.close(PaneId(99)), Err(Refusal::UnknownPane));
+        invariants(&l);
+    }
+
+    #[test]
+    fn closing_keeps_the_other_terminals_and_unfocused_focus() {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        l.show(a, t(1, None)).unwrap();
+        let b = l
+            .split(a, Axis::Vertical, BIG, MIN, Some(t(2, None)))
+            .unwrap();
+        let c = l
+            .split(b, Axis::Vertical, BIG, MIN, Some(t(3, None)))
+            .unwrap();
+        l.focus(a);
+        l.close(b).unwrap();
+        assert_eq!(l.focused(), a);
+        assert_eq!(l.terminals(), vec![t(1, None), t(3, None)]);
+        assert!(l.pane(c).is_some());
+        l.focus(c);
+        l.close(c).unwrap();
+        assert_eq!(l.focused(), a, "nearest leaf of the sibling");
+    }
+
+    #[test]
+    fn swap_exchanges_terminals_including_an_empty_pane() {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        l.show(a, t(1, None)).unwrap();
+        let b = l.split(a, Axis::Vertical, BIG, MIN, None).unwrap();
+        l.swap(a, b).unwrap();
+        assert_eq!(l.pane(a).unwrap().terminal(), None);
+        assert_eq!(l.pane(b).unwrap().terminal(), Some(t(1, None)));
+        assert_eq!(l.focused(), b);
+        assert_eq!(l.swap(a, PaneId(99)), Err(Refusal::UnknownPane));
+        invariants(&l);
+    }
+
+    #[test]
+    fn set_ratio_is_clamped_by_the_minimum_sizes() {
+        let (mut l, ..) = grid();
+        // Divider 0 is the vertical one between a and (b over c): 1000 wide, min 100.
+        assert!(l.set_ratio(0, 0.3, BIG, MIN));
+        assert_eq!(l.place(BIG, MIN).panes[0].1.w, 300.0);
+        assert!(l.set_ratio(0, 0.0, BIG, MIN));
+        assert_eq!(
+            l.place(BIG, MIN).panes[0].1.w,
+            100.0,
+            "never below the minimum"
+        );
+        assert!(l.set_ratio(0, 1.0, BIG, MIN));
+        assert_eq!(l.place(BIG, MIN).panes[1].1.w, 100.0);
+        // Divider 1 is the horizontal one: 1000 high, min 50.
+        assert!(l.set_ratio(1, 0.99, BIG, MIN));
+        assert_eq!(l.place(BIG, MIN).panes[2].1.h, 50.0);
+        assert!(!l.set_ratio(2, 0.5, BIG, MIN), "no third divider");
+        invariants(&l);
+    }
+
+    #[test]
+    fn reset_equal_gives_every_pane_along_the_axis_the_same_share() {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        let b = l.split(a, Axis::Vertical, BIG, MIN, None).unwrap();
+        l.split(b, Axis::Vertical, BIG, MIN, None).unwrap();
+        l.set_ratio(0, 0.7, BIG, MIN);
+        assert!(l.reset_equal(0));
+        let w: Vec<f32> = l.place(BIG, MIN).panes.iter().map(|(_, r)| r.w).collect();
+        assert!(w.iter().all(|x| (x - 1000.0 / 3.0).abs() < 0.01), "{w:?}");
+        assert!(!l.reset_equal(5));
     }
 }

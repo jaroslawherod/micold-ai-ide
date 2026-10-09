@@ -393,6 +393,8 @@ fn pane_chords() -> Vec<(Key, PaneAction)> {
         (Key::Char('d'), PaneAction::SplitVertical),
         (Key::Char('D'), PaneAction::SplitVertical),
         (Key::Char('h'), PaneAction::SplitHorizontal),
+        (Key::Char('w'), PaneAction::Close),
+        (Key::Char('W'), PaneAction::Close),
         (
             Key::Named(NamedKey::ArrowLeft),
             PaneAction::Focus(Direction::Left),

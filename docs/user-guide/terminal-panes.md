@@ -32,12 +32,26 @@ receives them, so they shadow the same keys with Shift in a terminal program.
 |---|---|---|
 | Split side by side | Ctrl+Shift+D | Cmd+Shift+D |
 | Split stacked | Ctrl+Shift+H | Cmd+Shift+H |
+| Close the focused pane | Ctrl+Shift+W | Cmd+Shift+W |
 | Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The
-existing Ctrl+Shift+E (release focus), T (new terminal), C and V (copy, paste) are unchanged. A
-close shortcut arrives with closing panes.
+existing Ctrl+Shift+E (release focus), T (new terminal), C and V (copy, paste) are unchanged.
+
+## Resize, close and swap
+
+**Resize.** Drag the line between two panes; both resize as you drag, and neither goes below a
+minimum usable size. Double-press the line to give the panes on its two sides equal sizes again.
+The terminals are told their new size when you let go.
+
+**Close.** The × in a pane's header closes that pane, and so does Ctrl/Cmd+Shift+W for the focused
+one. The pane next to it takes the freed space and focus moves to it. Closing only removes the
+pane: the terminal it showed keeps running and stays in the tab strip and the sidebar, and you can
+put it in a pane again. The last pane cannot be closed; a message next to the panes says so.
+
+**Swap.** Drag a pane's header onto another pane. The two panes swap their terminals, and the
+outlined pane shows where it will land. Focus stays with the terminal you moved.
 
 ## Each pane has its own size
 

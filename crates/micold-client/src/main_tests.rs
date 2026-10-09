@@ -96,6 +96,7 @@ fn update_inner_applies_window_focus_changed() {
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
+        divider_dragging: false,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -160,6 +161,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
+        divider_dragging: false,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -801,6 +803,7 @@ pub(crate) fn base_app() -> App {
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
+        divider_dragging: false,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -2803,6 +2806,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
         pane_refusal: None,
+        divider_dragging: false,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -10204,5 +10208,176 @@ mod panes {
             })
             .collect();
         assert_eq!(sent, vec![ids[0]]);
+    }
+
+    // ---- M3 (T026): resize, close, swap ------------------------------------------------------
+
+    use micold_client::ui::SplitEvent;
+
+    fn wire(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
+        drain(rx)
+    }
+
+    /// FR-007, SC-005: closing a pane sends nothing that stops, restarts or detaches a session, and
+    /// the session stays in the workspace (tab strip and sidebar read it from there).
+    #[test]
+    fn closing_a_pane_leaves_every_session_running() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        assert_eq!(layout_of(&app).focused(), second);
+        let _ = wire(&mut rx);
+        pane_msg(&mut app, PaneMsg::Close(second));
+        let l = layout_of(&app);
+        assert_eq!(l.len(), 1);
+        assert_eq!(l.focused(), first, "focus moves to the surviving pane");
+        for m in wire(&mut rx) {
+            assert!(
+                !matches!(
+                    m,
+                    ClientMsg::SessionStop { .. }
+                        | ClientMsg::SessionKill { .. }
+                        | ClientMsg::SessionStart { .. }
+                        | ClientMsg::SessionRestart { .. }
+                        | ClientMsg::Detach { .. }
+                ),
+                "closing a pane sent {m:?}"
+            );
+        }
+        let still: Vec<_> = app
+            .core
+            .workspace
+            .sessions
+            .values()
+            .flatten()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(still, ids, "both sessions remain");
+        assert_eq!(app.core.session.active, Some(ids[0]));
+    }
+
+    /// Replacing a pane's terminal (picker, swap) is just as quiet.
+    #[test]
+    fn swapping_terminals_sends_no_session_lifecycle_message() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        let _ = wire(&mut rx);
+        pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Swap(first, second)));
+        let l = layout_of(&app);
+        assert_eq!(
+            l.pane(first).unwrap().terminal(),
+            Some(t(ids[1], SessionProcess::Primary))
+        );
+        assert_eq!(
+            l.pane(second).unwrap().terminal(),
+            Some(t(ids[0], SessionProcess::Primary))
+        );
+        assert_eq!(l.focused(), second, "focus follows the moved terminal");
+        assert_eq!(app.core.session.active, Some(ids[0]));
+        for m in wire(&mut rx) {
+            assert!(
+                !matches!(
+                    m,
+                    ClientMsg::SessionStop { .. }
+                        | ClientMsg::SessionKill { .. }
+                        | ClientMsg::SessionStart { .. }
+                        | ClientMsg::SessionRestart { .. }
+                        | ClientMsg::Detach { .. }
+                ),
+                "swap sent {m:?}"
+            );
+        }
+    }
+
+    /// Closing a pane that is not focused keeps focus where it was; the last pane is refused with
+    /// a visible reason.
+    #[test]
+    fn the_last_pane_cannot_be_closed_and_says_why() {
+        let (mut app, _ids, _rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        pane_msg(&mut app, PaneMsg::FocusPane(first));
+        pane_msg(&mut app, PaneMsg::Close(second));
+        assert_eq!(layout_of(&app).focused(), first);
+        assert_eq!(app.pane_refusal, None);
+        pane_msg(&mut app, PaneMsg::Close(first));
+        assert_eq!(layout_of(&app).len(), 1);
+        assert_eq!(app.pane_refusal, Some("The last pane stays open."));
+    }
+
+    /// FR-009: the close chord closes the focused pane.
+    #[test]
+    fn the_close_chord_closes_the_focused_pane() {
+        use micold_client::keymap::PaneAction;
+        let (mut app, _ids, _rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        split_focused(&mut app, Axis::Vertical);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::Close));
+        assert_eq!(layout_of(&app).len(), 1);
+        assert_eq!(layout_of(&app).focused(), first);
+    }
+
+    /// T018: while a divider is dragged the sizes are not sent; the release sends them once.
+    #[test]
+    fn a_divider_drag_sends_pane_sizes_once_on_release() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
+        let second = split_focused(&mut app, Axis::Vertical);
+        size_pane(&mut app, first, 100, 40);
+        size_pane(&mut app, second, 100, 40);
+        let _ = wire(&mut rx);
+        for (bp, cols) in [(3000u16, 60u16), (3500, 70), (4000, 80)] {
+            pane_msg(
+                &mut app,
+                PaneMsg::Gesture(SplitEvent::Drag {
+                    index: 0,
+                    basis_points: bp,
+                }),
+            );
+            // The view lays the panes out again at the new share and reports their sizes.
+            size_pane(&mut app, first, cols, 40);
+            size_pane(&mut app, second, 200 - cols, 40);
+        }
+        assert!(
+            wire(&mut rx)
+                .iter()
+                .all(|m| !matches!(m, ClientMsg::SessionResize { .. })),
+            "nothing is sent mid-drag"
+        );
+        assert_eq!(layout_of(&app).ratio(0), Some(0.4));
+        pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Release));
+        let sent: Vec<_> = wire(&mut rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionResize {
+                    session,
+                    cols,
+                    rows,
+                    ..
+                } => Some((session, cols, rows)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sent, vec![(ids[0], 80, 40), (ids[1], 120, 40)]);
+        assert!(!app.divider_dragging);
+    }
+
+    /// FR-005: a double press restores equal sizes.
+    #[test]
+    fn a_double_press_on_the_divider_restores_equal_sizes() {
+        let (mut app, _ids, _rx) = app_with_sessions(2);
+        split_focused(&mut app, Axis::Vertical);
+        pane_msg(
+            &mut app,
+            PaneMsg::Gesture(SplitEvent::Drag {
+                index: 0,
+                basis_points: 2000,
+            }),
+        );
+        pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Release));
+        assert_eq!(layout_of(&app).ratio(0), Some(0.2));
+        pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Reset(0)));
+        assert_eq!(layout_of(&app).ratio(0), Some(0.5));
     }
 }
