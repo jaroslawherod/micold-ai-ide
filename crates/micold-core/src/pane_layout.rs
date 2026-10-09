@@ -93,7 +93,7 @@ impl Refusal {
     /// A sentence for the user.
     pub fn reason(self) -> &'static str {
         match self {
-            Refusal::TooManyPanes => "At most 6 panes fit. Close one to split again.",
+            Refusal::TooManyPanes => "At most 6 panes fit.",
             Refusal::TooSmall => "This pane is too small to split.",
             Refusal::UnknownPane => "That pane is gone.",
         }
