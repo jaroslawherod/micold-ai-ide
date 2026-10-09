@@ -93,4 +93,6 @@ and its quoted path appears at the prompt, with nothing sent until you press Ent
 - If the clipboard holds text, even together with an image (a copied spreadsheet range, say), the
   text is pasted as always and no file is made.
 - In a regular terminal, paste works as before.
+- In a session that runs in the sandbox, paths are inserted as the container sees them; see
+  [Dropping files into a sandboxed session](sandboxed-daemon.md#dropping-files-into-a-sandboxed-session).
 - If the image can't be read or saved, nothing is inserted and a notice says why.

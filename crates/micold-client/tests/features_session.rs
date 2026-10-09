@@ -838,6 +838,7 @@ mod drops {
                 paths: paths.iter().map(PathBuf::from).collect(),
                 target,
                 shell: ShellKind::Posix,
+                sandbox: None,
             },
         )
     }
@@ -936,6 +937,7 @@ mod drops {
                 paths: vec![PathBuf::from("/ok.png"), PathBuf::from("/bad%.png")],
                 target: DropTarget::Terminal(t),
                 shell: ShellKind::Cmd,
+                sandbox: None,
             },
         );
         assert!(
@@ -960,6 +962,7 @@ mod drops {
             SessionMsg::ImagePasted {
                 terminal: t,
                 shell: ShellKind::Posix,
+                sandbox: None,
                 result: result.map(PathBuf::from).map_err(str::to_string),
             },
         )
@@ -975,6 +978,142 @@ mod drops {
         assert_eq!(*terminal, t);
         assert_eq!(text, "'/w/.micold-pasted/s/1-0.png'");
         assert!(!text.contains(['\n', '\r']));
+    }
+
+    /// A sandbox sharing one project at `/mnt/host/p` (a Windows-style mapping, so the container
+    /// path differs from the host's), with that container running it.
+    fn sandbox_for(root: &std::path::Path) -> micold_core::path_insert::SandboxShare {
+        use micold_core::sandbox::{
+            HomeMount, MountSet, ProjectMount, SecretMount, StateMount, STATE_CONTAINER_DIR,
+        };
+        let mut project = ProjectMount::project_for(root.join("proj"), false);
+        project.container = PathBuf::from("/mnt/host/p");
+        micold_core::path_insert::SandboxShare {
+            mounts: MountSet {
+                projects: vec![project],
+                state: StateMount {
+                    host: root.join("state"),
+                    container: PathBuf::from(STATE_CONTAINER_DIR),
+                },
+                home: HomeMount {
+                    host: root.join("state/home"),
+                    container: PathBuf::from("/home/u"),
+                },
+                secret: SecretMount {
+                    host: root.join("state/token"),
+                    container: PathBuf::from("/run/token"),
+                },
+                credentials: Vec::new(),
+            },
+            mounted: vec!["/mnt/host/p".to_string()],
+        }
+    }
+
+    fn sandbox_tree() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        for d in ["proj", "out", "state/pasted/s"] {
+            std::fs::create_dir_all(tmp.path().join(d)).unwrap();
+        }
+        tmp
+    }
+
+    #[test]
+    fn a_sandboxed_drop_inserts_container_paths_and_names_what_it_refused() {
+        let tmp = sandbox_tree();
+        let root = tmp.path().canonicalize().unwrap();
+        let (inside, outside) = (root.join("proj/a.png"), root.join("out/b.png"));
+        std::fs::write(&inside, b"x").unwrap();
+        std::fs::write(&outside, b"x").unwrap();
+        let (mut st, t) = running();
+        let out = update(
+            &mut st,
+            SessionMsg::FilesDropped {
+                paths: vec![outside, inside],
+                target: DropTarget::Terminal(t),
+                shell: ShellKind::Fish,
+                sandbox: Some(sandbox_for(&root)),
+            },
+        );
+        assert!(
+            matches!(&out[0], Outcome::Insert { text, .. } if text == "'/mnt/host/p/a.png'"),
+            "{out:?}"
+        );
+        let notes = notified(&out);
+        assert_eq!(notes.len(), 1);
+        assert!(
+            notes[0].contains("b.png") && notes[0].contains("outside"),
+            "{notes:?}"
+        );
+    }
+
+    #[test]
+    fn a_sandboxed_drop_of_only_outside_files_inserts_nothing() {
+        let tmp = sandbox_tree();
+        let root = tmp.path().canonicalize().unwrap();
+        let outside = root.join("out/b.png");
+        std::fs::write(&outside, b"x").unwrap();
+        let (mut st, t) = running();
+        let out = update(
+            &mut st,
+            SessionMsg::FilesDropped {
+                paths: vec![outside],
+                target: DropTarget::Terminal(t),
+                shell: ShellKind::Posix,
+                sandbox: Some(sandbox_for(&root)),
+            },
+        );
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+        assert_eq!(notified(&out).len(), 1);
+    }
+
+    #[test]
+    fn a_sandboxed_pasted_image_inserts_its_container_path() {
+        let tmp = sandbox_tree();
+        let root = tmp.path().canonicalize().unwrap();
+        let (mut st, t) = running();
+        for (saved, want) in [
+            (
+                root.join("proj/.micold-pasted/s/1.png"),
+                "'/mnt/host/p/.micold-pasted/s/1.png'",
+            ),
+            (
+                root.join("state/pasted/s/2.png"),
+                "'/var/lib/micold-ai-ide/pasted/s/2.png'",
+            ),
+        ] {
+            std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
+            let out = update(
+                &mut st,
+                SessionMsg::ImagePasted {
+                    terminal: t,
+                    shell: ShellKind::Posix,
+                    sandbox: Some(sandbox_for(&root)),
+                    result: Ok(saved),
+                },
+            );
+            assert!(
+                matches!(&out[..], [Outcome::Insert { text, .. }] if text == want),
+                "{out:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_sandboxed_image_that_could_not_be_saved_anywhere_inserts_nothing_and_says_why() {
+        let tmp = sandbox_tree();
+        let root = tmp.path().canonicalize().unwrap();
+        let (mut st, t) = running();
+        let out = update(
+            &mut st,
+            SessionMsg::ImagePasted {
+                terminal: t,
+                shell: ShellKind::Posix,
+                sandbox: Some(sandbox_for(&root)),
+                result: Err("Nothing was inserted: the image could not be saved.".into()),
+            },
+        );
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+        assert_eq!(notified(&out).len(), 1);
     }
 
     #[test]

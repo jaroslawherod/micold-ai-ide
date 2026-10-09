@@ -1727,6 +1727,8 @@ pub enum Msg {
         target: DropTarget,
         /// The shell the target terminal runs.
         shell: micold_core::path_insert::ShellKind,
+        /// What the sandbox shares, when the session runs in one (FR-010, FR-011).
+        sandbox: Option<micold_core::path_insert::SandboxShare>,
     },
     /// Something inserted into a terminal's input could not be (feature 487, FR-012): nothing was
     /// typed, and the user is told why.
@@ -1739,6 +1741,8 @@ pub enum Msg {
         terminal: micold_core::protocol::messages::TerminalRef,
         /// The shell that terminal runs.
         shell: micold_core::path_insert::ShellKind,
+        /// What the sandbox shares, when the session runs in one.
+        sandbox: Option<micold_core::path_insert::SandboxShare>,
         /// The saved file, or the sentence naming why there is none.
         result: Result<std::path::PathBuf, String>,
     },
@@ -1857,6 +1861,7 @@ fn files_dropped(
     paths: Vec<std::path::PathBuf>,
     target: DropTarget,
     shell: micold_core::path_insert::ShellKind,
+    sandbox: Option<micold_core::path_insert::SandboxShare>,
 ) -> Vec<crate::features::Outcome> {
     use crate::features::Outcome;
     use micold_core::path_insert::{plan_insertion, InsertTarget};
@@ -1877,7 +1882,11 @@ fn files_dropped(
             "Nothing was inserted: the terminal's process is not running.".to_string(),
         )];
     }
-    let plan = plan_insertion(&paths, shell, InsertTarget::Host);
+    let plan = plan_insertion(
+        &paths,
+        shell,
+        sandbox.as_ref().map_or(InsertTarget::Host, |s| s.target()),
+    );
     let mut out = Vec::new();
     if let Some(text) = plan.text() {
         out.push(Outcome::Insert { terminal, text });
@@ -1962,15 +1971,23 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             paths,
             target,
             shell,
-        } => return files_dropped(state, paths, target, shell),
+            sandbox,
+        } => return files_dropped(state, paths, target, shell, sandbox),
         Msg::InsertionFailed(reason) => return vec![insertion_notice(reason)],
         Msg::ImagePasted {
             terminal,
             shell,
+            sandbox,
             result,
         } => {
             return match result {
-                Ok(path) => files_dropped(state, vec![path], DropTarget::Terminal(terminal), shell),
+                Ok(path) => files_dropped(
+                    state,
+                    vec![path],
+                    DropTarget::Terminal(terminal),
+                    shell,
+                    sandbox,
+                ),
                 Err(reason) => vec![insertion_notice(reason)],
             }
         }

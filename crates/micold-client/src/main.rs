@@ -930,8 +930,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::ImagePasted {
             terminal,
             shell,
+            sandbox,
             result,
-        }) => shell::clipboard::on_image_pasted(app, terminal, shell, result),
+        }) => shell::clipboard::on_image_pasted(app, terminal, shell, sandbox, result),
         Message::Worktree(WorktreeMsg::TextCopyRequested(text)) => {
             shell::clipboard::on_text_copy_requested(app, text)
         }

@@ -47,6 +47,7 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
     // Known limit (M1): the user's login shell, not the one this terminal runs. A shell instance
     // started with another shell, or an AI CLI's own prompt, is quoted for the default shell.
     let shell = login_shell_kind();
+    let sandbox = crate::shell::sandbox::share(app);
     Task::batch(groups.into_iter().map(|(pane, paths)| {
         let target = target_of(app, pane);
         let effects = app
@@ -55,6 +56,7 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
                 paths,
                 target,
                 shell,
+                sandbox: sandbox.clone(),
             });
         Task::batch(effects.into_iter().map(|effect| match effect {
             Outcome::Insert { terminal, text } => insert(app, terminal, &text),

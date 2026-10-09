@@ -271,4 +271,49 @@ mod tests {
         assert!(err.starts_with("Nothing was inserted"), "{err}");
         assert!(err.contains(&fallback.dir().display().to_string()), "{err}");
     }
+
+    #[test]
+    fn a_sandboxed_image_in_the_state_directory_is_inserted_by_its_container_path() {
+        use micold_core::path_insert::{plan_insertion, InsertTarget, ShellKind};
+        use micold_core::sandbox::{
+            HomeMount, MountSet, ProjectMount, SecretMount, StateMount, STATE_CONTAINER_DIR,
+        };
+        // The worktree cannot take the image, so it goes to the state directory (US3.5).
+        let blocker = tempfile::NamedTempFile::new().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let id = SessionId::new();
+        let layout = PastedLayout::in_worktree(blocker.path(), id);
+        let fallback = PastedLayout::in_data_dir(state.path(), id);
+        let path = save(&img(), Some((blocker.path(), &layout)), &fallback, 7, 1).unwrap();
+        let mounts = MountSet {
+            projects: vec![ProjectMount::project_for(
+                blocker.path().to_path_buf(),
+                false,
+            )],
+            state: StateMount {
+                host: state.path().to_path_buf(),
+                container: PathBuf::from(STATE_CONTAINER_DIR),
+            },
+            home: HomeMount {
+                host: state.path().join("home"),
+                container: PathBuf::from("/home/u"),
+            },
+            secret: SecretMount {
+                host: state.path().join("token"),
+                container: PathBuf::from("/run/token"),
+            },
+            credentials: Vec::new(),
+        };
+        let plan = plan_insertion(
+            &[path],
+            ShellKind::Posix,
+            InsertTarget::Sandbox(&mounts, &[]),
+        );
+        let shown = &plan.accepted[0].shown;
+        assert!(
+            shown.starts_with(format!("{STATE_CONTAINER_DIR}/pasted/{id}")),
+            "{shown:?}"
+        );
+        assert!(shown.to_string_lossy().ends_with(".png"));
+    }
 }

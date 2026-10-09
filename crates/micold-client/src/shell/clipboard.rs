@@ -137,11 +137,13 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
                         Ok(Some(path)) => Message::Session(SessionMsg::ImagePasted {
                             terminal: target.terminal,
                             shell: target.shell,
+                            sandbox: target.sandbox.clone(),
                             result: Ok(path),
                         }),
                         Err(reason) => Message::Session(SessionMsg::ImagePasted {
                             terminal: target.terminal,
                             shell: target.shell,
+                            sandbox: target.sandbox.clone(),
                             result: Err(reason),
                         }),
                     },
@@ -164,6 +166,7 @@ fn text_message(text: &str, bracketed: bool) -> Message {
 struct ImageTarget {
     terminal: micold_core::protocol::messages::TerminalRef,
     shell: micold_core::path_insert::ShellKind,
+    sandbox: Option<micold_core::path_insert::SandboxShare>,
     worktree: Option<(std::path::PathBuf, micold_core::path_insert::PastedLayout)>,
     fallback: micold_core::path_insert::PastedLayout,
 }
@@ -179,9 +182,15 @@ fn image_target(app: &App) -> Option<ImageTarget> {
         return None;
     }
     let (repo, session) = app.core.workspace.find_session(terminal.session)?;
-    let data_dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|d| d.data_dir().to_path_buf())
-        .unwrap_or_else(std::env::temp_dir);
+    let sandbox = crate::shell::sandbox::share(app);
+    // A sandbox sees the state directory, so that is where an image goes when its worktree cannot
+    // take it (FR-010); otherwise it is the app's data directory.
+    let data_dir = match &sandbox {
+        Some(share) => share.mounts.state.host.clone(),
+        None => directories::ProjectDirs::from("", "", "micold-ai-ide")
+            .map(|d| d.data_dir().to_path_buf())
+            .unwrap_or_else(std::env::temp_dir),
+    };
     let worktree = match &session.location {
         SessionLocation::Worktree(_) => {
             let root = session.location.cwd(repo);
@@ -193,6 +202,7 @@ fn image_target(app: &App) -> Option<ImageTarget> {
     Some(ImageTarget {
         terminal,
         shell: crate::shell::drops::login_shell_kind(),
+        sandbox,
         worktree,
         fallback: PastedLayout::in_data_dir(&data_dir, terminal.session),
     })
@@ -224,6 +234,7 @@ pub fn on_image_pasted(
     app: &mut App,
     terminal: micold_core::protocol::messages::TerminalRef,
     shell: micold_core::path_insert::ShellKind,
+    sandbox: Option<micold_core::path_insert::SandboxShare>,
     result: Result<std::path::PathBuf, String>,
 ) -> Task<Message> {
     let effects = app
@@ -231,6 +242,7 @@ pub fn on_image_pasted(
         .update_session_for_effects(SessionMsg::ImagePasted {
             terminal,
             shell,
+            sandbox,
             result,
         });
     Task::batch(effects.into_iter().map(|effect| match effect {

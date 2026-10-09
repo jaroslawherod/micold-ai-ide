@@ -387,6 +387,23 @@ fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) 
     )
 }
 
+/// What a drop or paste is measured against when the sessions run in the sandbox (feature 487,
+/// FR-010, FR-011): the mounts the plan names and the projects the running container really has.
+/// `None` for the host placement and while no container is running, where paths are used as they
+/// are.
+pub fn share(app: &crate::App) -> Option<micold_core::path_insert::SandboxShare> {
+    if app.placement.kind != micold_core::sandbox::placement::PlacementKind::LocalSandbox {
+        return None;
+    }
+    let mounted = app.sandbox.locations()?.projects.clone();
+    let plan = app.sandbox_boot.as_ref()?;
+    let facts = HostFacts::gather(plan.state_dir.clone());
+    Some(micold_core::path_insert::SandboxShare {
+        mounts: mount_set(&plan.profile, &plan.projects, &facts),
+        mounted,
+    })
+}
+
 /// What the running container shares with this machine, through `mounts`. `mounted` is
 /// `Started::mounted`: `None` for a container made from `mounts`, its destinations for one adopted.
 fn locations_for(

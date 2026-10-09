@@ -66,11 +66,11 @@
 
 **Independent test**: in a sandboxed session drop a project file (container path inserted) and `~/outside.txt` (nothing inserted, notice names it).
 
-- [ ] T025 [P] [US3] Write failing unit tests in `crates/micold-core/src/path_insert/mod.rs`: `InsertTarget::Sandbox(&MountSet, mounted)` maps a project path through `pathmap::map_for`; a path outside every project → `Refusal::OutsideProjects`; a project not yet mounted → `NotMounted`; a symlink resolving outside is refused; a missing file is judged by its canonicalised parent; the shell is forced to `Bash`; a mixed drop accepts the visible ones and refuses the rest with messages naming them (US3.3).
-- [ ] T026 [US3] Implement the sandbox target of `plan_insertion` in `crates/micold-core/src/path_insert/mod.rs` (reusing `crates/micold-core/src/sandbox/pathmap.rs`) until T025 passes.
-- [ ] T027 [P] [US3] Write failing tests in `crates/micold-client/tests/features_session.rs` and `crates/micold-client/src/shell/pasted_image.rs`: a sandboxed drop and a sandboxed pasted image insert the container-side path; with an unwritable worktree the image goes to `MountSet.state` and its container path is inserted; if neither is possible nothing is inserted and a notice says why (US3.4, US3.5).
-- [ ] T028 [US3] Wire the sandbox target (session's `MountSet` and mounted list) into the drop and paste reducers in `crates/micold-client/src/features/session.rs` and the `MountSet.state` fallback in `crates/micold-client/src/shell/pasted_image.rs`, until T027 passes.
-- [ ] T029 [US3] Add the sandbox note to `docs/user-guide/sandboxed-daemon.md` and a one-line pointer from `docs/user-guide/terminal-panes.md`.
+- [x] T025 [P] [US3] Write failing unit tests in `crates/micold-core/src/path_insert/mod.rs`: `InsertTarget::Sandbox(&MountSet, mounted)` maps a project path through `pathmap::map_for`; a path outside every project → `Refusal::OutsideProjects`; a project not yet mounted → `NotMounted`; a symlink resolving outside is refused; a missing file is judged by its canonicalised parent; the shell is forced to `Bash`; a mixed drop accepts the visible ones and refuses the rest with messages naming them (US3.3).
+- [x] T026 [US3] Implement the sandbox target of `plan_insertion` in `crates/micold-core/src/path_insert/mod.rs` (reusing `crates/micold-core/src/sandbox/pathmap.rs`) until T025 passes.
+- [x] T027 [P] [US3] Write failing tests in `crates/micold-client/tests/features_session.rs` and `crates/micold-client/src/shell/pasted_image.rs`: a sandboxed drop and a sandboxed pasted image insert the container-side path; with an unwritable worktree the image goes to `MountSet.state` and its container path is inserted; if neither is possible nothing is inserted and a notice says why (US3.4, US3.5).
+- [x] T028 [US3] Wire the sandbox target (session's `MountSet` and mounted list) into the drop and paste reducers in `crates/micold-client/src/features/session.rs` and the `MountSet.state` fallback in `crates/micold-client/src/shell/pasted_image.rs`, until T027 passes.
+- [x] T029 [US3] Add the sandbox note to `docs/user-guide/sandboxed-daemon.md` and a one-line pointer from `docs/user-guide/terminal-panes.md`.
 
 **Checkpoint**: M3 ships.
 
