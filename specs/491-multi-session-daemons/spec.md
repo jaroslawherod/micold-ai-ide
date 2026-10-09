@@ -8,6 +8,19 @@
 
 **Input**: User description: GitHub issue #491, "Support multiple session daemons: host and container" (host and Docker/Podman container runtimes; SSH is #687 and Kubernetes is #688, both out of scope).
 
+## Clarifications
+
+### Session 2026-10-09
+
+- Q: Are worktree names and branches unique across a project's daemons, or may one branch be checked
+  out on several daemons at once? → A: Unique. A project's worktrees share one git repository whatever
+  daemon they are bound to, git refuses a branch checked out twice, and the app already refuses it with
+  the holder named. The refusal also names the holder's daemon. _(agent-resolved:
+  specs/016-existing-branch-worktree/spec.md, branch-in-use stories; crates/micold-core/src/worktree.rs)_
+- Q: May a user add several daemons of one runtime (for example two container daemons)? → A: Yes.
+  The issue defines the list as name, runtime, settings and state per daemon, with no per-runtime cap;
+  names are the unique key (FR-001). _(agent-resolved: GitHub issue #491, "Multi-daemon model")_
+
 ## Overview
 
 Today the app talks to one session daemon, which runs either directly on the user's computer or in a
@@ -183,7 +196,7 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 - **Windows and macOS**: a Linux container on a Windows or macOS host may not see the project at the
   same path as the client; the behaviour is the same on all three platforms and the difference is
   explained in the daemon's state or settings, not silently ignored.
-- **Branch checked out on several daemons**: open, see FR-016.
+- **Branch checked out on several daemons**: refused, naming the worktree and daemon that hold it (FR-016).
 
 ## Requirements *(mandatory)*
 
@@ -223,10 +236,10 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 - **FR-015**: Binding, state display and the Daemons list MUST treat the runtime as data: a daemon of
   any runtime appears with the same name, runtime, endpoint, version, state and bound-worktree
   fields, so a further runtime (SSH, Kubernetes) needs no change to those surfaces.
-- **FR-016**: The system MUST either allow or refuse (with a stated reason) checking out the same
-  branch, or reusing a worktree name, on several daemons of one project: [NEEDS CLARIFICATION: are
-  worktree names and branches unique across a project's daemons, or may the same branch be checked
-  out on several daemons at once?]
+- **FR-016**: Worktree names and branches MUST be unique across all of a project's daemons. The
+  system MUST refuse checking out a branch that is already checked out in another worktree of the
+  project, or reusing a worktree name, on any daemon, and MUST state the reason, naming the worktree
+  and the daemon that hold it.
 - **FR-017**: The system MUST persist daemons, bindings and their settings locally, with no cloud
   dependency, and MUST NOT leak state of one session or daemon into another.
 - **FR-018**: The automated end-to-end suite MUST exercise the container runtime with a scripted

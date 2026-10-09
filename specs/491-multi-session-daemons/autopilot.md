@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #491
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
-- **Phase**: spec
+- **Phase**: clarify
 - **Next step**: clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers (FR-014, FR-016) in spec.md
 
 ## Pull requests
@@ -46,7 +46,11 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1. FR-016 and same-runtime-daemons resolved from evidence (recorded in spec.md
+Clarifications). Open for the user: FR-014, what happens to worktrees bound to a removed daemon.
+Options: (A, recommended) kept, sessions stopped, shown unbound until user binds a daemon, nothing
+deleted on disk; (B) user must pick a target daemon in the confirmation dialog; (C) deleted from the
+app. Evidence: specs/014-forget-project (forgetting never deletes on disk, sessions stopped).
 
 ## Follow-ups not done
 
