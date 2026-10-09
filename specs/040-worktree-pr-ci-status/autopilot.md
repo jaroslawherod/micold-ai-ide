@@ -25,6 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #641 | M6 | merged | 98da2889252f1804c9d3ada474d2d3ecdaf94249 |
 | #646 | M7 | merged | 599def4097e93879a959079a9f113d7566113bea |
 | #665 | M8 | merged | caa6ef54ce89e37e1541bcc24bedb5a839acbac0 |
+| (close) | Close | open | |
 
 ## Milestones
 
@@ -89,7 +90,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | CLEAN; 1 MINOR (compile-red, already logged as a deviation). Verify suites passed. |
 | Code A (M7) | 1 | 0563917214b2f047089872edc572454c318c36bc:20faec254d53d87606f34cdbbe79e3abf32cab9a | CLEAN |
 | Review B (M7) | 1 | same | CHANGES: F1 cycle-log entry missing (fixed, entry added), F2 doc wrap (fixed, prose only) |
-| Close | 1 | 3ac2eae03348084f9b70b66e231765308cd8bbc8:caa6ef54ce89e37e1541bcc24bedb5a839acbac0 | pending |
+| Close | 1 | 3ac2eae03348084f9b70b66e231765308cd8bbc8:caa6ef54ce89e37e1541bcc24bedb5a839acbac0 | CLEAN: 3 MINOR (F1 this row, fixed; F2, F3 accepted) |
 
 ## Declined review findings
 
