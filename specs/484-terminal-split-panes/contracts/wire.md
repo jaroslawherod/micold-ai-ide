@@ -5,7 +5,7 @@
 | `GridFrame` | + `process: SessionProcess` (`#[serde(default)]` → `Primary`). |
 | `ClientMsg::SessionInput` | + `process: Option<SessionProcess>` (None = the currently attached process, today's behaviour). Serial stays per session. |
 | `ClientMsg::SessionResize` | + `process: Option<SessionProcess>` (None = the attached process only; with `Some`, that PTY only). |
-| `ClientMsg::SetViewedTerminals { project, terminals: Vec<(SessionId, SessionProcess)> }` | new; ≤ 6 entries; daemon streams exactly these for this client+project, replaces the previous set, records the first as the foreground session (`remember_foreground`). Unknown terminals are ignored. |
+| `ClientMsg::SetViewedTerminals { project, terminals: Vec<TerminalRef> }` | new; ≤ 6 entries; daemon streams exactly these for this client+project, replaces the previous set, records the first as the foreground session (`remember_foreground`). Unknown terminals are ignored. |
 | `ClientMsg::SetPaneLayout { project, layout: Option<String> }` | new; JSON of the contracts/pane-layout-file.md form; daemon validates (invalid → rejected, stored layout kept) and persists in the catalog. `ProjectSnapshot` gains `pane_layout: Option<String>` (`#[serde(default, skip_serializing_if)]`). |
 | `SetViewedSession`, `SessionAttachProcess` | unchanged; equivalent to a one-element `SetViewedTerminals`. |
 

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: milestone M1 (after the design PR merges)
 
 ## Pull requests
 
@@ -22,6 +22,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | — | pending |
+| M2 | T021–T023 | full | Pane shortcuts (split, focus) | — | pending |
+| M3 | T024–T028 | full | Resize, close, rearrange | — | pending |
+| M4 | T029–T035 | full | Layout survives restart | — | pending |
 
 ## Decisions
 
@@ -37,11 +41,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 303c12f166730835012ddb99e2d6f068115ff086:e61d1682ef7b666342bfb8834c130312e9e3e26a | CHANGES: 1 MAJOR (bad `feature 182` citation: it was a commit hash; fixed, prose only), 3 MINOR (fixed, prose only) |
 | Plan | 1 | dbb88a3c2cb206cb6716902bb89d94ac49cd8803:8f919183081da946845bf3a7e9b909967d5192fe | CHANGES: 2 MAJOR (layout write path: daemon-owned via Workspace + SetPaneLayout; process field semantics), 4 MINOR; fixed |
 | Plan | 2 | 2c92523f4feb02154bd127d01e88edcb54c2d30c:ea4f3c2260e6d692e94b4d3122dfc2776902dafb | CLEAN (1 MINOR: snapshot name, fixed, prose only) |
+| Tasks | 1 | 0301e32716201fec8325e22c1d5d8d31d669aebd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 2 MAJOR (M1 half-wired: US2+US5 folded into M1; last-pane refusal moved to T026), 4 MINOR; fixed; analyze HIGH C1/U1 fixed (T006a, T002) |
+| Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| — | Tasks 2 | F1 MAJOR: T036/T037 in no milestone | Polish changes no code: left to the close unit (milestones.md rule 4) |
 
 ## Handover
 
