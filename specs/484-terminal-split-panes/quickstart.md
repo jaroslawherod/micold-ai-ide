@@ -33,3 +33,9 @@ per redraw). Fix: the poll sends only a changed scheme (`changed_scheme`, M5 T04
 | After | 89/90 ticks (3.0 %) | 92/93 ticks (3.1 %) |
 
 Six panes are +3 % over one pane (limit +10 %); total idle CPU fell about 85 %.
+
+## Results (T036)
+
+- Part A: `mise run gate`-equivalent raw commands green on every milestone PR (#656–#660); the only local failures were six unrelated permission tests that fail when run as root (named in `tdd/verification.md`) and pass in CI.
+- Part B: visual pass run on a private Xvfb display against the real client; evidence in `visual-pass-m3.md` (M3: header strip, single-pane refusal) and `visual-pass-close.md` (close unit and M5: refusal text, empty-pane focus, idle CPU; all checks pass after M5).
+- Step 9 (idle CPU, SC-004): see the record above, 6 panes +3 % over one pane (limit +10 %).

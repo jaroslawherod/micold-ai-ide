@@ -109,8 +109,8 @@ Found by the close unit's visual pass (`visual-pass-close.md`) and `tdd/verifica
 
 ## Final Phase: Polish (close unit, no code)
 
-- [ ] T036 Run quickstart Part A and Part B (`visual-pass`) and record the results in `specs/484-terminal-split-panes/quickstart.md` (FR-015's idle CPU is manual-only; no pane timer or subscription is added, asserted in T013's review), including the 6-pane idle CPU probe (SC-004, ≤ +10%).
-- [ ] T037 Tick the tasks, close the spec in `autopilot.md`.
+- [x] T036 Run quickstart Part A and Part B (`visual-pass`) and record the results in `specs/484-terminal-split-panes/quickstart.md` (FR-015's idle CPU is manual-only; no pane timer or subscription is added, asserted in T013's review), including the 6-pane idle CPU probe (SC-004, ≤ +10%).
+- [x] T037 Tick the tasks, close the spec in `autopilot.md`.
 
 ### M5 — Converge: pane refusal text, empty-pane focus, idle CPU
 
