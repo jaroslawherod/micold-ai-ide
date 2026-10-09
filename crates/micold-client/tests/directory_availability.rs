@@ -583,7 +583,7 @@ fn no_project_no_wanted_directories() {
 // ---------------------------------------------------------------------------------------------
 
 /// Everything but Pi, so the one CLI the notes name is Pi.
-const TWO: &[AiCli] = &[
+const WITHOUT_PI: &[AiCli] = &[
     AiCli::ClaudeCode,
     AiCli::Copilot,
     AiCli::Codex,
@@ -616,7 +616,7 @@ fn note(state: &State, path: &str) -> Option<String> {
 /// 037 U78 (FR-010, US3-AS1, SC-007, R6).
 #[test]
 fn a_list_of_two_says_which_cli_is_missing_and_why_for_the_directory_asked_about() {
-    let state = row_answered(TWO, Some(SpawnEnv::ScriptFailed));
+    let state = row_answered(WITHOUT_PI, Some(SpawnEnv::ScriptFailed));
 
     assert_eq!(
         note(&state, P),
@@ -659,7 +659,7 @@ fn a_list_of_none_has_no_note() {
 /// 037 U82 (FR-011, W5): a CLI is missing and the answer does not say why.
 #[test]
 fn an_answer_without_a_state_has_no_note() {
-    let state = row_answered(TWO, None);
+    let state = row_answered(WITHOUT_PI, None);
     assert_eq!(note(&state, P), None);
 }
 
@@ -677,10 +677,10 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
         .session
         .availability
         .asked(HOME_KEY, AvailabilityKey::Home);
-    state
-        .session
-        .availability
-        .answered(HOME_KEY, answer_in(TWO, Some(SpawnEnv::ScriptTimedOut)));
+    state.session.availability.answered(
+        HOME_KEY,
+        answer_in(WITHOUT_PI, Some(SpawnEnv::ScriptTimedOut)),
+    );
 
     let on_home = note(&state, P).expect("the home answer is in use for the row");
     assert_eq!(
@@ -693,7 +693,7 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
     state
         .session
         .availability
-        .answered(2, answer_in(TWO, Some(SpawnEnv::ScriptFailed)));
+        .answered(2, answer_in(WITHOUT_PI, Some(SpawnEnv::ScriptFailed)));
 
     assert_eq!(
         note(&state, P),
@@ -709,7 +709,7 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
 /// 037 U85 (US3-AS3, FR-012, Edge Cases several rows at once).
 #[test]
 fn two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other() {
-    let mut state = row_answered(TWO, Some(SpawnEnv::ScriptFailed));
+    let mut state = row_answered(WITHOUT_PI, Some(SpawnEnv::ScriptFailed));
     state.session.availability.asked(3, dir(Q));
     state.session.availability.answered(
         3,

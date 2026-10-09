@@ -286,8 +286,11 @@ fn seed(state: &Path, project: &Path) -> Seeded {
     };
     let shell = SessionId::new();
     let control = SessionId::new();
+    // Codex and OpenCode record no conversation this test knows the layout of until M3/M4
+    // (feature 488), so they are left out of the prune seed.
     let per_cli: Vec<(AiCli, SessionId)> = AiCli::ALL
         .iter()
+        .filter(|c| matches!(c, AiCli::ClaudeCode | AiCli::Copilot | AiCli::Pi))
         .map(|&which| (which, SessionId::new()))
         .collect();
 
@@ -338,6 +341,7 @@ fn config_under_home(which: AiCli) -> PathBuf {
         AiCli::ClaudeCode => PathBuf::from(".claude"),
         AiCli::Copilot => PathBuf::from(".copilot"),
         AiCli::Pi => Path::new(".pi").join("agent"),
+        AiCli::Codex | AiCli::OpenCode => unreachable!("not seeded until feature 488 M3/M4"),
     }
 }
 
@@ -357,6 +361,7 @@ fn layout_in_sandbox(which: AiCli, home: &str, cwd: &Path, id: SessionId) -> (St
             config.join("session-state").join(id.0.to_string()),
             "events.jsonl".to_string(),
         ),
+        AiCli::Codex | AiCli::OpenCode => unreachable!("not seeded until feature 488 M3/M4"),
         AiCli::Pi => {
             let body = cwd
                 .to_string_lossy()

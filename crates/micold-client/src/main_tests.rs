@@ -7712,10 +7712,11 @@ mod the_settings_note_explains_a_missing_cli {
             &[AiCli::ClaudeCode],
             Some(SpawnEnv::IncludeOff),
         );
-        let said = note(&app).expect("two CLIs are missing");
+        let said = note(&app).expect("four CLIs are missing");
         assert!(
-            said.starts_with("A session would not find GitHub Copilot and Pi Coding Agent:")
-                && said.contains("\"Source a script before each session\" is off"),
+            said.starts_with(
+                "A session would not find GitHub Copilot, Pi Coding Agent, Codex and OpenCode:"
+            ) && said.contains("\"Source a script before each session\" is off"),
             "the note names what is missing with the reason of the answer that arrived: {said}"
         );
 
