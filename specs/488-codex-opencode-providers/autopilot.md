@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M3
-- **Next step**: M3 gate, reviews A and B, push; orchestrator opens the PR from scratchpad/pr-488-m3.md
+- **Next step**: orchestrator pushes the branch and opens the M3 PR from scratchpad/pr-488-m3.md
 
 ## Pull requests
 
@@ -75,7 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 done locally and gated (gate stamped at tree be35a64c; only the six root-only permission tests fail). Reviews A and B CLEAN after round 2. PR text in scratchpad/pr-488-m3.md. Push refused (stale info; remote branch still holds the merged M2 commits): orchestrator force-pushes claude/project-thread-wysm57 and opens the PR.
 
 ## Open escalation
 
