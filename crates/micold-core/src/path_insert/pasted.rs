@@ -207,13 +207,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (a, b) = (SessionId::new(), SessionId::new());
         let la = PastedLayout::in_data_dir(tmp.path(), a);
-        let lb = PastedLayout::in_data_dir(tmp.path(), b);
         make(&tmp.path().join(TEMP_DIR), &a.to_string());
         let kept = make(&tmp.path().join(TEMP_DIR), &b.to_string());
         la.remove().unwrap();
         assert!(!la.dir().exists());
         assert!(kept.exists());
         la.remove().unwrap();
-        drop(lb);
     }
 }

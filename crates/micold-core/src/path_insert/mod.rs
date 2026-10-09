@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use crate::sandbox::MountSet;
 
-pub use pasted::{PastedLayout, pasted_roots};
+pub use pasted::{pasted_roots, PastedLayout};
 pub use quote::{quote, Unrepresentable};
 
 /// The shell that will read the inserted text. Each quotes differently (research R2).
