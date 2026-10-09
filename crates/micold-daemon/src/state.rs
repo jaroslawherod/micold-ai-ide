@@ -23,8 +23,8 @@ use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
-    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, WindowView, WireLifecycle,
-    WorktreeSnapshot, WorktreeStatus,
+    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, TerminalRef, WindowView,
+    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ToolServerSupport};
 use micold_core::session::{
@@ -206,7 +206,7 @@ struct Inner {
     /// order (BUG-009, T125). Present only for the duration of a start — see
     /// [`DaemonState::session_input`] for why the input is held rather than dropped, and
     /// [`DaemonState::finish_start`] for how the buffer is closed without a gap.
-    starting: HashMap<SessionId, Vec<(u64, Vec<u8>)>>,
+    starting: HashMap<SessionId, Vec<(u64, Vec<u8>, Option<SessionProcess>)>>,
     /// One mutual-exclusion gate per session for starts (T125), for the same reason
     /// [`Self::worktree_gates`] exists: spawning the work removed the serialization the connection
     /// loop provided incidentally, and two concurrent starts would spawn two processes.
@@ -4747,13 +4747,36 @@ impl DaemonState {
     /// attach-switch shows a correctly-sized grid too. PTY resizes happen outside the state lock
     /// (the handles are cloned `Arc`s).
     pub fn resize_session(&self, session: SessionId, cols: u16, rows: u16) {
+        self.resize_terminal(session, None, cols, rows);
+    }
+
+    /// Resize one process of a session (feature 484): `Some` touches that PTY only and leaves the
+    /// session's others alone; a process the session does not have is ignored. `None` is
+    /// [`Self::resize_session`]'s reach, every process.
+    pub fn resize_terminal(
+        &self,
+        session: SessionId,
+        process: Option<SessionProcess>,
+        cols: u16,
+        rows: u16,
+    ) {
         // A degenerate size is not a size: `PtySession::resize` rejects a zero dimension, and
         // recording one would seed a spawn with it. A client reporting one keeps whatever it last
         // reported for real.
         if cols > 0 && rows > 0 {
             self.lock().sizes.insert(session, (cols, rows));
         }
-        for pty in self.session_ptys(session) {
+        let ptys = match process {
+            None => self.session_ptys(session),
+            Some(p) => self
+                .terminal(TerminalRef {
+                    session,
+                    process: p,
+                })
+                .map(|(pty, _)| vec![pty])
+                .unwrap_or_default(),
+        };
+        for pty in ptys {
             if let Err(err) = pty.resize(cols, rows) {
                 tracing::warn!(session = %session.0, %err, "resize failed");
             }
@@ -4768,6 +4791,18 @@ impl DaemonState {
     /// seed applies.
     fn desired_size(&self, session: SessionId) -> Option<(u16, u16)> {
         self.lock().sizes.get(&session).copied()
+    }
+
+    /// One terminal's `(pty, framer)`, if the daemon hosts it (feature 484).
+    pub fn terminal(&self, t: TerminalRef) -> Option<(Arc<PtySession>, Arc<Mutex<Framer>>)> {
+        let inner = self.lock();
+        let p = inner.sessions.get(&t.session)?.procs.get(&t.process)?;
+        Some((Arc::clone(&p.pty), Arc::clone(&p.framer)))
+    }
+
+    /// The process currently attached for `session`, if it is live.
+    pub fn attached_process(&self, session: SessionId) -> Option<SessionProcess> {
+        self.lock().sessions.get(&session).map(|l| l.attached)
     }
 
     /// The *attached* process's framer (used by the view-stream task and the scrollback handler).
@@ -4937,6 +4972,18 @@ impl DaemonState {
     /// in arrival order puts every serial through [`InputReceiver`] exactly as it would have been
     /// had the start been instant.
     pub fn session_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
+        self.session_input_to(session, serial, bytes, None);
+    }
+
+    /// [`Self::session_input`] addressed to one of the session's processes (feature 484): `Some`
+    /// writes to that process only, `None` to the attached one. Serials stay per session.
+    pub fn session_input_to(
+        &self,
+        session: SessionId,
+        serial: u64,
+        bytes: &[u8],
+        process: Option<SessionProcess>,
+    ) {
         {
             let mut inner = self.lock();
             // The user typed into it: it is the session they are working with (feature 482, R5).
@@ -4944,11 +4991,11 @@ impl DaemonState {
                 live.last_active = micold_core::clock::now();
             }
             if let Some(held) = inner.starting.get_mut(&session) {
-                held.push((serial, bytes.to_vec()));
+                held.push((serial, bytes.to_vec(), process));
                 return;
             }
         }
-        self.apply_input(session, serial, bytes);
+        self.apply_input(session, serial, bytes, process);
     }
 
     /// Mark a start as in flight, so input for `session` is held rather than dropped (T125).
@@ -4977,8 +5024,8 @@ impl DaemonState {
                     None => return, // never begun, or already finished
                 }
             };
-            for (serial, bytes) in batch {
-                self.apply_input(session, serial, &bytes);
+            for (serial, bytes, process) in batch {
+                self.apply_input(session, serial, &bytes, process);
             }
         }
     }
@@ -5007,7 +5054,13 @@ impl DaemonState {
         block_on(tokio::task::unconstrained(gate.lock_owned()))
     }
 
-    fn apply_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
+    fn apply_input(
+        &self,
+        session: SessionId,
+        serial: u64,
+        bytes: &[u8],
+        process: Option<SessionProcess>,
+    ) {
         let resolved = {
             let mut inner = self.lock();
             inner.sessions.get_mut(&session).and_then(|live| {
@@ -5017,9 +5070,9 @@ impl DaemonState {
                 // Read *after* `accept`: a stale serial leaves the high-water mark unmoved, so this
                 // is the serial the client should have sent — the number a diagnostic needs (T113).
                 let expected = live.input.expected();
-                let attached = live.attached;
+                let target = process.unwrap_or(live.attached);
                 live.procs
-                    .get(&attached)
+                    .get(&target)
                     .map(|p| (outcome, expected, Arc::clone(&p.pty)))
             })
         };

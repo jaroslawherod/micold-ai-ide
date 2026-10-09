@@ -142,6 +142,7 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
     // Drive it: type "hello". The stamp mirrors what the client stamper produces (first serial 0).
     client
         .send(Frame::Control(ClientMsg::SessionInput {
+            process: None,
             session: sid,
             serial: 0,
             bytes: b"hello\n".to_vec(),
@@ -218,6 +219,7 @@ async fn session_resize_reframes_at_the_new_size() {
 
     client
         .send(Frame::Control(ClientMsg::SessionResize {
+            process: None,
             session: sid,
             cols: 120,
             rows: 40,
@@ -476,6 +478,7 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
     // Drive the freshly-started shell: the tty echoes typed input back as streamed output.
     client
         .send(Frame::Control(ClientMsg::SessionInput {
+            process: None,
             session: sid,
             serial: 0,
             bytes: b"wire_marker\n".to_vec(),

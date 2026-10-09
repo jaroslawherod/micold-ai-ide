@@ -2095,6 +2095,7 @@ mod tests {
             let top = LineId(history);
             let mut cache = GridCache::default();
             cache.apply(&GridFrame {
+                process: micold_core::protocol::messages::SessionProcess::Primary,
                 session: SessionId::new(),
                 seq: 1,
                 generation: 1,
@@ -2643,6 +2644,7 @@ mod tests {
         fn grid() -> GridCache {
             let mut cache = GridCache::default();
             cache.apply(&GridFrame {
+                process: micold_core::protocol::messages::SessionProcess::Primary,
                 session: SessionId::new(),
                 seq: 1,
                 generation: 1,
@@ -3379,6 +3381,7 @@ mod tests {
                 .map(|(id, row)| wire(*id, row, &mut hyperlinks))
                 .collect();
             GridFrame {
+                process: micold_core::protocol::messages::SessionProcess::Primary,
                 session: SessionId::from_uuid(uuid::Uuid::nil()),
                 seq,
                 generation: 1,

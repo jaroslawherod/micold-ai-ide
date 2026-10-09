@@ -361,6 +361,7 @@ mod tests {
     /// A bare frame; the caller fills in the fields that matter to the test.
     fn frame(seq: u64, generation: u64, full: bool, viewport_top: i64, rows: u16) -> GridFrame {
         GridFrame {
+            process: micold_core::protocol::messages::SessionProcess::Primary,
             session: SessionId::new(),
             seq,
             generation,

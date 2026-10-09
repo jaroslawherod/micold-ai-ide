@@ -78,6 +78,7 @@ impl SessionInputStamper {
     pub fn stamp(&mut self, session: SessionId, bytes: Vec<u8>) -> ClientMsg {
         let serial = self.seqs.entry(session).or_default().stamp();
         ClientMsg::SessionInput {
+            process: None,
             session,
             serial,
             bytes,

@@ -59,6 +59,7 @@ fn wire_line(id: i64, text: &str) -> WireLine {
 fn snapshot(session: SessionId, viewport_top: i64, lines: Vec<WireLine>) -> GridFrame {
     let rows = lines.len() as u16;
     GridFrame {
+        process: micold_core::protocol::messages::SessionProcess::Primary,
         session,
         seq: 1,
         generation: 0,

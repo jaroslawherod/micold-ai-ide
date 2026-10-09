@@ -91,6 +91,7 @@ async fn no_log_line_contains_terminal_content_or_input() {
         .unwrap();
     client
         .send(Frame::Control(ClientMsg::SessionInput {
+            process: None,
             session: SessionId::new(),
             serial: 0,
             bytes: SENTINEL.as_bytes().to_vec(),

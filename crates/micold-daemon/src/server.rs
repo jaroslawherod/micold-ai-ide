@@ -6,6 +6,7 @@
 //! viewed-session, keepalive, and settings routing, with catalog/settings changes pushed to every
 //! connected client. Grid streaming and the mutating RPCs layer on in Phase 3 / T053.
 
+use std::collections::HashMap;
 use std::io;
 use std::sync::Arc;
 
@@ -18,7 +19,7 @@ use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
     BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
-    OperationResult, SessionProcess, WindowView,
+    OperationResult, SessionProcess, TerminalRef, WindowView,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -661,6 +662,10 @@ where
     // `create_session`). The loop owns `view_stream` and is the only thing that may touch it, so a
     // start that finishes elsewhere reports here rather than reaching in (BUG-009, T125).
     let mut started_rx = state.subscribe_session_started();
+    // Feature 484: the terminals this client asked for with `SetViewedTerminals`, and the running
+    // stream of each live one. Independent of `view_stream`, which serves `SetViewedSession`.
+    let mut viewed_terminals: Vec<TerminalRef> = Vec::new();
+    let mut terminal_streams: HashMap<TerminalRef, tokio::task::JoinHandle<()>> = HashMap::new();
 
     loop {
         let msg = tokio::select! {
@@ -685,8 +690,14 @@ where
                     if let Some((pty, framer)) =
                         state.live_session(session).zip(state.session_framer(session))
                     {
-                        restart_view(state, id, &mut view_stream, pty, framer);
+                        let process = state
+                            .attached_process(session)
+                            .unwrap_or(SessionProcess::Primary);
+                        restart_view(state, id, &mut view_stream, process, pty, framer);
                     }
+                }
+                if viewed_terminals.iter().any(|t| matches!(started, Ok(s) if s == t.session) || started.is_err()) {
+                    sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
                 }
                 continue;
             }
@@ -867,7 +878,8 @@ where
                 session,
                 serial,
                 bytes,
-            } => state.session_input(session, serial, &bytes),
+                process,
+            } => state.session_input_to(session, serial, &bytes, process),
             ClientMsg::SessionStart { session } => {
                 // Bringing an existing durable session back is a resume.
                 //
@@ -965,8 +977,20 @@ where
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
                 viewing = session;
+                // The single view replaces a pane set (feature 484).
+                viewed_terminals.clear();
+                sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
                 match session.and_then(|s| state.live_session(s).zip(state.session_framer(s))) {
-                    Some((pty, framer)) => restart_view(state, id, &mut view_stream, pty, framer),
+                    Some((pty, framer)) => restart_view(
+                        state,
+                        id,
+                        &mut view_stream,
+                        session
+                            .and_then(|s| state.attached_process(s))
+                            .unwrap_or(SessionProcess::Primary),
+                        pty,
+                        framer,
+                    ),
                     // Not live *yet* is the ordinary case now: the client sends `SessionStart` and
                     // `SetViewedSession` back to back, and the start no longer completes before this
                     // arrives (BUG-009, T125). `viewing` above records the intent, and the
@@ -981,7 +1005,9 @@ where
             // --- Feature 011: shell instances + which process is attached ---
             ClientMsg::SessionAttachProcess { session, process } => {
                 match state.attach_process(session, process) {
-                    Some((pty, framer)) => restart_view(state, id, &mut view_stream, pty, framer),
+                    Some((pty, framer)) => {
+                        restart_view(state, id, &mut view_stream, process, pty, framer)
+                    }
                     // The client asked to display a process the daemon does not have, so the two
                     // now disagree about what is attached — the client will show its new mode while
                     // the pane keeps streaming whatever it streamed before (FR-007). Silently
@@ -1023,7 +1049,14 @@ where
             }
             ClientMsg::SessionCloseShell { session, instance } => {
                 if let Some((pty, framer)) = state.close_shell(session, instance) {
-                    restart_view(state, id, &mut view_stream, pty, framer);
+                    restart_view(
+                        state,
+                        id,
+                        &mut view_stream,
+                        SessionProcess::Primary,
+                        pty,
+                        framer,
+                    );
                 }
                 // Closed or not (the id may name nothing), the live set may have changed.
                 state.broadcast_catalog();
@@ -1040,7 +1073,14 @@ where
                         if let Some((pty, framer)) =
                             state.attach_process(session, SessionProcess::Shell(instance))
                         {
-                            restart_view(state, id, &mut view_stream, pty, framer);
+                            restart_view(
+                                state,
+                                id,
+                                &mut view_stream,
+                                SessionProcess::Shell(instance),
+                                pty,
+                                framer,
+                            );
                         }
                     }
                     Ok(()) => {}
@@ -1059,7 +1099,14 @@ where
                         // the view stream and input routing agree (both on Primary) instead of the
                         // view showing the dead shell while input goes to Primary.
                         if let Some((pty, framer)) = reattached_primary {
-                            restart_view(state, id, &mut view_stream, pty, framer);
+                            restart_view(
+                                state,
+                                id,
+                                &mut view_stream,
+                                SessionProcess::Primary,
+                                pty,
+                                framer,
+                            );
                         }
                     }
                 }
@@ -1070,7 +1117,27 @@ where
                 session,
                 cols,
                 rows,
-            } => state.resize_session(session, cols, rows),
+                process,
+            } => state.resize_terminal(session, process, cols, rows),
+            // Feature 484: exactly the named terminals stream to this client, replacing the last
+            // set. The first is the project's foreground session; it is also the attached process
+            // of its session, so an input without a `process` keeps landing where it always did.
+            ClientMsg::SetViewedTerminals { project, terminals } => {
+                let wanted: Vec<TerminalRef> = terminals.into_iter().take(MAX_VIEWED).collect();
+                state.set_viewed(id, project, wanted.first().map(|t| t.session));
+                if let Some(first) = wanted.first() {
+                    let _ = state.attach_process(first.session, first.process);
+                }
+                // A set replaces the single view of `SetViewedSession`.
+                if let Some(prev) = view_stream.take() {
+                    prev.abort();
+                }
+                viewing = None;
+                viewed_terminals = wanted;
+                sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
+            }
+            // Stored in the daemon in M4 (feature 484, T032); until then it is ignored.
+            ClientMsg::SetPaneLayout { .. } => {}
             // Feature 034 (FR-009): the stop an agent's `stop_session` performs, so the two agree:
             // processes end, the record is `Idle`, and every window is told.
             //
@@ -2055,6 +2122,8 @@ where
             _ => {}
         }
     }
+    viewed_terminals.clear();
+    sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
     if let Some(stream) = view_stream.take() {
         stream.abort();
     }
@@ -2329,6 +2398,7 @@ fn restart_view(
     state: &Arc<DaemonState>,
     id: crate::state::ClientId,
     current: &mut Option<tokio::task::JoinHandle<()>>,
+    process: SessionProcess,
     pty: std::sync::Arc<crate::supervisor::PtySession>,
     framer: std::sync::Arc<std::sync::Mutex<crate::framer::Framer>>,
 ) {
@@ -2336,7 +2406,42 @@ fn restart_view(
         prev.abort();
     }
     if let Some(tx) = state.frame_sender(id) {
-        *current = Some(tokio::spawn(stream_view(pty, framer, tx)));
+        *current = Some(tokio::spawn(stream_view(process, pty, framer, tx)));
+    }
+}
+
+/// The most terminals one client may view at once (feature 484: the 6-pane cap).
+const MAX_VIEWED: usize = 6;
+
+/// Make `streams` exactly the live members of `wanted` (feature 484): stop the others, keep the
+/// running ones (no new snapshot, so a pane does not flicker), start the missing ones. A terminal
+/// that is not live yet is started when its session announces itself (see the `started_rx` arm).
+fn sync_terminal_streams(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    streams: &mut HashMap<TerminalRef, tokio::task::JoinHandle<()>>,
+    wanted: &[TerminalRef],
+) {
+    streams.retain(|t, handle| {
+        let keep = wanted.contains(t) && !handle.is_finished();
+        if !keep {
+            handle.abort();
+        }
+        keep
+    });
+    let Some(tx) = state.frame_sender(id) else {
+        return;
+    };
+    for t in wanted {
+        if streams.contains_key(t) {
+            continue;
+        }
+        if let Some((pty, framer)) = state.terminal(*t) {
+            streams.insert(
+                *t,
+                tokio::spawn(stream_view(t.process, pty, framer, tx.clone())),
+            );
+        }
     }
 }
 
@@ -2345,15 +2450,17 @@ fn restart_view(
 /// coalesced deltas whenever the VT reports new output. Ends when the client's channel closes
 /// (disconnect) or the task is aborted (view changed / connection ended).
 async fn stream_view(
+    process: SessionProcess,
     pty: std::sync::Arc<crate::supervisor::PtySession>,
     framer: std::sync::Arc<std::sync::Mutex<crate::framer::Framer>>,
     tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
 ) {
     // Full snapshot on first view — the whole current screen, however long the client was away.
-    let snapshot = framer
+    let mut snapshot = framer
         .lock()
         .expect("framer poisoned")
         .frame(pty.term(), true, None);
+    snapshot.process = process;
     if tx.send(Frame::Grid(snapshot)).is_err() {
         return; // client already gone
     }
@@ -2364,10 +2471,11 @@ async fn stream_view(
         ticker.tick().await;
         // Only frame when there is new output; a clean tick sends nothing.
         if pty.signals().take_dirty() {
-            let delta = framer
+            let mut delta = framer
                 .lock()
                 .expect("framer poisoned")
                 .frame(pty.term(), false, None);
+            delta.process = process;
             if tx.send(Frame::Grid(delta)).is_err() {
                 return;
             }

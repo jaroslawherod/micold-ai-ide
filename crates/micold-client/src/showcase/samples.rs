@@ -239,6 +239,7 @@ pub fn grid() -> GridCache {
         .collect();
 
     cache.apply(&GridFrame {
+        process: micold_core::protocol::messages::SessionProcess::Primary,
         session: sample_session(),
         seq: 1,
         generation: 0,

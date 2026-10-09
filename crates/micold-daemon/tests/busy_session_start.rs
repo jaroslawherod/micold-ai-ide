@@ -288,6 +288,7 @@ async fn input_typed_during_a_slow_start_is_applied_in_order_not_dropped() {
     for serial in 1..=3u64 {
         client
             .send(Frame::Control(ClientMsg::SessionInput {
+                process: None,
                 session: session_id(),
                 serial,
                 bytes: vec![b'a' + serial as u8 - 1],

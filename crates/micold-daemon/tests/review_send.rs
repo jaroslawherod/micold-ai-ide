@@ -650,6 +650,7 @@ async fn r5_the_most_recently_active_running_session_of_the_entry_receives_it() 
 
     client
         .send(Frame::Control(ClientMsg::SessionInput {
+            process: None,
             session: sid(1),
             serial: 0,
             // A line end: the stand-in `cat` reads a canonical-mode terminal line by line.

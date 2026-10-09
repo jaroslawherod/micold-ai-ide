@@ -214,6 +214,7 @@ mod derived_labels {
             schema_version: 1,
             last_active: Some(PathBuf::from("/a")),
             projects: vec![ProjectSnapshot {
+                pane_layout: None,
                 path: PathBuf::from("/a"),
                 display_name: "a".into(),
                 is_git_repo: true,
