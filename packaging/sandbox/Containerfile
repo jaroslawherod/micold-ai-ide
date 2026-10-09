@@ -96,8 +96,8 @@ RUN npm install -g --omit=dev \
 
 # Pi checks for updates, asks pi.dev for its latest version and reports installs at startup. The
 # session service turns all three off per launch; setting them here too makes a `pi` run by hand
-# inside the container keep the same offline posture (Principle IV). OpenCode's self-update is off for
-the same reason (the session service sets it per launch too).
+# inside the container keep the same offline posture (Principle IV). OpenCode's
+# self-update is off for the same reason (the session service sets it per launch too).
 ENV PI_OFFLINE=1 \
     PI_SKIP_VERSION_CHECK=1 \
     PI_TELEMETRY=0 \
