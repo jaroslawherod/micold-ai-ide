@@ -256,6 +256,8 @@ impl AiCliProvider for MinimalProvider {
         self.id
     }
     fn identity(&self) -> micold_core::provider::ConversationIdentity {
+        // The app picks this provider's ids, as for `claude`: nothing to bind, nothing minted.
+        let _ = &self.root;
         micold_core::provider::ConversationIdentity::AppAssigned
     }
     fn launch_args_in(
@@ -268,18 +270,20 @@ impl AiCliProvider for MinimalProvider {
     }
     fn new_conversations(
         &self,
-        _config_dir: &Path,
-        _cwd: &Path,
-        _since: std::time::SystemTime,
+        config_dir: &Path,
+        cwd: &Path,
+        since: std::time::SystemTime,
     ) -> Vec<micold_core::provider::ConversationRef> {
+        let _ = (&self.root, config_dir, cwd, since);
         Vec::new()
     }
     fn bind(
         &self,
-        _config_dir: &Path,
-        _session_id: Uuid,
-        _conversation: &micold_core::provider::ConversationRef,
+        config_dir: &Path,
+        session_id: Uuid,
+        conversation: &micold_core::provider::ConversationRef,
     ) -> std::io::Result<()> {
+        let _ = (&self.root, config_dir, session_id, conversation);
         Ok(())
     }
     fn display_name(&self) -> &'static str {

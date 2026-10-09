@@ -60,12 +60,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (reviewer, sonnet) | 2 | a959e0e9f42b1e0fa2053a46082bfc93cb27c4b6:67df06aff34a0c102150116786686f8522188556 | CLEAN (2 MINOR: TWO const renamed WITHOUT_PI; `]` inside a trust-header comment declined) |
 | M1 B (conformance, sonnet) | 1 | same | CHANGES: only BLOCKER was that the reviewer could not run cargo; the orchestrating unit ran Verify itself (green); 1 MINOR fixed |
 
+- M3 A round 1 (snapshot 78ef01f81aea703b662d10bf1504a13767ac97cb:da63a8225eeafb577113692d3e8f72f482b3b49e): CHANGES, F1 MAJOR (shell peer blocks bind) fixed, F2/F4 fixed, F3 declined (below). Round 2 (snapshot 6caadbfccef19c0db653d5d9a08f26be5a0fe58e:af01facf278a685d91b9d2c4763e39b8d37c0715, sonnet, fix diff): CLEAN.
+- M3 B round 1 (same snapshot, sonnet): CHANGES, F1 MAJOR (no TDD cycle log) fixed with tdd/cycle-log.md, F2/F3 fixed. Round 2: CLEAN, 2 MINOR left (env mutation in the terminal_backend test: that file's other tests use claude/copilot only; test-first order not followed, stated in the cycle log).
+- M3 visual pass: not run, no UI change.
+
 ## Declined review findings
 
 - M1 A round 2, MINOR trust.rs `project_header` uses the last `]`, so a comment containing `]` after the header is not read as trusted: declined, it fails closed (the project is simply not treated as trusted) and the file is Codex's own.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+- M3 A F3 (two simultaneous same-folder Codex sessions both stay unbound): intended never-guess rule (FR-006); user guide says so.
 
 ## Handover
 
