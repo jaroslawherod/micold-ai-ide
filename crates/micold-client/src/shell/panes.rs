@@ -9,13 +9,14 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::keymap::PaneAction;
-use micold_core::pane_layout::{Axis, PaneId, PaneLayout, Refusal, MIN_PANE_COLS, MIN_PANE_ROWS};
+use micold_core::pane_layout::{
+    Axis, PaneId, PaneLayout, Refusal, SplitEvent, MIN_PANE_COLS, MIN_PANE_ROWS,
+};
 use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 
 use crate::App;
 use micold_client::app::Message;
 use micold_client::features::session::{Msg as SessionMsg, PaneMsg};
-use micold_client::ui::SplitEvent;
 
 /// The project whose panes are displayed.
 fn project(app: &App) -> Option<PathBuf> {
@@ -126,6 +127,13 @@ fn send_pane_sizes(app: &mut App) {
 /// Apply a pane message (FR-001, FR-004, FR-010, FR-014).
 pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
     app.pane_refusal = None;
+    if matches!(
+        msg,
+        PaneMsg::Close(_) | PaneMsg::Split(..) | PaneMsg::Chord(_) | PaneMsg::Show(..)
+    ) {
+        // A drag whose release never came (the pointer left the window) must not hold the sizes back.
+        app.divider_dragging = false;
+    }
     match msg {
         PaneMsg::Split(pane, axis) => {
             // A pane never measured on its own (the lone pane of an unsplit project) is as big as

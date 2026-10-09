@@ -11,7 +11,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Point, Rectangle, Size};
-use micold_core::pane_layout::{Axis, Divider, PaneId, PaneLayout, Placement, Rect};
+use micold_core::pane_layout::{Axis, Divider, PaneId, PaneLayout, Placement, Rect, SplitEvent};
 use micold_core::tokens::Roles;
 
 use super::style;
@@ -58,25 +58,6 @@ pub fn pane_focus_mark(focused: bool, r: Roles) -> (iced::Color, Option<iced::Co
     } else {
         (style::color(r.surface), None)
     }
-}
-
-/// What the user did to the split, for the caller to apply to its [`PaneLayout`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SplitEvent {
-    /// The pointer dragged divider `index` (the order of [`Placement::dividers`]) to this share
-    /// of its split, in ten-thousandths, already within both children's minimum sizes.
-    Drag {
-        /// Which divider.
-        index: usize,
-        /// The first child's share, 0..=10000.
-        basis_points: u16,
-    },
-    /// The drag ended.
-    Release,
-    /// A double press on divider `index`: back to equal sizes.
-    Reset(usize),
-    /// A pane's header was dropped on another pane: swap their terminals.
-    Swap(PaneId, PaneId),
 }
 
 /// Where things are, relative to the widget's top-left.
@@ -134,7 +115,11 @@ impl Gesture {
             mouse::Event::CursorMoved { .. } => {
                 let i = self.dragging?;
                 let p = cursor?;
-                let d = g.placement.dividers.get(i)?;
+                let Some(d) = g.placement.dividers.get(i) else {
+                    // The divider is gone (a pane closed mid-drag): end the drag.
+                    self.dragging = None;
+                    return Some(Some(SplitEvent::Release));
+                };
                 let (at, start, extent) = match d.axis {
                     Axis::Vertical => (p.x, d.area.x, d.area.w),
                     Axis::Horizontal => (p.y, d.area.y, d.area.h),
@@ -170,7 +155,11 @@ impl Gesture {
             return None;
         };
         match e {
-            mouse::Event::ButtonPressed(mouse::Button::Left) if !captured => {
+            mouse::Event::ButtonPressed(mouse::Button::Left) if captured => {
+                self.header = None;
+                None
+            }
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 let p = cursor?;
                 self.header = g
                     .headers
@@ -357,7 +346,6 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
                     shell.publish(f(out));
                 }
                 shell.capture_event();
-                shell.request_redraw();
                 return;
             }
         }
@@ -377,7 +365,6 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             let gesture = &mut tree.state.downcast_mut::<State>().gesture;
             if let Some(out) = gesture.header(event, at, &g, captured) {
                 shell.publish(f(out));
-                shell.request_redraw();
             }
         }
     }
