@@ -47,10 +47,10 @@ description: "Task list for #488 Codex CLI and OpenCode as session providers"
 
 ## Phase 5: User Story 3 — Resume and name a session (P2), OpenCode
 
-- [ ] T023 [US3] Failing OpenCode tests with a stub `opencode` script printing JSON (fields per T001): list → candidates by `directory`, created after spawn, not bound elsewhere; `opencode --session <id>` on resume; label from export; 2 s timeout and unavailable CLI ⇒ nothing read; bad JSON ⇒ unbound. Files: `crates/micold-core/tests/opencode_provider.rs`.
-- [ ] T024 [US3] Implement OpenCode `Minted` identity, bounded CLI reader (R2), binding under `~/.local/share/opencode/micold-bindings/`, `launch_args_in`, `new_conversations`, `bind`, `read_title`, archive markers. Files: `crates/micold-core/src/provider.rs`.
-- [ ] T025 [US3] Daemon tests with the stub: start, bind, restart resumes `--session <id>`; two concurrent same-cwd sessions never cross-resume; close records the archive marker (FR-010, Principle II). Files: `crates/micold-daemon/tests/` (T020's file).
-- [ ] T026 [US3] User guide: OpenCode restart behaviour and naming. Files: `docs/user-guide/worktrees-and-sessions.md`.
+- [x] T023 [US3] Failing OpenCode tests with a stub `opencode` script printing JSON (fields per T001): list → candidates by `directory`, created after spawn, not bound elsewhere; `opencode --session <id>` on resume; label from export; 2 s timeout and unavailable CLI ⇒ nothing read; bad JSON ⇒ unbound. Files: `crates/micold-core/tests/opencode_provider.rs`.
+- [x] T024 [US3] Implement OpenCode `Minted` identity, bounded CLI reader (R2), binding under `~/.local/share/opencode/micold-bindings/`, `launch_args_in`, `new_conversations`, `bind`, `read_title`, archive markers. Files: `crates/micold-core/src/provider.rs`.
+- [x] T025 [US3] Daemon tests with the stub: start, bind, restart resumes `--session <id>`; two concurrent same-cwd sessions never cross-resume; close records the archive marker (FR-010, Principle II). Files: `crates/micold-daemon/tests/` (T020's file).
+- [x] T026 [US3] User guide: OpenCode restart behaviour and naming. Files: `docs/user-guide/worktrees-and-sessions.md`.
 
 ## Phase 6: User Story 4 — Activity that is honest (P2)
 
