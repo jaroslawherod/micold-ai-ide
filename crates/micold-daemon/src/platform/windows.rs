@@ -155,21 +155,30 @@ pub const STOP_WINDOW_CLASS: &str = "Micold.Daemon.StopWindow";
 /// application that has not answered `WM_ENDSESSION` after about five seconds anyway.
 const END_SESSION_WAIT: std::time::Duration = std::time::Duration::from_millis(4_500);
 
-/// The one request of this process, raised by the stop event or by the end-of-session window.
-static REQUEST: std::sync::OnceLock<tokio::sync::watch::Sender<bool>> = std::sync::OnceLock::new();
+/// The one request of this process, raised by the stop event or by the end-of-session window. It is
+/// one-shot: once raised it stays raised, as a service handles one stop per process.
+static REQUEST: std::sync::OnceLock<std::sync::Arc<tokio::sync::watch::Sender<bool>>> =
+    std::sync::OnceLock::new();
 
 /// The request's sender, creating it, the event thread and the window thread on first use.
-fn request() -> &'static tokio::sync::watch::Sender<bool> {
+fn request() -> &'static std::sync::Arc<tokio::sync::watch::Sender<bool>> {
     REQUEST.get_or_init(|| {
         let (sender, _) = tokio::sync::watch::channel(false);
+        let sender = std::sync::Arc::new(sender);
         match StopEvent::create() {
             Ok(event) => {
+                let raised = std::sync::Arc::clone(&sender);
                 let spawned =
                     std::thread::Builder::new()
                         .name("stop-event".into())
                         .spawn(move || {
                             event.wait();
-                            raise();
+                            raised.send_replace(true);
+                            // Keep the event open for the life of the process: a second requester
+                            // during the save must still find it, not conclude no service listens.
+                            loop {
+                                std::thread::park();
+                            }
                         });
                 if let Err(err) = spawned {
                     tracing::warn!(%err, "could not wait for the stop event");
