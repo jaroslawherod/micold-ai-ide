@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
 | M2 | T018–T024 | full | paste image into AI session | #667 | merged |
 | M3 | T025–T029 | full | sandbox container paths, refusals | #671 | merged |
-| M4 | T030–T034 | full | cleanup on delete and startup | #TBD | implemented; gate and reviews running; PR text in scratchpad pr-487-m4.md |
+| M4 | T030–T034 | full | cleanup on delete and startup | #TBD | gate green except six root-only tests; reviews A and B CLEAN; PR text in scratchpad pr-487-m4.md |
 
 ## Decisions
 
@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M3 (conformance, fresh) | 1 | same family | CHANGES: 1 MAJOR (image paste with no running sandbox was silent; fixed with a notice), 1 MAJOR (reviewer could not run Verify; the unit ran the three test commands green), 1 MINOR (data-dir choice not unit-tested; declined) |
 
 ## Declined review findings
+
+- M4 A/B MINORs: not-loaded-catalog sweep test, routing the sweep through `PastedLayout::remove`, spawn_blocking for delete: left as is (guards exist in code; dirs are small). Unused test binding fixed.
 
 - B M1 F2 (widget-level FileDropped test): the pure hit-test, the reducer, the coalescing and the wiring are tested; a headless widget harness for one event path was judged out of proportion. Pointer-staleness during a native drag is an unverified platform risk recorded in research.md.
 - B M1 F4: no `tdd/cycle-log.md`: tests were written beside the code; red-first was not recorded and is not invented now.
