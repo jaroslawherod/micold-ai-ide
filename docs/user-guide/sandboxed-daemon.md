@@ -92,6 +92,16 @@ exist.
 
 Files a session creates in a project come out owned by **you**, not by root.
 
+### Dropping files into a sandboxed session
+
+Dropping a file on a sandboxed terminal (or pasting a screenshot) inserts the path **the container
+sees**, which is not always the path on your computer. A file inside a registered project is
+inserted; a file anywhere else, such as your home directory or a symbolic link that points out of
+the project, is left out and a notice names it, because the sandbox cannot open it. The other files
+of the same drop are still inserted. A project you registered after the sandbox started is not
+shared yet; the notice says so, and restarting the sandbox shares it. A pasted screenshot goes in
+the session's worktree, or in the service's data directory when the worktree cannot be written to.
+
 ### The AI CLIs come from the image
 
 A session runs its AI CLI inside the container. That means the CLI comes from the image, and the one
