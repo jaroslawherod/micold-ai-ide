@@ -124,12 +124,12 @@ service knows the CLI is ready depends on the CLI:
 | GitHub Copilot | Its screen has shown something and then stopped changing for 1.5 seconds |
 | Codex, OpenCode | Their screen has shown something and then stopped changing for 1.5 seconds |
 
-Claude Code and GitHub Copilot ask whether you trust a folder the first time they run in it. The
+Claude Code, GitHub Copilot and Codex ask whether you trust a folder the first time they run in it. The
 service never answers that question for you: before it waits, it reads the CLI's own record of the
 folders you trust (it never changes it), and if the CLI would ask, the prompt is not typed. The
 session starts and waits at the question for you. **Trust the project in that CLI first**: run
-Claude Code or Copilot once in the project folder and accept its question. Worktrees inside the
-project are then trusted too, and first prompts arrive. Pi asks no such question.
+Claude Code, Copilot or Codex once in the project folder and accept its question. Worktrees inside
+the project are then trusted too, and first prompts arrive. Pi and OpenCode ask no such question.
 
 The service waits at most 60 seconds from the request. If the CLI is not ready by then, the session
 failed to start, or the CLI would ask about trusting the folder, the prompt is not typed at all,
@@ -199,8 +199,8 @@ on your computer outside the container can reach it. The assistant sees the same
 | Claude Code | Yes |
 | GitHub Copilot | Yes |
 | Pi Coding Agent | No: Pi has no support for tool servers of this kind (MCP) |
-| Codex | No: the app does not connect it to its tool server yet |
-| OpenCode | No: the app does not connect it to its tool server yet |
+| Codex | No: the app does not connect it to its tool server yet; the log line says `no per-launch tool-server binding was verified for Codex` |
+| OpenCode | No: the app does not connect it to its tool server yet; the log line says `no per-launch tool-server binding was verified for OpenCode` |
 | Regular terminal | No: there is no assistant to connect |
 
 A session that is not connected works exactly as before. The session service writes one line to

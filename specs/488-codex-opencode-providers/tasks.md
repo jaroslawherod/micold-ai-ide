@@ -54,10 +54,10 @@ description: "Task list for #488 Codex CLI and OpenCode as session providers"
 
 ## Phase 6: User Story 4 — Activity that is honest (P2)
 
-- [ ] T027 [US4] Characterization daemon tests (pass once T007 sets `ActivitySource::None`; they pin FR-009 against later change): Codex and OpenCode badges stay `Unknown` through output and silence; a provider with an activity source still follows busy/idle (AS2, existing providers). Files: `crates/micold-daemon/tests/`.
-- [ ] T028 [US4] Characterization tests (red only where T029 needs code): `Unsupported` tool-server support is logged with the reason and the session starts; `create_session` with `prompt` is refused as `AsksTrust` for Codex in an untrusted dir and accepted for a trusted dir and for OpenCode. Files: `crates/micold-daemon/tests/`.
-- [ ] T029 [US4] Close any gap T027/T028 expose (logging, readiness wiring); no gap ⇒ "no code change" in the ledger. Files: `crates/micold-daemon/src/ops.rs`, `crates/micold-daemon/src/state.rs`.
-- [ ] T030 [US4] User guide: per provider, the activity badge (`Unknown`), tool-server support, first-prompt/folder-trust behaviour. Files: `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/agent-tools.md`.
+- [x] T027 [US4] Characterization daemon tests (pass once T007 sets `ActivitySource::None`; they pin FR-009 against later change): Codex and OpenCode badges stay `Unknown` through output and silence; a provider with an activity source still follows busy/idle (AS2, existing providers). Files: `crates/micold-daemon/tests/`.
+- [x] T028 [US4] Characterization tests (red only where T029 needs code): `Unsupported` tool-server support is logged with the reason and the session starts; `create_session` with `prompt` is refused as `AsksTrust` for Codex in an untrusted dir and accepted for a trusted dir and for OpenCode. Files: `crates/micold-daemon/tests/`.
+- [x] T029 [US4] Close any gap T027/T028 expose (logging, readiness wiring); no gap ⇒ "no code change" in the ledger. Files: `crates/micold-daemon/src/ops.rs`, `crates/micold-daemon/src/state.rs`.
+- [x] T030 [US4] User guide: per provider, the activity badge (`Unknown`), tool-server support, first-prompt/folder-trust behaviour. Files: `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/agent-tools.md`.
 
 ## Phase 7: User Story 5 — Use them in the sandbox (P3)
 

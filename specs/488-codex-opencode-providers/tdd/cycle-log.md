@@ -24,3 +24,13 @@ Written test-first this time. Red run (2026-10-09) of `cargo test --test opencod
 | Daemon: bind, restart resumes, no cross-resume, archive marker (T025, FR-010) | `codex_resume.rs` OpenCode cases (the Codex fixture is shared) |
 
 The daemon cases were added with the code; one race in the first draft (the stub recorded its conversation before the second session started, so session 1 was legitimately bound) was a test flaw, fixed by making the stub record a second after its start.
+
+# TDD cycle log — #488 M5
+
+M5 is characterization (T027/T028): the behaviours already hold since M1, so the tests were green on first run (11 passed in `codex_opencode_start`). T029: **no code change**. Red evidence (2026-10-09), by breaking the behaviour on purpose and reverting:
+
+| Behaviour (task) | Break applied | Failing test (right reason) |
+|---|---|---|
+| Codex in an untrusted folder gets no first prompt (T028, FR-012) | `Codex::folder_trust` → `NeverAsks` | `a_first_prompt_is_never_typed_into_a_trust_question` (prompt delivered when it should be refused) |
+| Unsupported tool-server reason is logged, session starts (T028, FR-011) | log text `no tool server:` renamed | `an_unsupported_tool_server_binding_is_logged_and_the_session_starts` |
+| Badge stays `Unknown` through output and silence (T027, FR-009) | not broken: `Unknown` is the projection's default, so no cheap break exists; the test also asserts Codex/OpenCode `activity_source` is `None` and Claude Code's is not |
