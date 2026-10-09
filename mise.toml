@@ -96,6 +96,25 @@ mise run test-scripts
 echo "${snap%%:*}" >> "$(git rev-parse --git-path autopilot-gate-ok)"
 """
 
+# Duplication budget (issue #645). Not part of `gate`: jscpd is an npx download and similarity-rs a
+# `cargo install`, both outside the pinned toolchain, and the gate must stay offline and reproducible.
+# Measured 2026-10-09: jscpd 3.17% duplicated lines (400 clones), similarity-rs 712 pairs. The budgets
+# sit just above that, so the task fails when a change adds duplication, never on today's tree. When a
+# refactor lowers a number, lower the budget with it. Tools: docs/development/duplication.md.
+[tasks.duplication]
+description = "Fail when code duplication exceeds the budget (jscpd % lines, similarity-rs pairs); ~30 s, no build"
+dir = "{{config_root}}"
+run = """
+set -e
+max_pct=3.5
+max_pairs=750
+command -v similarity-rs >/dev/null 2>&1 || { echo "duplication: run 'cargo install similarity-rs' first" >&2; exit 1; }
+npx -y jscpd@4 crates --format rust --min-lines 8 --min-tokens 80 --gitignore --threshold "$max_pct"
+pairs=$(similarity-rs crates/*/src --skip-test -t 0.85 -m 8 | sed -n 's/^Total duplicate pairs found: //p')
+echo "similarity-rs: ${pairs:?no summary line} similar pairs (budget $max_pairs)"
+[ "$pairs" -le "$max_pairs" ] || { echo "duplication: over the similarity-rs budget" >&2; exit 1; }
+"""
+
 [tasks.test-sandbox]
 description = "Run the real-runtime sandbox tests against an installed container runtime (feature 027) [build-locked]"
 run = """
