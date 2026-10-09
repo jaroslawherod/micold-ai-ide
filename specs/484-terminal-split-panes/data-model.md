@@ -4,7 +4,7 @@
 - `root: PaneNode`, `focused: PaneId` (must name a leaf).
 - `PaneNode::Leaf(Pane)` | `PaneNode::Split { axis: Axis(Horizontal|Vertical), ratio: f32, first: Box, second: Box }`.
 - `Pane { id: PaneId, terminal: Option<TerminalRef> }`; `PaneId` is a u32 allocated by the layout, stable across save/load.
-- `TerminalRef { session: SessionId, process: ProcessRef }`, `ProcessRef = Primary | Shell(ShellInstanceId)`.
+- `TerminalRef { session: SessionId, process: ProcessRef }`, `ProcessRef` is the existing `SessionProcess` (`Primary | Shell(ShellInstanceId)`), not a new type.
 
 Invariants (enforced by constructors/ops, so violations are unrepresentable): 1 ≤ leaves ≤ 6; ratio in [0.05, 0.95] and respects minimums at the current size; `focused` is a leaf; a `TerminalRef` appears in at most one leaf; `PaneId`s unique.
 

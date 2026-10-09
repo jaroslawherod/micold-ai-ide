@@ -58,15 +58,15 @@ focus, and PTY size are all keyed by the pane's terminal, never by "the active s
 
 ### D2. Store: persistence (FR-013/014/016)
 
-`StoredProjectState.pane_layout: Option<StoredPaneLayout>` (`#[serde(default, skip_serializing_if)]`), plus `ProjectStore` load/save of the layout beside `last_session`, written with the existing atomic temp+rename path. A layout with unknown `layout_version`, bad JSON shape, ≥7 leaves, or duplicate terminals degrades to `None` → single pane (never an error to startup; the rest of the state file still loads — a layout fault must not mark the project unreadable). `forget` already removes the file.
+**Ownership: the daemon's catalog**, like `foreground_by_project` (its docs: written by the daemon). `StoredProjectState` is rebuilt from `Workspace` on every save (`from_workspace`), so the layout must live in `Workspace`: new `pane_layouts: BTreeMap<PathBuf, PaneLayout>` beside `foreground_by_project`, mapped to/from `StoredProjectState.pane_layout: Option<StoredPaneLayout>` (`#[serde(default, skip_serializing_if)]`) in `from_workspace` and the load path, and written by the existing atomic temp+rename save. Client↔daemon: new `ClientMsg::SetPaneLayout { project, layout: Option<String> }` (the layout's JSON, validated by `pane_layout.rs` on the daemon before storing) and a `pane_layout: Option<String>` field in the project-attached snapshot, so the client restores it on connect (D3, contracts/wire.md). A test saves unrelated state (new session, rename) and asserts the layout survives (FR-013/SC-006). A layout with unknown `layout_version`, bad JSON shape, ≥7 leaves, or duplicate terminals degrades to `None` → single pane (never an error to startup; the rest of the state file still loads — a layout fault must not mark the project unreadable). `forget` already removes the file.
 
 ### D3. Wire: terminals addressed by `(session, process)` — [contracts/wire.md](contracts/wire.md)
 
-Additive change, `PROTOCOL_VERSION` 36 → 37 with the `tests/schema_hash.rs` pin moved: `GridFrame` gains `process`; `SessionInput` and `SessionResize` gain `process` (`#[serde(default)]` = `Primary`/attached, so a single-pane client behaves as today); new `ClientMsg::SetViewedTerminals { project, terminals: Vec<TerminalRef> }` tells the daemon every terminal to stream (≤ 6). `SessionAttachProcess`/`SetViewedSession` remain for compatibility and map to a one-element set. Daemon `LiveSession.attached` becomes a set of attached processes; the framer already runs per process.
+Additive change, `PROTOCOL_VERSION` 36 → 37 with the `tests/schema_hash.rs` pin moved: `GridFrame` gains `process`; `SessionInput` and `SessionResize` gain `process: Option<SessionProcess>` (`None` = the attached process only, today's behaviour; a resize never touches a session's other processes, FR-012); new `ClientMsg::SetPaneLayout` (D2) and `ClientMsg::SetViewedTerminals { project, terminals: Vec<TerminalRef> }` tells the daemon every terminal to stream (≤ 6). `SessionAttachProcess`/`SetViewedSession` remain for compatibility and map to a one-element set. Daemon `LiveSession.attached` becomes a set of attached processes; the framer already runs per process.
 
 ### D4. Client state
 
-`App.pane_layouts: HashMap<ProjectPath, PaneLayout>` replaces "the displayed terminal" reads; `core.session.active` stays the *focused pane's session* so features that follow the active session (sidebar highlight, toolbar, attention) keep working (FR-017). `App.grids` is keyed by `TerminalRef`; `last_grid` becomes per pane (`HashMap<PaneId,(u16,u16)>`) with the focused pane's value used for starting new sessions (`send_pane_size`). `on_terminal_resized` gains the pane identity and sends `SessionResize{session, process, cols, rows}`; during a divider drag sizes are coalesced to the drag end plus at most one send per ~100 ms frame boundary (no timer: sent from the existing layout pass when the size changed).
+`App.pane_layouts: HashMap<ProjectPath, PaneLayout>` replaces "the displayed terminal" reads; `core.session.active` stays the *focused pane's session* so features that follow the active session (sidebar highlight, toolbar, attention) keep working (FR-017). `App.grids` is keyed by `TerminalRef`; `last_grid` becomes per pane (`HashMap<PaneId,(u16,u16)>`) with the focused pane's value used for starting new sessions (`send_pane_size`). `on_terminal_resized` and `send_pane_size` (`shell/daemon_sync.rs`) gain the pane identity and sends `SessionResize{session, process, cols, rows}`; during a divider drag sizes are coalesced to the drag end plus at most one send per ~100 ms frame boundary (no timer: sent from the existing layout pass when the size changed).
 
 ### D5. Client UI
 
@@ -101,9 +101,9 @@ Additive change, `PROTOCOL_VERSION` 36 → 37 with the `tests/schema_hash.rs` pi
 | Layer | Covers |
 |---|---|
 | Core unit (`mise run test-core`) | tree ops, caps/minimums, focus direction, prune, serde round-trip, newer-version and corrupt degradation, at-most-one-pane invariant (property-style loop over op sequences) |
-| Core store | `pane_layout` round-trip, other state intact when layout corrupt, forget deletes (FR-013/014, SC-006/007) |
+| Core store | `pane_layout` round-trip, survives unrelated saves, other state intact when layout corrupt, forget deletes (FR-013/014, SC-006/007) |
 | Daemon | multi-attach streams two processes of one session and two sessions; input/resize routed by `(session, process)`; old-shape messages still work |
-| Client | key routed to focused pane only for 2–6 panes (SC-002), unfocused press focuses and is not delivered, resize per pane (SC-003), close keeps sessions (SC-005, no stop message), project switch swaps layouts, chords never reach `encode` |
+| Client | SC-001 (split + one choice = 2 interactions, by mouse and by key); FR-003 per-pane selection, link and scrollback state (grid/selection keyed by terminal); key routed to focused pane only for 2–6 panes (SC-002), unfocused press focuses and is not delivered, resize per pane (SC-003), close keeps sessions (SC-005, no stop message), project switch swaps layouts, chords never reach `encode` |
 | Geometry gates | divider hit area, minimum pane size, focus mark non-colour cue, both themes |
 | Quickstart §B visual pass | focus mark, empty pane, drag feel, two live panes, `stty size` per pane, 6-pane idle CPU |
 
@@ -132,7 +132,9 @@ crates/micold-core/src/store.rs                # StoredProjectState.pane_layout 
 crates/micold-core/src/protocol/{messages,grid,version}.rs   # D3
 crates/micold-daemon/src/{state,server,framer}.rs            # multi-attach, routing
 crates/micold-client/src/ui/material/split_view.rs           # new shared widget
-crates/micold-client/src/{app,main,keymap}.rs
+crates/micold-client/src/{main,main_tests,keymap}.rs   # App.grids, last_grid live in main.rs
+crates/micold-core/src/workspace.rs            # pane_layouts beside foreground_by_project
+crates/micold-daemon/src/catalog.rs            # persist/restore layout
 crates/micold-client/src/features/session.rs   # PaneMsg
 crates/micold-client/src/shell/daemon_sync.rs  # per-pane resize, view set
 crates/micold-client/src/ui/terminal.rs        # pane area rendering
