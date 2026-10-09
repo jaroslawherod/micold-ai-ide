@@ -311,3 +311,25 @@ fn u114_removal_with_saving_off_deletes_a_file_left_by_a_failed_deletion() {
         LoadOutcome::None
     );
 }
+
+/// FR-024: a catalog that did not load (recovered empty) knows no sessions, so the sweep at
+/// start judges none of the saved histories removed.
+#[test]
+fn the_sweep_deletes_nothing_when_the_catalog_did_not_load() {
+    let saved = tempfile::tempdir().unwrap();
+    let id = SessionId::new();
+    leave_file(saved.path(), id, "kept");
+
+    let catalog = micold_daemon::catalog::Catalog::load(
+        Box::new(micold_core::store::FakeProjectStore::recovered()),
+        Box::new(micold_core::settings::FakeSettingsStore::new()),
+    );
+    let state = DaemonState::new(catalog);
+    state.set_history_store(HistoryStore::new(saved.path().to_path_buf(), true));
+    state.sweep_saved_histories();
+
+    assert!(
+        history_file(saved.path(), id).exists(),
+        "a recovered catalog deleted a saved history"
+    );
+}

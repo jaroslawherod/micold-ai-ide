@@ -605,6 +605,34 @@ fn turning_saving_on_restores_nothing() {
     );
 }
 
+// A directory that could not be listed when saving went off is deleted from when it goes on.
+#[cfg(unix)]
+#[test]
+fn turning_saving_on_after_an_unlistable_directory_deletes_what_is_there() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    let set = |mode: u32| std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode));
+    set(0o000).unwrap();
+    let rooted = std::fs::read_dir(&dir).is_ok();
+    let failures = store.set_enabled(false);
+    set(0o700).unwrap();
+    if rooted {
+        return; // running as root: nothing stops the listing
+    }
+    assert_eq!(failures.len(), 1, "the directory could not be listed");
+    assert_eq!(entries(&dir).len(), 2, "nothing was deleted yet");
+
+    assert!(store.set_enabled(true).is_empty());
+
+    assert_eq!(
+        entries(&dir),
+        Vec::<PathBuf>::new(),
+        "turning saving on deletes what could not be listed before"
+    );
+    assert_eq!(store.load(session()), LoadOutcome::None);
+}
+
 // U97 (FR-033): a save racing the setting being turned off leaves no file.
 #[test]
 fn a_save_racing_turning_saving_off_leaves_no_file() {

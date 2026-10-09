@@ -129,7 +129,10 @@ async fn a_save_that_blocks_holds_the_unwind_for_at_most_three_seconds() {
 
     let gate = state.session_gate(id).lock_owned().await;
     let started = Instant::now();
-    unwind(&state, StopReason::Idle).await;
+    // An outer bound, so a save bound far over 3 s fails here instead of hanging the run.
+    tokio::time::timeout(Duration::from_secs(10), unwind(&state, StopReason::Idle))
+        .await
+        .expect("the unwind outlived 10 s");
     let took = started.elapsed();
     drop(gate);
 

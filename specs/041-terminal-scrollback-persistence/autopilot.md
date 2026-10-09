@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #485
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone
-- **Next step**: M10: PR open; orchestrator waits on CI and merges, then the close unit.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -26,7 +26,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #669 | M7 | merged | 9ad9a5c384d3220eec2e5b2dba4a14482300a861 |
 | #672 | M8 | merged | 0c39be31be9222549636dc4793f6e7d5d422432d |
 | #676 | M9 | merged | 88a6f3602c2bd037e1827e57897202ac41cc13eb |
-| #678 | M10 | open | |
+| #678 | M10 | merged | 0d8737b72e5a0b28300b1c28dc94b006e14f2878 |
+| close | Close | open | |
 
 ## Milestones
 
@@ -41,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | merged |
-| M10 | T075–T077 | full | Architecture page, recorded visual pass | #678 | in review |
+| M10 | T075–T077 | full | Architecture page, recorded visual pass | #678 | merged |
 
 ## Decisions
 
@@ -104,6 +105,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M9 review A (code-review high) | 1 | b9aeef9b135f97104cb5eca68905079b5a23676a:c5d62f98451249a5815de8efe8dd647c66bea167 | CHANGES: 1 MAJOR fixed (a failed ensure_dir still added the mount), 3 MINOR (doc comment placement fixed; tautological tz test and no TZ-env fallback left) |
 | M9 review B (conformance, sonnet) | 1 | 8ac97157c35afbdd4ccfc60f69a4376b888568c0:b96c5ed763ef5a35e39ee528e60f35ddb8f28a6c | CLEAN: 1 MINOR (client tests have no separate red run, admitted in cycle log). Verify: image built, sandbox_real_history 6 passed |
 
+| Close review (no rubric) | 1 | ecf436e071efe3707e5b0384127a567c5f991824:0d8737b72e5a0b28300b1c28dc94b006e14f2878 | CLEAN: 1 MINOR (verification.md stale counts), fixed by a resolved-at-close section |
+
+- Close, converge (0d8737b7): No unbuilt behaviour (M10 had no review B; docs only)
+- Close, tdd-verify (0d8737b7): PASS_WITH_GAPS: F1 test list refreshed (91 of 95 rows DONE; A11, U102, U104, U105 stay PENDING), F4, F5, F7 tests added, F3 not fixed (needs a seam in `save`), F2 recorded in the cycle log, F6 equivalent
+
 ## Declined review findings
 
 - M4 review A (code-review high): repeated signals ignored during the unwind: declined, SR §1 says a second signal changes nothing; the 3 s bound and `shutdown_timeout(5 s)` bound the stop. Output after the capture during the save window: declined, inherent to saving before teardown; the capture is the last step before it. Lib-test SIGTERM broadcast: declined, no other lib test runs a serve loop. Gate-held save abandoned at 3 s: by design (previous file stays). Fixed: duplicate Windows `stop_requested` (also review B F1), runtime-drop hang (`main.rs` `shutdown_timeout`), eager signal registration, `save_final` records its save.
@@ -141,3 +147,5 @@ None.
 - RED CI run 37519388539 (windows): ConPTY throughput (10 busy sessions reached line ~565 in 10 s) starved the test setup wait, not the 3.5 s unwind bound; Windows now prints 500 lines. Attempt 1; gate green (gh desktop-launch test skipped via MICOLD_SKIP_GH_LAUNCH_TEST=1, local env only).
 - RED CI run 37523108659 (ubuntu, macos): `ten_busy_sessions_are_all_saved_within_the_bound` took 4.5 s against 3.5 s. Cause: `history::capture` walks 1M cells a terminal and an unoptimised build needs ~1 s of CPU each, so ten on a two-core runner outlast the 3 s save bound (2.5 s locally pinned to two cores). Fix: `[profile.dev.package]` opt-level 1 for micold-daemon and 2 for alacritty_terminal (0.85 s pinned). Attempt 1.
 - RED CI run 37731798646 (windows, 8310e4ee): `ten_busy_sessions...` found no file for a session (a save abandoned at the 3 s bound, probably ten concurrent `sync_all` on the runner's disk); the unwind bound itself held. Rerun of the failed job passed with no code change. If it recurs, the Windows arm needs fewer sessions or a longer wait, not the unwind.
+- Close: F3 (a deterministic test of the `enabled` re-check in `save`) needs a hook inside `save`; U97 stays the only cover. M10: review A skipped (docs only); its visual pass did not run B12 (Pi not installed), the Copilot half of B14 or the Windows checks, and saw a client repaint glitch (blank rows after a service restart or resize), not investigated.
+- Close: client settings tests missing for A11, U102, U104, U105 (the recorded visual pass covers the screen).
