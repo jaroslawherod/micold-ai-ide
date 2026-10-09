@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 2 `[NEEDS CLARIFICATION]` markers in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
