@@ -117,6 +117,10 @@ alacritty_terminal = "0.26"
 # --- shared dev deps ---
 tempfile = "3.27.0"
 ttf-parser = "0.25.1"
+# Feature 487: read an image off the system clipboard (iced exposes text only), and write it as PNG.
+# `wayland-data-control` lets it read the clipboard on Wayland compositors without a focused surface.
+arboard = { version = "3", default-features = false, features = ["image-data", "wayland-data-control"] }
+png = "0.17"
 # Feature 613 (research R7): the kind icons rasterised for the OS notification. Already in the build
 # through `iced_tiny_skia`; `png-format` adds the `png` encoder for the Windows and macOS icon files.
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd", "png-format"] }

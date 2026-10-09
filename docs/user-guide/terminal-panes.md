@@ -80,3 +80,17 @@ until you press Enter.
   `cmd`), the file is left out and a notice names it; the other files are still inserted.
 - Dropping on a pane with no terminal, or on a terminal whose process has exited, inserts nothing
   and shows a notice saying why.
+
+### Paste a screenshot into an AI session
+
+Copy an image (a screenshot, say) and paste into an AI session: the image is saved as a PNG file
+and its quoted path appears at the prompt, with nothing sent until you press Enter.
+
+- The file goes in the session's worktree under `.micold-pasted/`, which stays out of `git status`.
+  A session with no worktree, or one whose worktree can't be written to, keeps it in the app's
+  data folder instead.
+- Each paste gets its own file; two pastes never overwrite each other.
+- If the clipboard holds text, even together with an image (a copied spreadsheet range, say), the
+  text is pasted as always and no file is made.
+- In a regular terminal, paste works as before.
+- If the image can't be read or saved, nothing is inserted and a notice says why.

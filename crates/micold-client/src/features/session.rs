@@ -1731,6 +1731,17 @@ pub enum Msg {
     /// Something inserted into a terminal's input could not be (feature 487, FR-012): nothing was
     /// typed, and the user is told why.
     InsertionFailed(String),
+    /// A paste found an image and no text on the clipboard (feature 487, FR-006): the shell saved
+    /// it and says where, or why it could not. Emits [`Outcome::Insert`] for the saved file's
+    /// path, or a notification and no insertion (FR-012). Never submits (FR-003).
+    ImagePasted {
+        /// The terminal the paste was aimed at.
+        terminal: micold_core::protocol::messages::TerminalRef,
+        /// The shell that terminal runs.
+        shell: micold_core::path_insert::ShellKind,
+        /// The saved file, or the sentence naming why there is none.
+        result: Result<std::path::PathBuf, String>,
+    },
     /// Begin a text selection at a viewport grid cell (feature 006 mouse, FR-013/FR-013b).
     TerminalSelectStart {
         col: u16,
@@ -1953,6 +1964,16 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             shell,
         } => return files_dropped(state, paths, target, shell),
         Msg::InsertionFailed(reason) => return vec![insertion_notice(reason)],
+        Msg::ImagePasted {
+            terminal,
+            shell,
+            result,
+        } => {
+            return match result {
+                Ok(path) => files_dropped(state, vec![path], DropTarget::Terminal(terminal), shell),
+                Err(reason) => vec![insertion_notice(reason)],
+            }
+        }
         Msg::StartRequested { .. }
         | Msg::TerminalBytes(_)
         | Msg::TerminalSelectStart { .. }
