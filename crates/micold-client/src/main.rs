@@ -75,6 +75,15 @@ struct App {
     viewed_dirty: bool,
     /// The displayed terminal as of the last pane sync: the layout moves only when it changes.
     pane_synced_displayed: Option<TerminalRef>,
+    /// Each pane's last measured `(cols, rows)` (feature 484, FR-014): a pane's terminal has its own
+    /// PTY size, so a split never resizes the terminals beside it.
+    pane_sizes: HashMap<micold_core::pane_layout::PaneId, (u16, u16)>,
+    /// The size last sent for each terminal by pane, so one is sent only when it changed and a
+    /// replaced terminal keeps its last size until shown again.
+    pane_sent: HashMap<TerminalRef, (u16, u16)>,
+    /// Why the last split or show was refused (FR-001), shown beside the panes until the next pane
+    /// action. No timer: it clears on the next pane message.
+    pane_refusal: Option<&'static str>,
     /// Per-session monotonic input stamper: turns key bytes into ordered `SessionInput` (G2). Held
     /// here (long-lived) so a session's serial is never reset by a daemon detach/reattach.
     stamper: SessionInputStamper,
@@ -875,6 +884,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.selection = None;
             Task::none()
         }
+        Message::Session(SessionMsg::Pane(msg)) => shell::panes::on_pane_msg(app, msg),
         Message::Session(SessionMsg::TerminalResized { cols, rows }) => {
             shell::daemon_sync::on_terminal_resized(app, cols, rows)
         }
@@ -1032,6 +1042,13 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         &connection_status(app),
         &app.sandbox,
         Some(&app.composer),
+        shell::panes::layout(app)
+            .map(|layout| micold_client::ui::panes::PaneArea {
+                layout,
+                grids: &app.grids,
+                refusal: app.pane_refusal,
+            })
+            .as_ref(),
     )
 }
 

@@ -34,6 +34,8 @@ fn expected(icon: Icon) -> char {
         Icon::ReleaseFocus => '\u{e31a}',
         Icon::ProjectRoot => '\u{e88a}',
         Icon::AddTerminalInstance => '\u{e146}',
+        Icon::SplitVertical => '\u{e949}',
+        Icon::SplitHorizontal => '\u{e947}',
         Icon::Close => '\u{e5cd}',
         Icon::ActivityWorking => '\u{e837}',
         Icon::ActivityEnded => '\u{e836}',
@@ -87,8 +89,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `keyboard_arrow_up`, `keyboard_arrow_down`; `arrow_upward` is already `NavigateUp`), +4 for the notification kinds' icons (feature 613, I1 —
     // `pan_tool`, `error`, `task_alt`, `chat_bubble`), +7 for feature 040's pull request indicator (`call_split`, `edit_note`, `call_merge`,
     // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s), +1 for `OpenInBrowser`
-    // (feature 040's **Open pull request** menu entry — `open_in_new`).
-    assert_eq!(Icon::ALL.len(), 47, "curated set size");
+    // (feature 040's **Open pull request** menu entry — `open_in_new`), +2 for feature 484's pane
+    // split buttons (`vertical_split`, `horizontal_split`).
+    assert_eq!(Icon::ALL.len(), 49, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

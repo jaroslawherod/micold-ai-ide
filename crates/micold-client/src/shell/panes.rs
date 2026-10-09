@@ -7,12 +7,15 @@
 
 use std::path::PathBuf;
 
-use micold_core::pane_layout::{Axis, PaneId, PaneLayout, Refusal};
+use iced::Task;
+use micold_core::pane_layout::{
+    Axis, PaneId, PaneLayout, Refusal, MIN_PANE_COLS, MIN_PANE_ROWS,
+};
 use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 
 use crate::App;
 use micold_client::app::Message;
-use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session::{Msg as SessionMsg, PaneMsg};
 
 /// The project whose panes are displayed.
 fn project(app: &App) -> Option<PathBuf> {
@@ -81,10 +84,80 @@ pub fn sync(app: &mut App) {
         }
         app.viewed_terminals_sent = Some((project, now));
     }
+    send_pane_sizes(app);
+}
+
+/// The smallest pane, in characters: what `PaneLayout::split` measures a pane against.
+const MIN: (f32, f32) = (MIN_PANE_COLS as f32, MIN_PANE_ROWS as f32);
+
+/// Send each pane's terminal the size of the pane it sits in, when that differs from the last size
+/// sent (FR-014). One pane: nothing is sent here, the single-pane path owns its size. A terminal no
+/// pane shows is not touched, so it keeps its last size until it is shown again.
+fn send_pane_sizes(app: &mut App) {
+    let Some(layout) = layout(app) else {
+        return;
+    };
+    if layout.len() < 2 {
+        return;
+    }
+    let due: Vec<(TerminalRef, (u16, u16))> = layout
+        .panes()
+        .into_iter()
+        .filter_map(|p| Some((p.terminal()?, *app.pane_sizes.get(&p.id())?)))
+        .filter(|(t, size)| app.pane_sent.get(t) != Some(size))
+        .collect();
+    for (t, (cols, rows)) in due {
+        if let Some(d) = &app.daemon {
+            d.send(ClientMsg::SessionResize {
+                session: t.session,
+                process: Some(t.process),
+                cols,
+                rows,
+            });
+        }
+        app.pane_sent.insert(t, (cols, rows));
+    }
+}
+
+/// Apply a pane message (FR-001, FR-004, FR-010, FR-014).
+pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
+    app.pane_refusal = None;
+    match msg {
+        PaneMsg::Split(pane, axis) => {
+            let size = app
+                .pane_sizes
+                .get(&pane)
+                .map_or((f32::MAX, f32::MAX), |(c, r)| (f32::from(*c), f32::from(*r)));
+            if let Err(refusal) = split_pane(app, pane, axis, size, MIN) {
+                app.pane_refusal = Some(refusal.reason());
+            }
+        }
+        PaneMsg::Show(pane, terminal) => {
+            let shown = project(app).and_then(|p| {
+                app.pane_layouts
+                    .get_mut(&p)
+                    .map(|l| l.show(pane, terminal))
+            });
+            match shown {
+                Some(Ok(())) => follow_focus(app),
+                Some(Err(refusal)) => app.pane_refusal = Some(refusal.reason()),
+                None => {}
+            }
+        }
+        PaneMsg::FocusPane(id) => focus_pane(app, id),
+        PaneMsg::Resized { pane, cols, rows } => {
+            app.pane_sizes.insert(pane, (cols, rows));
+            if layout(app).is_some_and(|l| l.focused() == pane) {
+                // The next session starts at the focused pane's size.
+                app.last_grid = Some((cols, rows));
+            }
+            send_pane_sizes(app);
+        }
+    }
+    Task::none()
 }
 
 /// A terminal of the active project no pane shows yet: what a new pane opens on (FR-004).
-#[allow(dead_code)] // Reached from the pane header and focus handling in T013 / T016.
 fn unshown_terminal(app: &App) -> Option<TerminalRef> {
     let project = project(app)?;
     let shown = app.pane_layouts.get(&project)?.terminals();
@@ -106,7 +179,6 @@ fn unshown_terminal(app: &App) -> Option<TerminalRef> {
 
 /// Split `pane` along `axis` (FR-001, FR-004): the new pane takes focus and opens on a terminal
 /// no pane shows, else stays empty. `pane_size` and `min` are in the same units (pixels).
-#[allow(dead_code)] // Reached from the pane header and focus handling in T013 / T016.
 pub fn split_pane(
     app: &mut App,
     pane: PaneId,
@@ -129,7 +201,6 @@ pub fn split_pane(
 
 /// Focus pane `id`: the keyboard, the selection and `core.session.active` follow its terminal
 /// (FR-010). An empty pane takes the focus and leaves the selection where it was.
-#[allow(dead_code)] // Reached from the pane header and focus handling in T013 / T016.
 pub fn focus_pane(app: &mut App, id: PaneId) {
     let Some(project) = project(app) else {
         return;
@@ -144,7 +215,6 @@ pub fn focus_pane(app: &mut App, id: PaneId) {
 }
 
 /// Make the selection follow the focused pane's terminal.
-#[allow(dead_code)] // Reached from the pane header and focus handling in T013 / T016.
 fn follow_focus(app: &mut App) {
     let target = layout(app).and_then(PaneLayout::focused_terminal);
     app.selection = None;

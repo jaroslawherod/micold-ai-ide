@@ -1490,6 +1490,32 @@ impl crate::app::State {
     }
 }
 
+/// What a terminal pane asks for (feature 484). Decided by `shell::panes`, which holds the layouts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaneMsg {
+    /// Split `pane` along `axis` (the header's split buttons, FR-001).
+    Split(
+        micold_core::pane_layout::PaneId,
+        micold_core::pane_layout::Axis,
+    ),
+    /// Show `terminal` in `pane` (the empty-pane picker, FR-004).
+    Show(
+        micold_core::pane_layout::PaneId,
+        micold_core::protocol::messages::TerminalRef,
+    ),
+    /// Focus `pane` (a press in it, FR-010).
+    FocusPane(micold_core::pane_layout::PaneId),
+    /// `pane` was laid out at `cols` x `rows` (FR-014): its terminal's PTY is resized to it.
+    Resized {
+        /// The pane measured.
+        pane: micold_core::pane_layout::PaneId,
+        /// Character columns.
+        cols: u16,
+        /// Character rows.
+        rows: u16,
+    },
+}
+
 /// Everything a session, its terminal panes and its tab strip say about themselves
 /// (feature 028, FR-001).
 ///
@@ -1695,6 +1721,8 @@ pub enum Msg {
     TerminalScrolledTo(usize),
     /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
     TerminalResized { cols: u16, rows: u16 },
+    /// A split-pane decision (feature 484); handled by the binary, which holds the layouts.
+    Pane(PaneMsg),
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
     /// A left-button selection gesture ended: copy the current selection, if it resolves to any
@@ -1825,6 +1853,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalScrolled(_)
         | Msg::TerminalScrolledTo(_)
         | Msg::TerminalResized { .. }
+        | Msg::Pane(_)
         | Msg::TerminalCopyRequested
         | Msg::TerminalSelectionReleased
         | Msg::TerminalPasteRequested => {}

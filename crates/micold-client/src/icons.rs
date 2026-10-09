@@ -71,6 +71,10 @@ pub enum Icon {
     /// Open an additional Regular Terminal instance for a session (feature 011, FR-001;
     /// `add_box` — distinct from `AddSession`'s plain `add` glyph).
     AddTerminalInstance,
+    /// Split a terminal pane into two side by side (feature 484; `vertical_split`).
+    SplitVertical,
+    /// Split a terminal pane into two stacked (feature 484; `horizontal_split`).
+    SplitHorizontal,
     /// Close/dismiss action (an "×" glyph) — e.g. a session row's trailing button, or closing a
     /// Regular Terminal instance (feature 011, FR-011). Distinct from [`Icon::Delete`] (a trash
     /// can): closing dismisses something without destroying anything on disk.
@@ -163,6 +167,8 @@ impl Icon {
         Icon::ReleaseFocus,
         Icon::ProjectRoot,
         Icon::AddTerminalInstance,
+        Icon::SplitVertical,
+        Icon::SplitHorizontal,
         Icon::Close,
         Icon::ActivityWorking,
         Icon::ActivityEnded,
@@ -216,6 +222,8 @@ impl Icon {
             Icon::ReleaseFocus => '\u{e31a}',
             Icon::ProjectRoot => '\u{e88a}',
             Icon::AddTerminalInstance => '\u{e146}',
+            Icon::SplitVertical => '\u{e949}',
+            Icon::SplitHorizontal => '\u{e947}',
             Icon::Close => '\u{e5cd}',
             // The shipped font is a static instance pinned at FILL=0 (PROVENANCE.md), where the
             // nominally-solid dots (`circle`, `lens`, `fiber_manual_record`) all render as rings —

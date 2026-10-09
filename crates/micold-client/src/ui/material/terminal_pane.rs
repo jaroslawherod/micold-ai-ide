@@ -7,6 +7,8 @@
 
 use crate::app::{route_key, KeyRouting, Message};
 use crate::features::session::Msg as SessionMsg;
+use crate::features::session::PaneMsg;
+use micold_core::pane_layout::PaneId;
 use crate::features::session::SelectKind;
 use crate::grid::GridCache;
 use crate::keymap;
@@ -51,6 +53,8 @@ use micold_core::tokens::state::FOCUS_RING_WIDTH;
 /// instance: only a *change* in the computed `(cols, rows)` publishes, so a steady window is silent.
 pub struct GridSizeReporter<'a, Theme = iced::Theme, Renderer = iced::Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
+    /// Set when this measures one of several panes (feature 484): the size is that pane's.
+    pane: Option<PaneId>,
 }
 
 /// The last `(cols, rows)` this instance published, so an unchanged size stays off the wire.
@@ -64,7 +68,14 @@ impl<'a> GridSizeReporter<'a> {
     pub fn new(content: impl Into<Element<'a, Message>>) -> Self {
         Self {
             content: content.into(),
+            pane: None,
         }
+    }
+
+    /// Report this rectangle as pane `pane`'s size rather than the terminal area's (feature 484).
+    pub fn pane(mut self, pane: PaneId) -> Self {
+        self.pane = Some(pane);
+        self
     }
 }
 
@@ -121,9 +132,16 @@ where
         let state = tree.state.downcast_mut::<ReporterState>();
         if grid != state.last_grid {
             state.last_grid = grid;
-            shell.publish(Message::Session(SessionMsg::TerminalResized {
-                cols: grid.0,
-                rows: grid.1,
+            shell.publish(Message::Session(match self.pane {
+                Some(pane) => SessionMsg::Pane(PaneMsg::Resized {
+                    pane,
+                    cols: grid.0,
+                    rows: grid.1,
+                }),
+                None => SessionMsg::TerminalResized {
+                    cols: grid.0,
+                    rows: grid.1,
+                },
             }));
         }
 
@@ -806,6 +824,8 @@ pub struct TerminalPane<'a> {
     focused: bool,
     session: Option<SessionId>,
     link_context: LinkContext,
+    /// Set when several panes are shown (feature 484): which one this is.
+    pane: Option<PaneId>,
 }
 
 /// What a link resolves against when the caller names no context: this machine, unsandboxed.
@@ -838,7 +858,16 @@ impl<'a> TerminalPane<'a> {
             focused: false,
             session: None,
             link_context: local_link_context(),
+            pane: None,
         }
+    }
+
+    /// Mark this one of several panes (feature 484): a press while it is unfocused focuses *it* and
+    /// is consumed, neither reported to the process nor starting a selection, and the wheel leaves
+    /// its scrollback alone (selection and scroll belong to the focused pane).
+    pub fn pane(mut self, pane: PaneId) -> Self {
+        self.pane = Some(pane);
+        self
     }
 
     /// The session this pane shows: a hover never outlives a switch to another one (FR-007).
@@ -1249,6 +1278,27 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         // Track modifiers (even when unfocused) so Shift-forces-selection works (FR-013b).
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(m)) = &event {
             state.modifiers = *m;
+        }
+
+        // ---- Several panes (feature 484): an unfocused pane only asks for focus. One press, and the
+        // press is spent on that: it is not also forwarded into the process.
+        if let (Some(pane), false) = (self.pane, self.focused) {
+            match event {
+                Event::Mouse(mouse::Event::ButtonPressed(
+                    mouse::Button::Left | mouse::Button::Right | mouse::Button::Middle,
+                )) if cursor.is_over(bounds) => {
+                    shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(
+                        pane,
+                    ))));
+                    shell.capture_event();
+                    return;
+                }
+                Event::Mouse(mouse::Event::WheelScrolled { .. }) if cursor.is_over(bounds) => {
+                    shell.capture_event();
+                    return;
+                }
+                _ => {}
+            }
         }
 
         // ---- Links: keep the link under the pointer current (feature 031, research R2, R7).
@@ -1995,6 +2045,46 @@ mod tests {
                     );
                 }
             }
+        }
+
+        #[test]
+        fn a_press_in_an_unfocused_pane_of_several_only_focuses_it() {
+            // Feature 484 (T015): one press focuses the pane and is consumed, not reported to the
+            // process and not the start of a selection.
+            let renderer = headless();
+            let grid = crate::grid::GridCache::default();
+            let id = micold_core::pane_layout::PaneLayout::single().focused();
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                &grid,
+                crate::ui::terminal::TermPalette::from_scheme(
+                    micold_core::theme::ColorScheme::Dark,
+                ),
+            )
+            .pane(id)
+            .into();
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+            let mut messages: Vec<Message> = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Layout::new(&node),
+                mouse::Cursor::Available(Point::new(100.0, 100.0)),
+                &renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+            assert!(shell.is_event_captured(), "the press is consumed");
+            assert_eq!(
+                messages,
+                vec![Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(id)))]
+            );
         }
 
         #[test]
