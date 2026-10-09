@@ -102,10 +102,10 @@
 
 Found by the close unit's visual pass (`visual-pass-close.md`) and `tdd/verification.md`.
 
-- [ ] T038 [US1] Write a failing client test, then fix: a refused split (7th pane, or a pane too small) shows its reason and keeps it visible (`pane_refusal` is cleared by every pane message and showing it relayouts the panes; quickstart step 7, FR-001/FR-002).
-- [ ] T039 [US2] Write a failing client test, then fix: a press on an empty pane (its header or body) focuses it, and a project switch keeps a focus resting on an empty pane (FR-010, FR-016).
-- [ ] T040 [US5] Find why six idle panes cost +81 % client CPU over one pane (`visual-pass-close.md` step 9; SC-004 needs ≤ +10 %): check that only the focused pane's cursor blink redraws, per-pane cache invalidation (R8) and any per-pane subscription. Write a failing test for the cause where it can be pinned, fix it, re-measure with the same probe and record the numbers in `quickstart.md`.
-- [ ] T041 Re-run quickstart Part B steps 3 (dark scheme), 3b and 7 and 9 with `visual-pass` and record them in `visual-pass-close.md`.
+- [x] T038 [US1] Write a failing client test, then fix: a refused split (7th pane, or a pane too small) shows its reason and keeps it visible (`pane_refusal` is cleared by every pane message and showing it relayouts the panes; quickstart step 7, FR-001/FR-002).
+- [x] T039 [US2] Write a failing client test, then fix: a press on an empty pane (its header or body) focuses it, and a project switch keeps a focus resting on an empty pane (FR-010, FR-016).
+- [x] T040 [US5] Find why six idle panes cost +81 % client CPU over one pane (`visual-pass-close.md` step 9; SC-004 needs ≤ +10 %): check that only the focused pane's cursor blink redraws, per-pane cache invalidation (R8) and any per-pane subscription. Write a failing test for the cause where it can be pinned, fix it, re-measure with the same probe and record the numbers in `quickstart.md`.
+- [x] T041 Re-run quickstart Part B steps 3 (dark scheme), 3b and 7 and 9 with `visual-pass` and record them in `visual-pass-close.md`.
 
 ## Final Phase: Polish (close unit, no code)
 

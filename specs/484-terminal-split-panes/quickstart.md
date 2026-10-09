@@ -18,3 +18,18 @@ Prereqs: `mise trust`, a project with two sessions. Gate: `mise run gate`.
 7. Reach 6 panes; a 7th split shows the refusal reason.
 8. Restart the app: layout, ratios, focus restored; per project (US6). Corrupt the `pane_layout` field by hand: starts with one pane.
 9. Idle: 6 panes, no output, compare CPU with one pane (≤ +10%, SC-004).
+
+## Idle CPU record (step 9, SC-004)
+
+Debug build, lavapipe on Xvfb, shells only, 5 s settle, `utime+stime` per 30 s window (100 ticks = 1 s).
+Cause of the earlier +81 %: the OS-theme poll sent a message every 500 ms even when the scheme was
+unchanged, so each tick re-composed and redrew the whole window (about 0.14 s of software rasterising
+per redraw). Fix: the poll sends only a changed scheme (`changed_scheme`, M5 T040).
+
+| Build | 1 pane | 6 panes |
+|---|---|---|
+| Before (close unit) | 313/314 ticks (10.4 %) | 569/568 ticks (19.0 %) |
+| Before (M5 profile) | 873 ticks (29 %) | 883 ticks (29 %) |
+| After | 89/90 ticks (3.0 %) | 92/93 ticks (3.1 %) |
+
+Six panes are +3 % over one pane (limit +10 %); total idle CPU fell about 85 %.

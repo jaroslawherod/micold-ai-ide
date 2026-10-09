@@ -51,3 +51,20 @@ something that runs per pane while idle.
   on every pane message, and showing the reason adds a row above the split view, which resizes the
   panes and may send `PaneMsg::Resized` straight away and clear it again. Unverified.
 - Step 9: +81 % idle CPU with six panes.
+
+## M5 re-run (T041), 2026-10-09
+
+Same set-up as above, window 1500x900, HEAD 30568506, driven with xdotool. Crops are in the unit's
+scratchpad (not committed).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Step 3 dark scheme (Settings > Appearance > Dark) and light | pass | Focused pane: tinted header, accent strip, outlined body; unfocused flat; typing reached only the focused shell |
+| Step 3b selection, link, scrollback with several panes | pass | Wheel scrollback and drag selection changed only the focused pane (neighbour pixel diff 0); link hover underlines, Ctrl+click reaches the opener. Not driven in the Claude pane |
+| Step 7 seventh split | pass | "At most 6 panes fit." visible at 0.2 s and unchanged at 3 s, by chord and header button; no pane resized |
+| Step 7 pane too small | pass | "This pane is too small to split." at 0.2 s and 3 s; layout unchanged |
+| Empty pane focus (FR-010, FR-016) | pass | Header click and body click focus an empty pane; focus stays on it across a switch to project B and back; persisted `focused` unchanged |
+| Step 9 idle CPU | pass | 3.0 % (1 pane) vs 3.1 % (6 panes): +3 %. See quickstart.md |
+
+Observation, not a defect of M5: with an empty pane focused the pane chords do nothing (they are
+handled by the terminal widget); the header buttons work.
