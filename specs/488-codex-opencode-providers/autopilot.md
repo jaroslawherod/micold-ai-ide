@@ -64,7 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 done locally (gate stamped at tree d942c5fa, commits on claude/project-thread-wysm57, PR text in scratchpad/pr-488-m2.md). Push refused (stale info; remote branch deleted after M1 merge): orchestrator pushes, opens the PR.
 
 ## Open escalation
 
