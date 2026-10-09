@@ -314,3 +314,73 @@ async fn two_concurrent_picks_integrate_exactly_one() {
         "the loser's commit is not on the base"
     );
 }
+
+/// US4 s1, integration.md: a run whose tip the base branch already holds has nothing to integrate:
+/// the answer is a fast-forward at the unchanged base tip, and no commit is made.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_run_already_contained_in_the_base_integrates_nothing() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new();
+    let (mut client, group) = group_of(&s, 2).await;
+    // The run has no commit of its own, and the base moves on past it.
+    base_commits(&s, "base.txt", "b\n");
+    let project = s.project();
+    let base_before = tip(&s, "base");
+    let count_before = git(&project, &["rev-list", "--count", "base"]);
+    let (answer, _) = request(&mut client, 5, pick(5, &project, group.id, 1)).await;
+    let Ok(OperationResult::RunPicked { integration, .. }) = answer else {
+        panic!("accepted: {answer:?}");
+    };
+    assert_eq!(
+        integration,
+        Integration::FastForward {
+            base_tip: base_before.clone()
+        }
+    );
+    assert_eq!(tip(&s, "base"), base_before, "the base did not move");
+    assert_eq!(
+        git(&project, &["rev-list", "--count", "base"]),
+        count_before,
+        "no commit was made"
+    );
+}
+
+/// integration.md I5: the base branch moving between the pre-check and the merge in its checkout
+/// refuses with nothing merged. A `git` on `PATH` moves `base` right after `git merge-tree`, which
+/// is the pre-check, so the window is hit deterministically.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_base_that_moves_before_the_checkout_merge_is_refused_and_not_merged() {
+    use std::os::unix::fs::PermissionsExt;
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new();
+    let (mut client, group) = group_of(&s, 2).await;
+    run_commits(&s, &group, 1, "run.txt", "r\n");
+    let project = s.project();
+    let moved = git(
+        &project,
+        &["commit-tree", "base^{tree}", "-p", "base", "-m", "moved"],
+    );
+    git(&project, &["branch", "moved", &moved]);
+    git(&project, &["checkout", "-q", "base"]);
+    let shim = s.bin.path().join("git");
+    std::fs::write(
+        &shim,
+        "#!/bin/sh\n/usr/bin/git \"$@\"\nstatus=$?\n\
+         case \"$*\" in *merge-tree*) /usr/bin/git -C \"$2\" update-ref refs/heads/base refs/heads/moved;; esac\n\
+         exit $status\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let run_tip = tip(&s, &group.runs[0].names.branch);
+
+    let (answer, pushes) = request(&mut client, 5, pick(5, &project, group.id, 1)).await;
+    let (kind, message) = answer.expect_err("the pick is refused");
+    assert_eq!(kind, ErrorKind::Refused, "{message}");
+    assert!(message.contains("moved while"), "{message}");
+    assert!(pushes.is_empty(), "a refusal pushes nothing");
+    assert_eq!(tip(&s, "base"), moved, "the base was not merged into");
+    assert_eq!(tip(&s, &group.runs[0].names.branch), run_tip);
+    assert!(!project.join(".git/MERGE_HEAD").exists());
+    assert!(!project.join("run.txt").exists(), "nothing was merged");
+    assert_eq!(s.on_disk().groups[0].winner, None);
+}

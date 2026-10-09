@@ -95,3 +95,69 @@ Red by mutation (one build each, then reverted):
 - `removable()` dropping the clean-or-confirmed condition → `a_failed_read_counts_as_uncommitted`, `a_loser_whose_read_is_pending_failed_or_uncommitted…` and `a_loser_that_turned_uncommitted_needs_the_second_confirmation…` FAILED
 - the toggle freeze (`is_editable`) removed → `the_choice_is_frozen_while_confirm_re_reads…` FAILED
 
+
+## Verification follow-up (T072, T076, T078, T079)
+
+Deliberate mutants, applied by hand one at a time against one test target each, restored byte for
+byte from a copy taken before (the script compares the file after the run; `git status` shows no
+source file changed). No mutation tool is configured.
+
+### T078 — behaviours recorded as "no mutation recorded"
+
+| Mutant | Test target | Failing test |
+|---|---|---|
+| `arrange_groups` renumbers runs from 1 (`#1, #3` becomes `#1, #2`) | `features_sidebar` | `a_group_whose_list_shrank_shows_the_remaining_numbers` |
+| `Msg::GroupsChanged` appends instead of replacing (a dropped group stays) | `features_runs` | `groups_changed_replaces_the_list`, `a_group_that_goes_away_takes_its_menu_and_confirmation_with_it` and 3 more |
+| Dialog `RunAdded` allows `<= MAX_RUNS` | `features_runs` | `runs_can_be_added_and_removed_between_the_minimum_and_the_maximum` |
+| Group row `expanded` ignores the collapse state | `features_sidebar` | `a_collapsed_group_hides_its_runs_and_keeps_both_counts` |
+| Group row `failed_count` always 0 | `features_sidebar` | `a_collapsed_group_hides_its_runs_and_keeps_both_counts`, `a_run_without_a_worktree_is_still_a_child_row_with_its_reason` |
+
+All five killed; no assertion added. (`a_dropped_group_is_not_shown` itself guards only the
+`arrange_groups` projection, which has no state to leak; the stored-list behaviour is held by
+`groups_changed_replaces_the_list`.)
+
+### T072 — the nine TEST_AFTER behaviours (verification rows 5, 7, 10, 11, 12, 14, 16, 17, 18)
+
+| Row | Mutant | Test target | Failing test |
+|---|---|---|---|
+| 5 | `create_worktree` for `NewBranchAt` calls `worktree_add_new_branch` (start at HEAD) | `micold-core --test worktree_create` | none: survives (the `FakeGit` ignores `start`, see below) |
+| 5 | same | `micold-daemon --test run_group_create` | `us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once`, `every_run_starts_at_the_recorded_base_commit_even_under_a_same_named_tag` |
+| 7 | `forget_project` skips `remove_runs` | `run_group_persist` | `w5_forgetting_the_project_removes_its_runs_file` |
+| 10 | dialog `RunAdded` bound `<=` (T078 row above) | `features_runs` | `runs_can_be_added_and_removed_between_the_minimum_and_the_maximum` |
+| 11 | group row `expanded` ignored, `failed_count` 0, runs renumbered (T078 rows above) | `features_sidebar` | see T078 |
+| 12 | `settle_interrupted` never fails a `Worktree`-step run | `run_group_persist` | `an_interrupted_creating_run_is_failed_and_its_folder_and_branch_are_removed`, `an_interrupted_run_whose_worktree_hosts_a_session_is_left_and_says_so` |
+| 14 | renumbering from 1 / `GroupsChanged` appends (T078 rows above) | `features_sidebar`, `features_runs` | see T078 |
+| 16 | Compare `summary_read` accepts any `seq` | `features_runs` | `an_answer_shows_and_a_stale_answer_is_dropped` |
+| 17 | `integrate::plan` fast-forward test inverted (`None if !is_ancestor`) | `micold-core --lib runs::integrate` | `the_plan_fast_forwards_when_the_base_tip_is_an_ancestor`, `the_plan_writes_a_merge_commit_when_the_base_moved_on` |
+| 18 | `ops::pick_run` uncommitted-files refusal off (`if false`) | `run_group_pick` | `w3_uncommitted_changes_refuse_naming_the_files_until_committed` |
+
+Row 5 note: the core-level `NewBranchAt` tests assert only the progress line, because `FakeGit::
+worktree_add_new_branch_at` (in `crates/micold-core/src/git.rs`, not a test file) drops `start`. The
+behaviour is held by the two real-git daemon tests above, which is where it was first red. Teaching
+the fake to record `start` is a source change and was left out of this test-only pass.
+
+### Verification F2–F4 mutants (T071, T073, T074; 2026-10-09)
+
+| Mutant | New test that failed | Restored |
+|---|---|---|
+| C5 `ops.rs:839` forced to `if false` (contained run still merged) | `run_group_pick::a_run_already_contained_in_the_base_integrates_nothing` (the only failure) | yes, `git diff` empty for `ops.rs` |
+| C6 `ops.rs:859` base-moved guard set to `if false` | `run_group_pick::a_base_that_moves_before_the_checkout_merge_is_refused_and_not_merged` | yes |
+| C7 `runs.rs:90-92` winner guard removed | `runs::tests::a_second_pick_on_a_group_with_a_winner_changes_nothing` | yes |
+
+T070 (2026-10-09): `docs/user-guide/parallel-runs.md` re-read end to end against the shipped code and FR-001–FR-020, FR-022: entry point (sidebar header beside New worktree, `sidebar.rs`), `GROUP_MENU_ITEMS` (Compare, Dismiss group), refusals, cleanup offer and the second confirmation all match; no wording change was needed.
+
+### T079 — `layout_snapshot.txt`
+
+`git diff e6605e57 6b6b6281 -- crates/micold-client/tests/fixtures/layout_snapshot.txt` was reviewed:
+280 lines removed, 344 added. Every node id on a removed line is still present afterwards; the
+only new ids are the sixth child of the sidebar header row (`.../0/0/0/1/0/0/0/0/6` and its `/0`, in
+the two themes' blocks), i.e. the new "Run in parallel" header action. Everything else is the x
+offsets and widths of the sibling action rows moving left (`122.0` to `96.0`, `156.0` to `130.0`, and
+so on). Position and size only, plus the added action node: legitimate.
+
+### T076
+
+Every bare assertion in `features_runs.rs` and `runs/integrate.rs` tests now carries a message naming
+the rule (the first-line test name plus the asserted expression, or a hand-written sentence in
+`integrate.rs`); `cargo test -p micold-client --test features_runs` (49) and `cargo test -p micold-core
+--lib runs::integrate` (9) pass.

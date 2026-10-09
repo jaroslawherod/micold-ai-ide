@@ -10,6 +10,8 @@
 
 #[path = "support/runs.rs"]
 mod runs_support;
+#[path = "support/mcp.rs"]
+mod runs_support_log;
 
 use std::time::Duration;
 
@@ -230,7 +232,8 @@ async fn us1_s1_s2_three_runs_each_get_a_worktree_a_session_and_the_prompt_once(
         );
         sessions.push(session);
     }
-    tokio::time::sleep(QUIET).await;
+    // `settled` returned with every run `Prompted`, so each prompt was delivered before this point
+    // and everything the stand-in received is already in its input log.
     let inputs = s.inputs();
     assert_eq!(
         inputs.len(),
@@ -349,7 +352,17 @@ async fn us1_s4_a_cli_never_ready_leaves_the_prompt_undelivered_and_keeps_the_ru
         );
         assert!(s.worktree(&run.names.dir_name).is_dir());
     }
-    tokio::time::sleep(Duration::from_secs(3) + QUIET).await;
+    // The stand-in opens its input log only once it is ready, which here is after the bound: wait
+    // for both logs, let a late prompt arrive (a quiet period), then nothing was typed into them.
+    let deadline = std::time::Instant::now() + runs_support::BOUND;
+    while s.inputs().len() < 2 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the stand-ins never became ready"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    tokio::time::sleep(QUIET).await;
     assert!(
         s.inputs().iter().all(|(_, typed)| !typed.contains(PROMPT)),
         "a CLI ready after the bound is typed nothing: {:?}",
@@ -381,10 +394,6 @@ async fn w2_the_prompt_is_never_logged() {
         "the prompt is in no log line"
     );
 }
-
-#[path = "support/mcp.rs"]
-#[allow(unused_imports)]
-mod runs_support_log;
 
 /// Review A M1a: every run starts at the base commit recorded at create time, even when a tag
 /// shares the base branch's name (git resolves a bare `base` to the tag first).

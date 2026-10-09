@@ -121,7 +121,7 @@ the 3 runs under it and the 2 others outside; restart and see the same.
 - [x] T036 [US2] Implement the group row's menu (**Dismiss group**) in `crates/micold-client/src/features/sidebar.rs` and the dismiss confirmation in `crates/micold-client/src/features/runs.rs` until T030 passes
 - [x] T037 [US2] Render the group row's menu in `crates/micold-client/src/ui/sidebar.rs` and register the dismiss confirmation in `crates/micold-client/src/overlay/registry.rs` (parallel-surfaces G4, G5)
 - [x] T038 [P] [US2] Add to `docs/user-guide/parallel-runs.md` what a restart keeps, interrupted runs, deleting a run, and Dismiss group (FR-022 part)
-- [x] T039 [US2] Run the visual pass for quickstart B7, B21, B22 and record the results under quickstart.md § Results § B
+- [x] T039 [US2] Run the visual pass for quickstart B7, B21, B22 and record the results under quickstart.md § Results § B (showcase poses only; B7, B21, B22 on a live client not run, recorded as such)
 
 **Checkpoint**: groups are visible, persistent and dismissable.
 
@@ -195,9 +195,9 @@ run 2's commits, run 1 is removed, run 3 is kept unless separately confirmed.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T068 Run quickstart B23 (showcase, both schemes) and record it under quickstart.md § Results § B
-- [ ] T069 Run or record quickstart §C (macOS and Windows: B1, B3, B8, B9, B13, B16, B22, names and merge message byte-for-byte) under quickstart.md § Results § C, or record it as not run with what CI covers instead
-- [ ] T070 Re-read `docs/user-guide/parallel-runs.md` end to end against the shipped behaviour and spec FR-022
+- [x] T068 Run quickstart B23 (showcase, both schemes) and record it under quickstart.md § Results § B
+- [x] T069 Run or record quickstart §C (macOS and Windows: B1, B3, B8, B9, B13, B16, B22, names and merge message byte-for-byte) under quickstart.md § Results § C, or record it as not run with what CI covers instead
+- [x] T070 Re-read `docs/user-guide/parallel-runs.md` end to end against the shipped behaviour and spec FR-022
 
 ---
 
@@ -295,3 +295,21 @@ T068–T070 (Polish) change no code and are left to the close unit (milestones r
 - **Verify**: `cargo test -p micold-client --test features_runs`; quickstart B17–B19
 - **Depends on**: M4
 - **Tier**: full
+
+---
+
+## Phase 8: TDD remediation
+
+From `tdd/verification.md` (verdict FAIL at `6b6b6281`). The feature is not done until T071 to T074
+are cleared. Tests come first and must fail for the right reason before any source change.
+
+- [x] T071 [US4] (F2, HIGH) Add a failing daemon test in `crates/micold-daemon/tests/run_group_pick.rs`: picking a run whose tip is already contained in the base branch answers `RunPicked { integration: FastForward { base_tip } }` with the base tip unchanged and no new commit (`git rev-list --count` of the base is the same). Prove it by re-running mutant C5 (`crates/micold-daemon/src/ops.rs:839` forced to `if false`) and seeing it fail, then restore. Proof: `cargo test -p micold-daemon --test run_group_pick`
+- [x] T072 [US4] (F1, HIGH) Derive `tdd/test-list.md` for 483 from `spec.md` (one behavior per acceptance scenario, `traces` to the test names in the verification's Traceability table). For each of the nine `TEST_AFTER` behaviors (verification rows 5, 7, 10, 11, 12, 14, 16, 17, 18) run one mutant of the behavior's implementation, record the failing test and the restore in `tdd/cycle-log.md`, and mark the row. Proof: `grep -c TEST_AFTER specs/483-parallel-agent-runs/tdd/verification.md` after a re-run of `/speckit.tdd.verify` reports `test_after: 0`
+- [x] T073 [US4] (F3, MED) Cover the in-checkout base-moved guard (`crates/micold-daemon/src/ops.rs:859`): either a daemon test that moves the base between the pre-check and the merge (a `Git` double behind `integrate_pick`, which takes `&dyn Git`) asserting `PickRefusal::BaseMoved` and nothing changed, or delete the guard if `git merge` already makes it redundant. Proof: mutant C6 fails; `cargo test -p micold-daemon --test run_group_pick`
+- [x] T074 [US4] (F4, MED) Either add a unit test of `Runs::pick` in `crates/micold-daemon/src/runs.rs` showing a second pick on a group with a winner returns `None` and leaves the winner, or remove the redundant guard (`runs.rs:89-91`). Proof: mutant C7 fails, or the guard is gone and `cargo test -p micold-daemon` is green
+- [x] T075 (F5, MED) Live client against a daemon (quickstart B1–B22) is not possible in the cloud container; recorded under `quickstart.md` § Results as not run, with what covers each rule, and T027, T039, T050, T061 reworded to the showcase-only scope they delivered. The automated client-to-daemon test stays a follow-up (ledger).
+- [x] T076 (F6, MED) Add a message stating the rule to the assertions in `crates/micold-client/tests/features_runs.rs` and `crates/micold-core/src/runs/integrate.rs:72-159` (`grep -nE 'assert(_eq)?!\([^"]*\);'` lists the bare ones). Proof: `cargo test -p micold-client --test features_runs && cargo test -p micold-core --lib runs::integrate`; the grep prints nothing for multi-line-free asserts
+- [x] T077 (F7, MED) Replace the fixed sleeps at `crates/micold-daemon/tests/run_group_create.rs:233,352` with a wait on the fake CLI's input log or session state, and make the partial-file check at `run_group_persist.rs:54-61` deterministic (inject a failing writer, or assert the temp-then-rename path). Proof: `cargo test -p micold-daemon --test run_group_create --test run_group_persist` three times green, with no `sleep` in those lines
+- [x] T078 (F8, MED) For "a shrunk group shows `#1, #3`", "a dropped group is not shown", the dialog reducer and the group-row tree, run one mutant each (for example `arrange_groups` renumbering runs from 1) and record the failing test in `tdd/cycle-log.md`. Proof: the cycle log rows no longer say "no mutation recorded"
+- [x] T079 (F9, LOW) Note in `tdd/cycle-log.md` that the `layout_snapshot.txt` regeneration was reviewed (only the rows shifted by the new header action changed). Proof: `git diff e6605e57 6b6b6281 -- crates/micold-client/tests/fixtures/layout_snapshot.txt` shows position-only changes and the log says so
+- [x] T080 (F10, LOW) Move `mod runs_support_log` at `crates/micold-daemon/tests/run_group_create.rs:387` beside `mod runs_support` and drop the `allow(unused_imports)` if unused. Proof: `cargo test -p micold-daemon --test run_group_create`

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #483
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-08
-- **Phase**: milestone M5
-- **Next step**: orchestrator opens the M5 PR from the scratchpad pr-483-m5.md; then the close unit (T068–T070)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #650 | M2 (restart survival, deletes, Dismiss group) | merged (rebase) | 0d356a56a83775c03741c14413fd93fd09cee0df |
 | #651 | M3 (Compare the runs) | merged (rebase) | 2d07a5ac7d387657f0dfd6fddde527d10fea0d77 |
 | #652 | M4 (Pick this one) | merged (rebase) | 6e84ae5292e3b767b81c75369ca8f8ff4f3b53f7 |
+| #653 | M5 (cleanup offer) | merged (rebase) | 6b6b6281e652a9374f22a65a3e820c85d239d516 |
+| (orchestrator opens) | Close (polish, TDD remediation) | opened from the scratchpad pr-483-close.md; gate green but for the six root-only tests; close review A fixed 3 MAJOR | |
 
 ## Milestones
 
@@ -141,3 +143,4 @@ None.
 - M1b: the Run in parallel prompt is a single-line `TextField`; contract D1 wants a multi-line `TextArea` (needs a binary-owned `text_editor::Content`).
 - M1b: a `BranchList` failure leaves the base-branch select empty with only the generic "Choose a base branch" error.
 - M1b: quickstart B1-B6 on the live client not driven (no fixture daemon in the cloud container); only B23 poses.
+- Close: live-client pass (quickstart B1–B22, §C) not run in the cloud container; an automated client-to-daemon test is not written (verification F5). `FakeGit::worktree_add_new_branch_at` ignores `start`.

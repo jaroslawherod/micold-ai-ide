@@ -86,21 +86,35 @@ mod tests {
                    1\0f 1.txt\0Auto-merging\0Auto-merging f 1.txt\n\0";
         assert_eq!(
             parse_merge_tree_conflicts(out),
-            paths(&["del.txt", "f 1.txt", "é.txt"])
+            paths(&["del.txt", "f 1.txt", "é.txt"]),
+            "each conflicted path is read once, up to the empty entry, names with spaces and UTF-8 intact"
         );
     }
 
     #[test]
     fn a_repeated_path_is_listed_once() {
         let out = "abc\0a.rs\0a.rs\0b.rs\0\0";
-        assert_eq!(parse_merge_tree_conflicts(out), paths(&["a.rs", "b.rs"]));
+        assert_eq!(
+            parse_merge_tree_conflicts(out),
+            paths(&["a.rs", "b.rs"]),
+            "a path repeated in the output is listed once"
+        );
     }
 
     #[test]
     fn a_clean_merge_has_no_conflicts() {
-        assert!(parse_merge_tree_conflicts("abc\0").is_empty());
-        assert!(parse_merge_tree_conflicts("abc\0\0messages\0").is_empty());
-        assert!(parse_merge_tree_conflicts("").is_empty());
+        assert!(
+            parse_merge_tree_conflicts("abc\0").is_empty(),
+            "a tree id alone means a clean merge"
+        );
+        assert!(
+            parse_merge_tree_conflicts("abc\0\0messages\0").is_empty(),
+            "informational messages after the empty entry are not conflicts"
+        );
+        assert!(
+            parse_merge_tree_conflicts("").is_empty(),
+            "empty output has no conflicts"
+        );
     }
 
     #[test]
@@ -109,13 +123,18 @@ mod tests {
             plan("run", true, None),
             Plan::FastForward {
                 run_tip: "run".into()
-            }
+            },
+            "a base tip that is an ancestor of the run is fast-forwarded to the run tip"
         );
     }
 
     #[test]
     fn the_plan_writes_a_merge_commit_when_the_base_moved_on() {
-        assert_eq!(plan("run", false, None), Plan::MergeCommit);
+        assert_eq!(
+            plan("run", false, None),
+            Plan::MergeCommit,
+            "a base that moved on needs a merge commit"
+        );
     }
 
     #[test]
@@ -124,7 +143,8 @@ mod tests {
         for ancestor in [true, false] {
             assert_eq!(
                 plan("run", ancestor, Some(path)),
-                Plan::MergeInCheckout { path: path.into() }
+                Plan::MergeInCheckout { path: path.into() },
+                "a base branch checked out somewhere is merged in that checkout, ancestor or not"
             );
         }
     }
@@ -133,11 +153,13 @@ mod tests {
     fn stderr_naming_write_tree_means_git_is_too_old() {
         assert_eq!(
             classify_stderr("error: unknown option `write-tree'\nusage: git merge-tree"),
-            PickRefusal::GitTooOld
+            PickRefusal::GitTooOld,
+            "stderr naming write-tree means git is too old for merge-tree --write-tree"
         );
         assert_eq!(
             classify_stderr("usage: git merge-tree [--write-tree] <b1> <b2>"),
-            PickRefusal::GitTooOld
+            PickRefusal::GitTooOld,
+            "the usage text mentioning write-tree also means git is too old"
         );
     }
 
@@ -145,7 +167,8 @@ mod tests {
     fn any_other_stderr_is_git_s_own_message() {
         assert_eq!(
             classify_stderr("fatal: not a valid object name\n"),
-            PickRefusal::Git("fatal: not a valid object name".into())
+            PickRefusal::Git("fatal: not a valid object name".into()),
+            "any other stderr is git's own message, trimmed"
         );
     }
 
@@ -153,7 +176,8 @@ mod tests {
     fn the_merge_message_names_the_run_the_group_and_the_base() {
         assert_eq!(
             merge_message(2, "login page", "main"),
-            "Merge run 2 of login page into main"
+            "Merge run 2 of login page into main",
+            "the merge message names the run, the group and the base"
         );
     }
 }

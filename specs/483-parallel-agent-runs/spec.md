@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Closed 2026-10-09 — shipped in PRs #644, #647, #650, #651, #652, #653 and the close PR
 
 **Input**: User description: "Implement GitHub issue #483: Run one prompt across several agents in
 parallel worktrees and pick the best result. Problem: trying the same task with different AI CLIs
