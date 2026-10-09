@@ -284,7 +284,10 @@ async fn a_provider_off_the_path_is_listed_unavailable() {
     let f = Fixture::installed(&[]).await;
     let found = listed(&f.state, f.project.path());
     for (cli, _) in PROVIDERS {
-        assert!(!found.contains(&cli), "{cli:?} offered with nothing on PATH");
+        assert!(
+            !found.contains(&cli),
+            "{cli:?} offered with nothing on PATH"
+        );
     }
 }
 
