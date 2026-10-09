@@ -255,6 +255,15 @@ pub fn user_sid() -> io::Result<String> {
     imp::user_sid()
 }
 
+/// The name of the event that asks this user's session service to stop (feature 041, stop-request
+/// contract §3): `Local\Micold.Daemon.Stop.<user SID>`. The service creates it at start; its
+/// "Restart service" sender and the installer open it by this name. The SID keeps two users'
+/// services apart, as it does in the pipe's name.
+#[cfg(windows)]
+pub fn stop_event_name() -> io::Result<String> {
+    Ok(format!(r"Local\Micold.Daemon.Stop.{}", user_sid()?))
+}
+
 /// The SID of the user the process `pid` runs as. Access denied when this user may not query it,
 /// which a process of another account usually is. Not found once the process has exited, even
 /// while a handle someone else holds keeps its pid openable.

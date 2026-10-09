@@ -187,3 +187,29 @@ fn ready_page_says_sessions_will_stop() {
          body is:\n{body}"
     );
 }
+
+/// Feature 041, stop-request contract §2 (T062, T065): the installer asks the daemon to stop through
+/// its event, and waits, before it ends the process, so the daemon saves every terminal first.
+#[test]
+fn stop_daemon_asks_through_the_stop_event_before_ending_the_process() {
+    let script = iss();
+    let code = code_section(&script);
+    let body = routine_body(&code, "StopDaemon").expect("[Code] must define `StopDaemon` (FR-009)");
+
+    let ask = body
+        .find(r"Local\Micold.Daemon.Stop.")
+        .unwrap_or_else(|| panic!("`StopDaemon` must open the stop event; the body is:\n{body}"));
+    assert!(
+        body[ask..].contains("AddSeconds(5)"),
+        "`StopDaemon` must wait up to 5 s for the daemon after setting the event; the body is:\n{body}"
+    );
+    for hard in ["Stop-Process", "taskkill"] {
+        let at = body.find(hard).unwrap_or_else(|| {
+            panic!("`StopDaemon` must still end a daemon that does not answer with `{hard}`")
+        });
+        assert!(
+            ask < at,
+            "`StopDaemon` must set the stop event before `{hard}`; the body is:\n{body}"
+        );
+    }
+}

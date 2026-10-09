@@ -63,15 +63,15 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 ## How it stops, and what it saves first
 
 The service stops in an orderly way in two cases: when it stops itself after 30 minutes with no
-window connected, and when the process is sent `SIGTERM`, `SIGINT` or `SIGHUP` (**Restart service**,
-logout and a reboot on Linux and macOS). Both run the same unwind: it stops accepting connections,
+window connected, and when it is asked to stop: `SIGTERM`, `SIGINT` or `SIGHUP` on Linux and macOS
+(**Restart service**, logout and a reboot), and on Windows its stop event or an end-of-session
+message (see *On Windows* below). Both run the same unwind: it stops accepting connections,
 **saves the terminal history of every running AI CLI terminal** (one file each, written in parallel,
 all of it bounded at 3 seconds so a stuck disk cannot keep the service from stopping), marks the
 sessions interrupted-resumable, ends their processes, and only then releases the endpoint. A terminal
 with no output since its last save is not written again. After the restart, starting a session shows
 everything it held above the "session restarted at" line. A kill without warning (`SIGKILL`, a crash,
-a power loss) runs none of this; the periodic save bounds that loss to the last minute. On Windows
-the stop request arrives with a later milestone; until then only the idle stop saves.
+a power loss) runs none of this; the periodic save bounds that loss to the last minute.
 
 ## It stops itself when nobody has used it for 30 minutes
 
@@ -372,8 +372,17 @@ The service works the same way on Windows, with Windows mechanisms underneath:
   signed in to the same PC cannot reach your sessions.
 - **Its pid is recorded** at `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`.
 - **Restart service works** as described above. The app stops the recorded process only if it
-  really is `micold-daemon.exe`, so a stale record never stops an unrelated program.
-- **Installing an update stops it for you.** The installer stops the running service before
+  really is `micold-daemon.exe`, so a stale record never stops an unrelated program. It first sets
+  the service's **stop event**, `Local\Micold.Daemon.Stop.<SID>`, which the service creates at start
+  with a protected DACL for your account only, and waits up to 5 seconds for the service to save
+  every terminal and exit; a service that does not answer, or has no event (an older one), is ended
+  with `TerminateProcess` as before.
+- **Logout and shutdown are told.** The service has a hidden top-level window whose
+  `WM_ENDSESSION` handler raises the same stop request and holds Windows back while the service
+  saves. Windows ends an application that takes more than about 5 seconds, so a very slow disk can
+  still lose the last minute, as a crash does.
+- **Installing an update stops it for you.** The installer sets the stop event and waits up to 5
+  seconds, then stops the service if it is still running, before
   replacing its files, and its Ready to Install page warns that running sessions will be stopped.
   The next launch starts the new service, and the sessions come back interrupted-resumable, as
   below.

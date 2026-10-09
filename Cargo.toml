@@ -66,6 +66,10 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Com",
     # `SetConsoleCtrlHandler`: a session inherits working Ctrl-C however the daemon was launched.
     "Win32_System_Console",
+    # Feature 041: `GetModuleHandleW` and `WNDCLASSW` (which names a GDI brush) for the service's
+    # hidden end-of-session window.
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
     "Win32_System_ProcessStatus",

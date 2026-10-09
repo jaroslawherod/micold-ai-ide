@@ -70,6 +70,9 @@ behind each directive. The ones that matter when changing it:
   open.
 - **The daemon is stopped explicitly.** Restart Manager does not close the windowless daemon, and a
   live daemon keeps its exe locked. So `StopDaemon` in `[Code]` runs before install and uninstall. It
+  asks first: it opens the daemon's stop event `Local\Micold.Daemon.Stop.<SID>`, sets it and waits up
+  to 5 s, so the daemon saves every terminal's history before it exits (feature 041; a test in
+  `windows_installer_in_use.rs` keeps the ask before the hard stops). Then it
   reads the pid record and stops that process only if its image is `micold-daemon.exe`. The ready
   page tells the user this ends their sessions. An uninstall started with the window open does not
   stop it until the window is closed, because Inno refuses such an uninstall only after

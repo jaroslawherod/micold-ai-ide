@@ -158,8 +158,10 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
     }
 }
 
-/// Terminate the daemon by pid on Windows (research R5). There is no `SIGTERM` to send, so this is a
-/// hard stop; the pipe goes with the process and the pid record is superseded by the next daemon.
+/// Stop the daemon by pid on Windows (research R5). There is no `SIGTERM` to send, so the service is
+/// asked through its stop event and given 5 s to save and exit; a service that does not answer is
+/// ended with `TerminateProcess`. The pipe goes with the process and the pid record is superseded by
+/// the next daemon.
 ///
 /// The pid comes from a file, and a pid is reused once its process is gone, so the image is checked
 /// first: anything that is not `micold-daemon.exe` is refused with `InvalidData` rather than killed
@@ -242,6 +244,13 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
         ));
     }
 
+    // Ask first: the service saves every terminal's history before it exits (feature 041, stop-request
+    // contract §2). A service that cannot be asked (an older one, or none listening) or that does not
+    // answer in time is ended as before.
+    if ask_to_stop(process.0, EXIT_WAIT_MS) {
+        return Ok(());
+    }
+
     // SAFETY: `process` holds PROCESS_TERMINATE and PROCESS_SYNCHRONIZE for this pid.
     unsafe {
         if TerminateProcess(process.0, 1) == 0 {
@@ -261,6 +270,36 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Set the service's stop event and wait up to `wait_ms` for `process` to exit. `true` when it did;
+/// `false` when the event could not be opened (no service of this user is listening) or the process
+/// is still running after the wait, which is the caller's cue to end it.
+///
+/// `process` must hold `PROCESS_SYNCHRONIZE`.
+#[cfg(windows)]
+fn ask_to_stop(process: windows_sys::Win32::Foundation::HANDLE, wait_ms: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenEventW, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
+    };
+
+    let Ok(name) = crate::endpoint::stop_event_name() else {
+        return false;
+    };
+    let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: `wide` is NUL-terminated and outlives the call; a null return is the failure signal.
+    let event = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, wide.as_ptr()) };
+    if event.is_null() {
+        return false;
+    }
+    // SAFETY: `event` is a live handle opened above with EVENT_MODIFY_STATE and closed once here;
+    // `process` is the caller's live handle with PROCESS_SYNCHRONIZE.
+    unsafe {
+        let set = SetEvent(event);
+        CloseHandle(event);
+        set != 0 && WaitForSingleObject(process, wait_ms) == WAIT_OBJECT_0
+    }
 }
 
 /// Stopping the daemon is not implemented on platforms that are neither Unix nor Windows.
@@ -470,6 +509,90 @@ mod tests {
         assert!(
             stopped.is_ok(),
             "terminating an exited process whose handle is still held is success; got {stopped:?}"
+        );
+    }
+
+    /// A system executable copied to `dir` as `micold-daemon.exe`, so the image check passes,
+    /// running for a minute and answering nothing.
+    #[cfg(windows)]
+    fn stand_in_daemon(dir: &std::path::Path) -> std::process::Child {
+        let system = std::env::var_os("SystemRoot").expect("SystemRoot");
+        let source = PathBuf::from(system).join("System32").join("ping.exe");
+        let copy = dir.join("micold-daemon.exe");
+        std::fs::copy(&source, &copy).expect("copy a system executable");
+        Command::new(&copy)
+            .args(["-n", "60", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("spawn the stand-in daemon")
+    }
+
+    /// Feature 041, stop-request contract §2 and §3 (T062): a service that does not answer the stop
+    /// event is ended after 5 s, and one with no event to open is ended at once. The event's name is
+    /// one per user, so the two cases run one after the other in this test.
+    #[cfg(windows)]
+    #[test]
+    fn terminate_falls_back_to_ending_the_process_when_the_event_is_unanswered_or_absent() {
+        use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
+        use windows_sys::Win32::System::Threading::CreateEventW;
+
+        let name = crate::endpoint::stop_event_name().expect("the event's name");
+        let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+        // SAFETY: `wide` is NUL-terminated and outlives the call; null attributes are the default.
+        let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, wide.as_ptr()) };
+        assert!(!event.is_null(), "create the event");
+        // SAFETY: reads the error of the call above on this thread.
+        if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+            eprintln!("skipped: a service of this user is running and owns the stop event");
+            // SAFETY: closing the handle opened above.
+            unsafe { CloseHandle(event) };
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut unanswered = stand_in_daemon(dir.path());
+        let started = std::time::Instant::now();
+        let stopped = terminate_daemon(unanswered.id());
+        let waited = started.elapsed();
+        let exited = unanswered.try_wait();
+        let _ = unanswered.kill();
+        let _ = unanswered.wait();
+        // SAFETY: closing the handle created above, once; from here no event can be opened.
+        unsafe { CloseHandle(event) };
+
+        assert!(
+            stopped.is_ok(),
+            "an unanswered stop ends the process; got {stopped:?}"
+        );
+        assert!(
+            waited >= std::time::Duration::from_secs(5),
+            "the process is asked for 5 s before it is ended; took {waited:?}"
+        );
+        assert!(
+            matches!(exited, Ok(Some(_))),
+            "the process is gone; got {exited:?}"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut absent = stand_in_daemon(dir.path());
+        let started = std::time::Instant::now();
+        let stopped = terminate_daemon(absent.id());
+        let waited = started.elapsed();
+        let exited = absent.try_wait();
+        let _ = absent.kill();
+        let _ = absent.wait();
+
+        assert!(
+            stopped.is_ok(),
+            "no event to open ends the process; got {stopped:?}"
+        );
+        assert!(
+            waited < std::time::Duration::from_secs(4),
+            "with no event the process is ended at once; took {waited:?}"
+        );
+        assert!(
+            matches!(exited, Ok(Some(_))),
+            "the process is gone; got {exited:?}"
         );
     }
 }
