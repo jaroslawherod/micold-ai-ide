@@ -212,10 +212,9 @@ fn container_path(mounts: &MountSet, mounted: &[String], path: &Path) -> Result<
     let pasted = mounts.state.host.join(pasted::TEMP_DIR);
     let pasted = resolve(&pasted).unwrap_or(pasted);
     if let Ok(rest) = real.strip_prefix(&pasted) {
-        return Ok(join_container(
-            &mounts.state.container.join(pasted::TEMP_DIR),
-            rest,
-        ));
+        // Strings all the way: `Path::join` would write `\` on a Windows host.
+        let base = join_container(&mounts.state.container, Path::new(pasted::TEMP_DIR));
+        return Ok(join_container(&base, rest));
     }
 
     // The most specific project wins when one sits inside another.
@@ -376,7 +375,7 @@ mod tests {
             std::fs::write(&file, b"x").unwrap();
             let m = mounted(&f);
             let plan = plan_insertion(
-                &[file.clone()],
+                std::slice::from_ref(&file),
                 ShellKind::Fish,
                 InsertTarget::Sandbox(&f.mounts, &m),
             );

@@ -389,19 +389,39 @@ fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) 
 
 /// What a drop or paste is measured against when the sessions run in the sandbox (feature 487,
 /// FR-010, FR-011): the mounts the plan names and the projects the running container really has.
-/// `None` for the host placement and while no container is running, where paths are used as they
-/// are.
-pub fn share(app: &crate::App) -> Option<micold_core::path_insert::SandboxShare> {
+///
+/// `Ok(None)` for the host placement, where paths are used as they are. Under the sandbox
+/// placement with no running container the answer is an error that names why: falling back to host
+/// paths there would insert paths the sandbox cannot see (FR-011).
+pub fn share(app: &crate::App) -> Result<Option<micold_core::path_insert::SandboxShare>, String> {
     if app.placement.kind != micold_core::sandbox::placement::PlacementKind::LocalSandbox {
-        return None;
+        return Ok(None);
     }
-    let mounted = app.sandbox.locations()?.projects.clone();
-    let plan = app.sandbox_boot.as_ref()?;
-    let facts = HostFacts::gather(plan.state_dir.clone());
-    Some(micold_core::path_insert::SandboxShare {
-        mounts: mount_set(&plan.profile, &plan.projects, &facts),
+    let unavailable = || "Nothing was inserted: the sandbox is not running.".to_string();
+    let mounted = app
+        .sandbox
+        .locations()
+        .ok_or_else(unavailable)?
+        .projects
+        .clone();
+    let plan = app.sandbox_boot.as_ref().ok_or_else(unavailable)?;
+    // Only the project and state mounts matter here, so nothing is read from the host: no
+    // credential layout, no home.
+    let mounts = MountSet::build(
+        &plan.projects,
+        &SandboxProfile::default(),
+        &CredentialLayout::default(),
+        plan.state_dir.clone(),
+        std::path::Path::new(""),
+        SecretMount {
+            host: host_token_path(&plan.state_dir),
+            container: PathBuf::from(CONTAINER_TOKEN_PATH),
+        },
+    );
+    Ok(Some(micold_core::path_insert::SandboxShare {
+        mounts,
         mounted,
-    })
+    }))
 }
 
 /// What the running container shares with this machine, through `mounts`. `mounted` is
