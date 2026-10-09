@@ -1503,6 +1503,8 @@ pub enum PaneMsg {
         micold_core::pane_layout::PaneId,
         micold_core::protocol::messages::TerminalRef,
     ),
+    /// A pane shortcut pressed in the focused terminal (FR-009).
+    Chord(crate::keymap::PaneAction),
     /// Focus `pane` (a press in it, FR-010).
     FocusPane(micold_core::pane_layout::PaneId),
     /// `pane` was laid out at `cols` x `rows` (FR-014): its terminal's PTY is resized to it.

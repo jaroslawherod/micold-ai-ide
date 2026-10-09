@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
+use micold_client::keymap::PaneAction;
 use micold_core::pane_layout::{Axis, PaneId, PaneLayout, Refusal, MIN_PANE_COLS, MIN_PANE_ROWS};
 use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 
@@ -133,6 +134,27 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
                 .map_or((f32::MAX, f32::MAX), |(c, r)| (f32::from(c), f32::from(r)));
             if let Err(refusal) = split_pane(app, pane, axis, size, MIN) {
                 app.pane_refusal = Some(refusal.reason());
+            }
+        }
+        PaneMsg::Chord(action) => {
+            let Some(focused) = layout(app).map(PaneLayout::focused) else {
+                return Task::none();
+            };
+            match action {
+                PaneAction::SplitVertical => {
+                    return on_pane_msg(app, PaneMsg::Split(focused, Axis::Vertical))
+                }
+                PaneAction::SplitHorizontal => {
+                    return on_pane_msg(app, PaneMsg::Split(focused, Axis::Horizontal))
+                }
+                PaneAction::Focus(dir) => {
+                    if project(app)
+                        .and_then(|p| app.pane_layouts.get_mut(&p))
+                        .is_some_and(|l| l.focus_dir(dir))
+                    {
+                        follow_focus(app);
+                    }
+                }
             }
         }
         PaneMsg::Show(pane, terminal) => {

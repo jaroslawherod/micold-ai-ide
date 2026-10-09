@@ -3,8 +3,9 @@
 //! `specs/006-real-terminal-emulator/contracts/key-encoding.md`.
 
 use micold_client::keymap::{
-    encode, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, TermMode,
+    encode, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, PaneAction, TermMode,
 };
+use micold_core::pane_layout::Direction;
 
 fn ctrl() -> Mods {
     Mods {
@@ -373,4 +374,137 @@ fn removing_an_end_marker_cannot_assemble_another_one() {
     // One pass over `ESC[20` `ESC[201~` `1~` leaves an `ESC[201~` behind; the removal has to run
     // until none is left, or the smuggled marker still closes the block early.
     assert_eq!(paste_bytes("x\x1b[20\x1b[201~1~y", true), bracketed("xy"));
+}
+
+// ---- Pane chords (feature 484, FR-009) ----
+
+/// The platform modifier of the app's reserved chords, with Shift.
+fn chord_mods() -> Mods {
+    Mods {
+        shift: true,
+        ctrl: cfg!(not(target_os = "macos")),
+        logo: cfg!(target_os = "macos"),
+        ..Mods::NONE
+    }
+}
+
+fn pane_chords() -> Vec<(Key, PaneAction)> {
+    vec![
+        (Key::Char('d'), PaneAction::SplitVertical),
+        (Key::Char('D'), PaneAction::SplitVertical),
+        (Key::Char('h'), PaneAction::SplitHorizontal),
+        (
+            Key::Named(NamedKey::ArrowLeft),
+            PaneAction::Focus(Direction::Left),
+        ),
+        (
+            Key::Named(NamedKey::ArrowRight),
+            PaneAction::Focus(Direction::Right),
+        ),
+        (
+            Key::Named(NamedKey::ArrowUp),
+            PaneAction::Focus(Direction::Up),
+        ),
+        (
+            Key::Named(NamedKey::ArrowDown),
+            PaneAction::Focus(Direction::Down),
+        ),
+    ]
+}
+
+#[test]
+fn pane_chords_are_app_actions_never_bytes() {
+    for (key, action) in pane_chords() {
+        let out = encode(&ki(key.clone(), chord_mods(), None), TermMode::default());
+        assert_eq!(out, KeyOutput::Pane(action), "{key:?}");
+        // Also with the text iced resolves for the press, and in application cursor mode.
+        let out = encode(
+            &ki(key, chord_mods(), Some("\u{4}")),
+            TermMode {
+                app_cursor: true,
+                alt_screen: true,
+            },
+        );
+        assert!(matches!(out, KeyOutput::Pane(_)));
+    }
+}
+
+/// No chord the key map forwards to the process (every Ctrl/Alt/plain letter, digit and named
+/// key, with or without Ctrl/Alt) equals a pane chord. All pane chords need Shift plus the
+/// platform modifier, so the existing reserved chords and plain forwarded input are unchanged.
+#[test]
+fn no_forwarded_chord_is_a_pane_chord() {
+    let mut keys: Vec<Key> = ('a'..='z').chain('0'..='9').map(Key::Char).collect();
+    keys.extend(
+        [
+            NamedKey::Enter,
+            NamedKey::Tab,
+            NamedKey::Escape,
+            NamedKey::Space,
+            NamedKey::Home,
+            NamedKey::End,
+            NamedKey::PageUp,
+            NamedKey::PageDown,
+            NamedKey::ArrowUp,
+            NamedKey::ArrowDown,
+            NamedKey::ArrowLeft,
+            NamedKey::ArrowRight,
+        ]
+        .map(Key::Named),
+    );
+    let mods = [
+        Mods::NONE,
+        ctrl(),
+        Mods {
+            alt: true,
+            ..Mods::NONE
+        },
+        Mods {
+            shift: true,
+            ..Mods::NONE
+        },
+        Mods {
+            ctrl: true,
+            alt: true,
+            ..Mods::NONE
+        },
+    ];
+    for key in &keys {
+        for m in mods {
+            let out = encode(&ki(key.clone(), m, None), TermMode::default());
+            assert!(!matches!(out, KeyOutput::Pane(_)), "{key:?} {m:?}");
+        }
+    }
+}
+
+#[test]
+fn existing_reserved_chords_are_unchanged() {
+    for (c, want) in [
+        ('e', KeyOutput::ReleaseFocus),
+        ('t', KeyOutput::NewTerminalInstance),
+    ] {
+        assert_eq!(
+            encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default()),
+            want
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
+    for (c, want) in [('c', KeyOutput::Copy), ('v', KeyOutput::Paste)] {
+        assert_eq!(
+            encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default()),
+            want
+        );
+    }
+}
+
+#[test]
+fn the_wrong_platform_modifier_is_not_a_pane_chord() {
+    let wrong = Mods {
+        shift: true,
+        ctrl: cfg!(target_os = "macos"),
+        logo: cfg!(not(target_os = "macos")),
+        ..Mods::NONE
+    };
+    let out = encode(&ki(Key::Char('d'), wrong, None), TermMode::default());
+    assert!(!matches!(out, KeyOutput::Pane(_)));
 }
