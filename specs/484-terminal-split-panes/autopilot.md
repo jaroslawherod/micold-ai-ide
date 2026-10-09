@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M2
-- **Next step**: orchestrator opens PR from scratchpad pr-484-m2.md, waits CI, merges; then M3
+- **Phase**: milestone M3
+- **Next step**: gate, reviews A and B, visual pass, then PR file pr-484-m3.md in scratchpad
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #657 | M2 | merged | e8f3abcccfc89f5a31c27474f0ba7ec6442629e9 |
 | #656 | M1 | merged | b3372f2016f9326499e632c32f08522736fb5525 |
 | #655 | Design (spec, plan, tasks) | merged | 909f4b233cfe660881ab0cbdc62a0ad7488e5221 |
 | #654 | Previous run (#483), not this run's | merged | 334cc99ff48ae82e60a4a107f4b76cb1ef9d5959 |
@@ -25,8 +26,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | #656 | merged |
-| M2 | T021–T023 | full | Pane shortcuts (split, focus) | pending (PR file in scratchpad pr-484-m2.md) | in review |
-| M3 | T024–T028 | full | Resize, close, rearrange | — | pending |
+| M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
+| M3 | T024–T028 | full | Resize, close, rearrange | — | in progress |
 | M4 | T029–T035 | full | Layout survives restart | — | pending |
 
 ## Decisions
@@ -65,7 +66,7 @@ None.
 
 ## Follow-ups not done
 
-- Review-A daemon fix (restarted PTY re-streams) has no dedicated test; add one with M3's daemon work.
-- T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test.
+- Review-A daemon fix (restarted PTY re-streams) has no dedicated test; M3 has no daemon work, so carry to M4 if it touches the daemon.
+- T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test. (M3: done, `divider_dragging` in App + `a_divider_drag_sends_pane_sizes_once_on_release`.)
 - Empty-pane picker is a list of buttons (one press per choice) rather than the `picker` component; revisit if review asks.
 - M2 ships chords only through the focused terminal widget (no app-level key listener): with the terminal unfocused the chords do nothing; the header buttons remain. Revisit if review asks.

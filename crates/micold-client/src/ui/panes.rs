@@ -118,6 +118,19 @@ fn split_button<'a>(pane: &Pane, axis: Axis, r: Roles) -> Element<'a, Message> {
     .into()
 }
 
+fn close_button<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
+    Tooltip::new(
+        IconButton::new(Icon::Close, r)
+            .compact()
+            .on_press(Message::Session(SessionMsg::Pane(PaneMsg::Close(
+                pane.id(),
+            )))),
+        "Close this pane (the terminal keeps running)",
+        r,
+    )
+    .into()
+}
+
 /// The two split buttons for `pane`, the pair the bottom bar and every header carry.
 pub fn split_buttons<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
     row![
@@ -153,6 +166,7 @@ fn header<'a>(state: &'a State, pane: &Pane, focused: bool, r: Roles) -> Element
         Text::new(status, TypeRole::Label, r).muted(),
         Space::new().width(Length::Fill),
         split_buttons(pane, r),
+        close_button(pane, r),
     ]
     .spacing(spacing::SM)
     .align_y(iced::Alignment::Center);
@@ -259,7 +273,8 @@ pub fn view<'a>(
             .into()
         })
         .collect();
-    let split = SplitView::new(area.layout, min_pane(), r, children);
+    let split = SplitView::new(area.layout, min_pane(), r, children)
+        .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))));
     match area.refusal {
         Some(reason) => column![
             container(Text::new(reason, TypeRole::Caption, r))

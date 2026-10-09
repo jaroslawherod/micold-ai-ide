@@ -84,6 +84,8 @@ struct App {
     /// Why the last split or show was refused (FR-001), shown beside the panes until the next pane
     /// action. No timer: it clears on the next pane message.
     pane_refusal: Option<&'static str>,
+    /// A divider is being dragged: pane sizes are sent once, when it is released (FR-014).
+    divider_dragging: bool,
     /// Per-session monotonic input stamper: turns key bytes into ordered `SessionInput` (G2). Held
     /// here (long-lived) so a session's serial is never reset by a daemon detach/reattach.
     stamper: SessionInputStamper,

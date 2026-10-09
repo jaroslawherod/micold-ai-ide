@@ -15,6 +15,7 @@ use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 use crate::App;
 use micold_client::app::Message;
 use micold_client::features::session::{Msg as SessionMsg, PaneMsg};
+use micold_client::ui::SplitEvent;
 
 /// The project whose panes are displayed.
 fn project(app: &App) -> Option<PathBuf> {
@@ -96,7 +97,8 @@ fn send_pane_sizes(app: &mut App) {
     let Some(layout) = layout(app) else {
         return;
     };
-    if layout.len() < 2 {
+    if layout.len() < 2 || app.divider_dragging {
+        // A divider drag resizes every frame: the sizes go out once, on release.
         return;
     }
     let due: Vec<(TerminalRef, (u16, u16))> = layout
@@ -147,6 +149,7 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
                 PaneAction::SplitHorizontal => {
                     return on_pane_msg(app, PaneMsg::Split(focused, Axis::Horizontal))
                 }
+                PaneAction::Close => return on_pane_msg(app, PaneMsg::Close(focused)),
                 PaneAction::Focus(dir) => {
                     if project(app)
                         .and_then(|p| app.pane_layouts.get_mut(&p))
@@ -157,6 +160,8 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
                 }
             }
         }
+        PaneMsg::Close(pane) => close_pane(app, pane),
+        PaneMsg::Gesture(event) => on_split_event(app, event),
         PaneMsg::Show(pane, terminal) => {
             let shown = project(app)
                 .and_then(|p| app.pane_layouts.get_mut(&p).map(|l| l.show(pane, terminal)));
@@ -179,6 +184,65 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
         }
     }
     Task::none()
+}
+
+/// Close `pane` (FR-006, FR-007): only the layout changes. No stop, restart or detach goes to the
+/// daemon; the terminal stays in the tab strip and the sidebar, and merely stops being streamed
+/// when no pane shows it (`sync`).
+fn close_pane(app: &mut App, pane: PaneId) {
+    let Some(project) = project(app) else {
+        return;
+    };
+    let Some(layout) = app.pane_layouts.get_mut(&project) else {
+        return;
+    };
+    let was_focused = layout.focused() == pane;
+    match layout.close(pane) {
+        Ok(()) => {
+            app.pane_sizes.remove(&(project, pane));
+            if was_focused {
+                follow_focus(app);
+            }
+        }
+        Err(refusal) => app.pane_refusal = Some(refusal.reason()),
+    }
+}
+
+/// Apply a gesture of the split view: divider drag, double press, header drop.
+fn on_split_event(app: &mut App, event: SplitEvent) {
+    let Some(project) = project(app) else {
+        return;
+    };
+    let Some(layout) = app.pane_layouts.get_mut(&project) else {
+        return;
+    };
+    match event {
+        SplitEvent::Drag {
+            index,
+            basis_points,
+        } => {
+            // The view already kept the share within both minimums.
+            layout.set_ratio(
+                index,
+                f32::from(basis_points) / 10_000.0,
+                (1.0, 1.0),
+                (0.0, 0.0),
+            );
+            app.divider_dragging = true;
+        }
+        SplitEvent::Release => {
+            app.divider_dragging = false;
+            send_pane_sizes(app);
+        }
+        SplitEvent::Reset(index) => {
+            layout.reset_equal(index);
+        }
+        SplitEvent::Swap(a, b) => {
+            if layout.swap(a, b).is_ok() {
+                follow_focus(app);
+            }
+        }
+    }
 }
 
 /// A terminal of the active project no pane shows yet: what a new pane opens on (FR-004).
