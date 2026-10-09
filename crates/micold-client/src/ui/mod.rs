@@ -25,8 +25,8 @@ mod install_location;
 /// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
-mod picker_scroll;
 pub mod panes;
+mod picker_scroll;
 /// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
 ///
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
@@ -361,7 +361,15 @@ pub fn view_with<'a>(
             compare
         } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
-            terminal::pane(state, panes, grid, selection, display_offset, scheme, link_context)
+            terminal::pane(
+                state,
+                panes,
+                grid,
+                selection,
+                display_offset,
+                scheme,
+                link_context,
+            )
         } else {
             shell::view(state, scheme)
         };

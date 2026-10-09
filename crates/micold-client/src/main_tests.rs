@@ -9955,7 +9955,10 @@ mod panes {
     #[test]
     fn a_split_then_one_choice_shows_the_terminal() {
         let (mut app, ids, _rx) = app_with_sessions(1);
-        let shell = t(ids[0], SessionProcess::Shell(micold_core::session::ShellInstanceId(1)));
+        let shell = t(
+            ids[0],
+            SessionProcess::Shell(micold_core::session::ShellInstanceId(1)),
+        );
         app.core.workspace.sessions.values_mut().next().unwrap()[0]
             .shells
             .push(micold_core::session::ShellInstance {
@@ -9971,7 +9974,11 @@ mod panes {
         assert_eq!(layout_of(&app).pane(empty).unwrap().terminal(), None);
         pane_msg(&mut app, PaneMsg::Show(empty, shell));
         assert_eq!(layout_of(&app).len(), 3);
-        assert_eq!(layout_of(&app).focused(), new, "a terminal shown elsewhere is focused, not duplicated");
+        assert_eq!(
+            layout_of(&app).focused(),
+            new,
+            "a terminal shown elsewhere is focused, not duplicated"
+        );
     }
 
     /// FR-004: a new pane opens on a terminal not shown elsewhere.
@@ -9983,7 +9990,11 @@ mod panes {
             layout_of(&app).pane(new).unwrap().terminal(),
             Some(t(ids[1], SessionProcess::Primary))
         );
-        assert_eq!(app.core.session.active, Some(ids[1]), "the selection follows the focus");
+        assert_eq!(
+            app.core.session.active,
+            Some(ids[1]),
+            "the selection follows the focus"
+        );
     }
 
     /// FR-001: a 7th pane is refused, with a reason the view shows.
@@ -9999,9 +10010,16 @@ mod panes {
         let f = layout_of(&app).focused();
         pane_msg(&mut app, PaneMsg::Split(f, Axis::Vertical));
         assert_eq!(layout_of(&app).len(), 6);
-        assert!(app.pane_refusal.is_some_and(|r| r.contains('6')), "{:?}", app.pane_refusal);
+        assert!(
+            app.pane_refusal.is_some_and(|r| r.contains('6')),
+            "{:?}",
+            app.pane_refusal
+        );
         pane_msg(&mut app, PaneMsg::FocusPane(f));
-        assert_eq!(app.pane_refusal, None, "the message clears on the next pane action");
+        assert_eq!(
+            app.pane_refusal, None,
+            "the message clears on the next pane action"
+        );
     }
 
     /// A tab-strip or sidebar choice of a terminal already shown focuses that pane.
@@ -10031,8 +10049,14 @@ mod panes {
             });
         let primary = t(ids[0], SessionProcess::Primary);
         let shell = t(ids[0], SessionProcess::Shell(inst));
-        assert_eq!(micold_client::ui::panes::terminal_status(&app.core, shell), "exited");
-        assert_ne!(micold_client::ui::panes::terminal_status(&app.core, primary), "exited");
+        assert_eq!(
+            micold_client::ui::panes::terminal_status(&app.core, shell),
+            "exited"
+        );
+        assert_ne!(
+            micold_client::ui::panes::terminal_status(&app.core, primary),
+            "exited"
+        );
     }
 
     /// T015: a key reaches only the focused pane's terminal, for 2 to 6 panes.
@@ -10050,11 +10074,16 @@ mod panes {
             for pane in l.panes() {
                 pane_msg(&mut app, PaneMsg::FocusPane(pane.id()));
                 let _ = drain(&mut rx);
-                let _ = update(&mut app, Message::Session(SessionMsg::TerminalBytes(b"x".to_vec())));
+                let _ = update(
+                    &mut app,
+                    Message::Session(SessionMsg::TerminalBytes(b"x".to_vec())),
+                );
                 let inputs: Vec<_> = drain(&mut rx)
                     .into_iter()
                     .filter_map(|m| match m {
-                        ClientMsg::SessionInput { session, process, .. } => Some((session, process)),
+                        ClientMsg::SessionInput {
+                            session, process, ..
+                        } => Some((session, process)),
                         _ => None,
                     })
                     .collect();
@@ -10063,7 +10092,11 @@ mod panes {
             }
             let _ = ids;
             assert_eq!(
-                layout_of(&app).panes().iter().filter(|p| p.id() == layout_of(&app).focused()).count(),
+                layout_of(&app)
+                    .panes()
+                    .iter()
+                    .filter(|p| p.id() == layout_of(&app).focused())
+                    .count(),
                 1
             );
         }
@@ -10074,7 +10107,10 @@ mod panes {
     fn focus_returns_to_the_same_pane() {
         let (mut app, _ids, _rx) = app_with_sessions(2);
         let second = split_focused(&mut app, Axis::Vertical);
-        let _ = update(&mut app, Message::Session(SessionMsg::TerminalFocusReleased));
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::TerminalFocusReleased),
+        );
         let _ = update(&mut app, Message::Session(SessionMsg::TerminalFocused));
         assert_eq!(layout_of(&app).focused(), second);
     }
@@ -10091,9 +10127,12 @@ mod panes {
         let sent: Vec<_> = drain(&mut rx)
             .into_iter()
             .filter_map(|m| match m {
-                ClientMsg::SessionResize { session, process, cols, rows } => {
-                    Some((session, process, cols, rows))
-                }
+                ClientMsg::SessionResize {
+                    session,
+                    process,
+                    cols,
+                    rows,
+                } => Some((session, process, cols, rows)),
                 _ => None,
             })
             .collect();
@@ -10106,7 +10145,9 @@ mod panes {
         );
         // Unchanged sizes stay off the wire (at most one send per change).
         size_pane(&mut app, first, 80, 24);
-        assert!(drain(&mut rx).iter().all(|m| !matches!(m, ClientMsg::SessionResize { .. })));
+        assert!(drain(&mut rx)
+            .iter()
+            .all(|m| !matches!(m, ClientMsg::SessionResize { .. })));
     }
 
     /// A replaced terminal keeps its last size; showing it again sends its pane's size.

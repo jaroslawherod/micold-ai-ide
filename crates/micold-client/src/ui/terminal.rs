@@ -446,23 +446,30 @@ pub fn pane<'a>(
     let several = area.filter(|a| a.layout.len() > 1);
     let body: Element<'a, Message> = if let Some(area) = several {
         // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
-        crate::ui::panes::view(state, area, selection, display_offset, scheme, &link_context)
-    } else {
-    match grid {
-        Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
-            .selection(selection)
-            .display_offset(display_offset)
-            .focused(state.terminal_focused())
-            .session(active)
-            .link_context(link_context)
-            .into(),
-        None => container(
-            Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+        crate::ui::panes::view(
+            state,
+            area,
+            selection,
+            display_offset,
+            scheme,
+            &link_context,
         )
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into(),
-    }
+    } else {
+        match grid {
+            Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
+                .selection(selection)
+                .display_offset(display_offset)
+                .focused(state.terminal_focused())
+                .session(active)
+                .link_context(link_context)
+                .into(),
+            None => container(
+                Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into(),
+        }
     };
     // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
     let body: Element<'a, Message> = if several.is_some() {

@@ -533,6 +533,50 @@ pub fn resize_handle<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     )
 }
 
+/// `SplitView` — panes tiled by a layout, with a divider between each pair (feature 484).
+pub fn split_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::pane_layout::{Axis, PaneLayout};
+    let build = |splits: usize| {
+        let mut layout = PaneLayout::single();
+        for n in 0..splits {
+            let at = layout.focused();
+            let axis = if n % 2 == 0 {
+                Axis::Vertical
+            } else {
+                Axis::Horizontal
+            };
+            let _ = layout.split(at, axis, (1000.0, 1000.0), (10.0, 10.0), None);
+        }
+        let panes: Vec<Element<'a, Message>> = layout
+            .panes()
+            .iter()
+            .map(|p| {
+                material::Text::<Message>::new(
+                    format!("pane {}", p.id().get()),
+                    material::TypeRole::Label,
+                    roles,
+                )
+                .into()
+            })
+            .collect();
+        iced::widget::container(material::SplitView::new(
+            &layout,
+            (60.0, 40.0),
+            roles,
+            panes,
+        ))
+        .width(iced::Length::Fixed(320.0))
+        .height(iced::Length::Fixed(160.0))
+    };
+    arrange(
+        vec![
+            posed("two panes", build(1), roles),
+            posed("four panes", build(3), roles),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `Ripple` — the press indication.
 ///
 /// Lives among the interactive components rather than in the motion section, even though what it

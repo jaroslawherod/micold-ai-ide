@@ -77,7 +77,7 @@ struct App {
     pane_synced_displayed: Option<TerminalRef>,
     /// Each pane's last measured `(cols, rows)` (feature 484, FR-014): a pane's terminal has its own
     /// PTY size, so a split never resizes the terminals beside it.
-    pane_sizes: HashMap<micold_core::pane_layout::PaneId, (u16, u16)>,
+    pane_sizes: HashMap<(PathBuf, micold_core::pane_layout::PaneId), (u16, u16)>,
     /// The size last sent for each terminal by pane, so one is sent only when it changed and a
     /// replaced terminal keeps its last size until shown again.
     pane_sent: HashMap<TerminalRef, (u16, u16)>,
