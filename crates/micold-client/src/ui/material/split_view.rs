@@ -356,8 +356,14 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             Event::Mouse(mouse::Event::CursorMoved { position }) => Some(relative(*position)),
             _ => cursor.position().map(relative),
         };
-        if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
-            tree.state.downcast_mut::<State>().pointer = Some(relative(*position));
+        match event {
+            Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                tree.state.downcast_mut::<State>().pointer = Some(relative(*position));
+            }
+            Event::Mouse(mouse::Event::CursorLeft) => {
+                tree.state.downcast_mut::<State>().pointer = None;
+            }
+            _ => {}
         }
         if let (Event::Window(iced::window::Event::FileDropped(path)), Some(f)) =
             (event, &self.on_file_drop)

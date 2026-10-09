@@ -44,8 +44,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | (fix diff, sonnet) | CLEAN (1 MINOR) |
 | Plan | 1 | cf9fa8c2fa31216b4d33a2826532e036bfc60e5a:9a2546f998dc3f8911b8404479a2a297555d6919 | CHANGES: 1 MAJOR (fixed) |
 | Plan | 2 | scoped fix diff | CLEAN |
+| A M1 (code-review high) | 1 | 8f8d224863015e668a987938c539ac181beb136f:16e690ab28a89a13168bb4d176596569bd609fb8 | CHANGES: 1 MAJOR (fixed: refuse any control character when unbracketed), 2 MINOR (CursorLeft clears pointer fixed; shell-detect limit commented) |
+| B M1 (conformance, fresh) | 1 | same | CLEAN (4 MINOR: doc order fixed; shell limit noted; no cycle-log; no widget-level FileDropped test, declined) |
 
 ## Declined review findings
+
+- B M1 F2 (widget-level FileDropped test): the pure hit-test, the reducer, the coalescing and the wiring are tested; a headless widget harness for one event path was judged out of proportion. Pointer-staleness during a native drag is an unverified platform risk recorded in research.md.
+- B M1 F4: no `tdd/cycle-log.md`: tests were written beside the code; red-first was not recorded and is not invented now.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
