@@ -145,3 +145,12 @@ Tests tracing to nothing: none found. `icons.rs` and `schema_hash.rs` changes tr
 - Idle CPU (FR-015, SC-004) and the visual pass: no test, and T036 is not recorded.
 - Performance and flakiness: the suite ran once; no repeat runs.
 - The scratchpad logs under the session directory belong to another feature (runs/483) and were not used as evidence.
+
+## Resolution (close unit, 2026-10-09)
+
+The verdict above stays **FAIL**, recorded as found. It is not rewritten to PASS.
+
+- **Finding 1 (no test-first evidence) stands.** No red-phase output was recorded for any of the 15 behaviors, and none can be recreated honestly after the fact. The feature ships with `test_after: 15`, `proven: 0`.
+- **Fixed after the audit** (commit `a02b2d4a` and M5, #660): finding 2 (US5-3 test), finding 3 (US2-5 test), finding 4 (cap-of-6 test), finding 5 (client-level refusal text), findings 7 and 8 (keymap tests), finding 16 (idle CPU recorded in `quickstart.md`; the +81 % found there became M5 T040).
+- **Finding 6** is covered by `research.md` R6 ("Accepted shadowing").
+- **Not addressed**: finding 9 (exited-state rendering), 10 (no real-runtime `stty` test), 11 (timing-window assertions), 12–15 (LOW). Mutation testing was never run; test strength stays unmeasured.

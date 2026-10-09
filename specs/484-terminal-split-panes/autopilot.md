@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M5 (PR ready)
-- **Next step**: orchestrator opens the M5 PR from the scratchpad body, merges, then a new close unit (T037)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #660 | M5 | merged | d0a8e51048e8c53dd5f485bf65ce517e9c52b416 |
 | #659 | M4 | merged | a0f059ec5c8c82f2fc10aa891b852db2d82a3010 |
 | #658 | M3 | merged | 3ae9822e88b48e0f73d83400881719f6a48a777a |
 | #657 | M2 | merged | e8f3abcccfc89f5a31c27474f0ba7ec6442629e9 |
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
 | M3 | T024–T028 | full | Resize, close, rearrange | #658 | merged |
 | M4 | T029–T035 | full | Layout survives restart | #659 | merged |
-| M5 | T038–T041 | full | Converge: refusal text, empty-pane focus, idle CPU (found by the close unit; ships with the tdd test additions and visual-pass-close.md) | (this unit's PR, not yet opened by the orchestrator) | in review |
+| M5 | T038–T041 | full | Converge: refusal text, empty-pane focus, idle CPU (found by the close unit; ships with the tdd test additions and visual-pass-close.md) | #660 | merged |
 
 ## Decisions
 
@@ -62,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 diff B | 1 | 22039296:8e3e2122 | CHANGES: 2 MAJOR (no test for T040, T039 press) fixed; tests added |
 | M5 diff B | 2 | 3056850 HEAD | CLEAN |
 | M5 visual pass | 1 | - | pass, all checks (visual-pass-close.md) |
+| Close final | 1 | 6b1a753c:d0a8e510 | CLEAN (1 MINOR: unsourced root-failure claim, fixed prose only) |
 | Close | 1 | working tree | tdd-verify FAIL→ fixed US2-5/US5-3 tests, cap test, keymap tests; visual pass found 3 defects → M5 |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 

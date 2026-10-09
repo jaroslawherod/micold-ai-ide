@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Closed 2026-10-09 — shipped in PRs #655, #656, #657, #658, #659, #660
 
 **Input**: GitHub issue #484, "Split the terminal area into panes to watch several sessions at once":
 only one terminal is visible at a time and switching is tabs-only; the user wants to split the
