@@ -10,7 +10,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Point, Rectangle, Size};
-use micold_core::pane_layout::{Axis, Divider, PaneLayout, Placement};
+use micold_core::pane_layout::{Axis, Divider, PaneId, PaneLayout, Placement};
 use micold_core::tokens::Roles;
 
 use super::style;
@@ -48,10 +48,27 @@ pub fn placement(layout: &PaneLayout, size: Size, min: (f32, f32)) -> Placement 
     layout.place((size.width, size.height), min)
 }
 
+/// How a pane header shows focus: its fill and the colour of its leading accent strip. Colour is
+/// never the only cue: the strip is a shape, and an unfocused header has none.
+pub fn pane_focus_mark(focused: bool, r: Roles) -> (iced::Color, Option<iced::Color>) {
+    if focused {
+        (
+            style::color(r.secondary_container),
+            Some(style::color(r.primary)),
+        )
+    } else {
+        (style::color(r.surface), None)
+    }
+}
+
+/// The panes the children were last diffed against, in order.
+struct Ids(Vec<PaneId>);
+
 /// The panes of a layout, tiled; builder form (Principle VIII):
 /// `SplitView::new(&layout, min, roles, children).into()`.
 pub struct SplitView<'a, M> {
     layout: PaneLayout,
+    ids: Vec<PaneId>,
     min: (f32, f32),
     roles: Roles,
     children: Vec<Element<'a, M>>,
@@ -66,6 +83,7 @@ impl<'a, M> SplitView<'a, M> {
         children: Vec<Element<'a, M>>,
     ) -> Self {
         Self {
+            ids: layout.panes().iter().map(|p| p.id()).collect(),
             layout: layout.clone(),
             min,
             roles,
@@ -76,15 +94,41 @@ impl<'a, M> SplitView<'a, M> {
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::stateless()
+        tree::Tag::of::<Ids>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Ids(Vec::new()))
     }
 
     fn children(&self) -> Vec<Tree> {
         self.children.iter().map(Tree::new).collect()
     }
 
+    /// Children are matched to their old state by pane, not by position: a split inserts a pane in
+    /// the middle of the tree order, and a positional diff would hand the new pane its neighbour's
+    /// measured size and terminal state.
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+        let before = tree.state.downcast_ref::<Ids>().0.clone();
+        let mut old: Vec<Option<Tree>> = std::mem::take(&mut tree.children)
+            .into_iter()
+            .map(Some)
+            .collect();
+        tree.children = self
+            .ids
+            .iter()
+            .zip(&self.children)
+            .map(|(id, child)| {
+                let mut t = before
+                    .iter()
+                    .position(|b| b == id)
+                    .and_then(|i| old.get_mut(i).and_then(Option::take))
+                    .unwrap_or_else(|| Tree::new(child));
+                child.as_widget().diff(&mut t);
+                t
+            })
+            .collect();
+        tree.state = tree::State::new(Ids(self.ids.clone()));
     }
 
     fn size(&self) -> Size<Length> {
@@ -150,7 +194,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             .iter()
             .zip(tree.children.iter())
             .zip(layout.children())
-            .map(|((c, s), l)| c.as_widget().mouse_interaction(s, l, cursor, viewport, renderer))
+            .map(|((c, s), l)| {
+                c.as_widget()
+                    .mouse_interaction(s, l, cursor, viewport, renderer)
+            })
             .max()
             .unwrap_or_default()
     }
@@ -241,7 +288,10 @@ mod tests {
         assert_eq!(p.dividers.len(), 1);
         let d = p.dividers[0];
         let hit = hit_area(d);
-        assert!(hit.width >= 6.0, "a grab zone narrower than the sidebar handle: {hit:?}");
+        assert!(
+            hit.width >= 6.0,
+            "a grab zone narrower than the sidebar handle: {hit:?}"
+        );
         assert_eq!(hit.height, 600.0);
         assert!((hit.x + hit.width / 2.0 - (d.rect.x + d.rect.w / 2.0)).abs() < 0.01);
     }
@@ -273,6 +323,9 @@ mod tests {
     fn the_divider_colour_resolves_in_both_themes() {
         let light = style::separator(roles(ColorScheme::Light));
         let dark = style::separator(roles(ColorScheme::Dark));
-        assert_ne!(light, dark, "a divider drawn the same in both themes is invisible in one");
+        assert_ne!(
+            light, dark,
+            "a divider drawn the same in both themes is invisible in one"
+        );
     }
 }

@@ -8,9 +8,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use micold_core::pane_layout::{
-    Axis, PaneId, PaneLayout, Refusal, MIN_PANE_COLS, MIN_PANE_ROWS,
-};
+use micold_core::pane_layout::{Axis, PaneId, PaneLayout, Refusal, MIN_PANE_COLS, MIN_PANE_ROWS};
 use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 
 use crate::App;
@@ -103,7 +101,10 @@ fn send_pane_sizes(app: &mut App) {
     let due: Vec<(TerminalRef, (u16, u16))> = layout
         .panes()
         .into_iter()
-        .filter_map(|p| Some((p.terminal()?, *app.pane_sizes.get(&p.id())?)))
+        .filter_map(|p| {
+            let size = *app.pane_sizes.get(&(project(app)?, p.id()))?;
+            Some((p.terminal()?, size))
+        })
         .filter(|(t, size)| app.pane_sent.get(t) != Some(size))
         .collect();
     for (t, (cols, rows)) in due {
@@ -124,20 +125,19 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
     app.pane_refusal = None;
     match msg {
         PaneMsg::Split(pane, axis) => {
-            let size = app
-                .pane_sizes
-                .get(&pane)
-                .map_or((f32::MAX, f32::MAX), |(c, r)| (f32::from(*c), f32::from(*r)));
+            // A pane never measured on its own (the lone pane of an unsplit project) is as big as
+            // the last area measured, and unknown only before any frame.
+            let size = project(app)
+                .and_then(|p| app.pane_sizes.get(&(p, pane)).copied())
+                .or(app.last_grid)
+                .map_or((f32::MAX, f32::MAX), |(c, r)| (f32::from(c), f32::from(r)));
             if let Err(refusal) = split_pane(app, pane, axis, size, MIN) {
                 app.pane_refusal = Some(refusal.reason());
             }
         }
         PaneMsg::Show(pane, terminal) => {
-            let shown = project(app).and_then(|p| {
-                app.pane_layouts
-                    .get_mut(&p)
-                    .map(|l| l.show(pane, terminal))
-            });
+            let shown = project(app)
+                .and_then(|p| app.pane_layouts.get_mut(&p).map(|l| l.show(pane, terminal)));
             match shown {
                 Some(Ok(())) => follow_focus(app),
                 Some(Err(refusal)) => app.pane_refusal = Some(refusal.reason()),
@@ -146,7 +146,9 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
         }
         PaneMsg::FocusPane(id) => focus_pane(app, id),
         PaneMsg::Resized { pane, cols, rows } => {
-            app.pane_sizes.insert(pane, (cols, rows));
+            if let Some(p) = project(app) {
+                app.pane_sizes.insert((p, pane), (cols, rows));
+            }
             if layout(app).is_some_and(|l| l.focused() == pane) {
                 // The next session starts at the focused pane's size.
                 app.last_grid = Some((cols, rows));

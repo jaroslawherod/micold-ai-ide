@@ -87,7 +87,6 @@ mod picker_parity;
 mod picker_press;
 mod progress;
 mod resize_handle;
-mod split_view;
 mod review_comment;
 mod ripple;
 mod scrollable;
@@ -102,6 +101,7 @@ mod snackbar;
 /// The split action — a primary button with an adjacent "…or choose" chevron (feature 026,
 /// T033). Used by the sidebar's start-a-session row action.
 mod split_action;
+mod split_view;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
 /// exactly the drift this feature removes. `pub(crate)` rather than private only because the
@@ -182,7 +182,6 @@ pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use resize_handle::ResizeHandle;
-pub use split_view::SplitView;
 pub use review_comment::{CardState, ReviewCommentCard};
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
@@ -190,6 +189,7 @@ pub use section_list::{Section, SectionList};
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use split_action::SplitAction;
+pub use split_view::{pane_focus_mark, SplitView};
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;

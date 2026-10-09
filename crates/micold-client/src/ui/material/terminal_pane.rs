@@ -8,7 +8,6 @@
 use crate::app::{route_key, KeyRouting, Message};
 use crate::features::session::Msg as SessionMsg;
 use crate::features::session::PaneMsg;
-use micold_core::pane_layout::PaneId;
 use crate::features::session::SelectKind;
 use crate::grid::GridCache;
 use crate::keymap;
@@ -33,6 +32,7 @@ use iced::{
     Theme,
 };
 use micold_core::link::{LinkContext, LinkRows, ResolvedLink};
+use micold_core::pane_layout::PaneId;
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
 use micold_core::session::SessionId;
 use micold_core::tokens::state::FOCUS_RING_WIDTH;
@@ -1287,9 +1287,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 Event::Mouse(mouse::Event::ButtonPressed(
                     mouse::Button::Left | mouse::Button::Right | mouse::Button::Middle,
                 )) if cursor.is_over(bounds) => {
-                    shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(
-                        pane,
-                    ))));
+                    shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(pane))));
                     shell.capture_event();
                     return;
                 }

@@ -459,6 +459,18 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::Inline,
         render: sections::controls::resize_handle,
     },
+    Entry {
+        module: "material/split_view.rs",
+        component: "SplitView",
+        variants: &[],
+        density: &[],
+        posed: &["two panes", "four panes"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::split_view,
+    },
     // ---- surfaces, containers and lists ----------------------------------------------------
     Entry {
         module: "material/surface.rs",

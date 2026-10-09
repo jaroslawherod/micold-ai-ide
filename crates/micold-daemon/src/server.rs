@@ -665,7 +665,7 @@ where
     // Feature 484: the terminals this client asked for with `SetViewedTerminals`, and the running
     // stream of each live one. Independent of `view_stream`, which serves `SetViewedSession`.
     let mut viewed_terminals: Vec<TerminalRef> = Vec::new();
-    let mut terminal_streams: HashMap<TerminalRef, tokio::task::JoinHandle<()>> = HashMap::new();
+    let mut terminal_streams: TerminalStreams = HashMap::new();
 
     loop {
         let msg = tokio::select! {
@@ -2413,17 +2413,30 @@ fn restart_view(
 /// The most terminals one client may view at once (feature 484: the 6-pane cap).
 const MAX_VIEWED: usize = 6;
 
+/// A client's running terminal streams, each with the PTY it streams (to notice a restart).
+type TerminalStreams = HashMap<
+    TerminalRef,
+    (
+        std::sync::Arc<crate::supervisor::PtySession>,
+        tokio::task::JoinHandle<()>,
+    ),
+>;
+
 /// Make `streams` exactly the live members of `wanted` (feature 484): stop the others, keep the
 /// running ones (no new snapshot, so a pane does not flicker), start the missing ones. A terminal
 /// that is not live yet is started when its session announces itself (see the `started_rx` arm).
 fn sync_terminal_streams(
     state: &Arc<DaemonState>,
     id: crate::state::ClientId,
-    streams: &mut HashMap<TerminalRef, tokio::task::JoinHandle<()>>,
+    streams: &mut TerminalStreams,
     wanted: &[TerminalRef],
 ) {
-    streams.retain(|t, handle| {
-        let keep = wanted.contains(t) && !handle.is_finished();
+    streams.retain(|t, (pty, handle)| {
+        // A restart replaces the terminal's PTY: the stream of the old one would stay silent.
+        let current = state
+            .terminal(*t)
+            .is_some_and(|(live, _)| std::sync::Arc::ptr_eq(&live, pty));
+        let keep = wanted.contains(t) && !handle.is_finished() && current;
         if !keep {
             handle.abort();
         }
@@ -2437,10 +2450,13 @@ fn sync_terminal_streams(
             continue;
         }
         if let Some((pty, framer)) = state.terminal(*t) {
-            streams.insert(
-                *t,
-                tokio::spawn(stream_view(t.process, pty, framer, tx.clone())),
-            );
+            let handle = tokio::spawn(stream_view(
+                t.process,
+                std::sync::Arc::clone(&pty),
+                framer,
+                tx.clone(),
+            ));
+            streams.insert(*t, (pty, handle));
         }
     }
 }

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use iced::widget::{column, container, row, Space};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 use micold_core::link::LinkContext;
 use micold_core::pane_layout::{Axis, Pane, PaneLayout, MIN_PANE_COLS, MIN_PANE_ROWS};
 use micold_core::protocol::messages::{SessionProcess, TerminalRef};
@@ -20,11 +20,11 @@ use crate::features::session::{Msg as SessionMsg, PaneMsg};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::ui::material::{
-    style, Button, ButtonVariant, GridSizeReporter, IconButton, SplitView, TerminalPane,
-    Text, Tooltip, TypeRole,
+    pane_focus_mark as focus_mark, Button, ButtonVariant, GridSizeReporter, IconButton, SplitView,
+    TerminalPane, Text, Tooltip, TypeRole,
 };
-use crate::ui::terminal::{empty_terminal_message, session_title, CellMetrics, TermPalette};
 use crate::ui::terminal::TERM_FONT_SIZE;
+use crate::ui::terminal::{empty_terminal_message, session_title, CellMetrics, TermPalette};
 
 /// What the pane renderer reads besides `State`: the active project's layout and the grids.
 pub struct PaneArea<'a> {
@@ -38,19 +38,6 @@ pub struct PaneArea<'a> {
 
 /// Width of the accent strip that marks the focused pane's header (FR-010).
 pub const FOCUS_STRIP: f32 = 2.0;
-
-/// How a header shows focus: its fill and the colour of its leading accent strip. Colour is never
-/// the only cue: the strip is a shape, and an unfocused header has none.
-pub fn focus_mark(focused: bool, r: Roles) -> (Color, Option<Color>) {
-    if focused {
-        (
-            style::color(r.secondary_container),
-            Some(style::color(r.primary)),
-        )
-    } else {
-        (style::color(r.surface), None)
-    }
-}
 
 /// The smallest pane, in pixels: `MIN_PANE_COLS` x `MIN_PANE_ROWS` characters.
 pub fn min_pane() -> (f32, f32) {
@@ -101,22 +88,19 @@ pub fn terminal_status(state: &State, t: TerminalRef) -> String {
             SessionLifecycle::Idle => "idle",
             SessionLifecycle::InterruptedResumable => "interrupted",
         },
-        SessionProcess::Shell(id) => match s.shells.iter().find(|i| i.id == id).map(|i| i.lifecycle)
-        {
-            Some(ShellLifecycle::Running) => "running",
-            Some(ShellLifecycle::Starting) => "starting…",
-            Some(ShellLifecycle::Exited) => "exited",
-            Some(ShellLifecycle::NotStarted) | None => "idle",
-        },
+        SessionProcess::Shell(id) => {
+            match s.shells.iter().find(|i| i.id == id).map(|i| i.lifecycle) {
+                Some(ShellLifecycle::Running) => "running",
+                Some(ShellLifecycle::Starting) => "starting…",
+                Some(ShellLifecycle::Exited) => "exited",
+                Some(ShellLifecycle::NotStarted) | None => "idle",
+            }
+        }
     }
     .to_string()
 }
 
-fn split_button<'a>(
-    pane: &Pane,
-    axis: Axis,
-    r: Roles,
-) -> Element<'a, Message> {
+fn split_button<'a>(pane: &Pane, axis: Axis, r: Roles) -> Element<'a, Message> {
     let (icon, tip) = match axis {
         Axis::Vertical => (Icon::SplitVertical, "Split into side-by-side panes"),
         Axis::Horizontal => (Icon::SplitHorizontal, "Split into stacked panes"),
@@ -144,12 +128,7 @@ pub fn split_buttons<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
     .into()
 }
 
-fn header<'a>(
-    state: &'a State,
-    pane: &Pane,
-    focused: bool,
-    r: Roles,
-) -> Element<'a, Message> {
+fn header<'a>(state: &'a State, pane: &Pane, focused: bool, r: Roles) -> Element<'a, Message> {
     let (fill, strip) = focus_mark(focused, r);
     let (name, status) = match pane.terminal() {
         Some(t) => (
@@ -188,10 +167,16 @@ fn header<'a>(
 }
 
 /// The empty-pane state: one button per terminal no pane shows (FR-004), so choosing is one press.
-fn picker<'a>(state: &'a State, area: &PaneArea<'a>, pane: &Pane, r: Roles) -> Element<'a, Message> {
+fn picker<'a>(
+    state: &'a State,
+    area: &PaneArea<'a>,
+    pane: &Pane,
+    r: Roles,
+) -> Element<'a, Message> {
     let shown = area.layout.terminals();
-    let mut list = column![Text::new("Choose a terminal for this pane", TypeRole::Caption, r).muted()]
-        .spacing(spacing::SM);
+    let mut list =
+        column![Text::new("Choose a terminal for this pane", TypeRole::Caption, r).muted()]
+            .spacing(spacing::SM);
     let mut any = false;
     for (t, name) in terminals(state) {
         if shown.contains(&t) {
@@ -207,7 +192,8 @@ fn picker<'a>(state: &'a State, area: &PaneArea<'a>, pane: &Pane, r: Roles) -> E
         );
     }
     if !any {
-        list = list.push(Text::new("Every terminal is already shown.", TypeRole::Caption, r).muted());
+        list =
+            list.push(Text::new("Every terminal is already shown.", TypeRole::Caption, r).muted());
     }
     container(list)
         .padding(spacing::LG)
@@ -251,8 +237,12 @@ pub fn view<'a>(
                         p.into()
                     }
                     None => container(
-                        Text::new(empty_terminal_message(state, t.session), TypeRole::Caption, r)
-                            .muted(),
+                        Text::new(
+                            empty_terminal_message(state, t.session),
+                            TypeRole::Caption,
+                            r,
+                        )
+                        .muted(),
                     )
                     .center_x(Length::Fill)
                     .center_y(Length::Fill)
@@ -295,8 +285,11 @@ mod tests {
             let (off_fill, off_strip) = focus_mark(false, r);
             assert_ne!(on_fill, off_fill, "{scheme:?}: the fill is the colour cue");
             assert!(on_strip.is_some(), "{scheme:?}: the strip is the shape cue");
-            assert!(off_strip.is_none(), "{scheme:?}: an unfocused header has no strip");
-            assert!(FOCUS_STRIP >= 2.0);
+            assert!(
+                off_strip.is_none(),
+                "{scheme:?}: an unfocused header has no strip"
+            );
+            const { assert!(FOCUS_STRIP >= 2.0) };
         }
     }
 }
