@@ -72,7 +72,7 @@ window shows (FR-026, FR-018); requests carry only `owner/name` and branch names
 and addresses never stored or logged (FR-032); no error surface of any kind (FR-025).
 
 **Scale/Scope**: one new core module (`pull_request`), three extended (`git`, `settings`,
-`protocol`); one protocol bump (20 → 21) for one RPC and one settings field; one daemon arm; one
+`protocol`); one protocol bump (20 → 21 as planned; shipped as 21 → 22, feature 039 took 21) for one RPC and one settings field; one daemon arm; one
 client feature module and one shell module; one shared component and eight `Icon` variants; one
 Settings control; the sidebar row, tooltip and row menu extended; user guide and three docs pages.
 
@@ -192,7 +192,7 @@ crates/micold-core/
 ├── src/git.rs                     # Git::branch_tip, Git::is_ancestor; pure containment()
 ├── src/settings.rs                # Settings.pr_status_enabled
 ├── src/protocol/messages.rs       # MergedBranchCheck pair; pr_status_enabled on DaemonSettings, SettingsSet
-├── src/protocol/version.rs        # 20 → 21
+├── src/protocol/version.rs        # 21 → 22 (planned 20 → 21; 039 took 21)
 └── tests/                         # pull_request_*.rs, fixtures/gh/pr_*.txt, schema_hash.rs, protocol_roundtrip.rs, settings_roundtrip.rs
 
 crates/micold-daemon/

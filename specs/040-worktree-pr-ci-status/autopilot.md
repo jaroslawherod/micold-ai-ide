@@ -8,8 +8,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #486
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
-- **Phase**: 4-milestone
-- **Next step**: M8 PR #665 open; wait for CI, merge, then the close unit. T067 stays open (partial pass, see Follow-ups).
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #637 | M5 | merged | 88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 |
 | #641 | M6 | merged | 98da2889252f1804c9d3ada474d2d3ecdaf94249 |
 | #646 | M7 | merged | 599def4097e93879a959079a9f113d7566113bea |
-| #665 | M8 | open | |
+| #665 | M8 | merged | caa6ef54ce89e37e1541bcc24bedb5a839acbac0 |
 
 ## Milestones
 
@@ -89,6 +89,7 @@ questions asked, spec.md unchanged. `CLEAN`.
 | Code B (M6) | 1 | 1b15601514b488326e6a46e71dd0826565f140aa:862c5e94355b883c0791bf7ea7a7fdcc05472b30 | CLEAN; 1 MINOR (compile-red, already logged as a deviation). Verify suites passed. |
 | Code A (M7) | 1 | 0563917214b2f047089872edc572454c318c36bc:20faec254d53d87606f34cdbbe79e3abf32cab9a | CLEAN |
 | Review B (M7) | 1 | same | CHANGES: F1 cycle-log entry missing (fixed, entry added), F2 doc wrap (fixed, prose only) |
+| Close | 1 | 3ac2eae03348084f9b70b66e231765308cd8bbc8:caa6ef54ce89e37e1541bcc24bedb5a839acbac0 | pending |
 
 ## Declined review findings
 
@@ -118,3 +119,10 @@ None.
 
 - M8: T067 left unticked. Quickstart §B ran on headless sway (no Xvfb/xdotool): B1 light and dark, B2, B12 pass; B3-B11, B13-B17 NOT RUN, they need a GitHub scratch repo with pull requests (creating one on the user's account was not authorised). Evidence: `evidence/visual-pass.md`. The close unit or the user must run the rest. `aarch64-apple-darwin` target was added with rustup; check passed; no non-test `cfg` in feature 040 commits.
 - M8 review B (sonnet, snapshot a724c3522b8a4b205847dc8e7b42dec9bbf97d27:599def4097e93879a959079a9f113d7566113bea): CHANGES, 1 MAJOR (doc said `gh pr list`; it is `gh api graphql`), 1 MINOR (protocol 22): both fixed, prose only.
+
+## Close findings (2026-10-09)
+
+- tdd-verify FAIL, fixed: F2, F3, F4, F7, F8 (missing tests, tests only), F1 (test-list close note). Accepted: F5, F6, F9, F11, F12, and M3 Review B F2 (Constitution I: T024/T025 tests written after the wiring; behaviours pinned by passing tests, two shown red by mutant).
+- converge: C1 plan/tasks protocol numbers fixed (prose); C2 = M1 review A F3 above, unconfirmed against GitHub, a documented follow-up; C4-C6 covered by tdd-verify.
+- Follow-up, not done (T067): quickstart B3-B11, B13-B17 NOT RUN; need a GitHub scratch repo with pull requests. Someone with a scratch repo runs `visual-pass` for them and ticks T067. The spec is closed with this recorded.
+- `micold-core` test `github_locate_desktop_launch` fails on this host (mise `gh` not on a desktop launch PATH); run the gate with MICOLD_SKIP_GH_LAUNCH_TEST=1.

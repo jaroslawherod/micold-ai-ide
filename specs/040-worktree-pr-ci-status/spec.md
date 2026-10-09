@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Draft
+**Status**: Closed 2026-10-09 — shipped in PRs #541, #547, #611, #619, #637, #641, #646, #665 and the close PR (T067 visual pass partly open, see autopilot.md)
 
 **Input**: User description: "Implement GitHub issue #486 (https://github.com/jaroslawherod/micold-ai-ide/issues/486): Show pull request and CI status for each worktree. For each worktree whose branch has a pull request, show a small PR indicator in the sidebar: open, draft, merged or closed, plus a combined check status (pending, passing, failing). The worktree tooltip shows the PR number, title, review state and a link that opens it in the browser. A merged PR suggests removing the worktree. Data comes from the `gh` CLI, refreshed on a modest interval and on demand, and only when `gh` is installed and signed in. Acceptance criteria: no indicator and no error when `gh` is missing or the repository has no GitHub remote; refreshing never blocks the UI and respects GitHub rate limits; status parsing lives in the render-free core with tests against recorded `gh` output."
 

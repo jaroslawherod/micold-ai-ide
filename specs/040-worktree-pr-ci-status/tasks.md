@@ -102,7 +102,7 @@ recorded fixtures of three branches yield open + failing, merged, and no entry.
 
 ## Phase 4: User Story 1, slice B — the switch on the wire and the merged-branch question (Priority: P1)
 
-**Goal**: The feature's one wire change (protocol 20 → 21): `pr_status_enabled` in
+**Goal**: The feature's one wire change (protocol 21 → 22, planned as 20 → 21): `pr_status_enabled` in
 `settings.json`, on `DaemonSettings` and settable through `SettingsSet`; and the read-only
 `MergedBranchCheck` RPC with its daemon arm. No UI sets or shows either yet; slices C and D and
 story 3 do.
@@ -124,7 +124,7 @@ story 3 do.
 - [X] T021 [US1] [U59] [U60] [U61] [U62] [U63] [U64] [U65] [U66] [U67] [U68] [U69] Add the `MergedBranchCheck` arm (a copy of `RemoteList`'s) and the `SettingsSet` field to `crates/micold-daemon/src/server.rs`, and `pr_status_enabled` to `crates/micold-daemon/src/catalog.rs` and `crates/micold-daemon/src/state.rs` as `tool_server_enabled` is held. T017 and T018 pass.
 - [X] T022 [US1] Keep the client building on the new wire: pass `pr_status_enabled: None` at every `SettingsSet` in `crates/micold-client/src/shell/persist.rs` and accept the new `DaemonSettings` field in `crates/micold-client/src/shell/daemon_sync.rs` (stored nowhere yet). `mise run gate` is green.
 
-**Checkpoint**: client and daemon speak protocol 21; the daemon stores the switch and answers the merged-branch question.
+**Checkpoint**: client and daemon speak protocol 22; the daemon stores the switch and answers the merged-branch question.
 
 ---
 

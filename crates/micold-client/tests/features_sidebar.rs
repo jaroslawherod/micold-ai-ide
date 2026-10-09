@@ -1606,3 +1606,73 @@ fn the_read_line_stands_before_the_cleanup_line() {
     assert_eq!(lines[n - 2], "Read: 20 min ago");
     assert_eq!(lines[n - 1], format!("Cleanup: {CLEANUP}"));
 }
+
+// --- Feature 040 A1-A9: the recorded answers, through to the row ---------------------------------
+
+/// What a row whose worktree is on `branch` projects after `fixture` was read for `asked`: the
+/// recorded `gh` answer goes through `split_response`, `parse_status` (selection and check
+/// reduction) and `row_pull_request`.
+fn row_state(fixture: &str, asked: &[&str], branch: &str) -> Option<PrState> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../micold-core/tests/fixtures/gh")
+        .join(fixture);
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{fixture}: {e}"));
+    let response = micold_core::pull_request::split_response(&bytes).expect("a recorded answer");
+    let asked: Vec<String> = asked.iter().map(|b| (*b).to_string()).collect();
+    let held = micold_core::pull_request::parse_status(response.body, &asked)
+        .unwrap_or_else(|e| panic!("{fixture} is readable: {e:?}"));
+    let mut node = worktree("w");
+    node.branch = Some(branch.to_string());
+    let entry = SidebarEntry::Worktree(WorktreeNode {
+        worktree: node,
+        display_name: "w".into(),
+        tags: vec![],
+        expanded: false,
+        sessions: vec![],
+        shown_for_current_session: false,
+    });
+    row_pull_request(&entry, &held, &BTreeSet::new(), Some(1), 2).map(|row| row.status.state)
+}
+
+/// A1, A3, A9 (US1-1, US1-3, US1-9).
+#[test]
+fn recorded_three_branches_reach_the_rows_as_open_merged_and_none() {
+    let asked = ["alpha", "beta", "gamma"];
+    let read = |branch| row_state("pr_three_branches.txt", &asked, branch);
+    assert_eq!(
+        read("alpha"),
+        Some(PrState::Open {
+            checks: CheckStatus::None
+        })
+    );
+    assert_eq!(read("beta"), Some(PrState::Merged));
+    assert_eq!(read("gamma"), None);
+}
+
+/// A2, A4 (US1-2, US1-4).
+#[test]
+fn recorded_draft_and_closed_reach_the_row() {
+    let draft = row_state("pr_draft.txt", &["d"], "d").expect("draft row");
+    assert!(matches!(draft, PrState::Draft { .. }), "{draft:?}");
+    assert_eq!(
+        row_state("pr_closed.txt", &["c"], "c"),
+        Some(PrState::Closed)
+    );
+}
+
+/// A5-A8 (US1-5 to US1-8).
+#[test]
+fn recorded_check_outcomes_reach_the_row() {
+    for (fixture, checks) in [
+        ("pr_checks_failing.txt", CheckStatus::Failing),
+        ("pr_checks_pending.txt", CheckStatus::Pending),
+        ("pr_checks_passing.txt", CheckStatus::Passing),
+        ("pr_no_checks.txt", CheckStatus::None),
+    ] {
+        assert_eq!(
+            row_state(fixture, &["b"], "b"),
+            Some(PrState::Open { checks }),
+            "{fixture}"
+        );
+    }
+}
