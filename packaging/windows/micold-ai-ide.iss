@@ -93,6 +93,18 @@ var
   ResultCode: Integer;
 begin
   Result := '';
+  // Ask first (feature 041): the daemon saves every terminal's history before it exits when its stop
+  // event is set. Wait up to 5 s for this session's daemons to go; a daemon that does not answer, or
+  // an older one with no event, is ended by the steps below as before.
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "try { $e = [Threading.EventWaitHandle]::OpenExisting(' +
+    '''Local\Micold.Daemon.Stop.'' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value, ' +
+    '[Security.AccessControl.EventWaitHandleRights]::Modify); [void]$e.Set(); ' +
+    '$end = (Get-Date).AddSeconds(5); $sid = (Get-Process -Id $PID).SessionId; ' +
+    'while ((Get-Process -Name micold-daemon -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.SessionId -eq $sid }) -and ((Get-Date) -lt $end)) { Start-Sleep -Milliseconds 100 } ' +
+    '} catch { }; exit 0"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   if LoadStringFromFile(ExpandConstant('{localappdata}\micold-ai-ide\run\micold-daemon.pid'), PidText) then
     Pid := Trim(String(PidText));
   if StrToIntDef(Pid, 0) > 0 then

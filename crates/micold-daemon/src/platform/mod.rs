@@ -25,7 +25,7 @@ pub use unix::{stop_requested, ProcessTree};
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use windows::{stop_requested, ProcessTree};
+pub use windows::{stop_requested, ProcessTree, STOP_WINDOW_CLASS};
 
 /// Fallback for exotic targets with neither Unix signals nor Windows job objects: reaping the direct
 /// child (the caller's own `child.kill()`) is the best available, so teardown is a no-op.

@@ -314,3 +314,339 @@ async fn a_signal_stops_a_real_service_within_five_seconds_with_its_terminals_sa
         );
     }
 }
+
+/// The stop request on Windows (T061, SR §1, §2, §3, §6): the named event and the end-of-session
+/// window of a real service process. The event's name is one per user and so is the pipe, so the
+/// cases take `SERIAL` as `tests/daemon_stop.rs` does, and run against the signed-in user's real
+/// endpoint and data directories: they are for CI's Windows job, not a desktop with the app open.
+#[cfg(windows)]
+mod windows {
+    use std::collections::BTreeMap;
+    use std::process::{Child, Command, Stdio};
+
+    use futures_util::SinkExt;
+    use micold_core::connect::{connect, Connected};
+    use micold_core::project::{Availability, Project};
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::ClientMsg;
+    use micold_core::session::{AiCli, Session, SessionLabel, SessionLocation, TerminalMode};
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    use micold_core::workspace::Workspace;
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, GetSecurityInfo, SE_KERNEL_OBJECT,
+    };
+    use windows_sys::Win32::Security::{
+        GetAce, GetSecurityDescriptorControl, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL,
+        DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SE_DACL_PROTECTED,
+    };
+    use windows_sys::Win32::Storage::FileSystem::READ_CONTROL;
+    use windows_sys::Win32::System::Threading::{OpenEventW, SetEvent, EVENT_MODIFY_STATE};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_ENDSESSION};
+
+    use super::*;
+
+    /// One at a time: the event, the pipe and the data directories are the user's own.
+    static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// A real service with one session that has printed its last line and is waiting.
+    struct Service {
+        child: Child,
+        id: SessionId,
+        last_line: String,
+        _project: tempfile::TempDir,
+    }
+
+    impl Drop for Service {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            if let Some(dir) = micold_core::terminal_history::history_dir() {
+                let _ = std::fs::remove_file(history_file(&dir, self.id));
+            }
+        }
+    }
+
+    fn wide(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(Some(0)).collect()
+    }
+
+    /// The stop event with `access`, or `None` while no service has created it.
+    fn open_event(access: u32) -> Option<HANDLE> {
+        let name = wide(&micold_core::endpoint::stop_event_name().expect("the event's name"));
+        // SAFETY: `name` is NUL-terminated and outlives the call; null is the failure signal.
+        let handle = unsafe { OpenEventW(access, 0, name.as_ptr()) };
+        (!handle.is_null()).then_some(handle)
+    }
+
+    /// The event once the service has created it, within 10 s.
+    async fn wait_event(access: u32) -> HANDLE {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(handle) = open_event(access) {
+                return handle;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the service never created the stop event"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
+    /// Start the real service, then a session in it, and wait until it has printed `last-line-<tag>`.
+    /// `None` when a service of this user is already running, whose endpoint and event these cases
+    /// would otherwise take over.
+    async fn start_service(tag: &str) -> Option<Service> {
+        fake_cli();
+        if let Some(event) = open_event(EVENT_MODIFY_STATE) {
+            // SAFETY: closing the handle opened above.
+            unsafe { CloseHandle(event) };
+            eprintln!("skipped: a service of this user is running and owns the stop event");
+            return None;
+        }
+        let project = tempfile::tempdir().unwrap();
+        let id = SessionId::from_uuid(uuid::Uuid::new_v4());
+        let session = Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("AI".into()),
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        let workspace = Workspace {
+            projects: vec![Project::new(
+                project.path().to_path_buf(),
+                false,
+                Availability::Available,
+            )],
+            active: Some(project.path().to_path_buf()),
+            sessions: BTreeMap::from([(project.path().to_path_buf(), vec![session])]),
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        };
+        JsonFileStore::default_location()
+            .unwrap()
+            .save(&workspace)
+            .unwrap();
+        let ready = project.path().join("ready");
+        let last_line = format!("last-line-{tag}");
+        script(
+            project.path(),
+            &format!(
+                "print before\nprint {last_line}\ntouch {}\nwait\n",
+                ready.display()
+            ),
+        );
+
+        let endpoint = micold_core::endpoint::resolve().unwrap();
+        let child = Command::new(env!("CARGO_BIN_EXE_micold-daemon"))
+            .env("MICOLD_LOG", "warn")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn the service");
+        let service = Service {
+            child,
+            id,
+            last_line,
+            _project: project,
+        };
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut conn = loop {
+            if let Ok(Some(Connected::Ready(conn, _))) = connect(&endpoint, "stop-test").await {
+                break conn;
+            }
+            assert!(Instant::now() < deadline, "the service never listened");
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        };
+        conn.send(Frame::Control(ClientMsg::SessionStart { session: id }))
+            .await
+            .expect("start the session");
+        wait_file(&service._project.path().join("ready"));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        Some(service)
+    }
+
+    /// The service's exit code once it has exited, within 5 s of `from`.
+    async fn exit_code_within_five_seconds(service: &mut Service, from: Instant) -> Option<i32> {
+        loop {
+            if let Some(status) = service.child.try_wait().unwrap() {
+                return status.code();
+            }
+            assert!(
+                from.elapsed() <= Duration::from_secs(5),
+                "the service did not exit within 5 s"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
+    /// The saved file of the service's session holds its last line.
+    fn assert_saved(service: &Service) {
+        let dir = micold_core::terminal_history::history_dir().unwrap();
+        let lines = saved_lines(&dir, service.id);
+        assert!(
+            lines.iter().any(|l| l == &service.last_line),
+            "the file lacks {:?}: {lines:?}",
+            service.last_line
+        );
+    }
+
+    /// U115, A1: setting the event makes a real service exit within 5 s, its file holding the last
+    /// line.
+    #[tokio::test]
+    async fn setting_the_stop_event_stops_a_real_service_with_its_terminals_saved() {
+        let _serial = SERIAL.lock().await;
+        let Some(mut service) = start_service("event").await else {
+            return;
+        };
+
+        let event = wait_event(EVENT_MODIFY_STATE).await;
+        // SAFETY: `event` is the live handle opened above, closed once after the call.
+        unsafe {
+            assert_ne!(SetEvent(event), 0, "set the event");
+            CloseHandle(event);
+        }
+        let code = exit_code_within_five_seconds(&mut service, Instant::now()).await;
+
+        assert_eq!(code, Some(0), "an orderly exit");
+        assert_saved(&service);
+    }
+
+    /// U116: `WM_ENDSESSION` sent to the service's hidden window raises the same request.
+    #[tokio::test]
+    async fn an_end_of_session_message_stops_a_real_service_with_its_terminals_saved() {
+        let _serial = SERIAL.lock().await;
+        let Some(mut service) = start_service("window").await else {
+            return;
+        };
+
+        let class = wide(micold_daemon::platform::STOP_WINDOW_CLASS);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let window = loop {
+            // SAFETY: `class` is NUL-terminated and outlives the call.
+            let window = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
+            if !window.is_null() {
+                break window;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the service has no end-of-session window"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        };
+        // Posted, not sent: the window holds Windows back until the unwind is over, and a send
+        // would wait for that.
+        // SAFETY: `window` was just found; the message carries no pointers.
+        assert_ne!(
+            unsafe { PostMessageW(window, WM_ENDSESSION, 1, 0) },
+            0,
+            "post WM_ENDSESSION"
+        );
+        let code = exit_code_within_five_seconds(&mut service, Instant::now()).await;
+
+        assert_eq!(code, Some(0), "an orderly exit");
+        assert_saved(&service);
+    }
+
+    /// U117: the event's DACL is protected and has one entry, for the current user.
+    #[tokio::test]
+    async fn the_stop_events_dacl_has_one_entry_for_the_current_user() {
+        let _serial = SERIAL.lock().await;
+        let Some(service) = start_service("dacl").await else {
+            return;
+        };
+
+        let event = wait_event(READ_CONTROL).await;
+        // SAFETY: `event` is a live handle with READ_CONTROL; every out pointer is a local, and
+        // the handle and the descriptor are released below.
+        let (protected, ace_count, owner) = unsafe {
+            let mut dacl: *mut ACL = std::ptr::null_mut();
+            let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+            let status = GetSecurityInfo(
+                event,
+                SE_KERNEL_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut dacl,
+                std::ptr::null_mut(),
+                &mut descriptor,
+            );
+            CloseHandle(event);
+            assert_eq!(status, ERROR_SUCCESS, "GetSecurityInfo on the event");
+            assert!(!dacl.is_null(), "a NULL DACL grants everyone full access");
+            let mut control = 0u16;
+            let mut revision = 0u32;
+            assert_ne!(
+                GetSecurityDescriptorControl(descriptor, &mut control, &mut revision),
+                0
+            );
+            let count = (*dacl).AceCount;
+            let mut owner = None;
+            let mut ace: *mut core::ffi::c_void = std::ptr::null_mut();
+            if count > 0 && GetAce(dacl, 0, &mut ace) != 0 {
+                let header = &*(ace as *const ACE_HEADER);
+                // ACCESS_ALLOWED_ACE_TYPE
+                if header.AceType == 0 {
+                    let allowed = ace as *const ACCESS_ALLOWED_ACE;
+                    let sid = std::ptr::addr_of!((*allowed).SidStart) as *mut core::ffi::c_void;
+                    let mut text: *mut u16 = std::ptr::null_mut();
+                    if ConvertSidToStringSidW(sid, &mut text) != 0 {
+                        let len = (0..).take_while(|&i| *text.add(i) != 0).count();
+                        owner = String::from_utf16(std::slice::from_raw_parts(text, len)).ok();
+                        LocalFree(text.cast());
+                    }
+                }
+            }
+            LocalFree(descriptor);
+            (control & SE_DACL_PROTECTED != 0, count, owner)
+        };
+        drop(service);
+
+        assert!(protected, "nothing may be inherited into the event's DACL");
+        assert_eq!(ace_count, 1, "exactly one entry");
+        assert_eq!(
+            owner,
+            Some(micold_core::endpoint::user_sid().unwrap()),
+            "the entry is for the current user"
+        );
+    }
+
+    /// U118, SR §2: `stop_running_daemon` against the real service makes it exit with code 0, the
+    /// orderly exit after the unwind and not the 1 of `TerminateProcess`, with its file holding the
+    /// last line.
+    #[tokio::test]
+    async fn restart_service_stops_a_real_service_in_order() {
+        let _serial = SERIAL.lock().await;
+        let Some(mut service) = start_service("restart").await else {
+            return;
+        };
+        let endpoint = micold_core::endpoint::resolve().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while micold_core::spawn::running_daemon_pid(&endpoint) != Some(service.child.id()) {
+            assert!(
+                Instant::now() < deadline,
+                "the service never recorded its pid"
+            );
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        let event = wait_event(EVENT_MODIFY_STATE).await;
+        // SAFETY: closing the handle opened above; an open handle would keep the event alive.
+        unsafe { CloseHandle(event) };
+
+        let started = Instant::now();
+        let stopped = micold_core::spawn::stop_running_daemon(&endpoint);
+        let code = exit_code_within_five_seconds(&mut service, started).await;
+
+        assert!(matches!(stopped, Ok(true)), "got {stopped:?}");
+        assert_eq!(
+            code,
+            Some(0),
+            "the orderly exit, not the 1 of TerminateProcess"
+        );
+        assert_saved(&service);
+    }
+}

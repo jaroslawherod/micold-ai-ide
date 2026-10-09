@@ -1566,9 +1566,10 @@ the scrollback limit is dropped, oldest lines first.
 - The history is also kept across a restart of the background service, or of the computer, when the
   session was stopped or its process had exited before the restart. The service saves it to disk at
   that moment.
-- After **Restart service**, after a logout or a reboot on Linux and macOS, and after the service
+- After **Restart service**, after an update, after a logout or a reboot, and after the service
   stopped itself because no window was open for 30 minutes, no output is missing: the service saves
-  every running terminal before it stops, and waits at most 3 seconds for that.
+  every running terminal before it stops, and waits at most 3 seconds for that. On Windows the
+  installer and **Restart service** ask the service to stop and give it 5 seconds before they end it.
 - A session that is still running is saved at most every 30 seconds, and only when it printed
   something new. So after a crash or a power loss, up to the last minute of its output can be
   missing from the restored history. An orderly stop is not affected: see above.
