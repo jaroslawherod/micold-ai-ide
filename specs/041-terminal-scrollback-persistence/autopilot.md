@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #669 | M7 | merged | 9ad9a5c384d3220eec2e5b2dba4a14482300a861 |
 | #672 | M8 | merged | 0c39be31be9222549636dc4793f6e7d5d422432d |
 | #676 | M9 | merged | 88a6f3602c2bd037e1827e57897202ac41cc13eb |
+| #678 | M10 | open | |
 
 ## Milestones
 
@@ -40,7 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | merged |
-| M10 | T075–T077 | full | Architecture page, recorded visual pass | | in review |
+| M10 | T075–T077 | full | Architecture page, recorded visual pass | #678 | in review |
 
 ## Decisions
 
