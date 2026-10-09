@@ -65,11 +65,19 @@ whose use is not obvious from that:
 - `mise run image` — build the `:dev` sandbox image from the working tree; `mise run test-sandbox`
   then runs the real-runtime sandbox suite against it (both crates, release, one at a time). Those
   tests are off by default, so `mise run test` does not need a container runtime installed.
+- `mise run duplication` — fail when code duplication passes its budget (jscpd, similarity-rs); not
+  in the gate. See `docs/development/duplication.md`.
 - `mise run app` — on Linux it stages the macOS bundle unsigned, which is what
   `scripts/tests/macos-bundle.test.sh` drives.
 
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).
+
+## Search for an existing helper before writing a new one
+
+Before adding a function, type or test fixture, `grep -n` the crates for what it does (a verb, a
+distinctive literal) and reuse or extend a match. Copying a block and editing it is the failure
+`mise run duplication` budgets; extract the shared part instead.
 
 ## One target directory, one build at a time
 
