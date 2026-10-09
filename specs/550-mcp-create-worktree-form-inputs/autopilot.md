@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #638 | Design (spec ships in it) | merged | 71d7195264cd757f40baf342ca3052ff7d541d8e |
 | #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
 | #648 | M2 | merged | 23e2db0e4c17ba6e2b7d28893d0999a9482cd0cf |
-| (M3) | M3 | open | - |
+| #664 | M3 | open | - |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
 | M2 | T010-T012 | full | Refusals and collision hint | #648 | merged |
-| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | (M3 PR) | gate green, PR open |
+| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | #664 | gate green, PR open |
 
 ## Decisions
 
