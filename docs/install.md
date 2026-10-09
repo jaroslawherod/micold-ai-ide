@@ -87,8 +87,10 @@ and sign in to whichever you use before starting a session:
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) — the `claude` command.
 - [GitHub Copilot CLI](https://docs.github.com/en/copilot) — the `copilot` command.
+- [Codex](https://github.com/openai/codex) — the `codex` command.
+- [OpenCode](https://opencode.ai/) — the `opencode` command.
 
-Either has to be on the path of the session service, which is your own path unless you have moved the
+Whichever you use has to be on the path of the session service, which is your own path unless you have moved the
 service into a container. [Settings](user-guide/settings.md) explains where that path comes from and
 how to change it.
 

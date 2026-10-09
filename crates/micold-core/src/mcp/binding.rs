@@ -113,6 +113,8 @@ pub struct ConfigLocations {
     pub claude_config_dir: Option<PathBuf>,
     /// The Copilot CLI's config directory (`COPILOT_HOME` or `~/.copilot`).
     pub copilot_config_dir: Option<PathBuf>,
+    /// The Codex home (`CODEX_HOME` or `~/.codex`), whose `config.toml` records trusted projects.
+    pub codex_home: Option<PathBuf>,
 }
 
 impl ConfigLocations {

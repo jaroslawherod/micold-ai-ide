@@ -18,6 +18,7 @@ fn locations(home: &Path) -> ConfigLocations {
         home: Some(home.to_path_buf()),
         claude_config_dir: None,
         copilot_config_dir: Some(home.join(".copilot")),
+        codex_home: Some(home.join(".codex")),
     }
 }
 
@@ -156,5 +157,69 @@ fn pi_never_asks() {
         FolderTrust::NeverAsks,
         &at,
         Path::new("/nowhere")
+    ));
+}
+
+fn codex_record(home: &Path, body: &str) {
+    std::fs::create_dir_all(home.join(".codex")).unwrap();
+    std::fs::write(home.join(".codex/config.toml"), body).unwrap();
+}
+
+/// Feature 488 (T003/T007): Codex records `[projects."<path>"] trust_level = "trusted"`.
+#[test]
+fn codex_trusts_what_its_config_lists_and_everything_below() {
+    assert_eq!(
+        AiCli::Codex.provider().folder_trust(),
+        FolderTrust::CodexProjects
+    );
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let at = locations(home.path());
+    // No record: it asks.
+    assert!(would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        project.path()
+    ));
+    let path = project.path().to_str().unwrap().replace('\\', "\\\\");
+    codex_record(
+        home.path(),
+        &format!("model = \"o3\"\n\n[projects.\"{path}\"]\ntrust_level = \"trusted\"\n"),
+    );
+    assert!(!would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        project.path()
+    ));
+    assert!(!would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        &project.path().join("wt")
+    ));
+    // A trailing comment on the header does not hide the project.
+    codex_record(
+        home.path(),
+        &format!("[projects.\"{path}\"] # mine\ntrust_level = \"trusted\" # yes\n"),
+    );
+    assert!(!would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        project.path()
+    ));
+    // Another recorded level, or a table that is not a project, trusts nothing.
+    codex_record(
+        home.path(),
+        &format!("[projects.\"{path}\"]\ntrust_level = \"untrusted\"\n"),
+    );
+    assert!(would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        project.path()
+    ));
+    codex_record(home.path(), "[projects\ntrust_level = \"trusted\"\n");
+    assert!(would_ask_trust(
+        FolderTrust::CodexProjects,
+        &at,
+        project.path()
     ));
 }

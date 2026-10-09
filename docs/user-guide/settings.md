@@ -73,7 +73,7 @@ Which AI coding CLI a new session runs when you don't choose one for it.
 - **"Installed" means a session would find it.** A CLI is offered when it is on the `PATH` a session
   starts with, and that includes what
   [the environment a session starts in](#the-environment-a-session-starts-in) adds. So a CLI you
-  installed through a version manager — `pi` or `copilot` from `npm install -g` under mise or nvm,
+  installed through a version manager — `pi`, `codex`, `opencode` or `copilot` from `npm install -g` under mise or nvm,
   say — is offered as long as environment-include is on and your startup file sets that version
   manager up. This field answers for your home directory, because the default applies everywhere.
   Each sidebar row answers for its own project or worktree, so a CLI one project's script adds is
@@ -193,7 +193,7 @@ their values; turn it on again and they are as you left them.
 Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they
 neither notify you nor mark the session unread.
 
-- **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot and Pi sessions.
+- **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot, Pi, Codex and OpenCode sessions.
   There is no switch per CLI.
 - **Every window at once.** The session service keeps the setting, so it holds for every open
   window from the moment you save, and every window's Settings shows the same value.

@@ -574,7 +574,8 @@ const TOOLS: &[Tool] = &[
             json!({
                 "worktree": {"type": "string", "minLength": 1,
                     "description": "A worktree ref from list_worktrees, or \"default\"."},
-                "ai_cli": {"type": "string", "enum": ["claude_code", "copilot", "pi"]},
+                "ai_cli": {"type": "string",
+                    "enum": AiCli::ALL.map(AiCli::tool_name)},
                 "prompt": {"type": "string", "description": "The session's first input."},
             })
         },
@@ -1008,6 +1009,15 @@ fn create_mode(args: &Map<String, Value>) -> Result<CreateMode, OpError> {
     }
 }
 
+/// The tool names of every provider, as a sentence fragment ("a, b or c").
+fn ai_cli_names() -> String {
+    let names: Vec<&str> = AiCli::ALL.into_iter().map(AiCli::tool_name).collect();
+    match names.split_last() {
+        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        None => String::new(),
+    }
+}
+
 fn optional_ai_cli(args: &Map<String, Value>, key: &str) -> Result<Option<AiCli>, OpError> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -1016,12 +1026,11 @@ fn optional_ai_cli(args: &Map<String, Value>, key: &str) -> Result<Option<AiCli>
             .find(|cli| cli.tool_name() == s)
             .map(Some)
             .ok_or_else(|| {
-                OpError::invalid_input(format!(
-                    "{key} must be claude_code, copilot or pi, not \"{s}\""
-                ))
+                OpError::invalid_input(format!("{key} must be {}, not \"{s}\"", ai_cli_names()))
             }),
         Some(_) => Err(OpError::invalid_input(format!(
-            "{key} must be claude_code, copilot or pi"
+            "{key} must be {}",
+            ai_cli_names()
         ))),
     }
 }

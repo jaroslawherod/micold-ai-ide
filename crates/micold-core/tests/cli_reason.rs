@@ -415,7 +415,7 @@ fn applied_in_an_image_keeps_the_sentence_of_027() {
     );
     assert_eq!(
         format!("{} {}", all.reason, all.action),
-        "Claude Code, GitHub Copilot and Pi Coding Agent aren't in img:tag. Sessions run in \
+        "Claude Code, GitHub Copilot, Pi Coding Agent, Codex and OpenCode aren't in img:tag. Sessions run in \
          that image, so it has to provide any AI CLI you want to use.",
         "Applied in an image, CLI set [all three]: reason and action joined are the 027 sentence"
     );
@@ -479,9 +479,9 @@ fn several_clis_are_them_and_were() {
         AttemptDir::Home,
     );
     assert!(
-        three
-            .reason
-            .starts_with("Claude Code, GitHub Copilot and Pi Coding Agent were not found"),
+        three.reason.starts_with(
+            "Claude Code, GitHub Copilot, Pi Coding Agent, Codex and OpenCode were not found"
+        ),
         "three names, plural verb: {}",
         three.reason
     );

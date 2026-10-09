@@ -12,7 +12,7 @@ next thing you open starts a new one. Both halves are described below.
 
 ## What survives, and what doesn't (User Story 1)
 
-A session is a running process (your AI CLI — `claude`, `copilot` or `pi` — or a shell) plus the
+A session is a running process (your AI CLI — `claude`, `copilot`, `pi`, `codex` or `opencode` — or a shell) plus the
 interpreted screen it has produced. Both live in the daemon, so:
 
 | You do this | What happens to your sessions |

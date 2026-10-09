@@ -530,6 +530,8 @@ const CLAUDE_CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 
 /// The variable that relocates Copilot's whole `~/.copilot` store, `mcp-config.json` included.
 const COPILOT_HOME_VAR: &str = "COPILOT_HOME";
+/// Relocates the Codex home, `config.toml` (its trust record) included.
+const CODEX_HOME_VAR: &str = "CODEX_HOME";
 
 /// A directory named by `var` as the session will see it: its launch environment first (an
 /// environment-include script may set it), then this process's. Empty counts as unset.
@@ -960,6 +962,7 @@ impl DaemonState {
                     session_dir_var(&spec.env, COPILOT_HOME_VAR).or_else(|| provider.config_dir())
                 })
                 .flatten(),
+            codex_home: None,
         };
         if let Some(path) = mcp_binding::name_taken(support, &locations, &spec.cwd) {
             return Err(SkipReason::NameTaken(path));
@@ -1137,6 +1140,9 @@ impl DaemonState {
             claude_config_dir: session_dir_var(&env, CLAUDE_CONFIG_DIR_VAR),
             copilot_config_dir: (trust == FolderTrust::CopilotTrustedFolders)
                 .then(|| session_dir_var(&env, COPILOT_HOME_VAR).or_else(|| provider.config_dir()))
+                .flatten(),
+            codex_home: (trust == FolderTrust::CodexProjects)
+                .then(|| session_dir_var(&env, CODEX_HOME_VAR).or_else(|| provider.config_dir()))
                 .flatten(),
         };
         micold_core::mcp::trust::would_ask_trust(trust, &locations, cwd)

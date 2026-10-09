@@ -259,6 +259,8 @@ enum StoredAiCli {
     ClaudeCode,
     Copilot,
     Pi,
+    Codex,
+    OpenCode,
 }
 
 impl From<AiCli> for StoredAiCli {
@@ -267,6 +269,8 @@ impl From<AiCli> for StoredAiCli {
             AiCli::ClaudeCode => StoredAiCli::ClaudeCode,
             AiCli::Copilot => StoredAiCli::Copilot,
             AiCli::Pi => StoredAiCli::Pi,
+            AiCli::Codex => StoredAiCli::Codex,
+            AiCli::OpenCode => StoredAiCli::OpenCode,
         }
     }
 }
@@ -277,6 +281,8 @@ impl From<StoredAiCli> for AiCli {
             StoredAiCli::ClaudeCode => AiCli::ClaudeCode,
             StoredAiCli::Copilot => AiCli::Copilot,
             StoredAiCli::Pi => AiCli::Pi,
+            StoredAiCli::Codex => AiCli::Codex,
+            StoredAiCli::OpenCode => AiCli::OpenCode,
         }
     }
 }

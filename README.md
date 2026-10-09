@@ -2,7 +2,8 @@
 
 A local-first, AI-assisted desktop IDE for managing git worktrees and AI coding sessions with an
 embedded, real terminal. A session runs [Claude Code](https://www.anthropic.com/claude-code),
-[GitHub Copilot CLI](https://github.com/features/copilot/cli) or [Pi Coding Agent](https://pi.dev/),
+[GitHub Copilot CLI](https://github.com/features/copilot/cli), [Pi Coding Agent](https://pi.dev/),
+[Codex](https://github.com/openai/codex) or [OpenCode](https://opencode.ai/),
 whichever you pick when you start it.
 
 Built in **Rust** with the **iced** GUI framework. All state lives on your machine — the app is
@@ -16,7 +17,7 @@ screenshots of the running application, published from this repository on every 
 - Open a git project and manage its worktrees (one branch per line of work) from a Material
   Design sidebar — on a new branch, or on one that already exists locally or on a remote, so work
   started outside the app can be picked up inside it.
-- Run multiple concurrent AI CLI sessions — `claude`, `copilot` or `pi` — each in its own worktree
+- Run multiple concurrent AI CLI sessions — `claude`, `copilot`, `pi`, `codex` or `opencode` — each in its own worktree
   or directly in the project root ("Default"), in an embedded terminal. Each session remembers which
   CLI it runs, and they can run side by side in the same project.
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,
