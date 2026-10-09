@@ -920,9 +920,9 @@ ask for them with `ai_cli` set to `codex` or `opencode`.
   answer that question for you; run `codex` once in the project folder and accept it.
 - **A provider whose command is missing says so.** If `codex` or `opencode` is not on the `PATH`
   sessions get, it is not offered as an entry; the note under the list names it and says why a
-  session would not find it and what to change. It also cannot be started any other way: as the
-  default, or by a tool through the tool server, the start is refused with the same reason before
-  anything is created. Install the CLI and it is available the next time the list is opened or a
+  session would not find it and what to change. It cannot be started any other way either: a tool
+  asking for it through the tool server is refused with the same reason before anything is
+  created. Install the CLI and it is available the next time the list is opened or a
   session is started, with no restart of the app.
 - **Neither is connected to the app's tool server** for now: the sessions start without it.
 - **OpenCode does not update itself** inside a session the app starts.
