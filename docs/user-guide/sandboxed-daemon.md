@@ -106,7 +106,7 @@ the session's worktree, or in the service's data directory when the worktree can
 
 A session runs its AI CLI inside the container. That means the CLI comes from the image, and the one
 installed on your computer is not used. The published image, and one built from this checkout, ship
-Claude Code, GitHub Copilot and Pi Coding Agent at pinned versions. If you choose an image that
+Claude Code, GitHub Copilot, Pi Coding Agent, Codex CLI and OpenCode at pinned versions. If you choose an image that
 lacks one, that CLI is not offered, and **Settings → Session service** names it under *Image
 reference*, with the same note that appears under **Default AI CLI**. The note says the image lacks
 the CLI only when the environment a session starts in was applied: environment-include is on and
@@ -132,9 +132,11 @@ Nothing of yours is shared unless you say so. Each item is a separate opt-in:
 - **Git configuration** — your commit name and email, read-only.
 - **SSH agent** — the agent's socket, so a session can push. Never your key files.
 - **Git credentials** — the credential helper's store.
-- **AI CLI sign-in** — Claude Code's sign-in token (`~/.claude/.credentials.json`), and nothing else
-  from `~/.claude`. It is the one share a session can write to: Claude Code replaces the token each
-  time it refreshes it.
+- **AI CLI sign-in** — each CLI's sign-in file, and nothing else from its directory:
+  Claude Code's `~/.claude/.credentials.json`, Codex's `~/.codex/auth.json` and OpenCode's
+  `~/.local/share/opencode/auth.json`. A file you do not have is simply not shared. It is the one
+  share a session can write to: a CLI replaces its file each time it refreshes the sign-in, and that
+  refresh lands in your computer's file, as it does for Claude Code.
 
 With none of these on, a session that tries to push to a remote fails for want of credentials, and
 the application says so rather than leaving you with an unexplained authentication error.
@@ -162,6 +164,13 @@ A few limits of the sign-in share:
   created with, and restarting the sandbox keeps the same container. To share a token you put at
   that path later, set *Where sessions run* to *On this computer* and back: that removes the
   container and creates a new one.
+- **Codex and OpenCode** are signed in the same way, one file each, mounted at the same path
+  under your home. Only a file that exists on your computer is shared; with none of them, the
+  sandbox still starts and each CLI shows its own login prompt. A Codex `CODEX_HOME` inside your
+  home is followed, and one outside it is not: the sandbox looks at `~/.codex/auth.json`
+  instead. Codex hosts that keep the sign-in in the system keyring have no file, so nothing is
+  shared and you sign in inside a session. The share does not copy the CLIs' conversation history
+  or settings.
 - **Copilot and Pi are not covered.** They sign in inside the sandbox, and that sign-in is kept in
   the sandbox's home.
 - **Claude Code starts signed in.** With the share on, the application marks Claude Code's

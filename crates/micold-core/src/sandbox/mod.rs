@@ -571,7 +571,10 @@ pub struct CredentialLayout {
     /// The AI CLI's sign-in token file (`~/.claude/.credentials.json`), and nothing else of the
     /// CLI's directory: the rest is its session store and the hooks the host's `claude` runs
     /// (FR-004e).
-    pub ai_cli_auth: Option<PathBuf>,
+    ///
+    /// One entry per provider that has such a file (`AiCliProvider::sandbox_auth_file`), in
+    /// `AiCli::ALL`'s order, so Claude Code's comes first. One toggle governs all of them.
+    pub ai_cli_auth: Vec<PathBuf>,
 }
 
 impl CredentialLayout {
@@ -585,16 +588,21 @@ impl CredentialLayout {
             git_config: Some(home.join(".gitconfig")),
             ssh_agent: ssh_auth_sock.map(Path::to_path_buf),
             git_credentials: Some(home.join(".git-credentials")),
-            ai_cli_auth: Some(home.join(".claude").join(".credentials.json")),
+            ai_cli_auth: crate::session::AiCli::ALL
+                .iter()
+                .filter_map(|cli| cli.provider().sandbox_auth_file(home))
+                .collect(),
         }
     }
 
-    fn path_for(&self, share: CredentialShare) -> Option<&Path> {
+    fn paths_for(&self, share: CredentialShare) -> Vec<&Path> {
         match share {
-            CredentialShare::GitConfig => self.git_config.as_deref(),
-            CredentialShare::SshAgent => self.ssh_agent.as_deref(),
-            CredentialShare::GitCredentials => self.git_credentials.as_deref(),
-            CredentialShare::AiCliAuth => self.ai_cli_auth.as_deref(),
+            CredentialShare::GitConfig => self.git_config.as_deref().into_iter().collect(),
+            CredentialShare::SshAgent => self.ssh_agent.as_deref().into_iter().collect(),
+            CredentialShare::GitCredentials => {
+                self.git_credentials.as_deref().into_iter().collect()
+            }
+            CredentialShare::AiCliAuth => self.ai_cli_auth.iter().map(PathBuf::as_path).collect(),
         }
     }
 }
@@ -647,15 +655,17 @@ impl MountSet {
         let credentials = profile
             .credentials
             .iter()
-            .filter_map(|share| {
-                let host = layout.path_for(*share)?;
-                Some(CredentialMount {
-                    share: *share,
-                    // Credentials are mounted at their own absolute paths for the same reason
-                    // projects are: the tools inside look for them where they always are.
-                    container: pathmap::map_for(host, windows_host),
-                    host: host.to_path_buf(),
-                })
+            .flat_map(|share| {
+                layout
+                    .paths_for(*share)
+                    .into_iter()
+                    .map(|host| CredentialMount {
+                        share: *share,
+                        // Credentials are mounted at their own absolute paths for the same reason
+                        // projects are: the tools inside look for them where they always are.
+                        container: pathmap::map_for(host, windows_host),
+                        host: host.to_path_buf(),
+                    })
             })
             .collect();
 
@@ -825,9 +835,12 @@ impl MountSet {
                     .map(|p| path(p))
                     // Every credential the layout could mount, shared by this profile or not: the
                     // container may come from another window, or from before a share was turned off.
-                    .chain(CredentialShare::ALL.into_iter().filter_map(|share| {
-                        let host = layout.path_for(share)?;
-                        Some(path(&pathmap::map_for(host, cfg!(windows))))
+                    .chain(CredentialShare::ALL.into_iter().flat_map(|share| {
+                        layout
+                            .paths_for(share)
+                            .into_iter()
+                            .map(|host| path(&pathmap::map_for(host, cfg!(windows))))
+                            .collect::<Vec<_>>()
                     }))
                     .collect();
                 mounted
@@ -863,7 +876,7 @@ impl MountSet {
             None => self
                 .credentials
                 .iter()
-                .any(|c| c.share == CredentialShare::AiCliAuth),
+                .any(|c| c.share == CredentialShare::AiCliAuth && c.host == looked_for),
             Some(mounted) => {
                 let destination = pathmap::map_for(looked_for, cfg!(windows));
                 mounted

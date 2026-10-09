@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M5
-- **Next step**: M5 gate + reviews, then the orchestrator pushes and opens the PR from scratchpad/pr-488-m5.md
+- **Phase**: milestone M6
+- **Next step**: M6 gate + reviews A and B, then the orchestrator pushes and opens the PR from scratchpad/pr-488-m6.md
 
 ## Pull requests
 
@@ -21,7 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #683 | M2 | MERGED (rebase) | eef53e0c7d6e501e7bd3fb0a6184ebade47c8253 |
 | #684 | M3 | MERGED (rebase) | e9abd92efe2c7d8ad097ff82d4a7073477349524 |
 | #690 | M4 | MERGED (rebase) | 26dbd73670583e4e4826b0c80f972359072deaf2 |
-| (orchestrator opens) | M5 | pending | |
+| #691 | M5 | MERGED (rebase) | 314405a5bc0b249ea033e6dfc1a21d0aef2d2872 |
+| (orchestrator opens) | M6 | pending | |
 
 ## Milestones
 
@@ -31,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T012–T015 | light | Unavailable providers explained | #683 | merged |
 | M3 | T016–T022 | full | Codex resume + naming (seam) | #684 | merged |
 | M4 | T023–T026 | full | OpenCode resume + naming | #690 | merged |
-| M5 | T027–T030 | light | Honest activity, tool-server, first prompt | pending (orchestrator opens) | in progress |
-| M6 | T031–T034 | full | Sandbox image + sign-in | | todo |
+| M5 | T027–T030 | light | Honest activity, tool-server, first prompt | #691 | merged |
+| M6 | T031–T034 | full | Sandbox image + sign-in | pending (orchestrator opens) | in progress |
 
 ## Decisions
 
@@ -73,6 +74,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 B round 1 (same snapshot, sonnet): CHANGES, F1 MAJOR (no TDD cycle log) fixed with tdd/cycle-log.md, F2/F3 fixed. Round 2: CLEAN, 2 MINOR left (env mutation in the terminal_backend test: that file's other tests use claude/copilot only; test-first order not followed, stated in the cycle log).
 - M3 visual pass: not run, no UI change.
 - M5 A (reviewer, sonnet) round 1 (snapshot cdae90711bbfb1ce934bf3ee8ad715c6fb97e802:940a8f2ad1470dd16f27b9346b69e3806dafaa56): CLEAN, 3 MINOR (cycle-log cell fixed; wrap and 2 s sleep left). M5 B (conformance, sonnet) round 1 (same snapshot): CLEAN, 2 MINOR (cycle-log cell and AS2 mapping fixed). M5 visual pass: not run, no UI change. T029: no code change.
+
+## Decisions (M6)
+
+- The sign-in mount is writable (rule N-4, `CredentialShare::writable`), not read-only as research R5 assumed; kept for every CLI so a refresh persists as for Claude Code (FR-013 "writing nothing existing providers would not write"). Guide says so. A read-only mount would break claude.
+- `unshared_sign_in` still reports Claude Code's file only (`ai_cli_auth.first()`); the settings page names one path.
 
 ## Declined review findings
 

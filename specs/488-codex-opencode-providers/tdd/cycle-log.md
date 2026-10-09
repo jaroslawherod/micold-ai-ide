@@ -34,3 +34,17 @@ M5 is characterization (T027/T028): the behaviours already hold since M1, so the
 | Codex in an untrusted folder gets no first prompt (T028, FR-012) | `Codex::folder_trust` → `NeverAsks` | `a_first_prompt_is_never_typed_into_a_trust_question` (prompt delivered when it should be refused) |
 | Unsupported tool-server reason is logged, session starts (T028, FR-011) | log text `no tool server:` renamed | `an_unsupported_tool_server_binding_is_logged_and_the_session_starts` |
 | Badge stays `Unknown` through output and silence (T027, FR-009) | not broken: `Unknown` is the projection's default, so no cheap break exists; the test also asserts Codex/OpenCode `activity_source` is `None` and Claude Code's is not | `the_badge_stays_unknown_through_output_and_silence` (only its `activity_source` assertions can fail; AS2's busy/idle is pinned by `activity_pipeline::hooks_drive_the_projected_activity_signal`) |
+
+# TDD cycle log — #488 M6
+
+Red run (2026-10-09) of `cargo test -p micold-core --test sandbox_credentials` before any code: compile errors only (no `AiCliProvider::sandbox_auth_file`, no `codex_sign_in`, `ai_cli_auth` still an `Option`) — the red is the missing API, not a wrong assertion. Green after T032: `sandbox_credentials` 26 passed, `ai_cli_provider_seam` green.
+
+| Behaviour (task) | Test |
+|---|---|
+| Each provider names its own sign-in file; copilot/pi `None` (T031) | `each_provider_names_its_own_sign_in_file` |
+| Codex `$CODEX_HOME` under home followed, outside not (pure path cases) | `codex_sign_in_follows_a_codex_home_under_the_home_only` |
+| `conventional()` fills `ai_cli_auth` from `AiCli::ALL`, claude first | `the_conventional_layout_lists_every_providers_sign_in_claude_first` |
+| One toggle mounts every listed file at its own path | `the_sign_in_share_mounts_every_listed_file_at_its_own_path` |
+| Absent files are pruned one by one, the present one stays | client `only_the_sign_in_files_this_host_has_are_shared` |
+
+Existing tests that assumed one sign-in file were updated mechanically (`each_opt_in_adds_exactly_one_mount`, the two `home_*_to_create` tests, the two client prune tests). Finding: the sign-in mount is writable (rule N-4), not read-only as research R5 assumed; Codex/OpenCode follow Claude Code, the guide says so.

@@ -230,6 +230,13 @@ pub trait AiCliProvider {
     /// determined — callers treat that as "uncertain", never as "absent".
     fn config_dir(&self) -> Option<PathBuf>;
 
+    /// The one file under `home` that holds this CLI's sign-in, shared read-only into a sandbox
+    /// (feature 488, FR-013), or `None` when the CLI keeps none a sandbox could share.
+    ///
+    /// Only that file, never the CLI's directory: the rest is its session store and history. Pure
+    /// of the file's presence: whether it exists is a question for the moment the sandbox starts.
+    fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf>;
+
     /// Environment variables this CLI's launches need, merged into the session's environment by
     /// the daemon (feature 029, FR-020).
     ///
@@ -731,6 +738,10 @@ impl AiCliProvider for ClaudeProvider {
         directories::UserDirs::new().map(|d| d.home_dir().join(".claude"))
     }
 
+    fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf> {
+        Some(home.join(".claude").join(".credentials.json"))
+    }
+
     fn launch_env(&self) -> Vec<(String, String)> {
         // Nothing. `claude` is configured by its own files and by the user's environment, and this
         // application adds neither.
@@ -1047,6 +1058,11 @@ impl AiCliProvider for CopilotProvider {
             }
         }
         directories::UserDirs::new().map(|d| d.home_dir().join(".copilot"))
+    }
+
+    fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
+        // Signs in inside the sandbox; nothing a read-only share could carry.
+        None
     }
 
     fn launch_env(&self) -> Vec<(String, String)> {
@@ -1448,6 +1464,11 @@ impl AiCliProvider for PiProvider {
         directories::UserDirs::new().map(|d| d.home_dir().join(".pi").join("agent"))
     }
 
+    fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
+        // Signs in inside the sandbox; nothing a read-only share could carry.
+        None
+    }
+
     fn launch_env(&self) -> Vec<(String, String)> {
         // Pi's documented startup does three things this application will not do on the user's
         // behalf: check for an update, ask `pi.dev` for the current version, and report
@@ -1582,6 +1603,15 @@ fn write_archived_marker(base: &Path, session_id: Uuid) -> io::Result<()> {
 }
 
 /// A non-empty environment variable as a path.
+/// Codex's sign-in file: `$CODEX_HOME/auth.json` when that directory is under `home`, else
+/// `~/.codex/auth.json`. A `$CODEX_HOME` outside the home is not shared (feature 488, research R5).
+pub fn codex_sign_in(home: &Path, codex_home: Option<&Path>) -> PathBuf {
+    match codex_home {
+        Some(dir) if dir.starts_with(home) => dir.join("auth.json"),
+        _ => home.join(".codex").join("auth.json"),
+    }
+}
+
 fn env_dir(name: &str) -> Option<PathBuf> {
     std::env::var_os(name)
         .filter(|value| !value.is_empty())
@@ -1855,6 +1885,10 @@ impl AiCliProvider for CodexProvider {
             .or_else(|| directories::UserDirs::new().map(|d| d.home_dir().join(".codex")))
     }
 
+    fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf> {
+        Some(codex_sign_in(home, env_dir("CODEX_HOME").as_deref()))
+    }
+
     fn launch_env(&self) -> Vec<(String, String)> {
         // The T001 probe found no environment switch for the update check or telemetry.
         Vec::new()
@@ -2087,6 +2121,15 @@ impl AiCliProvider for OpenCodeProvider {
                 directories::UserDirs::new().map(|d| d.home_dir().join(".local").join("share"))
             })
             .map(|dir| dir.join("opencode"))
+    }
+
+    fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf> {
+        Some(
+            home.join(".local")
+                .join("share")
+                .join("opencode")
+                .join("auth.json"),
+        )
     }
 
     fn launch_env(&self) -> Vec<(String, String)> {
@@ -2325,6 +2368,10 @@ impl AiCliProvider for FakeAiCliProvider {
 
     fn config_dir(&self) -> Option<PathBuf> {
         self.inner.borrow().config_dir.clone()
+    }
+
+    fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
+        None
     }
 
     fn launch_env(&self) -> Vec<(String, String)> {
