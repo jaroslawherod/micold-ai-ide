@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use iced::widget::{column, container, row, Space};
+use iced::widget::{column, container, mouse_area, row, stack, Space};
 use iced::{Element, Length};
 use micold_core::link::LinkContext;
 use micold_core::pane_layout::{Axis, Pane, PaneLayout, MIN_PANE_COLS, MIN_PANE_ROWS};
@@ -268,23 +268,46 @@ pub fn view<'a>(
                 },
             };
             let body = GridSizeReporter::new(body).pane(pane.id());
-            column![
+            let tile: Element<'a, Message> = column![
                 header(state, pane, is_focused, r),
                 container(Element::from(body))
                     .width(Length::Fill)
                     .height(Length::Fill)
             ]
-            .into()
+            .into();
+            if pane.terminal().is_some() {
+                // The terminal widget focuses its own pane on a press.
+                return tile;
+            }
+            // An empty pane has no terminal widget to take the press: its header and body do
+            // (FR-010). A button inside still handles its own press first.
+            mouse_area(tile)
+                .on_press(Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(
+                    pane.id(),
+                ))))
+                .into()
         })
         .collect();
     let split = SplitView::new(area.layout, min_pane(), r, children)
         .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))));
     match area.refusal {
-        Some(reason) => column![
-            container(Text::new(reason, TypeRole::Caption, r))
-                .width(Length::Fill)
-                .padding(spacing::SM),
-            Element::from(split)
+        // Over the panes, not above them: a row above would resize every pane, and the
+        // measurement that follows would dismiss the reason before it was read.
+        Some(reason) => stack![
+            Element::from(split),
+            container(
+                container(Text::new(reason, TypeRole::Caption, r))
+                    .padding(spacing::SM)
+                    .style(move |_| container::Style {
+                        background: Some(
+                            crate::ui::material::style::color(r.surface_container_high).into()
+                        ),
+                        ..container::Style::default()
+                    })
+            )
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .padding(spacing::SM)
         ]
         .into(),
         None => split.into(),
