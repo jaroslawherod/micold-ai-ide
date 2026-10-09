@@ -90,6 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 review B (conformance, sonnet) | 1 | same | CHANGES: 2 MAJOR fixed (cycle-log entry written, with the missing red noted; Verify flake was a test race: `shows` missed a token wrapped across a row end, fixed), 2 MINOR (T045 wording about main.rs left; tick case normalised no) |
 | M5 re-review of A fixes (sonnet) | 2 | ceb65a439e8c8fcd541b802c9426f3636ead0379:b2551e8bd43de3e32af9f04210b0421e372cb688 | CLEAN |
 | M6 review A (code-review high) | 1 | 61fd590e240b9a616fb0456b5ecb7a9b47474986:4426249a96fe7b2d9d6a5c3da0d9eb1c6f5d29d1 | CLEAN |
+| M6 review B (conformance, sonnet) | 1 | c1d6a1fe9c926ea96e39d068b02bb4f29d5ae90a:8b99c0f11700ffd27b28f10016e13febf1b04053 | CLEAN: 1 MINOR (history_damaged.rs is cfg(unix) as a whole; the stand-in is unix-only, as in the other M3 history tests), not fixed. Verify: history_damaged 6 passed |
 
 ## Declined review findings
 
