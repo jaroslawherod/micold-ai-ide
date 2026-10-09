@@ -176,6 +176,20 @@ A few limits of the sign-in share:
 While any of them is on, the settings view shows which — a partially shared sandbox should never
 look like a fully isolated one.
 
+### Saved terminal history is shared with your computer
+
+The terminal history the session service saves ([Settings → Terminal → Save terminal
+history](settings.md)) is written to the same folder whether the service runs on your computer or in
+the sandbox: the `terminal-history` folder in the application's local data directory. A history
+saved by a service on your computer is restored by one in the sandbox, and the other way round, and
+it survives the sandbox being recreated. Only you can read the files, in the sandbox as on your
+computer. The sandbox also shows the time of "session restarted at" in your computer's time zone.
+
+Two things depend on the sandbox having been created by this version or later. On Windows, a
+sandbox created earlier has no history folder mounted and saves no history; it logs one warning,
+*terminal history is not saved: recreate the sandbox*. On every system, an earlier sandbox shows the
+time in UTC. Set *Where sessions run* to *On this computer* and back to recreate it.
+
 ## Limits
 
 Settings → **Session service** → **Limits** caps what the sandbox may consume. A session that tries

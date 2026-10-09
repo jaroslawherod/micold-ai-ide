@@ -93,6 +93,7 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
         control_port: 7727,
         published_ports: Vec::new(),
         network_name: "micold-net".into(),
+        time_zone: None,
         home: PathBuf::from(home),
     }
 }
