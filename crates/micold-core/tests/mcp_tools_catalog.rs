@@ -400,11 +400,13 @@ fn create_worktree_rejects_a_malformed_branch() {
 }
 
 #[test]
-fn create_session_accepts_exactly_the_three_ai_clis() {
+fn create_session_accepts_exactly_the_five_ai_clis() {
     for (name, cli) in [
         ("claude_code", AiCli::ClaudeCode),
         ("copilot", AiCli::Copilot),
         ("pi", AiCli::Pi),
+        ("codex", AiCli::Codex),
+        ("opencode", AiCli::OpenCode),
     ] {
         assert_eq!(
             parse_call(
@@ -434,6 +436,14 @@ fn create_session_accepts_exactly_the_three_ai_clis() {
     invalid(
         "create_session",
         json!({"worktree": "feat-x", "ai_cli": "vim"}),
+    );
+    let message = invalid_any(
+        "create_session",
+        json!({"worktree": "feat-x", "ai_cli": "vim"}),
+    );
+    assert!(
+        message.contains("codex") && message.contains("opencode"),
+        "the refusal names every provider: {message}"
     );
     invalid("create_session", json!({"ai_cli": "pi"}));
     invalid("create_session", json!({"worktree": "feat-x", "prompt": 3}));

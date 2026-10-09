@@ -89,8 +89,13 @@ fn an_image_with_every_cli_says_nothing_either() {
 
 #[test]
 fn an_image_missing_one_names_it_the_image_and_the_obligation() {
-    let notice = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode, AiCli::Pi])))
-        .expect("an image without Copilot has something to report");
+    let notice = missing_cli_notice(Some(&in_image(&[
+        AiCli::ClaudeCode,
+        AiCli::Pi,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ])))
+    .expect("an image without Copilot has something to report");
 
     // The CLI, by the name a menu would show it under — the same register the picker beside this
     // notice uses, so the user can match the sentence to the missing entry.
@@ -151,8 +156,13 @@ fn the_host_placement_gets_a_different_sentence_and_no_image() {
     // FR-023c's other half. With the service on this computer there is no image, and telling the
     // user to fix one would send them to a machine that does not exist. Since feature 037 the
     // sentence is about the PATH sessions get, which is what the user can change.
-    let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode, AiCli::Pi])))
-        .expect("a host without Copilot has something to report");
+    let notice = missing_cli_notice(Some(&on_host(&[
+        AiCli::ClaudeCode,
+        AiCli::Pi,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ])))
+    .expect("a host without Copilot has something to report");
 
     assert!(
         notice.contains(AiCli::Copilot.provider().display_name()),
@@ -174,7 +184,13 @@ fn one_missing_cli_and_two_agree_with_their_verbs() {
     // Sentence-level, and worth a line: the notice appears in a settings form beside the control
     // it is about, and "GitHub Copilot aren't in …" is the kind of thing that makes a user trust
     // the rest of the page less.
-    let one = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode, AiCli::Pi]))).unwrap();
+    let one = missing_cli_notice(Some(&in_image(&[
+        AiCli::ClaudeCode,
+        AiCli::Pi,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ])))
+    .unwrap();
     let both = missing_cli_notice(Some(&in_image(&[]))).unwrap();
 
     assert!(one.contains("isn't"), "singular: {one}");
@@ -188,11 +204,21 @@ fn a_missing_pi_is_named_as_pi_coding_agent_and_never_as_its_command() {
     // `pi` in a sentence is a two-letter word that reads as a typo.
     for (availability, opening) in [
         (
-            in_image(&[AiCli::ClaudeCode, AiCli::Copilot]),
+            in_image(&[
+                AiCli::ClaudeCode,
+                AiCli::Copilot,
+                AiCli::Codex,
+                AiCli::OpenCode,
+            ]),
             format!("Pi Coding Agent isn't in {IMAGE}."),
         ),
         (
-            on_host(&[AiCli::ClaudeCode, AiCli::Copilot]),
+            on_host(&[
+                AiCli::ClaudeCode,
+                AiCli::Copilot,
+                AiCli::Codex,
+                AiCli::OpenCode,
+            ]),
             "Pi Coding Agent was not found on the PATH".to_string(),
         ),
     ] {
@@ -215,7 +241,13 @@ fn a_missing_pi_is_a_presence_fact_with_no_version_in_it() {
     // decide Pi is missing and there is no version to report. A number here would be one the
     // application invented — the version belongs to the failure of an *installed* `pi`, where it
     // was read, not to the notice that it is absent.
-    let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode, AiCli::Copilot]))).unwrap();
+    let notice = missing_cli_notice(Some(&on_host(&[
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ])))
+    .unwrap();
     assert!(
         !notice.chars().any(|c| c.is_ascii_digit()),
         "a missing CLI has no version to name: {notice}"
@@ -231,7 +263,10 @@ fn on_this_computer_the_note_is_the_reason_and_action_of_each_state() {
     let missing = [AiCli::Copilot, AiCli::Pi];
     for env in STATES {
         assert_eq!(
-            missing_cli_notice(Some(&in_state(on_host(&[AiCli::ClaudeCode]), Some(env)))),
+            missing_cli_notice(Some(&in_state(
+                on_host(&[AiCli::ClaudeCode, AiCli::Codex, AiCli::OpenCode]),
+                Some(env)
+            ))),
             Some(explained(&missing, env, Place::ThisComputer)),
             "{env:?}"
         );
@@ -245,7 +280,7 @@ fn in_an_image_the_note_blames_the_image_only_when_the_script_was_applied() {
     let missing = [AiCli::Copilot];
     for env in STATES.into_iter().filter(|env| !env.script_applied()) {
         let note = missing_cli_notice(Some(&in_state(
-            in_image(&[AiCli::ClaudeCode, AiCli::Pi]),
+            in_image(&[AiCli::ClaudeCode, AiCli::Pi, AiCli::Codex, AiCli::OpenCode]),
             Some(env),
         )))
         .expect("Copilot is missing");
@@ -282,7 +317,7 @@ fn with_nothing_available_every_cli_is_named_and_the_reason_is_given_once() {
 
     assert!(
         note.starts_with(
-            "A session would not find Claude Code, GitHub Copilot and Pi Coding Agent:"
+            "A session would not find Claude Code, GitHub Copilot, Pi Coding Agent, Codex and OpenCode:"
         ),
         "{note}"
     );

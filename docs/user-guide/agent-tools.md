@@ -122,6 +122,7 @@ service knows the CLI is ready depends on the CLI:
 | Claude Code | Its screen has shown something and then stopped changing for 1.5 seconds |
 | Pi Coding Agent | Pi reports that its session has started, through the activity reporter the application loads into it. If you turned off **Show activity for Pi sessions**, it is ready once its screen has stopped changing for 1.5 seconds |
 | GitHub Copilot | Its screen has shown something and then stopped changing for 1.5 seconds |
+| Codex, OpenCode | Their screen has shown something and then stopped changing for 1.5 seconds |
 
 Claude Code and GitHub Copilot ask whether you trust a folder the first time they run in it. The
 service never answers that question for you: before it waits, it reads the CLI's own record of the
@@ -198,6 +199,8 @@ on your computer outside the container can reach it. The assistant sees the same
 | Claude Code | Yes |
 | GitHub Copilot | Yes |
 | Pi Coding Agent | No: Pi has no support for tool servers of this kind (MCP) |
+| Codex | No: the app does not connect it to its tool server yet |
+| OpenCode | No: the app does not connect it to its tool server yet |
 | Regular terminal | No: there is no assistant to connect |
 
 A session that is not connected works exactly as before. The session service writes one line to

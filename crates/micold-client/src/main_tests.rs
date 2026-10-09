@@ -7489,7 +7489,12 @@ mod the_settings_note_explains_a_missing_cli {
 
     type Sent = iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>;
 
-    const WITHOUT_PI: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+    const WITHOUT_PI: [AiCli; 4] = [
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ];
 
     /// Open Settings, which asks about the home directory, and answer that request.
     fn settings_opened_and_answered(
@@ -7744,7 +7749,12 @@ mod a_missing_default_says_why_the_list_opened {
     use micold_core::cli_reason::{start_refusal, AttemptDir, Place, SpawnEnv};
     use micold_core::terminal::LaunchMode;
 
-    const WITHOUT_PI: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+    const WITHOUT_PI: [AiCli; 4] = [
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ];
 
     /// A9 (US2-AS1, FR-008, FR-015): the stored default is Pi, environment-include is off, and
     /// the row's own directory has no Pi. Pressing start says so in `cli_reason`'s words for the
@@ -7873,7 +7883,12 @@ mod a_rows_cli_list_names_what_is_not_offered {
     use micold_core::cli_reason::{explain, start_refusal, AttemptDir, Place, SpawnEnv};
     use micold_core::terminal::LaunchMode;
 
-    const WITHOUT_PI: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Copilot];
+    const WITHOUT_PI: &[AiCli] = &[
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ];
     const EVERY: &[AiCli] = &AiCli::ALL;
 
     /// One directory's answer: what a session there finds, and the state it was walked in.

@@ -434,6 +434,7 @@ fn an_ai_clis_own_startup_title_is_not_a_name() {
                 format!("π - {folder}"),
                 format!("π - Fixing the parser - {folder}"),
             ),
+            AiCli::Codex | AiCli::OpenCode => unreachable!("naming arrives with M3/M4"),
         };
         let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
         let state = DaemonState::new(catalog_with_session(project.path(), store.path(), cli));

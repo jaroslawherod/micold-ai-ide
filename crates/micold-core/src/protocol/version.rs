@@ -130,7 +130,10 @@
 /// And 37 → 38 for feature 041's `save_terminal_history` on `DaemonSettings` and `SettingsSet`
 /// (contracts/setting.md §2): the service holds whether terminal history is saved, for every
 /// window. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 38;
+///
+/// And 38 → 39 for feature 488's `AiCli::{Codex, OpenCode}`, once for the whole feature: an older
+/// peer would fail to decode a session, a default or a `create_session` naming either provider.
+pub const PROTOCOL_VERSION: u32 = 39;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

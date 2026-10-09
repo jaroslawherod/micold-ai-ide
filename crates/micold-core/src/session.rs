@@ -62,6 +62,10 @@ pub enum AiCli {
     /// this list and nothing else, which is what keeps the supported set enumerated once
     /// (FR-021).
     Pi,
+    /// OpenAI's `codex` CLI (feature 488).
+    Codex,
+    /// The `opencode` CLI (feature 488).
+    OpenCode,
 }
 
 impl AiCli {
@@ -69,7 +73,13 @@ impl AiCli {
     ///
     /// The UI's menus are built from this, so the order is not incidental — it is what the user
     /// sees. Kept sorted, so this and any `BTreeSet<AiCli>` agree.
-    pub const ALL: [AiCli; 3] = [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi];
+    pub const ALL: [AiCli; 5] = [
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Pi,
+        AiCli::Codex,
+        AiCli::OpenCode,
+    ];
 }
 
 /// The sidebar label for a session — read from the AI CLI's own records, never user-entered

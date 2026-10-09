@@ -48,7 +48,16 @@ fn it_is_copy_eq_hash_and_ord() {
 fn iterating_the_variants_is_deterministic_and_complete() {
     // The list the menus are built from. Asserting the exact sequence rather than the length is
     // the point: this is the order the user sees, and `ALL` is the only thing that decides it.
-    assert_eq!(AiCli::ALL, [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi]);
+    assert_eq!(
+        AiCli::ALL,
+        [
+            AiCli::ClaudeCode,
+            AiCli::Copilot,
+            AiCli::Pi,
+            AiCli::Codex,
+            AiCli::OpenCode
+        ]
+    );
 
     // And it is every variant, not a list someone forgot to extend when a third CLI landed —
     // which a length assertion alone would not catch, since a duplicated entry has the same
@@ -76,7 +85,7 @@ fn a_third_cli_is_one_more_member_of_the_same_list() {
     // of the supported CLIs exists to fall out of step with this one (FR-021), so a menu, a
     // settings select and a sandbox image check all gain it from here.
     assert!(AiCli::ALL.contains(&AiCli::Pi));
-    assert_eq!(AiCli::ALL.len(), 3);
+    assert_eq!(AiCli::ALL.len(), 5);
 
     // And it does not displace the default. A user who has never chosen a CLI still gets
     // `claude`, and every session written before this feature still reads back as one (FR-002).
@@ -93,6 +102,8 @@ fn every_variant_round_trips_its_persisted_name() {
         (AiCli::ClaudeCode, "\"ClaudeCode\""),
         (AiCli::Copilot, "\"Copilot\""),
         (AiCli::Pi, "\"Pi\""),
+        (AiCli::Codex, "\"Codex\""),
+        (AiCli::OpenCode, "\"OpenCode\""),
     ] {
         let json = serde_json::to_string(&which).expect("serialize");
         assert_eq!(json, persisted, "{which:?} is persisted as {persisted}");

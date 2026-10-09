@@ -751,7 +751,7 @@ fn an_unknown_provider_is_a_load_error_not_a_silent_fallback() {
     // The data-model's round-trip table, and the one place this feature deliberately chooses the
     // *less* forgiving behaviour.
     //
-    // `#[serde(other)]` on the persisted enum would make a future `"Codex"` load as `ClaudeCode`,
+    // `#[serde(other)]` on the persisted enum would make a future `"Gemini"` load as `ClaudeCode`,
     // and the consequence is not a cosmetic mislabel: the next resume would start `claude` in that
     // worktree, against a conversation it has never seen. Declining to load is safer, and the
     // store's existing malformed-file recovery already knows what to do with a file it cannot
@@ -762,7 +762,7 @@ fn an_unknown_provider_is_a_load_error_not_a_silent_fallback() {
         &path,
         r#"{"schema_version":1,"last_active":"/repo","projects":[
             {"path":"/repo","display_name":"repo","is_git_repo":true,"sessions":[
-                {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One","provider":"Codex"}
+                {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One","provider":"Gemini"}
             ]}
         ]}"#,
     )
@@ -920,4 +920,31 @@ fn a_catalog_without_a_version_number_loads_its_projects() {
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(written["schema_version"], 1);
     assert_eq!(store.load().workspace.projects.len(), 2);
+}
+
+// --- Feature 488: Codex and OpenCode sessions are remembered (FR-002) ------------------------
+
+#[test]
+fn every_provider_survives_a_save_and_load() {
+    use micold_core::session::{Session, SessionLocation};
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/p", "p", true));
+    ws.active = Some(PathBuf::from("/p"));
+    ws.sessions.insert(
+        PathBuf::from("/p"),
+        AiCli::ALL
+            .into_iter()
+            .map(|cli| Session::start_new(SessionLocation::Worktree("feat".to_string()), cli))
+            .collect(),
+    );
+    store.save(&ws).unwrap();
+
+    let loaded = store.load().workspace;
+    let providers: Vec<AiCli> = loaded.sessions[Path::new("/p")]
+        .iter()
+        .map(|session| session.provider)
+        .collect();
+    assert_eq!(providers, AiCli::ALL.to_vec());
 }

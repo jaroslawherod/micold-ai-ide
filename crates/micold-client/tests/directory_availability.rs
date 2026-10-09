@@ -582,7 +582,13 @@ fn no_project_no_wanted_directories() {
 // 037 surface U6: the note in a row's CLI list (U78–U85)
 // ---------------------------------------------------------------------------------------------
 
-const TWO: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Copilot];
+/// Everything but Pi, so the one CLI the notes name is Pi.
+const TWO: &[AiCli] = &[
+    AiCli::ClaudeCode,
+    AiCli::Copilot,
+    AiCli::Codex,
+    AiCli::OpenCode,
+];
 const HOME_KEY: u64 = 1;
 
 /// `explain`'s `{reason} {action}` for `missing` on this computer (contract W4, surface U6).
@@ -707,7 +713,10 @@ fn two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other() {
     state.session.availability.asked(3, dir(Q));
     state.session.availability.answered(
         3,
-        answer_in(&[AiCli::ClaudeCode, AiCli::Pi], Some(SpawnEnv::IncludeOff)),
+        answer_in(
+            &[AiCli::ClaudeCode, AiCli::Pi, AiCli::Codex, AiCli::OpenCode],
+            Some(SpawnEnv::IncludeOff),
+        ),
     );
     let p_says = explained(
         &[AiCli::Pi],

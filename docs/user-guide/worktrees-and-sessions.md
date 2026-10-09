@@ -856,7 +856,7 @@ watch, the same as it would after a restart.
 
 ## Choosing which AI CLI a session runs
 
-A session runs one AI coding CLI — Claude Code, GitHub Copilot or Pi Coding Agent — and which one is
+A session runs one AI coding CLI — Claude Code, GitHub Copilot, Pi Coding Agent, Codex or OpenCode — and which one is
 decided when the session is created.
 
 - **Press the start-session action** and you get the CLI set as your
@@ -900,14 +900,35 @@ conversations in its own place.
 **Two sessions in the same worktree can run different CLIs at once.** They do not interfere: each
 has its own process, its own terminal, its own conversation record, and its own title.
 
+### Sessions on Codex and OpenCode
+
+Pick **Codex** or **OpenCode** from the chevron beside the start-session action, or set one as your
+[Default AI CLI](./settings.md#default-ai-cli). Each is offered once its command (`codex`,
+`opencode`) is installed where sessions run: on your `PATH`, or in the container's image when the
+session service runs in one. A tool that starts sessions for you, through the app's tool server, can
+ask for them with `ai_cli` set to `codex` or `opencode`.
+
+- **It starts in the session's worktree**, running the bare command, and the sidebar and terminal
+  bar label it `codex` or `opencode`. Sign in to the CLI yourself first: the app does not carry your
+  credentials.
+- **The session remembers its provider** across restarts of the app and the session service.
+  Reopening the conversation itself, naming the session after it and showing its activity are not
+  part of this yet: after a restart the CLI opens fresh in the worktree, and the activity badge
+  reads unknown.
+- **Codex asks whether to trust a folder** the first time it runs there. When a tool asks for a
+  first prompt in a folder Codex has not been told to trust, the prompt is not typed, so it cannot
+  answer that question for you; run `codex` once in the project folder and accept it.
+- **Neither is connected to the app's tool server** for now: the sessions start without it.
+- **OpenCode does not update itself** inside a session the app starts.
+
 ### What the sidebar shows
 
-Each session row carries a short text label naming its CLI — `claude`, `copilot` or `pi`. It is text, not
+Each session row carries a short text label naming its CLI — `claude`, `copilot`, `pi`, `codex` or `opencode`. It is text, not
 a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
 the row runs out of room the *title* is what shortens, never the CLI label.
 
 Open a session and its terminal bar names the CLI too — on the AI tab at the bottom-right, beside
-its sparkle, reading `claude`, `copilot` or `pi` — so you can tell what you are talking to without going
+its sparkle, reading `claude`, `copilot`, `pi`, `codex` or `opencode` — so you can tell what you are talking to without going
 back to the sidebar. It is there whichever pane the session is showing.
 
 The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
@@ -1069,7 +1090,7 @@ You keep control of the panel:
   keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
 
-> Requires the session's CLI — `claude`, `copilot` or `pi` — where sessions run: on your `PATH`, or in
+> Requires the session's CLI — `claude`, `copilot`, `pi`, `codex` or `opencode` — where sessions run: on your `PATH`, or in
 > the container's image. If it is missing, starting the session reports which one could not be found
 > — see [When a CLI isn't installed](#when-a-cli-isnt-installed).
 
@@ -1079,7 +1100,7 @@ Each session's terminal can also run a plain shell instead of the AI CLI — use
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
 - The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude`,
-  `copilot` or `pi`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
+  `copilot`, `pi`, `codex` or `opencode`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
   numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
   single place to check which process your keystrokes are going to — it names where each press
   takes you rather than just saying "the other one".

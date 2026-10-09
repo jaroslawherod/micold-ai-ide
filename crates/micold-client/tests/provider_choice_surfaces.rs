@@ -226,6 +226,26 @@ fn the_settings_select_and_the_start_list_name_the_same_clis() {
     );
 }
 
+/// Feature 488 (FR-001, T009): with all five CLIs present the Settings select and the start list
+/// each paint five entries, Codex and OpenCode among them, from `AiCli::ALL` alone.
+#[test]
+fn the_settings_select_and_the_start_list_offer_all_five_clis() {
+    assert_eq!(AiCli::ALL.len(), 5);
+    let settings = painted(&settings_state(&AiCli::ALL), Some(SETTINGS_SELECT));
+    let start = painted(&start_menu_state(&AiCli::ALL), None);
+    for which in AiCli::ALL {
+        let name = which.provider().display_name();
+        assert!(
+            settings.iter().any(|s| s == name),
+            "Settings lacks {name}: {settings:?}"
+        );
+        assert!(
+            start.iter().any(|s| s == name),
+            "the start list lacks {name}: {start:?}"
+        );
+    }
+}
+
 /// Feature 029, T031 (FR-001, FR-001a, SC-004a): Pi is offered on both surfaces as "Pi Coding
 /// Agent", and neither ever paints its command name.
 ///

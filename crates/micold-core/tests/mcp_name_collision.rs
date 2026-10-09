@@ -43,6 +43,7 @@ impl Fixture {
             home: Some(self.home()),
             claude_config_dir: None,
             copilot_config_dir: Some(self.home().join(".copilot")),
+            codex_home: Some(self.home().join(".codex")),
         }
     }
 

@@ -269,14 +269,23 @@ fn the_settings_select_names_clis_the_human_readable_way() {
         .collect();
     assert_eq!(
         names,
-        vec!["Claude Code", "GitHub Copilot", "Pi Coding Agent"]
+        vec![
+            "Claude Code",
+            "GitHub Copilot",
+            "Pi Coding Agent",
+            "Codex",
+            "OpenCode"
+        ]
     );
 
     let commands: Vec<&str> = AiCli::ALL
         .into_iter()
         .map(|which| which.provider().command())
         .collect();
-    assert_eq!(commands, vec!["claude", "copilot", "pi"]);
+    assert_eq!(
+        commands,
+        vec!["claude", "copilot", "pi", "codex", "opencode"]
+    );
     assert!(
         names.iter().zip(&commands).all(|(name, cmd)| name != cmd),
         "the two registers are distinct strings for every provider, so a leak in either direction \

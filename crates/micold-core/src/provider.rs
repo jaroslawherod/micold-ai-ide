@@ -132,6 +132,8 @@ pub enum FolderTrust {
     ClaudeProjects,
     /// `config.json`'s `trustedFolders` in the config directory (`copilot`).
     CopilotTrustedFolders,
+    /// `config.toml`'s `[projects."<path>"] trust_level = "trusted"` in the Codex home (`codex`).
+    CodexProjects,
 }
 
 /// How a CLI's sessions are bound to the session service's tool server (feature 034, FR-002,
@@ -344,6 +346,8 @@ impl AiCli {
             AiCli::ClaudeCode => "claude_code",
             AiCli::Copilot => "copilot",
             AiCli::Pi => "pi",
+            AiCli::Codex => "codex",
+            AiCli::OpenCode => "opencode",
         }
     }
 
@@ -357,10 +361,14 @@ impl AiCli {
         static CLAUDE: ClaudeProvider = ClaudeProvider;
         static COPILOT: CopilotProvider = CopilotProvider;
         static PI: PiProvider = PiProvider;
+        static CODEX: CodexProvider = CodexProvider;
+        static OPENCODE: OpenCodeProvider = OpenCodeProvider;
         match self {
             AiCli::ClaudeCode => &CLAUDE,
             AiCli::Copilot => &COPILOT,
             AiCli::Pi => &PI,
+            AiCli::Codex => &CODEX,
+            AiCli::OpenCode => &OPENCODE,
         }
     }
 }
@@ -1382,6 +1390,207 @@ impl AiCliProvider for PiProvider {
                 .join("micold-activity")
                 .join(format!("{session_id}.jsonl")),
         }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Codex and OpenCode (feature 488, M1: fresh start only)
+// ---------------------------------------------------------------------------------------
+
+/// `<base>/micold-bindings/<session>.archived` — the durable close marker both providers keep
+/// outside their own store, which is never written (contracts/codex-cli.md, opencode-cli.md).
+fn binding_archived_marker(base: &Path, session_id: Uuid) -> PathBuf {
+    base.join("micold-bindings")
+        .join(format!("{session_id}.archived"))
+}
+
+fn write_archived_marker(base: &Path, session_id: Uuid) -> io::Result<()> {
+    let path = binding_archived_marker(base, session_id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, "")
+}
+
+/// A non-empty environment variable as a path.
+fn env_dir(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// OpenAI's Codex CLI (`codex`).
+///
+/// M1 starts it fresh in the worktree and remembers the provider; resume, naming and the
+/// conversation store arrive with M3, so every store read answers "nothing recorded".
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CodexProvider;
+
+impl AiCliProvider for CodexProvider {
+    fn id(&self) -> AiCli {
+        AiCli::Codex
+    }
+
+    fn display_name(&self) -> &'static str {
+        "Codex"
+    }
+
+    fn command(&self) -> &'static str {
+        "codex"
+    }
+
+    fn is_available(&self, path: &OsStr) -> bool {
+        resolves_on_path(self.command(), path)
+    }
+
+    fn launch_args(&self, _session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
+        // Codex mints its own conversation ids (research V5), so a start carries none. Until M3
+        // binds one, a restart opens a fresh conversation rather than guessing with `--last`.
+        Vec::new()
+    }
+
+    fn config_dir(&self) -> Option<PathBuf> {
+        env_dir("CODEX_HOME")
+            .or_else(|| directories::UserDirs::new().map(|d| d.home_dir().join(".codex")))
+    }
+
+    fn launch_env(&self) -> Vec<(String, String)> {
+        // The T001 probe found no environment switch for the update check or telemetry.
+        Vec::new()
+    }
+
+    fn recorded_session_ids(&self, _config_dir: &Path, _cwd: &Path) -> Vec<Uuid> {
+        Vec::new()
+    }
+
+    fn has_recorded_conversation(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> bool {
+        false
+    }
+
+    fn read_title(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        None
+    }
+
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        None
+    }
+
+    fn name_in_terminal_title(&self, _title: &str, _cwd: &Path) -> Option<String> {
+        None
+    }
+
+    fn mark_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> io::Result<()> {
+        write_archived_marker(config_dir, session_id)
+    }
+
+    fn is_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
+        binding_archived_marker(config_dir, session_id).exists()
+    }
+
+    fn activity_source(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> ActivitySource {
+        ActivitySource::None
+    }
+
+    fn tool_server_support(&self) -> ToolServerSupport {
+        ToolServerSupport::Unsupported {
+            reason: "no per-launch tool-server binding was verified for Codex",
+        }
+    }
+
+    fn input_readiness(&self) -> InputReadiness {
+        InputReadiness::OutputSettled
+    }
+
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::CodexProjects
+    }
+}
+
+/// The `opencode` CLI. Same M1 scope as [`CodexProvider`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OpenCodeProvider;
+
+impl AiCliProvider for OpenCodeProvider {
+    fn id(&self) -> AiCli {
+        AiCli::OpenCode
+    }
+
+    fn display_name(&self) -> &'static str {
+        "OpenCode"
+    }
+
+    fn command(&self) -> &'static str {
+        "opencode"
+    }
+
+    fn is_available(&self, path: &OsStr) -> bool {
+        resolves_on_path(self.command(), path)
+    }
+
+    fn launch_args(&self, _session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
+        // OpenCode mints its own `ses_…` ids (research V5); see `CodexProvider::launch_args`.
+        Vec::new()
+    }
+
+    fn config_dir(&self) -> Option<PathBuf> {
+        // The data directory `opencode debug paths` reports: `$XDG_DATA_HOME/opencode`, else
+        // `~/.local/share/opencode` (contracts/opencode-cli.md).
+        env_dir("XDG_DATA_HOME")
+            .or_else(|| {
+                directories::UserDirs::new().map(|d| d.home_dir().join(".local").join("share"))
+            })
+            .map(|dir| dir.join("opencode"))
+    }
+
+    fn launch_env(&self) -> Vec<(String, String)> {
+        // The one switch the T001 probe found: no self-update in a managed session.
+        vec![("OPENCODE_DISABLE_AUTOUPDATE".to_string(), "1".to_string())]
+    }
+
+    fn recorded_session_ids(&self, _config_dir: &Path, _cwd: &Path) -> Vec<Uuid> {
+        Vec::new()
+    }
+
+    fn has_recorded_conversation(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> bool {
+        false
+    }
+
+    fn read_title(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        None
+    }
+
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        None
+    }
+
+    fn name_in_terminal_title(&self, _title: &str, _cwd: &Path) -> Option<String> {
+        None
+    }
+
+    fn mark_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> io::Result<()> {
+        write_archived_marker(config_dir, session_id)
+    }
+
+    fn is_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
+        binding_archived_marker(config_dir, session_id).exists()
+    }
+
+    fn activity_source(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> ActivitySource {
+        ActivitySource::None
+    }
+
+    fn tool_server_support(&self) -> ToolServerSupport {
+        ToolServerSupport::Unsupported {
+            reason: "no per-launch tool-server binding was verified for OpenCode",
+        }
+    }
+
+    fn input_readiness(&self) -> InputReadiness {
+        InputReadiness::OutputSettled
+    }
+
+    fn folder_trust(&self) -> FolderTrust {
+        FolderTrust::NeverAsks
     }
 }
 

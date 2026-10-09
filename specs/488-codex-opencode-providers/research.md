@@ -25,6 +25,8 @@ Legend: **VERIFIED** (source named) / **ASSUMED** (fallback in force).
 | V14 | Tool-server (MCP) binding per launch | ASSUMED (Codex `-c mcp_servers.…` override; OpenCode `mcp` config key, `docs/config.mdx` §MCP servers) — no per-launch injection verified | Fallback: `Unsupported{reason}`, logged (FR-011) |
 | V15 | Folder-trust prompt | Codex ASSUMED to ask on untrusted dirs (`[projects."<path>"] trust_level` in `config.toml`); OpenCode ASSUMED to never ask | Codex: new `FolderTrust` arm, unrecorded trust ⇒ `create_session` prompt refused as `AsksTrust` (existing path, `ops.rs`); OpenCode: `NeverAsks` |
 
+T001 probe (2026-10-09; codex 0.162.0, opencode-ai 1.18.35, installed from npm, no sign-in): V5 for OpenCode confirmed (no id-choosing flag); V8, V13, V14, V15 not probed and V10 field names not probed (need a signed-in session), fallbacks stay; R8 found `OPENCODE_DISABLE_AUTOUPDATE` only. Details in `contracts/*.md`.
+
 Residual risk: V8, V10, V14, V15 need a real CLI to confirm. The tasks unit starts with a probe task
 that runs each against a real install when available and records the result in
 `contracts/*.md`; every provider read is best-effort so a wrong guess degrades to the fallback.
@@ -113,3 +115,16 @@ OpenCode's native binary (glibc/arch matrix) — npm package already pulls the r
 
 Not verified for either CLI; the tasks unit records any update-check or telemetry environment
 switch found during the probe in `launch_env()` (Pi's R9 precedent). Default: none set.
+
+## R9 — Audit of provider lists outside `provider.rs` (T002)
+
+`grep -rn 'AiCli::\|"pi"' crates/*/src` (2026-10-09). Hand-written places and their disposition:
+
+| Place | Derives from `ALL`/`tool_name`? | Action |
+|---|---|---|
+| `core/src/store.rs` `StoredAiCli` + both `From` arms | No (persisted mirror, by design) | Codex/OpenCode arms added (T006) |
+| `core/src/mcp/tools.rs` `create_session` `ai_cli` schema `enum` | No — literal list | Extended to `codex`, `opencode` (T009); parsing already uses `tool_name` |
+| `core/src/mcp/trust.rs` / `mcp/binding.rs` `ConfigLocations` | Per-`FolderTrust` arm | `CodexProjects` arm and `codex_home` added (T007) |
+| `daemon/src/state.rs` trust/binding locations | Per-`FolderTrust` | `CODEX_HOME` read for `CodexProjects` |
+| Client chooser, Settings select, availability notes | Yes (`AiCli::ALL`, `display_name`) | None; test added that both paint five entries |
+| `daemon/src/state.rs` Pi activity paths | Pi-only by design (`ActivitySource::Extension`) | None |
