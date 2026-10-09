@@ -886,3 +886,9 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - red: the argv tests failed before the argv change (no history mount, no `TZ`). The client tests were written alongside the implementation, so they have no separate red run
 - green: `MountSet::with_history`, `SandboxSpec.time_zone`, launcher `ensure_dir`, `tzdata` in the Containerfile, `DaemonState::save_to_store` warns once; `sandbox_real_history` 6 passed under podman (`MICOLD_TEST_RUNTIME=podman`, tests pass `--security-opt label=disable` for SELinux)
 - notes: other `sandbox_real_*` tests fail on this machine for the SELinux reason, unrelated
+
+## Close: recorded exceptions (tdd verification, F2, F3)
+
+- M5 (U86–U105, U131, A11–A18) was written test-after and M6 (U12, U13, U29, U106, U107, A20–A24) got its red by mutation after the code. This cannot be repaired afterwards; it is kept as a recorded exception.
+- Added at close: `the_sweep_deletes_nothing_when_the_catalog_did_not_load` (F4, red with the `Loaded` guard removed), `turning_saving_on_after_an_unlistable_directory_deletes_what_is_there` (F5, red with the re-delete skipped), and an outer 10 s timeout on the three-second unwind test (F7).
+- F3 (the `enabled` re-check under the lock in `save`) stays covered only by the probabilistic race test U97: a deterministic test needs a hook inside `save`.

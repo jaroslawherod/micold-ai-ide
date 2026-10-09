@@ -13,8 +13,9 @@ suite_baseline: unknown # not run at planning time: the branch holds only specs/
 Traces name spec.md ids: `US<story>-<scenario>` for an acceptance scenario, `FR-…`, `SC-…`, `EC-…`
 for an edge case of spec.md. `DM` = data-model.md, `HF` = contracts/saved-history-file.md, `ST` =
 contracts/setting.md, `SR` = contracts/stop-request.md, `R#` = research.md. The `test` column names
-the tasks.md task that writes the test; the same ids stand on those tasks. All states are `PENDING`:
-no test exists yet, and the code is all new (no characterization behaviors are needed). Components
+the tasks.md task that writes the test; the same ids stand on those tasks. States were refreshed at close: `DONE` rows name their test;
+four rows (A11, U102, U104, U105: client settings wording and draft wiring, seen in the recorded
+visual pass) stay `PENDING`. The code is all new (no characterization behaviors are needed). Components
 that already exist and change (`state.rs`, `supervisor.rs`, `server.rs`) were not read at planning
 time; the loop reads their existing tests before the first behavior that changes them.
 
@@ -31,36 +32,36 @@ a rendered screen; the rendered half is quickstart Part B (T076).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1  | After an orderly stop of the service, a start shows all 200 lines in order with colours and styles | US1-1, FR-001, FR-002, SC-001 | example | PENDING | `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` passes for a session stopped before the restart (T017); the orderly stop of the service itself is T031, T061 |
+| A1  | After an orderly stop of the service, a start shows all 200 lines in order with colours and styles | US1-1, FR-001, FR-002, SC-001 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::an_idle_unwind_saves_every_line_and_a_restart_restores_them`, `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` |
 | A2  | After a service restart, a start shows one separator `session restarted at <local date time>` below the saved history and above every new line | US1-2, FR-008, FR-009 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_new_output` |
 | A3  | A session that printed nothing before the restart shows no separator and no blank history after it | US1-3, FR-010 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a3_a_session_that_printed_nothing_shows_no_separator_after_a_restart` |
 | A4  | With one earlier separator in the history, a second restart shows output, separator, output, separator in that order | US1-4, FR-011 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a4_a_second_restart_shows_output_separator_output_separator_in_order` |
 | A5  | A history longer than the scrollback limit restores the most recent lines up to the limit, older lines absent | US1-5, FR-012 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a5_a_history_longer_than_the_limit_restores_the_most_recent_lines` |
 | A6  | Two sessions with different output each show only their own history after a restart | US1-6, FR-025 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a6_two_sessions_each_show_only_their_own_history_after_a_restart` |
-| A7  | After the service is dropped without an unwind while a session prints, a restart restores the history up to the last save, at most 60 s old | US1-7, FR-003, SC-002 | example | PENDING | T026 |
-| A8  | After the service unwinds for the idle stop, a start shows the whole history above the separator, nothing missing | US1-8, FR-002, SC-001 | example | PENDING | T031 |
+| A7  | After the service is dropped without an unwind while a session prints, a restart restores the history up to the last save, at most 60 s old | US1-7, FR-003, SC-002 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u77_a_service_lost_without_a_stop_restores_the_history_up_to_the_last_save` |
+| A8  | After the service unwinds for the idle stop, a start shows the whole history above the separator, nothing missing | US1-8, FR-002, SC-001 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::an_idle_unwind_saves_every_line_and_a_restart_restores_them` |
 | A9  | Stop then start in one service run shows the 200 lines, one separator, the new output, nothing missing | US1-9, FR-015, SC-011 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output` |
 | A10 | A process that exits by itself and is restarted shows its last lines above one separator and the new output below | US1-10, FR-015, FR-002 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a10_a_process_that_exits_by_itself_is_restarted_below_its_last_lines` |
 | A11 | The Terminal section of Settings holds the save-history control, on by default, with the sentence about disk and deletion | US2-1, FR-026, FR-031 | example | PENDING | T041 |
-| A12 | With the setting off, output and a service restart leave no file and the terminal starts empty with no separator | US2-2, FR-028 | example | PENDING | T040 |
-| A13 | Turning the setting off while a session prints stops every later write, with no restart | US2-3, FR-027 | example | PENDING | T040 |
-| A14 | Turning the setting on saves the running session's history, including output printed while off, within 60 s | US2-4, FR-027 | example | PENDING | T040 |
-| A15 | Turning the setting off deletes the files of running and stopped sessions before `SettingsSet` is answered, within 5 s | US2-5, FR-027, SC-008 | example | PENDING | T040 |
-| A16 | After turning the setting off, a running terminal's history is unchanged; only the disk copy is gone | US2-6, FR-033 | example | PENDING | T040 |
-| A17 | Off, then on, then a service restart shows only what was saved after it was turned on; earlier files do not return | US2-7, FR-033 | example | PENDING | T040 |
-| A18 | With the setting off, a stop and start in one run still shows the earlier output above the separator and writes nothing | US2-8, FR-015 | example | PENDING | T040 |
+| A12 | With the setting off, output and a service restart leave no file and the terminal starts empty with no separator | US2-2, FR-028 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::with_saving_off_output_and_a_restart_leave_no_file_and_an_empty_terminal` |
+| A13 | Turning the setting off while a session prints stops every later write, with no restart | US2-3, FR-027 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::turning_saving_off_stops_every_later_write` |
+| A14 | Turning the setting on saves the running session's history, including output printed while off, within 60 s | US2-4, FR-027 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::turning_saving_on_saves_the_running_history_including_what_was_printed_while_off` |
+| A15 | Turning the setting off deletes the files of running and stopped sessions before `SettingsSet` is answered, within 5 s | US2-5, FR-027, SC-008 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::turning_saving_off_deletes_every_file_at_once_and_leaves_the_running_terminal`, `crates/micold-daemon/tests/history_setting.rs::a_settings_set_deletes_the_files_before_it_is_answered_and_is_broadcast` |
+| A16 | After turning the setting off, a running terminal's history is unchanged; only the disk copy is gone | US2-6, FR-033 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::turning_saving_off_deletes_every_file_at_once_and_leaves_the_running_terminal` |
+| A17 | Off, then on, then a service restart shows only what was saved after it was turned on; earlier files do not return | US2-7, FR-033 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::off_then_on_then_a_restart_brings_back_nothing_that_was_deleted` |
+| A18 | With the setting off, a stop and start in one run still shows the earlier output above the separator and writes nothing | US2-8, FR-015 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::with_saving_off_a_stop_and_start_still_shows_the_history_and_writes_nothing` |
 | A19 | A saved history of random bytes: the session starts and runs exactly as one with no saved history | US3-1, FR-016, SC-006 | example | DONE | `crates/micold-daemon/tests/history_service_restart.rs::a19_a_file_of_random_bytes_starts_the_session_with_no_history_and_one_warning` (T017); T051 adds the other kinds of damage |
-| A20 | For that session the terminal holds the notice line and none of the file's bytes, and the log holds one warning naming session and reason, also in `RecentErrors` | US3-2, FR-017 | example | PENDING | T051 |
-| A21 | A history file with mode `000` gives the same outcome as a damaged one | US3-3, FR-016, FR-017 | example | PENDING | T051 |
-| A22 | With one damaged and one intact file, the second session shows its full history | US3-4, FR-018 | example | PENDING | T051 |
-| A23 | After a skip, the new output is saved at the next tick and a later restart restores the notice and the new output | US3-5, FR-018 | example | PENDING | T051 |
-| A24 | A failing save keeps the session running, logs one warning, and is tried again 30 s later | US3-6, FR-007 | example | PENDING | T026, T051 |
-| A25 | Remove (`delete_session`) deletes the saved history before the reply | US4-1, FR-023, SC-007 | example | PENDING | T057 |
-| A26 | Close (archive) deletes the saved history before the session disappears | US4-2, FR-023, SC-007 | example | PENDING | T057 |
-| A27 | Deleting a worktree or forgetting a project deletes the saved history of each of its sessions | US4-3, FR-023 | example | PENDING | T057 |
-| A28 | A file of an unknown id and one of an archived session are gone after a service start | US4-4, FR-024 | example | PENDING | T057 |
-| A29 | A removal during a save leaves no saved history on disk | US4-5, FR-023 | example | PENDING | T057 |
-| A30 | Stopping a session keeps its file, and the history is restored in the same run and after a restart | US4-6, FR-015 | example | PENDING | T057 |
+| A20 | For that session the terminal holds the notice line and none of the file's bytes, and the log holds one warning naming session and reason, also in `RecentErrors` | US3-2, FR-017 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::a19_a20_a_file_of_random_bytes_is_skipped_with_a_notice_and_one_warning` |
+| A21 | A history file with mode `000` gives the same outcome as a damaged one | US3-3, FR-016, FR-017 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::a21_an_unreadable_file_is_skipped_the_same_way` |
+| A22 | With one damaged and one intact file, the second session shows its full history | US3-4, FR-018 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::a23_a_second_session_with_an_intact_file_shows_its_full_history` |
+| A23 | After a skip, the new output is saved at the next tick and a later restart restores the notice and the new output | US3-5, FR-018 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::a24_after_a_skip_the_terminal_is_saved_at_the_next_tick_and_restored_later` |
+| A24 | A failing save keeps the session running, logs one warning, and is tried again 30 s later | US3-6, FR-007 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u78_a_failed_save_is_one_warning_and_is_tried_again_30_seconds_later` |
+| A25 | Remove (`delete_session`) deletes the saved history before the reply | US4-1, FR-023, SC-007 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a25_remove_deletes_the_saved_history_before_it_returns` |
+| A26 | Close (archive) deletes the saved history before the session disappears | US4-2, FR-023, SC-007 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a26_close_deletes_the_saved_history_with_the_session` |
+| A27 | Deleting a worktree or forgetting a project deletes the saved history of each of its sessions | US4-3, FR-023 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a27_deleting_a_worktree_deletes_the_files_of_its_sessions`, `crates/micold-daemon/tests/history_removal.rs::a27_forgetting_a_project_deletes_the_files_of_its_sessions` |
+| A28 | A file of an unknown id and one of an archived session are gone after a service start | US4-4, FR-024 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a28_a_service_start_removes_every_file_that_belongs_to_no_shown_session` |
+| A29 | A removal during a save leaves no saved history on disk | US4-5, FR-023 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a29_a_removal_during_saves_leaves_no_file` |
+| A30 | Stopping a session keeps its file, and the history is restored in the same run and after a restart | US4-6, FR-015 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::a30_a_stop_keeps_the_file_and_the_history_is_restored_in_the_run_and_after_a_restart` |
 
 ## Inner loop: unit behaviors
 
@@ -88,8 +89,8 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U9 | At a width narrower than the full text the rules are dropped | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_full_text_the_rules_are_dropped` |
 | U10 | At a width narrower than the text without rules the text is cut to the width | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_text_without_rules_the_text_is_cut_to_the_width` |
 | U11 | The separator is never wider than `columns` and never holds a line break, at widths 1, 2, the text width, and one below it | DM §7, FR-009 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::the_separator_is_never_wider_than_the_columns_and_never_breaks_the_line` |
-| U12 | At 80 columns `notice_line` is `── earlier output could not be restored ──` | DM §7, FR-017 | example | PENDING | T049 |
-| U13 | `notice_line` drops the rules, then cuts, when narrower, and is one row | DM §7, FR-017 | example | PENDING | T049 |
+| U12 | At 80 columns `notice_line` is `── earlier output could not be restored ──` | DM §7, FR-017 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::the_notice_is_ruled_at_80_columns_and_loses_its_rules_first` |
+| U13 | `notice_line` drops the rules, then cuts, when narrower, and is one row | DM §7, FR-017 | example | DONE | `crates/micold-core/tests/terminal_history_text.rs::the_notice_is_cut_to_the_width_and_never_wider_or_broken`, `crates/micold-core/tests/terminal_history_text.rs::narrower_than_the_full_text_the_rules_are_dropped` |
 
 ### `crates/micold-daemon/src/history.rs`: capture (T005, T009)
 
@@ -115,7 +116,7 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U26 | Seeding at a narrower width wraps, and a later capture gives the same logical lines | EC-Terminal size | example | DONE | `crates/micold-daemon/src/history.rs::tests::seeding_at_a_narrower_width_wraps_and_a_later_capture_gives_the_same_logical_lines` |
 | U27 | `Seed::None` leaves the `Term` untouched | FR-010 | example | DONE | `crates/micold-daemon/src/history.rs::tests::seed_none_leaves_the_term_untouched` |
 | U28 | A second seed after more output keeps the first separator | FR-011 | example | DONE | `crates/micold-daemon/src/history.rs::tests::a_second_seed_after_more_output_keeps_the_first_separator` |
-| U29 | `Seed::Notice` leaves exactly one line, the notice in the dim style, no separator, the cursor on the row below | DM §6, FR-017 | example | PENDING | T050 |
+| U29 | `Seed::Notice` leaves exactly one line, the notice in the dim style, no separator, the cursor on the row below | DM §6, FR-017 | example | DONE | `crates/micold-daemon/src/history.rs::a_notice_seed_is_one_dim_line_and_no_separator_and_the_screen_is_blank_at_home` |
 
 ### In-run restart through `DaemonState` (T007, T011, T012)
 
@@ -129,7 +130,7 @@ result. No property-based library is in the profile, so invariants (round trip, 
 | U35 | A fake CLI that prints `ESC[2J ESC[H` at start leaves the seeded lines and separator in the history | R13, EC-Full-screen | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u35_a_cli_that_erases_the_screen_at_start_leaves_the_restored_lines` |
 | U36 | A fake CLI that enters and leaves the alternate screen leaves them in the primary grid's history | R16, EC-Full-screen | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u36_a_cli_that_uses_the_alternate_screen_leaves_the_restored_lines_in_the_primary_history` |
 | U37 | A second attached client receives the same lines in its first `full` frame | EC-Several windows | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u37_a_second_window_gets_the_same_lines_in_its_first_full_frame` |
-| U38 | The stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)` | FR-030, R17 | example | PENDING | T007 (`crates/micold-daemon/tests/history_restart_in_run.rs`: A9, A10, U133, U134 are not `cfg`-gated; red/green on the CI Windows leg) |
+| U38 | The stop-start and self-exit-restart cases pass on a real pseudoconsole under `cfg(windows)` | FR-030, R17 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output`, `crates/micold-daemon/tests/history_restart_in_run.rs::a10_a_process_that_exits_by_itself_is_restarted_below_its_last_lines` |
 | U133 | With a client attached and streaming, a stop keeps the last line the process printed | R4, FR-015 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u133_with_a_window_streaming_a_stop_keeps_the_last_line` |
 | U134 | With a client attached and streaming, a self-exit and restart keeps the last line | R4, story 1 scenario 10 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u134_with_a_window_streaming_a_self_exit_and_restart_keeps_the_last_line` |
 | U135 | A fake CLI that leaves a detached grandchild holding the terminal open is stopped with a reply within 3 s and its parsed output is carried (`cfg(unix)`) | R4, FR-005 | example | DONE | `crates/micold-daemon/tests/history_restart_in_run.rs::u135_a_detached_grandchild_does_not_hold_the_stop_and_the_output_is_carried` |
@@ -184,71 +185,71 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U65 | `new(count)` is not due while the output count is unchanged | DM §4, FR-004, SC-003 | example | PENDING | T025 |
-| U66 | It is due when the count moved and no save was tried | DM §4, FR-003 | example | PENDING | T025 |
-| U67 | It is not due 29.999 s after `saved` with a moved count | DM §4, FR-003 | example | PENDING | T025 |
-| U68 | It is due at exactly 30 s after `saved` with a moved count | DM §4, FR-003 | example | PENDING | T025 |
-| U69 | Ticking every 5 s for 600 s with a count that always moves gives 20 saves, never more than 21 | DM §4, SC-003 | example | PENDING | T025 |
-| U70 | `failed(now)` makes it due again 30 s later with the same count | DM §4, FR-007 | example | PENDING | T025 |
-| U71 | `mark_due()` makes it due with an unchanged count, still spaced 30 s from the last attempt | DM §4, FR-027 | example | PENDING | T025 |
+| U65 | `new(count)` is not due while the output count is unchanged | DM §4, FR-004, SC-003 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u65_a_new_schedule_is_not_due_while_the_count_is_unchanged` |
+| U66 | It is due when the count moved and no save was tried | DM §4, FR-003 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u66_it_is_due_when_the_count_moved_and_no_save_was_tried` |
+| U67 | It is not due 29.999 s after `saved` with a moved count | DM §4, FR-003 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u67_it_is_not_due_just_under_30_s_after_a_save_with_a_moved_count` |
+| U68 | It is due at exactly 30 s after `saved` with a moved count | DM §4, FR-003 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u68_it_is_due_at_exactly_30_s_after_a_save_with_a_moved_count` |
+| U69 | Ticking every 5 s for 600 s with a count that always moves gives 20 saves, never more than 21 | DM §4, SC-003 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u69_ticking_every_5_s_for_600_s_with_a_count_that_always_moves_gives_20_saves` |
+| U70 | `failed(now)` makes it due again 30 s later with the same count | DM §4, FR-007 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u70_a_failed_save_is_due_again_30_s_later_with_the_same_count` |
+| U71 | `mark_due()` makes it due with an unchanged count, still spaced 30 s from the last attempt | DM §4, FR-027 | example | DONE | `crates/micold-core/tests/terminal_history_schedule.rs::u71_mark_due_makes_it_due_with_an_unchanged_count_spaced_from_the_last_attempt` |
 
 ### `crates/micold-daemon/src/history.rs`: saver (T026, T028, T029)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U72 | A printing terminal's file changes once per 30 s and holds the output printed before the tick | FR-003 | example | PENDING | T026 |
-| U73 | Output is on disk no later than 60 s after it was printed | FR-003, SC-002 | example | PENDING | T026 |
-| U74 | An idle terminal's file is not rewritten: modification time and a write counter stay | FR-004, SC-003 | example | PENDING | T026 |
-| U75 | Two printing sessions are saved each on its own schedule and neither file holds the other's lines | EC-Several busy sessions, FR-025 | example | PENDING | T026 |
-| U76 | A Regular Terminal instance is never saved | FR-014 | example | PENDING | T026 |
-| U77 | A save into a read-only directory leaves the session running, logs a warning and is tried again 30 s later | FR-007 | example | PENDING | T026 |
-| U78 | Input written and a resize sent during a save reach the fake CLI | FR-005 | example | PENDING | T026 |
+| U72 | A printing terminal's file changes once per 30 s and holds the output printed before the tick | FR-003 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u72_a_printing_terminal_is_saved_once_per_30_seconds_with_what_it_printed` |
+| U73 | Output is on disk no later than 60 s after it was printed | FR-003, SC-002 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u73_output_is_on_disk_within_60_seconds_of_being_printed` |
+| U74 | An idle terminal's file is not rewritten: modification time and a write counter stay | FR-004, SC-003 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u74_an_idle_terminal_is_not_rewritten` |
+| U75 | Two printing sessions are saved each on its own schedule and neither file holds the other's lines | EC-Several busy sessions, FR-025 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u75_two_printing_sessions_are_each_saved_on_their_own_schedule` |
+| U76 | A Regular Terminal instance is never saved | FR-014 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u76_a_regular_terminal_is_never_saved` |
+| U77 | A save into a read-only directory leaves the session running, logs a warning and is tried again 30 s later | FR-007 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::u78_a_failed_save_is_one_warning_and_is_tried_again_30_seconds_later` |
+| U78 | Input written and a resize sent during a save reach the fake CLI | FR-005 | example | DONE | `crates/micold-daemon/tests/history_periodic_save.rs::input_and_a_resize_during_saves_reach_the_process` |
 
 ### Orderly stop: `server.rs`, `history.rs::save_all_live`, `platform/unix.rs` (T031, T032, T033–T035)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U79 | `unwind` with the idle reason saves every running covered terminal, and a restart restores all 200 lines | FR-002, SC-001 | example | PENDING | T031 |
-| U80 | A real service process sent `SIGTERM`, `SIGINT` or `SIGHUP` exits within 5 s and its file holds the last line printed (`cfg(unix)`) | SR §6, FR-002 | example | PENDING | T031 |
-| U81 | A save that blocks holds `unwind` no longer than 3 s and the previous file stays | SR §4, FR-006 | example | PENDING | T031 |
-| U82 | With a store that refuses to save (`create_dir = false` and no directory), `unwind` writes nothing | FR-028 | example | PENDING | T031 |
-| U83 | A terminal with no output since its last save is not rewritten by `unwind` | FR-004 | example | PENDING | T031 |
-| U84 | The endpoint is released only after the saves: a second service started during the unwind loads the complete file | SR §4, FR-002 | example | PENDING | T031 |
-| U132 | Ten running sessions each holding 10,000 lines of 100 characters are all saved by one `unwind` within its 3 s bound | SR §4, FR-002, SC-001 | example | PENDING | T031 |
-| U85 | `stop_requested()` is pending until the process receives `SIGTERM`, then completes; a second signal changes nothing | SR §1 | example | PENDING | T032 |
+| U79 | `unwind` with the idle reason saves every running covered terminal, and a restart restores all 200 lines | FR-002, SC-001 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::an_idle_unwind_saves_every_line_and_a_restart_restores_them` |
+| U80 | A real service process sent `SIGTERM`, `SIGINT` or `SIGHUP` exits within 5 s and its file holds the last line printed (`cfg(unix)`) | SR §6, FR-002 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::a_signal_stops_a_real_service_within_five_seconds_with_its_terminals_saved` |
+| U81 | A save that blocks holds `unwind` no longer than 3 s and the previous file stays | SR §4, FR-006 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::a_save_that_blocks_holds_the_unwind_for_at_most_three_seconds` |
+| U82 | With a store that refuses to save (`create_dir = false` and no directory), `unwind` writes nothing | FR-028 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::a_store_that_does_not_save_leaves_nothing_on_disk` |
+| U83 | A terminal with no output since its last save is not rewritten by `unwind` | FR-004 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::a_terminal_with_nothing_new_is_not_rewritten_by_the_unwind` |
+| U84 | The endpoint is released only after the saves: a second service started during the unwind loads the complete file | SR §4, FR-002 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::the_unwind_returns_only_after_the_saves` |
+| U132 | Ten running sessions each holding 10,000 lines of 100 characters are all saved by one `unwind` within its 3 s bound | SR §4, FR-002, SC-001 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::ten_busy_sessions_are_all_saved_within_the_bound` |
+| U85 | `stop_requested()` is pending until the process receives `SIGTERM`, then completes; a second signal changes nothing | SR §1 | example | DONE | `crates/micold-daemon/src/platform/unix.rs::stop_requested_waits_for_sigterm_and_a_second_signal_changes_nothing` |
 
 ### `crates/micold-core/src/settings.rs` and the protocol (T037, T038, T042, T043)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U86 | `save_terminal_history` defaults to `true` | ST §1, FR-026 | example | PENDING | T037 |
-| U87 | A `settings.json` without the field reads as `true` | ST §1, FR-029 | example | PENDING | T037 |
-| U88 | `false` round-trips through the settings file | ST §1, FR-029 | example | PENDING | T037 |
-| U89 | `DaemonSettings.save_terminal_history` and `SettingsSet { save_terminal_history: Some(false) }` round-trip | ST §2, FR-029 | example | PENDING | T038 |
-| U90 | `SettingsSet` with `None` leaves the value unchanged | ST §2 | example | PENDING | T038 |
-| U91 | The pinned schema hash and `PROTOCOL_VERSION` are the new ones | ST §2 | example | PENDING | T038 |
+| U86 | `save_terminal_history` defaults to `true` | ST §1, FR-026 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::saving_terminal_history_is_on_by_default` |
+| U87 | A `settings.json` without the field reads as `true` | ST §1, FR-029 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::a_settings_file_without_the_history_field_reads_as_on` |
+| U88 | `false` round-trips through the settings file | ST §1, FR-029 | example | DONE | `crates/micold-core/tests/settings_roundtrip.rs::turning_history_saving_off_survives_a_save_and_load` |
+| U89 | `DaemonSettings.save_terminal_history` and `SettingsSet { save_terminal_history: Some(false) }` round-trip | ST §2, FR-029 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::the_save_terminal_history_setting_round_trips_on_the_wire` |
+| U90 | `SettingsSet` with `None` leaves the value unchanged | ST §2 | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs::the_save_terminal_history_setting_round_trips_on_the_wire` |
+| U91 | The pinned schema hash and `PROTOCOL_VERSION` are the new ones | ST §2 | example | DONE | `crates/micold-core/tests/schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump` |
 
 ### `crates/micold-core/src/terminal_history/store.rs`: setting and deletion (T039, T044)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U92 | With `enabled = false`, `save` returns `Skipped` and `load` returns `None` | DM §5, FR-028 | example | PENDING | T039 |
-| U93 | `set_enabled(false)` deletes every `.history` and temporary file and reports none left | DM §5, FR-027, SC-008 | example | PENDING | T039 |
-| U94 | A file that cannot be deleted is reported, kept in the retry set, and removed by `retry_deletions()` once deletable (`cfg(unix)`) | FR-033 | example | PENDING | T039 |
-| U95 | `purge()` deletes the same set at service start | FR-033 | example | PENDING | T039 |
-| U96 | `set_enabled(true)` restores nothing; a failed deletion stays in the retry set and `load` of its id returns `None` until a new `save` replaced the file | US2-7, FR-033 | example | PENDING | T039 |
-| U97 | A `save` racing `set_enabled(false)` from another thread leaves no file | FR-033 | example | PENDING | T039 |
+| U92 | With `enabled = false`, `save` returns `Skipped` and `load` returns `None` | DM §5, FR-028 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::with_saving_off_a_save_is_skipped_and_a_load_finds_nothing` |
+| U93 | `set_enabled(false)` deletes every `.history` and temporary file and reports none left | DM §5, FR-027, SC-008 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::turning_saving_off_deletes_every_saved_and_temporary_file` |
+| U94 | A file that cannot be deleted is reported, kept in the retry set, and removed by `retry_deletions()` once deletable (`cfg(unix)`) | FR-033 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_file_that_cannot_be_deleted_is_reported_retried_and_never_loaded` |
+| U95 | `purge()` deletes the same set at service start | FR-033 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::purge_deletes_everything_and_leaves_saving_off` |
+| U96 | `set_enabled(true)` restores nothing; a failed deletion stays in the retry set and `load` of its id returns `None` until a new `save` replaced the file | US2-7, FR-033 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::turning_saving_on_restores_nothing`, `crates/micold-core/tests/terminal_history_store.rs::a_new_save_replaces_a_file_whose_deletion_failed` |
+| U97 | A `save` racing `set_enabled(false)` from another thread leaves no file | FR-033 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_save_racing_turning_saving_off_leaves_no_file` |
 
 ### Setting end to end and client (T040, T041, T045–T047)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U98 | A service that starts with the setting off deletes every file before a session can start | FR-033, EC-Setting off while not running | example | PENDING | T040 |
-| U99 | A failed deletion is logged once as a warning with session and reason and retried every 30 s | FR-033, EC-Deletion failed | example | PENDING | T040 |
-| U100 | `SettingsChanged` is broadcast with the new value | FR-027, ST §2 | example | PENDING | T040 |
-| U101 | The client draft holds `save_terminal_history` from the service's settings | ST §3, FR-029 | example | PENDING | T041 |
+| U98 | A service that starts with the setting off deletes every file before a session can start | FR-033, EC-Setting off while not running | example | DONE | `crates/micold-daemon/tests/history_setting.rs::a_service_that_starts_with_saving_off_deletes_every_file_first` |
+| U99 | A failed deletion is logged once as a warning with session and reason and retried every 30 s | FR-033, EC-Deletion failed | example | DONE | `crates/micold-daemon/tests/history_setting.rs::a_failed_deletion_is_logged_once_and_retried_every_30_seconds` |
+| U100 | `SettingsChanged` is broadcast with the new value | FR-027, ST §2 | example | DONE | `crates/micold-daemon/tests/history_setting.rs::a_settings_set_deletes_the_files_before_it_is_answered_and_is_broadcast` |
+| U101 | The client draft holds `save_terminal_history` from the service's settings | ST §3, FR-029 | example | DONE | `crates/micold-client/tests/features_settings.rs::the_draft_holds_the_save_terminal_history_setting_of_the_service` |
 | U102 | Toggling the control marks the Terminal section dirty | ST §3, FR-031 | example | PENDING | T041 |
-| U103 | Save sends `SettingsSet` with `Some(value)` and no other field changed | ST §3, FR-027 | example | PENDING | T041 |
+| U103 | Save sends `SettingsSet` with `Some(value)` and no other field changed | ST §3, FR-027 | example | DONE | `crates/micold-client/tests/features_settings.rs::turning_save_terminal_history_off_reaches_what_save_writes` |
 | U104 | A `SettingsChanged` from the service updates the draft | ST §3 | example | PENDING | T041 |
 | U105 | The Terminal section's `SETTINGS` list holds the entry with the label and note of ST §4 | ST §4, FR-026, FR-031 | example | PENDING | T041 |
 
@@ -256,53 +257,53 @@ result. No property-based library is in the profile, so invariants (round trip, 
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U106 | A file with another format version gives the same outcome, with the reason "written by another version" | EC-Newer version, FR-017 | example | PENDING | T051 |
-| U107 | A save that keeps failing for the same reason is logged once per service run, and a different reason is logged again | FR-007 | example | PENDING | T051 |
+| U106 | A file with another format version gives the same outcome, with the reason "written by another version" | EC-Newer version, FR-017 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::u106_u107_a_save_failing_for_one_reason_is_logged_once_and_another_reason_again` |
+| U107 | A save that keeps failing for the same reason is logged once per service run, and a different reason is logged again | FR-007 | example | DONE | `crates/micold-daemon/tests/history_damaged.rs::u106_u107_a_save_failing_for_one_reason_is_logged_once_and_another_reason_again` |
 
 ### Removal: `store.rs` and `state.rs` (T056, T057, T058, T059)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U108 | `forget(ids)` deletes those files and no other | DM §5, FR-023 | example | PENDING | T056 |
-| U109 | A `save` for a forgotten id returns `Skipped` and leaves no file, also when it began before the `forget` on another thread | US4-5, FR-023 | example | PENDING | T056 |
-| U110 | `forget` deletes while `enabled` is false | EC-Removed while off, FR-023 | example | PENDING | T056 |
-| U111 | `sweep(keep)` deletes every `.history` file whose id is not in `keep`, every file with another name and every temporary file, and keeps the rest | FR-024 | example | PENDING | T056 |
-| U112 | Pruning a never-used session deletes its file and its carried snapshot | FR-023 | example | PENDING | T057 |
-| U113 | The carried snapshot of a removed session is dropped | FR-023, FR-025 | example | PENDING | T057 |
-| U114 | Removal with the setting off deletes a file left by a failed deletion | EC-Removed while off, FR-023 | example | PENDING | T057 |
+| U108 | `forget(ids)` deletes those files and no other | DM §5, FR-023 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::forget_deletes_the_files_of_those_sessions_and_no_other` |
+| U109 | A `save` for a forgotten id returns `Skipped` and leaves no file, also when it began before the `forget` on another thread | US4-5, FR-023 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::a_save_for_a_forgotten_session_is_skipped_and_leaves_no_file`, `crates/micold-core/tests/terminal_history_store.rs::a_save_racing_a_forget_leaves_no_file` |
+| U110 | `forget` deletes while `enabled` is false | EC-Removed while off, FR-023 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::forget_deletes_while_saving_is_off` |
+| U111 | `sweep(keep)` deletes every `.history` file whose id is not in `keep`, every file with another name and every temporary file, and keeps the rest | FR-024 | example | DONE | `crates/micold-core/tests/terminal_history_store.rs::sweep_keeps_the_listed_sessions_and_deletes_everything_else` |
+| U112 | Pruning a never-used session deletes its file and its carried snapshot | FR-023 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::u112_pruning_a_never_used_session_deletes_its_file` |
+| U113 | The carried snapshot of a removed session is dropped | FR-023, FR-025 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::u113_a_removed_session_leaves_no_file_after_a_late_save` |
+| U114 | Removal with the setting off deletes a file left by a failed deletion | EC-Removed while off, FR-023 | example | DONE | `crates/micold-daemon/tests/history_removal.rs::u114_removal_with_saving_off_deletes_a_file_left_by_a_failed_deletion` |
 
 ### Windows stop request (T061, T062, T063–T065)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U115 | Setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service exit within 5 s with its file holding the last line (`cfg(windows)`) | SR §6, FR-002, FR-030 | example | PENDING | T061 |
-| U116 | `WM_ENDSESSION` sent to the hidden window raises the same request | SR §3, FR-030 | example | PENDING | T061 |
-| U117 | The event's DACL has one entry, for the current user | SR §1, FR-020 | example | PENDING | T061 |
-| U118 | `stop_running_daemon` against the real service makes it exit with code 0, not the 1 of `TerminateProcess`, its file holding the last line | SR §2 | example | PENDING | T061 |
-| U119 | Against a process that ignores the event, `terminate_daemon` falls back to `TerminateProcess` after 5 s | SR §2 | example | PENDING | T062 |
-| U120 | With no event to open, `terminate_daemon` falls back at once | SR §3 | example | PENDING | T062 |
-| U136 | In the installer's `StopDaemon`, the step that sets the stop event comes before `Stop-Process` and `taskkill` | SR §2 | example | PENDING | T062 |
+| U115 | Setting the event `Local\Micold.Daemon.Stop.<SID>` makes a real service exit within 5 s with its file holding the last line (`cfg(windows)`) | SR §6, FR-002, FR-030 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::setting_the_stop_event_stops_a_real_service_with_its_terminals_saved` |
+| U116 | `WM_ENDSESSION` sent to the hidden window raises the same request | SR §3, FR-030 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::an_end_of_session_message_stops_a_real_service_with_its_terminals_saved` |
+| U117 | The event's DACL has one entry, for the current user | SR §1, FR-020 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::the_stop_events_dacl_has_one_entry_for_the_current_user` |
+| U118 | `stop_running_daemon` against the real service makes it exit with code 0, not the 1 of `TerminateProcess`, its file holding the last line | SR §2 | example | DONE | `crates/micold-daemon/tests/history_stop_request.rs::restart_service_stops_a_real_service_in_order` |
+| U119 | Against a process that ignores the event, `terminate_daemon` falls back to `TerminateProcess` after 5 s | SR §2 | example | DONE | `crates/micold-core/src/spawn.rs::terminate_falls_back_to_ending_the_process_when_the_event_is_unanswered_or_absent` |
+| U120 | With no event to open, `terminate_daemon` falls back at once | SR §3 | example | DONE | `crates/micold-core/src/spawn.rs::terminate_falls_back_to_ending_the_process_when_the_event_is_unanswered_or_absent` |
+| U136 | In the installer's `StopDaemon`, the step that sets the stop event comes before `Stop-Process` and `taskkill` | SR §2 | example | DONE | `crates/micold-core/tests/windows_installer_in_use.rs::stop_daemon_asks_through_the_stop_event_before_ending_the_process` |
 
 ### Sandbox (T067, T068, T069, T070–T072)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U121 | `MountSet::build` adds the history mount only when the history directory is not inside the state directory, and none otherwise | DM §9, FR-021 | example | PENDING | T067 |
-| U122 | The container arguments carry `-e TZ=<zone>` when a zone is given and no `TZ` when none is | DM §9, FR-009 | example | PENDING | T067 |
-| U123 | At bring-up, attach included, the host history directory is created through `owner_only::ensure_dir` before the runtime is called | FR-021, FR-020 | example | PENDING | T068 |
-| U124 | The zone passed to the container is the host's IANA zone | FR-009 | example | PENDING | T068 |
-| U125 | A history saved by a host service is restored by a container service on the same directory, and the reverse | FR-022 | example | PENDING | T069 |
-| U126 | A file written by the container is `0600` in a `0700` directory as seen from the host | FR-021, SC-009 | example | PENDING | T069 |
-| U127 | After the container is recreated the history is restored | FR-021 | example | PENDING | T069 |
-| U128 | `<runtime> stop` on a sandbox with a printing session leaves a file holding the last line | SR §6, FR-002 | example | PENDING | T069 |
-| U129 | The separator carries the host's UTC offset | FR-009, FR-021 | example | PENDING | T069 |
-| U130 | A container without the directory saves nothing and logs one warning saying to recreate the sandbox | R15, FR-007 | example | PENDING | T069 |
+| U121 | `MountSet::build` adds the history mount only when the history directory is not inside the state directory, and none otherwise | DM §9, FR-021 | example | DONE | `crates/micold-core/src/sandbox/mod.rs::the_history_mount_is_added_only_when_the_history_is_outside_the_state_directory` |
+| U122 | The container arguments carry `-e TZ=<zone>` when a zone is given and no `TZ` when none is | DM §9, FR-009 | example | DONE | `crates/micold-core/src/sandbox/argv.rs::the_container_arguments_carry_tz_only_when_a_zone_is_given` |
+| U123 | At bring-up, attach included, the host history directory is created through `owner_only::ensure_dir` before the runtime is called | FR-021, FR-020 | example | DONE | `crates/micold-client/src/shell/sandbox.rs::a_bring_up_makes_the_history_directory_owner_only_before_the_runtime_is_called` |
+| U124 | The zone passed to the container is the host's IANA zone | FR-009 | example | DONE | `crates/micold-client/src/shell/sandbox.rs::a_bring_up_passes_the_hosts_time_zone_to_the_container` |
+| U125 | A history saved by a host service is restored by a container service on the same directory, and the reverse | FR-022 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_saved_on_the_host_is_restored_in_the_container_and_back` |
+| U126 | A file written by the container is `0600` in a `0700` directory as seen from the host | FR-021, SC-009 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_file_written_by_the_container_is_owner_only` |
+| U127 | After the container is recreated the history is restored | FR-021 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_survives_recreating_the_container` |
+| U128 | `<runtime> stop` on a sandbox with a printing session leaves a file holding the last line | SR §6, FR-002 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_runtime_stop_leaves_the_last_line` |
+| U129 | The separator carries the host's UTC offset | FR-009, FR-021 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_separator_carries_the_host_utc_offset` |
+| U130 | A container without the directory saves nothing and logs one warning saying to recreate the sandbox | R15, FR-007 | example | DONE | `crates/micold-daemon/tests/sandbox_real_history.rs::sandbox_real_history_container_without_the_directory_saves_nothing_and_warns_once` |
 
 ### Echo delay (T074)
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U131 | With ten printing sessions, the 95th percentile of keystroke-to-echo with saving on is at most 20 ms above that with saving off | FR-005, SC-005 | example | PENDING | T074 |
+| U131 | With ten printing sessions, the 95th percentile of keystroke-to-echo with saving on is at most 20 ms above that with saving off | FR-005, SC-005 | example | DONE | `crates/micold-daemon/tests/history_timing.rs::u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95` |
 
 ## Invariants and edge cases still to place
 
