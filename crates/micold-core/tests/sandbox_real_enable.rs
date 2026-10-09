@@ -159,6 +159,7 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
         control_port: PORT,
         published_ports: Vec::new(),
         network_name: NETWORK.to_string(),
+        time_zone: None,
         home: host_home(),
     };
 

@@ -129,6 +129,14 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     args.push("-e".into());
     args.push(format!("HOME={}", spec.home.display()).into());
 
+    // The host's zone, so the separator of a saved terminal history shows the user's local time
+    // and offset (feature 041, research R11). Fixed at creation like the other values: an older
+    // container shows UTC until it is recreated. No zone is no variable, not an empty one.
+    if let Some(zone) = &spec.time_zone {
+        args.push("-e".into());
+        args.push(format!("TZ={zone}").into());
+    }
+
     // The image the daemon is running from, so a `StaleDevImage` refusal can name it (FR-024d,
     // research R8). The daemon reads it (`state.rs`) and has no other way to learn it — a container
     // cannot see the reference it was created from. Without this the refusal carries `image: ""`
@@ -194,6 +202,11 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
         )
         .into(),
     );
+    // The saved terminal histories, on a host whose state mount does not carry them (feature 041).
+    if let Some(h) = &mounts.history {
+        args.push("-v".into());
+        args.push(format!("{}:{}:rw", h.host.display(), h.container.display()).into());
+    }
     for m in &mounts.projects {
         let mode = if m.writable { "rw" } else { "ro" };
         args.push("-v".into());
@@ -284,12 +297,14 @@ mod tests {
                     container: PathBuf::from("/run/micold/token"),
                 },
                 credentials: Vec::new(),
+                history: None,
             },
             uid: 1000,
             gid: 1000,
             control_port: 7727,
             published_ports: Vec::new(),
             network_name: "micold-net".into(),
+            time_zone: None,
             home: PathBuf::from("/home/u"),
         }
     }
@@ -429,6 +444,48 @@ mod tests {
             assert!(mounted
                 .iter()
                 .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+        }
+    }
+
+    /// Feature 041, research R11 (U122): the host's zone reaches the container as `TZ`, and only
+    /// when there is one.
+    #[test]
+    fn the_container_arguments_carry_tz_only_when_a_zone_is_given() {
+        for kind in RuntimeKind::ALL {
+            let mut s = spec();
+            s.time_zone = Some("Europe/Berlin".into());
+            let with = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(
+                with.windows(2)
+                    .any(|w| w[0] == "-e" && w[1] == "TZ=Europe/Berlin"),
+                "{kind}: {with:?}"
+            );
+
+            s.time_zone = None;
+            let without = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(
+                !without.iter().any(|a| a.starts_with("TZ=")),
+                "{kind}: {without:?}"
+            );
+        }
+    }
+
+    /// Feature 041, FR-021 (U121): a history mount is one more `-v`, rw, at the container path.
+    #[test]
+    fn a_history_mount_is_mounted_read_write_at_the_container_path() {
+        let mut s = spec();
+        s.mounts.history = Some(crate::sandbox::HistoryMount {
+            host: PathBuf::from("/home/u/AppData/Local/micold-ai-ide/data/terminal-history"),
+            container: PathBuf::from("/var/lib/micold-ai-ide/terminal-history"),
+        });
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(
+                args.windows(2).any(|w| w[0] == "-v"
+                    && w[1]
+                        == "/home/u/AppData/Local/micold-ai-ide/data/terminal-history:/var/lib/micold-ai-ide/terminal-history:rw"),
+                "{kind}: {args:?}"
+            );
         }
     }
 

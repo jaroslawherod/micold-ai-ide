@@ -297,6 +297,18 @@ fn term_color(color: HistoryColor) -> Option<Color> {
     }
 }
 
+/// Whether this is the first save a store skipped for want of its directory in this service run
+/// (research R15): a container made before this feature has none, and says so once, not at every
+/// save. `warned` is the run's flag.
+pub fn first_missing_directory(warned: &std::sync::atomic::AtomicBool) -> bool {
+    !warned.swap(true, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The one warning for a container whose history directory is absent (research R15, FR-021).
+pub fn warn_directory_missing() {
+    tracing::warn!("terminal history is not saved: recreate the sandbox");
+}
+
 /// How long the orderly stop waits for the saves of the running terminals, together (stop-request
 /// contract §4). A save that has not finished by then is left behind and the previous file stays.
 pub const STOP_SAVE_BOUND: std::time::Duration = std::time::Duration::from_secs(3);
@@ -452,6 +464,14 @@ mod tests {
     use micold_core::terminal_history::{HistoryColor, HistoryStyle, StyleFlags, StyleRun};
 
     const HISTORY_LIMIT: usize = 100;
+
+    #[test]
+    fn a_missing_directory_is_reported_once_per_service_run() {
+        let warned = std::sync::atomic::AtomicBool::new(false);
+        assert!(first_missing_directory(&warned));
+        assert!(!first_missing_directory(&warned));
+        assert!(!first_missing_directory(&warned));
+    }
 
     struct Size {
         columns: usize,

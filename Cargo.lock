@@ -2166,6 +2166,7 @@ dependencies = [
  "directories",
  "embed-resource",
  "gethostname",
+ "iana-time-zone",
  "iced",
  "iced_renderer",
  "iced_runtime",

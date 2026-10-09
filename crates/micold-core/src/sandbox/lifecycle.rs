@@ -880,6 +880,7 @@ mod mounted_tests {
             control_port: 7727,
             published_ports: Vec::new(),
             network_name: "micold-net".to_string(),
+            time_zone: None,
             home: PathBuf::from("/home/u"),
         };
         bring_up(

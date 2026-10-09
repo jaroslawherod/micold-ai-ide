@@ -43,6 +43,13 @@ pub struct HostFacts {
     /// The host user's home, passed into the container as `HOME` — see `SandboxSpec::home`.
     pub home: PathBuf,
     pub layout: CredentialLayout,
+    /// Where the host keeps saved terminal histories (feature 041, FR-021): made owner-only at every
+    /// bring-up and mounted into the container when the state mount does not carry it. `None` when
+    /// the host has no home to name it in.
+    pub history_dir: Option<PathBuf>,
+    /// The host's IANA time zone, for the container's `TZ` (research R11). `None` when it cannot be
+    /// read: the separator then shows UTC.
+    pub time_zone: Option<String>,
 }
 
 impl HostFacts {
@@ -61,6 +68,10 @@ impl HostFacts {
             uid,
             gid,
             state_dir,
+            history_dir: micold_core::terminal_history::history_dir(),
+            time_zone: iana_time_zone::get_timezone()
+                .ok()
+                .filter(|z| !z.is_empty()),
             // Probed here, at the boundary that is allowed to read the host, rather than in
             // `conventional` — which stays pure and names the path whether or not it is there.
             layout: drop_absent_sign_in(CredentialLayout::conventional(
@@ -294,6 +305,21 @@ pub fn start<R: CommandRunner>(
         )));
     }
 
+    // The saved terminal histories (feature 041, FR-021, research R8, R15). Made owner-only on the
+    // host at every bring-up, an attach included: a runtime that has to create the bind source
+    // makes it root-owned, and a container made before this version never had the mount, so the
+    // service inside saves only into a directory that is already there. A directory that cannot be
+    // made costs the history, not the sandbox.
+    if let Some(dir) = &facts.history_dir {
+        if let Err(e) = micold_core::owner_only::ensure_dir(dir) {
+            eprintln!(
+                "sandbox: could not prepare {} for saved terminal history: {e}. \
+                 Terminal history will not be saved in the sandbox.",
+                dir.display()
+            );
+        }
+    }
+
     let mounts = mount_set(profile, projects, facts);
 
     // A credential mounted into a directory of that home — the AI CLI's sign-in, in `~/.claude` —
@@ -344,6 +370,7 @@ pub fn start<R: CommandRunner>(
         control_port: port,
         published_ports: Vec::new(),
         network_name: NETWORK_NAME.to_string(),
+        time_zone: facts.time_zone.clone(),
         home: facts.home.clone(),
     };
 
@@ -374,7 +401,7 @@ pub fn start<R: CommandRunner>(
 /// The mount set this client creates its container from. No side effects: [`start`] prepares the
 /// host paths it names, and [`reread`] only reads what a running container shares through it.
 fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) -> MountSet {
-    MountSet::build(
+    let mounts = MountSet::build(
         projects,
         profile,
         &facts.layout,
@@ -384,7 +411,11 @@ fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) 
             host: host_token_path(&facts.state_dir),
             container: PathBuf::from(CONTAINER_TOKEN_PATH),
         },
-    )
+    );
+    match &facts.history_dir {
+        Some(dir) => mounts.with_history(dir),
+        None => mounts,
+    }
 }
 
 /// What a drop or paste is measured against when the sessions run in the sandbox (feature 487,
@@ -1210,6 +1241,8 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
+            history_dir: None,
+            time_zone: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1374,6 +1407,129 @@ mod tests {
         );
     }
 
+    /// A recording runtime that notes whether `watched` existed when it was first called.
+    struct WatchingRunner {
+        inner: micold_core::sandbox::exec::RecordingRunner,
+        watched: PathBuf,
+        existed_at_first_call: std::sync::Arc<std::sync::Mutex<Option<bool>>>,
+    }
+
+    impl CommandRunner for WatchingRunner {
+        fn run(
+            &self,
+            program: &std::ffi::OsStr,
+            args: &[std::ffi::OsString],
+        ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+            self.existed_at_first_call
+                .lock()
+                .unwrap()
+                .get_or_insert(self.watched.is_dir());
+            self.inner.run(program, args)
+        }
+    }
+
+    fn facts_with_history(
+        state_dir: &std::path::Path,
+        history_dir: PathBuf,
+        time_zone: Option<&str>,
+    ) -> HostFacts {
+        let home = PathBuf::from("/home/u");
+        HostFacts {
+            uid: 1000,
+            gid: 1000,
+            state_dir: state_dir.to_path_buf(),
+            layout: CredentialLayout::conventional(&home, None),
+            history_dir: Some(history_dir),
+            time_zone: time_zone.map(str::to_string),
+            home,
+        }
+    }
+
+    /// Feature 041, FR-021 (R8, R15): the host's history directory is made owner-only through
+    /// `owner_only::ensure_dir` before the runtime is called, whatever the runtime then does — the
+    /// same step runs for a container that is attached to as for one that is created.
+    #[test]
+    fn a_bring_up_makes_the_history_directory_owner_only_before_the_runtime_is_called() {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let history = state_dir.path().join("local").join("terminal-history");
+        let facts = facts_with_history(state_dir.path(), history.clone(), None);
+        let existed = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let runner = WatchingRunner {
+            inner: micold_core::sandbox::exec::RecordingRunner::new(),
+            watched: history.clone(),
+            existed_at_first_call: existed.clone(),
+        };
+
+        let _ = start(
+            &SandboxProfile::default(),
+            &[],
+            &facts,
+            DEFAULT_SANDBOX_PORT,
+            runner,
+            &mut |_| {},
+        );
+
+        assert_eq!(
+            *existed.lock().unwrap(),
+            Some(true),
+            "the runtime was called before the history directory existed"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&history).unwrap().permissions().mode();
+            assert_eq!(mode & 0o077, 0, "group or others can enter it: {mode:o}");
+        }
+    }
+
+    /// Feature 041, R11: the host's zone is a `TZ` of the create command, and no zone is no `TZ`.
+    #[test]
+    fn a_bring_up_passes_the_hosts_time_zone_to_the_container() {
+        for (zone, expected) in [(Some("Europe/Berlin"), true), (None, false)] {
+            let state_dir = tempfile::tempdir().expect("tempdir");
+            let facts = facts_with_history(
+                state_dir.path(),
+                state_dir.path().join("terminal-history"),
+                zone,
+            );
+            let calls = a_runtime_that_creates_the_sandbox();
+            let _ = start(
+                &SandboxProfile::default(),
+                &[],
+                &facts,
+                DEFAULT_SANDBOX_PORT,
+                &calls,
+                &mut |_| {},
+            );
+            let create = calls
+                .calls()
+                .into_iter()
+                .map(|c| c.args_lossy())
+                .find(|a| a.first().map(String::as_str) == Some("create"))
+                .expect("a create command");
+            assert_eq!(
+                create.iter().any(|a| a == "TZ=Europe/Berlin"),
+                expected,
+                "{create:?}"
+            );
+            assert!(
+                expected || !create.iter().any(|a| a.starts_with("TZ=")),
+                "{create:?}"
+            );
+        }
+    }
+
+    /// Feature 041, R11: the zone `gather` records is the machine's IANA zone.
+    #[test]
+    fn gather_records_the_hosts_iana_time_zone() {
+        assert_eq!(
+            HostFacts::gather(std::env::temp_dir()).time_zone,
+            iana_time_zone::get_timezone()
+                .ok()
+                .filter(|zone| !zone.is_empty())
+        );
+    }
+
     /// Research R11 (BUG-006): the directory a shared sign-in is mounted into exists before the
     /// runtime runs, created by this process — so it is the user's, not root's.
     #[test]
@@ -1388,6 +1544,8 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.path().to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
+            history_dir: None,
+            time_zone: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1435,6 +1593,8 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
+            history_dir: None,
+            time_zone: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1649,6 +1809,8 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.path().to_path_buf(),
             layout: drop_absent_sign_in(CredentialLayout::conventional(home, None)),
+            history_dir: None,
+            time_zone: None,
             home: home.to_path_buf(),
         };
         let profile = SandboxProfile {
