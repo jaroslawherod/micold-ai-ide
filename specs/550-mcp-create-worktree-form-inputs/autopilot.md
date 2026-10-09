@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
 | #648 | M2 | merged | 23e2db0e4c17ba6e2b7d28893d0999a9482cd0cf |
 | #664 | M3 | merged | 8dcc0ad9ff24a5f6862c34d2d03ca3b6640f9e47 |
-| close | Close | open | - |
+| #668 | Close | open | - |
 
 ## Milestones
 
