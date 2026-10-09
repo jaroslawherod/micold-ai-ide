@@ -12,7 +12,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (3 open, for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (resolved by the clarify unit, 2026-10-09)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -30,5 +30,5 @@
 
 ## Notes
 
-- Open markers: at-most-one-pane-per-terminal, empty panes persisting, shortcut chords. Each has a
-  provisional default in the spec.
+- The three markers (at-most-one-pane-per-terminal, empty panes persisting, shortcut chords) were
+  resolved by the clarify unit on 2026-10-09.
