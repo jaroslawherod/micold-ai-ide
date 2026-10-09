@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/worktree-pr-ci-status
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M8 PR open; wait for CI, merge, then the close unit. T067 stays open (partial pass, see Follow-ups).
+- **Next step**: M8 PR #665 open; wait for CI, merge, then the close unit. T067 stays open (partial pass, see Follow-ups).
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #637 | M5 | merged | 88c3a363b2acf0a05c3a9ad40b2cb2d052a27229 |
 | #641 | M6 | merged | 98da2889252f1804c9d3ada474d2d3ecdaf94249 |
 | #646 | M7 | merged | 599def4097e93879a959079a9f113d7566113bea |
+| #665 | M8 | open | |
 
 ## Milestones
 
