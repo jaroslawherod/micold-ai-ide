@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M1
-- **Next step**: orchestrator opens the M1 PR from scratchpad pr-487-m1.md, waits for CI, merges; then M2
+- **Phase**: milestone M2
+- **Next step**: reviews A and B of M2, full gate, then write scratchpad pr-487-m2.md and push
 
 ## Pull requests
 
@@ -18,19 +18,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #661 | Previous run (#484) | merged | a42cf25517a42ad7a17a25a84db513fea48a4565 |
 | #662 | Design (spec, plan, tasks) | merged | ab2f9967b89658219500097833054c14634698c3 |
+| #663 | M1 drop files | merged | b1d3c18944e1172294740bffd45295af60570322 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | drop files insert quoted paths | #TBD | gate green except six root-only tests; pushed |
-| M2 | T018–T024 | full | paste image into AI session | | pending |
+| M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
+| M2 | T018–T024 | full | paste image into AI session | #TBD | implemented, in review |
 | M3 | T025–T029 | full | sandbox container paths, refusals | | pending |
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
 ## Decisions
 
 - M1: the planned `CursorMoved` subscription is banned by `tests/idle_subscriptions.rs`; the pointer lives in `SplitView`'s widget state and the widget publishes `PaneMsg::FileDropped(pane, path)`; `shell::drops` coalesces with a 40 ms settle (research.md, M1 spike findings). No pane rectangles are published to app state, so T015 became `PaneLayout::pane_at` + the widget hook.
+- M2: `arboard` (image-data, wayland-data-control) and `png` added; `paste_source` decides, the reducer reuses `files_dropped` for the saved path; the worktree fallback test uses a file-as-worktree (works as root).
 - M1: visual pass skipped: M1 adds no visible element (errors use the existing snackbar) and a file drag cannot be synthesised on Xvfb.
 
 | # | Phase | Question | Answer | By | Evidence |

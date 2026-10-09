@@ -5,10 +5,12 @@
 //! sends anything; the client types the text without a newline, so nothing runs until Enter
 //! (FR-003).
 
+pub mod pasted;
 pub mod quote;
 
 use std::path::{Path, PathBuf};
 
+pub use pasted::PastedLayout;
 pub use quote::{quote, Unrepresentable};
 
 /// The shell that will read the inserted text. Each quotes differently (research R2).

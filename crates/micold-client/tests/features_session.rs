@@ -953,4 +953,53 @@ mod drops {
         let out = update(&mut st, SessionMsg::InsertionFailed("no clipboard".into()));
         assert_eq!(notified(&out), vec!["no clipboard".to_string()]);
     }
+
+    fn pasted(st: &mut State, t: TerminalRef, result: Result<&str, &str>) -> Vec<Outcome> {
+        update(
+            st,
+            SessionMsg::ImagePasted {
+                terminal: t,
+                shell: ShellKind::Posix,
+                result: result.map(PathBuf::from).map_err(str::to_string),
+            },
+        )
+    }
+
+    #[test]
+    fn a_pasted_image_inserts_its_quoted_path_without_a_newline() {
+        let (mut st, t) = running();
+        let out = pasted(&mut st, t, Ok("/w/.micold-pasted/s/1-0.png"));
+        let [Outcome::Insert { terminal, text }] = out.as_slice() else {
+            panic!("{out:?}");
+        };
+        assert_eq!(*terminal, t);
+        assert_eq!(text, "'/w/.micold-pasted/s/1-0.png'");
+        assert!(!text.contains(['\n', '\r']));
+    }
+
+    #[test]
+    fn an_image_that_could_not_be_saved_inserts_nothing_and_says_why() {
+        let (mut st, t) = running();
+        let out = pasted(&mut st, t, Err("Nothing was inserted: disk full."));
+        assert_eq!(notified(&out), vec!["Nothing was inserted: disk full."]);
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+    }
+
+    #[test]
+    fn two_pasted_images_give_two_paths() {
+        let (mut st, t) = running();
+        let a = pasted(&mut st, t, Ok("/w/1-0.png"));
+        let b = pasted(&mut st, t, Ok("/w/1-1.png"));
+        assert_ne!(format!("{a:?}"), format!("{b:?}"));
+    }
+
+    #[test]
+    fn a_pasted_image_for_an_exited_process_inserts_nothing() {
+        let (mut st, t) = running();
+        let (_, s) = st.workspace.find_session_mut(t.session).unwrap();
+        s.lifecycle = SessionLifecycle::Idle;
+        let out = pasted(&mut st, t, Ok("/w/1-0.png"));
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+        assert_eq!(notified(&out).len(), 1);
+    }
 }

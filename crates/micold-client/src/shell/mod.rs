@@ -31,6 +31,7 @@ pub mod link_opener;
 pub mod links;
 pub mod os_theme;
 pub mod panes;
+pub mod pasted_image;
 pub mod persist;
 pub mod pr_status;
 pub mod runs;

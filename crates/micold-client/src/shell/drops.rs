@@ -46,11 +46,7 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
     }
     // Known limit (M1): the user's login shell, not the one this terminal runs. A shell instance
     // started with another shell, or an AI CLI's own prompt, is quoted for the default shell.
-    let shell =
-        micold_core::path_insert::ShellKind::detect(&micold_core::terminal::default_shell_command(
-            std::env::var("SHELL").ok().as_deref(),
-            std::env::var("COMSPEC").ok().as_deref(),
-        ));
+    let shell = login_shell_kind();
     Task::batch(groups.into_iter().map(|(pane, paths)| {
         let target = target_of(app, pane);
         let effects = app
@@ -65,6 +61,14 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
             other => crate::shell::clipboard::interpret(other),
         }))
     }))
+}
+
+/// The user's login shell, which is the shell inserted text is quoted for.
+pub fn login_shell_kind() -> micold_core::path_insert::ShellKind {
+    micold_core::path_insert::ShellKind::detect(&micold_core::terminal::default_shell_command(
+        std::env::var("SHELL").ok().as_deref(),
+        std::env::var("COMSPEC").ok().as_deref(),
+    ))
 }
 
 /// What `pane` shows now. A pane closed between the drop and the settle is `Outside`.
@@ -83,7 +87,7 @@ fn target_of(app: &App, pane: PaneId) -> DropTarget {
 /// A terminal that did not ask for bracketing would take a control character inside a name as a
 /// key (a line break is Enter, a tab completes, `^C` interrupts), so such a name is refused there
 /// rather than typed (SC-004).
-fn insert(app: &mut App, terminal: TerminalRef, text: &str) -> Task<Message> {
+pub fn insert(app: &mut App, terminal: TerminalRef, text: &str) -> Task<Message> {
     let bracketed = app
         .grids
         .get(&terminal)
