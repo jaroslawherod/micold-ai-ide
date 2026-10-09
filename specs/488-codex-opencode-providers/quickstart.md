@@ -6,7 +6,7 @@
 
 ## Part B — visual pass (`visual-pass` skill)
 With stand-in `codex` on `PATH` and no `opencode`: open the new-session chooser; Codex selectable,
-OpenCode shown unavailable naming `opencode`; Settings default lists all five providers; start the
+OpenCode shown unavailable naming `opencode`; Settings default lists the available providers and its note names the missing ones with the reason (a chooser note needs two or more available CLIs, so also put a second stand-in such as `claude` on `PATH`); start the
 Codex session, row labelled `codex`, badge `Unknown`.
 
 ## Part C — real CLIs (when installed)
