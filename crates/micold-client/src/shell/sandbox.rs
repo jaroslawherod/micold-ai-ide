@@ -102,9 +102,7 @@ impl HostFacts {
 /// made by `start`, about the container it ended up with, and reaches the settings page
 /// (FR-004g, BUG-008).
 fn drop_absent_sign_in(mut layout: CredentialLayout) -> CredentialLayout {
-    if layout.ai_cli_auth.as_deref().is_some_and(|p| !p.is_file()) {
-        layout.ai_cli_auth = None;
-    }
+    layout.ai_cli_auth.retain(|p| p.is_file());
     layout
 }
 
@@ -472,9 +470,12 @@ fn locations_for(
     // keeps the mounts it was created with (FR-004g, BUG-008).
     // The path is named from the home rather than from `facts.layout`, which has already dropped a
     // token this host does not have.
+    // Claude Code's token is the one the settings page names (its entry comes first); the other
+    // CLIs' files are shared the same way but reported nowhere.
     let unshared_sign_in = CredentialLayout::conventional(&facts.home, None)
         .ai_cli_auth
-        .and_then(|looked_for| mounts.unshared_sign_in(mounted, &looked_for));
+        .first()
+        .and_then(|looked_for| mounts.unshared_sign_in(mounted, looked_for));
     SandboxLocations {
         shared: mounts.shared_locations(mounted),
         denied: mounts.denied_host_paths(),
@@ -1368,7 +1369,8 @@ mod tests {
         let layout = drop_absent_sign_in(CredentialLayout::conventional(home.path(), None));
 
         assert_eq!(
-            layout.ai_cli_auth, None,
+            layout.ai_cli_auth,
+            Vec::<PathBuf>::new(),
             "a token file that is not on this host was handed to the runtime to create"
         );
 
@@ -1408,9 +1410,44 @@ mod tests {
 
         assert_eq!(
             layout.ai_cli_auth,
-            Some(home.path().join(".claude").join(".credentials.json")),
+            vec![home.path().join(".claude").join(".credentials.json")],
             "the host's own sign-in was dropped"
         );
+    }
+
+    /// Feature 488 (FR-013, US5 AS2/AS3): each CLI's sign-in is pruned on its own. Only the files
+    /// this host has are kept, so a host with Codex signed in and nothing else shares just that,
+    /// and the sandbox still starts for a host with none.
+    #[test]
+    fn only_the_sign_in_files_this_host_has_are_shared() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let codex = home.path().join(".codex").join("auth.json");
+        std::fs::create_dir_all(codex.parent().expect("parent")).expect("the CLI's directory");
+        std::fs::write(&codex, "{}").expect("the token");
+
+        let layout = drop_absent_sign_in(CredentialLayout::conventional(home.path(), None));
+
+        assert_eq!(layout.ai_cli_auth, vec![codex.clone()]);
+
+        let profile = SandboxProfile {
+            credentials: std::collections::BTreeSet::from([
+                micold_core::sandbox::CredentialShare::AiCliAuth,
+            ]),
+            ..SandboxProfile::default()
+        };
+        let mounts = MountSet::build(
+            &[],
+            &profile,
+            &layout,
+            home.path().join("state"),
+            home.path(),
+            SecretMount {
+                host: home.path().join("token"),
+                container: PathBuf::from(CONTAINER_TOKEN_PATH),
+            },
+        );
+        let hosts: Vec<_> = mounts.credentials.iter().map(|c| c.host.clone()).collect();
+        assert_eq!(hosts, vec![codex]);
     }
 
     /// A recording runtime that notes whether `watched` existed when it was first called.

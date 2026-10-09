@@ -93,12 +93,19 @@ fn each_opt_in_adds_exactly_one_mount() {
             ..SandboxProfile::default()
         };
         let mounts = build(&profile);
+        // The sign-in toggle governs one file per CLI that has one (feature 488); every other
+        // share is a single path.
+        let expected = if share == CredentialShare::AiCliAuth {
+            layout().ai_cli_auth.len()
+        } else {
+            1
+        };
         assert_eq!(
             mounts.credentials.len(),
-            1,
+            expected,
             "{share:?} added more than itself"
         );
-        assert_eq!(mounts.credentials[0].share, share);
+        assert!(mounts.credentials.iter().all(|c| c.share == share));
     }
 }
 
@@ -239,7 +246,16 @@ fn a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create() {
     let mounts = build(&profile);
     assert_eq!(
         mounts.home_dirs_to_create(),
-        vec![mounts.home.host.join(".claude")],
+        vec![
+            mounts.home.host.join(".claude"),
+            mounts.home.host.join(".codex"),
+            mounts
+                .home
+                .host
+                .join(".local")
+                .join("share")
+                .join("opencode"),
+        ],
         "the sign-in's parent must exist, user-owned, before the runtime mounts the file into it"
     );
 }
@@ -259,7 +275,17 @@ fn a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create() {
     let mounts = build(&profile);
     assert_eq!(
         mounts.home_files_to_create(),
-        vec![mounts.home.host.join(".claude").join(".credentials.json")],
+        vec![
+            mounts.home.host.join(".claude").join(".credentials.json"),
+            mounts.home.host.join(".codex").join("auth.json"),
+            mounts
+                .home
+                .host
+                .join(".local")
+                .join("share")
+                .join("opencode")
+                .join("auth.json"),
+        ],
         "the sign-in's target must exist, user-owned, before the runtime mounts onto it"
     );
 }
@@ -303,7 +329,7 @@ fn without_a_shared_sign_in_no_onboarding_record_is_named() {
 #[test]
 fn a_sign_in_share_with_no_token_names_no_onboarding_record() {
     let mut layout = layout();
-    layout.ai_cli_auth = None;
+    layout.ai_cli_auth = Vec::new();
     let profile = SandboxProfile {
         credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
         ..SandboxProfile::default()
@@ -371,7 +397,7 @@ fn a_created_container_reports_the_sign_in_its_mount_set_lacks() {
     assert_eq!(with_token.unshared_sign_in(None, &sign_in_path()), None);
 
     let mut no_token = layout();
-    no_token.ai_cli_auth = None;
+    no_token.ai_cli_auth = Vec::new();
     let without = MountSet::build(
         &[PathBuf::from("/home/u/projects/micold")],
         &profile,
@@ -523,4 +549,86 @@ fn daemon_state_is_the_hosts_own_data_directory() {
         .host_paths()
         .iter()
         .any(|p| p.ends_with("micold-ai-ide")));
+}
+
+// --- Every CLI's sign-in file (feature 488, FR-013, T031) ---
+
+/// The sign-in file each provider names under `home`, built with native separators.
+fn claude_sign_in(home: &Path) -> PathBuf {
+    home.join(".claude").join(".credentials.json")
+}
+
+fn codex_sign_in_default(home: &Path) -> PathBuf {
+    home.join(".codex").join("auth.json")
+}
+
+fn opencode_sign_in(home: &Path) -> PathBuf {
+    home.join(".local")
+        .join("share")
+        .join("opencode")
+        .join("auth.json")
+}
+
+#[test]
+fn each_provider_names_its_own_sign_in_file() {
+    use micold_core::session::AiCli;
+    let home = Path::new("/home/u");
+    assert_eq!(
+        AiCli::ClaudeCode.provider().sandbox_auth_file(home),
+        Some(claude_sign_in(home))
+    );
+    assert_eq!(AiCli::Copilot.provider().sandbox_auth_file(home), None);
+    assert_eq!(AiCli::Pi.provider().sandbox_auth_file(home), None);
+    assert_eq!(
+        AiCli::OpenCode.provider().sandbox_auth_file(home),
+        Some(opencode_sign_in(home))
+    );
+}
+
+/// Pure path cases for Codex: home-relative by default, a relocated `$CODEX_HOME` under the home
+/// is followed, one outside it is not shared (the default file is named instead).
+#[test]
+fn codex_sign_in_follows_a_codex_home_under_the_home_only() {
+    use micold_core::provider::codex_sign_in;
+    let home = Path::new("/home/u");
+    assert_eq!(codex_sign_in(home, None), codex_sign_in_default(home));
+    let inside = home.join("elsewhere").join("codex");
+    assert_eq!(codex_sign_in(home, Some(&inside)), inside.join("auth.json"));
+    let outside = Path::new("/srv/codex");
+    assert_eq!(
+        codex_sign_in(home, Some(outside)),
+        codex_sign_in_default(home)
+    );
+}
+
+#[test]
+fn the_conventional_layout_lists_every_providers_sign_in_claude_first() {
+    use micold_core::session::AiCli;
+    let home = Path::new("/home/u");
+    let layout = CredentialLayout::conventional(home, None);
+    let expected: Vec<PathBuf> = AiCli::ALL
+        .iter()
+        .filter_map(|cli| cli.provider().sandbox_auth_file(home))
+        .collect();
+    assert_eq!(layout.ai_cli_auth, expected);
+    assert_eq!(layout.ai_cli_auth.first(), Some(&claude_sign_in(home)));
+    assert!(layout.ai_cli_auth.contains(&opencode_sign_in(home)));
+    assert!(layout.ai_cli_auth.len() >= 3, "{:?}", layout.ai_cli_auth);
+}
+
+/// One toggle governs all of them; each mounts at its own path, read-only (credential mounts are).
+#[test]
+fn the_sign_in_share_mounts_every_listed_file_at_its_own_path() {
+    let mounts = build(&sharing_the_sign_in());
+    let layout = layout();
+    let mounted: Vec<PathBuf> = mounts
+        .credentials
+        .iter()
+        .filter(|c| c.share == CredentialShare::AiCliAuth)
+        .map(|c| c.host.clone())
+        .collect();
+    assert_eq!(mounted, layout.ai_cli_auth);
+    for c in &mounts.credentials {
+        assert_eq!(c.container, pathmap::map_for(&c.host, cfg!(windows)));
+    }
 }

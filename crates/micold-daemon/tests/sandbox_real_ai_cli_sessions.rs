@@ -86,7 +86,10 @@ async fn sandbox_real_ai_cli_sessions_survive_the_sandbox_with_the_sign_in_share
 /// token moves this probe's precondition with it.
 fn host_sign_in() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    CredentialLayout::conventional(Path::new(&home), None).ai_cli_auth
+    CredentialLayout::conventional(Path::new(&home), None)
+        .ai_cli_auth
+        .into_iter()
+        .next()
 }
 
 /// The sessions one run seeds: a shell to type into, one pending session per CLI, and a control.
