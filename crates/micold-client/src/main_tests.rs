@@ -10149,17 +10149,35 @@ mod panes {
         }
     }
 
-    /// Focus lives in the layout: releasing and regaining the keyboard leaves the same pane focused.
+    /// Focus lives in the layout: a dialog, menu or text field taking the keyboard and giving it back
+    /// leaves the same pane focused, and the next key still reaches that pane's terminal (US2-5).
     #[test]
     fn focus_returns_to_the_same_pane() {
-        let (mut app, _ids, _rx) = app_with_sessions(2);
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = layout_of(&app).focused();
         let second = split_focused(&mut app, Axis::Vertical);
+        pane_msg(&mut app, PaneMsg::FocusPane(first));
         let _ = update(
             &mut app,
             Message::Session(SessionMsg::TerminalFocusReleased),
         );
+        assert_eq!(layout_of(&app).focused(), first);
         let _ = update(&mut app, Message::Session(SessionMsg::TerminalFocused));
-        assert_eq!(layout_of(&app).focused(), second);
+        assert_eq!(layout_of(&app).focused(), first);
+        assert_ne!(first, second);
+        let _ = drain(&mut rx);
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::TerminalBytes(b"x".to_vec())),
+        );
+        let inputs: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionInput { session, .. } => Some(session),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(inputs, vec![ids[0]]);
     }
 
     /// T018: each pane's size goes to its own terminal's PTY and to no other process.
@@ -10197,7 +10215,7 @@ mod panes {
             .all(|m| !matches!(m, ClientMsg::SessionResize { .. })));
     }
 
-    /// A replaced terminal keeps its last size; showing it again sends its pane's size.
+    /// A terminal no pane shows is not resized; shown again, it takes its new pane's size (US5-3).
     #[test]
     fn a_terminal_not_shown_is_not_resized() {
         let (mut app, ids, mut rx) = app_with_sessions(2);
@@ -10206,16 +10224,36 @@ mod panes {
         size_pane(&mut app, first, 80, 24);
         size_pane(&mut app, second, 60, 20);
         let _ = drain(&mut rx);
+        let resizes = |rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>| {
+            drain(rx)
+                .into_iter()
+                .filter_map(|m| match m {
+                    ClientMsg::SessionResize {
+                        session,
+                        cols,
+                        rows,
+                        ..
+                    } => Some((session, cols, rows)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
         // Resizing the first pane resizes only the terminal in it.
         size_pane(&mut app, first, 90, 24);
-        let sent: Vec<_> = drain(&mut rx)
-            .into_iter()
-            .filter_map(|m| match m {
-                ClientMsg::SessionResize { session, .. } => Some(session),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(sent, vec![ids[0]]);
+        assert_eq!(resizes(&mut rx), vec![(ids[0], 90, 24)]);
+        // Closing the second pane stops showing its terminal: it keeps its size, nothing is sent.
+        pane_msg(&mut app, PaneMsg::Close(second));
+        size_pane(&mut app, first, 120, 40);
+        assert!(resizes(&mut rx).iter().all(|(s, ..)| *s != ids[1]));
+        // Shown again in a new pane, it is sized to that pane.
+        let third = split_focused(&mut app, Axis::Vertical);
+        let _ = drain(&mut rx);
+        pane_msg(
+            &mut app,
+            PaneMsg::Show(third, t(ids[1], SessionProcess::Primary)),
+        );
+        size_pane(&mut app, third, 50, 15);
+        assert!(resizes(&mut rx).contains(&(ids[1], 50, 15)));
     }
 
     // ---- M3 (T026): resize, close, swap ------------------------------------------------------

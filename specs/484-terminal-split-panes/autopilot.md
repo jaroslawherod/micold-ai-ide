@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M4 (pushed)
-- **Next step**: orchestrator opens PR from scratchpad pr-484-m4.md, waits CI, merges; then the close unit
+- **Phase**: milestone M5 (pending)
+- **Next step**: orchestrator runs M5 (T038–T041), then a new close unit (T036 visual pass already recorded in visual-pass-close.md, T037)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #659 | M4 | merged | a0f059ec5c8c82f2fc10aa891b852db2d82a3010 |
 | #658 | M3 | merged | 3ae9822e88b48e0f73d83400881719f6a48a777a |
 | #657 | M2 | merged | e8f3abcccfc89f5a31c27474f0ba7ec6442629e9 |
 | #656 | M1 | merged | b3372f2016f9326499e632c32f08522736fb5525 |
@@ -29,7 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | #656 | merged |
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
 | M3 | T024–T028 | full | Resize, close, rearrange | #658 | merged |
-| M4 | T029–T035 | full | Layout survives restart | PR body in scratchpad pr-484-m4.md | pushed |
+| M4 | T029–T035 | full | Layout survives restart | #659 | merged |
+| M5 | T038–T041 | full | Converge: refusal text, empty-pane focus, idle CPU (found by the close unit; ships with the tdd test additions and visual-pass-close.md) | - | pending |
 
 ## Decisions
 
@@ -56,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 diff A | 1 | cca2237b:804ce026 | CLEAN (3 MINOR: restore pruning written back — fixed by recording pruned json as saved; persist failure left memory ahead of disk — fixed with rollback; restore once per run = last writer wins, accepted) |
 | M4 diff B | 1 | cca2237b:804ce026 | CLEAN (2 MINOR: reviewer sandbox could not run Verify, run in the gate; no tdd/ dir; inactive-project prune happens on switch, fine) |
 | M4 visual pass | - | - | not re-run: no view or style changed |
+| Close | 1 | working tree | tdd-verify FAIL→ fixed US2-5/US5-3 tests, cap test, keymap tests; visual pass found 3 defects → M5 |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings

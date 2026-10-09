@@ -25,6 +25,7 @@ Each entry: Decision / Rationale / Rejected.
 
 ## R6. Shortcuts
 **Decision**: `Ctrl/Cmd+Shift+D/H/W/Arrow` per the clarification; handled in `keymap.rs` before `encode`; rebindable through the same mechanism as existing chords. `Ctrl+Shift+Arrow` conflicts with word-selection in some terminals' text fields only outside the terminal; feature 006's map is checked by a test (contracts/keybindings.md).
+**Accepted shadowing** (FR-009's "must not shadow" is met for every chord feature 006 forwards without Shift): with Shift, `Ctrl+Shift+D` was EOF (0x04, the same byte as `Ctrl+D`, which still works) and `Ctrl+Shift+Arrow` a modified cursor key; the pane action wins. `keymap.rs` pins that only these keys become pane actions.
 **Rejected**: `Ctrl+Alt+Arrow` (GNOME/KDE workspace switch), tmux-style prefix (modal state, unlike other app shortcuts).
 
 ## R7. Resize coalescing
