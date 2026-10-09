@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M1
-- **Next step**: M1 gate green and pushed; orchestrator opens the PR from scratchpad/pr-488-m1.md, waits for CI, merges; then M2
+- **Phase**: milestone M2
+- **Next step**: M2 reviews, visual pass, gate, push; orchestrator opens the PR from scratchpad/pr-488-m2.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #679 | Design (spec, plan, tasks) | MERGED (rebase) | 96f85d69d1e0d335f23e44fc93097483b913a5d7 |
-| (orchestrator opens) | M1 | pending | |
+| #680 | M1 | MERGED (rebase) | cf3881fd2bad0e79bc61c9be3669b77f3c6ef2df |
+| (orchestrator opens) | M2 | pending | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | pending (orchestrator opens) | pushed |
-| M2 | T012–T015 | light | Unavailable providers explained | | todo |
+| M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | #680 | merged |
+| M2 | T012–T015 | light | Unavailable providers explained | pending (orchestrator opens) | in progress |
 | M3 | T016–T022 | full | Codex resume + naming (seam) | | todo |
 | M4 | T023–T026 | full | OpenCode resume + naming | | todo |
 | M5 | T027–T030 | light | Honest activity, tool-server, first prompt | | todo |
@@ -34,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M1 T001 probe (npm install worked): codex 0.162.0, opencode-ai 1.18.35; V8/V10 fields/V13/V14/V15 need a signed-in session so were not probed, fallbacks stay; OPENCODE_DISABLE_AUTOUPDATE=1 set in launch_env; Codex has no env switch. M1 launches Fresh and Resume identically (no args) until M3/M4.
 - Tasks unit: US1/US2 split (rule 3) and US3 split Codex/OpenCode; US6 docs ride in each story's milestone; Polish (T035) left to the close unit. Analyze findings I1,I2,C1,C2,T1,A1–A3,D1–D3 fixed in spec/tasks; SC-001 reworded (no number to measure).
+- M2 T012/T013: characterization tests passed on existing behaviour (daemon: unavailable listing, MCP and app-path refusal naming the command with no record/terminal, availability after install without restart, removed provider keeps its provider); no code change (T013). T014 client test added in missing_cli_is_reported_where_it_is_chosen.rs.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

@@ -93,11 +93,16 @@ fn open_state(store: &Path) -> Arc<DaemonState> {
 
 impl Fixture {
     async fn new() -> Self {
+        Self::installed(&["codex", "opencode"]).await
+    }
+
+    /// A fixture whose `PATH` holds stand-ins for just the `installed` commands.
+    async fn installed(installed: &[&str]) -> Self {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
-        for (_, command) in PROVIDERS {
+        for command in installed {
             install_cli(bin.path(), command);
         }
         init_repo(project.path());
@@ -256,5 +261,109 @@ async fn the_provider_survives_a_restart_of_the_service() {
             .find(|s| s.id == id)
             .map(|s| s.provider);
         assert_eq!(provider, Some(cli), "the restarted service lists {cli:?}");
+    }
+}
+
+fn listed(state: &DaemonState, cwd: &Path) -> Vec<AiCli> {
+    state.availability_in(cwd).0
+}
+
+/// No session record for `cli` in the catalog (only the fixture's own session 3 exists).
+fn session_count(f: &Fixture) -> usize {
+    f.state
+        .catalog_snapshot()
+        .projects
+        .iter()
+        .map(|p| p.sessions.len())
+        .sum()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_provider_off_the_path_is_listed_unavailable() {
+    let _guard = ENV.lock().await;
+    let f = Fixture::installed(&[]).await;
+    let found = listed(&f.state, f.project.path());
+    for (cli, _) in PROVIDERS {
+        assert!(!found.contains(&cli), "{cli:?} offered with nothing on PATH");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn starting_an_unavailable_provider_over_mcp_is_refused_naming_it_and_creates_nothing() {
+    let _guard = ENV.lock().await;
+    for (cli, command) in PROVIDERS {
+        let f = Fixture::installed(&[]).await;
+        let before = session_count(&f);
+        let err = call_err(
+            f.addr,
+            &credential(&f.state, sid(3)),
+            "create_session",
+            json!({"worktree": "b", "ai_cli": cli.tool_name()}),
+        )
+        .await;
+        let message = err["message"].as_str().unwrap().to_lowercase();
+        assert!(message.contains(command), "{command} not named: {err}");
+        assert_eq!(session_count(&f), before, "a record was created");
+        assert!(
+            !f.bin.path().join(format!("{command}.cwd")).exists(),
+            "{command} was started"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_app_start_path_gives_the_same_reason_before_any_terminal() {
+    let _guard = ENV.lock().await;
+    for (cli, command) in PROVIDERS {
+        let f = Fixture::installed(&[]).await;
+        let why = micold_daemon::ops::cli_unavailable(&f.state, f.project.path(), cli)
+            .await
+            .expect("unavailable");
+        assert!(why.to_lowercase().contains(command), "{command}: {why}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_provider_installed_afterwards_is_available_on_the_next_listing() {
+    let _guard = ENV.lock().await;
+    for (cli, command) in PROVIDERS {
+        let f = Fixture::installed(&[]).await;
+        assert!(!listed(&f.state, f.project.path()).contains(&cli));
+        install_cli(f.bin.path(), command);
+        assert!(
+            listed(&f.state, f.project.path()).contains(&cli),
+            "{command} not available after install, without a restart"
+        );
+        let out = f
+            .create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
+            .await;
+        created(&out);
+        f.started_in(command).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_session_whose_provider_was_removed_keeps_its_provider_in_the_listing() {
+    let _guard = ENV.lock().await;
+    for (cli, _) in PROVIDERS {
+        let f = Fixture::new().await;
+        let id = created(
+            &f.create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
+                .await,
+        );
+        f.kill_all();
+        for (_, command) in PROVIDERS {
+            std::fs::remove_file(f.bin.path().join(command)).unwrap();
+        }
+        let restarted = open_state(f.store.path());
+        let kept = restarted
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|p| p.sessions.iter())
+            .find(|s| s.id == id)
+            .map(|s| s.provider);
+        assert_eq!(kept, Some(cli));
+        assert!(!listed(&restarted, f.project.path()).contains(&cli));
     }
 }
