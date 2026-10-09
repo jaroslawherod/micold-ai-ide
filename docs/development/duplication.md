@@ -17,3 +17,8 @@ Left out on purpose: both tools are downloads outside the pinned toolchain, so t
 being offline and reproducible, and a percentage over 230k lines moves little per PR. Run the task
 before a PR that adds a lot of similar code, or from a scheduled CI job. Joining the gate is one line
 in `[tasks.gate]` once the tools are pinned in CI.
+
+## Triage
+
+[duplication-triage.md](duplication-triage.md) sorts every known cluster into the five fix types of
+issue #645, with lines removable, risk and a rank, one row per future child issue.
