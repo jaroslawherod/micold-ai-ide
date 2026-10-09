@@ -89,6 +89,10 @@ fn update_inner_applies_window_focus_changed() {
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
+        pane_layouts: HashMap::new(),
+        viewed_terminals_sent: None,
+        viewed_dirty: false,
+        pane_synced_displayed: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -146,6 +150,10 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
+        pane_layouts: HashMap::new(),
+        viewed_terminals_sent: None,
+        viewed_dirty: false,
+        pane_synced_displayed: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -780,6 +788,10 @@ pub(crate) fn base_app() -> App {
         },
         reported_scheme: None,
         grids: HashMap::new(),
+        pane_layouts: HashMap::new(),
+        viewed_terminals_sent: None,
+        viewed_dirty: false,
+        pane_synced_displayed: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -952,12 +964,28 @@ fn feed(app: &mut App, msg: DaemonMsg) {
 
 /// A grid sitting at the live tail: `rows` visible lines at `viewport_top`, no history cached.
 fn at_the_tail(session: SessionId, viewport_top: i64, rows: u16) -> GridCache {
+    let mut cache = GridCache::new();
+    cache.apply(&frame_of(
+        session,
+        micold_core::protocol::messages::SessionProcess::Primary,
+        viewport_top,
+        rows,
+    ));
+    cache
+}
+
+/// A full frame for one terminal of `session` (feature 484).
+fn frame_of(
+    session: SessionId,
+    process: micold_core::protocol::messages::SessionProcess,
+    viewport_top: i64,
+    rows: u16,
+) -> micold_core::protocol::grid::GridFrame {
     use micold_core::protocol::grid::{
         GridFrame, WireCursor, WireCursorShape, WireLine, WireStyle,
     };
-    let mut cache = GridCache::new();
-    cache.apply(&GridFrame {
-        process: micold_core::protocol::messages::SessionProcess::Primary,
+    GridFrame {
+        process,
         session,
         seq: 1,
         generation: 1,
@@ -991,8 +1019,7 @@ fn at_the_tail(session: SessionId, viewport_top: i64, rows: u16) -> GridCache {
             .collect(),
         mode: 0,
         input_serial: None,
-    });
-    cache
+    }
 }
 
 /// An `App` scrolled-ready: one session, its grid at the tail, and a socket to read.
@@ -1005,7 +1032,13 @@ fn app_at_the_tail() -> (
     app.daemon = Some(micold_client::daemon::Outbox::new(tx));
     let id = SessionId::new();
     app.core.session.active = Some(id);
-    app.grids.insert(id, at_the_tail(id, 4000, 69));
+    app.grids.insert(
+        micold_core::protocol::messages::TerminalRef {
+            session: id,
+            process: micold_core::protocol::messages::SessionProcess::Primary,
+        },
+        at_the_tail(id, 4000, 69),
+    );
     (app, rx)
 }
 
@@ -2754,6 +2787,10 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
+        pane_layouts: HashMap::new(),
+        viewed_terminals_sent: None,
+        viewed_dirty: false,
+        pane_synced_displayed: None,
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -9678,5 +9715,206 @@ mod pr_status_open {
                 }
             )]
         );
+    }
+}
+
+// ---- Feature 484: panes, client state (T008) ----
+
+mod panes {
+    use super::*;
+    use micold_core::pane_layout::PaneLayout;
+    use micold_core::project::{Availability, Project};
+    use micold_core::protocol::messages::{SessionProcess, TerminalRef};
+    use micold_core::session::{AiCli, Session, SessionLocation};
+
+    fn t(session: SessionId, process: SessionProcess) -> TerminalRef {
+        TerminalRef { session, process }
+    }
+
+    /// An app with a connected daemon and one project holding `n` sessions, the first selected.
+    fn app_with_sessions(
+        n: usize,
+    ) -> (
+        App,
+        Vec<SessionId>,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let project = PathBuf::from("/repo/panes");
+        app.core.workspace.projects.push(Project::new(
+            project.clone(),
+            true,
+            Availability::Available,
+        ));
+        app.core.workspace.active = Some(project.clone());
+        let sessions: Vec<Session> = (0..n)
+            .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
+            .collect();
+        let ids: Vec<SessionId> = sessions.iter().map(|s| s.id).collect();
+        app.core.workspace.sessions.insert(project, sessions);
+        app.core.session.active = Some(ids[0]);
+        crate::shell::panes::sync(&mut app);
+        (app, ids, rx)
+    }
+
+    fn drain(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<ClientMsg> {
+        let mut sent = Vec::new();
+        while let Ok(m) = rx.try_recv() {
+            sent.push(m);
+        }
+        sent
+    }
+
+    fn layout_of(app: &App) -> PaneLayout {
+        crate::shell::panes::layout(app).expect("a layout").clone()
+    }
+
+    /// A frame for terminal X changes only X's grid (FR-003).
+    #[test]
+    fn a_frame_updates_only_its_own_terminals_grid() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let s = ids[0];
+        let shell = SessionProcess::Shell(micold_core::session::ShellInstanceId(1));
+        let _ = crate::shell::daemon_sync::on_grid_frame(
+            &mut app,
+            frame_of(s, SessionProcess::Primary, 100, 10),
+        );
+        let _ = crate::shell::daemon_sync::on_grid_frame(&mut app, frame_of(s, shell, 5000, 10));
+        assert_eq!(
+            app.grids[&t(s, SessionProcess::Primary)].viewport_top().0,
+            100
+        );
+        assert_eq!(app.grids[&t(s, shell)].viewport_top().0, 5000);
+    }
+
+    /// One pane behaves as today (FR-017): nothing about panes goes on the wire.
+    #[test]
+    fn a_project_with_one_pane_sends_no_viewed_terminals() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let _ = update(&mut app, Message::Session(SessionMsg::Selected(ids[0])));
+        crate::shell::panes::sync(&mut app);
+        assert_eq!(layout_of(&app).len(), 1);
+        assert!(!drain(&mut rx)
+            .iter()
+            .any(|m| matches!(m, ClientMsg::SetViewedTerminals { .. })));
+    }
+
+    /// Selecting a terminal that is already shown focuses its pane instead of duplicating it.
+    #[test]
+    fn selecting_a_terminal_calls_show_or_focus() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let first = t(ids[0], SessionProcess::Primary);
+        let second = t(ids[1], SessionProcess::Primary);
+        // Two panes: the first shows session 0, the second session 1.
+        let p0 = layout_of(&app).focused();
+        crate::shell::panes::split_pane(
+            &mut app,
+            p0,
+            micold_core::pane_layout::Axis::Vertical,
+            (1000.0, 600.0),
+            (10.0, 10.0),
+        )
+        .unwrap();
+        crate::shell::panes::sync(&mut app);
+        assert_eq!(layout_of(&app).terminals(), vec![first, second]);
+        // Select session 0 again: its pane takes the focus, and nothing is duplicated.
+        let _ = update(&mut app, Message::Session(SessionMsg::Selected(ids[0])));
+        let l = layout_of(&app);
+        assert_eq!(l.focused_terminal(), Some(first));
+        assert_eq!(l.terminals(), vec![first, second]);
+        // Selecting session 1 focuses the other pane.
+        let _ = update(&mut app, Message::Session(SessionMsg::Selected(ids[1])));
+        assert_eq!(layout_of(&app).focused_terminal(), Some(second));
+    }
+
+    /// Input and the viewed set follow the panes (FR-010); focus moves the active session.
+    #[test]
+    fn input_goes_to_the_focused_panes_terminal_and_the_daemon_streams_both() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let first = t(ids[0], SessionProcess::Primary);
+        let second = t(ids[1], SessionProcess::Primary);
+        let p0 = layout_of(&app).focused();
+        crate::shell::panes::split_pane(
+            &mut app,
+            p0,
+            micold_core::pane_layout::Axis::Vertical,
+            (1000.0, 600.0),
+            (10.0, 10.0),
+        )
+        .unwrap();
+        let _ = drain(&mut rx);
+        crate::shell::panes::sync(&mut app);
+        let sent = drain(&mut rx);
+        assert!(
+            sent.iter().any(|m| matches!(m, ClientMsg::SetViewedTerminals { terminals, .. } if *terminals == vec![first, second])),
+            "both terminals are streamed: {sent:?}"
+        );
+        // Focus the second pane: the active session follows it, and a key reaches it alone.
+        let second_pane = layout_of(&app).pane_showing(second).unwrap();
+        crate::shell::panes::focus_pane(&mut app, second_pane);
+        assert_eq!(app.core.session.active, Some(ids[1]));
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::TerminalBytes(b"x".to_vec())),
+        );
+        let inputs: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionInput {
+                    session, process, ..
+                } => Some((session, process)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(inputs, vec![(ids[1], Some(SessionProcess::Primary))]);
+    }
+
+    /// A project's panes never show in another project (FR-016).
+    #[test]
+    fn layouts_are_per_project() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let other = PathBuf::from("/repo/other");
+        app.core.workspace.projects.push(Project::new(
+            other.clone(),
+            true,
+            Availability::Available,
+        ));
+        app.core.workspace.active = Some(other.clone());
+        app.core.session.active = None;
+        crate::shell::panes::sync(&mut app);
+        assert!(layout_of(&app).terminals().is_empty());
+        assert!(!layout_of(&app)
+            .terminals()
+            .contains(&t(ids[0], SessionProcess::Primary)));
+    }
+
+    /// A removed session empties its pane and never collapses the tree.
+    #[test]
+    fn a_session_that_is_gone_empties_its_pane() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let project = app.core.workspace.active.clone().unwrap();
+        let p0 = layout_of(&app).focused();
+        crate::shell::panes::split_pane(
+            &mut app,
+            p0,
+            micold_core::pane_layout::Axis::Vertical,
+            (1000.0, 600.0),
+            (10.0, 10.0),
+        )
+        .unwrap();
+        app.core
+            .workspace
+            .sessions
+            .get_mut(&project)
+            .unwrap()
+            .retain(|s| s.id != ids[1]);
+        crate::shell::panes::sync(&mut app);
+        let l = layout_of(&app);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.terminals(), vec![t(ids[0], SessionProcess::Primary)]);
     }
 }

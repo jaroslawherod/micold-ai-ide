@@ -871,7 +871,13 @@ mod acceptance {
             let mut app = crate::tests::base_app();
             app.caps = app.caps.clone().with_link_opener(opener.clone());
             app.core.session.active = Some(id);
-            app.grids.insert(id, grid);
+            app.grids.insert(
+                micold_core::protocol::messages::TerminalRef {
+                    session: id,
+                    process: micold_core::protocol::messages::SessionProcess::Primary,
+                },
+                grid,
+            );
             let renderer = block_on(<iced::Renderer as Headless>::new(
                 iced::Font::DEFAULT,
                 iced::Pixels(16.0),
@@ -990,7 +996,12 @@ mod acceptance {
                     micold_client::ui::terminal::link_context(&self.app.core, &self.app.sandbox);
                 let mut element = micold_client::ui::terminal::pane(
                     &self.app.core,
-                    self.app.grids.get(&self.id),
+                    self.app
+                        .grids
+                        .get(&micold_core::protocol::messages::TerminalRef {
+                            session: self.id,
+                            process: micold_core::protocol::messages::SessionProcess::Primary,
+                        }),
                     self.app.selection.as_ref(),
                     self.app.display_offset,
                     ColorScheme::Dark,
