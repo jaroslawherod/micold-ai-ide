@@ -62,7 +62,7 @@ use micold_client::features::worktree_form::{
 };
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
-    ShellOpenFailure,
+    ShellOpenFailure, TerminalRef,
 };
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::worktree::{BranchOrigin, CreateMode};
@@ -270,6 +270,7 @@ pub fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMs
 /// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
 /// disconnected; the initial attach on connect is handled by `DaemonConnected`.
 pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path) {
+    app.viewed_dirty = true;
     // Feature 040: what was read describes the project being left, and the window does not hold
     // the new one until the daemon says so (data-model §3 invariant 4). Before the early return:
     // a switch made while disconnected leaves the old project all the same.
@@ -323,8 +324,13 @@ pub fn on_grid_frame(
 ) -> Task<Message> {
     // Feed the frame into the session's grid cache; the pane renders from it (T042).
     let session = frame.session;
+    // Feature 484 (FR-003): a frame updates only its own terminal's grid.
+    let terminal = TerminalRef {
+        session,
+        process: frame.process,
+    };
     let (old_top, new_top, oldest) = {
-        let cache = app.grids.entry(session).or_default();
+        let cache = app.grids.entry(terminal).or_default();
         let old = cache.viewport_top().0;
         cache.apply(&frame);
         (old, cache.viewport_top().0, cache.oldest_available().0)
@@ -333,7 +339,7 @@ pub fn on_grid_frame(
     // `line_at_row = viewport_top - display_offset + row` would slide the shown lines toward
     // the live bottom on every output tick (FR-016). Only the displayed session, only while
     // scrolled up; clamp to the retained history.
-    if app.core.session.active == Some(session) && app.display_offset > 0 && new_top > old_top {
+    if app.displayed_terminal() == Some(terminal) && app.display_offset > 0 && new_top > old_top {
         let advanced = (new_top - old_top) as usize;
         let history = (new_top - oldest).max(0) as usize;
         app.display_offset = (app.display_offset + advanced).min(history);
@@ -502,6 +508,7 @@ pub fn bring_up_again(app: &mut App) -> Option<crate::shell::sandbox::BringUp> {
 /// The user chose to take the active project back after being displaced (FR-024): re-attach
 /// with force, which displaces the current holder, and re-view its active session.
 pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
+    app.viewed_dirty = true;
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.daemon.clone()) {
         app.displaced.remove(&project);
         d.send(ClientMsg::Attach {
@@ -837,7 +844,13 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // not serve stops suppressing its own re-request rather than staying blank
             // forever.
             app.scrollback_inflight.remove(&req);
-            if let Some(grid) = app.grids.get_mut(&session) {
+            // The response names a session, not a process (wire 37 did not change it): it
+            // answers the request for the displayed terminal, else any grid of that session.
+            let target = Some(app.displayed_terminal())
+                .flatten()
+                .filter(|t| t.session == session)
+                .or_else(|| app.grids.keys().copied().find(|t| t.session == session));
+            if let Some(grid) = target.and_then(|t| app.grids.get_mut(&t)) {
                 grid.apply_scrollback(&lines, &styles, &hyperlinks);
             }
         }
@@ -1790,14 +1803,15 @@ pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
 /// active pointer in memory for instant feedback; nothing inside the project folder is touched.
 pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
     if let Some(path) = app.core.project.forget_target.clone() {
-        app.grids.retain(|id, _| {
+        app.grids.retain(|t, _| {
             !app.core
                 .workspace
                 .session_ids_of_project(&path)
-                .contains(id)
+                .contains(&t.session)
         });
+        app.pane_layouts.remove(&path);
         app.scrollback_inflight
-            .retain(|_, (session, _)| app.grids.contains_key(session));
+            .retain(|_, (session, _)| app.grids.keys().any(|t| t.session == *session));
         let remove_path = path.clone();
         send_op(app, PendingOp::ProjectRemove, move |req| {
             ClientMsg::ProjectRemove {
@@ -2060,7 +2074,7 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
 /// durably (anti-resurrection marker) and stops its process (T055). The pure-core update
 /// archives the record in memory for instant feedback; the daemon reconciles other windows.
 pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message> {
-    app.grids.remove(&id);
+    app.grids.retain(|t, _| t.session != id);
     app.scrollback_inflight
         .retain(|_, (session, _)| *session != id);
     // Release the input counter too (T114): ids are unique UUIDs so it can never be reused,
@@ -2112,7 +2126,7 @@ pub fn send_agent_confirm_declines(app: &mut App) {
 /// also suppresses any future reconciliation (FR-020c). The pure core drops the record.
 pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.session.remove_target {
-        app.grids.remove(&id);
+        app.grids.retain(|t, _| t.session != id);
         app.scrollback_inflight
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
@@ -2322,7 +2336,17 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
         // client-side lifecycle field is wrong now (the client no longer tracks process
         // state, and the daemon never marks the catalog session Running), so we send
         // whenever connected. Input is stamped with a monotonic per-session serial (G2).
-        let msg = app.stamper.stamp(id, bytes);
+        let mut msg = app.stamper.stamp(id, bytes);
+        // Feature 484 (FR-010): with several panes the input names the focused pane's process, so
+        // it can never reach a terminal the daemon happens to have attached for another pane. A
+        // single pane sends `None`, as before (FR-017).
+        if crate::shell::panes::layout(app).is_some_and(|l| l.len() > 1) {
+            if let (ClientMsg::SessionInput { process, .. }, Some(t)) =
+                (&mut msg, app.displayed_terminal())
+            {
+                *process = Some(t.process);
+            }
+        }
         if let Some(d) = &app.daemon {
             d.send(msg);
         }
@@ -2619,6 +2643,7 @@ pub fn view_and_restart(app: &mut App, id: SessionId) {
 /// The shared body of [`view_and_start`] and [`view_and_restart`]: `start` is the message that
 /// starts the session.
 fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
+    app.viewed_dirty = true;
     app.selection = None;
     app.display_offset = 0;
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), &app.daemon) {
@@ -2693,6 +2718,7 @@ pub fn session_process(session: &Session) -> SessionProcess {
 /// mode + active shell, and reset the local view (selection + scroll) for the switch. Called
 /// whenever the attached process changes: mode toggle, instance select/open/close.
 pub fn attach_current_process(app: &mut App, id: SessionId) {
+    app.viewed_dirty = true;
     let process = app
         .core
         .workspace

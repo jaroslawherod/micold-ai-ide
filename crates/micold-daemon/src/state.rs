@@ -70,6 +70,9 @@ pub struct DrainedSignals {
     pub names: Vec<(SessionId, String)>,
 }
 
+/// One input batch held while its session starts: serial, bytes and the targeted process.
+type HeldInput = (u64, Vec<u8>, Option<SessionProcess>);
+
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
@@ -206,7 +209,7 @@ struct Inner {
     /// order (BUG-009, T125). Present only for the duration of a start — see
     /// [`DaemonState::session_input`] for why the input is held rather than dropped, and
     /// [`DaemonState::finish_start`] for how the buffer is closed without a gap.
-    starting: HashMap<SessionId, Vec<(u64, Vec<u8>, Option<SessionProcess>)>>,
+    starting: HashMap<SessionId, Vec<HeldInput>>,
     /// One mutual-exclusion gate per session for starts (T125), for the same reason
     /// [`Self::worktree_gates`] exists: spawning the work removed the serialization the connection
     /// loop provided incidentally, and two concurrent starts would spawn two processes.

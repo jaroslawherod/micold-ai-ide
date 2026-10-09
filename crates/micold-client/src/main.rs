@@ -36,7 +36,7 @@ use micold_core::frame_probe::{
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
 };
 use micold_core::protocol::grid::LineId;
-use micold_core::protocol::messages::ClientMsg;
+use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 use micold_core::session::{SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 
 use micold_core::theme::observe_system_scheme;
@@ -62,7 +62,19 @@ struct App {
     caps: Capabilities,
     /// Per-session renderable grid caches, fed by daemon `GridFrame`s (never Clone/Eq). The client
     /// no longer owns any PTY — sessions live in the daemon (feature 010).
-    grids: HashMap<SessionId, GridCache>,
+    grids: HashMap<TerminalRef, GridCache>,
+    /// Each project's terminal-area panes (feature 484), keyed by project path. A project with no
+    /// entry has the single-pane default; the focused pane's terminal is the displayed one.
+    pane_layouts: HashMap<PathBuf, micold_core::pane_layout::PaneLayout>,
+    /// The terminal set last sent in `SetViewedTerminals` and the project it was for, so the
+    /// message goes out only when the visible set changes (and never for a one-pane project that
+    /// has not been split, which keeps today's wire traffic).
+    viewed_terminals_sent: Option<(PathBuf, Vec<TerminalRef>)>,
+    /// A message re-pointed the daemon's single view (`SetViewedSession`, `SessionAttachProcess`),
+    /// which replaces any set `SetViewedTerminals` named; `shell::panes::sync` resends it.
+    viewed_dirty: bool,
+    /// The displayed terminal as of the last pane sync: the layout moves only when it changes.
+    pane_synced_displayed: Option<TerminalRef>,
     /// Per-session monotonic input stamper: turns key bytes into ordered `SessionInput` (G2). Held
     /// here (long-lived) so a session's serial is never reset by a daemon detach/reattach.
     stamper: SessionInputStamper,
@@ -384,7 +396,22 @@ impl Drop for App {
 impl App {
     /// The displayed session's grid cache, if any (routes through `active_session`).
     fn attached_grid(&self) -> Option<&GridCache> {
-        self.grids.get(&self.core.session.active?)
+        self.grids.get(&self.displayed_terminal()?)
+    }
+
+    /// The terminal the keyboard and the single-terminal state (selection, scroll) belong to: the
+    /// displayed session's selected process (feature 484: the focused pane's terminal, kept equal
+    /// to it by `shell::panes::sync`).
+    fn displayed_terminal(&self) -> Option<TerminalRef> {
+        let session = self.core.session.active?;
+        let process = self
+            .core
+            .workspace
+            .find_session(session)
+            .map_or(SessionProcess::Primary, |(_, s)| {
+                shell::daemon_sync::session_process(s)
+            });
+        Some(TerminalRef { session, process })
     }
 }
 
@@ -425,6 +452,8 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // `006` BUG-007: whichever message changed the resolved scheme — a desktop switch, a saved
     // preference — the daemon has to hear of it, and only here sees every message.
     shell::daemon_sync::report_color_scheme(app);
+    // Feature 484: panes follow the selection and the daemon streams what they show.
+    shell::panes::sync(app);
     // Feature 039 (FR-019): which session the window has in view changes with a selection, with
     // Settings opening and with the window's focus, and only here sees every message.
     shell::daemon_sync::report_window_view(app);
@@ -818,7 +847,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Mouse text selection on the displayed session's grid, anchored to absolute `LineId`s so
         // new output can't corrupt it (FR-013/FR-018).
         Message::Session(SessionMsg::TerminalSelectStart { col, line, kind }) => {
-            if let Some(id) = app.core.session.active {
+            if let Some(id) = app.displayed_terminal() {
                 if let Some(grid) = app.grids.get(&id) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     let gran = match kind {
@@ -834,7 +863,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
-            if let Some(id) = app.core.session.active {
+            if let Some(id) = app.displayed_terminal() {
                 if let (Some(grid), Some(sel)) = (app.grids.get(&id), app.selection.as_mut()) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     sel.update(anchor, |id| grid.line(id).map(|l| l.text.clone()));
@@ -1062,9 +1091,10 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
 /// the range whose size grows with scroll depth. Moving it left this function with the two things
 /// that genuinely need the shell — the correlation id and the socket.
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
-    let Some(id) = app.core.session.active else {
+    let Some(terminal) = app.displayed_terminal() else {
         return;
     };
+    let id = terminal.session;
     let inflight: Vec<Range<LineId>> = app
         .scrollback_inflight
         .values()
@@ -1072,7 +1102,7 @@ fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
         .map(|(_, range)| range.clone())
         .collect();
     let (new_off, needed) = {
-        let Some(grid) = app.grids.get(&id) else {
+        let Some(grid) = app.grids.get(&terminal) else {
             return;
         };
         let history = (grid.viewport_top().0 - grid.oldest_available().0).max(0) as usize;
