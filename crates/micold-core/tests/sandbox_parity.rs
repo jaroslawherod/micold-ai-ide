@@ -44,6 +44,7 @@ fn spec(profile: &SandboxProfile) -> SandboxSpec {
         control_port: 7727,
         published_ports: Vec::new(),
         network_name: "micold-sandbox-net".into(),
+        time_zone: None,
         home: PathBuf::from("/home/u"),
     }
 }

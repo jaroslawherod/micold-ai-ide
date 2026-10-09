@@ -40,6 +40,8 @@ dark-light = { workspace = true }
 alacritty_terminal = { workspace = true }
 uuid = { workspace = true }
 directories = { workspace = true }
+# Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
+iana-time-zone = { workspace = true }
 # Feature 031: the hostname a `file://` link is checked against (FR-012).
 gethostname = { workspace = true }
 serde = { workspace = true }

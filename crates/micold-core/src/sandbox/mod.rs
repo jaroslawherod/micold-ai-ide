@@ -474,6 +474,22 @@ pub struct HomeMount {
     pub container: PathBuf,
 }
 
+/// Where the container finds its saved terminal histories (feature 041, FR-021, research R7).
+pub const HISTORY_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide/terminal-history";
+
+/// The host's history directory, mounted where the container's service looks for saved histories.
+///
+/// Present only when the host's directory is *not* already inside the state mount: on Linux and
+/// macOS it is, and the state mount carries it. On Windows the state directory is the roaming
+/// profile (FR-019), so the history comes from the local data directory through a mount of its own.
+/// The launcher creates [`Self::host`] owner-only before the runtime runs (R8), because a runtime
+/// that creates a bind source makes it root-owned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryMount {
+    pub host: PathBuf,
+    pub container: PathBuf,
+}
+
 /// Everything the sandbox can see (FR-006 … FR-011).
 ///
 /// The load-bearing rule of this feature is rule M-1: **only** what is listed here is mounted. The
@@ -496,6 +512,8 @@ pub struct MountSet {
     pub secret: SecretMount,
     /// Credential mounts, one per active opt-in. Empty unless the user opted in (rule N-1).
     pub credentials: Vec<CredentialMount>,
+    /// The saved terminal histories, when the state mount does not already carry them (feature 041).
+    pub history: Option<HistoryMount>,
 }
 
 /// How many components an absolute container path has, which is how specific it is (C15).
@@ -660,7 +678,19 @@ impl MountSet {
             },
             secret,
             credentials,
+            history: None,
         }
+    }
+
+    /// This set with the host's saved-history directory `host_history_dir` mounted at
+    /// [`HISTORY_CONTAINER_DIR`], unless it lies inside the state directory, which is mounted
+    /// already (feature 041, FR-021, research R7).
+    pub fn with_history(mut self, host_history_dir: &Path) -> Self {
+        self.history = (!host_history_dir.starts_with(&self.state.host)).then(|| HistoryMount {
+            host: host_history_dir.to_path_buf(),
+            container: PathBuf::from(HISTORY_CONTAINER_DIR),
+        });
+        self
     }
 
     /// The directories inside [`Self::home`] that must exist before the runtime runs (research R11).
@@ -789,6 +819,7 @@ impl MountSet {
             Some(mounted) => {
                 let others: Vec<String> = [&self.state.container, &self.home.container]
                     .into_iter()
+                    .chain(self.history.iter().map(|h| &h.container))
                     .chain(std::iter::once(&self.secret.container))
                     .chain(self.credentials.iter().map(|c| &c.container))
                     .map(|p| path(p))
@@ -862,6 +893,7 @@ impl MountSet {
             .chain(std::iter::once(self.state.host.as_path()))
             .chain(std::iter::once(self.home.host.as_path()))
             .chain(std::iter::once(self.secret.host.as_path()))
+            .chain(self.history.iter().map(|h| h.host.as_path()))
             .chain(self.credentials.iter().map(|c| c.host.as_path()))
             .collect()
     }
@@ -892,6 +924,9 @@ pub struct SandboxSpec {
     /// The user-defined network the sandbox joins. With [`NetworkPosture::NoOutbound`] this network
     /// is created with IP masquerade disabled (research R4).
     pub network_name: String,
+    /// The host's IANA time zone, passed in as `TZ` so the separator of a saved history shows the
+    /// user's local time (feature 041, research R11). `None` leaves the container in UTC.
+    pub time_zone: Option<String>,
     /// The host user's home directory, passed in as `HOME`.
     ///
     /// Required, not optional. The container runs as a uid with no `/etc/passwd` entry, so without
@@ -1025,6 +1060,44 @@ mod tests {
             },
             false,
         )
+    }
+
+    /// FR-021, research R7 (U121): the history mount exists only when the host's history directory is
+    /// not inside the state directory the state mount already carries.
+    #[test]
+    fn the_history_mount_is_added_only_when_the_history_is_outside_the_state_directory() {
+        let inside = shared().with_history(Path::new(
+            "/home/u/.local/share/micold-ai-ide/terminal-history",
+        ));
+        assert_eq!(inside.history, None, "the state mount carries it already");
+
+        let outside =
+            shared().with_history(Path::new("/home/u/local/micold-ai-ide/terminal-history"));
+        assert_eq!(
+            outside.history,
+            Some(HistoryMount {
+                host: PathBuf::from("/home/u/local/micold-ai-ide/terminal-history"),
+                container: PathBuf::from("/var/lib/micold-ai-ide/terminal-history"),
+            })
+        );
+        assert!(
+            outside
+                .host_paths()
+                .contains(&Path::new("/home/u/local/micold-ai-ide/terminal-history")),
+            "the denylist assertion must know every host path the sandbox reaches"
+        );
+        // An adopted container's destination for it is not a project.
+        let mounted = vec![
+            "/var/lib/micold-ai-ide/terminal-history".to_string(),
+            "/home/u/p".to_string(),
+        ];
+        assert_eq!(
+            outside.container_projects(
+                Some(&mounted),
+                &CredentialLayout::conventional(Path::new("/home/u"), None)
+            ),
+            vec!["/home/u/p".to_string()]
+        );
     }
 
     /// The same set for a *Windows* host, which is the one whose spelling every platform can check.

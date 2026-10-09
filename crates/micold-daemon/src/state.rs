@@ -131,6 +131,9 @@ pub struct DaemonState {
     /// (feature 487). Set once at startup; absent for tests that give the state none, which then
     /// remove and sweep only what lies in worktrees.
     pasted_data_dir: std::sync::OnceLock<PathBuf>,
+    /// Whether the warning for a missing history directory (a sandbox made before the feature,
+    /// R15) has been logged in this service run.
+    history_directory_warned: std::sync::atomic::AtomicBool,
     /// The periodic saver's schedules (feature 041, R6). Never held across a write.
     saver: Mutex<history::Saver>,
     /// Serialises changes of the terminal history setting.
@@ -675,6 +678,7 @@ impl DaemonState {
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
             pasted_data_dir: std::sync::OnceLock::new(),
+            history_directory_warned: std::sync::atomic::AtomicBool::new(false),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
         }
@@ -4588,6 +4592,23 @@ impl DaemonState {
     /// Write `id`'s history to its file. **Blocking**, and never under the state lock. A save
     /// that fails is one warning and nothing else: the history stays carried in memory (FR-007).
     /// A save the store skips (no directory in a container, R15) is not a failure.
+    /// `store.save`, with the one warning for a store that skipped it for want of its directory.
+    fn save_to_store(
+        &self,
+        store: &micold_core::terminal_history::HistoryStore,
+        id: SessionId,
+        snapshot: &micold_core::terminal_history::HistorySnapshot,
+    ) -> std::io::Result<micold_core::terminal_history::SaveOutcome> {
+        use micold_core::terminal_history::{SaveOutcome, SkipReason};
+        let outcome = store.save(id, snapshot);
+        if matches!(outcome, Ok(SaveOutcome::Skipped(SkipReason::NoDirectory)))
+            && history::first_missing_directory(&self.history_directory_warned)
+        {
+            history::warn_directory_missing();
+        }
+        outcome
+    }
+
     fn save_history(
         &self,
         id: SessionId,
@@ -4596,7 +4617,7 @@ impl DaemonState {
         let Some(store) = self.history_store.get() else {
             return;
         };
-        if let Err(err) = store.save(id, snapshot) {
+        if let Err(err) = self.save_to_store(store, id, snapshot) {
             tracing::warn!(session = %id.0, reason = %err, "terminal history was not saved");
         }
     }
@@ -4656,7 +4677,7 @@ impl DaemonState {
             // Read before the capture: output that lands between them is saved again later.
             let count = pty.signals().output_count();
             let snapshot = history::capture(&pty.term().lock());
-            let result = store.save(id, &snapshot);
+            let result = self.save_to_store(store, id, &snapshot);
             let mut saver = self
                 .saver
                 .lock()
@@ -4700,7 +4721,7 @@ impl DaemonState {
             return;
         }
         let snapshot = history::capture(&pty.term().lock());
-        let result = store.save(id, &snapshot);
+        let result = self.save_to_store(store, id, &snapshot);
         let mut saver = self
             .saver
             .lock()

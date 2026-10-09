@@ -32,6 +32,8 @@ FROM docker.io/library/node:24-trixie-slim AS runtime-base
 
 # Session tooling. `git` is not optional: the daemon runs it for worktree management, and feature
 # 027's whole path-identity decision (research R2) exists because it does.
+# `tzdata` is what makes the `TZ` the launcher passes (feature 041, research R11) mean anything: without
+# it the zone is unknown and the "session restarted at" line of a saved history shows UTC.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -40,6 +42,7 @@ RUN apt-get update \
       procps \
       less \
       bash \
+      tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 # The daemon's state directory, bind-mounted from the host at run time so it survives container

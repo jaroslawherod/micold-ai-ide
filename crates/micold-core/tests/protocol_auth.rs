@@ -274,6 +274,7 @@ fn the_token_is_in_no_generated_argument_vector() {
         control_port: 7727,
         published_ports: Vec::new(),
         network_name: "micold-net".into(),
+        time_zone: None,
         home: dir.path().to_path_buf(),
     };
 

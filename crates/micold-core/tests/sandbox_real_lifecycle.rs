@@ -122,6 +122,7 @@ impl Fixture {
             control_port: port,
             published_ports: Vec::new(),
             network_name: net.clone(),
+            time_zone: None,
             home: host_home(),
         };
 
@@ -471,6 +472,7 @@ impl Fixture {
             control_port: port,
             published_ports: Vec::new(),
             network_name: net.clone(),
+            time_zone: None,
             home: host_home(),
         };
 
@@ -578,6 +580,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         control_port: PORT,
         published_ports: Vec::new(),
         network_name: network.clone(),
+        time_zone: None,
         home: host_home(),
     };
     let runtime = CliRuntime::new(

@@ -42,6 +42,8 @@ uuid = { version = "1.24.0", features = ["v4", "serde"] }
 # Already in Cargo.lock through iced/cosmic-text; dependency-free, MIT/Apache-2.0.
 unicode-segmentation = "1.13"
 directories = "6.0.0"
+# Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
+iana-time-zone = "0.1"
 # This machine's hostname, for the `file://` links terminal output prints (feature 031, FR-012).
 # Already in Cargo.lock through x11rb; two syscalls behind one cross-platform call, MIT/Apache-2.0.
 gethostname = "1.1"
