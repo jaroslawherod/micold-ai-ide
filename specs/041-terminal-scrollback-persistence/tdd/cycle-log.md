@@ -858,3 +858,10 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - green: `State::unlisted` makes `load` return none, `retry_deletions` and `set_enabled` repeat the whole deletion
 - test: `history_timing.rs::shows` read one row at a time, so a token wrapped across the end of a row was never seen: a test race, not a lost echo (review B F2; the same flake seen once on Windows CI). It now reads the rows joined
 - code: `DaemonState::set_save_terminal_history` applies the value to the store even when the settings file cannot be written, and one change runs at a time (review A)
+
+## Cycles 93-99 (M6): a damaged saved history is skipped with a notice (U12, U13, U29, U106, U107, A19-A24)
+
+- test: `terminal_history_text.rs` (notice_line), `history.rs` unit test of `Seed::Notice`, `crates/micold-daemon/tests/history_damaged.rs` (6 cases)
+- red: tests and code were written together, so the red run was made afterwards by mutation: with `saved_seed` returning `Seed::None` for `Damaged`, `cargo test -p micold-daemon --test history_damaged` -> `test result: FAILED. 2 passed; 4 failed` (a19/a20, a21, a22, a24 lack the notice)
+- green: `notice_line`, `Seed::Notice`, `Saver::started_damaged` (first look is due), `saved_seed` returns the notice; `test result: ok. 6 passed`
+- notes: `history_service_restart::a19` now expects the notice line. The once-per-run log of a repeated save failure (T054) already existed from M3; U106/U107 pin it.

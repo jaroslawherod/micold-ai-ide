@@ -89,6 +89,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 review A (code-review high) | 1 | ec36b09056965d05e017bf4bd9d586d54788d32c:34278345e2267e81547a89ddc80d2f21a61b0e4b | 9 findings: 3 fixed (unlistable directory kept no retry record; two-window race on the setting; persist failure left the store on), 6 declined as MINOR/no concrete failure (blocking deletion in async arm: catalog write there is already blocking; redundant on; nil-session warning dedup; Skipped(Disabled) marked saved; TerminalDraft bool default; store default enabled) |
 | M5 review B (conformance, sonnet) | 1 | same | CHANGES: 2 MAJOR fixed (cycle-log entry written, with the missing red noted; Verify flake was a test race: `shows` missed a token wrapped across a row end, fixed), 2 MINOR (T045 wording about main.rs left; tick case normalised no) |
 | M5 re-review of A fixes (sonnet) | 2 | ceb65a439e8c8fcd541b802c9426f3636ead0379:b2551e8bd43de3e32af9f04210b0421e372cb688 | CLEAN |
+| M6 review A (code-review high) | 1 | 61fd590e240b9a616fb0456b5ecb7a9b47474986:4426249a96fe7b2d9d6a5c3da0d9eb1c6f5d29d1 | CLEAN |
 
 ## Declined review findings
 
