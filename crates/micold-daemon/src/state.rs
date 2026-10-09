@@ -127,6 +127,10 @@ pub struct DaemonState {
     /// `server::run`. Absent for tests that give the state none: nothing is then saved or loaded,
     /// and a history is carried in memory only.
     history_store: std::sync::OnceLock<micold_core::terminal_history::HistoryStore>,
+    /// The app's data directory, where pasted images of sessions without a worktree are kept
+    /// (feature 487). Set once at startup; absent for tests that give the state none, which then
+    /// remove and sweep only what lies in worktrees.
+    pasted_data_dir: std::sync::OnceLock<PathBuf>,
     /// The periodic saver's schedules (feature 041, R6). Never held across a write.
     saver: Mutex<history::Saver>,
     /// Serialises changes of the terminal history setting.
@@ -670,9 +674,15 @@ impl DaemonState {
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
+            pasted_data_dir: std::sync::OnceLock::new(),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
         }
+    }
+
+    /// Record the data directory pasted images are kept in (feature 487). A no-op if already set.
+    pub fn set_pasted_data_dir(&self, dir: PathBuf) {
+        let _ = self.pasted_data_dir.set(dir);
     }
 
     /// Record where terminal histories are saved (feature 041). A no-op if already set.
@@ -3427,14 +3437,62 @@ impl DaemonState {
         &self,
         session: SessionId,
     ) -> io::Result<(Option<PathBuf>, Vec<Arc<PtySession>>)> {
-        let (owner, ptys) = {
+        let (owner, ptys, worktree) = {
             let mut inner = self.lock();
+            let worktree = inner.catalog.session_worktree_dir(session);
             let owner = inner.catalog.archive_session(session)?;
             let ptys = Self::remove_live_by_ids(&mut inner, vec![session]);
-            (owner, ptys)
+            (owner, ptys, worktree)
         };
         self.revoke_tool_credentials(&[session]);
+        if owner.is_some() {
+            self.remove_pasted_images(session, worktree.as_deref());
+        }
         Ok((owner, ptys))
+    }
+
+    /// Remove the images pasted into `session`: its directory in its worktree and the one in the
+    /// data directory. Never a file the user dropped (feature 487, FR-013). Deletes files, so it
+    /// runs outside the state lock; a failure is logged, never fatal.
+    fn remove_pasted_images(&self, session: SessionId, worktree: Option<&Path>) {
+        use micold_core::path_insert::PastedLayout;
+        let layouts = worktree
+            .map(|w| PastedLayout::in_worktree(w, session))
+            .into_iter()
+            .chain(
+                self.pasted_data_dir
+                    .get()
+                    .map(|d| PastedLayout::in_data_dir(d, session)),
+            );
+        for layout in layouts {
+            if let Err(e) = layout.remove() {
+                tracing::warn!(session = %session.0, error = %e, "pasted images were not removed");
+            }
+        }
+    }
+
+    /// At service start, remove the pasted images of every session the catalog no longer shows
+    /// (feature 487, FR-014): a crash or an archive that never reached `delete_session` leaves
+    /// them. Does nothing when the catalog did not load, since its sessions are then unknown.
+    /// **Blocking**; runs before the accept loop.
+    pub fn sweep_pasted_images(&self) {
+        use micold_core::path_insert::{PastedLayout, pasted_roots};
+        let (live, worktrees) = {
+            let inner = self.lock();
+            if inner.catalog.load_status() != micold_core::store::LoadStatus::Loaded {
+                return;
+            }
+            (
+                inner.catalog.unarchived_session_ids(),
+                inner.catalog.session_worktree_dirs(),
+            )
+        };
+        let roots = pasted_roots(&worktrees, self.pasted_data_dir.get().map(PathBuf::as_path));
+        for dir in PastedLayout::orphans(&roots, &live) {
+            if let Err(e) = std::fs::remove_dir_all(&dir) {
+                tracing::warn!(dir = %dir.display(), error = %e, "orphaned pasted images were not removed");
+            }
+        }
     }
 
     /// Prune (archive) empty sessions of `project` — those the AI CLI never recorded a conversation

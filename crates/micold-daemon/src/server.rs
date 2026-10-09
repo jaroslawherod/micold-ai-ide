@@ -190,6 +190,14 @@ pub async fn run() -> io::Result<()> {
         let _ = tokio::task::spawn_blocking(move || sweeping.sweep_saved_histories()).await;
     }
 
+    // Feature 487: images pasted into sessions are removed with their session. Whatever a crash
+    // left behind goes now, before any session starts (FR-014).
+    if let Some(dirs) = directories::ProjectDirs::from("", "", "micold-ai-ide") {
+        state.set_pasted_data_dir(dirs.data_dir().to_path_buf());
+    }
+    let sweeping = Arc::clone(&state);
+    let _ = tokio::task::spawn_blocking(move || sweeping.sweep_pasted_images()).await;
+
     // Feature 027: a sandboxed daemon requires the token its runtime mounted. Fatal if named and
     // unreadable — see `adopt_auth_token`.
     adopt_auth_token(&state)?;

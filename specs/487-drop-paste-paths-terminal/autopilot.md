@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M3
-- **Next step**: orchestrator pushes the branch (remote branch missing), opens the M3 PR from scratchpad pr-487-m3.md, waits for CI, merges; then M4
+- **Phase**: milestone M4
+- **Next step**: orchestrator pushes if needed, opens the M4 PR from scratchpad pr-487-m4.md, waits for CI, merges; then close
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #662 | Design (spec, plan, tasks) | merged | ab2f9967b89658219500097833054c14634698c3 |
 | #663 | M1 drop files | merged | b1d3c18944e1172294740bffd45295af60570322 |
 | #667 | M2 paste image | merged | 3d65796a1f523c657562ab8b6ea91cee2f40ebf4 |
+| #671 | M3 sandbox container paths | merged (rebase) | 567676fc070508f04ed368aa11f278b2ae2e5394 (two Windows test fixes added on top by the orchestrator: host-equals-container test now #[cfg(unix)] with a mapped cross-platform twin) |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
 | M2 | T018–T024 | full | paste image into AI session | #667 | merged |
-| M3 | T025–T029 | full | sandbox container paths, refusals | #TBD | gate green except six root-only tests; PR text in scratchpad pr-487-m3.md |
-| M4 | T030–T034 | full | cleanup on delete and startup | | pending |
+| M3 | T025–T029 | full | sandbox container paths, refusals | #671 | merged |
+| M4 | T030–T034 | full | cleanup on delete and startup | #TBD | implemented; gate and reviews running; PR text in scratchpad pr-487-m4.md |
 
 ## Decisions
 
@@ -36,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2: visual pass skipped: no visible element changed (paste inserts text; errors use the existing snackbar).
 - M2: `arboard` (image-data, wayland-data-control) and `png` added; `paste_source` decides, the reducer reuses `files_dropped` for the saved path; the worktree fallback test uses a file-as-worktree (works as root).
 - M1: visual pass skipped: M1 adds no visible element (errors use the existing snackbar) and a file drag cannot be synthesised on Xvfb.
+- M4: visual pass skipped: no visible element changed (daemon-side cleanup and one docs paragraph). Daemon `set_pasted_data_dir` is set from `ProjectDirs::data_dir()` (same as the client's host data dir); sweep skipped when the catalog did not load; non-UUID names under a pasted root are left alone.
 - M3: visual pass skipped: no visible element changed (refusals use the existing snackbar). `SandboxShare` (mounts + really-mounted projects) rides on `FilesDropped`/`ImagePasted`; `shell::sandbox::share` builds it without host probes and fails closed (a notice) under the sandbox placement with no running container.
 
 | # | Phase | Question | Answer | By | Evidence |

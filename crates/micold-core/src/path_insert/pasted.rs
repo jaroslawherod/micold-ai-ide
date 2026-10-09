@@ -4,6 +4,8 @@
 //! directory keyed by the session's id, so deleting the session can remove them and no two
 //! sessions share a file (data-model: `PastedLayout`).
 
+use std::collections::HashSet;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::session::SessionId;
@@ -61,6 +63,66 @@ impl PastedLayout {
     pub fn exclude_line() -> &'static str {
         "/.micold-pasted/"
     }
+
+    /// Remove this session's directory with everything in it. A directory that is not there is
+    /// fine. Only a directory named for a session under a `pasted` root is ever removed (FR-013).
+    pub fn remove(&self) -> io::Result<()> {
+        if !is_pasted_root(self.dir.parent()) {
+            return Ok(());
+        }
+        match std::fs::remove_dir_all(&self.dir) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    }
+
+    /// The per-session directories under `roots` that belong to no session in `live` (FR-014,
+    /// SC-005). A root is a directory named [`WORKTREE_DIR`] or [`TEMP_DIR`]; any other path is
+    /// ignored, as is an entry whose name is not a session id and a symbolic link.
+    pub fn orphans(roots: &[PathBuf], live: &HashSet<SessionId>) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        for root in roots {
+            if !is_pasted_root(Some(root)) {
+                continue;
+            }
+            let Ok(entries) = std::fs::read_dir(root) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
+                if !kind.is_dir() {
+                    continue;
+                }
+                let name = entry.file_name();
+                let Some(id) = name.to_str().and_then(|n| n.parse::<uuid::Uuid>().ok()) else {
+                    continue;
+                };
+                if !live.contains(&SessionId::from_uuid(id)) {
+                    found.push(entry.path());
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+}
+
+/// Every place pasted images may be kept: `.micold-pasted` in each of `worktrees`, and `pasted`
+/// under `data_dir`. What [`PastedLayout::orphans`] searches.
+pub fn pasted_roots(worktrees: &[PathBuf], data_dir: Option<&Path>) -> Vec<PathBuf> {
+    worktrees
+        .iter()
+        .map(|w| w.join(WORKTREE_DIR))
+        .chain(data_dir.map(|d| d.join(TEMP_DIR)))
+        .collect()
+}
+
+/// Whether `dir` is a place pasted images live in, by its name.
+fn is_pasted_root(dir: Option<&Path>) -> bool {
+    dir.and_then(Path::file_name)
+        .is_some_and(|n| n == WORKTREE_DIR || n == TEMP_DIR)
 }
 
 #[cfg(test)]
@@ -97,5 +159,61 @@ mod tests {
     #[test]
     fn the_exclude_line_names_the_worktree_dir() {
         assert_eq!(PastedLayout::exclude_line(), "/.micold-pasted/");
+    }
+
+    fn make(dir: &Path, name: &str) -> PathBuf {
+        let d = dir.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("1-1.png"), b"x").unwrap();
+        d
+    }
+
+    #[test]
+    fn orphans_are_the_dead_sessions_dirs_in_both_kinds_of_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (live, dead, dead_wt) = (SessionId::new(), SessionId::new(), SessionId::new());
+        let data = tmp.path().join("data").join(TEMP_DIR);
+        let wt = tmp.path().join("wt").join(WORKTREE_DIR);
+        make(&data, &live.to_string());
+        let d1 = make(&data, &dead.to_string());
+        let d2 = make(&wt, &dead_wt.to_string());
+        let found = PastedLayout::orphans(&[data, wt], &HashSet::from([live]));
+        let mut want = vec![d1, d2];
+        want.sort();
+        assert_eq!(found, want);
+    }
+
+    #[test]
+    fn orphans_never_name_a_path_outside_a_pasted_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let other = tmp.path().join("projects");
+        let stray = make(&other, &SessionId::new().to_string());
+        let root = tmp.path().join(TEMP_DIR);
+        make(&root, "notes");
+        std::fs::write(root.join(SessionId::new().to_string()), b"a file").unwrap();
+        assert!(PastedLayout::orphans(&[other, root.clone()], &HashSet::new()).is_empty());
+        assert!(stray.exists() && root.join("notes").exists());
+    }
+
+    #[test]
+    fn a_missing_root_has_no_orphans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gone = tmp.path().join(TEMP_DIR);
+        assert!(PastedLayout::orphans(&[gone], &HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn remove_deletes_the_session_dir_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (a, b) = (SessionId::new(), SessionId::new());
+        let la = PastedLayout::in_data_dir(tmp.path(), a);
+        let lb = PastedLayout::in_data_dir(tmp.path(), b);
+        make(&tmp.path().join(TEMP_DIR), &a.to_string());
+        let kept = make(&tmp.path().join(TEMP_DIR), &b.to_string());
+        la.remove().unwrap();
+        assert!(!la.dir().exists());
+        assert!(kept.exists());
+        la.remove().unwrap();
+        drop(lb);
     }
 }
