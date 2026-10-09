@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M1
-- **Next step**: M1 verify (scoped gate, Review A, Review B, visual pass, full gate, PR file)
+- **Next step**: orchestrator opens PR from scratchpad pr-484-m1.md, waits CI, merges; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | — | pending |
+| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | pending (pushed; PR file in scratchpad pr-484-m1.md) | in review |
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | — | pending |
 | M3 | T024–T028 | full | Resize, close, rearrange | — | pending |
 | M4 | T029–T035 | full | Layout survives restart | — | pending |
@@ -43,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | dbb88a3c2cb206cb6716902bb89d94ac49cd8803:8f919183081da946845bf3a7e9b909967d5192fe | CHANGES: 2 MAJOR (layout write path: daemon-owned via Workspace + SetPaneLayout; process field semantics), 4 MINOR; fixed |
 | Plan | 2 | 2c92523f4feb02154bd127d01e88edcb54c2d30c:ea4f3c2260e6d692e94b4d3122dfc2776902dafb | CLEAN (1 MINOR: snapshot name, fixed, prose only) |
 | Tasks | 1 | 0301e32716201fec8325e22c1d5d8d31d669aebd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 2 MAJOR (M1 half-wired: US2+US5 folded into M1; last-pane refusal moved to T026), 4 MINOR; fixed; analyze HIGH C1/U1 fixed (T006a, T002) |
+| M1 diff A | 1 | d50bde24 | CHANGES: 2 MAJOR (daemon stream not re-attached after PTY restart; pane_sizes unkeyed by project) + 2 MINOR; all fixed |
+| M1 diff B | 1 | HEAD | CLEAN (1 MINOR wording, fixed); visual pass: showcase SplitView, label inset fixed |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
@@ -61,5 +63,6 @@ None.
 
 ## Follow-ups not done
 
+- Review-A daemon fix (restarted PTY re-streams) has no dedicated test; add one with M3's daemon work.
 - T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test.
 - Empty-pane picker is a list of buttons (one press per choice) rather than the `picker` component; revisit if review asks.

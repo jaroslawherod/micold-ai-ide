@@ -551,11 +551,12 @@ pub fn split_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
             .panes()
             .iter()
             .map(|p| {
-                material::Text::<Message>::new(
+                iced::widget::container(material::Text::<Message>::new(
                     format!("pane {}", p.id().get()),
                     material::TypeRole::Label,
                     roles,
-                )
+                ))
+                .padding(micold_core::tokens::spacing::SM)
                 .into()
             })
             .collect();
