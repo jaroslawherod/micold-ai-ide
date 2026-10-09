@@ -8690,6 +8690,24 @@ mod pr_status {
         assert_eq!(remote_lists(&mut rig).len(), 1);
     }
 
+    // A34 (S4), the failed variant: a refresh the daemon failed ends the same way, and still reads.
+    #[test]
+    fn pr_status_refresh_failed_reads_too() {
+        let mut rig = holding();
+        let refresh = press_refresh(&mut rig);
+        daemon(
+            &mut rig.app,
+            DaemonMsg::OperationError {
+                req: refresh,
+                kind: micold_core::protocol::messages::ErrorKind::Internal,
+                message: "the refresh failed".into(),
+                detail: None,
+            },
+        );
+        assert!(!rig.app.core.worktree.refreshing);
+        assert_eq!(remote_lists(&mut rig).len(), 1);
+    }
+
     // A36 (FR-027): a failed reading changes neither the control nor the notice the refresh shows.
     #[test]
     fn pr_status_refresh_then_a_failed_reading_adds_nothing_to_the_refresh() {
@@ -8872,13 +8890,17 @@ mod pr_status {
             Some(FAKE_GH),
             FakePullRequestSource::new()
                 .with_answer(statuses())
-                .with_answer(other.clone()),
+                .with_answer(other.clone())
+                .with_answer(BTreeMap::new()),
         );
         read_once(&mut rig, one_worktree());
         let before = untouched(&rig.app);
         tick_and_answer(&mut rig);
         assert_eq!(rig.app.core.pr_status.statuses, other);
         assert_eq!(untouched(&rig.app), before);
+        // A reading replaces the whole map: a branch whose pull request is gone is not kept.
+        tick_and_answer(&mut rig);
+        assert!(rig.app.core.pr_status.statuses.is_empty());
     }
 
     // A35 (FR-022): a tick and three refreshes during a reading add no call; one more when it ends.
@@ -8978,6 +9000,22 @@ mod pr_status {
         );
         settle(&mut rig.app, work);
         assert_eq!(rig.app.core.pr_status, before);
+
+        // Nor does a timer whose request is not the one the reading waits for.
+        let req = read_again(&mut rig);
+        let seq = seq_under_way(&rig.app);
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut {
+                seq,
+                req: req + 1000,
+            }),
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            matches!(rig.app.core.pr_status.phase, Phase::Reading { .. }),
+            "the reading is still waiting for its own answer"
+        );
     }
 
     // The daemon failing the remotes request is a passing failure, and never a notice.
@@ -9138,6 +9176,11 @@ mod pr_status {
         );
         answer_remotes(&mut rig.app, asked[0], github_remote());
         assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        daemon(&mut rig.app, settings(true));
+        assert!(
+            remote_lists(&mut rig).is_empty(),
+            "the same value again, after the reading ended, reads nothing"
+        );
 
         daemon(&mut rig.app, settings(false));
         assert!(rig.app.core.pr_status.statuses.is_empty());

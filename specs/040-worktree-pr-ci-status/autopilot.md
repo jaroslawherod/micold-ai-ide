@@ -116,10 +116,12 @@ None.
 
 ## Follow-ups not done
 
-- M1 review A, F3 (MINOR, not confirmed against GitHub): a sign-in that may read pull requests but not checks could get a field-level `FORBIDDEN` error on `statusCheckRollup`. Contract PS §5 makes any `errors` entry a failure, and `github::classify` reads "resource not accessible" as no access, so the whole project would show nothing (`Unavailable`). Deciding whether such an error is tolerated (checks read as none) needs a recorded answer from a token of that kind and a contract change.
+Follow-up unit (2026-10-09, after #670):
 
-- M8: T067 left unticked. Quickstart §B ran on headless sway (no Xvfb/xdotool): B1 light and dark, B2, B12 pass; B3-B11, B13-B17 NOT RUN, they need a GitHub scratch repo with pull requests (creating one on the user's account was not authorised). Evidence: `evidence/visual-pass.md`. The close unit or the user must run the rest. `aarch64-apple-darwin` target was added with rustup; check passed; no non-test `cfg` in feature 040 commits.
-- M8 review B (sonnet, snapshot a724c3522b8a4b205847dc8e7b42dec9bbf97d27:599def4097e93879a959079a9f113d7566113bea): CHANGES, 1 MAJOR (doc said `gh pr list`; it is `gh api graphql`), 1 MINOR (protocol 22): both fixed, prose only.
+- C2 (M1 review A F3) DONE: recorded from GitHub with a `GITHUB_TOKEN` limited to `pull-requests: read` (workflow in a private scratch repo): HTTP 200, `statusCheckRollup: null`, a `FORBIDDEN` error per rollup path, `gh` exit 1, stderr "Resource not accessible by integration". Decision: checks read as none (FR-025 says "cannot be read at all"; here the pull request can be); only `FORBIDDEN` at a `statusCheckRollup` path is tolerated. Red test first, fixture `pr_checks_forbidden.txt`, contract and spec edge case updated. Commit a1b2ce2d, gate green, reviewer CLEAN (2 MINOR doc wrap, not fixed).
+- M3 Review B F2 (mutation evidence for T024/T025): run by a worker in an isolated worktree; result goes into tdd/cycle-log.md (see below if it is not there, it was not received).
+- T067 partly done: quickstart B3 to B7, B9 to B14, B16 and B17 ran on the scratch repo and PASS (B4 lacks the `Review: approved` line for want of a reviewer, B14 is a simulated launcher, B3 `draft, no check glyph` not exercised because the draft's CI passed). NOT RUN: B15 (sandbox image `micold-daemon:dev` not built, no cheap build), B8's close half (`gh pr close` on the scratch repo is blocked by the autopilot gate hook). T067 stays unticked until those two run. Evidence: `evidence/visual-pass.md`.
+- Scratch repo `jaroslawherod/micold-pr-status-scratch` (private) still exists: the token has no `delete_repo` scope. Needs `gh auth refresh -s delete_repo` by the user, then `gh repo delete jaroslawherod/micold-pr-status-scratch --yes`.
 
 ## Close findings (2026-10-09)
 
