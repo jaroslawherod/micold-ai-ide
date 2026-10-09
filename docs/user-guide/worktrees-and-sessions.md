@@ -781,6 +781,9 @@ Right-click a worktree in the sidebar to open its context menu:
     there is no possible recovery path back into the sidebar either. Remove is only offered on a
     still-visible session — a closed session can't be removed separately, since it's already
     hidden.
+  - Close, Remove, deleting a worktree and forgetting a project also delete the session's
+    [saved terminal history](settings.md#terminal) from the disk, before the action is done. **Stopping** a
+    session keeps it: the earlier output is shown again when the session is started.
 
 Session labels come from the AI CLI itself (its own session title); until a title is available a
 placeholder is shown.

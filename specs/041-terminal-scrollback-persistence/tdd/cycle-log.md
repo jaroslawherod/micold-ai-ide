@@ -865,3 +865,10 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - red: tests and code were written together, so the red run was made afterwards by mutation: with `saved_seed` returning `Seed::None` for `Damaged`, `cargo test -p micold-daemon --test history_damaged` -> `test result: FAILED. 2 passed; 4 failed` (a19/a20, a21, a22, a24 lack the notice)
 - green: `notice_line`, `Seed::Notice`, `Saver::started_damaged` (first look is due), `saved_seed` returns the notice; `test result: ok. 6 passed`
 - notes: `history_service_restart::a19` now expects the notice line. The once-per-run log of a repeated save failure (T054) already existed from M3; U106/U107 pin it.
+
+## Cycles 100-105 (M7): a saved history goes away with its session (U108-U114, A25-A30)
+
+- test: `terminal_history_store.rs` (forget, a save after a forget, a save racing a forget, forget with saving off, sweep; U108-U111), `crates/micold-daemon/tests/history_removal.rs` (10 cases, A25-A30, U112-U114)
+- red: the store tests failed to compile (`forget`, `SkipReason::Forgotten` missing). The daemon tests were run with the `forget` and `sweep` calls commented out: `test result: FAILED. 1 passed; 9 failed` (only A30, which needs no deletion, passed)
+- green: `HistoryStore::forget` and `sweep`, `forgotten` set checked by `save` and `load`; `DaemonState::revoke_tool_credentials` calls `forget`, `sweep_saved_histories` runs before the accept loop; `test result: ok. 10 passed`
+- notes: the sweep is skipped unless the catalog loaded (`LoadStatus::Loaded`), so a recovered empty catalog does not delete every history.
