@@ -182,7 +182,8 @@ fn image_target(app: &App) -> Option<ImageTarget> {
         return None;
     }
     let (repo, session) = app.core.workspace.find_session(terminal.session)?;
-    let sandbox = crate::shell::sandbox::share(app);
+    // A sandbox that is not running takes no image: the paste goes on as text.
+    let sandbox = crate::shell::sandbox::share(app).ok()?;
     // A sandbox sees the state directory, so that is where an image goes when its worktree cannot
     // take it (FR-010); otherwise it is the app's data directory.
     let data_dir = match &sandbox {

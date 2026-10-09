@@ -47,7 +47,14 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
     // Known limit (M1): the user's login shell, not the one this terminal runs. A shell instance
     // started with another shell, or an AI CLI's own prompt, is quoted for the default shell.
     let shell = login_shell_kind();
-    let sandbox = crate::shell::sandbox::share(app);
+    let sandbox = match crate::shell::sandbox::share(app) {
+        Ok(sandbox) => sandbox,
+        Err(reason) => {
+            app.core
+                .update(Message::Session(SessionMsg::InsertionFailed(reason)));
+            return Task::none();
+        }
+    };
     Task::batch(groups.into_iter().map(|(pane, paths)| {
         let target = target_of(app, pane);
         let effects = app
