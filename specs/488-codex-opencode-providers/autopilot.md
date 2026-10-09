@@ -80,6 +80,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - The sign-in mount is writable (rule N-4, `CredentialShare::writable`), not read-only as research R5 assumed; kept for every CLI so a refresh persists as for Claude Code (FR-013 "writing nothing existing providers would not write"). Guide says so. A read-only mount would break claude.
 - `unshared_sign_in` still reports Claude Code's file only (`ai_cli_auth.first()`); the settings page names one path.
 
+- M6 A round 1 f1744874…:b4825904: CHANGES (F1 MAJOR onboarding_record keyed on any sign-in, fixed to Claude's token; F2/F3 MINOR fixed). B round 1 (sonnet): CLEAN (MINORs: doc comment order, read-only wording, T034 text, all fixed). Gate found 6 existing sandbox tests assuming one sign-in file; updated.
+
 ## Declined review findings
 
 - M4 review A F2 (MINOR, output cap checked after buffering): declined, the 2 s timeout bounds it; documented on `run_json`.

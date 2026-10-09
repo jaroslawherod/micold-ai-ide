@@ -170,14 +170,14 @@ fn a_windows_host_mounts_every_path_under_the_container_root() {
         );
     }
 
-    // The project and the three credentials all come from the host's filesystem, so all four
+    // The project and the credentials all come from the host's filesystem, so all six
     // land under the container root. The state and token mounts do not: they have fixed container
     // paths the image dictates.
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        4,
-        "one project and three credentials: {mapped:?}"
+        6,
+        "one project, two git credentials and three sign-in files: {mapped:?}"
     );
     assert!(
         mapped
@@ -235,8 +235,8 @@ fn a_unix_host_mounts_every_path_at_itself() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        4,
-        "one project and three credentials: {mapped:?}"
+        6,
+        "one project, two git credentials and three sign-in files: {mapped:?}"
     );
     for (host, container, _) in mapped {
         assert_eq!(
@@ -301,7 +301,11 @@ fn only_the_ai_cli_sign_in_is_mounted_writable() {
         if !credential_hosts.contains(&host) {
             continue;
         }
-        let expected = if host == sign_in { "rw" } else { "ro" };
+        // Every CLI's sign-in file, not only Claude Code's (feature 488).
+        let is_sign_in = host == sign_in
+            || host.ends_with("auth.json")
+                && (host.contains(".codex") || host.contains("opencode"));
+        let expected = if is_sign_in { "rw" } else { "ro" };
         assert_eq!(mode, expected, "credential mount {host} has the wrong mode");
     }
 }

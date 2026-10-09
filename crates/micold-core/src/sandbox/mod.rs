@@ -761,9 +761,14 @@ impl MountSet {
     /// with nothing behind it records nothing either. Never the host's own `.claude.json`: this is
     /// always a path under [`HomeMount::host`].
     pub fn onboarding_record(&self) -> Option<PathBuf> {
+        // Claude Code's own token, not any sign-in: a host signed in to Codex alone must not have
+        // `claude` told its setup is done (feature 488).
+        let claude_token = crate::session::AiCli::ClaudeCode
+            .provider()
+            .sandbox_auth_file(&self.home.container)?;
         self.credentials
             .iter()
-            .any(|c| c.share == CredentialShare::AiCliAuth)
+            .any(|c| c.share == CredentialShare::AiCliAuth && c.container == claude_token)
             .then(|| self.home.host.join(ONBOARDING_RECORD))
     }
 
@@ -1156,7 +1161,9 @@ mod tests {
         assert_eq!(
             containers,
             vec![
+                "/mnt/host/c/Users/u/.local/share/opencode/auth.json".to_string(),
                 "/mnt/host/c/Users/u/.claude/.credentials.json".to_string(),
+                "/mnt/host/c/Users/u/.codex/auth.json".to_string(),
                 "/mnt/host/c/Users/u/p".to_string(),
                 "/mnt/host/d/srv/other".to_string(),
                 "/mnt/host/c/Users/u".to_string(),
@@ -1184,9 +1191,14 @@ mod tests {
             pairs,
             vec![
                 (
+                    "/home/u/.local/share/opencode/auth.json",
+                    "/home/u/.local/share/opencode/auth.json"
+                ),
+                (
                     "/home/u/.claude/.credentials.json",
                     "/home/u/.claude/.credentials.json"
                 ),
+                ("/home/u/.codex/auth.json", "/home/u/.codex/auth.json"),
                 ("/home/u/p", "/home/u/p"),
                 (
                     "/var/lib/micold-ai-ide",
@@ -1235,7 +1247,7 @@ mod tests {
         );
         assert_eq!(
             mounts.shared_locations(None).len(),
-            5,
+            7,
             "with nothing known about what is mounted — a container this bring-up created from \
              this very set — every location is shared"
         );

@@ -1602,7 +1602,6 @@ fn write_archived_marker(base: &Path, session_id: Uuid) -> io::Result<()> {
     std::fs::write(path, "")
 }
 
-/// A non-empty environment variable as a path.
 /// Codex's sign-in file: `$CODEX_HOME/auth.json` when that directory is under `home`, else
 /// `~/.codex/auth.json`. A `$CODEX_HOME` outside the home is not shared (feature 488, research R5).
 pub fn codex_sign_in(home: &Path, codex_home: Option<&Path>) -> PathBuf {
@@ -1612,6 +1611,7 @@ pub fn codex_sign_in(home: &Path, codex_home: Option<&Path>) -> PathBuf {
     }
 }
 
+/// A non-empty environment variable as a path.
 fn env_dir(name: &str) -> Option<PathBuf> {
     std::env::var_os(name)
         .filter(|value| !value.is_empty())

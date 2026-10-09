@@ -616,7 +616,7 @@ fn the_conventional_layout_lists_every_providers_sign_in_claude_first() {
     assert!(layout.ai_cli_auth.len() >= 3, "{:?}", layout.ai_cli_auth);
 }
 
-/// One toggle governs all of them; each mounts at its own path, read-only (credential mounts are).
+/// One toggle governs all of them; each mounts at its own path.
 #[test]
 fn the_sign_in_share_mounts_every_listed_file_at_its_own_path() {
     let mounts = build(&sharing_the_sign_in());
@@ -631,4 +631,21 @@ fn the_sign_in_share_mounts_every_listed_file_at_its_own_path() {
     for c in &mounts.credentials {
         assert_eq!(c.container, pathmap::map_for(&c.host, cfg!(windows)));
     }
+}
+
+/// Claude Code's setup is only skipped for a host whose Claude token is mounted: a host signed in
+/// to Codex alone must not tell `claude` its first-run setup is done (review A, feature 488).
+#[test]
+fn another_clis_sign_in_does_not_record_claude_setup_as_done() {
+    let mut layout = layout();
+    layout.ai_cli_auth = vec![codex_sign_in_default(Path::new("/home/u"))];
+    let mounts = MountSet::build(
+        &[PathBuf::from("/home/u/projects/micold")],
+        &sharing_the_sign_in(),
+        &layout,
+        PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
+        secret(),
+    );
+    assert_eq!(mounts.onboarding_record(), None);
 }
