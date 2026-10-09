@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M1
-- **Next step**: M1 gate, reviews A and B, push (PR body in scratchpad pr-487-m1.md)
+- **Next step**: orchestrator opens the M1 PR from scratchpad pr-487-m1.md, waits for CI, merges; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | drop files insert quoted paths | | pending |
+| M1 | T001–T017 | full | drop files insert quoted paths | #TBD | gate green except six root-only tests; pushed |
 | M2 | T018–T024 | full | paste image into AI session | | pending |
 | M3 | T025–T029 | full | sandbox container paths, refusals | | pending |
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
@@ -45,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | cf9fa8c2fa31216b4d33a2826532e036bfc60e5a:9a2546f998dc3f8911b8404479a2a297555d6919 | CHANGES: 1 MAJOR (fixed) |
 | Plan | 2 | scoped fix diff | CLEAN |
 | A M1 (code-review high) | 1 | 8f8d224863015e668a987938c539ac181beb136f:16e690ab28a89a13168bb4d176596569bd609fb8 | CHANGES: 1 MAJOR (fixed: refuse any control character when unbracketed), 2 MINOR (CursorLeft clears pointer fixed; shell-detect limit commented) |
+| A M1 (re-review of fix, sonnet) | 2 | 82d149fb7a8a2448c09cc2012611ff61bb357c5b:1257a0b81f0899a9b88f23a7c934a196f2e7a2a5 | CLEAN (1 MINOR, fmt-checked) |
 | B M1 (conformance, fresh) | 1 | same | CLEAN (4 MINOR: doc order fixed; shell limit noted; no cycle-log; no widget-level FileDropped test, declined) |
 
 ## Declined review findings
