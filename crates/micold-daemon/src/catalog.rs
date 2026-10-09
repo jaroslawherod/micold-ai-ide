@@ -1358,6 +1358,18 @@ impl Catalog {
         Ok(marked)
     }
 
+    /// The id of every session of every project that is not archived: the sessions that can still
+    /// be shown (feature 041, FR-024).
+    pub fn unarchived_session_ids(&self) -> std::collections::HashSet<SessionId> {
+        self.workspace
+            .sessions
+            .values()
+            .flatten()
+            .filter(|s| !s.archived)
+            .map(|s| s.id)
+            .collect()
+    }
+
     /// The ids this catalog already has a record of at `project`, archived ones included.
     ///
     /// Archived ones **included** deliberately: discovery must not resurrect a session the user

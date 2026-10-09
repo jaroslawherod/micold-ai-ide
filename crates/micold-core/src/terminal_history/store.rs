@@ -39,6 +39,8 @@ pub enum SkipReason {
     NoDirectory,
     /// Saving is turned off (feature 041, FR-026).
     Disabled,
+    /// The session was removed: its history is never written again (FR-023).
+    Forgotten,
 }
 
 /// A saved file that could not be deleted (FR-033): the session it belongs to, when its name says
@@ -80,6 +82,9 @@ struct State {
     unlisted: bool,
     /// The checksum of the file last written for each session by this store.
     last_written: HashMap<SessionId, [u8; CHECKSUM_BYTES]>,
+    /// Sessions that were removed. A save for one writes nothing, also when it began before the
+    /// removal, and its file is never loaded (FR-023). Ids are never reused.
+    forgotten: HashSet<SessionId>,
 }
 
 impl HistoryStore {
@@ -95,6 +100,7 @@ impl HistoryStore {
                 undeleted: HashSet::new(),
                 unlisted: false,
                 last_written: HashMap::new(),
+                forgotten: HashSet::new(),
             }),
         }
     }
@@ -160,6 +166,81 @@ impl HistoryStore {
         failures
     }
 
+    /// The sessions in `ids` were removed: delete their files and temporary files before this
+    /// returns, also while saving is off, and write nothing for them again (FR-023). Under the lock
+    /// a save writes under, so a save in flight has either finished and is deleted, or finds the
+    /// session forgotten. Returns the deletions that failed; those files stay in the retry set.
+    pub fn forget(&self, ids: &[SessionId]) -> Vec<DeletionFailure> {
+        let mut state = self.lock();
+        let mut failures = Vec::new();
+        for id in ids {
+            state.forgotten.insert(*id);
+            state.last_written.remove(id);
+            let name = file_name(*id);
+            for name in [format!(".{name}.tmp"), name] {
+                match std::fs::remove_file(self.dir.join(&name)) {
+                    Ok(()) => {
+                        state.undeleted.remove(&name);
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        state.undeleted.remove(&name);
+                    }
+                    Err(error) => {
+                        state.undeleted.insert(name.clone());
+                        failures.push(DeletionFailure {
+                            session: Some(*id),
+                            error,
+                        });
+                    }
+                }
+            }
+        }
+        failures
+    }
+
+    /// The service starts: delete every file in the directory that is not the saved history of a
+    /// session in `keep` (FR-024). A temporary file, a file with another name and a history of an
+    /// unknown session all go. Subdirectories are left alone. Returns the deletions that failed;
+    /// those history files stay in the retry set.
+    pub fn sweep(&self, keep: &HashSet<SessionId>) -> Vec<DeletionFailure> {
+        let mut state = self.lock();
+        let mut failures = Vec::new();
+        let entries = match std::fs::read_dir(&self.dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return failures,
+            Err(error) => {
+                failures.push(DeletionFailure {
+                    session: None,
+                    error,
+                });
+                return failures;
+            }
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let kept = name.ends_with(".history")
+                && !name.starts_with('.')
+                && session_of(&name).is_some_and(|id| keep.contains(&id));
+            if kept || entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            match std::fs::remove_file(entry.path()) {
+                Ok(()) => {
+                    state.undeleted.remove(&name);
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    state.undeleted.insert(name.clone());
+                    failures.push(DeletionFailure {
+                        session: session_of(&name),
+                        error,
+                    });
+                }
+            }
+        }
+        failures
+    }
+
     /// Delete every saved and temporary file; the ones that stay go to the retry set.
     fn delete_all(&self, state: &mut State) -> Vec<DeletionFailure> {
         state.last_written.clear();
@@ -219,6 +300,9 @@ impl HistoryStore {
         if !state.enabled {
             return Ok(SaveOutcome::Skipped(SkipReason::Disabled));
         }
+        if state.forgotten.contains(&id) {
+            return Ok(SaveOutcome::Skipped(SkipReason::Forgotten));
+        }
         if state.last_written.get(&id) == Some(&checksum) {
             return Ok(SaveOutcome::Unchanged);
         }
@@ -237,7 +321,11 @@ impl HistoryStore {
         let read = {
             let state = self.lock();
             // A history that was to be deleted never comes back (story 2 scenario 7).
-            if !state.enabled || state.unlisted || state.undeleted.contains(&file_name(id)) {
+            if !state.enabled
+                || state.unlisted
+                || state.forgotten.contains(&id)
+                || state.undeleted.contains(&file_name(id))
+            {
                 return LoadOutcome::None;
             }
             read_capped(&self.dir.join(file_name(id)))

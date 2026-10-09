@@ -3326,6 +3326,32 @@ impl DaemonState {
         for id in ids {
             self.confirmations_session_gone(*id);
         }
+        // And their saved terminal history, before the action is reported as done, also while
+        // saving is off (feature 041, FR-023).
+        if let Some(store) = self.history_store.get() {
+            self.log_undeleted(&store.forget(ids));
+        }
+    }
+
+    /// At service start, delete every saved history that belongs to no session that can still be
+    /// shown (feature 041, FR-024). Does nothing with saving off (everything is gone already) or
+    /// when the catalog did not load: its sessions are unknown then, and none is to be judged
+    /// removed. **Blocking**; runs before the accept loop.
+    pub fn sweep_saved_histories(&self) {
+        let Some(store) = self.history_store.get() else {
+            return;
+        };
+        if !store.enabled() {
+            return;
+        }
+        let keep = {
+            let inner = self.lock();
+            if inner.catalog.load_status() != micold_core::store::LoadStatus::Loaded {
+                return;
+            }
+            inner.catalog.unarchived_session_ids()
+        };
+       self.log_undeleted(&store.sweep(&keep));
     }
 
     /// Remove the given session ids from the live registry, returning **every** removed process

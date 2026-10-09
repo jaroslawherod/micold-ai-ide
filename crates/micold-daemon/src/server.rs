@@ -184,6 +184,10 @@ pub async fn run() -> io::Result<()> {
             dir,
             !in_container,
         ));
+        // Whatever belongs to no session that can still be shown is removed before any session
+        // starts (FR-024).
+        let sweeping = Arc::clone(&state);
+        let _ = tokio::task::spawn_blocking(move || sweeping.sweep_saved_histories()).await;
     }
 
     // Feature 027: a sandboxed daemon requires the token its runtime mounted. Fatal if named and

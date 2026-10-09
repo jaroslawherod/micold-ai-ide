@@ -658,3 +658,118 @@ fn an_unlistable_directory_is_retried_and_its_files_are_never_loaded() {
     assert!(store.retry_deletions().is_empty());
     assert_eq!(entries(&dir), Vec::<PathBuf>::new());
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 041 M7 — removal (T056; U108–U111; data-model §5, FR-023, FR-024)
+// ---------------------------------------------------------------------------------------
+
+fn ids(list: &[SessionId]) -> std::collections::HashSet<SessionId> {
+    list.iter().copied().collect()
+}
+
+// U108.
+#[test]
+fn forget_deletes_the_files_of_those_sessions_and_no_other() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    std::fs::write(dir.join(format!(".{SESSION_FILE}.tmp")), b"half").unwrap();
+
+    assert!(store.forget(&[session()]).is_empty());
+
+    assert_eq!(entries(&dir), vec![dir.join(OTHER_SESSION_FILE)]);
+    assert_eq!(store.load(session()), LoadOutcome::None);
+    assert!(matches!(
+        store.load(other_session()),
+        LoadOutcome::History(_)
+    ));
+}
+
+// U109.
+#[test]
+fn a_save_for_a_forgotten_session_is_skipped_and_leaves_no_file() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    store.forget(&[session()]);
+
+    assert_eq!(
+        store.save(session(), &snapshot(&["late"])).unwrap(),
+        SaveOutcome::Skipped(SkipReason::Forgotten)
+    );
+    assert_eq!(entries(&dir), vec![dir.join(OTHER_SESSION_FILE)]);
+}
+
+// U109 (story 4 scenario 5): a save that began before the forget, on another thread.
+#[test]
+fn a_save_racing_a_forget_leaves_no_file() {
+    for round in 0..50 {
+        let root = tempfile::tempdir().unwrap();
+        let store = std::sync::Arc::new(store_in(root.path()));
+        let dir = root.path().join("terminal-history");
+        let saver = {
+            let store = std::sync::Arc::clone(&store);
+            std::thread::spawn(move || {
+                for n in 0..20 {
+                    let _ = store.save(session(), &snapshot(&[&format!("{round}-{n}")]));
+                }
+            })
+        };
+        assert!(store.forget(&[session()]).is_empty());
+        saver.join().unwrap();
+        let left: Vec<_> = if dir.is_dir() { entries(&dir) } else { vec![] };
+        assert_eq!(left, Vec::<PathBuf>::new(), "round {round}");
+    }
+}
+
+// U110.
+#[test]
+fn forget_deletes_while_saving_is_off() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    // A file left by a failed deletion: the store is off, and the file is still there.
+    store.set_enabled(false);
+    std::fs::write(dir.join(SESSION_FILE), b"left").unwrap();
+
+    assert!(store.forget(&[session()]).is_empty());
+
+    assert_eq!(entries(&dir), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn forget_drops_the_record_of_the_last_write_of_a_session_it_does_not_forget_for_good() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, _dir) = two_saved(root.path());
+    // The other session's record stays: an equal save is still unchanged.
+    store.forget(&[session()]);
+    assert_eq!(
+        store.save(other_session(), &snapshot(&["two"])).unwrap(),
+        SaveOutcome::Unchanged
+    );
+}
+
+// U111.
+#[test]
+fn sweep_keeps_the_listed_sessions_and_deletes_everything_else() {
+    let root = tempfile::tempdir().unwrap();
+    let (store, dir) = two_saved(root.path());
+    store
+        .save(
+            SessionId::from_uuid(Uuid::from_u128(7)),
+            &snapshot(&["unknown"]),
+        )
+        .unwrap();
+    std::fs::write(dir.join(format!(".{SESSION_FILE}.tmp")), b"half").unwrap();
+    std::fs::write(dir.join("notes.txt"), b"other").unwrap();
+    std::fs::write(dir.join("not-a-uuid.history"), b"other").unwrap();
+
+    let failures = store.sweep(&ids(&[session()]));
+
+    assert!(failures.is_empty(), "{failures:?}");
+    assert_eq!(entries(&dir), vec![dir.join(SESSION_FILE)]);
+    assert!(matches!(store.load(session()), LoadOutcome::History(_)));
+}
+
+#[test]
+fn sweep_of_a_directory_that_is_not_there_does_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    assert!(store_in(root.path()).sweep(&ids(&[])).is_empty());
+}
