@@ -38,6 +38,7 @@
 - [The CI pipeline](development/ci-pipeline.md)
 - [The shared target directory and build lock](development/shared-build.md)
 - [The duplication budget](development/duplication.md)
+- [Duplication triage](development/duplication-triage.md)
 - [Packaging for macOS](development/macos-packaging.md)
 - [Packaging for Windows](development/windows-packaging.md)
 - [The documentation site](development/docs-site.md)
