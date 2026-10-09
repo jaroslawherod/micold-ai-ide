@@ -1928,13 +1928,15 @@ impl OpenCodeProvider {
     /// Sessions asked of `session list`: the newest are the ones that can have just appeared.
     const LIST_LIMIT: &'static str = "50";
 
-    /// Run `opencode <args>` bounded and return its stdout as JSON, or `None` for anything else:
-    /// no CLI on the `PATH`, a spawn failure, a timeout, a non-zero exit, oversized or bad output.
-    fn run_json(args: &[&str]) -> Option<serde_json::Value> {
-        let path = std::env::var_os("PATH")?;
-        let program = resolve_on_path("opencode", &path)?;
+    /// Run `opencode <args>` in `cwd`, bounded, and return its stdout as JSON, or `None` for
+    /// anything else: no CLI on the `PATH`, a spawn failure, a timeout, a non-zero exit, oversized
+    /// or bad output. `session list` is scoped to the project of the directory it runs in, so the
+    /// session's own folder is where it must run. The 2 s timeout is what bounds memory too.
+    fn run_json(cwd: &Path, args: &[&str]) -> Option<serde_json::Value> {
+        let program = resolve_on_path("opencode", &process_path())?;
         let mut cmd = std::process::Command::new(program);
         crate::process::no_window(&mut cmd)
+            .current_dir(cwd)
             .args(args)
             .env("OPENCODE_DISABLE_AUTOUPDATE", "1")
             .stdin(std::process::Stdio::null());
@@ -2043,14 +2045,17 @@ impl AiCliProvider for OpenCodeProvider {
         let earliest = since
             .checked_sub(Self::CLOCK_ALLOWANCE)
             .unwrap_or(std::time::UNIX_EPOCH);
-        let Some(serde_json::Value::Array(listed)) = Self::run_json(&[
-            "session",
-            "list",
-            "--format",
-            "json",
-            "-n",
-            Self::LIST_LIMIT,
-        ]) else {
+        let Some(serde_json::Value::Array(listed)) = Self::run_json(
+            cwd,
+            &[
+                "session",
+                "list",
+                "--format",
+                "json",
+                "-n",
+                Self::LIST_LIMIT,
+            ],
+        ) else {
             return Vec::new();
         };
         let taken = bound_ids(config_dir);
@@ -2098,11 +2103,11 @@ impl AiCliProvider for OpenCodeProvider {
         bound_conversation(config_dir, session_id).is_some()
     }
 
-    fn read_title(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> Option<String> {
+    fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
         // OpenCode's own title is generated and may be a placeholder, so the name is the first
         // typed turn, as for Codex. An unbound session has nothing to ask about.
         let id = bound_conversation(config_dir, session_id)?;
-        Self::first_turn(&Self::run_json(&["export", &id])?)
+        Self::first_turn(&Self::run_json(cwd, &["export", &id])?)
     }
 
     fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {

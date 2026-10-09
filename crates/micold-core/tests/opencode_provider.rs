@@ -117,7 +117,7 @@ mod resume {
     }
 
     impl Cli {
-        /// `PATH` holds a stand-in `opencode`. `session list` prints `list.json`; `export <id>`
+        /// `PATH` holds a stand-in `opencode`. `session list` prints `list.json` when run in `cwd`; `export <id>`
         /// prints `export-<id>.json`; `sleep` in `list.json` makes it hang instead.
         fn new() -> Self {
             let guard = ENV.lock().unwrap_or_else(|p| p.into_inner());
@@ -128,7 +128,7 @@ mod resume {
                  dir='{dir}'\n\
                  if [ -f \"$dir/hang\" ]; then exec sleep 30; fi\n\
                  if [ -f \"$dir/fail\" ]; then exit 3; fi\n\
-                 if [ \"$1 $2\" = 'session list' ]; then cat \"$dir/list.json\"; exit 0; fi\n\
+                 if [ \"$1 $2\" = 'session list' ]; then [ \"$(pwd -P)\" = \"$(cat \"$dir/cwd\")\" ] || {{ echo '[]'; exit 0; }}; cat \"$dir/list.json\"; exit 0; fi\n\
                  if [ \"$1\" = export ]; then cat \"$dir/export-$2.json\"; exit 0; fi\n\
                  exit 9\n",
                 dir = bin.path().display()
@@ -141,6 +141,8 @@ mod resume {
                 .unwrap();
             std::env::set_var("PATH", path);
             let cwd = std::fs::canonicalize(tempfile::tempdir().unwrap().keep()).unwrap();
+            // The stand-in lists sessions only when run in this folder, as the real CLI does.
+            std::fs::write(bin.path().join("cwd"), cwd.display().to_string()).unwrap();
             Self {
                 bin,
                 base,
