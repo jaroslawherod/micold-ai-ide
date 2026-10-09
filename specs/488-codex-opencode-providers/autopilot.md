@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M4
-- **Next step**: M4 reviews A and B, full gate, then the orchestrator pushes and opens the M4 PR from scratchpad/pr-488-m4.md
+- **Next step**: gate green at tree 5995d396 (only the six root-only permission tests fail); the orchestrator pushes and opens the M4 PR from scratchpad/pr-488-m4.md
 
 ## Pull requests
 
@@ -53,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- M4 A round 1 dfef1b4f…:d963162a: CHANGES (F1 MAJOR current_dir, fixed); round 2 (sonnet, fix diff): CLEAN.
+- M4 B round 1: CHANGES, sole BLOCKER was that the daemon Verify had not run in the gate (it stopped at a root-only failure); re-run with --no-fail-fast: codex_resume 7/7 green. F2 MINOR (daemon tests not red-first) disclosed in cycle-log.
+
 - M2 review A (fresh, high): CLEAN, 3 MINOR (MCP/app same-reason assertion added; comment fixed; 'as the default' dropped from docs). Review B (sonnet): could not run cargo (denied in its sandbox); the unit ran both Verify commands green itself; only MINOR otherwise. No counted rounds beyond 1.
 
 | Review | Round | Snapshot | Verdict |
@@ -70,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 visual pass: not run, no UI change.
 
 ## Declined review findings
+
+- M4 review A F2 (MINOR, output cap checked after buffering): declined, the 2 s timeout bounds it; documented on `run_json`.
 
 - M1 A round 2, MINOR trust.rs `project_header` uses the last `]`, so a comment containing `]` after the header is not read as trusted: declined, it fails closed (the project is simply not treated as trusted) and the file is Codex's own.
 
