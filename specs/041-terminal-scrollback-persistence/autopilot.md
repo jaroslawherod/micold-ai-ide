@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M6: scoped gate, review A/B, full gate, PR. Then M7.
+- **Next step**: M6: PR #666 merged, then M7.
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #601 | M3 | merged | 7681c0f4a9644a988dd2fa3aaa8818acbae5c4e3 |
 | #610 | M4 | merged | 031d01c6e7b93f494220a0721fd0e0e9194cf6b7 |
 | #639 | M5 | merged | 4b43b8cd63ae8510f47fe37216a8e01350b7298e |
+| #666 | M6 | open | |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | merged |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | #639 | merged |
-| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | in progress |
+| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | in review |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | pending |
