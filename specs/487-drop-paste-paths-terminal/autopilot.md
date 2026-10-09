@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: close
-- **Next step**: final review of the close diff, gate, push; orchestrator opens the close PR from scratchpad pr-487-close.md
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #667 | M2 paste image | merged | 3d65796a1f523c657562ab8b6ea91cee2f40ebf4 |
 | #671 | M3 sandbox container paths | merged (rebase) | 567676fc070508f04ed368aa11f278b2ae2e5394 (two Windows test fixes added on top by the orchestrator: host-equals-container test now #[cfg(unix)] with a mapped cross-platform twin) |
 | #675 | M4 cleanup | merged (rebase) | 474f5937d83f3afbb72677325991d63571479585 |
-| TBD | Close (TDD remediation T035–T042, spec closed) | in progress | |
+| TBD | Close (TDD remediation, spec closed); gate: fmt, clippy, scripts green; tests green except 7 permission tests in 5 targets that fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers x2, mutation_semantics, settings_service_write_refuses_failed_read) | opened by orchestrator | |
 
 ## Milestones
 
@@ -87,3 +87,5 @@ None.
 None.
 
 - Tasks review (round 1, snapshot 3a1a5833:788b5d57): CHANGES; F1 (paste_source test task) fixed, F2-F4 MINOR fixed; no further round (tasks added, tests-only).
+
+- Close: T041 left open (text-wins-over-image reducer test, T012 pointer state); T038 has no mutant run; CI does not set MICOLD_REQUIRE_SHELLS=1 yet.
