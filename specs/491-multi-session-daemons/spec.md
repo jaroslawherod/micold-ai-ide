@@ -20,6 +20,9 @@
 - Q: May a user add several daemons of one runtime (for example two container daemons)? → A: Yes.
   The issue defines the list as name, runtime, settings and state per daemon, with no per-runtime cap;
   names are the unique key (FR-001). _(agent-resolved: GitHub issue #491, "Multi-daemon model")_
+- Q: What happens to worktrees bound to a removed daemon? → A: Kept, sessions stopped, shown as "no
+  daemon" until the user binds them; nothing deleted on disk; the confirmation gives the worktree and
+  running-session counts; FR-003 becomes "at most one". _(decided by user)_
 
 ## Overview
 
@@ -28,7 +31,7 @@ local container, chosen for the whole app. Users want both at once: a trusted pr
 host while an untrusted one runs in a container.
 
 This feature introduces a list of **daemons** (environments). Each has a name, a **runtime** (host or
-container), settings and a connection state. Every worktree is **bound** to exactly one daemon, and
+container), settings and a connection state. Every worktree is **bound** to at most one daemon (none only after its daemon was removed), and
 its sessions and terminals live on that daemon. Daemons start, stop, reconnect and fail independently.
 Settings gets a **Daemons** section to manage them.
 
@@ -110,6 +113,9 @@ from starting to connected without reopening Settings, then stop and remove it.
    confirmation says what happens to those worktrees and nothing is removed until confirmed.
 6. **Given** the user cancels that confirmation, **When** it closes, **Then** the daemon and its
    bindings are unchanged.
+7. **Given** the user confirmed removal, **When** the daemon is gone, **Then** its worktrees remain
+   listed as "no daemon", their sessions have stopped, nothing on disk is deleted, and the user can
+   bind each to a daemon by an explicit action, after which sessions can start on it.
 
 ---
 
@@ -183,7 +189,7 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
   and reason; the host daemon is unaffected.
 - **Daemon stopped while a session is running**: the session's state is shown as lost to its daemon,
   not as finished; no other daemon's session changes.
-- **Daemon removed with bound worktrees**: per the confirmation (see FR-014); sessions on that daemon
+- **Daemon removed with bound worktrees**: the worktrees are kept and shown as "no daemon" (FR-014); sessions on that daemon
   end cleanly, and nothing on other daemons is touched.
 - **Same project path visible to two daemons**: one worktree is bound to one daemon at a time;
   sessions in it never run on two daemons at once.
@@ -206,13 +212,14 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
   container), runtime-specific settings and a connection state.
 - **FR-002**: The system MUST allow a host daemon and a container daemon to be running and connected
   at the same time.
-- **FR-003**: The system MUST bind each worktree to exactly one daemon, and MUST allow worktrees of
+- **FR-003**: The system MUST bind each worktree to at most one daemon at a time (none only after its daemon was removed, FR-014), and MUST allow worktrees of
   the same project to be bound to different daemons.
 - **FR-004**: The system MUST run a worktree's sessions and terminals on its bound daemon only.
 - **FR-005**: The system MUST show, for each worktree, the daemon it runs on, and MUST show a
   project's worktrees on different daemons side by side.
 - **FR-006**: The user MUST be able to choose a worktree's daemon when creating or attaching it, and
-  the binding MUST persist across restarts.
+  the binding MUST persist across restarts. The user MUST be able to bind a worktree that has no
+  daemon, or change a worktree's daemon, by an explicit action.
 - **FR-007**: The system MUST start, stop, remove and reconnect each daemon independently, and a
   daemon being down, unreachable or mismatched MUST NOT change the state or behaviour of any other
   daemon or of worktrees bound elsewhere.
@@ -229,10 +236,11 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 - **FR-013**: The system MUST migrate an existing single-daemon setup (host or container) to a list
   holding one equivalent daemon with every existing worktree bound to it, with no user action and no
   new credential sharing.
-- **FR-014**: When a daemon is removed, the worktrees bound to it MUST end in a defined state:
-  [NEEDS CLARIFICATION: what happens to worktrees bound to a removed daemon: are they deleted from
-  the app, kept but shown unbound until the user rebinds them, or must the user rebind or choose a
-  target daemon in the confirmation dialog first?]
+- **FR-014**: When a daemon is removed, the worktrees bound to it MUST be kept, MUST have their
+  sessions stopped, and MUST be shown as "no daemon" until the user binds each to a daemon by an
+  explicit action. Nothing on disk and no worktree is deleted. The confirmation (FR-012) MUST state
+  the number of worktrees affected and the number of running sessions that will stop, and that
+  nothing on disk is deleted. A worktree with no daemon MUST NOT start sessions or terminals.
 - **FR-015**: Binding, state display and the Daemons list MUST treat the runtime as data: a daemon of
   any runtime appears with the same name, runtime, endpoint, version, state and bound-worktree
   fields, so a further runtime (SSH, Kubernetes) needs no change to those surfaces.
@@ -255,7 +263,8 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 - **Runtime**: how a daemon runs: host or container now; SSH and Kubernetes later.
 - **Daemon state**: starting, connected, unreachable, version mismatch, stopped; plus recent
   connection errors and logs.
-- **Binding**: the link from one worktree to the one daemon it runs on.
+- **Binding**: the link from one worktree to the one daemon it runs on; absent ("no daemon") after
+  its daemon is removed, until the user rebinds it.
 - **Worktree**: unchanged in meaning; gains its daemon. A project may have worktrees on several
   daemons.
 

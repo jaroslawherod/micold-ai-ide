@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
 - **Phase**: clarify
-- **Next step**: clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers (FR-014, FR-016) in spec.md
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -24,6 +24,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- FR-014 (decided by user): removed daemon's worktrees kept, sessions stopped, shown as "no daemon" until rebound; FR-003 is "at most one".
+- FR-016 (agent-resolved): names and branches unique across a project's daemons.
+- Several daemons of one runtime allowed (agent-resolved: issue #491).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -46,11 +50,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1. FR-016 and same-runtime-daemons resolved from evidence (recorded in spec.md
-Clarifications). Open for the user: FR-014, what happens to worktrees bound to a removed daemon.
-Options: (A, recommended) kept, sessions stopped, shown unbound until user binds a daemon, nothing
-deleted on disk; (B) user must pick a target daemon in the confirmation dialog; (C) deleted from the
-app. Evidence: specs/014-forget-project (forgetting never deletes on disk, sessions stopped).
+None.
 
 ## Follow-ups not done
 
