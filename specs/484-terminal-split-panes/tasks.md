@@ -98,10 +98,28 @@
 - [x] T034 [US6] Implement restore and save in `crates/micold-client/src/main.rs` and `crates/micold-client/src/shell/daemon_sync.rs`. Make T033 pass.
 - [x] T035 [US6] Docs: add "your layout is remembered per project" to `docs/user-guide/terminal-panes.md`.
 
+## Phase 8: Convergence (close unit findings, M5)
+
+Found by the close unit's visual pass (`visual-pass-close.md`) and `tdd/verification.md`.
+
+- [ ] T038 [US1] Write a failing client test, then fix: a refused split (7th pane, or a pane too small) shows its reason and keeps it visible (`pane_refusal` is cleared by every pane message and showing it relayouts the panes; quickstart step 7, FR-001/FR-002).
+- [ ] T039 [US2] Write a failing client test, then fix: a press on an empty pane (its header or body) focuses it, and a project switch keeps a focus resting on an empty pane (FR-010, FR-016).
+- [ ] T040 [US5] Find why six idle panes cost +81 % client CPU over one pane (`visual-pass-close.md` step 9; SC-004 needs ≤ +10 %): check that only the focused pane's cursor blink redraws, per-pane cache invalidation (R8) and any per-pane subscription. Write a failing test for the cause where it can be pinned, fix it, re-measure with the same probe and record the numbers in `quickstart.md`.
+- [ ] T041 Re-run quickstart Part B steps 3 (dark scheme), 3b and 7 and 9 with `visual-pass` and record them in `visual-pass-close.md`.
+
 ## Final Phase: Polish (close unit, no code)
 
 - [ ] T036 Run quickstart Part A and Part B (`visual-pass`) and record the results in `specs/484-terminal-split-panes/quickstart.md` (FR-015's idle CPU is manual-only; no pane timer or subscription is added, asserted in T013's review), including the 6-pane idle CPU probe (SC-004, ≤ +10%).
 - [ ] T037 Tick the tasks, close the spec in `autopilot.md`.
+
+### M5 — Converge: pane refusal text, empty-pane focus, idle CPU
+
+- **Tasks**: T038–T041
+- **Deliverable**: A refused split says why; an empty pane can be focused and keeps focus across project switches; six idle panes stay within +10 % CPU of one.
+- **Satisfies**: US1/US2/US5 gaps; FR-001, FR-002, FR-010, FR-015, SC-004
+- **Verify**: `mise run test`; quickstart Part B steps 3, 7, 9
+- **Depends on**: M4
+- **Tier**: full
 
 ## Dependencies
 

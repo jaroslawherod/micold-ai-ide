@@ -476,6 +476,10 @@ fn no_forwarded_chord_is_a_pane_chord() {
             let out = encode(&ki(key.clone(), m, None), TermMode::default());
             assert!(!matches!(out, KeyOutput::Pane(_)), "{key:?} {m:?}");
         }
+        // With the pane modifier, only the pane chords' own keys are pane actions.
+        let out = encode(&ki(key.clone(), chord_mods(), None), TermMode::default());
+        let is_pane_key = pane_chords().iter().any(|(k, _)| k == key);
+        assert_eq!(matches!(out, KeyOutput::Pane(_)), is_pane_key, "{key:?}");
     }
 }
 
@@ -509,16 +513,4 @@ fn the_wrong_platform_modifier_is_not_a_pane_chord() {
     };
     let out = encode(&ki(Key::Char('d'), wrong, None), TermMode::default());
     assert!(!matches!(out, KeyOutput::Pane(_)));
-}
-
-/// The pane chords deliberately shadow what the key map once forwarded for the same keys with
-/// Shift (research R6): Ctrl+Shift+D was EOF (0x04), Ctrl+Shift+Arrow a modified cursor key.
-#[test]
-fn pane_chords_shadow_the_old_forwarded_encoding() {
-    for (key, action) in pane_chords() {
-        assert_eq!(
-            encode(&ki(key, chord_mods(), None), TermMode::default()),
-            KeyOutput::Pane(action)
-        );
-    }
 }

@@ -288,6 +288,33 @@ async fn set_viewed_terminals_streams_exactly_the_named_terminals_and_replaces_t
     }
 }
 
+/// SC-004 / FR-001: at most 6 terminals stream to one client; a 7th named is dropped, not an error.
+#[tokio::test]
+async fn at_most_six_terminals_stream_to_one_client() {
+    let (project, store) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let ids: Vec<SessionId> = (0..7).map(|_| SessionId::new()).collect();
+    let state = Arc::new(DaemonState::new(catalog_with(
+        project.path(),
+        store.path(),
+        &ids,
+    )));
+    for id in &ids {
+        let _ = state.register_session(cat(*id, (80, 24)));
+    }
+    let mut client = connect(&state).await;
+    view(&mut client, ids.iter().map(|i| primary(*i)).collect()).await;
+    let frames = frames_within(&mut client, Duration::from_millis(800)).await;
+    for (n, id) in ids.iter().enumerate() {
+        let streamed = frames.iter().any(|f| f.full && f.session == *id);
+        assert_eq!(streamed, n < 6, "terminal {n} streamed = {streamed}");
+    }
+    for s in ids {
+        for p in state.remove_session(s) {
+            let _ = p.kill();
+        }
+    }
+}
+
 /// A restart replaces the terminal's PTY: the viewing client's stream of the old one would stay
 /// silent, so the new one must be streamed once the session announces itself (review A, M1).
 #[tokio::test]
