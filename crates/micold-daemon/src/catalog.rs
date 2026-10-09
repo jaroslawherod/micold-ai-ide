@@ -840,15 +840,19 @@ impl Catalog {
         if self.workspace.pane_layouts.get(project) == parsed.as_ref() {
             return Ok(false);
         }
-        match parsed {
-            Some(l) => {
-                self.workspace.pane_layouts.insert(project.to_path_buf(), l);
-            }
-            None => {
-                self.workspace.pane_layouts.remove(project);
-            }
+        let previous = match parsed {
+            Some(l) => self.workspace.pane_layouts.insert(project.to_path_buf(), l),
+            None => self.workspace.pane_layouts.remove(project),
+        };
+        if let Err(err) = self.persist() {
+            // Keep memory and disk the same, so the client's retry of this layout is not taken
+            // for a repeat.
+            match previous {
+                Some(l) => self.workspace.pane_layouts.insert(project.to_path_buf(), l),
+                None => self.workspace.pane_layouts.remove(project),
+            };
+            return Err(err);
         }
-        self.persist()?;
         Ok(true)
     }
 

@@ -115,6 +115,9 @@ pub fn restore(app: &mut App, catalog: &micold_core::protocol::messages::Catalog
                 .collect();
             if let Some(l) = app.pane_layouts.get_mut(&p.path) {
                 l.prune(|t| live.contains(&t));
+                // Emptying a pane is not a change to store: the file keeps the terminal until the
+                // user changes the layout, so a session that is merely slow to appear is not lost.
+                app.pane_saved.insert(p.path.clone(), l.to_json());
             }
             follow_focus(app);
         }

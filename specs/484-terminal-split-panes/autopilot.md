@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- M4: the client prunes gone terminals (existing `sync`) and then saves, so a terminal that vanished is dropped from the stored layout at the next change; the file keeps unresolved terminals only until the client next saves. `layout_version` stays separate from `schema_version`. `pane_layout` is held raw (`serde_json::Value`) in `StoredProjectState` so a bad shape fails that field only.
+- M4: the client prunes gone terminals (existing `sync`); restore does not store the pruning, so the file keeps an unresolved terminal until the user next changes that project's layout, which stores the pruned one. `layout_version` stays separate from `schema_version`. `pane_layout` is held raw (`serde_json::Value`) in `StoredProjectState` so a bad shape fails that field only.
 - Clarify round 1: 3 markers agent-resolved (one pane per terminal; empty panes persist; chords Ctrl/Cmd+Shift+D/H/W/Arrow, not Ctrl+Alt+Arrow). No escalation.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -53,6 +53,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 diff A | 1 | 8c89cb11:cef39232 | CLEAN (3 MINOR: stale header press, stuck divider_dragging, divider gone mid-drag; all fixed) |
 | M3 diff B | 1 | c25a230e:a59eb500 | CLEAN (Verify not runnable by reviewer, run in the gate; 2 MINOR: no tdd/ dir, T027 names ui/terminal.rs for the close button, which is in ui/panes.rs) |
 | M3 visual pass | 1 | real client on Xvfb | pass; fixed header strip height (header took half its pane) and the single-pane refusal text; specs/484-terminal-split-panes/visual-pass-m3.md |
+| M4 diff A | 1 | cca2237b:804ce026 | CLEAN (3 MINOR: restore pruning written back — fixed by recording pruned json as saved; persist failure left memory ahead of disk — fixed with rollback; restore once per run = last writer wins, accepted) |
+| M4 diff B | 1 | cca2237b:804ce026 | CLEAN (2 MINOR: reviewer sandbox could not run Verify, run in the gate; no tdd/ dir; inactive-project prune happens on switch, fine) |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
