@@ -1577,6 +1577,17 @@ the scrollback limit is dropped, oldest lines first.
   [Settings](./settings.md#terminal)). With it off, a stop and start still shows the earlier
   output above the line; a restart of the background service or of the computer does not, and the
   files already saved are deleted.
+- If a saved history cannot be read (the file is damaged, was written by another version of the
+  app, or the service may not read it), the session starts and runs as usual and its terminal shows
+  one dim line instead of the earlier output:
+
+  ```text
+  ── earlier output could not be restored ──
+  ```
+
+  Nothing of the unreadable file is shown, other sessions are not affected, and the session's new
+  output is saved again as for any other. The reason is in the session service's log and among the
+  recent errors in **Session service diagnostics**.
 - **Regular Terminal** instances are not covered: a stopped and started shell starts with an empty
   terminal.
 - An AI CLI that draws full-screen (Claude Code and Copilot CLI do by default) repaints its whole

@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M4: PR merged, then M5. M3 merged; its Windows CI failure was a lost runner, fixed by a rerun, no code change.
+- **Next step**: M6: scoped gate, review A/B, full gate, PR. Then M7.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #578 | M2 | merged | b0100eab588663563b14cee5756e3e511b7f8014 |
 | #601 | M3 | merged | 7681c0f4a9644a988dd2fa3aaa8818acbae5c4e3 |
 | #610 | M4 | merged | 031d01c6e7b93f494220a0721fd0e0e9194cf6b7 |
-| #639 | M5 | open | |
+| #639 | M5 | merged | 4b43b8cd63ae8510f47fe37216a8e01350b7298e |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T024 | full | History saved at a process end is restored after a service restart, from an owner-only file | #578 | merged |
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | merged |
-| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | #639 | in review |
-| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | pending |
+| M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | #639 | merged |
+| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | | in progress |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | pending |
