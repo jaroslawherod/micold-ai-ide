@@ -69,9 +69,7 @@ with that image exists at the inserted path, inside the worktree or the session 
 2. **Given** text on the clipboard, **When** the user pastes, **Then** behaviour is unchanged from
    today.
 3. **Given** both text and an image on the clipboard, **When** the user pastes, **Then** the text is
-   pasted as today and no file is created. [NEEDS CLARIFICATION: when the clipboard holds both text
-   and an image (a copied spreadsheet range, a copied web image), is the text always preferred?
-   Provisional default: yes.]
+   pasted as today and no file is created (text is always preferred, so a copied spreadsheet range or web image pastes its text).
 4. **Given** an image on the clipboard that cannot be read or saved, **When** the user pastes,
    **Then** nothing is inserted and a message states the cause (FR-012).
 5. **Given** two pastes of images, **When** both are saved, **Then** they have distinct paths and
@@ -143,18 +141,25 @@ and no file the user dropped is touched.
 - Terminal whose process has exited, or a pane showing the empty-pane state: drop and paste do
   nothing and say why.
 - Two sessions pasting at the same time: each writes to its own session's location; no collision.
-- Paste into a regular (non-AI) terminal: [NEEDS CLARIFICATION: issue says "into an AI session";
-  should a regular terminal also convert a pasted image to a path? Provisional default: no, only AI
-  sessions.]
+- Paste into a regular (non-AI) terminal: unchanged; only AI sessions convert a pasted image to a path (the issue scopes the feature to AI sessions).
 - Quoting differs by shell and platform (POSIX shells, Windows shells): the inserted text must be
   correct for the shell the terminal runs (Principle VI).
 - Session without a worktree (the project-root Default session): images go to the session temp
   directory only; the same sandbox and cleanup rules apply.
 - Symlink dropped into a sandboxed session: judged by where it resolves; one pointing outside the
   registered projects is refused.
-- Non-UTF-8 file names and Windows drive-letter or UNC paths: quoted and translated correctly, or
-  refused with a message; never inserted garbled.
+- Non-UTF-8 file names and Windows drive-letter or UNC paths: quoted correctly in the shell's own syntax when
+  representable; a path the shell cannot represent without loss is refused with a message naming it;
+  never translated between path styles and never inserted garbled.
 - Worktree is on a read-only or network location: falls back to the session temp directory.
+
+## Clarifications
+
+### Session 2026-10-09
+
+- Q: Text and image both on the clipboard? → A: Text always wins, no file created. _(agent-resolved: spec.md#User Story 2, matches today's paste behaviour)_
+- Q: Do regular terminals convert a pasted image? → A: No, AI sessions only. _(agent-resolved: issue #487 scope)_
+- Q: Non-UTF-8 / Windows paths: translated or refused? → A: Quoted natively when representable, else refused with a message; no translation. _(agent-resolved: spec.md#FR-002, never garbled)_
 
 ## Requirements *(mandatory)*
 
