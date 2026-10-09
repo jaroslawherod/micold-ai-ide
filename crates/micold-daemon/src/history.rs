@@ -14,7 +14,7 @@ use alacritty_terminal::vte::ansi::{Attr, ClearMode, Color, Handler, NamedColor,
 use chrono::{DateTime, Local};
 use micold_core::session::SessionId;
 use micold_core::terminal_history::schedule::{SaveSchedule, SAVE_SPACING};
-use micold_core::terminal_history::text::separator_line;
+use micold_core::terminal_history::text::{notice_line, separator_line};
 use micold_core::terminal_history::{
     HistoryColor, HistorySnapshot, HistoryStyle, LogicalLine, StyleFlags, StyleRun,
 };
@@ -195,33 +195,37 @@ pub enum Seed {
         snapshot: HistorySnapshot,
         at: DateTime<Local>,
     },
+    /// The saved history could not be read: one line saying so, in place of history and separator.
+    Notice,
 }
 
 /// Writes `seed` into `term` through its `vte::ansi::Handler`, keeping at most the most recent
 /// `limit` + screen rows lines, and leaves the screen blank with the cursor at home (R3, R17).
 pub fn seed<T: EventListener>(term: &mut Term<T>, seed: Seed, limit: usize) {
-    let Seed::History { snapshot, at } = seed else {
-        return;
+    let text = match seed {
+        Seed::None => return,
+        Seed::History { snapshot, at } => {
+            let keep = limit + term.screen_lines();
+            let skip = snapshot.lines.len().saturating_sub(keep);
+            for line in &snapshot.lines[skip..] {
+                write_line(term, line);
+            }
+            separator_line(&at.format(SEPARATOR_TIME).to_string(), term.columns())
+        }
+        Seed::Notice => notice_line(term.columns()),
     };
-    let keep = limit + term.screen_lines();
-    let skip = snapshot.lines.len().saturating_sub(keep);
-    for line in &snapshot.lines[skip..] {
-        write_line(term, line);
-    }
-
-    let text = separator_line(&at.format(SEPARATOR_TIME).to_string(), term.columns());
     let dim = HistoryStyle {
         flags: StyleFlags::DIM,
         ..HistoryStyle::default()
     };
-    let separator = LogicalLine {
+    let line = LogicalLine {
         runs: vec![StyleRun {
             chars: text.chars().count() as u32,
             style: dim,
         }],
         text,
     };
-    write_line(term, &separator);
+    write_line(term, &line);
 
     // Move the seeded rows off the screen into the history, so the new process starts on a blank
     // screen at home on every platform (R17); clearing does not move the cursor.
@@ -329,6 +333,8 @@ pub struct Saver {
     schedules: HashMap<SessionId, Tracked>,
     /// Failures already logged, by session and reason (FR-007).
     logged: HashSet<(SessionId, String)>,
+    /// Sessions whose terminal started on a skipped history: due at the first look (FR-018).
+    start_due: HashSet<SessionId>,
     /// When the deletions that failed were last tried again (FR-033).
     last_retry: Option<Instant>,
 }
@@ -363,6 +369,9 @@ impl Saver {
                     schedule: SaveSchedule::new(0),
                 };
             }
+            if self.start_due.remove(id) {
+                tracked.schedule.mark_due();
+            }
             if tracked.schedule.due(now, count) {
                 due.push((*id, Arc::clone(pty)));
             }
@@ -380,6 +389,12 @@ impl Saver {
             }
             _ => true,
         }
+    }
+
+    /// `id`'s next terminal starts on a skipped history: its first look finds it due, though it
+    /// has printed nothing, so the file that could not be read is replaced (FR-018).
+    pub fn started_damaged(&mut self, id: SessionId) {
+        self.start_due.insert(id);
     }
 
     /// `id` was saved at `now` as of `output_count`.
@@ -433,7 +448,7 @@ mod tests {
     use alacritty_terminal::term::Config;
     use alacritty_terminal::vte::ansi::Processor;
     use chrono::TimeZone;
-    use micold_core::terminal_history::text::separator_line;
+    use micold_core::terminal_history::text::{notice_line, separator_line};
     use micold_core::terminal_history::{HistoryColor, HistoryStyle, StyleFlags, StyleRun};
 
     const HISTORY_LIMIT: usize = 100;
@@ -799,6 +814,25 @@ mod tests {
         let mut expected = lines;
         expected.push(separator(columns));
         assert_eq!(capture(&term).lines, expected);
+    }
+
+    #[test]
+    fn a_notice_seed_is_one_dim_line_and_no_separator_and_the_screen_is_blank_at_home() {
+        let columns = 60;
+        let mut term = term(columns, 4, HISTORY_LIMIT);
+
+        seed(&mut term, Seed::Notice, HISTORY_LIMIT);
+
+        let text = notice_line(columns);
+        let expected = LogicalLine {
+            runs: vec![run(text.chars().count() as u32, flags(StyleFlags::DIM))],
+            text,
+        };
+        assert_eq!(capture(&term).lines, [expected]);
+        assert_eq!(term.grid().history_size(), 1);
+        assert_eq!(term.grid().cursor.point, Point::new(Line(0), Column(0)));
+        feed(&mut term, "x");
+        assert_eq!(capture(&term).lines.last(), Some(&plain("x")));
     }
 
     #[test]

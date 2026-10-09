@@ -4662,7 +4662,7 @@ impl DaemonState {
     }
 
     /// The seed from `id`'s saved history. A file that cannot be read is skipped with one warning
-    /// and the session starts as one with no saved history (FR-016).
+    /// and the session starts as one with no saved history, but for a notice line (FR-016, FR-017).
     fn saved_seed(&self, id: SessionId) -> Seed {
         use micold_core::terminal_history::LoadOutcome;
         let Some(store) = self.history_store.get() else {
@@ -4680,7 +4680,11 @@ impl DaemonState {
                     %reason,
                     "saved terminal history could not be read; starting without it"
                 );
-                Seed::None
+                self.saver
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .started_damaged(id);
+                Seed::Notice
             }
         }
     }

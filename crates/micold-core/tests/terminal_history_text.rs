@@ -2,7 +2,7 @@
 //! new output (data-model §7) — the rules go first, then the text is cut, and it is always one row
 //! no wider than the terminal (FR-009).
 
-use micold_core::terminal_history::text::separator_line;
+use micold_core::terminal_history::text::{notice_line, separator_line};
 
 /// A start time as the daemon formats it: local date and time with the UTC offset.
 const AT: &str = "2026-10-02 14:31 +02:00";
@@ -59,5 +59,33 @@ fn the_separator_is_never_wider_than_the_columns_and_never_breaks_the_line() {
             !separator.contains(['\n', '\r']),
             "{separator:?} holds a line break"
         );
+    }
+}
+
+const NOTICE: &str = "── earlier output could not be restored ──";
+const NOTICE_WITHOUT_RULES: &str = "earlier output could not be restored";
+
+// U12: the notice has its rules at 80 columns and loses them first when narrower.
+#[test]
+fn the_notice_is_ruled_at_80_columns_and_loses_its_rules_first() {
+    assert_eq!(notice_line(80), NOTICE);
+    for columns in [width(NOTICE) - 1, width(NOTICE_WITHOUT_RULES)] {
+        assert_eq!(notice_line(columns), NOTICE_WITHOUT_RULES, "at {columns}");
+    }
+}
+
+// U13: narrower still it is cut, and it is always one row.
+#[test]
+fn the_notice_is_cut_to_the_width_and_never_wider_or_broken() {
+    for columns in [1, 2, 10, width(NOTICE_WITHOUT_RULES) - 1] {
+        let notice = notice_line(columns);
+        assert_eq!(
+            notice,
+            NOTICE_WITHOUT_RULES
+                .chars()
+                .take(columns)
+                .collect::<String>()
+        );
+        assert!(width(&notice) <= columns && !notice.contains(['\n', '\r']));
     }
 }

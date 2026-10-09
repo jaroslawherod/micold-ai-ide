@@ -161,6 +161,13 @@ impl Logging {
         }
     }
 
+    /// The layer that fills this handle's ring from the events of a subscriber it is part of, for
+    /// a test that scopes its own subscriber (`init` installs it process-wide).
+    #[doc(hidden)]
+    pub fn capture_layer<S: Subscriber>(&self) -> impl Layer<S> {
+        RecentErrorsLayer(self.errors.clone())
+    }
+
     /// Seed the recent-errors ring in a test (mirrors what the capture layer does at runtime).
     #[doc(hidden)]
     pub fn push_error_for_test(&self, entry: LogEntry) {

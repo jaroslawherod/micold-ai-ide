@@ -8,6 +8,12 @@ pub fn separator_line(date_time_offset: &str, columns: usize) -> String {
     fit(&format!("session restarted at {date_time_offset}"), columns)
 }
 
+/// The one-row line shown instead of history that could not be restored, for a terminal `columns`
+/// wide (FR-017).
+pub fn notice_line(columns: usize) -> String {
+    fit("earlier output could not be restored", columns)
+}
+
 /// `text` between rules if that fits in `columns`, else `text` alone, cut to `columns` if need be.
 /// Widths are counted in characters: the text is the daemon's own, one column per character.
 fn fit(text: &str, columns: usize) -> String {
