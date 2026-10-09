@@ -1514,6 +1514,11 @@ pub enum PaneMsg {
     Chord(crate::keymap::PaneAction),
     /// Focus `pane` (a press in it, FR-010).
     FocusPane(micold_core::pane_layout::PaneId),
+    /// A file was dropped on the window while the pointer was over `pane` (feature 487). Files of
+    /// one drop arrive one by one; the shell gathers them before inserting.
+    FileDropped(micold_core::pane_layout::PaneId, std::path::PathBuf),
+    /// The files of a drop have all arrived (feature 487): insert them as one.
+    DropsSettled,
     /// `pane` was laid out at `cols` x `rows` (FR-014): its terminal's PTY is resized to it.
     Resized {
         /// The pane measured.
@@ -1712,6 +1717,20 @@ pub enum Msg {
     /// Bytes to write to the focused session's PTY (from `keymap::encode` / paste). The binary
     /// writes them only when the session is Running (FR-008, FR-012a).
     TerminalBytes(Vec<u8>),
+    /// Files were dropped on the window (feature 487, FR-001): the shell resolved the terminal
+    /// they landed on and the shell that terminal runs. Emits [`Outcome::Insert`] for the paths a
+    /// shell can take and a notification for each it cannot; types nothing else.
+    FilesDropped {
+        /// The dropped paths, in drop order.
+        paths: Vec<std::path::PathBuf>,
+        /// Where they landed.
+        target: DropTarget,
+        /// The shell the target terminal runs.
+        shell: micold_core::path_insert::ShellKind,
+    },
+    /// Something inserted into a terminal's input could not be (feature 487, FR-012): nothing was
+    /// typed, and the user is told why.
+    InsertionFailed(String),
     /// Begin a text selection at a viewport grid cell (feature 006 mouse, FR-013/FR-013b).
     TerminalSelectStart {
         col: u16,
@@ -1782,6 +1801,80 @@ pub enum Msg {
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
 /// reference.
+/// Where a drop landed (feature 487): the shell hit-tests the pointer against the panes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropTarget {
+    /// Not over any pane (the sidebar, the window edge): nothing happens.
+    Outside,
+    /// Over a pane that shows no terminal yet: there is no input to type into.
+    EmptyPane,
+    /// Over a pane showing this terminal, focused or not (FR-005).
+    Terminal(micold_core::protocol::messages::TerminalRef),
+}
+
+fn insertion_notice(message: String) -> crate::features::Outcome {
+    crate::features::Outcome::NotificationRaised(micold_core::notify::Notification::new(
+        micold_core::notify::Level::Error,
+        message,
+    ))
+}
+
+/// Whether `terminal` has a running process to type into: the daemon drops input for one that is
+/// not running, and the user would see nothing happen.
+fn terminal_is_running(
+    state: &crate::app::State,
+    terminal: micold_core::protocol::messages::TerminalRef,
+) -> bool {
+    use micold_core::protocol::messages::SessionProcess;
+    use micold_core::session::{SessionLifecycle, ShellLifecycle};
+    let Some((_, session)) = state.workspace.find_session(terminal.session) else {
+        return false;
+    };
+    match terminal.process {
+        SessionProcess::Primary => session.lifecycle == SessionLifecycle::Running,
+        SessionProcess::Shell(id) => session
+            .shells
+            .iter()
+            .any(|i| i.id == id && i.lifecycle == ShellLifecycle::Running),
+    }
+}
+
+/// A drop (feature 487, FR-001 to FR-005, FR-012). Nothing is submitted: the text is the quoted
+/// paths and no line break of ours.
+fn files_dropped(
+    state: &crate::app::State,
+    paths: Vec<std::path::PathBuf>,
+    target: DropTarget,
+    shell: micold_core::path_insert::ShellKind,
+) -> Vec<crate::features::Outcome> {
+    use crate::features::Outcome;
+    use micold_core::path_insert::{plan_insertion, InsertTarget};
+    if paths.is_empty() {
+        return Vec::new();
+    }
+    let terminal = match target {
+        DropTarget::Outside => return Vec::new(),
+        DropTarget::EmptyPane => {
+            return vec![insertion_notice(
+                "Nothing was inserted: this pane shows no terminal.".to_string(),
+            )]
+        }
+        DropTarget::Terminal(t) => t,
+    };
+    if !terminal_is_running(state, terminal) {
+        return vec![insertion_notice(
+            "Nothing was inserted: the terminal's process is not running.".to_string(),
+        )];
+    }
+    let plan = plan_insertion(&paths, shell, InsertTarget::Host);
+    let mut out = Vec::new();
+    if let Some(text) = plan.text() {
+        out.push(Outcome::Insert { terminal, text });
+    }
+    out.extend(plan.refused.iter().map(|r| insertion_notice(r.message())));
+    out
+}
+
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Started(session) => return started(state, session),
@@ -1854,6 +1947,12 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         } => return start_menu_toggled(state, location, unavailable_default),
         Msg::StartMenuAnchored(anchor) => start_menu_anchored(state, anchor),
         Msg::StartMenuDismissed => start_menu_dismissed(state),
+        Msg::FilesDropped {
+            paths,
+            target,
+            shell,
+        } => return files_dropped(state, paths, target, shell),
+        Msg::InsertionFailed(reason) => return vec![insertion_notice(reason)],
         Msg::StartRequested { .. }
         | Msg::TerminalBytes(_)
         | Msg::TerminalSelectStart { .. }

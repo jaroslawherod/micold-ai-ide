@@ -2334,6 +2334,26 @@ pub fn on_shell_instance_selected(
 /// (FR-007/FR-008), but only while that process is Running (FR-012a, feature 010 extends
 /// the write-gate to the shell): input to a non-running process is discarded, not
 /// buffered.
+/// Send `bytes` to one terminal by name, whichever pane has focus and whichever session is
+/// selected (feature 487, FR-005). The daemon already writes input addressed to a process of any
+/// session it hosts, so this needs no new message; it keeps the displaced-window rule and the
+/// per-session serial of [`on_terminal_bytes`].
+pub fn send_to_terminal(app: &mut App, terminal: TerminalRef, bytes: Vec<u8>) {
+    if active_project_displaced(app) {
+        return;
+    }
+    let mut msg = app.stamper.stamp(terminal.session, bytes);
+    if let ClientMsg::SessionInput { process, .. } = &mut msg {
+        *process = Some(terminal.process);
+    }
+    if let Some(d) = &app.daemon {
+        d.send(msg);
+    }
+    if app.displayed_terminal() == Some(terminal) {
+        app.display_offset = 0;
+    }
+}
+
 pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
     // A window displaced from the active project is read-only: it MUST send zero further
     // input (FR-024). Bail before stamping so no serial is consumed (a consumed-but-unsent

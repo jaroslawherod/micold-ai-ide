@@ -9,14 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: tasks
-- **Next step**: design PR (body in scratchpad), then M1
+- **Phase**: milestone M1
+- **Next step**: M1 gate, reviews A and B, push (PR body in scratchpad pr-487-m1.md)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #661 | Previous run (#484) | merged | a42cf25517a42ad7a17a25a84db513fea48a4565 |
+| #662 | Design (spec, plan, tasks) | merged | ab2f9967b89658219500097833054c14634698c3 |
 
 ## Milestones
 
@@ -28,6 +29,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
 ## Decisions
+
+- M1: the planned `CursorMoved` subscription is banned by `tests/idle_subscriptions.rs`; the pointer lives in `SplitView`'s widget state and the widget publishes `PaneMsg::FileDropped(pane, path)`; `shell::drops` coalesces with a 40 ms settle (research.md, M1 spike findings). No pane rectangles are published to app state, so T015 became `PaneLayout::pane_at` + the widget hook.
+- M1: visual pass skipped: M1 adds no visible element (errors use the existing snackbar) and a file drag cannot be synthesised on Xvfb.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

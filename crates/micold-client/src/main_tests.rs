@@ -100,6 +100,7 @@ fn update_inner_applies_window_focus_changed() {
         pane_sent: Default::default(),
         pane_refusal: None,
         divider_dragging: false,
+        pending_drops: Vec::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -168,6 +169,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         pane_sent: Default::default(),
         pane_refusal: None,
         divider_dragging: false,
+        pending_drops: Vec::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -814,6 +816,7 @@ pub(crate) fn base_app() -> App {
         pane_sent: Default::default(),
         pane_refusal: None,
         divider_dragging: false,
+        pending_drops: Vec::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -2825,6 +2828,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         pane_sent: Default::default(),
         pane_refusal: None,
         divider_dragging: false,
+        pending_drops: Vec::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
         display_offset: 0,
@@ -10838,5 +10842,119 @@ mod panes {
             "the active project has none stored"
         );
         assert_eq!(app.pane_layouts.get(&other), Some(&stored));
+    }
+
+    /// Two panes over two running sessions; the second is focused. Returns the panes' terminals.
+    fn two_running_panes(app: &mut App, ids: &[SessionId]) -> (TerminalRef, TerminalRef) {
+        let first = t(ids[0], SessionProcess::Primary);
+        let second = t(ids[1], SessionProcess::Primary);
+        for id in ids {
+            let (_, s) = app.core.workspace.find_session_mut(*id).unwrap();
+            s.lifecycle = micold_core::session::SessionLifecycle::Running;
+        }
+        let _ = update(app, Message::Session(SessionMsg::Selected(ids[0])));
+        let p0 = layout_of(app).focused();
+        crate::shell::panes::split_pane(
+            app,
+            p0,
+            micold_core::pane_layout::Axis::Vertical,
+            (1000.0, 600.0),
+            (10.0, 10.0),
+        )
+        .unwrap();
+        let _ = update(app, Message::Session(SessionMsg::Selected(ids[1])));
+        (first, second)
+    }
+
+    fn inputs(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<(SessionId, Option<SessionProcess>, Vec<u8>)> {
+        drain(rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionInput {
+                    session,
+                    process,
+                    bytes,
+                    ..
+                } => Some((session, process, bytes)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The files of one drop arrive as separate messages and are inserted as one run, in event
+    /// order (feature 487, T012), at the pane they landed on, not the focused one (FR-005).
+    #[test]
+    fn files_dropped_in_one_turn_are_inserted_together_at_the_pane_they_landed_on() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let (first, second) = two_running_panes(&mut app, &ids);
+        assert_eq!(layout_of(&app).focused_terminal(), Some(second));
+        let unfocused = layout_of(&app).pane_showing(first).unwrap();
+        let _ = drain(&mut rx);
+        let drop = |app: &mut App, path: &str| {
+            update(
+                app,
+                Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(
+                    unfocused,
+                    PathBuf::from(path),
+                ))),
+            )
+        };
+        let _ = drop(&mut app, "/d/a b.png");
+        let _ = drop(&mut app, "/d/c");
+        let _ = drop(&mut app, "/d/it's");
+        assert_eq!(app.pending_drops.len(), 3);
+        assert!(
+            inputs(&mut rx).is_empty(),
+            "nothing is sent until the drop settles"
+        );
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::Pane(PaneMsg::DropsSettled)),
+        );
+        assert!(app.pending_drops.is_empty());
+        let sent = inputs(&mut rx);
+        assert_eq!(
+            sent,
+            vec![(
+                ids[0],
+                Some(SessionProcess::Primary),
+                micold_client::keymap::paste_bytes(r"'/d/a b.png' '/d/c' '/d/it'\''s'", false),
+            )]
+        );
+        assert!(
+            !sent[0].2.iter().any(|b| *b == b'\r' || *b == b'\n'),
+            "SC-004"
+        );
+        assert_eq!(
+            layout_of(&app).focused_terminal(),
+            Some(second),
+            "a drop does not move focus"
+        );
+    }
+
+    /// A drop on an exited terminal inserts nothing and says so (FR-012).
+    #[test]
+    fn a_drop_on_a_terminal_that_is_not_running_sends_nothing_and_notifies() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let (first, _) = two_running_panes(&mut app, &ids);
+        let (_, s) = app.core.workspace.find_session_mut(first.session).unwrap();
+        s.lifecycle = micold_core::session::SessionLifecycle::Idle;
+        let pane = layout_of(&app).pane_showing(first).unwrap();
+        let _ = drain(&mut rx);
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(
+                pane,
+                PathBuf::from("/f"),
+            ))),
+        );
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::Pane(PaneMsg::DropsSettled)),
+        );
+        assert!(inputs(&mut rx).is_empty());
+        assert!(app.core.notifications.queue.is_active());
     }
 }

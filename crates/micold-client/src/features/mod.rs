@@ -126,6 +126,17 @@ pub enum Outcome {
     /// `shell/links.rs` takes it out of the queue before the root drains the rest, because opening
     /// is I/O on a blocking task and its result comes back as `LinkOpenFinished`.
     OpenLink(OpenRequest),
+    /// Type `text` at this terminal's input, without submitting it (feature 487, FR-003).
+    ///
+    /// An effect request like [`Outcome::OpenLink`]: the bytes go to the daemon addressed to
+    /// `terminal`, whichever pane has focus (FR-005), and whether the terminal asked for bracketed
+    /// paste is the shell's fact, so the shell turns the text into bytes.
+    Insert {
+        /// The terminal that receives the text.
+        terminal: micold_core::protocol::messages::TerminalRef,
+        /// The quoted paths, joined by single spaces. No line break the user did not put in a name.
+        text: String,
+    },
 }
 
 /// What an activated link asks the operating system to open (feature 031, data-model §3).

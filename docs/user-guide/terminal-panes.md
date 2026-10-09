@@ -66,3 +66,17 @@ left it, and switching projects switches layouts. A pane whose terminal no longe
 session was closed) comes back empty so you can pick another; the rest of the layout is kept. If a
 saved layout cannot be read, for example because it was written by a newer version of the app, the
 project opens with one pane instead. Forgetting a project forgets its layout.
+
+## Drop files and paste screenshots
+
+Drag one or more files or folders from your file manager onto a terminal and their full paths
+appear at that terminal's prompt, quoted for its shell, in the order you dropped them and separated
+by single spaces. Nothing is sent: the paths wait at the prompt, after anything you had typed,
+until you press Enter.
+
+- The paths go to the pane you drop on, whether or not it has the focus.
+- Names with spaces, quotes, `$` or other awkward characters are quoted so the shell reads each
+  path as one argument. If a shell cannot take a name at all (for example a `%` in a name under
+  `cmd`), the file is left out and a notice names it; the other files are still inserted.
+- Dropping on a pane with no terminal, or on a terminal whose process has exited, inserts nothing
+  and shows a notice saying why.

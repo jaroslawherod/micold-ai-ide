@@ -289,7 +289,10 @@ pub fn view<'a>(
         })
         .collect();
     let split = SplitView::new(area.layout, min_pane(), r, children)
-        .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))));
+        .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))))
+        .on_file_drop(|pane, path| {
+            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path)))
+        });
     match area.refusal {
         // Over the panes, not above them: a row above would resize every pane, and the
         // measurement that follows would dismiss the reason before it was read.

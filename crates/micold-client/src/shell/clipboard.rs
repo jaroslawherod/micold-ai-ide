@@ -53,6 +53,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared
         | Outcome::OpenLink(_)
+        | Outcome::Insert { .. }
         | Outcome::SurfaceOpened(_) => Task::none(),
     }
 }

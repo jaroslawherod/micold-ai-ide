@@ -94,6 +94,9 @@ struct App {
     pane_refusal: Option<&'static str>,
     /// A divider is being dragged: pane sizes are sent once, when it is released (FR-014).
     divider_dragging: bool,
+    /// Files dropped on a pane, waiting for the rest of their drop (feature 487): the window reports
+    /// one event per file, and `PaneMsg::DropsSettled` inserts them as one.
+    pending_drops: Vec<(micold_core::pane_layout::PaneId, PathBuf)>,
     /// Per-session monotonic input stamper: turns key bytes into ordered `SessionInput` (G2). Held
     /// here (long-lived) so a session's serial is never reset by a daemon detach/reattach.
     stamper: SessionInputStamper,
