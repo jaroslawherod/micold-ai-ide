@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M8: reviews, full gate, PR.
+- **Next step**: M8: PR #672 open; orchestrator waits on CI and merges, then M9.
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #639 | M5 | merged | 4b43b8cd63ae8510f47fe37216a8e01350b7298e |
 | #666 | M6 | merged | e9a4a16cfbae782230119967052e353f0ef06240 |
 | #669 | M7 | merged | 9ad9a5c384d3220eec2e5b2dba4a14482300a861 |
+| #672 | M8 | open | |
 
 ## Milestones
 
@@ -36,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | #639 | merged |
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | merged |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | in review |
-| M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | in review |
+| M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | in review |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | pending |
 | M10 | T075–T077 | full | Architecture page, recorded visual pass | | pending |
 
