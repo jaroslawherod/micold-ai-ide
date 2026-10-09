@@ -168,8 +168,33 @@ fn window_focus_message(
 }
 
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {
-    every(interval)
-        .map(|_instant| Message::Settings(SettingsMsg::SystemThemeChanged(detect_system_scheme())))
+    Subscription::run_with(interval, |interval| {
+        let interval = *interval;
+        iced::stream::channel(
+            1,
+            move |mut output: iced::futures::channel::mpsc::Sender<Message>| async move {
+                use iced::futures::SinkExt;
+                let mut last = None;
+                let mut tick = tokio::time::interval(interval);
+                loop {
+                    tick.tick().await;
+                    let detected = tokio::task::spawn_blocking(detect_system_scheme).await;
+                    // Only a changed `Ok` reaches `update`: every message re-composes and redraws the
+                    // whole window, and an idle poll that found nothing new must not (SC-004).
+                    if let Ok(Ok(scheme)) = detected {
+                        if last != Some(scheme) {
+                            last = Some(scheme);
+                            let msg =
+                                Message::Settings(SettingsMsg::SystemThemeChanged(Ok(scheme)));
+                            if output.send(msg).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                }
+            },
+        )
+    })
 }
 
 #[cfg(test)]
