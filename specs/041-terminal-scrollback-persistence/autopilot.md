@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | merged |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
-| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | in review |
+| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | in review |
 | M10 | T075–T077 | full | Architecture page, recorded visual pass | | pending |
 
 ## Decisions
