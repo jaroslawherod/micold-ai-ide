@@ -96,6 +96,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 review A (code-review high) | 1 | 4f67f5c608ec2224b464b60a9901c17e31f35e71:efff05d9a78e92978d0fb14809e3bdd40f40f4f7 | CLEAN: 1 MINOR (fmt), fixed |
 | M7 review B (conformance, sonnet) | 1 | same | CLEAN: 1 MINOR (T059 named main.rs, code is in server.rs), task text fixed. Verify: history_removal 10 passed |
 
+| M8 review A (code-review high) | 1 | b9002207ce8a302e2b48f5d8312983195f3e6ebe:c458c57b6cd4adaf968f15055877e1072530fe8c | CHANGES: 2 MAJOR fixed (a stop raised before the request cell was set was dropped; the event handle closed after the first request), 3 MINOR declined (event is per user and the image check already passed; one-shot documented; installer wait by process name is bounded at 5 s) |
+| M8 review B (conformance, sonnet) | 1 | same | CLEAN: 1 MINOR (the window's wait is cut short by the process exit; as designed). Verify: windows_installer_in_use 7 passed, windows-gnu clippy clean |
+
 ## Declined review findings
 
 - M4 review A (code-review high): repeated signals ignored during the unwind: declined, SR §1 says a second signal changes nothing; the 3 s bound and `shutdown_timeout(5 s)` bound the stop. Output after the capture during the save window: declined, inherent to saving before teardown; the capture is the last step before it. Lib-test SIGTERM broadcast: declined, no other lib test runs a serve loop. Gate-held save abandoned at 3 s: by design (previous file stays). Fixed: duplicate Windows `stop_requested` (also review B F1), runtime-drop hang (`main.rs` `shutdown_timeout`), eager signal registration, `save_final` records its save.
