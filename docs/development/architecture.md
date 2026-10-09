@@ -166,6 +166,43 @@ the notification and reports a click as `NotifierEvent::Activated` for the sessi
 (desktop notification backends)" step runs on macOS and Windows and picks its tests up by the
 `desktop_notify` name filter (Principle VI).
 
+## Pull request and check status on worktree rows
+
+_(Feature 040. Why each choice: `specs/040-worktree-pr-ci-status/research.md` R5 to R11.)_
+
+A worktree row whose branch has a GitHub pull request shows its state and its checks, and a merged
+pull request with nothing newer suggests removing the worktree. The status is read, never stored.
+
+| Piece | Where |
+|---|---|
+| Rules: pull request, check and failure kinds, per-branch status, "can be removed" | `micold_core::pull_request` (`crates/micold-core/src/pull_request.rs`), render-free and platform-neutral |
+| The reading itself (`gh api graphql`, one request per reading) | `shell/pr_status.rs` in the client, through the `Task::perform` + `spawn_blocking` pattern of 034 |
+| The schedule and the holding rule | `features/pr_status.rs`, a render-free reducer |
+| The indicator | `ui/material/pull_request_indicator.rs` (see `component-library.md`) |
+| The switch | `pr_status_enabled` in the settings the daemon stores and broadcasts; Settings → GitHub |
+| "Has the merged branch later commits?" | `ClientMsg::MergedBranchCheck`, answered by the daemon from local git |
+
+**Where the reading runs (R5).** In the client, on the host, as the GitHub issue fetch does: the
+service may run in a container with no `gh`, no keychain and no network. The client cannot run git
+under a sandbox, so the two local git facts (remotes, later commits on a merged branch) are asked
+of the daemon. `pr_status_enabled` and `MergedBranchCheck` are this feature's one protocol bump (21 to 22).
+
+**Who holds the status (R6).** Only the window that holds the project reads and shows it. Holding
+starts at `Attached` and ends at `Displaced`, `Refused { ProjectBusy }`, a project switch or a
+disconnect; losing it clears the statuses. A read-only window sends no request and shows no
+indicator; taking the project over reads once. Nothing is held in the daemon or on disk, and the
+logs carry no titles or addresses.
+
+**What starts a reading (R7, R8).** Only the first `CatalogChanged` after `Attached`, the switch
+turning on, the 5-minute interval (subscribed only while the switch is on and the project held),
+and the end of a list refresh. A reading never changes the listing. While one runs, any number of
+further triggers become one further reading; a request-limit answer pauses reading until the limit
+resets, and an older status turns *stale* (dimmer, same shapes) rather than disappearing. Failures
+of `gh` (not installed, not signed in, offline) show nothing and no error. The
+`pr_status_is_read_only_on_named_events` source gate counts the lines that can start a reading.
+
+**Platforms (FR-034).** The feature adds no `cfg` arm; the `gh` launch reuses 034's locator.
+
 ## Adding a floating surface
 
 A floating surface is anything the window stacks over its content: a dialog, a panel popover, a
