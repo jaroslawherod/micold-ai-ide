@@ -125,7 +125,85 @@ fn has_control_character(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::has_control_character;
+    use super::{has_control_character, insert};
+    use micold_client::grid::GridCache;
+    use micold_core::protocol::grid::{GridFrame, LineId, WireCursor, WireCursorShape};
+    use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
+    use micold_core::session::SessionId;
+
+    type Sent = iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>;
+
+    /// An app with a live outbox and a terminal whose grid has (or has not) enabled DECSET 2004.
+    fn app_with_terminal(bracketed: bool) -> (crate::App, TerminalRef, Sent) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = crate::tests::base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let t = TerminalRef {
+            session: SessionId::new(),
+            process: SessionProcess::Primary,
+        };
+        let mut grid = GridCache::new();
+        grid.apply(&GridFrame {
+            process: SessionProcess::Primary,
+            session: t.session,
+            seq: 1,
+            generation: 1,
+            full: true,
+            viewport_top: LineId(0),
+            oldest_available: LineId(0),
+            cols: 80,
+            rows: 2,
+            cursor: WireCursor {
+                line: LineId(0),
+                col: 0,
+                shape: WireCursorShape::Block,
+                visible: true,
+                blinking: false,
+            },
+            styles: Vec::new(),
+            hyperlinks: Vec::new(),
+            lines: Vec::new(),
+            mode: if bracketed {
+                alacritty_terminal::term::TermMode::BRACKETED_PASTE.bits()
+            } else {
+                0
+            },
+            input_serial: None,
+        });
+        assert_eq!(grid.bracketed_paste(), bracketed);
+        app.grids.insert(t, grid);
+        (app, t, rx)
+    }
+
+    fn sent_bytes(rx: &mut Sent) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        while let Ok(m) = rx.try_recv() {
+            if let ClientMsg::SessionInput { bytes, .. } = m {
+                out.push(bytes);
+            }
+        }
+        out
+    }
+
+    /// SC-004: a name with a line break typed unbracketed would press Enter.
+    #[test]
+    fn a_name_with_a_line_break_is_refused_and_announced_when_the_terminal_did_not_ask_for_bracketing(
+    ) {
+        let (mut app, t, mut rx) = app_with_terminal(false);
+        let _ = insert(&mut app, t, "'a\nb'");
+        assert!(sent_bytes(&mut rx).is_empty(), "nothing may be typed");
+        assert!(app.core.notifications.queue.visible().is_some());
+    }
+
+    #[test]
+    fn a_name_with_a_line_break_is_sent_bracketed_when_the_terminal_asked_for_it() {
+        let (mut app, t, mut rx) = app_with_terminal(true);
+        let _ = insert(&mut app, t, "'a\nb'");
+        let sent = sent_bytes(&mut rx);
+        assert_eq!(sent.len(), 1, "{sent:?}");
+        assert!(sent[0].starts_with(b"\x1b[200~"), "{:?}", sent[0]);
+        assert!(!app.core.notifications.queue.is_active());
+    }
 
     #[test]
     fn a_name_with_a_control_character_is_not_typed_unbracketed() {

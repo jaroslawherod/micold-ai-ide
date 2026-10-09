@@ -137,3 +137,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run test-core`, `mise run gate`; quickstart §B step 6
 - **Depends on**: M2
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+Verdict `BLOCKED` (no test list or cycle log); on the evidence gathered the feature would be `FAIL`. Tasks T035 to T042 were cleared in the close PR (see Remediation in verification.md). Source: `tdd/verification.md` at `474f5937`. Finding 12 (no real-entry-point test, visual passes skipped) needs a decision, not code.
+
+- [X] T035 [US3] Finding 2: in `crates/micold-core/src/path_insert/mod.rs:372` (and `crates/micold-client/tests/features_session.rs:1021`) drop a file named with a backslash in a sandboxed plan under `ShellKind::Fish` and assert the bash form (`'a\b'`, not `'a\\b'`). Proof: mutate line 172 `=> ShellKind::Bash` to `=> shell`; `mise run test-core` must fail; restore and rerun green.
+- [X] T036 [US1] Finding 7: test the unbracketed control-character refusal through `crates/micold-client/src/shell/drops.rs:100-116` (a name with `\n` into a terminal that did not ask for bracketed paste sends nothing and notifies; with bracketing it sends). Proof: mutate `drops.rs:104` to `if false &&`; the new test must fail.
+- [X] T037 [US2] Finding 3: remove or replace `two_pasted_images_give_two_paths` (`crates/micold-client/tests/features_session.rs:1128`) with a test that calls the real `save` twice through the reducer path and asserts the two inserted paths differ. Proof: `cargo test -p micold-client --test features_session`.
+- [X] T038 [US1] Finding 4: replace the length check at `crates/micold-core/src/path_insert/quote.rs:181` with per-shell expected strings for the awkward names (or assert `Err` only for the names Cmd cannot hold). Proof: `mise run test-core`.
+- [X] T039 [US1] Finding 5: make `crates/micold-core/tests/path_insert_roundtrip.rs:48,57,72,80` report a skipped shell (print the skip, or fail under an opt-in `MICOLD_REQUIRE_SHELLS=1` set in CI where zsh and fish are installed). Proof: with the variable set on a host lacking fish the test fails; with fish installed it passes.
+- [X] T040 [US1] Finding 6: replace the `include_str!` substring checks at `crates/micold-client/tests/pane_drop_target.rs:61-70` with a test that drives the `SplitView` widget with a file-drop event (or delete the test and record the gap). Proof: commenting out the `.on_file_drop(` wiring fails the test.
+- [X] T041 [US3] Findings 8 and 9: add a nested-project test (inner project wins) at `crates/micold-core/src/path_insert/mod.rs:229`, and reducer or shell-level tests for text-wins-over-image and for the T012 pointer state noted in finding 13. Proof: mutate `max_by_key` to `min_by_key`; the new test must fail.
+- [X] T042 Finding 1: from now on record red output per behavior in `specs/487-drop-paste-paths-terminal/tdd/cycle-log.md` for T035 to T041 (write each test, show it fail against the mutant, then restore). Proof: the log has a red command and output per task.

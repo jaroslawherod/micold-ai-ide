@@ -251,6 +251,54 @@ mod tests {
         assert!(a.exists() && b.exists());
     }
 
+    /// US2: two pastes in the same nanosecond, each saved by the real `save` and typed by the real
+    /// reducer, insert two different paths.
+    #[test]
+    fn two_pastes_saved_and_run_through_the_reducer_insert_different_paths() {
+        use micold_client::features::session::Msg as SessionMsg;
+        use micold_client::features::Outcome;
+        use micold_core::path_insert::ShellKind;
+        use micold_core::project::{Availability, Project};
+        use micold_core::protocol::messages::{SessionProcess, TerminalRef};
+        use micold_core::session::{AiCli, Session, SessionLifecycle, SessionLocation};
+
+        let mut st = micold_client::app::State::default();
+        let path = PathBuf::from("/p");
+        st.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "p".into(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        session.lifecycle = SessionLifecycle::Running;
+        let terminal = TerminalRef {
+            session: session.id,
+            process: SessionProcess::Primary,
+        };
+        st.workspace.sessions.insert(path.clone(), vec![session]);
+        st.workspace.active = Some(path);
+
+        let data = tempfile::tempdir().unwrap();
+        let fallback = PastedLayout::in_data_dir(data.path(), terminal.session);
+        let mut inserted = Vec::new();
+        for seq in 0..2 {
+            // The same instant both times: only the sequence number tells the pastes apart.
+            let saved = save(&img(), None, &fallback, 7, seq);
+            let out = st.update_session_for_effects(SessionMsg::ImagePasted {
+                terminal,
+                shell: ShellKind::Posix,
+                sandbox: None,
+                result: saved,
+            });
+            let [Outcome::Insert { text, .. }] = out.as_slice() else {
+                panic!("{out:?}");
+            };
+            inserted.push(text.clone());
+        }
+        assert_ne!(inserted[0], inserted[1], "{inserted:?}");
+    }
+
     #[test]
     fn a_worktree_that_cannot_be_written_falls_back_to_the_data_dir() {
         // A file where the worktree should be: nothing can be created inside it, as root or not.

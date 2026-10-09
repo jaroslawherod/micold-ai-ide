@@ -16,6 +16,20 @@ fn installed(program: &str) -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
+/// True when `program` can run here. A missing shell is reported on stderr, and fails the test
+/// when `MICOLD_REQUIRE_SHELLS=1` (set in CI, where every shell is installed).
+fn available(program: &str) -> bool {
+    if installed(program) {
+        return true;
+    }
+    assert!(
+        std::env::var("MICOLD_REQUIRE_SHELLS").as_deref() != Ok("1"),
+        "MICOLD_REQUIRE_SHELLS=1 but {program} is not installed"
+    );
+    eprintln!("SKIPPED: {program} is not installed");
+    false
+}
+
 /// Run `script` in `program` with `args` before it and return stdout.
 fn run(program: &str, args: &[&str], script: &str) -> String {
     let out = Command::new(program)
@@ -45,7 +59,7 @@ fn sh_reads_each_quoted_name_back_exactly() {
 #[cfg(unix)]
 #[test]
 fn bash_reads_each_quoted_name_back_exactly() {
-    if installed("bash") {
+    if available("bash") {
         check_posix_like("bash", ShellKind::Bash);
     }
 }
@@ -54,7 +68,7 @@ fn bash_reads_each_quoted_name_back_exactly() {
 #[test]
 fn bash_reads_a_non_utf8_name_back_as_the_same_bytes() {
     use std::os::unix::ffi::OsStrExt;
-    if !installed("bash") {
+    if !available("bash") {
         return;
     }
     let name = OsStr::from_bytes(b"a\xffb'c\\d");
@@ -69,7 +83,7 @@ fn bash_reads_a_non_utf8_name_back_as_the_same_bytes() {
 #[cfg(unix)]
 #[test]
 fn zsh_reads_each_quoted_name_back_exactly() {
-    if installed("zsh") {
+    if available("zsh") {
         check_posix_like("zsh", ShellKind::Bash);
     }
 }
@@ -77,7 +91,7 @@ fn zsh_reads_each_quoted_name_back_exactly() {
 #[cfg(unix)]
 #[test]
 fn fish_reads_each_quoted_name_back_exactly() {
-    if installed("fish") {
+    if available("fish") {
         for name in AWKWARD_NAMES {
             let q = quote(ShellKind::Fish, OsStr::new(name)).unwrap();
             let got = run("fish", &["-c"], &format!("printf %s {q}"));

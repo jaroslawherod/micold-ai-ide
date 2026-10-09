@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Closed 2026-10-09 — shipped in PRs #662, #663, #667, #671, #675 and the close PR
 
 **Input**: GitHub issue #487, "Drop files or paste images into a session terminal to insert their
 paths": handing a file or screenshot to an AI session means typing or pasting its path by hand. The

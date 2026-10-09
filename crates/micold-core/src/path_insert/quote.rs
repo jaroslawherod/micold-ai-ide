@@ -173,14 +173,145 @@ mod tests {
         }
     }
 
+    /// Name, then the expected text for posix/bash, fish, PowerShell and cmd (`None` = refused).
+    type Row = (
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+        Option<&'static str>,
+    );
+    const EXPECTED: &[Row] = &[
+        (
+            "plain.png",
+            "'plain.png'",
+            "'plain.png'",
+            "'plain.png'",
+            Some("\"plain.png\""),
+        ),
+        (
+            "it's",
+            r"'it'\''s'",
+            r"'it\'s'",
+            "'it''s'",
+            Some("\"it's\""),
+        ),
+        (
+            "'''",
+            r"''\'''\'''\'''",
+            r"'\'\'\''",
+            "''''''''",
+            Some("\"'''\""),
+        ),
+        (
+            "say \"hi\".txt",
+            "'say \"hi\".txt'",
+            "'say \"hi\".txt'",
+            "'say \"hi\".txt'",
+            None,
+        ),
+        (
+            "$(whoami)",
+            "'$(whoami)'",
+            "'$(whoami)'",
+            "'$(whoami)'",
+            Some("\"$(whoami)\""),
+        ),
+        (
+            "back\\slash",
+            r"'back\slash'",
+            r"'back\\slash'",
+            r"'back\slash'",
+            Some(r#""back\slash""#),
+        ),
+        (
+            "trailing\\",
+            r"'trailing\'",
+            r"'trailing\\'",
+            r"'trailing\'",
+            Some(r#""trailing\""#),
+        ),
+        ("-rf", "'-rf'", "'-rf'", "'-rf'", Some("\"-rf\"")),
+        (
+            "tab\there",
+            "'tab\there'",
+            "'tab\there'",
+            "'tab\there'",
+            Some("\"tab\there\""),
+        ),
+        (
+            "new\nline",
+            "'new\nline'",
+            "'new\nline'",
+            "'new\nline'",
+            None,
+        ),
+        (
+            "100% done!.txt",
+            "'100% done!.txt'",
+            "'100% done!.txt'",
+            "'100% done!.txt'",
+            None,
+        ),
+        (
+            "a;b&c|d<e>f",
+            "'a;b&c|d<e>f'",
+            "'a;b&c|d<e>f'",
+            "'a;b&c|d<e>f'",
+            Some("\"a;b&c|d<e>f\""),
+        ),
+    ];
+
     #[test]
-    fn every_shell_quotes_every_awkward_name_or_refuses_it_by_name() {
-        for shell in ALL {
-            for name in AWKWARD_NAMES {
-                match quote(shell, OsStr::new(name)) {
-                    Ok(q) => assert!(q.len() >= name.len() + 2, "{shell:?} {name:?} -> {q:?}"),
-                    Err(Unrepresentable) => assert_eq!(shell, ShellKind::Cmd, "{name:?}"),
-                }
+    fn awkward_names_quote_to_the_exact_text_each_shell_expects() {
+        for &(name, posix, fish, pwsh, cmd) in EXPECTED {
+            assert!(
+                AWKWARD_NAMES.contains(&name),
+                "{name:?} is not an awkward name"
+            );
+            let n = OsStr::new(name);
+            assert_eq!(
+                quote(ShellKind::Posix, n).as_deref(),
+                Ok(posix),
+                "posix {name:?}"
+            );
+            assert_eq!(
+                quote(ShellKind::Bash, n).as_deref(),
+                Ok(posix),
+                "bash {name:?}"
+            );
+            assert_eq!(
+                quote(ShellKind::Fish, n).as_deref(),
+                Ok(fish),
+                "fish {name:?}"
+            );
+            assert_eq!(
+                quote(ShellKind::PowerShell, n).as_deref(),
+                Ok(pwsh),
+                "pwsh {name:?}"
+            );
+            match cmd {
+                Some(c) => assert_eq!(quote(ShellKind::Cmd, n).as_deref(), Ok(c), "cmd {name:?}"),
+                None => assert_eq!(
+                    quote(ShellKind::Cmd, n),
+                    Err(Unrepresentable),
+                    "cmd {name:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn only_cmd_refuses_and_only_the_names_it_cannot_hold() {
+        for name in AWKWARD_NAMES {
+            for shell in ALL {
+                let held = quote(shell, OsStr::new(name)).is_ok();
+                let cmd_cannot = name.contains(['"', '%', '^', '!', '\n', '\r']);
+                assert_eq!(
+                    held,
+                    !(shell == ShellKind::Cmd && cmd_cannot),
+                    "{shell:?} {name:?}"
+                );
             }
         }
     }

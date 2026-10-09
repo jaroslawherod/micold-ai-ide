@@ -1047,6 +1047,30 @@ mod drops {
         );
     }
 
+    /// Fish doubles a backslash, but the container's shell is bash: the sandbox form wins.
+    #[cfg(unix)]
+    #[test]
+    fn a_sandboxed_drop_under_fish_quotes_a_backslash_name_for_the_containers_bash() {
+        let tmp = sandbox_tree();
+        let root = tmp.path().canonicalize().unwrap();
+        let file = root.join("proj/a\\b.png");
+        std::fs::write(&file, b"x").unwrap();
+        let (mut st, t) = running();
+        let out = update(
+            &mut st,
+            SessionMsg::FilesDropped {
+                paths: vec![file],
+                target: DropTarget::Terminal(t),
+                shell: ShellKind::Fish,
+                sandbox: Some(sandbox_for(&root)),
+            },
+        );
+        assert!(
+            matches!(&out[0], Outcome::Insert { text, .. } if text == "'/mnt/host/p/a\\b.png'"),
+            "{out:?}"
+        );
+    }
+
     #[test]
     fn a_sandboxed_drop_of_only_outside_files_inserts_nothing() {
         let tmp = sandbox_tree();
@@ -1123,14 +1147,6 @@ mod drops {
         let out = pasted(&mut st, t, Err("Nothing was inserted: disk full."));
         assert_eq!(notified(&out), vec!["Nothing was inserted: disk full."]);
         assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
-    }
-
-    #[test]
-    fn two_pasted_images_give_two_paths() {
-        let (mut st, t) = running();
-        let a = pasted(&mut st, t, Ok("/w/1-0.png"));
-        let b = pasted(&mut st, t, Ok("/w/1-1.png"));
-        assert_ne!(format!("{a:?}"), format!("{b:?}"));
     }
 
     #[test]
