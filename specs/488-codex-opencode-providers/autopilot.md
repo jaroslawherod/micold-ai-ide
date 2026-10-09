@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M1
-- **Next step**: M1 pushed; orchestrator opens the PR from scratchpad/pr-488-m1.md, waits for CI, merges; then M2
+- **Next step**: M1 gate green and pushed; orchestrator opens the PR from scratchpad/pr-488-m1.md, waits for CI, merges; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | pending | in review |
+| M1 | T001–T011 | full | Start Codex/OpenCode, remembered, wire 39 | pending (orchestrator opens) | pushed |
 | M2 | T012–T015 | light | Unavailable providers explained | | todo |
 | M3 | T016–T022 | full | Codex resume + naming (seam) | | todo |
 | M4 | T023–T026 | full | OpenCode resume + naming | | todo |
@@ -47,34 +47,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 7c296cdcbfffe844d73667e0a7202ac201a4cd1c:cb0c493ce4098522100c5f5837df60a8b6d37777 | CLEAN (3 MINOR, fixed prose only) |
 | Tasks | 1 | e22c6bd38c87bb5d49e9aab99ac717d28b8552ef:96244711417951fe05bf6105add19e0cbd91cbfb | CLEAN (3 MINOR, fixed prose only; T035 covers FR-014/SC-006 in close) |
 | M1 A (reviewer, sonnet) | 1 | 43ed7a7abe06108b9f82c3a5b75739a1068c7c3f:96f85d69d1e0d335f23e44fc93097483b913a5d7 | CHANGES: 1 MAJOR fixed (ai_cli error text + schema enum now from AiCli::ALL), 2 MINOR fixed (comment-tolerant trust header, docs) |
+| M1 A (reviewer, sonnet) | 2 | a959e0e9f42b1e0fa2053a46082bfc93cb27c4b6:67df06aff34a0c102150116786686f8522188556 | CLEAN (2 MINOR: TWO const renamed WITHOUT_PI; `]` inside a trust-header comment declined) |
 | M1 B (conformance, sonnet) | 1 | same | CHANGES: only BLOCKER was that the reviewer could not run cargo; the orchestrating unit ran Verify itself (green); 1 MINOR fixed |
 
 ## Declined review findings
+
+- M1 A round 2, MINOR trust.rs `project_header` uses the last `]`, so a comment containing `]` after the header is not read as trusted: declined, it fails closed (the project is simply not treated as trusted) and the file is Codex's own.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M1 (T001–T011) is implemented, ticked, reviewed (A and B done, findings fixed, see Review rounds) and committed on
-claude/project-thread-wysm57 (restarted from origin/main 96f85d69). NOT yet done: the full gate is green, push, and the PR.
-Disk is tight (~1G free after a full build; `rm -rf target-shared` is approved; the gate needs ~27G, so build with
-`CARGO_PROFILE_DEV_DEBUG=0` if it fills).
-Next step (fresh unit, skip branch-start.sh, stay on the branch):
-1. Run the gate: `bash $SCRATCH/g2.sh` (fmt, clippy core+workspace, `cargo test --workspace --no-fail-fast`, CARGO_INCREMENTAL=0), then `for t in scripts/tests/*.test.sh; do $t; done`.
-   Last gate run failed only on: the six root-only permission tests (a_directory_that_cannot_be_emptied_names_what_survived,
-   a_refused_write_is_logged_as_a_failure_with_the_reason, a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched,
-   a_service_write_over_an_unreadable_settings_file_is_refused, the_leftover_report_is_capped,
-   worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports — expected here) and provider-count tests,
-   since fixed (cli_reason, store_roundtrip, directory_availability, missing_cli_is_reported_where_it_is_chosen pass).
-   NOT yet re-run: `cargo test -p micold-client --bin micold-ai-ide` (src/main_tests.rs WITHOUT_PI consts edited to add Codex/OpenCode;
-   these had 5 failures) — check it first.
-2. `cargo check -p micold-daemon -p micold-core --features micold-daemon/sandbox-real-runtime --tests` (not yet run).
-3. Visual pass (visual-pass skill inline, Xvfb): the start-session chooser and Settings default now list Codex and OpenCode; not yet run.
-4. When the only failures are the six above: `echo ... >> .git/autopilot-gate-ok` alone in its own Bash call (see gate-hook.sh), then
-   `git push --force-with-lease -u origin claude/project-thread-wysm57`; if refused, return HANDOVER saying so.
-5. PR text is ready at scratchpad/pr-488-m1.md (fill in the gate sha and the visual-pass line); set the M1 row of Milestones/Pull requests to the PR.
-Context at handover: >180k tokens.
+None.
 
 ## Open escalation
 
