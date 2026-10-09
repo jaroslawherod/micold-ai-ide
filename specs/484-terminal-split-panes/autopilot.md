@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M3
-- **Next step**: gate, reviews A and B, visual pass, then PR file pr-484-m3.md in scratchpad
+- **Next step**: orchestrator opens PR from scratchpad pr-484-m3.md, waits CI, merges; then M4
 
 ## Pull requests
 
@@ -48,6 +48,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 diff A | 1 | d50bde24 | CHANGES: 2 MAJOR (daemon stream not re-attached after PTY restart; pane_sizes unkeyed by project) + 2 MINOR; all fixed |
 | M1 diff B | 1 | HEAD | CLEAN (1 MINOR wording, fixed); visual pass: showcase SplitView, label inset fixed |
 | M2 diff A+B | 1 | ceb9881f:075de250 | CLEAN (3 MINOR: shadow case in test fixed; no tdd/ dir in this feature; ledger cell fixed) |
+| M3 diff A | 1 | 8c89cb11:cef39232 | CLEAN (3 MINOR: stale header press, stuck divider_dragging, divider gone mid-drag; all fixed) |
+| M3 diff B | 1 | c25a230e:a59eb500 | CLEAN (Verify not runnable by reviewer, run in the gate; 2 MINOR: no tdd/ dir, T027 names ui/terminal.rs for the close button, which is in ui/panes.rs) |
+| M3 visual pass | 1 | real client on Xvfb | pass; fixed header strip height (header took half its pane) and the single-pane refusal text; specs/484-terminal-split-panes/visual-pass-m3.md |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
