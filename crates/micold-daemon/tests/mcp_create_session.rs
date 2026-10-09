@@ -165,6 +165,16 @@ impl Sandbox {
             .unwrap_or_default()
     }
 
+    /// Wait (up to 10 s) until `command`'s terminal received `expected`; the caller asserts.
+    /// A delivered prompt reaches the PTY before `create_session` answers, and the stand-in
+    /// copies it to its input file a moment later, so reading the file at once can race it.
+    async fn settle_typed(&self, command: &str, expected: &str) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while self.typed(command) != expected && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
     /// How many times `command` was launched.
     fn launches(&self, command: &str) -> usize {
         std::fs::read_to_string(self.bin.path().join(format!("{command}.launches")))
@@ -306,6 +316,7 @@ async fn create_worktree_then_create_session_types_the_first_prompt() {
         .await,
         "every window sees the new session (SC-003)"
     );
+    s.settle_typed("claude", &format!("{PROMPT}\n")).await;
     assert_eq!(
         s.typed("claude"),
         format!("{PROMPT}\n"),
@@ -490,6 +501,7 @@ async fn a_ready_signal_inside_the_bound_delivers_the_prompt() {
         .ok(json!({"worktree": "b", "ai_cli": "copilot", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    s.settle_typed("copilot", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
     assert_eq!(
         out.get("prompt_reason"),
@@ -571,6 +583,7 @@ async fn with_the_hook_receiver_running_claude_is_ready_once_its_output_settles(
         asked.elapsed() >= SETTLE_AFTER,
         "not before its output settled"
     );
+    s.settle_typed("claude", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
 
     let id = Sandbox::created(&out);
@@ -607,6 +620,7 @@ async fn a_pi_session_start_event_makes_pi_ready() {
         .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    s.settle_typed("pi", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }
 
@@ -623,6 +637,7 @@ async fn copilot_is_ready_once_its_output_settles() {
         asked.elapsed() >= SETTLE_AFTER,
         "not before its output has settled"
     );
+    s.settle_typed("copilot", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
 }
 
@@ -636,6 +651,7 @@ async fn claude_without_a_hook_receiver_is_ready_once_its_output_settles() {
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
     assert!(asked.elapsed() >= SETTLE_AFTER);
+    s.settle_typed("claude", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("claude"), format!("{PROMPT}\n"));
 }
 
@@ -682,6 +698,7 @@ async fn pi_gets_its_first_prompt_without_a_trust_record() {
         .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    s.settle_typed("pi", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }
 
@@ -723,6 +740,7 @@ async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached
         .unwrap();
     let out = call.await.unwrap();
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    s.settle_typed("copilot", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
 }
 
@@ -755,5 +773,6 @@ async fn pi_without_its_event_is_ready_once_its_output_settles() {
         .ok(json!({"worktree": "b", "ai_cli": "pi", "prompt": PROMPT}))
         .await;
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    s.settle_typed("pi", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }
