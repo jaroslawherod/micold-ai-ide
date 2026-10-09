@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M6: PR #666 merged, then M7.
+- **Next step**: M7: PR open; orchestrator waits on CI and merges, then M8.
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #601 | M3 | merged | 7681c0f4a9644a988dd2fa3aaa8818acbae5c4e3 |
 | #610 | M4 | merged | 031d01c6e7b93f494220a0721fd0e0e9194cf6b7 |
 | #639 | M5 | merged | 4b43b8cd63ae8510f47fe37216a8e01350b7298e |
-| #666 | M6 | open | |
+| #666 | M6 | merged | e9a4a16cfbae782230119967052e353f0ef06240 |
+| M7 PR | M7 | pending | |
 
 ## Milestones
 
@@ -33,8 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T025–T030 | full | A running terminal is saved at most every 30 s; a killed service loses at most the last minute | #601 | merged |
 | M4 | T031–T036 | full | An orderly stop (idle, SIGTERM) saves every terminal first | #610 | merged |
 | M5 | T037–T048, T074 | full | Settings → Terminal: Save terminal history; off deletes the files at once | #639 | merged |
-| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | in review |
-| M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | pending |
+| M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | merged |
+| M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | | in review |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | | pending |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | pending |
 | M10 | T075–T077 | full | Architecture page, recorded visual pass | | pending |
@@ -92,6 +93,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 re-review of A fixes (sonnet) | 2 | ceb65a439e8c8fcd541b802c9426f3636ead0379:b2551e8bd43de3e32af9f04210b0421e372cb688 | CLEAN |
 | M6 review A (code-review high) | 1 | 61fd590e240b9a616fb0456b5ecb7a9b47474986:4426249a96fe7b2d9d6a5c3da0d9eb1c6f5d29d1 | CLEAN |
 | M6 review B (conformance, sonnet) | 1 | c1d6a1fe9c926ea96e39d068b02bb4f29d5ae90a:8b99c0f11700ffd27b28f10016e13febf1b04053 | CLEAN: 1 MINOR (history_damaged.rs is cfg(unix) as a whole; the stand-in is unix-only, as in the other M3 history tests), not fixed. Verify: history_damaged 6 passed |
+| M7 review A (code-review high) | 1 | 4f67f5c608ec2224b464b60a9901c17e31f35e71:efff05d9a78e92978d0fb14809e3bdd40f40f4f7 | CLEAN: 1 MINOR (fmt), fixed |
+| M7 review B (conformance, sonnet) | 1 | same | CLEAN: 1 MINOR (T059 named main.rs, code is in server.rs), task text fixed. Verify: history_removal 10 passed |
 
 ## Declined review findings
 

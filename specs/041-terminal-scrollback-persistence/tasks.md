@@ -240,7 +240,7 @@ start removes every file that belongs to no session that can still be shown.
 ### Implementation for User Story 4
 
 - [x] T058 [US4] Add `forgotten`, `forget(ids)` and `sweep(keep)` to `HistoryStore` in `crates/micold-core/src/terminal_history/store.rs` to pass T056.
-- [x] T059 [US4] Call `forget(&ids)` from `DaemonState::revoke_tool_credentials` in `crates/micold-daemon/src/state.rs`, outside the state lock and before the handler replies (R9); in `crates/micold-daemon/src/main.rs` call `sweep(keep)` with the catalog's non-archived session ids before the accept loop when saving is on. T057 passes.
+- [x] T059 [US4] Call `forget(&ids)` from `DaemonState::revoke_tool_credentials` in `crates/micold-daemon/src/state.rs`, outside the state lock and before the handler replies (R9); in `crates/micold-daemon/src/server.rs` call `sweep(keep)` with the catalog's non-archived session ids before the accept loop when saving is on. T057 passes.
 - [x] T060 [US4] Update `docs/user-guide/worktrees-and-sessions.md`: Close, Remove, deleting a worktree and forgetting a project delete the session's saved history; stopping a session keeps it (FR-032).
 
 **Checkpoint**: `cargo test -p micold-daemon --test history_removal` passes.
