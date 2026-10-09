@@ -117,3 +117,36 @@ fn handle_records_input_resize_kill() {
     handle.kill().unwrap();
     // No panic; the fake handle accepted the calls (recorded internally).
 }
+
+/// Feature 488, M3 (T017): `launch_args` resolves the provider's own store, so a Codex session
+/// with a bound conversation resumes it and one without starts fresh.
+#[test]
+fn a_codex_launch_resumes_the_conversation_bound_in_its_store() {
+    let home = tempfile::tempdir().unwrap();
+    let id = Uuid::new_v4();
+    let conversation = "11111111-aaaa-4aaa-8aaa-000000000001";
+    let day = home.path().join("sessions/2026/10/09");
+    std::fs::create_dir_all(&day).unwrap();
+    std::fs::write(
+        day.join(format!("rollout-2026-10-09T10-00-00-{conversation}.jsonl")),
+        "",
+    )
+    .unwrap();
+    std::fs::create_dir_all(home.path().join("micold-bindings")).unwrap();
+    std::fs::write(
+        home.path().join("micold-bindings").join(id.to_string()),
+        conversation,
+    )
+    .unwrap();
+
+    let previous = std::env::var_os("CODEX_HOME");
+    std::env::set_var("CODEX_HOME", home.path());
+    let bound = launch_args(&spec_for(AiCli::Codex, LaunchMode::Resume, id));
+    let unbound = launch_args(&spec_for(AiCli::Codex, LaunchMode::Resume, Uuid::new_v4()));
+    match previous {
+        Some(value) => std::env::set_var("CODEX_HOME", value),
+        None => std::env::remove_var("CODEX_HOME"),
+    }
+    assert_eq!(bound, vec!["resume".to_string(), conversation.to_string()]);
+    assert!(unbound.is_empty());
+}

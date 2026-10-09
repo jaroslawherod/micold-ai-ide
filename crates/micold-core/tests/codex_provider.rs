@@ -246,6 +246,7 @@ mod resume {
         let base = tempfile::tempdir().unwrap();
         let work = cwd(base.path());
         let session = Uuid::from_u128(1);
+        rollout(base.path(), "09", A, &work, &[]);
         bind(base.path(), session, A, &work).unwrap();
         bind(base.path(), session, A, &work).unwrap();
         assert!(bind(base.path(), session, B, &work).is_err(), "other id");
@@ -254,6 +255,20 @@ mod resume {
             "another session's conversation"
         );
         assert!(bind(base.path(), Uuid::from_u128(3), "--last", &work).is_err());
+    }
+
+    #[test]
+    fn a_binding_whose_conversation_is_gone_can_be_replaced() {
+        let base = tempfile::tempdir().unwrap();
+        let work = cwd(base.path());
+        let session = Uuid::from_u128(1);
+        bind(base.path(), session, A, &work).unwrap();
+        rollout(base.path(), "09", B, &work, &[]);
+        bind(base.path(), session, B, &work).unwrap();
+        assert_eq!(
+            CodexProvider.launch_args_in(Some(base.path()), session, LaunchMode::Resume),
+            vec!["resume".to_string(), B.to_string()]
+        );
     }
 
     #[test]

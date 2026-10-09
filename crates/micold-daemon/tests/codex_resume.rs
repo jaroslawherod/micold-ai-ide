@@ -104,6 +104,15 @@ fn open_state(store: &Path) -> Arc<DaemonState> {
 impl Fixture {
     /// A project with worktree `b` holding one Codex session per id in `ids`.
     async fn new(ids: &[u128]) -> Self {
+        Self::with_modes(
+            &ids.iter()
+                .map(|n| (*n, TerminalMode::AiCli))
+                .collect::<Vec<_>>(),
+        )
+        .await
+    }
+
+    async fn with_modes(ids: &[(u128, TerminalMode)]) -> Self {
         let dirs: Vec<tempfile::TempDir> = (0..4).map(|_| tempfile::tempdir().unwrap()).collect();
         let canonical = |n: usize| dirs[n].path().canonicalize().unwrap();
         let (bin, home, project, store) = (canonical(0), canonical(1), canonical(2), canonical(3));
@@ -121,7 +130,7 @@ impl Fixture {
         ]);
         let sessions = ids
             .iter()
-            .map(|n| session(sid(*n), Some("b"), TerminalMode::AiCli, AiCli::Codex))
+            .map(|(n, mode)| session(sid(*n), Some("b"), *mode, AiCli::Codex))
             .collect();
         JsonFileStore::at(store.join("projects.json"))
             .save(&Workspace {
@@ -237,6 +246,16 @@ async fn two_sessions_in_one_directory_never_resume_each_others_conversation() {
         "a session resumed some conversation: {:?}",
         f.argument_lines()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_shell_session_beside_it_does_not_hold_the_binding_back() {
+    let _guard = ENV.lock().await;
+    let f = Fixture::with_modes(&[(1, TerminalMode::AiCli), (2, TerminalMode::Regular)]).await;
+    f.start(&f.state, 2, LaunchMode::Fresh).await;
+    f.start(&f.state, 1, LaunchMode::Fresh).await;
+    f.until("the binding", |f| f.binding(1).exists()).await;
+    f.stop(&f.state, &[1, 2]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

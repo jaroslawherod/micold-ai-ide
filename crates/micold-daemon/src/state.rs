@@ -296,11 +296,12 @@ struct AttentionRetry {
     delay: Option<std::time::Duration>,
 }
 
-/// The first wait after a failed attention write, doubled on each further failure up to
-/// [`ATTENTION_RETRY_MAX`].
 /// How often the bind step polls a minting provider's store, and for how long (research R1).
 const BIND_POLL: std::time::Duration = std::time::Duration::from_secs(2);
 const BIND_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The first wait after a failed attention write, doubled on each further failure up to
+/// [`ATTENTION_RETRY_MAX`].
 const ATTENTION_RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(1);
 const ATTENTION_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -4024,6 +4025,7 @@ impl DaemonState {
                 .flat_map(|(project, sessions)| {
                     sessions
                         .iter()
+                        .filter(|s| s.mode == TerminalMode::AiCli)
                         .filter(|s| s.provider == which && s.id != id)
                         .filter(|s| s.location.cwd(project) == cwd)
                         .filter(|s| inner.sessions.contains_key(&s.id))
