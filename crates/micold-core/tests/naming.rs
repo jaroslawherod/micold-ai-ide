@@ -468,6 +468,25 @@ fn the_tool_derives_the_same_names_as_the_form() {
     use micold_core::mcp::tools::{parse_call, Operation};
     use serde_json::json;
 
+    // The derived strings themselves, literally, for every type (SC-001): the table below only
+    // proves tool and form agree, this proves what they agree on.
+    for type_ in ConventionalType::ALL {
+        let t = type_.as_str();
+        let tool = |args: serde_json::Value| {
+            let Operation::CreateWorktree(request) = parse_call("create_worktree", &args).unwrap()
+            else {
+                panic!("not a create_worktree")
+            };
+            derive(&request.naming().unwrap()).unwrap()
+        };
+        let plain = tool(json!({"type": t, "name": "login crash"}));
+        assert_eq!(plain.branch, format!("{t}/login-crash"));
+        assert_eq!(plain.dir_name, format!("{t}-login-crash"));
+        let ticketed = tool(json!({"type": t, "ticket": "ABC-123", "name": "login crash"}));
+        assert_eq!(ticketed.branch, format!("{t}/abc-123_login-crash"));
+        assert_eq!(ticketed.dir_name, format!("{t}-abc-123_login-crash"));
+    }
+
     let long = "a very long description ".repeat(20);
     let tickets = [None, Some("ABC-123"), Some("#123"), Some("   "), Some("")];
     let names = ["login crash", "con", "Dark mode", long.as_str()];
@@ -521,10 +540,19 @@ mod from_issue {
     #[test]
     fn a_title_over_fifty_characters_is_cut_as_the_form_cuts_it() {
         let title = "Login crash when the user opens the project settings dialog twice";
-        let got = naming_for_issue(&issue(9, title, &[]), &default_mapping());
+        let got = naming_for_issue(&issue(9, title, &["bug"]), &default_mapping());
         assert_eq!(got.name, name_from_title(title));
+        assert_eq!(got.name, "Login crash when the user opens the project");
         assert!(slugify(&got.name).len() <= 50, "{}", got.name);
-        assert_ne!(got.name, title);
+        let names = derive(&got).unwrap();
+        assert_eq!(
+            names.branch,
+            "fix/9_login-crash-when-the-user-opens-the-project"
+        );
+        assert_eq!(
+            names.dir_name,
+            "fix-9_login-crash-when-the-user-opens-the-project"
+        );
     }
 
     #[test]

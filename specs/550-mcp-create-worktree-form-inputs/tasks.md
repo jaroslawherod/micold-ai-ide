@@ -53,7 +53,7 @@ Format: `- [ ] T### [P?] [US?] Description with file path`
 
 ## Phase 6: Polish
 
-- [ ] T022 Run `specs/550-mcp-create-worktree-form-inputs/quickstart.md` Part B with real `gh` and record the results (close unit).
+- [ ] T022 (deferred to a human, see autopilot.md Close checks) Run `specs/550-mcp-create-worktree-form-inputs/quickstart.md` Part B with real `gh` and record the results (close unit).
 
 ## Dependencies
 
@@ -93,3 +93,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-core --test github_issue_lookup --test naming`, `cargo test -p micold-daemon --test mcp_create_worktree`; quickstart B3–B5
 - **Depends on**: M1, M2
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+Verdict from `tdd/verification.md` (8dcc0ad9) is FAIL: the feature is not done until T023 is cleared or waived in writing.
+
+- [ ] T023 (waiver proposed in autopilot.md Close checks, pending a human) Finding 1: prove the M1 and M3 tests fail without their source. For each of `44496f8f` and `23e0efef`, check out the commit's test files over its parent's source in a scratch worktree, run the milestone's tests (`mise run test`-equivalent for `mcp_create_worktree`, `mcp_tools_catalog`, `naming`, `github_issue_lookup`), and record the failing output in `specs/550-mcp-create-worktree-form-inputs/tdd/cycle-log.md`; or record a signed waiver in `autopilot.md`. Done when `/speckit.tdd.verify` no longer reports `TEST_AFTER`.
+- [x] T024 Finding 2: pin the long-title cut with a literal expected branch in `crates/micold-daemon/tests/mcp_create_worktree.rs:893` and `crates/micold-core/tests/naming.rs`. Proof: `cargo test -p micold-daemon --test mcp_create_worktree a_long_title` and mutant "naming_for_issue skips name_from_title" still fails.
+- [x] T025 Finding 3: make `the_tool_derives_the_same_names_as_the_form` assert literal branch and directory for at least one row per type (or add a per-type literal table in `mcp_create_worktree.rs`). Proof: `mise run test-core`.
+- [ ] T026 (declined, not done: no policy rule denies create_worktree, see autopilot.md) Finding 4: add a policy-denial test with a stub denying `create_worktree` proving `read_issue` is not called (`crates/micold-daemon/tests/mcp_create_worktree.rs`, `mod github_issue`). Proof: `cargo test -p micold-daemon --test mcp_create_worktree`; swapping `check_policy` after `resolve_naming` makes it fail.
+- [ ] T027 (deferred to a human, see T022) Run T022 (quickstart Part B with real `gh`) and record it; still open from Phase 6.

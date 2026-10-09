@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Closed 2026-10-09 — shipped in PRs #640, #648, #664 (design #638); tdd-verify verdict FAIL (test-after) with a waiver pending a human, quickstart Part B not run by hand
 
 **Input**: GitHub issue #550 — "MCP create_worktree should support the same inputs as the New worktree form (type, ticket, GitHub issue)". Labels: enhancement.
 

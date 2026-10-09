@@ -898,13 +898,14 @@ mod github_issue {
             FakeIssueSource::new().with_lookup(Ok(snapshot(9, title, &["bug"]))),
         );
         let row = f.ok(sid(3), json!({"github_issue": 9})).await;
-        let expected = micold_core::naming::derive(&micold_core::naming::naming_for_issue(
-            &snapshot(9, title, &["bug"]).into_issue(),
-            &micold_core::issue_types::default_mapping(),
-        ))
-        .unwrap();
-        assert_eq!(row["branch"], expected.branch);
-        assert!(row["branch"].as_str().unwrap().len() < title.len());
+        assert_eq!(
+            row["branch"],
+            "fix/9_login-crash-when-the-user-opens-the-project"
+        );
+        assert_eq!(
+            row["directory"],
+            "fix-9_login-crash-when-the-user-opens-the-project"
+        );
     }
 
     /// FR-005: the mapping is read at call time, so one saved after the daemon started applies.

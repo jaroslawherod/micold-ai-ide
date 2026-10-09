@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #550
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
-- **Phase**: milestone M3 (gate green, PR open)
-- **Next step**: orchestrator merges the M3 PR; then close.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #638 | Design (spec ships in it) | merged | 71d7195264cd757f40baf342ca3052ff7d541d8e |
 | #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
 | #648 | M2 | merged | 23e2db0e4c17ba6e2b7d28893d0999a9482cd0cf |
-| #664 | M3 | open | - |
+| #664 | M3 | merged | 8dcc0ad9ff24a5f6862c34d2d03ca3b6640f9e47 |
+| close | Close | open | - |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
 | M2 | T010-T012 | full | Refusals and collision hint | #648 | merged |
-| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | #664 | gate green, PR open |
+| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | #664 | merged |
 
 ## Decisions
 
@@ -88,3 +89,14 @@ None. <or: the banner as sent, and when>
 
 - analyze: 0 CRITICAL/HIGH; C1-C5 fixed (tasks, contract). Declined: C7-C10 (prose/plan nits, LOW).
 - Review round 1 (snapshot 04276a7d198a9fcc175ede45f27a434d9d112e6e:091c5a0defd667af6b269ec6b10d2e41fa445ac4): F1 checklist ticked, F2 github_issue guard added to M1, F3 T010 reworded as characterisation, F4 T018 folded into T020, F5 recorded here. Structure-only fixes; checked by me.
+
+## Close checks
+
+- Converge skipped: every milestone has a CLEAN review B.
+- tdd-verify: FAIL on F1 (test-after, no red evidence for M1 and M3). WAIVER PROPOSED, pending a human (T023 stays open): the behaviours are fully covered by passing tests, 6 deliberate mutants were all caught, and reproducing red retroactively adds no behaviour; no human has signed it.
+- F2, F3 fixed (literal expectations in naming.rs and mcp_create_worktree.rs). F4 declined: `policy::decide` has no rule denying `create_worktree`, so the order against the issue lookup has no observable seam. F5, F6 not fixed (taste).
+- T022/T027 quickstart Part B (real `gh`, GUI sidebar): not run by hand by an unattended unit; covered by Part A automated tests with a stubbed lookup. Left for the human to run if wanted.
+- Host: `MICOLD_SKIP_GH_LAUNCH_TEST=1` used because the host `gh` is only on a mise path.
+- Close review: round 1 snapshot f70fddb6a4b4fd84c7d91960f32b79d859deefc3:8dcc0ad9ff24a5f6862c34d2d03ca3b6640f9e47
+- verification.md is a point-in-time audit at 8dcc0ad9; its findings 2 and 3 were fixed at close.
+- Close review A: round 1 CHANGES (2 MAJOR: ticks of undone tasks, unsigned waiver) fixed, prose only; tasks unticked, Status states FAIL/pending.
