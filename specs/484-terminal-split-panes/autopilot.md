@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) #656 | merged |
+| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | #656 | merged |
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | pending (PR file in scratchpad pr-484-m2.md) | in review |
 | M3 | T024–T028 | full | Resize, close, rearrange | — | pending |
 | M4 | T029–T035 | full | Layout survives restart | — | pending |
@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 0301e32716201fec8325e22c1d5d8d31d669aebd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 2 MAJOR (M1 half-wired: US2+US5 folded into M1; last-pane refusal moved to T026), 4 MINOR; fixed; analyze HIGH C1/U1 fixed (T006a, T002) |
 | M1 diff A | 1 | d50bde24 | CHANGES: 2 MAJOR (daemon stream not re-attached after PTY restart; pane_sizes unkeyed by project) + 2 MINOR; all fixed |
 | M1 diff B | 1 | HEAD | CLEAN (1 MINOR wording, fixed); visual pass: showcase SplitView, label inset fixed |
+| M2 diff A+B | 1 | ceb9881f:075de250 | CLEAN (3 MINOR: shadow case in test fixed; no tdd/ dir in this feature; ledger cell fixed) |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
 ## Declined review findings
