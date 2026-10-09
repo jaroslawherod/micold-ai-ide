@@ -619,3 +619,68 @@ fn an_empty_name_in_any_record_kind_is_not_a_name() {
         "a read still never errors on unparsable lines, and still finds the rename (C17)"
     );
 }
+
+// --- feature 488, M3 (T016): the minted-identity additions change nothing for the old providers ---
+
+mod minted_identity_seam {
+    use micold_core::provider::{AiCliProvider, ClaudeProvider};
+    use micold_core::provider::{
+        ConversationIdentity, ConversationRef, CopilotProvider, FakeAiCliProvider, PiProvider,
+    };
+    use micold_core::terminal::LaunchMode;
+    use std::path::Path;
+    use std::time::SystemTime;
+    use uuid::Uuid;
+
+    fn id() -> Uuid {
+        Uuid::parse_str("00000000-0000-4000-8000-0000000000aa").unwrap()
+    }
+
+    fn each() -> Vec<Box<dyn AiCliProvider>> {
+        vec![
+            Box::new(ClaudeProvider),
+            Box::new(CopilotProvider),
+            Box::new(PiProvider),
+            Box::new(FakeAiCliProvider::new()),
+        ]
+    }
+
+    #[test]
+    fn the_app_picks_the_conversation_id() {
+        for provider in each() {
+            assert_eq!(provider.identity(), ConversationIdentity::AppAssigned);
+        }
+    }
+
+    #[test]
+    fn launch_args_in_is_launch_args_whatever_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        for provider in each() {
+            for mode in [LaunchMode::Fresh, LaunchMode::Resume] {
+                let expected = provider.launch_args(id(), mode);
+                assert_eq!(provider.launch_args_in(None, id(), mode), expected);
+                assert_eq!(
+                    provider.launch_args_in(Some(dir.path()), id(), mode),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn there_are_no_new_conversations_and_binding_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let conversation = ConversationRef {
+            id: "abc".to_string(),
+            cwd: dir.path().to_path_buf(),
+            created: SystemTime::now(),
+        };
+        for provider in each() {
+            assert!(provider
+                .new_conversations(dir.path(), Path::new("/w"), SystemTime::UNIX_EPOCH)
+                .is_empty());
+            provider.bind(dir.path(), id(), &conversation).unwrap();
+        }
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+}

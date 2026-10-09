@@ -49,9 +49,8 @@ pub struct LaunchSpec {
 /// the spec entirely — the rename is the point, not decoration: a function named for one CLI is a
 /// decision, and this one is now the session's.
 pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
-    spec.provider
-        .provider()
-        .launch_args(spec.session_id, spec.mode)
+    let provider = spec.provider.provider();
+    provider.launch_args_in(provider.config_dir().as_deref(), spec.session_id, spec.mode)
 }
 
 /// Resolve the platform's default interactive shell command (feature 010, research R3;

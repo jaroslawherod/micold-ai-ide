@@ -55,6 +55,37 @@ use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+/// Who chooses a conversation's id (feature 488, R1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationIdentity {
+    /// The application picks the id and hands it to the CLI (`claude`, `copilot`, `pi`).
+    AppAssigned,
+    /// The CLI mints its own id; the application learns it after the start and binds it to the
+    /// session (Codex, OpenCode).
+    Minted,
+}
+
+/// A conversation a minting CLI recorded, found in its own store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationRef {
+    /// The CLI's own id for the conversation (a UUID for Codex, `ses_…` for OpenCode).
+    pub id: String,
+    /// The working directory the conversation was recorded in.
+    pub cwd: PathBuf,
+    /// When the record was last written; candidates are ordered by it.
+    pub created: std::time::SystemTime,
+}
+
+/// The one candidate that may be bound, or `None` (research R1, FR-006): with none there is nothing
+/// to bind, and with two there is no telling which belongs to which session, so nothing is bound.
+/// Never guessing is what keeps a restart from resuming another session's conversation.
+pub fn sole_candidate(candidates: &[ConversationRef]) -> Option<&ConversationRef> {
+    match candidates {
+        [only] => Some(only),
+        _ => None,
+    }
+}
+
 /// Where one session's busy/idle events come from (feature 026, FR-018).
 ///
 /// The daemon's `Activity` state machine consumes the same events either way and is **not**
@@ -212,6 +243,42 @@ pub trait AiCliProvider {
     /// It does not replace or override what the user's own environment supplies; it is merged with
     /// it, and a provider must not use it to reach settings that belong to the user (FR-007).
     fn launch_env(&self) -> Vec<(String, String)>;
+
+    // --- minted conversation ids (feature 488, research R1) ---
+
+    /// Who chooses this provider's conversation ids. [`ConversationIdentity::AppAssigned`]
+    /// providers keep the old behaviour in every method below.
+    fn identity(&self) -> ConversationIdentity;
+
+    /// [`Self::launch_args`] given where the provider's store is, which a minting provider needs to
+    /// look up the conversation bound to `session_id`. `None` (the directory cannot be told) means
+    /// a fresh start. [`ConversationIdentity::AppAssigned`] providers answer `launch_args`.
+    fn launch_args_in(
+        &self,
+        config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String>;
+
+    /// Conversations in the store for `cwd` written since `since` (less a small allowance) that no
+    /// session is bound to yet. Best-effort: nothing readable yields an empty vector.
+    /// [`ConversationIdentity::AppAssigned`] providers answer empty.
+    fn new_conversations(
+        &self,
+        config_dir: &Path,
+        cwd: &Path,
+        since: std::time::SystemTime,
+    ) -> Vec<ConversationRef>;
+
+    /// Bind `conversation` to `session_id` so a restart resumes it. Written once, in the
+    /// application's own storage, never in the CLI's. [`ConversationIdentity::AppAssigned`]
+    /// providers write nothing.
+    fn bind(
+        &self,
+        config_dir: &Path,
+        session_id: Uuid,
+        conversation: &ConversationRef,
+    ) -> io::Result<()>;
 
     // --- conversation storage ---
 
@@ -615,6 +682,37 @@ impl AiCliProvider for ClaudeProvider {
         }
     }
 
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::AppAssigned
+    }
+
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        self.launch_args(session_id, mode)
+    }
+
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        Vec::new()
+    }
+
+    fn bind(
+        &self,
+        _config_dir: &Path,
+        _session_id: Uuid,
+        _conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
     fn config_dir(&self) -> Option<PathBuf> {
         if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
             if !dir.is_empty() {
@@ -895,6 +993,37 @@ impl AiCliProvider for CopilotProvider {
             // and the application always targets a specific id.
             LaunchMode::Resume => vec![format!("--resume={id}"), "--no-remote".to_string()],
         }
+    }
+
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::AppAssigned
+    }
+
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        self.launch_args(session_id, mode)
+    }
+
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        Vec::new()
+    }
+
+    fn bind(
+        &self,
+        _config_dir: &Path,
+        _session_id: Uuid,
+        _conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        Ok(())
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
@@ -1260,6 +1389,37 @@ impl AiCliProvider for PiProvider {
         vec!["--session-id".to_string(), session_id.to_string()]
     }
 
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::AppAssigned
+    }
+
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        self.launch_args(session_id, mode)
+    }
+
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        Vec::new()
+    }
+
+    fn bind(
+        &self,
+        _config_dir: &Path,
+        _session_id: Uuid,
+        _conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
     fn config_dir(&self) -> Option<PathBuf> {
         // Home-relative on every platform, Windows included: Pi is a JavaScript bundle with no
         // per-platform resolver, and its default is `homedir()` joined with `.pi/agent` on all
@@ -1419,12 +1579,172 @@ fn env_dir(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// `<base>/micold-bindings/<session>` — the file holding the CLI's conversation id for a session
+/// (research R1). App-owned, written once at bind, never inside the CLI's own store.
+fn binding_path(base: &Path, session_id: Uuid) -> PathBuf {
+    base.join("micold-bindings").join(session_id.to_string())
+}
+
+/// A conversation id that is safe to hand to a CLI as an argument and to keep in a file name.
+fn valid_conversation_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// The conversation id bound to `session_id`, if any. Best-effort: unreadable or odd ⇒ `None`.
+fn bound_conversation(base: &Path, session_id: Uuid) -> Option<String> {
+    let text = std::fs::read_to_string(binding_path(base, session_id)).ok()?;
+    let id = text.trim();
+    valid_conversation_id(id).then(|| id.to_string())
+}
+
+/// Every conversation id some session is bound to under `base`.
+fn bound_ids(base: &Path) -> std::collections::HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(base.join("micold-bindings")) else {
+        return std::collections::HashSet::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| !entry.file_name().to_string_lossy().contains('.'))
+        .filter_map(|entry| std::fs::read_to_string(entry.path()).ok())
+        .map(|text| text.trim().to_string())
+        .collect()
+}
+
+/// Write the binding once. Binding the same id again is a no-op; a different id, or an id another
+/// session already holds, is refused (a conversation belongs to one session).
+fn write_binding(base: &Path, session_id: Uuid, conversation: &ConversationRef) -> io::Result<()> {
+    use std::io::Write;
+    if !valid_conversation_id(&conversation.id) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a usable conversation id",
+        ));
+    }
+    if let Some(existing) = bound_conversation(base, session_id) {
+        return if existing == conversation.id {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "session is already bound to another conversation",
+            ))
+        };
+    }
+    if bound_ids(base).contains(&conversation.id) {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "conversation is bound to another session",
+        ));
+    }
+    let path = binding_path(base, session_id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(conversation.id.as_bytes())
+}
+
 /// OpenAI's Codex CLI (`codex`).
 ///
 /// M1 starts it fresh in the worktree and remembers the provider; resume, naming and the
 /// conversation store arrive with M3, so every store read answers "nothing recorded".
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CodexProvider;
+
+impl CodexProvider {
+    /// How much of a rollout is read for its first line and its first turn (research R3).
+    const PREFIX_BYTES: u64 = 64 * 1024;
+    /// A rollout older than the spawn by more than this is not this session's.
+    const CLOCK_ALLOWANCE: std::time::Duration = std::time::Duration::from_secs(2);
+    /// Day directories walked for candidates: today's, yesterday's and the one before.
+    const RECENT_DAYS: usize = 3;
+
+    fn sub_dirs_newest_first(dir: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut dirs: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .map(|entry| entry.path())
+            .collect();
+        // `YYYY`, `MM` and `DD` are zero-padded, so name order is time order.
+        dirs.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+        dirs
+    }
+
+    /// Every `sessions/YYYY/MM/DD` directory, newest first.
+    fn day_dirs(config_dir: &Path) -> impl Iterator<Item = PathBuf> {
+        Self::sub_dirs_newest_first(&config_dir.join("sessions"))
+            .into_iter()
+            .flat_map(|year| Self::sub_dirs_newest_first(&year))
+            .flat_map(|month| Self::sub_dirs_newest_first(&month))
+    }
+
+    /// The conversation id in `rollout-<timestamp>-<id>.jsonl`: the trailing UUID of the name.
+    fn rollout_id(path: &Path) -> Option<String> {
+        let stem = path.file_name()?.to_str()?.strip_suffix(".jsonl")?;
+        let stem = stem.strip_prefix("rollout-")?;
+        let id = stem.get(stem.len().checked_sub(36)?..)?;
+        Uuid::parse_str(id).ok().map(|id| id.to_string())
+    }
+
+    fn rollouts_in(day: &Path) -> Vec<(String, PathBuf)> {
+        let Ok(entries) = std::fs::read_dir(day) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                let path = entry.path();
+                Self::rollout_id(&path).map(|id| (id, path))
+            })
+            .collect()
+    }
+
+    /// The rollout of conversation `id`, newest day first.
+    fn rollout_path(config_dir: &Path, id: &str) -> Option<PathBuf> {
+        Self::day_dirs(config_dir).find_map(|day| {
+            Self::rollouts_in(&day)
+                .into_iter()
+                .find_map(|(found, path)| (found == id).then_some(path))
+        })
+    }
+
+    /// The bound conversation's id and rollout, or `None` when unbound or the rollout is gone.
+    fn bound_rollout(config_dir: &Path, session_id: Uuid) -> Option<(String, PathBuf)> {
+        let id = bound_conversation(config_dir, session_id)?;
+        let path = Self::rollout_path(config_dir, &id)?;
+        Some((id, path))
+    }
+
+    /// The working directory in a rollout's first line (a `session_meta` record).
+    fn rollout_cwd(prefix: &[u8]) -> Option<PathBuf> {
+        let line = prefix.split(|byte| *byte == b'\n').next()?;
+        // A first line the prefix cut short is not read.
+        prefix.contains(&b'\n').then_some(())?;
+        let record: serde_json::Value = serde_json::from_slice(line).ok()?;
+        if record.get("type")?.as_str()? != "session_meta" {
+            return None;
+        }
+        record
+            .get("payload")?
+            .get("cwd")?
+            .as_str()
+            .map(PathBuf::from)
+    }
+
+    fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+        crate::first_turn::read_prefix_bounded(path, Self::PREFIX_BYTES)
+    }
+}
 
 impl AiCliProvider for CodexProvider {
     fn id(&self) -> AiCli {
@@ -1444,9 +1764,69 @@ impl AiCliProvider for CodexProvider {
     }
 
     fn launch_args(&self, _session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
-        // Codex mints its own conversation ids (research V5), so a start carries none. Until M3
-        // binds one, a restart opens a fresh conversation rather than guessing with `--last`.
+        // Codex mints its own conversation ids (research V5), so without a store to look in a
+        // start carries none: a fresh conversation, never `--last`, which could be another
+        // session's (FR-006). [`Self::launch_args_in`] resumes a bound one.
         Vec::new()
+    }
+
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::Minted
+    }
+
+    fn launch_args_in(
+        &self,
+        config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        if mode == LaunchMode::Fresh {
+            return self.launch_args(session_id, mode);
+        }
+        match config_dir.and_then(|base| Self::bound_rollout(base, session_id)) {
+            Some((id, _)) => vec!["resume".to_string(), id],
+            None => self.launch_args(session_id, mode),
+        }
+    }
+
+    fn new_conversations(
+        &self,
+        config_dir: &Path,
+        cwd: &Path,
+        since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        let earliest = since
+            .checked_sub(Self::CLOCK_ALLOWANCE)
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let taken = bound_ids(config_dir);
+        let mut found: Vec<ConversationRef> = Self::day_dirs(config_dir)
+            .take(Self::RECENT_DAYS)
+            .flat_map(|day| Self::rollouts_in(&day))
+            .filter(|(id, _)| !taken.contains(id))
+            .filter_map(|(id, path)| {
+                let written = std::fs::metadata(&path).and_then(|m| m.modified()).ok()?;
+                if written < earliest {
+                    return None;
+                }
+                let recorded = Self::rollout_cwd(&Self::read_bounded(&path)?)?;
+                (recorded == cwd).then_some(ConversationRef {
+                    id,
+                    cwd: recorded,
+                    created: written,
+                })
+            })
+            .collect();
+        found.sort_by_key(|conversation| conversation.created);
+        found
+    }
+
+    fn bind(
+        &self,
+        config_dir: &Path,
+        session_id: Uuid,
+        conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        write_binding(config_dir, session_id, conversation)
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
@@ -1463,12 +1843,15 @@ impl AiCliProvider for CodexProvider {
         Vec::new()
     }
 
-    fn has_recorded_conversation(&self, _config_dir: &Path, _cwd: &Path, _id: Uuid) -> bool {
-        false
+    fn has_recorded_conversation(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
+        Self::bound_rollout(config_dir, session_id).is_some()
     }
 
-    fn read_title(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
-        None
+    fn read_title(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> Option<String> {
+        // The first typed turn, from a bounded prefix. Codex records no name of its own, so the
+        // turn is the name (the label seam stays empty, as for Pi).
+        let (_, path) = Self::bound_rollout(config_dir, session_id)?;
+        crate::first_turn::codex_first_turn(&Self::read_bounded(&path)?)
     }
 
     fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
@@ -1530,6 +1913,38 @@ impl AiCliProvider for OpenCodeProvider {
     fn launch_args(&self, _session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
         // OpenCode mints its own `ses_…` ids (research V5); see `CodexProvider::launch_args`.
         Vec::new()
+    }
+
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::Minted
+    }
+
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        // Resume arrives with M4.
+        self.launch_args(session_id, mode)
+    }
+
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        Vec::new()
+    }
+
+    fn bind(
+        &self,
+        config_dir: &Path,
+        session_id: Uuid,
+        conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        write_binding(config_dir, session_id, conversation)
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
@@ -1739,6 +2154,37 @@ impl AiCliProvider for FakeAiCliProvider {
             LaunchMode::Resume => "--resume",
         };
         vec![flag.to_string(), session_id.to_string()]
+    }
+
+    fn identity(&self) -> ConversationIdentity {
+        ConversationIdentity::AppAssigned
+    }
+
+    fn launch_args_in(
+        &self,
+        _config_dir: Option<&Path>,
+        session_id: Uuid,
+        mode: LaunchMode,
+    ) -> Vec<String> {
+        self.launch_args(session_id, mode)
+    }
+
+    fn new_conversations(
+        &self,
+        _config_dir: &Path,
+        _cwd: &Path,
+        _since: std::time::SystemTime,
+    ) -> Vec<ConversationRef> {
+        Vec::new()
+    }
+
+    fn bind(
+        &self,
+        _config_dir: &Path,
+        _session_id: Uuid,
+        _conversation: &ConversationRef,
+    ) -> io::Result<()> {
+        Ok(())
     }
 
     fn config_dir(&self) -> Option<PathBuf> {

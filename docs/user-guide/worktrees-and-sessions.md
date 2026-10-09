@@ -911,10 +911,21 @@ ask for them with `ai_cli` set to `codex` or `opencode`.
 - **It starts in the session's worktree**, running the bare command, and the sidebar and terminal
   bar label it `codex` or `opencode`. Sign in to the CLI yourself first: the app does not carry your
   credentials.
-- **The session remembers its provider** across restarts of the app and the session service.
-  Reopening the conversation itself, naming the session after it and showing its activity are not
-  part of this yet: after a restart the CLI opens fresh in the worktree, and the activity badge
+- **The session remembers its provider** across restarts of the app and the session service. For
+  OpenCode, reopening the conversation, naming the session after it and showing its activity are
+  not part of this yet: after a restart it opens fresh in the worktree, and the activity badge
   reads unknown.
+- **A restarted Codex session resumes its own conversation.** A little after Codex starts, the app
+  finds the conversation it recorded in `~/.codex` (or `$CODEX_HOME`) for that folder and links it
+  to the session; restarting the session then runs `codex resume` on that conversation, never on
+  another session's. The link is made only when the match is certain. If two Codex sessions run in
+  the same folder, or Codex has not recorded a conversation (you have not sent a first message, or
+  it records nothing), no link is made and a restart opens a fresh conversation without an error.
+  The app only reads Codex's records; it never changes or deletes them. Closing a session
+  does not remove its conversation from Codex.
+- **A Codex session is named from your first message** once Codex has recorded one, as sessions on
+  the other CLIs are. Until then it keeps the usual placeholder name. Codex's activity badge reads
+  unknown.
 - **Codex asks whether to trust a folder** the first time it runs there. When a tool asks for a
   first prompt in a folder Codex has not been told to trust, the prompt is not typed, so it cannot
   answer that question for you; run `codex` once in the project folder and accept it.
