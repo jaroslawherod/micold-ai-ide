@@ -121,6 +121,12 @@ The user guide documents each new provider: how it is detected, what a session d
 - **Sign-in files differ per platform** (for instance a keychain instead of a file): the sandbox shares only what exists and never fails because a file is absent.
 - **A first prompt typed before the CLI is ready**, or into a folder-trust question: handled as for the existing providers, or the provider says it cannot take an injected first prompt.
 
+## Clarifications
+
+### Session 2026-10-09
+
+- Q: Is a wire protocol version bump acceptable when the provider list changes? → A: Yes. Adding `AiCli` variants is wire-visible; feature 029 (Pi) bumped 10 → 11 in one edit, and `PROTOCOL_VERSION` is "bumped on any wire-visible change". One bump covers both providers. _(agent-resolved: crates/micold-core/src/protocol/version.rs#PROTOCOL_VERSION)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -140,7 +146,7 @@ The user guide documents each new provider: how it is detected, what a session d
 - **FR-013**: The sandbox image MUST contain both CLIs, and a sandboxed session MUST share each CLI's sign-in from the host the way existing providers do, writing nothing the existing providers would not write.
 - **FR-014**: The user guide MUST list Codex and OpenCode wherever it lists providers and document, per provider: detection, restart behaviour, naming, activity, tool-server support and sandbox sign-in.
 - **FR-015**: Existing providers' behaviour MUST NOT change; adding a provider touches the provider seam and its consumers, not a per-CLI conditional elsewhere.
-- **FR-016**: The wire protocol MUST stay compatible: an older client meeting a session of a new provider MUST NOT crash, and any version bump follows the repository's protocol rules. [NEEDS CLARIFICATION: does the provider list in the wire schema break old clients, i.e. is a protocol version bump acceptable?]
+- **FR-016**: The wire protocol MUST stay compatible: an older client meeting a session of a new provider MUST NOT crash, and a new provider adds `AiCli` variants, so the protocol version MUST be bumped once for the whole feature, in one edit, as the Pi provider did (10 → 11); the handshake refuses the older peer instead of letting it fail to decode a frame.
 
 ### Key Entities
 
