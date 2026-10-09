@@ -167,6 +167,23 @@ fn window_focus_message(
     }
 }
 
+/// The message for a poll result, or `None` when `update` has nothing to learn from it. Only a
+/// changed `Ok` goes through: every message re-composes and redraws the whole window, and an idle
+/// poll that found nothing new must not (SC-004). A failed probe changes nothing, as in `update`.
+fn changed_scheme(
+    last: &mut Option<micold_core::theme::SystemScheme>,
+    detected: Result<micold_core::theme::SystemScheme, ()>,
+) -> Option<Message> {
+    let scheme = detected.ok()?;
+    if *last == Some(scheme) {
+        return None;
+    }
+    *last = Some(scheme);
+    Some(Message::Settings(SettingsMsg::SystemThemeChanged(Ok(
+        scheme,
+    ))))
+}
+
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {
     Subscription::run_with(interval, |interval| {
         let interval = *interval;
@@ -176,16 +193,12 @@ fn os_theme_poll(interval: Duration) -> Subscription<Message> {
                 use iced::futures::SinkExt;
                 let mut last = None;
                 let mut tick = tokio::time::interval(interval);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 loop {
                     tick.tick().await;
                     let detected = tokio::task::spawn_blocking(detect_system_scheme).await;
-                    // Only a changed `Ok` reaches `update`: every message re-composes and redraws the
-                    // whole window, and an idle poll that found nothing new must not (SC-004).
-                    if let Ok(Ok(scheme)) = detected {
-                        if last != Some(scheme) {
-                            last = Some(scheme);
-                            let msg =
-                                Message::Settings(SettingsMsg::SystemThemeChanged(Ok(scheme)));
+                    if let Ok(detected) = detected {
+                        if let Some(msg) = changed_scheme(&mut last, detected) {
                             if output.send(msg).await.is_err() {
                                 return;
                             }
@@ -200,6 +213,21 @@ fn os_theme_poll(interval: Duration) -> Subscription<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::theme::SystemScheme;
+
+    /// T040 (SC-004): the poll wakes the window only for a scheme `update` has not seen.
+    #[test]
+    fn the_theme_poll_reports_only_a_changed_scheme() {
+        let mut last = None;
+        assert!(changed_scheme(&mut last, Ok(SystemScheme::Dark)).is_some());
+        assert!(changed_scheme(&mut last, Ok(SystemScheme::Dark)).is_none());
+        assert!(
+            changed_scheme(&mut last, Err(())).is_none(),
+            "a failed probe is silent"
+        );
+        assert!(changed_scheme(&mut last, Ok(SystemScheme::Light)).is_some());
+        assert!(changed_scheme(&mut last, Ok(SystemScheme::Dark)).is_some());
+    }
 
     /// 003 FR-006 / SC-003: the theme poll must keep running while unfocused. It used to be
     /// dropped entirely, so a visible-but-unfocused window kept the wrong theme indefinitely —

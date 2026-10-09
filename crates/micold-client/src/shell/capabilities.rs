@@ -42,7 +42,7 @@
 //!
 //! # The one capability that is not here, and the reason is iced's
 //!
-//! `OsThemeProbe`'s only consumer is `os_theme_poll`'s `Subscription::map` closure. iced panics on
+//! `OsThemeProbe`'s only consumer is `os_theme_poll`'s polling stream (`spawn_blocking`). iced panics on
 //! boot if a subscription's mapping closure captures anything — a capturing closure has no stable
 //! identity, so the runtime restarts the underlying timer every frame — which is recorded at
 //! `detect_system_scheme` in `main.rs` as a bug that was already hit once. A closure that cannot

@@ -189,7 +189,7 @@ pub use section_list::{Section, SectionList};
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use split_action::SplitAction;
-pub use split_view::{pane_focus_mark, SplitView};
+pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;

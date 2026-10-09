@@ -20,8 +20,8 @@ use crate::features::session::{Msg as SessionMsg, PaneMsg};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::ui::material::{
-    pane_focus_mark as focus_mark, Button, ButtonVariant, GridSizeReporter, IconButton, SplitView,
-    TerminalPane, Text, Tooltip, TypeRole,
+    pane_focus_mark as focus_mark, pane_notice_fill, Button, ButtonVariant, GridSizeReporter,
+    IconButton, SplitView, TerminalPane, Text, Tooltip, TypeRole,
 };
 use crate::ui::terminal::TERM_FONT_SIZE;
 use crate::ui::terminal::{empty_terminal_message, session_title, CellMetrics, TermPalette};
@@ -299,9 +299,7 @@ pub fn view<'a>(
                 container(Text::new(reason, TypeRole::Caption, r))
                     .padding(spacing::SM)
                     .style(move |_| container::Style {
-                        background: Some(
-                            crate::ui::material::style::color(r.surface_container_high).into()
-                        ),
+                        background: Some(pane_notice_fill(r).into()),
                         ..container::Style::default()
                     })
             )
@@ -318,6 +316,21 @@ pub fn view<'a>(
 mod tests {
     //! The focus mark (feature 484, T015): visible without hover, not colour alone, both themes.
     use super::*;
+
+    /// T039 (FR-010): an empty pane has no terminal widget to take a press, so its tile must be
+    /// wrapped in a `mouse_area` that publishes `FocusPane`; a pane with a terminal must not be.
+    #[test]
+    fn an_empty_pane_tile_is_pressable_and_a_terminal_pane_is_not() {
+        let src = include_str!("panes.rs");
+        let body = &src[src.find("let tile: Element").expect("tile")..];
+        let body = &body[..body.find(".collect();").expect("end of map")];
+        assert!(body.contains("if pane.terminal().is_some()"), "{body}");
+        let wrapped = body
+            .split("mouse_area(tile)")
+            .nth(1)
+            .expect("mouse_area(tile)");
+        assert!(wrapped.contains(".on_press(") && wrapped.contains("PaneMsg::FocusPane("));
+    }
 
     #[test]
     fn a_focused_header_differs_from_an_unfocused_one_in_both_themes() {
