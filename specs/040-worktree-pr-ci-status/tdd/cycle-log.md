@@ -567,3 +567,20 @@ existed and failed before the implementation.
   the `Read:` line, `.stale(row.stale)`, the regenerated layout snapshot, the user guide. The tick is `Message::PrStatus(Msg::Tick)`,
   not a root `Message::PrStatusTick`: `root_vocabulary_is_cross_cutting` rejects a root variant one feature answers.
 - commit: the commit that adds this entry
+
+### Follow-up C2 (post-close, 2026-10-09): a sign-in that reads pull requests but not checks
+
+- answer recorded from GitHub, not assumed: a workflow in a private scratch repository ran the feature's query with
+  `GITHUB_TOKEN` limited to `permissions: pull-requests: read, contents: read`. HTTP 200; the pull request comes back with
+  `statusCheckRollup: null`, and `errors` holds one `FORBIDDEN` entry per `statusCheckRollup` path ("Resource not accessible by
+  integration"); `gh` exits 1 and prints `gh: Resource not accessible by integration`. A plain pull request query with the same token
+  succeeds. Fixture: `pr_checks_forbidden.txt`.
+- before the change: `read_outcome` took any non-zero exit and any `errors` entry as a failure, and `classify` reads "resource not
+  accessible" as no access, so the whole project was `Unavailable` (FR-025: no indicator at all).
+- decision: the pull request is readable, so FR-025 ("cannot be read at all") does not apply; the checks read as none (FR-003). Only a
+  `FORBIDDEN` error whose path ends in `statusCheckRollup` is tolerated.
+- red: `a_sign_in_that_cannot_read_checks_still_shows_the_pull_request_without_a_check_status` FAILED (the answer was `Err(Unavailable)`)
+  in `pull_request_source.rs`, before `parse_status` / `read_outcome` were changed. Its sibling
+  `a_forbidden_error_elsewhere_than_the_checks_is_still_no_access` passed at once (it pins the tolerance's width) and is held by that
+  design: a tolerance of every `FORBIDDEN` would fail it.
+- green: `pull_request_source`, `pull_request_parse`, `pull_request_failure` all pass.

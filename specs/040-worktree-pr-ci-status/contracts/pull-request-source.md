@@ -167,7 +167,11 @@ pub fn reading_failure(outcome: &RunOutcome, now: u64) -> ReadingFailure
   `None` when there is no status line or no empty line (⇒ `Passing`).
 - **`parse_status`**: `data.repository` holding `o<i>` and `r<i>` for every `i` ⇒ §3 per branch.
   A GraphQL `errors` entry, a missing alias, a `null` repository or JSON that does not parse is a
-  failure, never a partial map. The key of the result is `branches[i]`, never a name taken from the
+  failure, never a partial map. One exception: a `FORBIDDEN` error whose path ends in
+  `statusCheckRollup` (the sign-in reads pull requests but not checks) is not an error here; that
+  pull request's checks read as none (FR-003). Recorded: HTTP 200, `statusCheckRollup: null`, `gh`
+  exit 1, stderr `gh: Resource not accessible by integration`. `read_outcome` reads such an answer
+  although `gh` exited 1, only when every `errors` entry is of that kind. The key of the result is `branches[i]`, never a name taken from the
   answer.
 - **`rate_limit_pause`**, called only for a rate-limit answer (row 3 below):
   1. `Retry-After: <seconds>` ⇒ `now + seconds`;
@@ -207,6 +211,7 @@ and only then trimmed of tokens and request ids; the recording command is the fi
 | `pr_rate_limited_graphql.txt` | `RATE_LIMITED` with `X-RateLimit-Remaining: 0` and `X-RateLimit-Reset` |
 | `pr_rate_limited_secondary.txt` | HTTP 403 with `Retry-After` |
 | `pr_rate_limited_secondary_no_retry_after.txt` | HTTP 403 secondary limit, `X-RateLimit-Remaining` above 0, no `Retry-After` |
+| `pr_checks_forbidden.txt` | HTTP 200, exit 1: a `FORBIDDEN` error at each `statusCheckRollup` (a token with `pull-requests: read` only) |
 | `pr_truncated.txt` | a 200 answer cut mid-body |
 
 A state that cannot be produced on demand (a secondary limit) is recorded from GitHub's documented

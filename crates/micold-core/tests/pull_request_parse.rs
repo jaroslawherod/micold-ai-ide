@@ -7,8 +7,8 @@
 
 use std::path::PathBuf;
 
-/// The 14 recorded answers of contracts/pull-request-source.md §5.
-const FIXTURES: [&str; 14] = [
+/// The 15 recorded answers of contracts/pull-request-source.md §5.
+const FIXTURES: [&str; 15] = [
     "pr_three_branches.txt",
     "pr_checks_failing.txt",
     "pr_checks_pending.txt",
@@ -23,6 +23,7 @@ const FIXTURES: [&str; 14] = [
     "pr_rate_limited_secondary.txt",
     "pr_rate_limited_secondary_no_retry_after.txt",
     "pr_truncated.txt",
+    "pr_checks_forbidden.txt",
 ];
 
 fn fixture_path(name: &str) -> PathBuf {
