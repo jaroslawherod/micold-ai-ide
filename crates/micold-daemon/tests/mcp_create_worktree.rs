@@ -611,16 +611,6 @@ async fn a_default_session_may_create_a_derived_worktree() {
     assert_eq!(row["branch"], "docs/guide-update");
 }
 
-/// A literal `github_issue` is refused until the lookup ships, and nothing is created.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn github_issue_is_refused_and_creates_nothing() {
-    let f = Fixture::new().await;
-    let before = f.snapshot().await;
-    let error = f.err(sid(3), json!({"github_issue": 12})).await;
-    assert_eq!(error["category"], "invalid_input", "{error}");
-    f.assert_unchanged(&before).await;
-}
-
 /// SC-002, US2 s1-s3: each invalid input is refused with its reason and leaves nothing behind.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn each_invalid_input_is_refused_with_its_reason_and_leaves_nothing() {
@@ -711,4 +701,246 @@ async fn two_concurrent_identical_requests_leave_one_worktree() {
             .count(),
         1
     );
+}
+
+// ---- Feature 550 US3: a GitHub issue ----
+
+mod github_issue {
+    use super::*;
+    use micold_core::github::{
+        FakeIssueSource, IssueLoadError, IssueLookup, IssueLookupError, IssueSnapshot,
+    };
+    use micold_core::issue_types::LabelTypeEntry;
+    use micold_core::naming::ConventionalType;
+    use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+
+    fn snapshot(number: u64, title: &str, labels: &[&str]) -> IssueSnapshot {
+        IssueSnapshot {
+            number,
+            title: title.to_string(),
+            labels: labels.iter().map(|l| l.to_string()).collect(),
+        }
+    }
+
+    /// `origin` on github.com, and `fake` answering the lookups.
+    fn on_github(f: &Fixture, fake: FakeIssueSource) -> Arc<FakeIssueSource> {
+        git(
+            f.repo(),
+            &["remote", "add", "origin", "https://github.com/o/r.git"],
+        );
+        let fake = Arc::new(fake);
+        let held = Arc::clone(&fake);
+        f.state
+            .set_issue_lookup(move |_| Some(Arc::clone(&held) as Arc<dyn IssueLookup>));
+        fake
+    }
+
+    /// US3 s1, FR-005: an open `bug` issue gives the branch the form's pick gives.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_open_bug_issue_creates_the_forms_worktree() {
+        let f = Fixture::new().await;
+        let fake = on_github(
+            &f,
+            FakeIssueSource::new().with_lookup(Ok(snapshot(123, "Login crash", &["bug"]))),
+        );
+        let row = f.ok(sid(3), json!({"github_issue": 123})).await;
+        assert_eq!(row["branch"], "fix/123_login-crash");
+        assert_eq!(row["directory"], "fix-123_login-crash");
+        assert_eq!(row["type"], "fix");
+        assert_eq!(row["ticket"], "123");
+        assert_eq!(fake.lookup_calls(), vec![("o/r".to_string(), 123)]);
+    }
+
+    /// US3 s2: no mapped label and no `type` is the form's "Select a type"; an explicit type works.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn unmapped_labels_need_a_type() {
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            FakeIssueSource::new()
+                .with_lookup(Ok(snapshot(7, "Question", &["question"])))
+                .with_lookup(Ok(snapshot(7, "Question", &["question"]))),
+        );
+        let before = f.snapshot().await;
+        let error = f.err(sid(3), json!({"github_issue": 7})).await;
+        assert_eq!(error["category"], "invalid_input", "{error}");
+        assert_eq!(error["message"], NamingError::NoType.to_string());
+        f.assert_unchanged(&before).await;
+        let row = f
+            .ok(sid(3), json!({"github_issue": 7, "type": "docs"}))
+            .await;
+        assert_eq!(row["branch"], "docs/7_question");
+    }
+
+    /// US3 s3, FR-007: each way the issue is unusable is refused with the form's reason.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_unusable_issue_is_refused_with_the_forms_reason_and_creates_nothing() {
+        let cases: Vec<(IssueLookupError, &str, &str)> = vec![
+            (
+                IssueLookupError::NotOpenIssue { closed: true },
+                "invalid_input",
+                "issue #5 in o/r is closed",
+            ),
+            (
+                IssueLookupError::NotOpenIssue { closed: false },
+                "invalid_input",
+                "#5 is not an open issue in o/r: it may be a pull request or not exist",
+            ),
+            (
+                IssueLookupError::Load(IssueLoadError::NotSignedIn),
+                "service_error",
+                "you're not signed in to GitHub",
+            ),
+            (
+                IssueLookupError::Load(IssueLoadError::NoAccess),
+                "service_error",
+                "your GitHub sign-in can't access o/r",
+            ),
+            (
+                IssueLookupError::Load(IssueLoadError::RateLimited),
+                "service_error",
+                "GitHub's rate limit was reached",
+            ),
+            (
+                IssueLookupError::Load(IssueLoadError::TimedOut),
+                "service_error",
+                "GitHub didn't answer within 10 seconds.",
+            ),
+            (
+                IssueLookupError::Load(IssueLoadError::Offline),
+                "service_error",
+                "Couldn't reach GitHub",
+            ),
+        ];
+        for (failure, category, text) in cases {
+            let f = Fixture::new().await;
+            on_github(&f, FakeIssueSource::new().with_lookup(Err(failure.clone())));
+            let before = f.snapshot().await;
+            let error = f
+                .err(sid(3), json!({"github_issue": 5, "type": "fix"}))
+                .await;
+            assert_eq!(error["category"], category, "{failure:?}: {error}");
+            let message = error["message"].as_str().unwrap();
+            assert!(message.contains(text), "{failure:?}: {message}");
+            f.assert_unchanged(&before).await;
+        }
+    }
+
+    /// FR-007: no `gh` on the machine is the form's "isn't installed" text.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn no_gh_is_refused_as_the_form_does() {
+        let f = Fixture::new().await;
+        git(
+            f.repo(),
+            &["remote", "add", "origin", "https://github.com/o/r.git"],
+        );
+        f.state.set_issue_lookup(|_| None);
+        let before = f.snapshot().await;
+        let error = f.err(sid(3), json!({"github_issue": 5})).await;
+        assert_eq!(error["category"], "service_error", "{error}");
+        assert!(error["message"]
+            .as_str()
+            .unwrap()
+            .contains("isn't installed"));
+        f.assert_unchanged(&before).await;
+    }
+
+    /// FR-007: a project with no GitHub remote is refused with the form's text, before any lookup.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn no_github_remote_is_refused_without_a_lookup() {
+        let f = Fixture::new().await;
+        let fake = Arc::new(FakeIssueSource::new());
+        let held = Arc::clone(&fake);
+        f.state
+            .set_issue_lookup(move |_| Some(Arc::clone(&held) as Arc<dyn IssueLookup>));
+        git(
+            f.repo(),
+            &["remote", "add", "origin", "https://example.com/o/r.git"],
+        );
+        let before = f.snapshot().await;
+        let error = f.err(sid(3), json!({"github_issue": 5})).await;
+        assert_eq!(error["category"], "invalid_input", "{error}");
+        assert_eq!(error["message"], "This repository has no GitHub remote.");
+        assert!(fake.lookup_calls().is_empty());
+        f.assert_unchanged(&before).await;
+    }
+
+    /// US3 s4, FR-006: explicit values replace the issue's.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn explicit_values_replace_the_issues() {
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            FakeIssueSource::new()
+                .with_lookup(Ok(snapshot(123, "Login crash", &["bug"])))
+                .with_lookup(Ok(snapshot(124, "Login crash", &["bug"]))),
+        );
+        let row = f
+            .ok(
+                sid(3),
+                json!({"github_issue": 123, "type": "chore", "ticket": "ABC-1", "name": "other thing"}),
+            )
+            .await;
+        assert_eq!(row["branch"], "chore/abc-1_other-thing");
+        let row = f
+            .ok(sid(3), json!({"github_issue": 124, "name": "renamed"}))
+            .await;
+        assert_eq!(row["branch"], "fix/124_renamed");
+    }
+
+    /// FR-005: a title over 50 characters is cut as the form cuts it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_long_title_is_cut_as_the_form_cuts_it() {
+        let title = "Login crash when the user opens the project settings dialog twice";
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            FakeIssueSource::new().with_lookup(Ok(snapshot(9, title, &["bug"]))),
+        );
+        let row = f.ok(sid(3), json!({"github_issue": 9})).await;
+        let expected = micold_core::naming::derive(&micold_core::naming::naming_for_issue(
+            &snapshot(9, title, &["bug"]).into_issue(),
+            &micold_core::issue_types::default_mapping(),
+        ))
+        .unwrap();
+        assert_eq!(row["branch"], expected.branch);
+        assert!(row["branch"].as_str().unwrap().len() < title.len());
+    }
+
+    /// FR-005: the mapping is read at call time, so one saved after the daemon started applies.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_mapping_saved_after_start_applies_to_the_next_call() {
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            FakeIssueSource::new().with_lookup(Ok(snapshot(3, "Thing", &["Bug"]))),
+        );
+        JsonFileSettingsStore::at(f._store.path().join("settings.json"))
+            .save(&Settings {
+                issue_label_types: vec![LabelTypeEntry {
+                    label: "bug".into(),
+                    type_: ConventionalType::Chore,
+                }],
+                ..Settings::default()
+            })
+            .unwrap();
+        let row = f.ok(sid(3), json!({"github_issue": 3})).await;
+        assert_eq!(row["branch"], "chore/3_thing");
+    }
+
+    /// SC-005, FR-008: a call without `github_issue`, and one refused before it is needed, makes
+    /// no lookup.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn calls_without_github_issue_make_no_lookup() {
+        let f = Fixture::new().await;
+        let fake = on_github(&f, FakeIssueSource::new());
+        f.ok(sid(3), json!({"type": "fix", "name": "plain"})).await;
+        f.ok(sid(3), json!({"branch": "feat-lit"})).await;
+        f.err(sid(3), json!({"type": "fix", "name": "???"})).await;
+        let mixed = f
+            .err(sid(3), json!({"branch": "feat-y", "github_issue": 4}))
+            .await;
+        assert_eq!(mixed["category"], "invalid_input", "{mixed}");
+        assert!(fake.lookup_calls().is_empty(), "{:?}", fake.lookup_calls());
+    }
 }

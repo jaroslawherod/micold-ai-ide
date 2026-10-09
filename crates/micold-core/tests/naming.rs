@@ -491,3 +491,90 @@ fn the_tool_derives_the_same_names_as_the_form() {
         }
     }
 }
+
+// --- 550 US3: naming from an issue (FR-005, FR-006) ---------------------------------------------
+
+mod from_issue {
+    use super::*;
+    use micold_core::github::Issue;
+    use micold_core::issue_types::{default_mapping, LabelTypeEntry};
+    use micold_core::naming::{name_from_title, naming_for_issue};
+
+    fn issue(number: u64, title: &str, labels: &[&str]) -> Issue {
+        Issue::new(
+            number,
+            title.to_string(),
+            labels.iter().map(|l| l.to_string()).collect(),
+            String::new(),
+        )
+    }
+
+    #[test]
+    fn the_number_is_the_ticket_the_title_the_name_and_a_label_the_type() {
+        let got = naming_for_issue(&issue(123, "Login crash", &["bug"]), &default_mapping());
+        assert_eq!(
+            got,
+            naming(Some(ConventionalType::Fix), Some("123"), "Login crash")
+        );
+    }
+
+    #[test]
+    fn a_title_over_fifty_characters_is_cut_as_the_form_cuts_it() {
+        let title = "Login crash when the user opens the project settings dialog twice";
+        let got = naming_for_issue(&issue(9, title, &[]), &default_mapping());
+        assert_eq!(got.name, name_from_title(title));
+        assert!(slugify(&got.name).len() <= 50, "{}", got.name);
+        assert_ne!(got.name, title);
+    }
+
+    #[test]
+    fn the_first_mapping_entry_that_matches_wins_ignoring_case() {
+        let mapping = vec![
+            LabelTypeEntry {
+                label: "Docs".into(),
+                type_: ConventionalType::Docs,
+            },
+            LabelTypeEntry {
+                label: "bug".into(),
+                type_: ConventionalType::Fix,
+            },
+        ];
+        let got = naming_for_issue(&issue(1, "x", &["BUG", "docs"]), &mapping);
+        assert_eq!(got.type_, Some(ConventionalType::Docs));
+    }
+
+    #[test]
+    fn no_matching_label_gives_no_type() {
+        let got = naming_for_issue(&issue(1, "x", &["question"]), &default_mapping());
+        assert_eq!(got.type_, None);
+    }
+
+    #[test]
+    fn explicit_values_replace_the_issues_and_absent_ones_keep_them() {
+        let base = naming_for_issue(&issue(123, "Login crash", &["bug"]), &default_mapping());
+        let got = base.clone().overridden_by(
+            Some(ConventionalType::Chore),
+            Some("ABC-1".into()),
+            Some("Other".into()),
+        );
+        assert_eq!(
+            got,
+            naming(Some(ConventionalType::Chore), Some("ABC-1"), "Other")
+        );
+        assert_eq!(base.clone().overridden_by(None, None, None), base);
+        let only_type = base
+            .clone()
+            .overridden_by(Some(ConventionalType::Docs), None, None);
+        assert_eq!(only_type.type_, Some(ConventionalType::Docs));
+        assert_eq!(only_type.ticket, base.ticket);
+        assert_eq!(only_type.name, base.name);
+    }
+
+    #[test]
+    fn an_explicit_name_replaces_a_long_title_whole() {
+        let title = "a ".repeat(60);
+        let base = naming_for_issue(&issue(5, &title, &["bug"]), &default_mapping());
+        let got = base.overridden_by(None, None, Some("short".into()));
+        assert_eq!(got.name, "short");
+    }
+}

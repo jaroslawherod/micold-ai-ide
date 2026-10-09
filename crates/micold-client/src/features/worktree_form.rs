@@ -32,10 +32,10 @@ use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
     GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
 };
-use micold_core::issue_types::{type_for_labels, LabelTypeEntry};
-use micold_core::naming::name_from_title;
+use micold_core::issue_types::LabelTypeEntry;
 use micold_core::naming::{
-    derive, dir_name_from_branch, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
+    derive, dir_name_from_branch, naming_for_issue, ConventionalType, DerivedNames, NamingError,
+    WorktreeNaming,
 };
 use micold_core::overlay::Layer;
 use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
@@ -1072,23 +1072,18 @@ pub fn issue_dismissed(state: &mut crate::app::State) {
 /// hold changes nothing.
 pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[LabelTypeEntry]) {
     while_editing_unprompted(state, |form| {
-        let Some((title, type_)) = form
+        let Some(naming) = form
             .issues
             .held()
             .into_iter()
             .find(|issue| issue.number() == number)
-            .map(|issue| {
-                (
-                    issue.title().to_string(),
-                    type_for_labels(mapping, issue.labels()),
-                )
-            })
+            .map(|issue| naming_for_issue(issue, mapping))
         else {
             return;
         };
         form.ticket = number.to_string();
-        form.name = name_from_title(&title);
-        form.type_ = type_;
+        form.name = naming.name;
+        form.type_ = naming.type_;
         form.error = None;
         form.picked_issue = Some(number);
         form.issue_list_open = false;

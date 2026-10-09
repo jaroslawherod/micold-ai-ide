@@ -89,6 +89,38 @@ pub struct WorktreeNaming {
     pub name: String,
 }
 
+impl WorktreeNaming {
+    /// These inputs with each explicit value replacing the one already here (550 FR-006): the
+    /// issue's number, title and labels fill the form's fields, and what the caller names wins.
+    /// An absent value keeps what the issue gave.
+    pub fn overridden_by(
+        self,
+        type_: Option<ConventionalType>,
+        ticket: Option<String>,
+        name: Option<String>,
+    ) -> Self {
+        Self {
+            type_: type_.or(self.type_),
+            ticket: ticket.or(self.ticket),
+            name: name.unwrap_or(self.name),
+        }
+    }
+}
+
+/// What the form's issue pick and the MCP tool's `github_issue` both fill in for `issue` (550
+/// FR-005, FR-016): the number as the ticket, the title cut by [`name_from_title`] as the name, and
+/// the type of the first `mapping` entry matching one of its labels, ignoring case.
+pub fn naming_for_issue(
+    issue: &crate::github::Issue,
+    mapping: &[crate::issue_types::LabelTypeEntry],
+) -> WorktreeNaming {
+    WorktreeNaming {
+        type_: crate::issue_types::type_for_labels(mapping, issue.labels()),
+        ticket: Some(issue.number().to_string()),
+        name: name_from_title(issue.title()),
+    }
+}
+
 /// The derived, validated names ready to hand to git.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DerivedNames {

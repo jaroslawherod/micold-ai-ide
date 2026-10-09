@@ -15,9 +15,12 @@
 //! no-op request never shows a prompt.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 
+use micold_core::git::parse_remote_list;
 use micold_core::git::{Git, GitCli};
+use micold_core::github::{choose_remote, IssueLoadError, IssueLookupError, RemoteChoice};
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
@@ -639,7 +642,7 @@ async fn create_derived_worktree(
     };
     check_policy(&who, &Operation::CreateWorktree(request.clone()))?;
 
-    let naming = request.naming().expect("a derived request has form inputs");
+    let naming = resolve_naming(state, &project.path, &repo, &request).await?;
     let names = naming::derive(&naming).map_err(|e| OpError::invalid_input(e.to_string()))?;
     let checked = names.branch.clone();
     let probe_repo = repo.clone();
@@ -707,6 +710,73 @@ async fn create_derived_worktree(
         }
     }
     Ok(row)
+}
+
+/// The form's inputs of a derived request. With `github_issue` the issue fills them as the form's
+/// pick does and the explicit values replace its (550 FR-005, FR-006); without it nothing leaves
+/// the machine (FR-008). The remote is read and `gh` run on the blocking pool, after the policy
+/// check.
+async fn resolve_naming(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    repo: &Path,
+    request: &CreateWorktreeRequest,
+) -> Result<naming::WorktreeNaming, OpError> {
+    let explicit = request.naming().expect("a derived request has form inputs");
+    let CreateWorktreeRequest::Derived {
+        github_issue: Some(number),
+        type_,
+        ticket,
+        name,
+    } = request
+    else {
+        return Ok(explicit);
+    };
+    let number = *number;
+
+    let repo = repo.to_path_buf();
+    let github = blocking(move || {
+        let raw = GitCli::new()
+            .remote_list(&repo)
+            .map_err(|e| OpError::service_error(format!("could not read the remotes: {e}")))?;
+        match choose_remote(&parse_remote_list(&raw)) {
+            RemoteChoice::Github { repo, .. } => Ok(repo),
+            RemoteChoice::NoGithubRemote => Err(OpError::invalid_input(
+                "This repository has no GitHub remote.",
+            )),
+        }
+    })
+    .await?;
+
+    let (st, project) = (Arc::clone(state), project.to_path_buf());
+    let lookup_repo = github.clone();
+    let looked_up = blocking(move || {
+        let lookup = st.issue_lookup(&project);
+        let mapping = st.label_mapping();
+        Ok((
+            match lookup {
+                Some(lookup) => lookup.read_issue(&lookup_repo, number),
+                None => Err(IssueLookupError::Load(IssueLoadError::ToolMissing)),
+            },
+            mapping,
+        ))
+    })
+    .await?;
+    let (result, mapping) = looked_up;
+    let issue = result.map_err(|e| {
+        let message = e.message(&github, number);
+        match e {
+            IssueLookupError::NotOpenIssue { .. } => OpError::invalid_input(message),
+            IssueLookupError::Load(_) => OpError::service_error(message),
+        }
+    })?;
+    Ok(
+        naming::naming_for_issue(&issue.into_issue(), &mapping).overridden_by(
+            *type_,
+            ticket.clone(),
+            name.clone(),
+        ),
+    )
 }
 
 /// A literal branch: scope, then the naming rules and git's ref check, then policy (FR-015a), then

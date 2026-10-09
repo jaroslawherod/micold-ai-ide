@@ -49,6 +49,8 @@ These tools make changes, exactly as the sidebar does:
 
 - `type`: one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`.
 - `ticket`: optional; a reference such as `#123` or `ABC-123`. Blank means none.
+- `github_issue`: optional; the number of an open issue in the project's GitHub repository (see
+  below).
 - `name`: the description. Without a `branch` it is the description, not the folder name.
 
 The branch and folder are built exactly as the form builds them: type `fix`, ticket `#123` and name
@@ -56,7 +58,19 @@ The branch and folder are built exactly as the form builds them: type `fix`, tic
 type and issue tags in the sidebar. Without a ticket there is no ticket part. The result lists the
 worktree and also its `branch`, `directory`, `type` and (when there is one) `ticket`. A derived
 branch that already exists is refused, and nothing is created: use `branch` with `mode` to reuse
-it. `github_issue` is accepted by the tool's description but is not available yet and is refused.
+it.
+
+With `github_issue`, the issue fills in what you leave out, as picking it in the form does: the
+ticket is the issue number, the name is its title (cut to fit, as the form cuts it) and the type
+comes from the first entry of the label-to-type mapping in Settings that matches one of its labels,
+ignoring case. A `type`, `ticket` or `name` you pass replaces the one from the issue. If no label
+maps to a type and you pass no `type`, the call is refused with "Select a type". The lookup uses
+your existing GitHub sign-in (the `gh` command) and sends only the repository and the issue number;
+it happens only when `github_issue` is passed, so every other call works offline and signed out.
+It is refused, and nothing is created, with the same explanation the form gives, when the issue is
+closed, is a pull request or does not exist, the project has no GitHub remote, `gh` is not
+installed or not signed in, the sign-in cannot see the repository, GitHub cannot be reached or its
+rate limit is reached, or GitHub does not answer within 10 seconds.
 
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch

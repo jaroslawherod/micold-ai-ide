@@ -248,7 +248,7 @@ fn create_worktree_schema_lists_the_derived_inputs() {
     assert!(props["github_issue"]["description"]
         .as_str()
         .unwrap()
-        .contains("Not yet available"));
+        .contains("explicit values win"));
     let description = tool["description"].as_str().unwrap();
     assert!(description.contains("branch") && description.contains("type"));
     assert!(description.contains("never both"), "{description}");
@@ -321,12 +321,15 @@ fn an_unknown_type_names_the_allowed_values() {
     invalid("create_worktree", json!({"type": 3}));
 }
 
-/// Until the lookup ships, a valid `github_issue` is refused and nothing is created; a malformed
-/// one is refused as malformed.
+/// A valid `github_issue` parses as the derived request; a malformed one is refused as malformed.
 #[test]
-fn github_issue_is_refused_for_now_and_validated() {
-    let message = invalid("create_worktree", json!({"github_issue": 12}));
-    assert!(message.contains("not supported yet"), "{message}");
+fn github_issue_is_accepted_and_validated() {
+    let Operation::CreateWorktree(CreateWorktreeRequest::Derived { github_issue, .. }) =
+        parse_call("create_worktree", &json!({"github_issue": 12})).unwrap()
+    else {
+        panic!("not a derived request")
+    };
+    assert_eq!(github_issue, Some(12));
     for bad in [
         json!(0),
         json!(-1),
