@@ -255,8 +255,9 @@ impl AiCliProvider for MinimalProvider {
     fn id(&self) -> AiCli {
         self.id
     }
-    fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
-        None
+    fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf> {
+        // A file of its own under the home, so the share has something to carry.
+        Some(home.join(format!(".{}-auth", self.id.tool_name())))
     }
     fn identity(&self) -> micold_core::provider::ConversationIdentity {
         // The app picks this provider's ids, as for `claude`: nothing to bind, nothing minted.
