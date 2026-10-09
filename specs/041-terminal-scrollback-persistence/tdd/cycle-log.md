@@ -872,3 +872,10 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - red: the store tests failed to compile (`forget`, `SkipReason::Forgotten` missing). The daemon tests were run with the `forget` and `sweep` calls commented out: `test result: FAILED. 1 passed; 9 failed` (only A30, which needs no deletion, passed)
 - green: `HistoryStore::forget` and `sweep`, `forgotten` set checked by `save` and `load`; `DaemonState::revoke_tool_credentials` calls `forget`, `sweep_saved_histories` runs before the accept loop; `test result: ok. 10 passed`
 - notes: the sweep is skipped unless the catalog loaded (`LoadStatus::Loaded`), so a recovered empty catalog does not delete every history.
+
+## Cycles 106-112 (M8): the stop request on Windows (U115-U120, U136)
+
+- test: `windows_installer_in_use.rs::stop_daemon_asks_through_the_stop_event_before_ending_the_process` (U136); `cfg(windows)` cases in `history_stop_request.rs` (U115-U118: event, `WM_ENDSESSION`, DACL, `stop_running_daemon`) and in `spawn.rs` (U119, U120)
+- red: U136 against the installer script of `main`: `test result: FAILED. 6 passed; 1 failed` (`StopDaemon` must open the stop event). The `cfg(windows)` cases cannot run on the Linux machine of this unit: they were type-checked and linted with `cargo clippy --target x86_64-pc-windows-gnu`, and their red and green runs are CI's Windows job. Before the code they would have failed because the service never created the event and `terminate_daemon` ended the process at once
+- green: `platform::stop_requested` on Windows (event with the pipe's owner-only DACL, hidden top-level window, one `watch` request), `terminate_daemon` asks first (`ask_to_stop`, 5 s), `StopDaemon` asks first; U136 `test result: ok. 7 passed`
+- refactor: none
