@@ -2338,6 +2338,7 @@ pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message>
     app.last_grid = Some((cols, rows));
     if let (Some(id), Some(d)) = (app.core.session.active, &app.daemon) {
         d.send(ClientMsg::SessionResize {
+            process: None,
             session: id,
             cols,
             rows,
@@ -2645,6 +2646,7 @@ fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
 pub fn send_pane_size(app: &App, id: SessionId) {
     if let (Some((cols, rows)), Some(d)) = (app.last_grid, &app.daemon) {
         d.send(ClientMsg::SessionResize {
+            process: None,
             session: id,
             cols,
             rows,
@@ -3704,6 +3706,7 @@ pub(crate) mod tests {
             schema_version: 1,
             last_active: Some(PathBuf::from(path)),
             projects: vec![ProjectSnapshot {
+                pane_layout: None,
                 path: PathBuf::from(path),
                 display_name: "demo".into(),
                 is_git_repo: true,

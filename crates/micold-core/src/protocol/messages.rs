@@ -49,6 +49,17 @@ pub enum SessionProcess {
     Shell(ShellInstanceId),
 }
 
+/// One terminal a client can show: a session's process (feature 484). Declared here, beside
+/// [`SessionProcess`], because it is wire-visible (`SetViewedTerminals`) and `SCHEMA_HASH` covers
+/// this file only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TerminalRef {
+    /// The session the terminal belongs to.
+    pub session: SessionId,
+    /// Which of that session's processes.
+    pub process: SessionProcess,
+}
+
 /// The handshake secret as it travels on the wire, in a wrapper that will not print it.
 ///
 /// This field used to be a bare `String`, and [`ClientMsg`] derives `Debug` — so one
@@ -263,6 +274,10 @@ pub enum ClientMsg {
         serial: u64,
         /// The raw VT bytes (the client already translated keys, FR-019).
         bytes: Vec<u8>,
+        /// Which of the session's processes receives the bytes; `None` is the attached process
+        /// (feature 484).
+        #[serde(default)]
+        process: Option<SessionProcess>,
     },
     /// Resize a session's PTY / grid.
     SessionResize {
@@ -272,6 +287,9 @@ pub enum ClientMsg {
         cols: u16,
         /// New row count.
         rows: u16,
+        /// Resize this process's PTY only; `None` is the attached process (feature 484).
+        #[serde(default)]
+        process: Option<SessionProcess>,
     },
     /// Start (or resume) a session: `Idle | Failed | InterruptedResumable` → `Starting`.
     SessionStart {
@@ -340,6 +358,22 @@ pub enum ClientMsg {
         project: PathBuf,
         /// The viewed session, or `None`.
         session: Option<SessionId>,
+    },
+    /// Choose exactly which terminals this client streams for `project` (feature 484): up to six
+    /// `(session, process)` pairs, replacing the previous set. The first is the foreground one.
+    SetViewedTerminals {
+        /// Project identity path.
+        project: PathBuf,
+        /// The terminals shown, in pane order.
+        terminals: Vec<TerminalRef>,
+    },
+    /// Store the project's pane layout (feature 484): the JSON of the stored form, or `None` to
+    /// clear it. Invalid layouts are rejected and the stored one kept.
+    SetPaneLayout {
+        /// Project identity path.
+        project: PathBuf,
+        /// The layout JSON.
+        layout: Option<String>,
     },
     /// Request scrollback by `LineId` range. Advisory, never an error (protocol.md §6).
     ScrollbackRequest {
@@ -1297,6 +1331,9 @@ pub struct ProjectSnapshot {
     pub worktrees: Vec<WorktreeSnapshot>,
     /// Its sessions.
     pub sessions: Vec<SessionSummary>,
+    /// Its stored terminal-pane layout, as JSON (feature 484).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pane_layout: Option<String>,
 }
 
 /// A worktree within a [`ProjectSnapshot`].

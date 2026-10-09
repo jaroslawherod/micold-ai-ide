@@ -225,6 +225,7 @@ fn displaying_a_session_states_the_pane_size_before_starting_it() {
             session,
             cols,
             rows,
+            ..
         }) => {
             assert_eq!(session, id);
             assert_eq!((cols, rows), (220, 60));
@@ -956,6 +957,7 @@ fn at_the_tail(session: SessionId, viewport_top: i64, rows: u16) -> GridCache {
     };
     let mut cache = GridCache::new();
     cache.apply(&GridFrame {
+        process: micold_core::protocol::messages::SessionProcess::Primary,
         session,
         seq: 1,
         generation: 1,

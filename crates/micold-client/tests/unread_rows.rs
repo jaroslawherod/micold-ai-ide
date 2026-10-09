@@ -43,6 +43,7 @@ fn catalog(id: SessionId, unread: bool) -> CatalogSnapshot {
         schema_version: 1,
         last_active: Some(PathBuf::from(REPO)),
         projects: vec![ProjectSnapshot {
+            pane_layout: None,
             path: PathBuf::from(REPO),
             display_name: "repo".to_string(),
             is_git_repo: true,

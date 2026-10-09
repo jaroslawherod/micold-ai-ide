@@ -1,0 +1,643 @@
+//! The terminal area's split layout (feature 484): a binary tree of panes, each showing at most
+//! one terminal, with one focused pane.
+//!
+//! Render-free by construction (Constitution I): every decision (refuse a split, where focus goes,
+//! which terminal a pane shows, how the area is tiled) lives here and is unit-tested; the client's
+//! `SplitView` widget only draws what [`PaneLayout::place`] returns.
+//!
+//! Invariants, enforced by the operations so a violation is unrepresentable: 1 ≤ leaves ≤
+//! [`MAX_PANES`]; `focused` names a leaf; a [`TerminalRef`] appears in at most one leaf; `PaneId`s
+//! are unique; every ratio lies in [`RATIO_MIN`], [`RATIO_MAX`].
+
+pub use crate::protocol::messages::{SessionProcess, TerminalRef};
+
+/// The most panes one project may show at once (FR-001).
+pub const MAX_PANES: usize = 6;
+/// Smallest pane, in terminal columns (research R10).
+pub const MIN_PANE_COLS: u16 = 20;
+/// Smallest pane, in terminal rows, excluding the header strip (research R10).
+pub const MIN_PANE_ROWS: u16 = 5;
+/// Lowest divider ratio.
+pub const RATIO_MIN: f32 = 0.05;
+/// Highest divider ratio.
+pub const RATIO_MAX: f32 = 0.95;
+
+/// Stable identity of a pane within its layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PaneId(u32);
+
+impl PaneId {
+    /// The raw number (persistence).
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// How a split divides its area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Axis {
+    /// Children side by side (a vertical divider).
+    Vertical,
+    /// Children stacked (a horizontal divider).
+    Horizontal,
+}
+
+/// One pane: a terminal, or empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pane {
+    id: PaneId,
+    terminal: Option<TerminalRef>,
+}
+
+impl Pane {
+    /// The pane's identity.
+    pub fn id(&self) -> PaneId {
+        self.id
+    }
+    /// What it shows; `None` is the empty-pane state.
+    pub fn terminal(&self) -> Option<TerminalRef> {
+        self.terminal
+    }
+}
+
+/// A node of the layout tree.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PaneNode {
+    /// A pane.
+    Leaf(Pane),
+    /// Two children divided along `axis`; `ratio` is the first child's share.
+    Split {
+        /// The direction children sit in.
+        axis: Axis,
+        /// First child's share of the extent, in [`RATIO_MIN`]..=[`RATIO_MAX`].
+        ratio: f32,
+        /// Left / top child.
+        first: Box<PaneNode>,
+        /// Right / bottom child.
+        second: Box<PaneNode>,
+    },
+}
+
+/// Why an operation was refused. The client shows [`Refusal::reason`] next to the pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// Already [`MAX_PANES`] panes.
+    TooManyPanes,
+    /// The pane is too small to halve.
+    TooSmall,
+    /// No such pane.
+    UnknownPane,
+}
+
+impl Refusal {
+    /// A sentence for the user.
+    pub fn reason(self) -> &'static str {
+        match self {
+            Refusal::TooManyPanes => "At most 6 panes fit. Close one to split again.",
+            Refusal::TooSmall => "This pane is too small to split.",
+            Refusal::UnknownPane => "That pane is gone.",
+        }
+    }
+}
+
+/// A rectangle in the units the caller passes to [`PaneLayout::place`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    /// Left edge.
+    pub x: f32,
+    /// Top edge.
+    pub y: f32,
+    /// Width.
+    pub w: f32,
+    /// Height.
+    pub h: f32,
+}
+
+/// The line between two siblings.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Divider {
+    /// `Vertical`: a vertical line between side-by-side children.
+    pub axis: Axis,
+    /// Where the line is; `w` or `h` is zero along the axis, the other spans the split's extent.
+    pub rect: Rect,
+}
+
+/// Where everything goes for one area.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Placement {
+    /// Each pane's rectangle, in tree order.
+    pub panes: Vec<(PaneId, Rect)>,
+    /// Each split's divider.
+    pub dividers: Vec<Divider>,
+}
+
+/// The split layout of one project's terminal area.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaneLayout {
+    root: PaneNode,
+    focused: PaneId,
+    next_id: u32,
+}
+
+impl Default for PaneLayout {
+    fn default() -> Self {
+        Self::single()
+    }
+}
+
+fn leaves_of<'a>(node: &'a PaneNode, out: &mut Vec<&'a Pane>) {
+    match node {
+        PaneNode::Leaf(p) => out.push(p),
+        PaneNode::Split { first, second, .. } => {
+            leaves_of(first, out);
+            leaves_of(second, out);
+        }
+    }
+}
+
+fn find_leaf_mut(node: &mut PaneNode, id: PaneId) -> Option<&mut PaneNode> {
+    match node {
+        PaneNode::Leaf(p) if p.id == id => Some(node),
+        PaneNode::Leaf(_) => None,
+        PaneNode::Split { first, second, .. } => {
+            find_leaf_mut(first, id).or_else(move || find_leaf_mut(second, id))
+        }
+    }
+}
+
+/// Smallest extent `node` needs along `axis`.
+fn min_extent(node: &PaneNode, axis: Axis, min: (f32, f32)) -> f32 {
+    let m = match axis {
+        Axis::Vertical => min.0,
+        Axis::Horizontal => min.1,
+    };
+    match node {
+        PaneNode::Leaf(_) => m,
+        PaneNode::Split {
+            axis: a,
+            first,
+            second,
+            ..
+        } => {
+            let (f, s) = (min_extent(first, axis, min), min_extent(second, axis, min));
+            if *a == axis {
+                f + s
+            } else {
+                f.max(s)
+            }
+        }
+    }
+}
+
+fn place_node(node: &PaneNode, r: Rect, min: (f32, f32), out: &mut Placement) {
+    match node {
+        PaneNode::Leaf(p) => out.panes.push((p.id, r)),
+        PaneNode::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        } => {
+            let extent = match axis {
+                Axis::Vertical => r.w,
+                Axis::Horizontal => r.h,
+            };
+            let (fm, sm) = (
+                min_extent(first, *axis, min),
+                min_extent(second, *axis, min),
+            );
+            let want = extent * ratio;
+            let f = if extent >= fm + sm {
+                want.clamp(fm, extent - sm)
+            } else if fm + sm > 0.0 {
+                extent * fm / (fm + sm)
+            } else {
+                want
+            };
+            let (ra, rb, line) = match axis {
+                Axis::Vertical => (
+                    Rect { w: f, ..r },
+                    Rect {
+                        x: r.x + f,
+                        w: extent - f,
+                        ..r
+                    },
+                    Rect {
+                        x: r.x + f,
+                        w: 0.0,
+                        ..r
+                    },
+                ),
+                Axis::Horizontal => (
+                    Rect { h: f, ..r },
+                    Rect {
+                        y: r.y + f,
+                        h: extent - f,
+                        ..r
+                    },
+                    Rect {
+                        y: r.y + f,
+                        h: 0.0,
+                        ..r
+                    },
+                ),
+            };
+            out.dividers.push(Divider {
+                axis: *axis,
+                rect: line,
+            });
+            place_node(first, ra, min, out);
+            place_node(second, rb, min, out);
+        }
+    }
+}
+
+impl PaneLayout {
+    /// One empty pane, focused: today's single-terminal area.
+    pub fn single() -> Self {
+        let id = PaneId(1);
+        Self {
+            root: PaneNode::Leaf(Pane { id, terminal: None }),
+            focused: id,
+            next_id: 2,
+        }
+    }
+
+    /// The tree.
+    pub fn root(&self) -> &PaneNode {
+        &self.root
+    }
+
+    /// The focused pane.
+    pub fn focused(&self) -> PaneId {
+        self.focused
+    }
+
+    /// Every pane, in tree order.
+    pub fn panes(&self) -> Vec<&Pane> {
+        let mut v = Vec::new();
+        leaves_of(&self.root, &mut v);
+        v
+    }
+
+    /// Number of panes.
+    pub fn len(&self) -> usize {
+        self.panes().len()
+    }
+
+    /// Never true: a layout always has a pane.
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// One pane by id.
+    pub fn pane(&self, id: PaneId) -> Option<&Pane> {
+        self.panes().into_iter().find(|p| p.id == id)
+    }
+
+    /// The pane showing `t`, if any.
+    pub fn pane_showing(&self, t: TerminalRef) -> Option<PaneId> {
+        self.panes()
+            .into_iter()
+            .find(|p| p.terminal == Some(t))
+            .map(|p| p.id)
+    }
+
+    /// The terminal the focused pane shows.
+    pub fn focused_terminal(&self) -> Option<TerminalRef> {
+        self.pane(self.focused).and_then(|p| p.terminal)
+    }
+
+    /// Every terminal shown, in tree order.
+    pub fn terminals(&self) -> Vec<TerminalRef> {
+        self.panes().iter().filter_map(|p| p.terminal).collect()
+    }
+
+    /// Focus `id`; false when there is no such pane.
+    pub fn focus(&mut self, id: PaneId) -> bool {
+        if self.pane(id).is_some() {
+            self.focused = id;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Split `pane` along `axis`; the new pane comes second, takes focus and shows `candidate`
+    /// unless that terminal is already shown (FR-004: never a duplicate). `pane_size` is the
+    /// pane's current size and `min` the smallest pane, in the same units.
+    pub fn split(
+        &mut self,
+        pane: PaneId,
+        axis: Axis,
+        pane_size: (f32, f32),
+        min: (f32, f32),
+        candidate: Option<TerminalRef>,
+    ) -> Result<PaneId, Refusal> {
+        if self.pane(pane).is_none() {
+            return Err(Refusal::UnknownPane);
+        }
+        if self.len() >= MAX_PANES {
+            return Err(Refusal::TooManyPanes);
+        }
+        let (have, need) = match axis {
+            Axis::Vertical => (pane_size.0, min.0),
+            Axis::Horizontal => (pane_size.1, min.1),
+        };
+        if have < 2.0 * need {
+            return Err(Refusal::TooSmall);
+        }
+        let new_id = PaneId(self.next_id);
+        let terminal = candidate.filter(|t| self.pane_showing(*t).is_none());
+        let node = find_leaf_mut(&mut self.root, pane).ok_or(Refusal::UnknownPane)?;
+        let old = std::mem::replace(
+            node,
+            PaneNode::Leaf(Pane {
+                id: new_id,
+                terminal: None,
+            }),
+        );
+        *node = PaneNode::Split {
+            axis,
+            ratio: 0.5,
+            first: Box::new(old),
+            second: Box::new(PaneNode::Leaf(Pane {
+                id: new_id,
+                terminal,
+            })),
+        };
+        self.next_id += 1;
+        self.focused = new_id;
+        Ok(new_id)
+    }
+
+    /// Show `t` in `pane` and focus it. A terminal already shown in another pane is never
+    /// duplicated: that pane takes focus instead and nothing else changes.
+    pub fn show(&mut self, pane: PaneId, t: TerminalRef) -> Result<(), Refusal> {
+        if let Some(at) = self.pane_showing(t) {
+            self.focused = at;
+            return Ok(());
+        }
+        match find_leaf_mut(&mut self.root, pane) {
+            Some(PaneNode::Leaf(p)) => p.terminal = Some(t),
+            _ => return Err(Refusal::UnknownPane),
+        }
+        self.focused = pane;
+        Ok(())
+    }
+
+    /// Show `t` in the focused pane, or focus the pane already showing it (tab strip, sidebar).
+    pub fn show_or_focus(&mut self, t: TerminalRef) {
+        let at = self.focused;
+        let _ = self.show(at, t);
+    }
+
+    /// Empty every pane whose terminal `live` rejects. Never removes a pane.
+    pub fn prune(&mut self, live: impl Fn(TerminalRef) -> bool) {
+        fn walk(n: &mut PaneNode, live: &dyn Fn(TerminalRef) -> bool) {
+            match n {
+                PaneNode::Leaf(p) => {
+                    if p.terminal.is_some_and(|t| !live(t)) {
+                        p.terminal = None;
+                    }
+                }
+                PaneNode::Split { first, second, .. } => {
+                    walk(first, live);
+                    walk(second, live);
+                }
+            }
+        }
+        walk(&mut self.root, &live);
+    }
+
+    /// Tile `total` (width, height). Ratios are honoured within the minimums; when `total` is
+    /// below the layout's total minimum, shares scale down in proportion to their minimums so the
+    /// panes still tile the whole area without overlap.
+    pub fn place(&self, total: (f32, f32), min: (f32, f32)) -> Placement {
+        let mut out = Placement {
+            panes: Vec::new(),
+            dividers: Vec::new(),
+        };
+        let r = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: total.0,
+            h: total.1,
+        };
+        place_node(&self.root, r, min, &mut out);
+        out
+    }
+
+    /// Each pane's rectangle ([`Self::place`] without the dividers).
+    pub fn rects(&self, total: (f32, f32), min: (f32, f32)) -> Vec<(PaneId, Rect)> {
+        self.place(total, min).panes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::{SessionId, ShellInstanceId};
+
+    const MIN: (f32, f32) = (100.0, 50.0);
+    const BIG: (f32, f32) = (1000.0, 1000.0);
+
+    fn t(n: u128, shell: Option<u32>) -> TerminalRef {
+        TerminalRef {
+            session: SessionId::from_uuid(uuid::Uuid::from_u128(n)),
+            process: shell.map_or(SessionProcess::Primary, |s| {
+                SessionProcess::Shell(ShellInstanceId(s))
+            }),
+        }
+    }
+
+    fn invariants(l: &PaneLayout) {
+        let panes = l.panes();
+        assert!((1..=MAX_PANES).contains(&panes.len()));
+        assert!(panes.iter().any(|p| p.id == l.focused()));
+        let mut ids: Vec<_> = panes.iter().map(|p| p.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), panes.len(), "PaneIds unique");
+        let shown = l.terminals();
+        let mut d = shown.clone();
+        d.dedup();
+        for (i, a) in shown.iter().enumerate() {
+            assert!(!shown[i + 1..].contains(a), "duplicate terminal");
+        }
+        drop(d);
+    }
+
+    #[test]
+    fn a_new_layout_is_one_focused_empty_pane() {
+        let l = PaneLayout::single();
+        assert_eq!(l.len(), 1);
+        assert_eq!(l.focused_terminal(), None);
+        invariants(&l);
+    }
+
+    #[test]
+    fn split_adds_a_pane_after_and_focuses_it() {
+        let mut l = PaneLayout::single();
+        let first = l.focused();
+        l.show(first, t(1, None)).unwrap();
+        let new = l
+            .split(first, Axis::Vertical, BIG, MIN, Some(t(2, None)))
+            .unwrap();
+        assert_eq!(l.focused(), new);
+        assert_eq!(l.terminals(), vec![t(1, None), t(2, None)]);
+        invariants(&l);
+    }
+
+    #[test]
+    fn a_candidate_already_shown_gives_an_empty_pane() {
+        let mut l = PaneLayout::single();
+        let first = l.focused();
+        l.show(first, t(1, None)).unwrap();
+        let new = l
+            .split(first, Axis::Horizontal, BIG, MIN, Some(t(1, None)))
+            .unwrap();
+        assert_eq!(l.pane(new).unwrap().terminal(), None);
+        assert_eq!(l.terminals(), vec![t(1, None)]);
+    }
+
+    #[test]
+    fn the_seventh_split_is_refused() {
+        let mut l = PaneLayout::single();
+        for _ in 1..MAX_PANES {
+            let f = l.focused();
+            l.split(f, Axis::Vertical, BIG, MIN, None).unwrap();
+        }
+        let f = l.focused();
+        assert_eq!(
+            l.split(f, Axis::Vertical, BIG, MIN, None),
+            Err(Refusal::TooManyPanes)
+        );
+        assert_eq!(l.len(), 6);
+        assert!(!Refusal::TooManyPanes.reason().is_empty());
+    }
+
+    #[test]
+    fn a_pane_below_twice_the_minimum_is_not_split_along_that_axis() {
+        let mut l = PaneLayout::single();
+        let f = l.focused();
+        assert_eq!(
+            l.split(f, Axis::Vertical, (150.0, 1000.0), MIN, None),
+            Err(Refusal::TooSmall)
+        );
+        assert!(l
+            .split(f, Axis::Horizontal, (150.0, 1000.0), MIN, None)
+            .is_ok());
+    }
+
+    #[test]
+    fn an_unknown_pane_is_refused() {
+        let mut l = PaneLayout::single();
+        assert_eq!(
+            l.split(PaneId(99), Axis::Vertical, BIG, MIN, None),
+            Err(Refusal::UnknownPane)
+        );
+        assert_eq!(l.show(PaneId(99), t(1, None)), Err(Refusal::UnknownPane));
+        assert!(!l.focus(PaneId(99)));
+    }
+
+    #[test]
+    fn showing_a_terminal_shown_elsewhere_focuses_that_pane() {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        l.show(a, t(1, None)).unwrap();
+        let b = l.split(a, Axis::Vertical, BIG, MIN, None).unwrap();
+        l.show(b, t(2, None)).unwrap();
+        l.show(b, t(1, None)).unwrap();
+        assert_eq!(l.focused(), a);
+        assert_eq!(l.pane(b).unwrap().terminal(), Some(t(2, None)));
+        l.show_or_focus(t(2, None));
+        assert_eq!(l.focused(), b);
+        l.show_or_focus(t(3, Some(1)));
+        assert_eq!(l.pane(b).unwrap().terminal(), Some(t(3, Some(1))));
+        invariants(&l);
+    }
+
+    #[test]
+    fn prune_empties_gone_terminals_and_keeps_every_pane() {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        l.show(a, t(1, None)).unwrap();
+        let b = l
+            .split(a, Axis::Vertical, BIG, MIN, Some(t(2, None)))
+            .unwrap();
+        l.prune(|x| x != t(2, None));
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.pane(a).unwrap().terminal(), Some(t(1, None)));
+        assert_eq!(l.pane(b).unwrap().terminal(), None);
+    }
+
+    fn tiles(l: &PaneLayout, total: (f32, f32)) {
+        let p = l.place(total, MIN);
+        let area: f32 = p.panes.iter().map(|(_, r)| r.w * r.h).sum();
+        assert!(
+            (area - total.0 * total.1).abs() < 0.5,
+            "area {area} vs {}",
+            total.0 * total.1
+        );
+        for (i, (_, a)) in p.panes.iter().enumerate() {
+            assert!(a.x >= -0.01 && a.y >= -0.01);
+            assert!(a.x + a.w <= total.0 + 0.01 && a.y + a.h <= total.1 + 0.01);
+            for (_, b) in &p.panes[i + 1..] {
+                let ox = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
+                let oy = (a.y + a.h).min(b.y + b.h) - a.y.max(b.y);
+                assert!(ox <= 0.01 || oy <= 0.01, "overlap {a:?} {b:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn rects_tile_the_area_and_scale_down_below_the_total_minimum() {
+        let mut l = PaneLayout::single();
+        let mut seed = 7u32;
+        while l.len() < 4 {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let at = l.panes()[(seed >> 8) as usize % l.len()].id();
+            let axis = if seed & 1 == 0 {
+                Axis::Vertical
+            } else {
+                Axis::Horizontal
+            };
+            let _ = l.split(at, axis, BIG, MIN, None);
+        }
+        for total in [(1000.0, 800.0), (400.0, 300.0), (50.0, 40.0)] {
+            tiles(&l, total);
+        }
+        let p = l.place((1000.0, 800.0), MIN);
+        assert!(p.panes.iter().all(|(_, r)| r.w >= MIN.0 && r.h >= MIN.1));
+        assert_eq!(p.dividers.len(), 3);
+    }
+
+    #[test]
+    fn random_operation_sequences_keep_the_invariants() {
+        let mut l = PaneLayout::single();
+        let mut seed = 12345u32;
+        for step in 0..400u32 {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let r = (seed >> 8) as usize;
+            let pane = l.panes()[r % l.len()].id();
+            match r % 5 {
+                0 | 1 => {
+                    let axis = if r & 8 == 0 {
+                        Axis::Vertical
+                    } else {
+                        Axis::Horizontal
+                    };
+                    let _ = l.split(pane, axis, BIG, MIN, Some(t((r % 9) as u128, None)));
+                }
+                2 => {
+                    let _ = l.show(pane, t((r % 9) as u128, Some((r % 2) as u32)));
+                }
+                3 => l.show_or_focus(t((r % 9) as u128, None)),
+                _ => l.prune(|x| x.session.0.as_u128() % 3 != u128::from(step % 3)),
+            }
+            invariants(&l);
+            tiles(&l, (900.0, 700.0));
+        }
+    }
+}

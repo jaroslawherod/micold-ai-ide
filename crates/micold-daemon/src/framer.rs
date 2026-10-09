@@ -172,6 +172,7 @@ impl Framer {
         self.seq += 1;
 
         GridFrame {
+            process: micold_core::protocol::messages::SessionProcess::Primary,
             session: self.session,
             seq: self.seq,
             generation: self.generation,

@@ -845,6 +845,7 @@ mod acceptance {
             let id = SessionId::new();
             let mut grid = GridCache::new();
             grid.apply(&GridFrame {
+                process: micold_core::protocol::messages::SessionProcess::Primary,
                 session: id,
                 seq: 1,
                 generation: 1,

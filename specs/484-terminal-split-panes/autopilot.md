@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: tasks
-- **Next step**: milestone M1 (after the design PR merges)
+- **Phase**: milestone M1
+- **Next step**: M1 in progress (implement)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #655 | Design (spec, plan, tasks) | merged | 909f4b233cfe660881ab0cbdc62a0ad7488e5221 |
 | #654 | Previous run (#483), not this run's | merged | 334cc99ff48ae82e60a4a107f4b76cb1ef9d5959 |
 
 ## Milestones
@@ -52,7 +53,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 in progress, branch `claude/project-thread-wysm57` restarted from origin/main (909f4b23). Not pushed, no PR yet.
+
+Done (committed): T001–T007, T006a. `crates/micold-core/src/pane_layout.rs` (full M1 API: `PaneLayout::{single,split,show,show_or_focus,focus,prune,place,rects,panes,terminals,focused_terminal,pane_showing}`, `Refusal::reason`, consts `MAX_PANES`, `MIN_PANE_COLS/ROWS`; `split(pane, axis, pane_size, min, candidate)` takes pixel sizes). `TerminalRef` lives in `protocol/messages.rs` and is re-exported from `pane_layout`. Wire 36 → 37 landed whole (GridFrame/SessionInput/SessionResize `process`, `SetViewedTerminals`, `SetPaneLayout`, `ProjectSnapshot.pane_layout`; the daemon ignores `SetPaneLayout` until T032). Daemon: `DaemonState::{session_input_to,resize_terminal,terminal,attached_process}`, `server.rs` `sync_terminal_streams` + `viewed_terminals`/`terminal_streams`; tests in `crates/micold-daemon/tests/pane_terminals.rs` (5 pass). Workspace compiles (`cargo check --workspace --all-targets`); `micold-core` tests pass except the root-only permission tests.
+
+Next: T008 (client tests) + T009 (client state: `App.pane_layouts`, `App.grids` keyed by `TerminalRef`, `App.pane_sizes`; every client `SessionInput`/`SessionResize` currently passes `process: None` and the client does not yet send `SetViewedTerminals`), then T010–T020 (SplitView widget, pane rendering, focus mark, per-pane resize, docs `docs/user-guide/terminal-panes.md` + SUMMARY link). T018's daemon half (two panes of one session hold distinct PTY sizes) is already in `pane_terminals.rs`; its client half is open. Then verify.md: scoped gate + Review A/B + visual pass + full gate + PR file at the scratchpad path in the prompt.
+
+Open findings: none. Tip: `scratchpad/fix.py` patches missing `process`/`pane_layout` struct-literal fields from compile errors.
 
 ## Open escalation
 

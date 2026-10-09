@@ -246,7 +246,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 35 → 36 for feature 483's run groups (contracts/run-group-wire.md): `RunGroupCreate`,
 /// `RunGroupPick`, `RunGroupDismiss`, `RunGroupsChanged`, `RunGroupCreated` and `RunPicked`, in one
 /// edit.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 36;
+///
+/// And 36 → 37 for feature 484's terminal panes (contracts/wire.md): `process` on `GridFrame`,
+/// `SessionInput` and `SessionResize`, `SetViewedTerminals`, `SetPaneLayout` and
+/// `ProjectSnapshot::pane_layout`, in one edit.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 37;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -496,4 +500,26 @@ fn the_run_group_messages_are_in_the_hashed_source() {
             "`{anchor}` is not in messages.rs, so version 36's hash does not cover the run groups"
         );
     }
+}
+
+#[test]
+fn the_pane_messages_are_in_the_hashed_source() {
+    // Feature 484 (version 37, contracts/wire.md). Read from the text `build.rs` hashes.
+    let (messages, grid, _envelope) = read_protocol_source();
+    let (messages, grid) = (canonicalize(&messages), canonicalize(&grid));
+    for anchor in [
+        "pub struct TerminalRef {",
+        "SetViewedTerminals {",
+        "terminals: Vec<TerminalRef>,",
+        "SetPaneLayout {",
+        "layout: Option<String>,",
+        "process: Option<SessionProcess>,",
+        "pub pane_layout: Option<String>,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs, so version 37's hash does not cover the panes"
+        );
+    }
+    assert!(grid.contains("pub process: SessionProcess,"));
 }

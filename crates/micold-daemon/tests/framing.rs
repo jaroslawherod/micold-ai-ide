@@ -21,6 +21,7 @@ fn sid() -> SessionId {
 
 fn grid_frame(seq: u64) -> GridFrame {
     GridFrame {
+        process: micold_core::protocol::messages::SessionProcess::Primary,
         session: sid(),
         seq,
         generation: 0,
@@ -115,6 +116,7 @@ fn a_frame_exceeding_the_cap_is_rejected_on_encode() {
     // silently truncate (protocol.md §3, Settled Decision 8).
     let mut codec = ClientCodec::with_format(WireFormat::Postcard);
     let huge = ClientMsg::SessionInput {
+        process: None,
         session: sid(),
         serial: 0,
         bytes: vec![0u8; MAX_FRAME_LENGTH + 1],

@@ -19,6 +19,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::messages::SessionProcess;
 use crate::session::SessionId;
 
 /// Absolute, stable line identity: `scrolled_total + history_size + line` (data-model §LineId).
@@ -125,12 +126,19 @@ pub struct WireCursor {
     pub blinking: bool,
 }
 
+fn primary_process() -> SessionProcess {
+    SessionProcess::Primary
+}
+
 /// A grid frame — a full snapshot (`full = true`) or a stable-`LineId`-keyed delta (`full = false`).
 /// Sent on the transport under envelope `kind = 1`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridFrame {
     /// Which session this frame belongs to.
     pub session: SessionId,
+    /// Which of the session's processes this frame shows (feature 484).
+    #[serde(default = "primary_process")]
+    pub process: SessionProcess,
     /// Monotonic per-session frame sequence.
     pub seq: u64,
     /// Bumped on resize / alt-screen enter-exit / reset — a change forces a resnapshot because

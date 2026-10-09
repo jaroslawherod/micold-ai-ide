@@ -24,8 +24,8 @@ use micold_core::protocol::grid::{
 use micold_core::protocol::messages::{
     ActivitySignal, BranchContainment, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg,
     ConfirmOperation, DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink,
-    MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
-    ShellOpenFailure, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionProcess,
+    SessionSummary, ShellOpenFailure, TerminalRef, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
@@ -102,11 +102,46 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             session: sid(),
             serial: 42,
             bytes: vec![0x1b, b'[', b'A'],
+            process: None,
+        },
+        ClientMsg::SessionInput {
+            session: sid(),
+            serial: 43,
+            bytes: vec![b'x'],
+            process: Some(SessionProcess::Shell(ShellInstanceId(2))),
         },
         ClientMsg::SessionResize {
             session: sid(),
             cols: 120,
             rows: 40,
+            process: None,
+        },
+        ClientMsg::SessionResize {
+            session: sid(),
+            cols: 80,
+            rows: 24,
+            process: Some(SessionProcess::Primary),
+        },
+        ClientMsg::SetViewedTerminals {
+            project: PathBuf::from("/p"),
+            terminals: vec![
+                TerminalRef {
+                    session: sid(),
+                    process: SessionProcess::Primary,
+                },
+                TerminalRef {
+                    session: sid(),
+                    process: SessionProcess::Shell(ShellInstanceId(1)),
+                },
+            ],
+        },
+        ClientMsg::SetPaneLayout {
+            project: PathBuf::from("/p"),
+            layout: Some("{\"layout_version\":1}".into()),
+        },
+        ClientMsg::SetPaneLayout {
+            project: PathBuf::from("/p"),
+            layout: None,
         },
         ClientMsg::SessionStart { session: sid() },
         ClientMsg::SessionRestart { session: sid() },
@@ -354,6 +389,7 @@ fn sample_catalog() -> CatalogSnapshot {
         schema_version: 1,
         last_active: Some(PathBuf::from("/a")),
         projects: vec![ProjectSnapshot {
+            pane_layout: Some("{\"layout_version\":1}".into()),
             path: PathBuf::from("/a"),
             display_name: "Alpha".into(),
             is_git_repo: true,
@@ -395,6 +431,7 @@ fn wide_char_line() -> WireLine {
 fn sample_grid_frame() -> GridFrame {
     GridFrame {
         session: sid(),
+        process: SessionProcess::Primary,
         seq: 7,
         generation: 2,
         full: true,
@@ -1405,4 +1442,12 @@ fn the_run_group_messages_round_trip_on_both_wires() {
         json_roundtrip(msg);
         postcard_roundtrip(msg);
     }
+}
+
+#[test]
+fn a_grid_frame_carries_its_process_under_postcard() {
+    let mut frame = sample_grid_frame();
+    assert_eq!(frame.process, SessionProcess::Primary);
+    frame.process = SessionProcess::Shell(ShellInstanceId(3));
+    postcard_roundtrip(&frame);
 }

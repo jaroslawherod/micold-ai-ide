@@ -14,6 +14,7 @@ fn input(serial_msg: &ClientMsg) -> (SessionId, u64, &[u8]) {
             session,
             serial,
             bytes,
+            ..
         } => (*session, *serial, bytes),
         other => panic!("expected SessionInput, got {other:?}"),
     }

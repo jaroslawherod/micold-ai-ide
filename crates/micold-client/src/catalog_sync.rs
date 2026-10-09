@@ -384,6 +384,7 @@ mod tests {
             projects: projects
                 .into_iter()
                 .map(|(path, n)| ProjectSnapshot {
+                    pane_layout: None,
                     path: PathBuf::from(path),
                     display_name: "p".into(),
                     is_git_repo: true,

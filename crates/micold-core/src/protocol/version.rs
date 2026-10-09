@@ -123,7 +123,10 @@
 /// `ClientMsg::{RunGroupCreate, RunGroupPick, RunGroupDismiss}`, `DaemonMsg::RunGroupsChanged`
 /// and `OperationResult::{RunGroupCreated, RunPicked}`. An older peer would fail to decode any of
 /// them.
-pub const PROTOCOL_VERSION: u32 = 36;
+/// Bumped 36 → 37 for feature 484's terminal panes in one edit (contracts/wire.md): `process` on
+/// `GridFrame`, `SessionInput` and `SessionResize`, `ClientMsg::{SetViewedTerminals,
+/// SetPaneLayout}` and `ProjectSnapshot::pane_layout`. An older peer would fail to decode them.
+pub const PROTOCOL_VERSION: u32 = 37;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

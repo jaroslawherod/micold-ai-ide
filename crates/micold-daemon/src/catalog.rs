@@ -245,6 +245,7 @@ impl Catalog {
                     .collect();
 
                 ProjectSnapshot {
+                    pane_layout: None,
                     path: p.path.clone(),
                     display_name: p.display_name.clone(),
                     is_git_repo: p.is_git_repo,
