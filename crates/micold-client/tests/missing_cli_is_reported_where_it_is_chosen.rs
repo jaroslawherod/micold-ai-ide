@@ -338,3 +338,33 @@ fn asking_for_the_note_leaves_the_answer_as_it_was() {
 
     assert_eq!(answer, before);
 }
+
+#[test]
+fn a_missing_codex_or_opencode_is_shown_with_its_name_and_a_reason() {
+    // Feature 488 (US2): with `codex` present and `opencode` absent, the notice names OpenCode and
+    // says where it was looked for; Codex, which is present, is not named.
+    let notice = missing_cli_notice(Some(&on_host(&[
+        AiCli::ClaudeCode,
+        AiCli::Copilot,
+        AiCli::Pi,
+        AiCli::Codex,
+    ])))
+    .expect("a host without OpenCode has something to report");
+
+    assert!(
+        notice.contains(AiCli::OpenCode.provider().display_name()),
+        "the notice must name OpenCode: {notice}"
+    );
+    assert!(
+        !notice.contains(AiCli::Codex.provider().display_name()),
+        "Codex is installed and must not be named: {notice}"
+    );
+    assert!(
+        notice.contains("the PATH sessions get for your home directory"),
+        "the notice must give the reason: {notice}"
+    );
+    assert_eq!(
+        notice,
+        explained(&[AiCli::OpenCode], SpawnEnv::Applied, Place::ThisComputer),
+    );
+}

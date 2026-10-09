@@ -918,6 +918,12 @@ ask for them with `ai_cli` set to `codex` or `opencode`.
 - **Codex asks whether to trust a folder** the first time it runs there. When a tool asks for a
   first prompt in a folder Codex has not been told to trust, the prompt is not typed, so it cannot
   answer that question for you; run `codex` once in the project folder and accept it.
+- **A provider whose command is missing says so.** If `codex` or `opencode` is not on the `PATH`
+  sessions get, it is not offered as an entry; the note under the list names it and says why a
+  session would not find it and what to change. It also cannot be started any other way: as the
+  default, or by a tool through the tool server, the start is refused with the same reason before
+  anything is created. Install the CLI and it is available the next time the list is opened or a
+  session is started, with no restart of the app.
 - **Neither is connected to the app's tool server** for now: the sessions start without it.
 - **OpenCode does not update itself** inside a session the app starts.
 
