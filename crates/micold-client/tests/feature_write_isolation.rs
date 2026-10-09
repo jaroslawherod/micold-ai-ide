@@ -98,6 +98,9 @@ const OWNERS: &[(&str, &str)] = &[
     ("workspace.active", "project"),
     ("workspace.sessions", "session"),
     ("workspace.foreground_by_project", "session"),
+    // Feature 484: the terminal area belongs to the session feature (`PaneMsg`), and the layout is
+    // only ever replaced by the shell restoring it from the daemon's catalog.
+    ("workspace.pane_layouts", "session"),
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
     // Feature 029. The first two are the provenance record and its one-time migration marker: both
@@ -248,6 +251,13 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     (
         "project",
         "workspace.included_worktrees",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    // Feature 484: the panes held against the path go with it (FR-013).
+    (
+        "project",
+        "workspace.pane_layouts",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),
