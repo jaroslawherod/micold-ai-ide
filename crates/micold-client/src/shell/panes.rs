@@ -86,6 +86,64 @@ pub fn sync(app: &mut App) {
         app.viewed_terminals_sent = Some((project, now));
     }
     send_pane_sizes(app);
+    save(app);
+}
+
+/// Adopt the layouts a catalog snapshot carries (feature 484, FR-013): once per project per run,
+/// the first time a snapshot names it. A layout the snapshot lacks leaves the project on the single
+/// default pane. The active project's selection then follows the restored focused pane.
+pub fn restore(app: &mut App, catalog: &micold_core::protocol::messages::CatalogSnapshot) {
+    let active = project(app);
+    for p in &catalog.projects {
+        if !app.pane_restored.insert(p.path.clone()) {
+            continue;
+        }
+        let Some(layout) = p.pane_layout.as_deref().and_then(PaneLayout::from_json) else {
+            continue;
+        };
+        app.pane_saved.insert(p.path.clone(), layout.to_json());
+        app.pane_layouts.insert(p.path.clone(), layout);
+        if active.as_ref() == Some(&p.path) {
+            // Terminals that no longer exist become empty panes (FR-014); the pane stays.
+            let live: Vec<TerminalRef> = app
+                .pane_layouts
+                .get(&p.path)
+                .map(|l| l.terminals())
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|t| is_live(app, *t))
+                .collect();
+            if let Some(l) = app.pane_layouts.get_mut(&p.path) {
+                l.prune(|t| live.contains(&t));
+            }
+            follow_focus(app);
+        }
+    }
+}
+
+/// Tell the daemon the active project's layout when it differs from the one last restored or sent.
+/// A project that was never split and never had a stored layout sends nothing (FR-017).
+fn save(app: &mut App) {
+    let Some(project) = project(app) else {
+        return;
+    };
+    let Some(layout) = app.pane_layouts.get(&project) else {
+        return;
+    };
+    let json = layout.to_json();
+    match app.pane_saved.get(&project) {
+        Some(saved) if *saved == json => return,
+        None if layout.len() < 2 => return,
+        _ => {}
+    }
+    let Some(d) = &app.daemon else {
+        return;
+    };
+    d.send(ClientMsg::SetPaneLayout {
+        project: project.clone(),
+        layout: Some(json.clone()),
+    });
+    app.pane_saved.insert(project, json);
 }
 
 /// The smallest pane, in characters: what `PaneLayout::split` measures a pane against.

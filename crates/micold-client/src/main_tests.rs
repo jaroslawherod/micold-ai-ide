@@ -92,6 +92,8 @@ fn update_inner_applies_window_focus_changed() {
         pane_layouts: HashMap::new(),
         viewed_terminals_sent: None,
         viewed_dirty: false,
+        pane_saved: HashMap::new(),
+        pane_restored: Default::default(),
         pane_synced_displayed: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
@@ -157,6 +159,8 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         pane_layouts: HashMap::new(),
         viewed_terminals_sent: None,
         viewed_dirty: false,
+        pane_saved: HashMap::new(),
+        pane_restored: Default::default(),
         pane_synced_displayed: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
@@ -799,6 +803,8 @@ pub(crate) fn base_app() -> App {
         pane_layouts: HashMap::new(),
         viewed_terminals_sent: None,
         viewed_dirty: false,
+        pane_saved: HashMap::new(),
+        pane_restored: Default::default(),
         pane_synced_displayed: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
@@ -2802,6 +2808,8 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         pane_layouts: HashMap::new(),
         viewed_terminals_sent: None,
         viewed_dirty: false,
+        pane_saved: HashMap::new(),
+        pane_restored: Default::default(),
         pane_synced_displayed: None,
         pane_sizes: Default::default(),
         pane_sent: Default::default(),
@@ -10379,5 +10387,209 @@ mod panes {
         assert_eq!(layout_of(&app).ratio(0), Some(0.2));
         pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Reset(0)));
         assert_eq!(layout_of(&app).ratio(0), Some(0.5));
+    }
+
+    // ---- M4 (T033): the layout survives a restart ----------------------------------------------
+
+    use micold_core::protocol::messages::{CatalogSnapshot, ProjectSnapshot};
+
+    fn catalog_with_layout(project: &str, layout: Option<String>) -> CatalogSnapshot {
+        CatalogSnapshot {
+            schema_version: 1,
+            last_active: Some(PathBuf::from(project)),
+            projects: vec![ProjectSnapshot {
+                pane_layout: layout,
+                path: PathBuf::from(project),
+                display_name: "demo".into(),
+                is_git_repo: true,
+                available: true,
+                worktrees: Vec::new(),
+                sessions: Vec::new(),
+            }],
+            env_include_failures: Vec::new(),
+        }
+    }
+
+    fn sent_layouts(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<String> {
+        drain(rx)
+            .into_iter()
+            .filter_map(|m| match m {
+                ClientMsg::SetPaneLayout { layout, .. } => layout,
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `[first | second]` at 30/70, the second focused.
+    fn two_pane_layout(first: TerminalRef, second: TerminalRef) -> PaneLayout {
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        l.show(a, first).unwrap();
+        l.split(
+            a,
+            Axis::Vertical,
+            (1000.0, 600.0),
+            (10.0, 10.0),
+            Some(second),
+        )
+        .unwrap();
+        l.set_ratio(0, 0.3, (1000.0, 600.0), (10.0, 10.0));
+        l
+    }
+
+    /// US6 scenario 1: structure, ratios, contents and the focused pane come back from the snapshot,
+    /// and the restored focus decides the displayed session.
+    #[test]
+    fn the_layout_is_restored_from_the_snapshot_on_connect() {
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let (first, second) = (
+            t(ids[0], SessionProcess::Primary),
+            t(ids[1], SessionProcess::Primary),
+        );
+        let stored = two_pane_layout(first, second);
+        assert_eq!(stored.focused_terminal(), Some(second));
+        let _ = drain(&mut rx);
+        crate::shell::panes::restore(
+            &mut app,
+            &catalog_with_layout("/repo/panes", Some(stored.to_json())),
+        );
+        crate::shell::panes::sync(&mut app);
+        assert_eq!(layout_of(&app), stored);
+        assert_eq!(
+            app.core.session.active,
+            Some(ids[1]),
+            "the focused pane's session is shown"
+        );
+        assert!(
+            sent_layouts(&mut rx).is_empty(),
+            "what was just restored is not sent back"
+        );
+    }
+
+    /// US6 scenario 3: a terminal that no longer exists leaves an empty pane, the rest loads.
+    #[test]
+    fn a_gone_terminal_becomes_an_empty_pane_on_restore() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        let gone = t(SessionId::new(), SessionProcess::Primary);
+        let stored = two_pane_layout(t(ids[0], SessionProcess::Primary), gone);
+        crate::shell::panes::restore(
+            &mut app,
+            &catalog_with_layout("/repo/panes", Some(stored.to_json())),
+        );
+        crate::shell::panes::sync(&mut app);
+        let l = layout_of(&app);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.terminals(), vec![t(ids[0], SessionProcess::Primary)]);
+        assert_eq!(l.ratio(0), Some(0.3));
+    }
+
+    /// US6 scenario 4 and FR-014: no layout, or one that cannot be read, is one pane on the last
+    /// session.
+    #[test]
+    fn no_stored_layout_and_a_corrupt_one_both_give_one_pane() {
+        for stored in [None, Some("{not json".to_string())] {
+            let (mut app, ids, _rx) = app_with_sessions(2);
+            crate::shell::panes::restore(&mut app, &catalog_with_layout("/repo/panes", stored));
+            crate::shell::panes::sync(&mut app);
+            let l = layout_of(&app);
+            assert_eq!(l.len(), 1);
+            assert_eq!(l.terminals(), vec![t(ids[0], SessionProcess::Primary)]);
+            assert_eq!(app.core.session.active, Some(ids[0]));
+        }
+    }
+
+    /// Only the first snapshot restores: a later one echoes what this client sent.
+    #[test]
+    fn a_later_snapshot_does_not_replace_the_layout() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let stored = two_pane_layout(
+            t(ids[0], SessionProcess::Primary),
+            t(ids[1], SessionProcess::Primary),
+        );
+        crate::shell::panes::restore(
+            &mut app,
+            &catalog_with_layout("/repo/panes", Some(stored.to_json())),
+        );
+        let first_pane = layout_of(&app).panes()[0].id();
+        crate::shell::panes::focus_pane(&mut app, first_pane);
+        let before = layout_of(&app);
+        crate::shell::panes::restore(
+            &mut app,
+            &catalog_with_layout("/repo/panes", Some(stored.to_json())),
+        );
+        assert_eq!(layout_of(&app), before);
+    }
+
+    /// FR-013: every change to the layout goes to the daemon; an unchanged one does not.
+    #[test]
+    fn every_layout_change_sends_set_pane_layout() {
+        let (mut app, _ids, mut rx) = app_with_sessions(2);
+        assert!(
+            sent_layouts(&mut rx).is_empty(),
+            "an unsplit project stores nothing"
+        );
+        split_focused(&mut app, Axis::Vertical);
+        let sent = sent_layouts(&mut rx);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(PaneLayout::from_json(&sent[0]), Some(layout_of(&app)));
+        crate::shell::panes::sync(&mut app);
+        assert!(sent_layouts(&mut rx).is_empty(), "no change, no message");
+        // A divider drag ends with one more.
+        pane_msg(
+            &mut app,
+            PaneMsg::Gesture(SplitEvent::Drag {
+                index: 0,
+                basis_points: 2000,
+            }),
+        );
+        pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Release));
+        let sent = sent_layouts(&mut rx);
+        assert_eq!(
+            PaneLayout::from_json(sent.last().unwrap()),
+            Some(layout_of(&app))
+        );
+        // Closing back to one pane stores that too.
+        let focused = layout_of(&app).focused();
+        pane_msg(&mut app, PaneMsg::Close(focused));
+        let sent = sent_layouts(&mut rx);
+        assert_eq!(
+            PaneLayout::from_json(sent.last().unwrap()).map(|l| l.len()),
+            Some(1)
+        );
+    }
+
+    /// FR-016: restoring one project's layout leaves another project's alone.
+    #[test]
+    fn each_project_restores_its_own_layout() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let other = PathBuf::from("/repo/other");
+        app.core.workspace.projects.push(Project::new(
+            other.clone(),
+            true,
+            Availability::Available,
+        ));
+        let stored = two_pane_layout(
+            t(ids[0], SessionProcess::Primary),
+            t(ids[1], SessionProcess::Primary),
+        );
+        let mut catalog = catalog_with_layout("/repo/panes", None);
+        catalog.projects.push(ProjectSnapshot {
+            pane_layout: Some(stored.to_json()),
+            path: other.clone(),
+            display_name: "other".into(),
+            is_git_repo: true,
+            available: true,
+            worktrees: Vec::new(),
+            sessions: Vec::new(),
+        });
+        crate::shell::panes::restore(&mut app, &catalog);
+        assert_eq!(
+            layout_of(&app).len(),
+            1,
+            "the active project has none stored"
+        );
+        assert_eq!(app.pane_layouts.get(&other), Some(&stored));
     }
 }

@@ -348,6 +348,8 @@ fn boot() -> (App, Task<Message>) {
             pane_layouts: HashMap::new(),
             viewed_terminals_sent: None,
             viewed_dirty: false,
+            pane_saved: HashMap::new(),
+            pane_restored: std::collections::HashSet::new(),
             pane_synced_displayed: None,
             pane_sizes: HashMap::new(),
             pane_sent: HashMap::new(),

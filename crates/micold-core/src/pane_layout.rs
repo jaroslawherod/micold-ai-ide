@@ -700,6 +700,206 @@ impl PaneLayout {
     }
 }
 
+// Ratios are finite by invariant (clamped to [RATIO_MIN, RATIO_MAX] on every write and on load),
+// so equality is total; `Workspace` derives `Eq` and holds layouts.
+impl Eq for PaneNode {}
+impl Eq for PaneLayout {}
+
+/// The stored form's current version (contracts/pane-layout-file.md).
+pub const LAYOUT_VERSION: u32 = 1;
+
+/// The on-disk and on-wire shape of a [`PaneLayout`] (feature 484, FR-013): JSON, versioned by
+/// `layout_version`, independent of the state file's `schema_version`.
+mod stored {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Layout {
+        /// Missing reads as 0, which is rejected: an unversioned layout is not ours.
+        #[serde(default)]
+        pub layout_version: u32,
+        pub focused: u32,
+        pub root: Node,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Node {
+        Pane(Pane),
+        Split(Split),
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Pane {
+        pub id: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub terminal: Option<Terminal>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Split {
+        pub axis: StoredAxis,
+        pub ratio: f32,
+        pub first: Box<Node>,
+        pub second: Box<Node>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum StoredAxis {
+        Vertical,
+        Horizontal,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Terminal {
+        pub session: crate::session::SessionId,
+        pub process: Process,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Process {
+        Primary,
+        Shell(u32),
+    }
+}
+
+fn to_stored(node: &PaneNode) -> stored::Node {
+    match node {
+        PaneNode::Leaf(p) => stored::Node::Pane(stored::Pane {
+            id: p.id.0,
+            terminal: p.terminal.map(|t| stored::Terminal {
+                session: t.session,
+                process: match t.process {
+                    SessionProcess::Primary => stored::Process::Primary,
+                    SessionProcess::Shell(id) => stored::Process::Shell(id.0),
+                },
+            }),
+        }),
+        PaneNode::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        } => stored::Node::Split(stored::Split {
+            axis: match axis {
+                Axis::Vertical => stored::StoredAxis::Vertical,
+                Axis::Horizontal => stored::StoredAxis::Horizontal,
+            },
+            ratio: *ratio,
+            first: Box::new(to_stored(first)),
+            second: Box::new(to_stored(second)),
+        }),
+    }
+}
+
+/// Rebuild a node, refusing anything that would break an invariant. `ids` and `shown` collect what
+/// has been seen so duplicates are caught; `leaves` counts against [`MAX_PANES`].
+fn from_stored(
+    node: stored::Node,
+    ids: &mut Vec<u32>,
+    shown: &mut Vec<TerminalRef>,
+) -> Option<PaneNode> {
+    match node {
+        stored::Node::Pane(p) => {
+            if ids.len() >= MAX_PANES || ids.contains(&p.id) {
+                return None;
+            }
+            ids.push(p.id);
+            let terminal = match p.terminal {
+                None => None,
+                Some(t) => {
+                    let t = TerminalRef {
+                        session: t.session,
+                        process: match t.process {
+                            stored::Process::Primary => SessionProcess::Primary,
+                            stored::Process::Shell(n) => {
+                                SessionProcess::Shell(crate::session::ShellInstanceId(n))
+                            }
+                        },
+                    };
+                    if shown.contains(&t) {
+                        return None;
+                    }
+                    shown.push(t);
+                    Some(t)
+                }
+            };
+            Some(PaneNode::Leaf(Pane {
+                id: PaneId(p.id),
+                terminal,
+            }))
+        }
+        stored::Node::Split(s) => {
+            if !(RATIO_MIN..=RATIO_MAX).contains(&s.ratio) {
+                return None;
+            }
+            let first = from_stored(*s.first, ids, shown)?;
+            let second = from_stored(*s.second, ids, shown)?;
+            Some(PaneNode::Split {
+                axis: match s.axis {
+                    stored::StoredAxis::Vertical => Axis::Vertical,
+                    stored::StoredAxis::Horizontal => Axis::Horizontal,
+                },
+                ratio: s.ratio,
+                first: Box::new(first),
+                second: Box::new(second),
+            })
+        }
+    }
+}
+
+impl PaneLayout {
+    /// The stored form as JSON (contracts/pane-layout-file.md).
+    pub fn to_json(&self) -> String {
+        let layout = stored::Layout {
+            layout_version: LAYOUT_VERSION,
+            focused: self.focused.0,
+            root: to_stored(&self.root),
+        };
+        serde_json::to_string(&layout).expect("a pane layout serialises")
+    }
+
+    /// The stored form as a JSON value, for embedding in a larger document.
+    pub fn to_json_value(&self) -> serde_json::Value {
+        serde_json::from_str(&self.to_json()).expect("to_json yields JSON")
+    }
+
+    /// Read the stored form. `None` when it is not a layout this build can honour: not JSON of this
+    /// shape, a version other than [`LAYOUT_VERSION`] (newer or missing), more than [`MAX_PANES`]
+    /// panes, a duplicated pane id or terminal, a `focused` that is not a pane, or a ratio outside
+    /// its bounds. Terminals are not checked against anything here: one that no longer exists is
+    /// kept and shown as an empty pane by the caller (FR-014).
+    pub fn from_json(json: &str) -> Option<PaneLayout> {
+        let stored: stored::Layout = serde_json::from_str(json).ok()?;
+        Self::from_stored_layout(stored)
+    }
+
+    /// [`Self::from_json`] for a value already parsed.
+    pub fn from_json_value(value: serde_json::Value) -> Option<PaneLayout> {
+        let stored: stored::Layout = serde_json::from_value(value).ok()?;
+        Self::from_stored_layout(stored)
+    }
+
+    fn from_stored_layout(stored: stored::Layout) -> Option<PaneLayout> {
+        if stored.layout_version != LAYOUT_VERSION {
+            return None;
+        }
+        let (mut ids, mut shown) = (Vec::new(), Vec::new());
+        let root = from_stored(stored.root, &mut ids, &mut shown)?;
+        if !ids.contains(&stored.focused) {
+            return None;
+        }
+        let next_id = ids.iter().max()?.checked_add(1)?;
+        Some(PaneLayout {
+            root,
+            focused: PaneId(stored.focused),
+            next_id,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

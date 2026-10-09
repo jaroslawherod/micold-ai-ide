@@ -17,6 +17,7 @@
 //! new-style state file does not exist yet; the next `save` writes that data out to the
 //! project's own state file and stops carrying it in the catalog.
 
+use crate::pane_layout::PaneLayout;
 use crate::project::{Availability, Project};
 use crate::review::store::ReviewFile;
 use crate::runs::store::RunsFile;
@@ -460,6 +461,8 @@ impl StoredCatalog {
             provenance_migrated: BTreeSet::new(),
             // Never persisted at all — it describes this run's reading of the disk (FR-011).
             unreadable_projects: BTreeSet::new(),
+            // Feature 484: per project, filled in by `load` from each project's own state file.
+            pane_layouts: BTreeMap::new(),
         }
     }
 }
@@ -515,6 +518,15 @@ struct StoredProjectState {
     /// upgrading into this feature is in.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     provenance_migrated: bool,
+    /// The project's terminal-pane layout (feature 484, FR-013), in the form of
+    /// contracts/pane-layout-file.md.
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records. It
+    /// is held as a raw JSON value, not a typed one, so that a layout from a newer build, or one
+    /// that is malformed, fails *this field only* when it is read (FR-014): typed, one bad shape
+    /// would fail the whole file and mark the project unreadable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pane_layout: Option<serde_json::Value>,
 }
 
 impl StoredProjectState {
@@ -543,6 +555,10 @@ impl StoredProjectState {
                 .map(|set| set.iter().cloned().collect())
                 .unwrap_or_default(),
             provenance_migrated: ws.provenance_migrated.contains(project_path),
+            pane_layout: ws
+                .pane_layouts
+                .get(project_path)
+                .map(PaneLayout::to_json_value),
         }
     }
 }
@@ -966,6 +982,23 @@ impl ProjectStore for JsonFileStore {
                     }
                     // Feature 025. Absent in a file written before this field existed, which is
                     // "no memory" — the behaviour this application had until now.
+                    // Feature 484 (FR-014): a layout this build cannot honour is absent, and the
+                    // rest of the file has already loaded.
+                    match state.pane_layout.map(PaneLayout::from_json_value) {
+                        Some(Some(layout)) => {
+                            workspace.pane_layouts.insert(project.path.clone(), layout);
+                        }
+                        Some(None) => {
+                            eprintln!(
+                                "micold: ignoring the pane layout of {}: unreadable or from a newer version",
+                                project.path.display()
+                            );
+                            workspace.pane_layouts.remove(&project.path);
+                        }
+                        None => {
+                            workspace.pane_layouts.remove(&project.path);
+                        }
+                    }
                     match state.last_session {
                         Some(id) => {
                             workspace
@@ -1003,6 +1036,7 @@ impl ProjectStore for JsonFileStore {
                     // start normally rather than restore against sessions it could not load
                     // (feature 025, FR-010).
                     workspace.foreground_by_project.remove(&project.path);
+                    workspace.pane_layouts.remove(&project.path);
                 }
             }
         }

@@ -92,6 +92,13 @@ pub struct Workspace {
     /// listing everything, rather than hiding the user's own work behind a control they have no
     /// reason to look for (data-model.md §4).
     pub unreadable_projects: BTreeSet<PathBuf>,
+    /// Each project's terminal-area pane layout (feature 484, FR-013), keyed by project path like
+    /// [`Self::sessions`]. A project without an entry has the single default pane.
+    ///
+    /// Written by the **daemon** (`SetPaneLayout`), for the reason [`Self::foreground_by_project`]
+    /// gives. Terminals a layout names are not checked against [`Self::sessions`] here: one that
+    /// no longer exists is kept and shown as an empty pane (FR-014).
+    pub pane_layouts: BTreeMap<PathBuf, crate::pane_layout::PaneLayout>,
 }
 
 impl Workspace {
@@ -172,6 +179,8 @@ impl Workspace {
         self.worktree_provenance.remove(&path);
         self.provenance_migrated.remove(&path);
         self.unreadable_projects.remove(&path);
+        // Feature 484 (FR-013): the panes go with the project.
+        self.pane_layouts.remove(&path);
         if self.active.as_ref() == Some(&path) {
             self.active = None;
         }

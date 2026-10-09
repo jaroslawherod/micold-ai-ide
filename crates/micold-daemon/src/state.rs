@@ -1696,6 +1696,18 @@ impl DaemonState {
         }
     }
 
+    /// Store a project's pane layout (feature 484, `SetPaneLayout`). Returns whether it was
+    /// accepted: an unusable layout is logged and dropped, and the stored one stays.
+    pub fn set_pane_layout(&self, project: &Path, layout: Option<&str>) -> bool {
+        match self.lock().catalog.set_pane_layout(project, layout) {
+            Ok(_) => true,
+            Err(err) => {
+                tracing::warn!(project = %project.display(), %err, "pane layout not stored");
+                false
+            }
+        }
+    }
+
     /// Set the scrollback limit and push `SettingsChanged` to every client (FR-012a, FR-011).
     pub fn set_scrollback(&self, lines: usize) -> std::io::Result<()> {
         let settings = {
