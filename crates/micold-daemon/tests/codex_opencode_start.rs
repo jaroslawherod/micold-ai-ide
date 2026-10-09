@@ -268,7 +268,7 @@ fn listed(state: &DaemonState, cwd: &Path) -> Vec<AiCli> {
     state.availability_in(cwd).0
 }
 
-/// No session record for `cli` in the catalog (only the fixture's own session 3 exists).
+/// How many session records the catalog holds (the fixture starts with one, session 3).
 fn session_count(f: &Fixture) -> usize {
     f.state
         .catalog_snapshot()
@@ -304,8 +304,19 @@ async fn starting_an_unavailable_provider_over_mcp_is_refused_naming_it_and_crea
             json!({"worktree": "b", "ai_cli": cli.tool_name()}),
         )
         .await;
-        let message = err["message"].as_str().unwrap().to_lowercase();
-        assert!(message.contains(command), "{command} not named: {err}");
+        let message = err["message"].as_str().unwrap();
+        assert!(
+            message.to_lowercase().contains(command),
+            "{command} not named: {err}"
+        );
+        let app = micold_daemon::ops::cli_unavailable(
+            &f.state,
+            &f.project.path().join(".claude/worktrees/b"),
+            cli,
+        )
+        .await
+        .expect("unavailable");
+        assert_eq!(message, app, "MCP and the app give the same reason");
         assert_eq!(session_count(&f), before, "a record was created");
         assert!(
             !f.bin.path().join(format!("{command}.cwd")).exists(),
