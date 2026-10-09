@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
 | M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | #676 | merged |
-| M10 | T075–T077 | full | Architecture page, recorded visual pass | | in progress |
+| M10 | T075–T077 | full | Architecture page, recorded visual pass | | in review |
 
 ## Decisions
 
