@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Spec | 1 | 303c12f166730835012ddb99e2d6f068115ff086:e61d1682ef7b666342bfb8834c130312e9e3e26a | CHANGES: 1 MAJOR (bad `feature 182` citation: it was a commit hash; fixed, prose only), 3 MINOR (fixed, prose only) |
 
 ## Declined review findings
 
