@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 3 [NEEDS CLARIFICATION] markers in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -24,6 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify round 1: 3 markers agent-resolved (one pane per terminal; empty panes persist; chords Ctrl/Cmd+Shift+D/H/W/Arrow, not Ctrl+Alt+Arrow). No escalation.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

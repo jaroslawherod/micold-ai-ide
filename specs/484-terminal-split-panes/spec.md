@@ -179,8 +179,7 @@ confirm each project shows its own.
   and does not affect other panes. A failed PTY resize in one pane does not block the other pane.
 - **Same terminal in two panes**: a terminal is shown in at most one pane. Choosing a terminal that
   another pane already shows moves focus to that pane instead of duplicating it
-  [NEEDS CLARIFICATION: confirm "at most one pane per terminal" over mirroring one PTY in two
-  panes. Provisional default: at most one, because two views of one PTY would have two sizes.]
+  (two views of one PTY would have two sizes).
 - **Concurrency (Principle II)**: several sessions of one project, and sessions of different
   worktrees, may be shown at once; output from one never appears in another's pane. Two panes
   may receive output simultaneously; the plan decides how redraws are shared.
@@ -188,16 +187,16 @@ confirm each project shows its own.
   below the minimum size. The window shrinking below the layout's total minimum scales dividers
   down instead of clipping a pane.
 - **Session ends or is removed while shown**: the pane stays and shows the empty-pane state; if the
-  removed session was the last shown anywhere, the layout is kept, not collapsed
-  [NEEDS CLARIFICATION: confirm empty panes persist rather than auto-closing. Provisional
-  default: they persist until the user closes them.]
+  removed session was the last shown anywhere, the layout is kept, not collapsed;
+  empty panes persist until the user closes them.
 - **Tab strip with several panes**: pressing a tab shows that terminal in the focused pane (and, by
   the previous edge case, focuses the pane already showing it).
 - **Cross-platform (Principle VI)**: the shortcuts avoid chords reserved by macOS, Windows or common
   Linux desktops, use `Cmd` on macOS and `Ctrl+Shift` elsewhere, and are rebindable where other
-  shortcuts are [NEEDS CLARIFICATION: the exact chords. Provisional default: split vertical
-  `Ctrl/Cmd+Shift+D`, split horizontal `Ctrl/Cmd+Shift+H`, close pane `Ctrl/Cmd+Shift+W`, move focus
-  `Ctrl/Cmd+Alt+Arrow`, none of them forwarded to a terminal].
+  shortcuts are. Chords: split vertical `Ctrl/Cmd+Shift+D`, split horizontal `Ctrl/Cmd+Shift+H`,
+  close pane `Ctrl/Cmd+Shift+W`, move focus `Ctrl/Cmd+Shift+Arrow` (not `Ctrl+Alt+Arrow`, which
+  GNOME/KDE use for workspace switching); none is forwarded to a terminal and none collides with the
+  existing `Ctrl/Cmd+Shift+E`/`T`/`C`/`V`.
 - **Very many panes**: the layout caps at 6 panes per project; splitting at the cap is refused with
   a visible reason.
 - **Idle**: unfocused windows and background panes do not poll or redraw more than today's single
@@ -274,6 +273,14 @@ confirm each project shows its own.
   pane contents, apart from terminals that no longer exist.
 - **SC-007**: A corrupt or newer-version layout never prevents the app from starting (0 start
   failures in the fault-injection tests).
+
+## Clarifications
+
+### Session 2026-10-09
+
+- Q: May one terminal be shown in two panes (mirroring)? → A: No, at most one pane per terminal; choosing it focuses the pane that shows it. _(agent-resolved: specs/484-terminal-split-panes/spec.md#Assumptions — terminals are never mirrored, one PTY has one size)_
+- Q: Do empty panes persist or auto-close? → A: They persist until the user closes them, so a layout survives a session ending. _(agent-resolved: specs/484-terminal-split-panes/spec.md#Edge Cases — layout kept when the last shown session is removed; FR-011 empty-pane state)_
+- Q: Which split/close/focus chords? → A: `Ctrl/Cmd+Shift+D`/`H`/`W` and `Ctrl/Cmd+Shift+Arrow`. _(agent-resolved: crates/micold-client/src/keymap.rs — existing chords are `Ctrl/Cmd+Shift+E`/`T`/`C`/`V`; the new ones follow that family and avoid desktop-reserved `Ctrl+Alt+Arrow`)_
 
 ## Assumptions
 
