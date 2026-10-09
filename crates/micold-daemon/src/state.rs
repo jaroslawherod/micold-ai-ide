@@ -4589,9 +4589,6 @@ impl DaemonState {
         }
     }
 
-    /// Write `id`'s history to its file. **Blocking**, and never under the state lock. A save
-    /// that fails is one warning and nothing else: the history stays carried in memory (FR-007).
-    /// A save the store skips (no directory in a container, R15) is not a failure.
     /// `store.save`, with the one warning for a store that skipped it for want of its directory.
     fn save_to_store(
         &self,
@@ -4609,6 +4606,9 @@ impl DaemonState {
         outcome
     }
 
+    /// Write `id`'s history to its file. **Blocking**, and never under the state lock. A save
+    /// that fails is one warning and nothing else: the history stays carried in memory (FR-007).
+    /// A save the store skips (no directory in a container, R15) is not a failure.
     fn save_history(
         &self,
         id: SessionId,

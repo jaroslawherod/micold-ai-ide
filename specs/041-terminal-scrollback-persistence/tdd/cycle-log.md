@@ -879,3 +879,10 @@ End of T017, T018, T022, T023: `history_service_restart` -> `test result: ok. 13
 - red: U136 against the installer script of `main`: `test result: FAILED. 6 passed; 1 failed` (`StopDaemon` must open the stop event). The `cfg(windows)` cases cannot run on the Linux machine of this unit: they were type-checked and linted with `cargo clippy --target x86_64-pc-windows-gnu`, and their red and green runs are CI's Windows job. Before the code they would have failed because the service never created the event and `terminate_daemon` ended the process at once
 - green: `platform::stop_requested` on Windows (event with the pipe's owner-only DACL, hidden top-level window, one `watch` request), `terminate_daemon` asks first (`ask_to_stop`, 5 s), `StopDaemon` asks first; U136 `test result: ok. 7 passed`
 - refactor: none
+
+## Cycles 113-119 (M9): saved history in the sandbox (T067-T073)
+
+- test: argv tests in `micold-core` sandbox (history mount, `-e TZ=`), launcher tests (`ensure_dir`, iana zone in `HostFacts`), daemon test of the one-per-run missing-directory warning, `crates/micold-daemon/tests/sandbox_real_history.rs` (6 cases, real runtime)
+- red: the argv tests failed before the argv change (no history mount, no `TZ`). The client tests were written alongside the implementation, so they have no separate red run
+- green: `MountSet::with_history`, `SandboxSpec.time_zone`, launcher `ensure_dir`, `tzdata` in the Containerfile, `DaemonState::save_to_store` warns once; `sandbox_real_history` 6 passed under podman (`MICOLD_TEST_RUNTIME=podman`, tests pass `--security-opt label=disable` for SELinux)
+- notes: other `sandbox_real_*` tests fail on this machine for the SELinux reason, unrelated

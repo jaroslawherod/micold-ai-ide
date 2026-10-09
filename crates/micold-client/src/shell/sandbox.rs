@@ -310,8 +310,10 @@ pub fn start<R: CommandRunner>(
     // makes it root-owned, and a container made before this version never had the mount, so the
     // service inside saves only into a directory that is already there. A directory that cannot be
     // made costs the history, not the sandbox.
+    let mut history_ready = true;
     if let Some(dir) = &facts.history_dir {
         if let Err(e) = micold_core::owner_only::ensure_dir(dir) {
+            history_ready = false;
             eprintln!(
                 "sandbox: could not prepare {} for saved terminal history: {e}. \
                  Terminal history will not be saved in the sandbox.",
@@ -320,7 +322,11 @@ pub fn start<R: CommandRunner>(
         }
     }
 
-    let mounts = mount_set(profile, projects, facts);
+    let mut mounts = mount_set(profile, projects, facts);
+    if !history_ready {
+        // No mount for a directory the runtime would create root-owned.
+        mounts.history = None;
+    }
 
     // A credential mounted into a directory of that home — the AI CLI's sign-in, in `~/.claude` —
     // needs the directory too, for the same reason: left to the runtime it comes out root-owned,
