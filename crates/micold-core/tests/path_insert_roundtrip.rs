@@ -17,7 +17,7 @@ fn installed(program: &str) -> bool {
 }
 
 /// True when `program` can run here. A missing shell is reported on stderr, and fails the test
-/// when `MICOLD_REQUIRE_SHELLS=1` (set in CI, where every shell is installed).
+/// when `MICOLD_REQUIRE_SHELLS=1` (CI does not set it yet; set it once fish and zsh are installed there).
 fn available(program: &str) -> bool {
     if installed(program) {
         return true;

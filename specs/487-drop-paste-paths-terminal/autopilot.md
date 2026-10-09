@@ -61,9 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M2 (re-review of fix, sonnet) | 2 | scoped fix diff | PASS (1 MINOR: empty bracketed paste on empty clipboard, harmless) |
 | A M3 (code-review high, fresh) | 1 | e2a5e7bd:5ef13056 | CHANGES: 1 MAJOR (state-dir container path joined with Path::join; fixed), 2 MINOR (fail-open without a running sandbox fixed; HostFacts probe removed) |
 | B M3 (conformance, fresh) | 1 | same family | CHANGES: 1 MAJOR (image paste with no running sandbox was silent; fixed with a notice), 1 MAJOR (reviewer could not run Verify; the unit ran the three test commands green), 1 MINOR (data-dir choice not unit-tested; declined) |
-
 | Close converge | 1 | 474f5937 | converged: all FRs/SCs built (M3 B had no round 2 and M4 rows were prose; code checked) |
-| Close tdd-verify | 1 | 474f5937 | BLOCKED (test-after, 3 surviving mutants); remediated T035–T042, verdict kept as audited |
+| Close tdd-verify | 1 | 474f5937 | BLOCKED (test-after, 3 surviving mutants); remediated T035–T042 except T041 (partly, open), verdict kept as audited |
 
 ## Declined review findings
 

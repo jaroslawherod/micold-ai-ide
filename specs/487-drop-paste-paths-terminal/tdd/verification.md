@@ -133,6 +133,6 @@ Untested or weakly tested: all 19 scenarios have some test; US2.2 and US2.3 only
 
 ## Remediation (close unit, 2026-10-09)
 
-The verdict above stands as audited: the feature was built test-after and no red was recorded at the time. T035–T042 then fixed the test-strength findings (no production change); `tdd/cycle-log.md` holds a red and a green per task, proven with mutants for T035, T036, T037, T040 and T041.
+The verdict above stands as audited: the feature was built test-after and no red was recorded at the time. T035–T042 then fixed the test-strength findings (no production change); `tdd/cycle-log.md` holds the evidence: a red and a green, proven with mutants, for T035, T036, T037, T039 (env var) and T040, and for the nested-project part of T041. T038 has none, and the text-wins and pointer-state parts of T041 are not built (T041 stays open).
 
 Not proven: T038 (per-shell expected strings) has no mutant run, and the fish, zsh and PowerShell expectations were checked by hand (only bash is installed here). `MICOLD_REQUIRE_SHELLS=1` is not yet set in CI. The T012 pointer state has no separate test; the T040 move-then-drop test covers it. Finding 12 (no real OS drop/clipboard entry point, visual passes skipped) remains a known gap.
