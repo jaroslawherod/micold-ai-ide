@@ -44,6 +44,8 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
             _ => groups.push((pane, vec![path])),
         }
     }
+    // Known limit (M1): the user's login shell, not the one this terminal runs. A shell instance
+    // started with another shell, or an AI CLI's own prompt, is quoted for the default shell.
     let shell =
         micold_core::path_insert::ShellKind::detect(&micold_core::terminal::default_shell_command(
             std::env::var("SHELL").ok().as_deref(),
@@ -78,20 +80,21 @@ fn target_of(app: &App, pane: PaneId) -> DropTarget {
 /// Type `text` at `terminal`'s input. Bracketed when the program asked for it, as a paste is, so a
 /// shell shows the text instead of acting on it (FR-003).
 ///
-/// A terminal that did not ask for bracketing would take a line break inside a name as Enter, so a
-/// name with one is refused there rather than typed (SC-004).
+/// A terminal that did not ask for bracketing would take a control character inside a name as a
+/// key (a line break is Enter, a tab completes, `^C` interrupts), so such a name is refused there
+/// rather than typed (SC-004).
 fn insert(app: &mut App, terminal: TerminalRef, text: &str) -> Task<Message> {
     let bracketed = app
         .grids
         .get(&terminal)
         .is_some_and(|g| g.bracketed_paste());
-    if !bracketed && text.contains(['\n', '\r']) {
+    if !bracketed && has_control_character(text) {
         app.core
             .update(Message::Session(SessionMsg::InsertionFailed(
-                "Nothing was inserted: a file name contains a line break, and this terminal would \
-             run it."
-                    .to_string(),
-            )));
+            "Nothing was inserted: a file name contains a control character, and this terminal \
+                 would act on it."
+                .to_string(),
+        )));
         return Task::none();
     }
     crate::shell::daemon_sync::send_to_terminal(
@@ -100,4 +103,24 @@ fn insert(app: &mut App, terminal: TerminalRef, text: &str) -> Task<Message> {
         keymap::paste_bytes(text, bracketed),
     );
     Task::none()
+}
+
+/// Whether typing `text` unbracketed would press a key: any control character, a line break first.
+fn has_control_character(text: &str) -> bool {
+    text.chars().any(char::is_control)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_control_character;
+
+    #[test]
+    fn a_name_with_a_control_character_is_not_typed_unbracketed() {
+        for name in [
+            "a\nb", "a\rb", "a\tb", "a\x03b", "a\x1bb", "a\x7fb", "a\u{85}b",
+        ] {
+            assert!(has_control_character(&format!("'{name}'")), "{name:?}");
+        }
+        assert!(!has_control_character("'/d/a b.png' '/d/naïve 日本語'"));
+    }
 }
