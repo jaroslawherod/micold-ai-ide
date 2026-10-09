@@ -124,9 +124,9 @@ pub fn naming_for_issue(
 /// The derived, validated names ready to hand to git.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DerivedNames {
-    /// Directory component under `.claude/worktrees/`: `${type}-${ticket}-${name}`.
+    /// Directory component under `.claude/worktrees/`: `${type}-${ticket}_${name}`.
     pub dir_name: String,
-    /// Git branch: `${type}/${ticket}-${name}`.
+    /// Git branch: `${type}/${ticket}_${name}`.
     pub branch: String,
 }
 
