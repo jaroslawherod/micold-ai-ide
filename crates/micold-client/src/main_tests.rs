@@ -8355,27 +8355,37 @@ mod pr_status {
 
     /// Connected, `DEMO` active, the switch on, and tooling that finds `gh` at `gh` (or nowhere).
     fn rig(gh: Option<&str>, source: FakePullRequestSource) -> Rig {
-        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let source = Arc::new(source);
+        let (app, rx) = app_over(
+            gh,
+            Arc::clone(&source) as Arc<dyn PullRequestSource + Send + Sync>,
+        );
+        Rig { app, rx, source }
+    }
+
+    /// The app of [`rig`] over any source.
+    fn app_over(
+        gh: Option<&str>,
+        source: Arc<dyn PullRequestSource + Send + Sync>,
+    ) -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let found = gh.map(PathBuf::from);
         let tooling = IssueTooling {
             locate_gh: Arc::new(move |_: Option<&str>| found.clone()),
             source: Arc::new(|_: PathBuf| -> Arc<dyn IssueSource + Send + Sync> {
                 unreachable!("a pull request reading never builds the issue source")
             }),
-            pull_requests: {
-                let source = Arc::clone(&source);
-                Arc::new(move |_: PathBuf| {
-                    Arc::clone(&source) as Arc<dyn PullRequestSource + Send + Sync>
-                })
-            },
+            pull_requests: Arc::new(move |_: PathBuf| Arc::clone(&source)),
         };
         let mut app = base_app();
         app.caps = app.caps.clone().with_issue_tooling(tooling);
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
         app.core.workspace.active = Some(PathBuf::from(DEMO));
         let _ = shell::pr_status::enabled_changed(&mut app, true);
-        Rig { app, rx, source }
+        (app, rx)
     }
 
     fn status(number: u64) -> PullRequestStatus {
@@ -8623,7 +8633,7 @@ mod pr_status {
         refresh
     }
 
-    // A32, A33 (S4, FR-018a, FR-027): the refresh acknowledged returns the control to idle, shows
+    // A34, A36 (S4, FR-018a, FR-027): the refresh acknowledged returns the control to idle, shows
     // its notice, and only then starts a reading for the branches the updated listing shows.
     #[test]
     fn pr_status_refresh_ack_reads_after_the_control_is_idle() {
@@ -8670,7 +8680,7 @@ mod pr_status {
         );
     }
 
-    // A34 (S4): a refresh that timed out ends the same way, and still reads.
+    // A34 (S4), the timed-out variant: a refresh that timed out ends the same way, and still reads.
     #[test]
     fn pr_status_refresh_timed_out_reads_too() {
         let mut rig = holding();
@@ -8680,7 +8690,7 @@ mod pr_status {
         assert_eq!(remote_lists(&mut rig).len(), 1);
     }
 
-    // A35 (FR-027): a failed reading changes neither the control nor the notice the refresh shows.
+    // A36 (FR-027): a failed reading changes neither the control nor the notice the refresh shows.
     #[test]
     fn pr_status_refresh_then_a_failed_reading_adds_nothing_to_the_refresh() {
         let mut rig = holding();
@@ -8722,7 +8732,7 @@ mod pr_status {
         assert_eq!(rig.app.core.notifications.queue.pending(), 0);
     }
 
-    // A36 (S3): the interval's tick starts one reading; a tick while the switch is off starts none.
+    // A32 (S3): the interval's tick starts one reading; a tick while the switch is off starts none.
     #[test]
     fn pr_status_tick_starts_a_reading() {
         let mut rig = holding();
@@ -8742,6 +8752,186 @@ mod pr_status {
         let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
         assert!(sent(&mut rig).is_empty());
         assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+    }
+
+    /// A source that tells the test it was called and then waits to be let go.
+    struct BlockingSource {
+        entered: std::sync::mpsc::Sender<()>,
+        release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl PullRequestSource for BlockingSource {
+        fn read(
+            &self,
+            _: &micold_core::github::GithubRepo,
+            _: &[String],
+            _: u64,
+        ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
+            self.entered.send(()).expect("the test listens");
+            self.release
+                .lock()
+                .expect("not poisoned")
+                .recv()
+                .expect("the test lets the source go");
+            Ok(statuses())
+        }
+    }
+
+    // A12 (FR-021, SC-005): the update that starts the source returns without calling it, and a
+    // selection message is applied while the source is still reading.
+    #[test]
+    fn pr_status_a_selection_is_applied_while_the_source_is_reading() {
+        let (entered_tx, entered) = std::sync::mpsc::channel();
+        let (release, release_rx) = std::sync::mpsc::channel();
+        let source = Arc::new(BlockingSource {
+            entered: entered_tx,
+            release: std::sync::Mutex::new(release_rx),
+        });
+        let (mut app, mut rx) = app_over(Some(FAKE_GH), source);
+        let mut rig_sent = || {
+            let mut all = Vec::new();
+            while let Ok(msg) = rx.try_recv() {
+                all.push(msg);
+            }
+            all
+        };
+        attached(&mut app);
+        listed(&mut app, one_worktree());
+        let req = rig_sent()
+            .into_iter()
+            .find_map(|msg| match msg {
+                ClientMsg::RemoteList { req, .. } => Some(req),
+                _ => None,
+            })
+            .expect("the listing asks for the remotes");
+
+        let work = shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RemoteList {
+                    remotes: github_remote(),
+                },
+            },
+        );
+        assert!(
+            entered.try_recv().is_err(),
+            "the update returned without calling the source"
+        );
+        let reading = std::thread::spawn(move || messages(work));
+        entered
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the source is reading");
+
+        let id = SessionId::new();
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
+        assert!(
+            rig_sent()
+                .iter()
+                .any(|msg| matches!(msg, ClientMsg::SessionStart { session } if *session == id)),
+            "the selection was applied while the reading was outstanding"
+        );
+        assert!(matches!(app.core.pr_status.phase, Phase::Reading { .. }));
+
+        release.send(()).expect("the source waits");
+        for message in reading.join().expect("the reading finished") {
+            let _ = update_inner(&mut app, message);
+        }
+        assert_eq!(app.core.pr_status.statuses, statuses());
+    }
+
+    /// A rig that holds `statuses()`, then reads a second time and gets `second` (the tick's reading
+    /// when `by_tick`), returning once that reading has ended.
+    fn holding_then(second: Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>) -> Rig {
+        let source = FakePullRequestSource::new().with_answer(statuses());
+        let source = match second {
+            Ok(answer) => source.with_answer(answer),
+            Err(failure) => source.with_failure(failure),
+        };
+        let mut rig = rig(Some(FAKE_GH), source);
+        read_once(&mut rig, one_worktree());
+        tick_and_answer(&mut rig);
+        assert_eq!(rig.source.calls().len(), 2);
+        assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
+        rig
+    }
+
+    /// A tick, and the answer of the remotes it asked for.
+    fn tick_and_answer(rig: &mut Rig) {
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
+        let asked = remote_lists(rig);
+        assert_eq!(asked.len(), 1, "the tick starts one reading");
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+    }
+
+    // A33 (FR-020): a tick's reading that differs replaces the branch's status and leaves the rest.
+    #[test]
+    fn pr_status_tick_replaces_the_status_and_nothing_else() {
+        let other = BTreeMap::from([("feat/a".to_string(), status(9))]);
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_answer(statuses())
+                .with_answer(other.clone()),
+        );
+        read_once(&mut rig, one_worktree());
+        let before = untouched(&rig.app);
+        tick_and_answer(&mut rig);
+        assert_eq!(rig.app.core.pr_status.statuses, other);
+        assert_eq!(untouched(&rig.app), before);
+    }
+
+    // A35 (FR-022): a tick and three refreshes during a reading add no call; one more when it ends.
+    #[test]
+    fn pr_status_tick_and_refreshes_during_a_reading_add_one_call_when_it_ends() {
+        let mut rig = holding();
+        let req = read_again(&mut rig);
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
+        for _ in 0..3 {
+            let _ = shell::pr_status::refresh_ended(&mut rig.app);
+        }
+        assert!(
+            remote_lists(&mut rig).is_empty(),
+            "nothing starts meanwhile"
+        );
+        assert_eq!(rig.source.calls().len(), 1);
+
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(rig.source.calls().len(), 2, "the reading itself");
+        assert_eq!(remote_lists(&mut rig).len(), 1, "exactly one more starts");
+    }
+
+    // A37 (FR-024, SC-006): after `RateLimited` a tick adds no call and the statuses stay.
+    #[test]
+    fn pr_status_tick_after_rate_limited_adds_no_call() {
+        let mut rig = holding_then(Err(ReadingFailure::RateLimited { until: u64::MAX }));
+        let _ = sent(&mut rig);
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
+        assert!(remote_lists(&mut rig).is_empty());
+        assert_eq!(rig.source.calls().len(), 2);
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+    }
+
+    // A38 (FR-019, FR-025): after `Passing` the statuses stay, nothing is reported, the next tick reads.
+    #[test]
+    fn pr_status_tick_after_passing_keeps_the_statuses_and_reads_again() {
+        let mut rig = holding_then(Err(ReadingFailure::Passing));
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
+        assert!(nothing_was_reported(&rig.app));
+        tick_and_answer(&mut rig);
+        assert_eq!(rig.source.calls().len(), 3);
+    }
+
+    // A39 (FR-025): after `Unavailable` the statuses and `removable` are empty, nothing is reported,
+    // the next tick reads.
+    #[test]
+    fn pr_status_tick_after_unavailable_clears_and_reads_again() {
+        let mut rig = holding_then(Err(ReadingFailure::Unavailable));
+        assert!(rig.app.core.pr_status.statuses.is_empty());
+        assert!(rig.app.core.pr_status.removable.is_empty());
+        assert!(nothing_was_reported(&rig.app));
+        tick_and_answer(&mut rig);
+        assert_eq!(rig.source.calls().len(), 3);
     }
 
     // A10 (FR-025): `gh` not found.
@@ -8968,7 +9158,7 @@ mod pr_status {
         )
     }
 
-    // A12, U97 (FR-020, SC-004): every way a reading ends leaves the rest of the application as it
+    // A33, U97 (FR-020, SC-004): every way a reading ends leaves the rest of the application as it
     // was and raises nothing.
     #[test]
     fn pr_status_a_finished_reading_changes_nothing_else_and_reports_nothing() {

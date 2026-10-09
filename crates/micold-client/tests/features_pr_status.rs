@@ -350,6 +350,7 @@ fn messages_for(st: &State, pick: usize) -> Msg {
 fn no_sequence_yields_two_reads_without_an_end_between_them() {
     // A small linear congruential walk: deterministic, and it visits long mixed sequences.
     let mut x: u64 = 0x2545_f491;
+    let mut reads = 0;
     for _ in 0..200 {
         let mut st = State::default();
         for _ in 0..40 {
@@ -357,20 +358,19 @@ fn no_sequence_yields_two_reads_without_an_end_between_them() {
                 .wrapping_mul(6_364_136_223_846_793_005)
                 .wrapping_add(1_442_695_040_888_963_407);
             let msg = messages_for(&st, (x >> 33) as usize);
-            let was_reading = matches!(st.phase, Phase::Reading { .. });
-            let ends = matches!(
-                msg,
-                Msg::Finished { .. } | Msg::Released | Msg::EnabledChanged { enabled: false, .. }
-            );
-            if let Effect::Read { .. } = update(&mut st, msg) {
-                assert!(
-                    !was_reading || ends,
-                    "a second reading started while one was under way"
-                );
-                assert!(matches!(st.phase, Phase::Reading { .. }));
+            let before = st.phase;
+            if let Effect::Read { seq } = update(&mut st, msg) {
+                reads += 1;
+                // A reading was under way before only if this one replaced it by a new `seq`
+                // after the old one ended (the abandon bound), never beside it.
+                if let Phase::Reading { seq: old, .. } = before {
+                    assert_ne!(old, seq, "a second reading started beside the first");
+                }
+                assert!(matches!(st.phase, Phase::Reading { seq: s, .. } if s == seq));
             }
         }
     }
+    assert!(reads > 0, "the walk never started a reading");
 }
 
 // ---- U119–U121: the removal mark (feature 040 US3, data-model §3 invariant 5) ----

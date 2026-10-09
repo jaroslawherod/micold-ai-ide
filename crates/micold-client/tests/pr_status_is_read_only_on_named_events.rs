@@ -297,28 +297,41 @@ fn a_pull_requests_title_and_address_are_never_logged() {
         "tracing",
         "dbg!",
     ];
+    let mut offenders = Vec::new();
+    // Reading a title or address is for the two files that handle a status; logging one is
+    // forbidden in every file of the client (U88, FR-032).
     for file in [SHELL, FEATURE] {
-        let own: Vec<_> = in_file(&lines, file).collect();
-        let mut offenders = Vec::new();
-        for (i, (_, n, l)) in own.iter().enumerate() {
+        for (_, n, l) in in_file(&lines, file) {
             if l.contains(".title") || l.contains(".url") {
                 offenders.push(format!("  {file}:{n}: {l} (reads a title or address)"));
             }
-            if logging.iter().any(|m| l.contains(m)) {
+        }
+    }
+    let mut files: Vec<&str> = lines.iter().map(|(f, _, _)| f.as_str()).collect();
+    files.dedup();
+    for file in files.into_iter().filter(|f| *f != MAIN_TESTS) {
+        let own: Vec<_> = in_file(&lines, file).collect();
+        for (i, (_, _, l)) in own.iter().enumerate() {
+            // `format!` also builds the text a row shows (the tooltip), so outside the two files
+            // that handle a status only a call that writes somewhere counts.
+            let writes = logging
+                .iter()
+                .any(|m| l.contains(m) && (*m != "format!" || file == SHELL || file == FEATURE));
+            if writes {
                 for (_, m, w) in own.iter().skip(i).take(5) {
-                    if w.contains("title") || w.contains("url") {
+                    if w.contains("status.title") || w.contains("status.url") {
                         offenders.push(format!("  {file}:{m}: {w} (in a logging statement)"));
                     }
                 }
             }
         }
-        offenders.dedup();
-        assert!(
-            offenders.is_empty(),
-            "a pull request's title or address must never be logged (contract §1):\n{}",
-            offenders.join("\n")
-        );
     }
+    offenders.dedup();
+    assert!(
+        offenders.is_empty(),
+        "a pull request's title or address must never be logged (contract §1):\n{}",
+        offenders.join("\n")
+    );
 }
 
 /// The text of the free function `name` in `file`, comments dropped: from its signature to the

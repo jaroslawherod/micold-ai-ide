@@ -16,6 +16,11 @@ contracts/pull-request-ui.md, `DM` = data-model.md, `R#` = research.md) is added
 leaves the detail to the plan. The task that writes each test is named above its table; the same
 ids stand on the tasks of [tasks.md](../tasks.md).
 
+> **Close note (2026-10-09).** The `state` and `test` columns below were not kept up to date during
+> M4 to M8: every row whose task is ticked in tasks.md has a passing test; the test-to-behavior
+> mapping as audited is in [verification.md](verification.md) (Traceability) and the red/green
+> record in [cycle-log.md](cycle-log.md). Rows still reading PENDING are not unwritten tests.
+
 ## Outer loop: acceptance behaviors
 
 One per acceptance scenario of spec.md, in spec order. The profile's acceptance runner
