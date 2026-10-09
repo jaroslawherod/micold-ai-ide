@@ -2,7 +2,6 @@
 //! sweeps what a crash left (story 4, FR-013, FR-014, SC-005).
 
 #[path = "support/history.rs"]
-#[allow(dead_code)]
 mod history;
 
 use std::path::{Path, PathBuf};
