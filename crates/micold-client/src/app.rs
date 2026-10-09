@@ -692,7 +692,12 @@ impl State {
         let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
             crate::features::session::update(self, msg)
                 .into_iter()
-                .partition(|o| matches!(o, Outcome::ClipboardWrite(_) | Outcome::OpenLink(_)));
+                .partition(|o| {
+                    matches!(
+                        o,
+                        Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. }
+                    )
+                });
         drain(rest, |outcome| interpret(self, outcome));
         effects
     }
@@ -712,7 +717,12 @@ impl State {
         let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
             crate::features::session::link_open_confirmed(self, sandbox_live)
                 .into_iter()
-                .partition(|o| matches!(o, Outcome::ClipboardWrite(_) | Outcome::OpenLink(_)));
+                .partition(|o| {
+                    matches!(
+                        o,
+                        Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. }
+                    )
+                });
         drain(rest, |outcome| interpret(self, outcome));
         effects
     }
@@ -1004,7 +1014,7 @@ pub fn interpret(
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
-        Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) => {}
+        Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
     }
     Vec::new()
 }

@@ -36,6 +36,7 @@ pub mod os_theme;
 pub mod overlay;
 pub mod owner_only;
 pub mod pane_layout;
+pub mod path_insert;
 pub mod permission_failure;
 pub mod process;
 pub mod project;

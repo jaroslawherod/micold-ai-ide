@@ -73,6 +73,33 @@ pub fn default_shell_command(shell_env: Option<&str>, comspec_env: Option<&str>)
     }
 }
 
+impl crate::path_insert::ShellKind {
+    /// The shell kind of a terminal's shell command (feature 487, research R2), by the file name
+    /// of the program. A name that is not recognised is [`ShellKind::Posix`] on Unix and
+    /// [`ShellKind::Cmd`] on Windows, the platform's default shell.
+    ///
+    /// [`ShellKind::Posix`]: crate::path_insert::ShellKind::Posix
+    /// [`ShellKind::Cmd`]: crate::path_insert::ShellKind::Cmd
+    pub fn detect(shell_command: &str) -> Self {
+        use crate::path_insert::ShellKind;
+        let program = shell_command
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(shell_command)
+            .to_ascii_lowercase();
+        let program = program.strip_suffix(".exe").unwrap_or(&program);
+        match program {
+            "bash" | "zsh" => ShellKind::Bash,
+            "sh" | "dash" | "ash" | "ksh" | "mksh" => ShellKind::Posix,
+            "fish" => ShellKind::Fish,
+            "pwsh" | "powershell" => ShellKind::PowerShell,
+            "cmd" => ShellKind::Cmd,
+            _ if cfg!(windows) => ShellKind::Cmd,
+            _ => ShellKind::Posix,
+        }
+    }
+}
+
 /// A live handle to one running session's terminal. `Send` so its reader can live on a worker
 /// thread (research R4).
 pub trait TerminalHandle: Send {
@@ -155,5 +182,42 @@ impl TerminalHandle for FakeHandle {
     fn kill(&mut self) -> io::Result<()> {
         *self.killed.lock().unwrap() = true;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod shell_kind_tests {
+    use crate::path_insert::ShellKind;
+
+    #[test]
+    fn a_shell_is_known_by_the_file_name_of_its_program() {
+        for (cmd, kind) in [
+            ("/bin/bash", ShellKind::Bash),
+            ("/usr/bin/zsh", ShellKind::Bash),
+            ("/bin/sh", ShellKind::Posix),
+            ("/usr/bin/dash", ShellKind::Posix),
+            ("/usr/local/bin/fish", ShellKind::Fish),
+            ("pwsh", ShellKind::PowerShell),
+            (
+                "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+                ShellKind::PowerShell,
+            ),
+            ("powershell.exe", ShellKind::PowerShell),
+            ("C:\\Windows\\System32\\cmd.exe", ShellKind::Cmd),
+            ("C:\\Git\\bin\\BASH.EXE", ShellKind::Bash),
+        ] {
+            assert_eq!(ShellKind::detect(cmd), kind, "{cmd}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_shell_is_the_platform_default() {
+        let expected = if cfg!(windows) {
+            ShellKind::Cmd
+        } else {
+            ShellKind::Posix
+        };
+        assert_eq!(ShellKind::detect("/opt/weird/nushell-ish"), expected);
+        assert_eq!(ShellKind::detect(""), expected);
     }
 }

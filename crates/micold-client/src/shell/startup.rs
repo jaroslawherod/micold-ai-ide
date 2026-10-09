@@ -356,6 +356,7 @@ fn boot() -> (App, Task<Message>) {
             pane_sent: HashMap::new(),
             pane_refusal: None,
             divider_dragging: false,
+            pending_drops: Vec::new(),
             stamper: SessionInputStamper::new(),
             selection: None,
             display_offset: 0,

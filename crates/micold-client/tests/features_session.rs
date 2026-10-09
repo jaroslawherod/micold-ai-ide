@@ -804,3 +804,153 @@ fn settings_reads_home_only() {
         "a directory with nothing held reads the home answer (FR-005)"
     );
 }
+
+// ---- Feature 487: files dropped on a terminal ----
+
+mod drops {
+    use super::*;
+    use micold_client::features::session::{update, DropTarget};
+    use micold_client::features::Outcome;
+    use micold_client::keymap::paste_bytes;
+    use micold_core::path_insert::ShellKind;
+    use micold_core::protocol::messages::{SessionProcess, TerminalRef};
+    use micold_core::session::SessionLifecycle;
+
+    /// `/a` with one running session, and the terminal that is its primary process.
+    fn running() -> (State, TerminalRef) {
+        let (mut st, ids, _) = two_projects(1, 0);
+        let id = ids[0];
+        let (_, s) = st.workspace.find_session_mut(id).unwrap();
+        s.lifecycle = SessionLifecycle::Running;
+        (
+            st,
+            TerminalRef {
+                session: id,
+                process: SessionProcess::Primary,
+            },
+        )
+    }
+
+    fn drop_on(st: &mut State, paths: &[&str], target: DropTarget) -> Vec<Outcome> {
+        update(
+            st,
+            SessionMsg::FilesDropped {
+                paths: paths.iter().map(PathBuf::from).collect(),
+                target,
+                shell: ShellKind::Posix,
+            },
+        )
+    }
+
+    fn notified(outcomes: &[Outcome]) -> Vec<String> {
+        outcomes
+            .iter()
+            .filter_map(|o| match o {
+                Outcome::NotificationRaised(n) => Some(n.message.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_drop_inserts_the_quoted_paths_in_order_and_submits_nothing() {
+        let (mut st, t) = running();
+        let out = drop_on(&mut st, &["/x/a b.png", "/x/it's"], DropTarget::Terminal(t));
+        let [Outcome::Insert { terminal, text }] = out.as_slice() else {
+            panic!("{out:?}");
+        };
+        assert_eq!(*terminal, t);
+        assert_eq!(text, r"'/x/a b.png' '/x/it'\''s'");
+        for bracketed in [false, true] {
+            let bytes = paste_bytes(text, bracketed);
+            let body = if bracketed {
+                &bytes[6..bytes.len() - 6]
+            } else {
+                &bytes[..]
+            };
+            assert!(
+                !body.iter().any(|b| *b == b'\r' || *b == b'\n'),
+                "SC-004 {bracketed}"
+            );
+            assert!(!bytes.ends_with(b"\r"), "nothing submitted");
+        }
+        assert!(
+            !text.starts_with(' '),
+            "text already typed is untouched (FR-004)"
+        );
+    }
+
+    #[test]
+    fn the_target_is_the_pane_dropped_on_whether_or_not_it_was_focused() {
+        let (mut st, t) = running();
+        let other = TerminalRef {
+            session: SessionId::new(),
+            process: SessionProcess::Primary,
+        };
+        // The selected session is `t`'s; the drop lands on another session's terminal.
+        st.workspace.active = Some(PathBuf::from("/a"));
+        let (_, s) = st.workspace.find_session_mut(t.session).unwrap();
+        s.lifecycle = SessionLifecycle::Running;
+        let sid = other.session;
+        let mut second = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        second.id = sid;
+        second.lifecycle = SessionLifecycle::Running;
+        st.workspace
+            .sessions
+            .get_mut(Path::new("/a"))
+            .unwrap()
+            .push(second);
+        let out = drop_on(&mut st, &["/f"], DropTarget::Terminal(other));
+        assert!(
+            matches!(out.as_slice(), [Outcome::Insert { terminal, .. }] if *terminal == other),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn an_exited_process_or_an_empty_pane_gets_a_notice_and_no_insert() {
+        let (mut st, t) = running();
+        let (_, s) = st.workspace.find_session_mut(t.session).unwrap();
+        s.lifecycle = SessionLifecycle::Idle;
+        let out = drop_on(&mut st, &["/f"], DropTarget::Terminal(t));
+        assert_eq!(notified(&out).len(), 1, "{out:?}");
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+        let out = drop_on(&mut st, &["/f"], DropTarget::EmptyPane);
+        assert_eq!(notified(&out).len(), 1, "{out:?}");
+        assert!(!out.iter().any(|o| matches!(o, Outcome::Insert { .. })));
+    }
+
+    #[test]
+    fn a_drop_with_nothing_usable_is_silent() {
+        let (mut st, t) = running();
+        assert!(drop_on(&mut st, &[], DropTarget::Terminal(t)).is_empty());
+        assert!(drop_on(&mut st, &["/f"], DropTarget::Outside).is_empty());
+    }
+
+    #[test]
+    fn a_path_the_shell_cannot_take_is_named_and_the_rest_still_goes() {
+        let (mut st, t) = running();
+        let out = update(
+            &mut st,
+            SessionMsg::FilesDropped {
+                paths: vec![PathBuf::from("/ok.png"), PathBuf::from("/bad%.png")],
+                target: DropTarget::Terminal(t),
+                shell: ShellKind::Cmd,
+            },
+        );
+        assert!(
+            matches!(&out[0], Outcome::Insert { text, .. } if text == "\"/ok.png\""),
+            "{out:?}"
+        );
+        let notes = notified(&out);
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].contains("bad%.png"), "{notes:?}");
+    }
+
+    #[test]
+    fn an_insertion_failure_is_shown_and_types_nothing() {
+        let (mut st, _) = running();
+        let out = update(&mut st, SessionMsg::InsertionFailed("no clipboard".into()));
+        assert_eq!(notified(&out), vec!["no clipboard".to_string()]);
+    }
+}

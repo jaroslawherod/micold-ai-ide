@@ -12,17 +12,17 @@
 
 ## Phase 1: Setup and spikes
 
-- [ ] T001 Spike S1: confirm in `crates/micold-client/src/features/session.rs` and `crates/micold-client/src/app.rs` that `TerminalBytes` reaches the PTY of a non-focused pane (pane-addressed by `TerminalRef`); if it does not, add a pane-addressed variant. Record the finding in `specs/487-drop-paste-paths-terminal/research.md` (R7).
-- [ ] T002 Spike S2: confirm pane rectangles are obtainable for hit-testing from `crates/micold-client/src/ui/material/split_view.rs` (and `crates/micold-core/src/pane_layout.rs` `rects`); decide how the layout publishes them to app state. Record the finding in `research.md` (R1).
-- [ ] T003 Add the empty module skeleton `crates/micold-core/src/path_insert/{mod.rs,quote.rs}` (types only: `ShellKind`, `InsertTarget::Host`, `InsertedPath`, `Refusal`, `InsertionPlan`) and `pub mod path_insert` in `crates/micold-core/src/lib.rs`.
+- [X] T001 Spike S1: confirm in `crates/micold-client/src/features/session.rs` and `crates/micold-client/src/app.rs` that `TerminalBytes` reaches the PTY of a non-focused pane (pane-addressed by `TerminalRef`); if it does not, add a pane-addressed variant. Record the finding in `specs/487-drop-paste-paths-terminal/research.md` (R7).
+- [X] T002 Spike S2: confirm pane rectangles are obtainable for hit-testing from `crates/micold-client/src/ui/material/split_view.rs` (and `crates/micold-core/src/pane_layout.rs` `rects`); decide how the layout publishes them to app state. Record the finding in `research.md` (R1).
+- [X] T003 Add the empty module skeleton `crates/micold-core/src/path_insert/{mod.rs,quote.rs}` (types only: `ShellKind`, `InsertTarget::Host`, `InsertedPath`, `Refusal`, `InsertionPlan`) and `pub mod path_insert` in `crates/micold-core/src/lib.rs`.
 
 ## Phase 2: Foundational (blocks all stories)
 
-- [ ] T004 [P] Write failing unit tests in `crates/micold-core/src/path_insert/quote.rs` (`#[cfg(test)]`): `quote(shell, name)` tables for every `ShellKind` over at least 20 awkward names (drive-letter and UNC paths, space, `'`, `"`, `$`, backtick, backslash, newline, tab, leading `-`, non-ASCII, `%`, `!`); `Unrepresentable` for Cmd and non-UTF-8 per R2 (SC-003, FR-002).
-- [ ] T005 Implement `ShellKind` and `quote` per shell in `crates/micold-core/src/path_insert/quote.rs` until T004 passes (`mise run test-core`).
-- [ ] T006 [P] Write failing tests in `crates/micold-core/src/terminal.rs` (`#[cfg(test)]`): `ShellKind::detect(shell command)` by basename; unknown → Posix on unix, Cmd on Windows.
-- [ ] T007 Implement `ShellKind::detect` beside `default_shell_command` in `crates/micold-core/src/terminal.rs` until T006 passes.
-- [ ] T008 [P] Write a failing real-shell round-trip test in `crates/micold-core/tests/path_insert_roundtrip.rs`: quoted text run by `sh`/`bash` (`printf %s`), and zsh and fish where installed, yields exactly the file name for the T004 names; each skipped when the shell is absent; cmd is covered by the T004 tables only; PowerShell on Windows CI (SC-003).
+- [X] T004 [P] Write failing unit tests in `crates/micold-core/src/path_insert/quote.rs` (`#[cfg(test)]`): `quote(shell, name)` tables for every `ShellKind` over at least 20 awkward names (drive-letter and UNC paths, space, `'`, `"`, `$`, backtick, backslash, newline, tab, leading `-`, non-ASCII, `%`, `!`); `Unrepresentable` for Cmd and non-UTF-8 per R2 (SC-003, FR-002).
+- [X] T005 Implement `ShellKind` and `quote` per shell in `crates/micold-core/src/path_insert/quote.rs` until T004 passes (`mise run test-core`).
+- [X] T006 [P] Write failing tests in `crates/micold-core/src/terminal.rs` (`#[cfg(test)]`): `ShellKind::detect(shell command)` by basename; unknown → Posix on unix, Cmd on Windows.
+- [X] T007 Implement `ShellKind::detect` beside `default_shell_command` in `crates/micold-core/src/terminal.rs` until T006 passes.
+- [X] T008 [P] Write a failing real-shell round-trip test in `crates/micold-core/tests/path_insert_roundtrip.rs`: quoted text run by `sh`/`bash` (`printf %s`), and zsh and fish where installed, yields exactly the file name for the T004 names; each skipped when the shell is absent; cmd is covered by the T004 tables only; PowerShell on Windows CI (SC-003).
 
 **Checkpoint**: quoting is proven for each shell.
 
@@ -32,15 +32,15 @@
 
 **Independent test**: drop two files, one `my file's (1).png`, onto a terminal: both quoted paths at the prompt, nothing executed.
 
-- [ ] T009 [P] [US1] Write failing tests in `crates/micold-core/src/path_insert/mod.rs` (`#[cfg(test)]`): `plan_insertion` with `InsertTarget::Host` keeps input order, joins with single spaces, `text()` is `None` when nothing is accepted, a directory is inserted like a file, a missing file is still accepted, an unrepresentable name lands in `refused` with the file named.
-- [ ] T010 [US1] Implement `plan_insertion`, `InsertionPlan::text` and `Refusal::message` for the host target in `crates/micold-core/src/path_insert/mod.rs` until T009 passes.
-- [ ] T011 [P] [US1] Write failing client reducer tests in `crates/micold-client/tests/features_session.rs`: `FilesDropped` → `Outcome::Insert` whose bytes (via `keymap::paste_bytes`, bracketed when requested) contain no `\r`/`\n` outside the bracket markers (SC-004); the target is the pane under the pointer, focused or not (US1.5); text already typed is untouched (no leading space); an exited process or empty pane → `Outcome::Notify` and no insert; a drop with no usable paths is silent; partial refusals notify.
-- [ ] T012 [P] [US1] Write failing client tests in `crates/micold-client/src/main_tests.rs`: pointer state follows `CursorMoved`; `window::Event::FileDropped` events of one update turn coalesce, in event order, into one `FilesDropped(Vec<PathBuf>)`.
-- [ ] T013 [P] [US1] Write a failing geometry-gate test in `crates/micold-client/tests/pane_drop_target.rs` (484's gate style): in a split layout the drop target resolves to the pane under the pointer, including the unfocused one, and outside every pane resolves to none.
-- [ ] T014 [US1] Add `Outcome::Insert { terminal, text }` in `crates/micold-client/src/features/mod.rs` and the `FilesDropped` / `InsertionFailed` messages with their reducer in `crates/micold-client/src/features/session.rs` (per T001's finding) until T011 passes.
-- [ ] T015 [US1] Publish pane rectangles from `crates/micold-client/src/ui/material/split_view.rs` and add the pointer state and hit-test in `crates/micold-client/src/app.rs`, until T013 passes.
-- [ ] T016 [US1] Add the pointer (`CursorMoved`) and file-drop subscriptions with per-turn coalescing in `crates/micold-client/src/shell/subscriptions.rs`, and route `Outcome::Insert` to `TerminalBytes` in `crates/micold-client/src/app.rs`, until T012 passes.
-- [ ] T017 [US1] Add the "Drop files and paste screenshots" section (drop part) to `docs/user-guide/terminal-panes.md`.
+- [X] T009 [P] [US1] Write failing tests in `crates/micold-core/src/path_insert/mod.rs` (`#[cfg(test)]`): `plan_insertion` with `InsertTarget::Host` keeps input order, joins with single spaces, `text()` is `None` when nothing is accepted, a directory is inserted like a file, a missing file is still accepted, an unrepresentable name lands in `refused` with the file named.
+- [X] T010 [US1] Implement `plan_insertion`, `InsertionPlan::text` and `Refusal::message` for the host target in `crates/micold-core/src/path_insert/mod.rs` until T009 passes.
+- [X] T011 [P] [US1] Write failing client reducer tests in `crates/micold-client/tests/features_session.rs`: `FilesDropped` → `Outcome::Insert` whose bytes (via `keymap::paste_bytes`, bracketed when requested) contain no `\r`/`\n` outside the bracket markers (SC-004); the target is the pane under the pointer, focused or not (US1.5); text already typed is untouched (no leading space); an exited process or empty pane → `Outcome::Notify` and no insert; a drop with no usable paths is silent; partial refusals notify.
+- [X] T012 [P] [US1] Write failing client tests in `crates/micold-client/src/main_tests.rs`: pointer state follows `CursorMoved`; `window::Event::FileDropped` events of one update turn coalesce, in event order, into one `FilesDropped(Vec<PathBuf>)`.
+- [X] T013 [P] [US1] Write a failing geometry-gate test in `crates/micold-client/tests/pane_drop_target.rs` (484's gate style): in a split layout the drop target resolves to the pane under the pointer, including the unfocused one, and outside every pane resolves to none.
+- [X] T014 [US1] Add `Outcome::Insert { terminal, text }` in `crates/micold-client/src/features/mod.rs` and the `FilesDropped` / `InsertionFailed` messages with their reducer in `crates/micold-client/src/features/session.rs` (per T001's finding) until T011 passes.
+- [X] T015 [US1] Publish pane rectangles from `crates/micold-client/src/ui/material/split_view.rs` and add the pointer state and hit-test in `crates/micold-client/src/app.rs`, until T013 passes.
+- [X] T016 [US1] Add the pointer (`CursorMoved`) and file-drop subscriptions with per-turn coalescing in `crates/micold-client/src/shell/subscriptions.rs`, and route `Outcome::Insert` to `TerminalBytes` in `crates/micold-client/src/app.rs`, until T012 passes.
+- [X] T017 [US1] Add the "Drop files and paste screenshots" section (drop part) to `docs/user-guide/terminal-panes.md`.
 
 **Checkpoint**: dropping files works end to end on a regular terminal. M1 ships.
 

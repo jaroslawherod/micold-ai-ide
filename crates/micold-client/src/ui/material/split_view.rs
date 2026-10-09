@@ -192,6 +192,10 @@ impl Gesture {
 struct State {
     ids: Vec<PaneId>,
     gesture: Gesture,
+    /// The last pointer position this widget was told of, relative to it (feature 487). Kept here
+    /// rather than in the application: a pointer subscription would make every mouse move an
+    /// `update` (`tests/idle_subscriptions.rs`), and the widget sees the moves for nothing.
+    pointer: Option<Point>,
 }
 
 /// The panes of a layout, tiled; builder form (Principle VIII):
@@ -203,6 +207,7 @@ pub struct SplitView<'a, M> {
     roles: Roles,
     children: Vec<Element<'a, M>>,
     on_event: Option<Box<dyn Fn(SplitEvent) -> M + 'a>>,
+    on_file_drop: Option<Box<dyn Fn(PaneId, std::path::PathBuf) -> M + 'a>>,
 }
 
 impl<'a, M> SplitView<'a, M> {
@@ -220,7 +225,15 @@ impl<'a, M> SplitView<'a, M> {
             roles,
             children,
             on_event: None,
+            on_file_drop: None,
         }
+    }
+
+    /// Report each file dropped on the window with the pane under the pointer (feature 487,
+    /// FR-005). A drop outside every pane is not reported. One call per file, in drop order.
+    pub fn on_file_drop(mut self, f: impl Fn(PaneId, std::path::PathBuf) -> M + 'a) -> Self {
+        self.on_file_drop = Some(Box::new(f));
+        self
     }
 
     /// Report gestures as messages; without it the dividers are fixed and headers do not drag.
@@ -263,6 +276,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
         tree::State::new(State {
             ids: Vec::new(),
             gesture: Gesture::default(),
+            pointer: None,
         })
     }
 
@@ -342,6 +356,24 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             Event::Mouse(mouse::Event::CursorMoved { position }) => Some(relative(*position)),
             _ => cursor.position().map(relative),
         };
+        if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
+            tree.state.downcast_mut::<State>().pointer = Some(relative(*position));
+        }
+        if let (Event::Window(iced::window::Event::FileDropped(path)), Some(f)) =
+            (event, &self.on_file_drop)
+        {
+            // The event carries no position, so the pointer is where the cursor or the last move
+            // said it was.
+            let pointer = at.or(tree.state.downcast_ref::<State>().pointer);
+            let pane = pointer.and_then(|p| {
+                let size = layout.bounds().size();
+                self.layout
+                    .pane_at((size.width, size.height), self.min, (p.x, p.y))
+            });
+            if let Some(pane) = pane {
+                shell.publish(f(pane, path.clone()));
+            }
+        }
         if self.on_event.is_some() {
             let g = self.geometry(layout);
             let size = layout.bounds().size();

@@ -694,6 +694,19 @@ impl PaneLayout {
         out
     }
 
+    /// The pane under `point` (x, y) when `total` is tiled, or `None` over a divider's rule or
+    /// outside every pane (feature 487, FR-005). Focus plays no part: a drop goes to the pane the
+    /// pointer is over.
+    pub fn pane_at(&self, total: (f32, f32), min: (f32, f32), point: (f32, f32)) -> Option<PaneId> {
+        self.place(total, min)
+            .panes
+            .into_iter()
+            .find(|(_, r)| {
+                point.0 >= r.x && point.0 < r.x + r.w && point.1 >= r.y && point.1 < r.y + r.h
+            })
+            .map(|(id, _)| id)
+    }
+
     /// Each pane's rectangle ([`Self::place`] without the dividers).
     pub fn rects(&self, total: (f32, f32), min: (f32, f32)) -> Vec<(PaneId, Rect)> {
         self.place(total, min).panes

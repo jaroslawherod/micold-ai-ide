@@ -250,6 +250,10 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
             }
         }
         PaneMsg::FocusPane(id) => focus_pane(app, id),
+        PaneMsg::FileDropped(pane, path) => {
+            return crate::shell::drops::on_file_dropped(app, pane, path)
+        }
+        PaneMsg::DropsSettled => return crate::shell::drops::on_drops_settled(app),
         PaneMsg::Resized { pane, cols, rows } => {
             if let Some(p) = project(app) {
                 app.pane_sizes.insert((p, pane), (cols, rows));
