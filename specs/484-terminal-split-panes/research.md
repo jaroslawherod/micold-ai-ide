@@ -17,7 +17,7 @@ Each entry: Decision / Rationale / Rejected.
 
 ## R4. Terminal reference durability
 **Decision**: `TerminalRef { session: SessionId, process: ProcessRef }` with `ProcessRef = Primary | Shell(ShellInstanceId)`; resolves against the workspace on load, else the pane becomes empty.
-**Rejected**: storing PTY ids — not stable across daemon restarts.
+**Reuse**: `ProcessRef` is the existing `SessionProcess` (`protocol/messages.rs`), and `TerminalRef` is the new core pair `(SessionId, SessionProcess)`; if `pane_layout.rs` cannot depend on `protocol::messages`, move the enum to `session.rs` and re-export. **Rejected**: a second enum (duplicate); storing PTY ids — not stable across daemon restarts.
 
 ## R5. Focus and input routing
 **Decision**: `PaneLayout.focused` is the single owner; keys are routed to `focused`'s `TerminalRef`, never to `core.session.active` directly; `active` is derived from it. Unfocused press is consumed by the pane (feature 023 rule).
