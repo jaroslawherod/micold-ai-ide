@@ -40,7 +40,6 @@ pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
 pub use material::chip_label;
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
-pub use material::SplitEvent;
 /// The issue list following its highlight (feature 038, FR-007): the task the shell chains, the
 /// operation under it for `tests/picker_highlight_into_view.rs` to drive, and the `Id` that test
 /// finds the highlighted row by. Named individually; `material` stays `pub(crate)`.

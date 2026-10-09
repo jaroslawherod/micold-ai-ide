@@ -10212,7 +10212,7 @@ mod panes {
 
     // ---- M3 (T026): resize, close, swap ------------------------------------------------------
 
-    use micold_client::ui::SplitEvent;
+    use micold_core::pane_layout::SplitEvent;
 
     fn wire(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
         drain(rx)

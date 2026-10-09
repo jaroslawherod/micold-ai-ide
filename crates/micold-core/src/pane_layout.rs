@@ -149,6 +149,25 @@ pub struct Placement {
     pub dividers: Vec<Divider>,
 }
 
+/// What the user did to the split, for the caller to apply to its [`PaneLayout`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitEvent {
+    /// The pointer dragged divider `index` (the order of [`Placement::dividers`]) to this share
+    /// of its split, in ten-thousandths, already within both children's minimum sizes.
+    Drag {
+        /// Which divider.
+        index: usize,
+        /// The first child's share, 0..=10000.
+        basis_points: u16,
+    },
+    /// The drag ended.
+    Release,
+    /// A double press on divider `index`: back to equal sizes.
+    Reset(usize),
+    /// A pane's header was dropped on another pane: swap their terminals.
+    Swap(PaneId, PaneId),
+}
+
 /// The split layout of one project's terminal area.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneLayout {
