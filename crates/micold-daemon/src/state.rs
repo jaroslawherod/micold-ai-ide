@@ -70,6 +70,9 @@ pub struct DrainedSignals {
     pub names: Vec<(SessionId, String)>,
 }
 
+type IssueLookupFactory =
+    Arc<dyn Fn(&Path) -> Option<Arc<dyn micold_core::github::IssueLookup>> + Send + Sync>;
+
 /// One input batch held while its session starts: serial, bytes and the targeted process.
 type HeldInput = (u64, Vec<u8>, Option<SessionProcess>);
 
@@ -102,6 +105,9 @@ pub struct DaemonState {
     /// How long `create_session` waits for a new session to be ready for its first prompt,
     /// counted from the request (feature 034, FR-017). [`FIRST_PROMPT_BOUND`] outside tests.
     first_prompt_bound: Mutex<std::time::Duration>,
+    /// Where `create_worktree`'s `github_issue` reads the issue (550): `None` outside tests, which
+    /// locates the user's `gh` per call.
+    issue_lookup: Mutex<Option<IssueLookupFactory>>,
     /// Every session start that has finished, whoever asked for it: each connection loop listens,
     /// so a window already viewing a session builds its stream once the session is live, including
     /// one an agent created (feature 034).
@@ -657,6 +663,7 @@ impl DaemonState {
             hooks: std::sync::OnceLock::new(),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
+            issue_lookup: Mutex::new(None),
             session_started: tokio::sync::broadcast::channel(64).0,
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
@@ -704,6 +711,46 @@ impl DaemonState {
             .first_prompt_bound
             .lock()
             .expect("first-prompt bound poisoned")
+    }
+
+    /// Replace how `github_issue` reaches GitHub, so a test injects a fake. The factory is given
+    /// the project's path and answers `None` for "no `gh` on this machine". Nothing else calls it.
+    pub fn set_issue_lookup(
+        &self,
+        factory: impl Fn(&Path) -> Option<Arc<dyn micold_core::github::IssueLookup>>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        *self.issue_lookup.lock().expect("issue lookup poisoned") = Some(Arc::new(factory));
+    }
+
+    /// What reads an issue for a call in `project` (550 FR-008): the injected lookup, else the
+    /// user's own `gh` found as the form finds it (the project's environment-include `PATH`, then
+    /// the process's). `None` when there is no `gh`. **Blocking**: it may source the environment.
+    pub fn issue_lookup(
+        &self,
+        project: &Path,
+    ) -> Option<Arc<dyn micold_core::github::IssueLookup>> {
+        let injected = self
+            .issue_lookup
+            .lock()
+            .expect("issue lookup poisoned")
+            .clone();
+        if let Some(factory) = injected {
+            return factory(project);
+        }
+        let vars = self.env_include_vars_for(project);
+        let gh = micold_core::github::locate_gh_on_host(
+            micold_core::github::env_include_path(&vars),
+            &std::env::var("PATH").unwrap_or_default(),
+        )?;
+        Some(Arc::new(micold_core::github::GhCli::new(gh)))
+    }
+
+    /// The label-to-type mapping as it is saved now (550 FR-005). **Blocking.**
+    pub fn label_mapping(&self) -> Vec<micold_core::issue_types::LabelTypeEntry> {
+        self.lock().catalog.label_mapping()
     }
 
     /// The AI CLI a new session runs when none is named (the Settings default).

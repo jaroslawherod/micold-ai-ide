@@ -152,6 +152,17 @@ impl Catalog {
         Ok(true)
     }
 
+    /// The label-to-type mapping as the settings file holds it now (550 FR-005): read on every
+    /// call, so a mapping the user saved after the daemon started applies to the next one. The
+    /// default when there is no store or the file is missing or unreadable. Reads a small file;
+    /// callers run it on the blocking pool.
+    pub fn label_mapping(&self) -> Vec<micold_core::issue_types::LabelTypeEntry> {
+        match &self.settings_store {
+            Some(store) => store.load().settings.issue_label_types,
+            None => Settings::default().issue_label_types,
+        }
+    }
+
     /// The current settings projected to the wire (FR-012a, FR-012b).
     pub fn settings_wire(&self) -> DaemonSettings {
         DaemonSettings {

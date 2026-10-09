@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #550
 - **Worktree branch**: feat/550_mcp-create-worktree-should-support-the-same-inputs
 - **Started**: 2026-10-08
-- **Phase**: milestone M2 (gate and reviews)
-- **Next step**: orchestrator merges M2 PR #648; then M3.
+- **Phase**: milestone M3 (gate green, PR open)
+- **Next step**: orchestrator merges the M3 PR; then close.
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #638 | Design (spec ships in it) | merged | 71d7195264cd757f40baf342ca3052ff7d541d8e |
 | #640 | M1 | merged | ec1029040d9873e913c7bea231ceae2de8294978 |
-| #648 | M2 | open | - |
+| #648 | M2 | merged | 23e2db0e4c17ba6e2b7d28893d0999a9482cd0cf |
+| (M3) | M3 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Derived type/ticket/name creates form's worktree; literal unchanged | #640 | merged |
-| M2 | T010-T012 | full | Refusals and collision hint | #648 | gate green, PR open |
-| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | - | pending |
+| M2 | T010-T012 | full | Refusals and collision hint | #648 | merged |
+| M3 | T013-T017b, T019-T021 | full | github_issue (M1 refuses it as not yet supported) | (M3 PR) | gate green, PR open |
 
 ## Decisions
 
@@ -37,6 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M3 review A (code-review high) | 1 | 146971b76647cbb0ca47e968c6954ce581f9373d:23e2db0e4c17ba6e2b7d28893d0999a9482cd0cf | 8 findings: stale tool description text and misplaced doc comment fixed; rest declined (below) |
+| M3 review B (conformance) | 1 | same | CLEAN (1 MINOR = the doc comment, fixed) |
 | M2 review A (code-review high) | 1 | befafbebc762204b57527b9eed16963c0657e4ab:13fd79b788db693ec37a762b4692dd5f1e1a38b0 | CLEAN (2 MINOR, not fixed: no hint on a lost race; test flake risk unproven) |
 | M2 review B (conformance) | 1 | same | CLEAN, Verify 23 passed |
 | Spec 550 | 1 | f31f875a52be3358279732b0a75b9977257c181c:99a3408db8a1672da2f13b0e7f9528a6525f6d6c | CHANGES: 1 MAJOR, 3 MINOR (fixed; MAJOR re-reviewed) |
@@ -58,6 +61,10 @@ GitHub lookup, label mapping and naming already live in micold-core; lookup runs
 
 ## Declined review findings
 
+- M3 A F7 (blank explicit ticket erases issue number): FR-006 says an explicit value replaces; the form lets the user clear the ticket after a pick. Kept.
+- M3 A F4 (label_mapping file read under state lock): small file; persist_service_settings already does store IO under that lock. Kept.
+- M3 A F3, F5, F6, F8 (refactor/style, label limit equals listing's 20, lookup before local checks): kept; no behaviour defect.
+- Note: no policy rule denies create_worktree today, so the 'denied caller before lookup' test (T019) is covered structurally (check_policy precedes resolve_naming) plus a no-lookup test for calls refused at parse.
 - Review A F2/B F1 (MINOR, audit target falls back to ticket/type): ticket is a reference naming the target, not free input text; kept.
 - Review A F3 (MINOR, literal replay test thin): the shipped literal tests still cover mode/remote shapes; kept.
 

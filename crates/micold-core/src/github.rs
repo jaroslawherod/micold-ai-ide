@@ -1140,6 +1140,117 @@ pub fn next_description_cursor(
     Some(next.to_string())
 }
 
+/// One issue known to be open (550 contracts/issue-lookup.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueSnapshot {
+    pub number: u64,
+    pub title: String,
+    pub labels: Vec<String>,
+}
+
+impl IssueSnapshot {
+    /// The same issue as the form's listing holds it, so the form and the tool derive names from
+    /// one type (FR-016).
+    pub fn into_issue(self) -> Issue {
+        Issue::new(self.number, self.title, self.labels, String::new())
+    }
+}
+
+/// An answer that is not an open issue: closed, or a pull request or a number that does not exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NotOpen {
+    pub closed: bool,
+}
+
+/// Why one issue could not be read for a worktree (550 FR-007).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IssueLookupError {
+    /// The number is not an open issue of the repository.
+    NotOpenIssue { closed: bool },
+    /// The lookup itself failed.
+    Load(IssueLoadError),
+}
+
+impl IssueLookupError {
+    /// The plain-language reason: the form's text for a load failure, and the not-open reasons.
+    pub fn message(&self, repo: &GithubRepo, number: u32) -> String {
+        match self {
+            Self::NotOpenIssue { closed: true } => format!("issue #{number} in {repo} is closed"),
+            Self::NotOpenIssue { closed: false } => format!(
+                "#{number} is not an open issue in {repo}: it may be a pull request or not exist"
+            ),
+            Self::Load(error) => error.message(repo),
+        }
+    }
+}
+
+/// Reading one issue by number (550 contracts/issue-lookup.md).
+pub trait IssueLookup: Send + Sync {
+    fn read_issue(&self, repo: &GithubRepo, number: u32)
+        -> Result<IssueSnapshot, IssueLookupError>;
+}
+
+/// The GraphQL document for one issue by number. One line, like [`LIST_QUERY`].
+pub const ISSUE_QUERY: &str = "query($owner: String!, $name: String!, $n: Int!) { \
+repository(owner: $owner, name: $name) { issue(number: $n) { number title state \
+labels(first: 20) { nodes { name } } } } }";
+
+/// The arguments after `gh` for one issue: only the owner, the name and the number leave the
+/// machine (FR-008). The number is the only typed (`-F`) variable.
+pub fn lookup_args(repo: &GithubRepo, number: u32) -> Vec<String> {
+    [
+        "api".to_string(),
+        "graphql".to_string(),
+        "--hostname".to_string(),
+        "github.com".to_string(),
+        "-f".to_string(),
+        format!("query={ISSUE_QUERY}"),
+        "-f".to_string(),
+        format!("owner={}", repo.owner),
+        "-f".to_string(),
+        format!("name={}", repo.name),
+        "-F".to_string(),
+        format!("n={number}"),
+    ]
+    .to_vec()
+}
+
+/// Parse `gh api graphql` stdout for [`ISSUE_QUERY`]. `data.repository` and its `issue` decide;
+/// `errors[]` decide only when there is no `data` to read, or beside a found repository when they
+/// are not the NOT_FOUND that an absent issue always comes with.
+pub fn parse_lookup(stdout: &[u8]) -> Result<Result<IssueSnapshot, NotOpen>, IssueLoadError> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
+    let unexpected = || IssueLoadError::Other("GitHub's answer had no issue".into());
+    let data = &json["data"];
+    if !data.is_object() {
+        return Err(graphql_error(&json).unwrap_or_else(unexpected));
+    }
+    let repository = &data["repository"];
+    if repository.is_null() {
+        return Err(graphql_error(&json).unwrap_or(IssueLoadError::NoAccess));
+    }
+    let node = &repository["issue"];
+    if node.is_null() {
+        let other = json["errors"]
+            .as_array()
+            .and_then(|errors| errors.iter().find(|e| e["type"] != "NOT_FOUND"));
+        return match other {
+            Some(error) => Err(graphql_error_of(error)),
+            None => Ok(Err(NotOpen { closed: false })),
+        };
+    }
+    if node["state"] != "OPEN" {
+        return Ok(Err(NotOpen { closed: true }));
+    }
+    let issue = issue_from_node(node).ok_or_else(unexpected)?;
+    Ok(Ok(IssueSnapshot {
+        number: issue.number(),
+        title: issue.title().to_string(),
+        labels: issue.labels().to_vec(),
+    }))
+}
+
 /// A scripted [`IssueSource`] for tests: answers each call with the next scripted page, search
 /// result or error, and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
 /// [`crate::git::FakeGit`].
@@ -1152,6 +1263,8 @@ pub struct FakeIssueSource {
     descriptions:
         std::sync::Mutex<std::collections::VecDeque<Result<DescriptionPage, IssueLoadError>>>,
     description_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+    lookups: std::sync::Mutex<std::collections::VecDeque<Result<IssueSnapshot, IssueLookupError>>>,
+    lookup_calls: std::sync::Mutex<Vec<(String, u32)>>,
 }
 
 impl FakeIssueSource {
@@ -1188,6 +1301,23 @@ impl FakeIssueSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push_back(result);
         self
+    }
+
+    /// Answer the next unanswered `read_issue` call with `result`.
+    pub fn with_lookup(self, result: Result<IssueSnapshot, IssueLookupError>) -> Self {
+        self.lookups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// Every `read_issue` call so far, as (`owner/name`, number).
+    pub fn lookup_calls(&self) -> Vec<(String, u32)> {
+        self.lookup_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Every `describe_open` call so far, as (`owner/name`, cursor).
@@ -1274,6 +1404,28 @@ impl IssueSource for FakeIssueSource {
                 Err(IssueLoadError::Other(
                     "FakeIssueSource: no descriptions scripted for this call".into(),
                 ))
+            })
+    }
+}
+
+impl IssueLookup for FakeIssueSource {
+    fn read_issue(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+    ) -> Result<IssueSnapshot, IssueLookupError> {
+        self.lookup_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), number));
+        self.lookups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(IssueLookupError::Load(IssueLoadError::Other(
+                    "FakeIssueSource: no lookup scripted for this call".into(),
+                )))
             })
     }
 }
@@ -1462,6 +1614,20 @@ impl IssueSource for GhCli {
         cursor: Option<&str>,
     ) -> Result<DescriptionPage, IssueLoadError> {
         self.run(descriptions_args(repo, cursor), parse_descriptions_page)
+    }
+}
+
+impl IssueLookup for GhCli {
+    fn read_issue(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+    ) -> Result<IssueSnapshot, IssueLookupError> {
+        match self.run(lookup_args(repo, number), parse_lookup) {
+            Ok(Ok(issue)) => Ok(issue),
+            Ok(Err(NotOpen { closed })) => Err(IssueLookupError::NotOpenIssue { closed }),
+            Err(error) => Err(IssueLookupError::Load(error)),
+        }
     }
 }
 

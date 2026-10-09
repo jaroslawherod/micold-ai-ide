@@ -474,7 +474,7 @@ const TOOLS: &[Tool] = &[
             fix, chore, docs, refactor, test, build, ci, perf, style), ticket and name (the \
             description) give the branch type/ticket_name and the directory type-ticket_name, as \
             the form does, with the sidebar's type and issue tags; github_issue (a GitHub issue \
-            number) will fill them from the issue but is not yet available. Pass branch, mode or \
+            number of an open issue) fills in what you leave out (ticket = number, name = title, type from its labels); explicit values win. Pass branch, mode or \
             remote, or the derived inputs, never both. A derived name that collides with an \
             existing branch is refused: use branch with mode instead. The result carries the \
             worktree row plus branch, directory, and for derived inputs type and ticket. Any \
@@ -501,7 +501,7 @@ const TOOLS: &[Tool] = &[
                     "description": "Derived only: a ticket reference, slugified as the form does; \
                         blank means none."},
                 "github_issue": {"type": "integer", "minimum": 1,
-                    "description": "Derived only: a GitHub issue number. Not yet available."},
+                    "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win."},
             })
         },
         required: &[],
@@ -827,9 +827,6 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
         return Err(OpError::invalid_input(
             "provide a branch, or type, ticket and name (or github_issue) to derive one",
         ));
-    }
-    if github_issue.is_some() {
-        return Err(OpError::invalid_input("github_issue is not supported yet"));
     }
     Ok(CreateWorktreeRequest::Derived {
         type_,
