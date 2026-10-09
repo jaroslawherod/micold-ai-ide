@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/terminal-scrollback-persistence
 - **Started**: 2026-10-02
 - **Phase**: 4-milestone
-- **Next step**: M9 in progress (T067–T073).
+- **Next step**: M9: PR open; orchestrator waits on CI and merges, then M10.
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T049–T055 | full | A damaged saved history is skipped with one notice line and one warning | #666 | merged |
 | M7 | T056–T060 | full | Removing a session deletes its saved history; a service start sweeps leftovers | #669 | merged |
 | M8 | T061–T066 | full | The stop request on Windows (event, installer, end-of-session window) | #672 | merged |
-| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | implemented, not reviewed |
+| M9 | T067–T073 | full | Saved history in the sandbox: shared with the host, host time zone | | in review |
 | M10 | T075–T077 | full | Architecture page, recorded visual pass | | pending |
 
 ## Decisions
@@ -99,6 +99,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | M8 review A (code-review high) | 1 | b9002207ce8a302e2b48f5d8312983195f3e6ebe:c458c57b6cd4adaf968f15055877e1072530fe8c | CHANGES: 2 MAJOR fixed (a stop raised before the request cell was set was dropped; the event handle closed after the first request), 3 MINOR declined (event is per user and the image check already passed; one-shot documented; installer wait by process name is bounded at 5 s) |
 | M8 review B (conformance, sonnet) | 1 | same | CLEAN: 1 MINOR (the window's wait is cut short by the process exit; as designed). Verify: windows_installer_in_use 7 passed, windows-gnu clippy clean |
+| M9 review A (code-review high) | 1 | b9aeef9b135f97104cb5eca68905079b5a23676a:c5d62f98451249a5815de8efe8dd647c66bea167 | CHANGES: 1 MAJOR fixed (a failed ensure_dir still added the mount), 3 MINOR (doc comment placement fixed; tautological tz test and no TZ-env fallback left) |
+| M9 review B (conformance, sonnet) | 1 | 8ac97157c35afbdd4ccfc60f69a4376b888568c0:b96c5ed763ef5a35e39ee528e60f35ddb8f28a6c | CLEAN: 1 MINOR (client tests have no separate red run, admitted in cycle log). Verify: image built, sandbox_real_history 6 passed |
 
 ## Declined review findings
 
@@ -116,9 +118,7 @@ Withdrawn by the tasks review (round 1): `speckit-analyze` F3 (T074 is now in M5
 
 ## Handover
 
-M9 (T067-T073) is implemented and ticked; committed on the branch (no PR yet, nothing pushed). Done: history mount (`MountSet::with_history`), `SandboxSpec.time_zone` and `-e TZ=`, launcher `ensure_dir` + iana zone in `HostFacts`, `tzdata` in the Containerfile, one-per-run missing-directory warning (`DaemonState::save_to_store`), user-guide section, `tests/sandbox_real_history.rs` (6 tests, pass under podman with `MICOLD_TEST_RUNTIME=podman`; SELinux here needs `--security-opt label=disable`, the tests pass it themselves; other sandbox_real_* tests fail on this machine for that reason, unrelated).
-Next: (1) cycle log specs/041-.../tdd/cycle-log.md for M9 (red evidence: argv tests failed before argv change; client tests were written alongside the implementation, no red run); (2) scoped gate + review A (high) in parallel, then review B + full gate (`MICOLD_SKIP_GH_LAUNCH_TEST=1 mise run gate`; `mise run image` + `mise run test-sandbox` with the podman env above, or note failures as environment); macOS cross-check `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`; (3) `git fetch --prune`, rebase on origin/main, push, open PR titled `feat(041): saved history in the sandbox (#485)`.
-Open: the M2 follow-up on `owner_only::ensure_dir` is decided: the history dir is ours, group/other bits removed is right; a failed ensure_dir only logs (history lost, sandbox starts). Pre-existing clippy failure `cloned_ref_to_slice_refs` in sandbox_real_ai_cli_sessions.rs:126 with the sandbox-real-runtime feature (not in the gate).
+None.
 
 ## Open escalation
 
