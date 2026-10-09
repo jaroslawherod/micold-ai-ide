@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M2
-- **Next step**: reviews A and B of M2, full gate, then write scratchpad pr-487-m2.md and push
+- **Next step**: orchestrator opens the M2 PR from scratchpad pr-487-m2.md, waits for CI, merges; then M3
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
-| M2 | T018–T024 | full | paste image into AI session | #TBD | implemented, in review |
+| M2 | T018–T024 | full | paste image into AI session | #TBD | gate green except six root-only tests; ready to push |
 | M3 | T025–T029 | full | sandbox container paths, refusals | | pending |
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M1 (conformance, fresh) | 1 | same | CLEAN (4 MINOR: doc order fixed; shell limit noted; no cycle-log; no widget-level FileDropped test, declined) |
 | A M2 (code-review high) | 1 | ffc7c326:e0447ebf | CLEAN (1 MINOR fixed: unopenable clipboard stays a silent empty paste) |
 | B M2 (conformance, sonnet) | 1 | same | CHANGES: 1 MAJOR (chord and middle-click paste never reached the image path; fixed via `paste_message`), 1 MINOR (comment) |
+| B M2 (re-review of fix, sonnet) | 2 | scoped fix diff | PASS (1 MINOR: empty bracketed paste on empty clipboard, harmless) |
 
 ## Declined review findings
 
