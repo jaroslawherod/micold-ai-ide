@@ -57,3 +57,12 @@ outlined pane shows where it will land. Focus stays with the terminal you moved.
 
 A terminal is sized to the pane it is in, so splitting does not resize the terminals beside it.
 A terminal that is no longer shown keeps its last size until it is shown again.
+
+## Your layout is remembered per project
+
+Each project keeps its own panes: the splits, where the dividers are, which terminal each pane
+shows and which pane has the focus. Quit and reopen the app and every project comes back as you
+left it, and switching projects switches layouts. A pane whose terminal no longer exists (its
+session was closed) comes back empty so you can pick another; the rest of the layout is kept. If a
+saved layout cannot be read, for example because it was written by a newer version of the app, the
+project opens with one pane instead. Forgetting a project forgets its layout.

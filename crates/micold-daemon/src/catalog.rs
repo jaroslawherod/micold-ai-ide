@@ -245,7 +245,11 @@ impl Catalog {
                     .collect();
 
                 ProjectSnapshot {
-                    pane_layout: None,
+                    pane_layout: self
+                        .workspace
+                        .pane_layouts
+                        .get(&p.path)
+                        .map(micold_core::pane_layout::PaneLayout::to_json),
                     path: p.path.clone(),
                     display_name: p.display_name.clone(),
                     is_git_repo: p.is_git_repo,
@@ -806,6 +810,44 @@ impl Catalog {
         self.workspace
             .foreground_by_project
             .insert(project.to_path_buf(), session);
+        self.persist()?;
+        Ok(true)
+    }
+
+    /// Store `project`'s pane layout, or clear it with `None`, persisting (feature 484, FR-013).
+    ///
+    /// Returns whether anything was written. A layout this build cannot honour (the checks of
+    /// `PaneLayout::from_json`) or one for a project the catalog does not know is rejected with
+    /// `InvalidData` and the stored layout is kept: the client sends what it holds, and a bad
+    /// message must not cost the user the layout that was working. A layout equal to the stored one
+    /// writes nothing, because the client re-sends on every change and a reconnect resends its
+    /// current layout.
+    pub fn set_pane_layout(&mut self, project: &Path, layout: Option<&str>) -> io::Result<bool> {
+        if !self.workspace.projects.iter().any(|p| p.path == project) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "pane layout for an unknown project",
+            ));
+        }
+        let parsed = match layout {
+            None => None,
+            Some(json) => Some(
+                micold_core::pane_layout::PaneLayout::from_json(json).ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "unusable pane layout")
+                })?,
+            ),
+        };
+        if self.workspace.pane_layouts.get(project) == parsed.as_ref() {
+            return Ok(false);
+        }
+        match parsed {
+            Some(l) => {
+                self.workspace.pane_layouts.insert(project.to_path_buf(), l);
+            }
+            None => {
+                self.workspace.pane_layouts.remove(project);
+            }
+        }
         self.persist()?;
         Ok(true)
     }

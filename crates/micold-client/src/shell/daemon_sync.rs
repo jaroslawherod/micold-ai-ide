@@ -1582,6 +1582,9 @@ pub fn on_connected(
     // (BUG-006). Part of the same resync as the flags and settings above: the daemon's
     // position is authoritative state, so re-read it rather than assume continuity.
     app.stamper.seed_from_catalog(&catalog);
+    // Feature 484 (FR-013): the stored panes, before the active session is viewed below, so the
+    // restored focused pane decides which session that is.
+    crate::shell::panes::restore(app, &catalog);
     adopt_mount_set(app, &catalog);
     app.daemon_catalog = Some(catalog);
     // Attach to the active project and view its active session so the daemon starts
@@ -1810,6 +1813,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
                 .contains(&t.session)
         });
         app.pane_layouts.remove(&path);
+        app.pane_saved.remove(&path);
+        app.pane_restored.remove(&path);
         app.scrollback_inflight
             .retain(|_, (session, _)| app.grids.keys().any(|t| t.session == *session));
         let remove_path = path.clone();

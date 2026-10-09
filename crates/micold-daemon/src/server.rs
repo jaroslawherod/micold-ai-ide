@@ -1136,8 +1136,10 @@ where
                 viewed_terminals = wanted;
                 sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
             }
-            // Stored in the daemon in M4 (feature 484, T032); until then it is ignored.
-            ClientMsg::SetPaneLayout { .. } => {}
+            // Feature 484 (FR-013): the daemon is the store's single writer.
+            ClientMsg::SetPaneLayout { project, layout } => {
+                state.set_pane_layout(&project, layout.as_deref());
+            }
             // Feature 034 (FR-009): the stop an agent's `stop_session` performs, so the two agree:
             // processes end, the record is `Idle`, and every window is told.
             //

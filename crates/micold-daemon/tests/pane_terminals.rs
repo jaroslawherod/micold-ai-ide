@@ -288,6 +288,43 @@ async fn set_viewed_terminals_streams_exactly_the_named_terminals_and_replaces_t
     }
 }
 
+/// A restart replaces the terminal's PTY: the viewing client's stream of the old one would stay
+/// silent, so the new one must be streamed once the session announces itself (review A, M1).
+#[tokio::test]
+async fn a_restarted_terminal_streams_again_to_the_client_viewing_it() {
+    let (project, store) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let a = SessionId::new();
+    let state = Arc::new(DaemonState::new(catalog_with(
+        project.path(),
+        store.path(),
+        &[a],
+    )));
+    let _old = state.register_session(cat(a, (80, 24)));
+    let mut client = connect(&state).await;
+    view(&mut client, vec![primary(a)]).await;
+    let first = frames_within(&mut client, Duration::from_millis(600)).await;
+    assert!(first.iter().any(|f| f.full && f.session == a));
+
+    // The restart: the old PTY goes, a new one takes its place, and the start is announced.
+    for p in state.remove_session(a) {
+        let _ = p.kill();
+    }
+    let new = state.register_session(cat(a, (80, 24)));
+    state.announce_session_started(a);
+    let _ = frames_within(&mut client, Duration::from_millis(600)).await;
+    new.write_input(b"after_restart\n").unwrap();
+    let later = frames_within(&mut client, Duration::from_millis(1000)).await;
+    assert!(
+        later
+            .iter()
+            .any(|f| f.lines.iter().any(|l| l.text.contains("after_restart"))),
+        "the new PTY's output never reached the client"
+    );
+    for p in state.remove_session(a) {
+        let _ = p.kill();
+    }
+}
+
 #[tokio::test]
 async fn a_frame_reaches_only_clients_whose_set_contains_it() {
     let (project, store) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());

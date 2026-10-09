@@ -73,6 +73,12 @@ struct App {
     /// A message re-pointed the daemon's single view (`SetViewedSession`, `SessionAttachProcess`),
     /// which replaces any set `SetViewedTerminals` named; `shell::panes::sync` resends it.
     viewed_dirty: bool,
+    /// The layout JSON last restored from the daemon or sent to it, per project (feature 484,
+    /// FR-013): a changed layout is sent as `SetPaneLayout`, an unchanged one is not.
+    pane_saved: HashMap<PathBuf, String>,
+    /// Projects whose stored layout this run has already adopted from a catalog snapshot. Only the
+    /// first snapshot restores: later ones echo what this client sent.
+    pane_restored: std::collections::HashSet<PathBuf>,
     /// The displayed terminal as of the last pane sync: the layout moves only when it changes.
     pane_synced_displayed: Option<TerminalRef>,
     /// Each pane's last measured `(cols, rows)` (feature 484, FR-014): a pane's terminal has its own

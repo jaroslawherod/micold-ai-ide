@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M3
-- **Next step**: orchestrator opens PR from scratchpad pr-484-m3.md, waits CI, merges; then M4
+- **Phase**: milestone M4
+- **Next step**: reviews A and B, gate, push; orchestrator opens PR from scratchpad pr-484-m4.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #658 | M3 | merged | 3ae9822e88b48e0f73d83400881719f6a48a777a |
 | #657 | M2 | merged | e8f3abcccfc89f5a31c27474f0ba7ec6442629e9 |
 | #656 | M1 | merged | b3372f2016f9326499e632c32f08522736fb5525 |
 | #655 | Design (spec, plan, tasks) | merged | 909f4b233cfe660881ab0cbdc62a0ad7488e5221 |
@@ -27,11 +28,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | #656 | merged |
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
-| M3 | T024–T028 | full | Resize, close, rearrange | — | in progress |
-| M4 | T029–T035 | full | Layout survives restart | — | pending |
+| M3 | T024–T028 | full | Resize, close, rearrange | #658 | merged |
+| M4 | T029–T035 | full | Layout survives restart | — | in progress |
 
 ## Decisions
 
+- M4: the client prunes gone terminals (existing `sync`) and then saves, so a terminal that vanished is dropped from the stored layout at the next change; the file keeps unresolved terminals only until the client next saves. `layout_version` stays separate from `schema_version`. `pane_layout` is held raw (`serde_json::Value`) in `StoredProjectState` so a bad shape fails that field only.
 - Clarify round 1: 3 markers agent-resolved (one pane per terminal; empty panes persist; chords Ctrl/Cmd+Shift+D/H/W/Arrow, not Ctrl+Alt+Arrow). No escalation.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -69,7 +71,7 @@ None.
 
 ## Follow-ups not done
 
-- Review-A daemon fix (restarted PTY re-streams) has no dedicated test; M3 has no daemon work, so carry to M4 if it touches the daemon.
+- Review-A daemon fix (restarted PTY re-streams): done in M4, `a_restarted_terminal_streams_again_to_the_client_viewing_it` (fails with the fix mutated away).
 - T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test. (M3: done, `divider_dragging` in App + `a_divider_drag_sends_pane_sizes_once_on_release`.)
 - Empty-pane picker is a list of buttons (one press per choice) rather than the `picker` component; revisit if review asks.
 - M2 ships chords only through the focused terminal widget (no app-level key listener): with the terminal unfocused the chords do nothing; the header buttons remain. Revisit if review asks.
