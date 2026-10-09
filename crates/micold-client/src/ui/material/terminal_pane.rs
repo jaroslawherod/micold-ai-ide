@@ -1802,6 +1802,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.publish(Message::Session(SessionMsg::ShellInstanceOpenRequested));
                     shell.capture_event();
                 }
+                KeyRouting::Pane(action) => {
+                    shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::Chord(action))));
+                    shell.capture_event();
+                }
                 KeyRouting::Copy => {
                     // Nothing selected, nothing to copy: the chord is still the terminal's, but the
                     // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule

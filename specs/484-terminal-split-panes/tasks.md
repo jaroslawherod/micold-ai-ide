@@ -68,9 +68,9 @@
 
 **Independent test**: each chord does its action and is never forwarded (contracts/keybindings.md).
 
-- [ ] T021 [P] [US3] Write failing tests: core `focus_dir(Direction)` in `crates/micold-core/src/pane_layout.rs` uses the unit-square rects (nearest neighbour; stays put at the edge); `crates/micold-client/src/keymap.rs` tests: a test enumerates feature 006's forwarded chords and asserts none equals a pane chord; existing `Ctrl/Cmd+Shift+E/T/C/V` unchanged; pane chords are rebindable where the existing shortcuts are; are checked before terminal encoding and never reach `encode`; a refused action (cap, minimum) shows a visible reason.
-- [ ] T022 [US3] Implement `focus_dir` in `crates/micold-core/src/pane_layout.rs` and `PaneAction` chords `Ctrl/Cmd+Shift+D` (split vertical), `H` (split horizontal), `W` (close focused), `Arrow` (focus) in `crates/micold-client/src/keymap.rs`, rebindable where the existing shortcuts are (research R6). Ship D/H/Arrow here; the `W` close chord is added in T027 once `close` exists. Make T021 pass.
-- [ ] T023 [US3] Docs: add the shortcut table to `docs/user-guide/terminal-panes.md` and to the shortcut reference page.
+- [x] T021 [P] [US3] Write failing tests: core `focus_dir(Direction)` in `crates/micold-core/src/pane_layout.rs` uses the unit-square rects (nearest neighbour; stays put at the edge); `crates/micold-client/src/keymap.rs` tests: a test enumerates feature 006's forwarded chords and asserts none equals a pane chord; existing `Ctrl/Cmd+Shift+E/T/C/V` unchanged; pane chords are rebindable where the existing shortcuts are; are checked before terminal encoding and never reach `encode`; a refused action (cap, minimum) shows a visible reason.
+- [x] T022 [US3] Implement `focus_dir` in `crates/micold-core/src/pane_layout.rs` and `PaneAction` chords `Ctrl/Cmd+Shift+D` (split vertical), `H` (split horizontal), `W` (close focused), `Arrow` (focus) in `crates/micold-client/src/keymap.rs`, rebindable where the existing shortcuts are (research R6). Ship D/H/Arrow here; the `W` close chord is added in T027 once `close` exists. Make T021 pass.
+- [x] T023 [US3] Docs: add the shortcut table to `docs/user-guide/terminal-panes.md` and to the shortcut reference page.
 
 ## Phase 7: User Story 4 - Resize, close and rearrange panes (P2)
 

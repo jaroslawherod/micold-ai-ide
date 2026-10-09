@@ -23,6 +23,22 @@ an accent strip, and its terminal has the focus ring. Keys go to the focused pan
 Pressing in another pane focuses it; that press only moves focus and is not sent to the program in
 the pane. Selecting and scrolling belong to the focused pane.
 
+## Keyboard shortcuts
+
+With the terminal focused, these act on the focused pane. The app takes them: the terminal never
+receives them, so they shadow the same keys with Shift in a terminal program.
+
+| Action | Linux / Windows | macOS |
+|---|---|---|
+| Split side by side | Ctrl+Shift+D | Cmd+Shift+D |
+| Split stacked | Ctrl+Shift+H | Cmd+Shift+H |
+| Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
+
+A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
+split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The
+existing Ctrl+Shift+E (release focus), T (new terminal), C and V (copy, paste) are unchanged. A
+close shortcut arrives with closing panes.
+
 ## Each pane has its own size
 
 A terminal is sized to the pane it is in, so splitting does not resize the terminals beside it.

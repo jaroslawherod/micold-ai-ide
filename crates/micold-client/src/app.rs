@@ -1123,6 +1123,8 @@ pub enum KeyRouting {
     ReleaseFocus,
     /// Open a new Regular Terminal instance for the active session (feature 011, FR-019).
     NewTerminalInstance,
+    /// A pane shortcut (feature 484): the app handles it, the terminal never sees it.
+    Pane(crate::keymap::PaneAction),
     /// Focused, but the key has no terminal meaning — drop it.
     Ignore,
 }
@@ -1139,6 +1141,7 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
         KeyOutput::Paste => KeyRouting::Paste,
         KeyOutput::ReleaseFocus => KeyRouting::ReleaseFocus,
         KeyOutput::NewTerminalInstance => KeyRouting::NewTerminalInstance,
+        KeyOutput::Pane(action) => KeyRouting::Pane(action),
         KeyOutput::Ignore => KeyRouting::Ignore,
     }
 }

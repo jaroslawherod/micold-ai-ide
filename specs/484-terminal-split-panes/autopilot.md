@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M1
-- **Next step**: orchestrator opens PR from scratchpad pr-484-m1.md, waits CI, merges; then M2
+- **Phase**: milestone M2
+- **Next step**: M2 gate + reviews, then orchestrator opens PR from scratchpad pr-484-m2.md; then M3
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #656 | M1 | merged | b3372f2016f9326499e632c32f08522736fb5525 |
 | #655 | Design (spec, plan, tasks) | merged | 909f4b233cfe660881ab0cbdc62a0ad7488e5221 |
 | #654 | Previous run (#483), not this run's | merged | 334cc99ff48ae82e60a4a107f4b76cb1ef9d5959 |
 
@@ -23,8 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) | pending (pushed; PR file in scratchpad pr-484-m1.md) | in review |
-| M2 | T021–T023 | full | Pane shortcuts (split, focus) | — | pending |
+| M1 | T001–T020, T006a | full | Live panes with focus and own PTY size (US1+US2+US5 folded: no half-wired UI; diff exceeds split threshold but no scenario split leaves a working deliverable) #656 | merged |
+| M2 | T021–T023 | full | Pane shortcuts (split, focus) | pending (PR file in scratchpad pr-484-m2.md) | in review |
 | M3 | T024–T028 | full | Resize, close, rearrange | — | pending |
 | M4 | T029–T035 | full | Layout survives restart | — | pending |
 
@@ -66,3 +67,4 @@ None.
 - Review-A daemon fix (restarted PTY re-streams) has no dedicated test; add one with M3's daemon work.
 - T018's divider-drag coalescing and drag-end flush has no M1 surface (dividers are not draggable until M3/T027): M1 sends a pane's size when the reporter sees it change, at most once per layout pass; T027 must add the drag-end flush and its test.
 - Empty-pane picker is a list of buttons (one press per choice) rather than the `picker` component; revisit if review asks.
+- M2 ships chords only through the focused terminal widget (no app-level key listener): with the terminal unfocused the chords do nothing; the header buttons remain. Revisit if review asks.

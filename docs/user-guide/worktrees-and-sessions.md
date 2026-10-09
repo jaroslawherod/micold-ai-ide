@@ -1370,6 +1370,9 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   You rarely need this: going anywhere else in the application hands the keyboard over on its
   own, so the chord is for the times you want the app's shortcuts back without leaving the
   terminal you are looking at.
+- **Pane shortcuts**: **Ctrl+Shift+D**, **H** and the arrow keys (Cmd+Shift on macOS) split and
+  move between terminal panes; the app takes them and the terminal never sees them. See
+  [Terminal panes](terminal-panes.md#keyboard-shortcuts).
 
 ### Links
 

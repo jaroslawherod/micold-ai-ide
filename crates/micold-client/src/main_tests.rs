@@ -10022,6 +10022,41 @@ mod panes {
         );
     }
 
+    /// FR-009: the split chords split the focused pane and focus the new one; the focus chords
+    /// move between panes and stay at the edge; a refused split shows its reason.
+    #[test]
+    fn pane_chords_split_and_move_focus() {
+        use micold_client::keymap::PaneAction;
+        use micold_core::pane_layout::Direction;
+        let (mut app, _ids, _rx) = app_with_sessions(1);
+        let first = layout_of(&app).focused();
+        size_pane(&mut app, first, 200, 60);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::SplitVertical));
+        let second = layout_of(&app).focused();
+        assert_ne!(second, first);
+        size_pane(&mut app, second, 100, 60);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::SplitHorizontal));
+        let third = layout_of(&app).focused();
+        assert_eq!(layout_of(&app).len(), 3);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::Focus(Direction::Up)));
+        assert_eq!(layout_of(&app).focused(), second);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::Focus(Direction::Up)));
+        assert_eq!(layout_of(&app).focused(), second, "no pane above: stays");
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::Focus(Direction::Left)));
+        assert_eq!(layout_of(&app).focused(), first);
+        pane_msg(
+            &mut app,
+            PaneMsg::Chord(PaneAction::Focus(Direction::Right)),
+        );
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::Focus(Direction::Down)));
+        assert_eq!(layout_of(&app).focused(), third);
+        // A pane too small to split shows why.
+        size_pane(&mut app, third, 4, 2);
+        pane_msg(&mut app, PaneMsg::Chord(PaneAction::SplitVertical));
+        assert_eq!(layout_of(&app).len(), 3);
+        assert!(app.pane_refusal.is_some());
+    }
+
     /// A tab-strip or sidebar choice of a terminal already shown focuses that pane.
     #[test]
     fn selecting_a_shown_terminal_focuses_its_pane() {

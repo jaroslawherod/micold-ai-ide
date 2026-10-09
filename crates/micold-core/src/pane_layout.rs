@@ -42,6 +42,19 @@ pub enum Axis {
     Horizontal,
 }
 
+/// A direction to move focus in (feature 484, FR-009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// Towards the left edge.
+    Left,
+    /// Towards the right edge.
+    Right,
+    /// Towards the top edge.
+    Up,
+    /// Towards the bottom edge.
+    Down,
+}
+
 /// One pane: a terminal, or empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pane {
@@ -323,6 +336,55 @@ impl PaneLayout {
         }
     }
 
+    /// Move focus to the nearest pane in `dir` (FR-009): judged on the unit-square tiling, the
+    /// neighbour whose edge is closest and whose extent overlaps the focused pane's most. Stays
+    /// put when there is none. True when focus moved.
+    pub fn focus_dir(&mut self, dir: Direction) -> bool {
+        const EPS: f32 = 1e-4;
+        let rects = self.rects((1.0, 1.0), (0.0, 0.0));
+        let Some((_, cur)) = rects.iter().find(|(id, _)| *id == self.focused).copied() else {
+            return false;
+        };
+        let overlap = |a0: f32, a1: f32, b0: f32, b1: f32| (a1.min(b1) - a0.max(b0)).max(0.0);
+        let mut best: Option<(PaneId, f32, f32)> = None;
+        for (id, r) in rects {
+            if id == self.focused {
+                continue;
+            }
+            let (gap, shared) = match dir {
+                Direction::Left => (
+                    cur.x - (r.x + r.w),
+                    overlap(cur.y, cur.y + cur.h, r.y, r.y + r.h),
+                ),
+                Direction::Right => (
+                    r.x - (cur.x + cur.w),
+                    overlap(cur.y, cur.y + cur.h, r.y, r.y + r.h),
+                ),
+                Direction::Up => (
+                    cur.y - (r.y + r.h),
+                    overlap(cur.x, cur.x + cur.w, r.x, r.x + r.w),
+                ),
+                Direction::Down => (
+                    r.y - (cur.y + cur.h),
+                    overlap(cur.x, cur.x + cur.w, r.x, r.x + r.w),
+                ),
+            };
+            if gap < -EPS || shared <= EPS {
+                continue;
+            }
+            let better = best.map_or(true, |(_, g, s)| {
+                gap < g - EPS || ((gap - g).abs() <= EPS && shared > s + EPS)
+            });
+            if better {
+                best = Some((id, gap, shared));
+            }
+        }
+        match best {
+            Some((id, _, _)) => self.focus(id),
+            None => false,
+        }
+    }
+
     /// Split `pane` along `axis`; the new pane comes second, takes focus and shows `candidate`
     /// unless that terminal is already shown (FR-004: never a duplicate). `pane_size` is the
     /// pane's current size and `min` the smallest pane, in the same units.
@@ -466,6 +528,53 @@ mod tests {
             assert!(!shown[i + 1..].contains(a), "duplicate terminal");
         }
         drop(d);
+    }
+
+    fn grid() -> (PaneLayout, PaneId, PaneId, PaneId) {
+        // [a | b over c]
+        let mut l = PaneLayout::single();
+        let a = l.focused();
+        let b = l.split(a, Axis::Vertical, BIG, MIN, None).unwrap();
+        let c = l.split(b, Axis::Horizontal, BIG, MIN, None).unwrap();
+        (l, a, b, c)
+    }
+
+    #[test]
+    fn focus_dir_moves_to_the_nearest_neighbour_and_stays_at_the_edge() {
+        let (mut l, a, b, c) = grid();
+        assert_eq!(l.focused(), c);
+        assert!(l.focus_dir(Direction::Up));
+        assert_eq!(l.focused(), b);
+        assert!(!l.focus_dir(Direction::Up), "no pane above");
+        assert_eq!(l.focused(), b);
+        assert!(l.focus_dir(Direction::Left));
+        assert_eq!(l.focused(), a);
+        assert!(!l.focus_dir(Direction::Left));
+        assert!(!l.focus_dir(Direction::Up));
+        assert!(!l.focus_dir(Direction::Down));
+        assert!(l.focus_dir(Direction::Right));
+        assert_eq!(
+            l.focused(),
+            b,
+            "the neighbour with the largest overlap, first in tree order"
+        );
+        assert!(l.focus_dir(Direction::Down));
+        assert_eq!(l.focused(), c);
+        assert!(!l.focus_dir(Direction::Down));
+        invariants(&l);
+    }
+
+    #[test]
+    fn focus_dir_on_a_single_pane_stays_put() {
+        let mut l = PaneLayout::single();
+        for d in [
+            Direction::Left,
+            Direction::Right,
+            Direction::Up,
+            Direction::Down,
+        ] {
+            assert!(!l.focus_dir(d));
+        }
     }
 
     #[test]

@@ -50,6 +50,7 @@ fn unfocused_routes_every_key_to_the_app() {
         KeyOutput::Paste,
         KeyOutput::ReleaseFocus,
         KeyOutput::NewTerminalInstance,
+        KeyOutput::Pane(micold_client::keymap::PaneAction::SplitVertical),
         KeyOutput::Ignore,
     ] {
         assert_eq!(route_key(false, out), KeyRouting::App);

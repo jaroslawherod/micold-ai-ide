@@ -86,6 +86,18 @@ pub struct TermMode {
     pub alt_screen: bool,
 }
 
+/// A pane shortcut (feature 484, FR-009). The close chord (`Ctrl/Cmd+Shift+W`) joins in M3, once a
+/// pane can be closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaneAction {
+    /// Split the focused pane side by side.
+    SplitVertical,
+    /// Split the focused pane stacked.
+    SplitHorizontal,
+    /// Move focus to the neighbouring pane.
+    Focus(micold_core::pane_layout::Direction),
+}
+
 /// The decoded action for a key press.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyOutput {
@@ -100,6 +112,8 @@ pub enum KeyOutput {
     /// The reserved "open a new Regular Terminal instance" chord was pressed (feature 011,
     /// FR-019; never forwarded to the PTY).
     NewTerminalInstance,
+    /// A pane shortcut (feature 484; never forwarded to the PTY).
+    Pane(PaneAction),
     /// Not handled here — let the app/subscription see it.
     Ignore,
 }
@@ -115,6 +129,10 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
     // focus-out chord above — never forwarded to the PTY either).
     if is_new_terminal_chord(&input.key, input.mods) {
         return KeyOutput::NewTerminalInstance;
+    }
+    // 1b. Pane chords (feature 484, FR-009; the same tier: never forwarded either).
+    if let Some(action) = pane_action(&input.key, input.mods) {
+        return KeyOutput::Pane(action);
     }
     // 2. Copy / paste chords.
     if let Some(action) = copy_paste_action(&input.key, input.mods) {
@@ -196,6 +214,34 @@ fn is_new_terminal_chord(key: &Key, mods: Mods) -> bool {
     #[cfg(not(target_os = "macos"))]
     {
         mods.ctrl && !mods.logo && !mods.alt
+    }
+}
+
+/// Pane chords (macOS `Cmd+Shift+D/H/Arrow`, else `Ctrl+Shift+D/H/Arrow`), built like
+/// [`is_release_chord`] (contracts/keybindings.md).
+fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {
+    use micold_core::pane_layout::Direction;
+    if !mods.shift {
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    let platform = mods.logo && !mods.ctrl && !mods.alt;
+    #[cfg(not(target_os = "macos"))]
+    let platform = mods.ctrl && !mods.logo && !mods.alt;
+    if !platform {
+        return None;
+    }
+    match key {
+        Key::Char(c) => match c.to_ascii_lowercase() {
+            'd' => Some(PaneAction::SplitVertical),
+            'h' => Some(PaneAction::SplitHorizontal),
+            _ => None,
+        },
+        Key::Named(NamedKey::ArrowLeft) => Some(PaneAction::Focus(Direction::Left)),
+        Key::Named(NamedKey::ArrowRight) => Some(PaneAction::Focus(Direction::Right)),
+        Key::Named(NamedKey::ArrowUp) => Some(PaneAction::Focus(Direction::Up)),
+        Key::Named(NamedKey::ArrowDown) => Some(PaneAction::Focus(Direction::Down)),
+        Key::Named(_) => None,
     }
 }
 
