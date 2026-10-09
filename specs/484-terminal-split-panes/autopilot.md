@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #484
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M5 (pending)
-- **Next step**: orchestrator runs M5 (T038–T041), then a new close unit (T036 visual pass already recorded in visual-pass-close.md, T037)
+- **Phase**: milestone M5 (PR ready)
+- **Next step**: orchestrator opens the M5 PR from the scratchpad body, merges, then a new close unit (T037)
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T021–T023 | full | Pane shortcuts (split, focus) | #657 | merged |
 | M3 | T024–T028 | full | Resize, close, rearrange | #658 | merged |
 | M4 | T029–T035 | full | Layout survives restart | #659 | merged |
-| M5 | T038–T041 | full | Converge: refusal text, empty-pane focus, idle CPU (found by the close unit; ships with the tdd test additions and visual-pass-close.md) | - | pending |
+| M5 | T038–T041 | full | Converge: refusal text, empty-pane focus, idle CPU (found by the close unit; ships with the tdd test additions and visual-pass-close.md) | (this unit's PR, not yet opened by the orchestrator) | in review |
 
 ## Decisions
 
@@ -58,6 +58,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 diff A | 1 | cca2237b:804ce026 | CLEAN (3 MINOR: restore pruning written back — fixed by recording pruned json as saved; persist failure left memory ahead of disk — fixed with rollback; restore once per run = last writer wins, accepted) |
 | M4 diff B | 1 | cca2237b:804ce026 | CLEAN (2 MINOR: reviewer sandbox could not run Verify, run in the gate; no tdd/ dir; inactive-project prune happens on switch, fine) |
 | M4 visual pass | - | - | not re-run: no view or style changed |
+| M5 diff A | 1 | 22039296:8e3e2122 | CLEAN (2 MINOR: Delay missed ticks fixed; 1 s unfocused cadence kept) |
+| M5 diff B | 1 | 22039296:8e3e2122 | CHANGES: 2 MAJOR (no test for T040, T039 press) fixed; tests added |
+| M5 diff B | 2 | 3056850 HEAD | CLEAN |
+| M5 visual pass | 1 | - | pass, all checks (visual-pass-close.md) |
 | Close | 1 | working tree | tdd-verify FAIL→ fixed US2-5/US5-3 tests, cap test, keymap tests; visual pass found 3 defects → M5 |
 | Tasks | 2 | e3ce4bb44072efb9b7df77aca2989996be758acd:5a7cd75a2dbce27d266c19362ff9763f1b66a99a | CHANGES: 1 MAJOR declined, 2 MINOR fixed prose only; done |
 
