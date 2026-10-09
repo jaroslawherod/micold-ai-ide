@@ -1,6 +1,6 @@
 # Feature Specification: Codex CLI and OpenCode as Session Providers
 
-**Feature Branch**: `feat/488-codex-opencode-providers`
+**Feature Branch**: `claude/project-thread-wysm57`
 
 **Created**: 2026-10-09
 
@@ -89,7 +89,7 @@ A user who runs sessions in the sandboxed runtime finds `codex` and `opencode` i
 
 **Why this priority**: sandbox users only; host sessions are complete without it.
 
-**Independent Test**: build the image, run each CLI's version command inside it, and check the sign-in files are visible in the container and read-only or writable exactly as for the existing providers.
+**Independent Test**: build the image, run each CLI's version command inside it, and check the sign-in files are visible in the container and read-only.
 
 **Acceptance Scenarios**:
 
@@ -146,7 +146,7 @@ The user guide documents each new provider: how it is detected, what a session d
 - **FR-013**: The sandbox image MUST contain both CLIs, and a sandboxed session MUST share each CLI's sign-in from the host the way existing providers do, writing nothing the existing providers would not write.
 - **FR-014**: The user guide MUST list Codex and OpenCode wherever it lists providers and document, per provider: detection, restart behaviour, naming, activity, tool-server support and sandbox sign-in.
 - **FR-015**: Existing providers' behaviour MUST NOT change; adding a provider touches the provider seam and its consumers, not a per-CLI conditional elsewhere.
-- **FR-016**: The wire protocol MUST stay compatible: an older client meeting a session of a new provider MUST NOT crash, and a new provider adds `AiCli` variants, so the protocol version MUST be bumped once for the whole feature, in one edit, as the Pi provider did (10 → 11); the handshake refuses the older peer instead of letting it fail to decode a frame.
+- **FR-016**: The wire protocol MUST stay compatible: an older client meeting a session of a new provider MUST NOT crash, and a new provider adds `AiCli` variants, so the protocol version MUST be bumped once for the whole feature, in one edit, as the Pi provider did (10 → 11, precedent only; this feature goes 38 → 39); the handshake refuses the older peer instead of letting it fail to decode a frame.
 
 ### Key Entities
 
@@ -158,7 +158,7 @@ The user guide documents each new provider: how it is detected, what a session d
 
 ### Measurable Outcomes
 
-- **SC-001**: A user can start a Codex session and an OpenCode session in a worktree in the same steps as for Claude Code, and each is running its CLI with its first output shown in the terminal within the same budget as Claude Code.
+- **SC-001**: A user can start a Codex session and an OpenCode session in a worktree in the same steps as for Claude Code, and each is running its CLI with its first output shown in the terminal; the app adds no wait beyond spawning the process (no readiness poll before spawn).
 - **SC-002**: 100% of sessions started with a new provider still report that provider after a restart.
 - **SC-003**: With a CLI missing, 100% of start attempts through the app and MCP are refused with a reason naming the missing command, and no terminal is created.
 - **SC-004**: For a provider with no activity signal, the badge is `Unknown` in 100% of observed samples.
@@ -169,7 +169,8 @@ The user guide documents each new provider: how it is detected, what a session d
 ## Assumptions
 
 - **Verified in plan (2026-10-09, see `research.md`)**: binaries `codex` / `opencode`; Codex resumes with `codex resume <id>`, OpenCode with `--session <id>`; neither accepts an app-chosen conversation id, so a session binds to the id the CLI minted (research R1); Codex records `~/.codex/sessions/**/rollout-*-<id>.jsonl` with `id` and `cwd` on line one; OpenCode's store is a database read through its own CLI; sign-in is `$CODEX_HOME/auth.json` and `~/.local/share/opencode/auth.json`.
-- **Still assumed (fallback in force)**: first-turn line shapes (no label), OpenCode JSON field names (unbound, no label), activity (`Unknown`), per-launch tool-server binding (unsupported, logged), Codex folder-trust prompt (prompt injection refused as `AsksTrust`).
+- **Probe-dependent (T001 settles them; the fallbacks stay in force until then)**: V5 for OpenCode, V8, V10, V13, V14, V15.
+- **Still assumed (fallback in force)**: first-turn line shapes (no label), OpenCode JSON field names (unbound, no label), activity (`Unknown`), per-launch tool-server binding (unsupported, logged), Codex folder-trust prompt (a directory with a recorded `trust_level` accepts prompt injection; an unrecorded one is refused as `AsksTrust`).
 - **Correction to the seam assumption**: sandbox sign-in sharing is one claude-only file today, so FR-013 means one read-only sign-in file per provider; the plan adds a required seam method (research R5). The protocol version bump is 38 → 39.
 - The existing provider seam is extended only where the plan shows a gap (conversation identity, per-provider sign-in file), with existing providers returning their old values.
 - A first-turn name is shown only if the CLI's record carries the turn in a form readable without running the CLI.
