@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M2
-- **Next step**: orchestrator opens the M2 PR from scratchpad pr-487-m2.md, waits for CI, merges; then M3
+- **Phase**: milestone M3
+- **Next step**: orchestrator pushes the branch (remote branch missing), opens the M3 PR from scratchpad pr-487-m3.md, waits for CI, merges; then M4
 
 ## Pull requests
 
@@ -19,14 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #661 | Previous run (#484) | merged | a42cf25517a42ad7a17a25a84db513fea48a4565 |
 | #662 | Design (spec, plan, tasks) | merged | ab2f9967b89658219500097833054c14634698c3 |
 | #663 | M1 drop files | merged | b1d3c18944e1172294740bffd45295af60570322 |
+| #667 | M2 paste image | merged | 3d65796a1f523c657562ab8b6ea91cee2f40ebf4 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
-| M2 | T018–T024 | full | paste image into AI session | #TBD | gate green except six root-only tests; ready to push |
-| M3 | T025–T029 | full | sandbox container paths, refusals | | pending |
+| M2 | T018–T024 | full | paste image into AI session | #667 | merged |
+| M3 | T025–T029 | full | sandbox container paths, refusals | #TBD | gate green except six root-only tests; ready to push |
 | M4 | T030–T034 | full | cleanup on delete and startup | | pending |
 
 ## Decisions
@@ -35,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2: visual pass skipped: no visible element changed (paste inserts text; errors use the existing snackbar).
 - M2: `arboard` (image-data, wayland-data-control) and `png` added; `paste_source` decides, the reducer reuses `files_dropped` for the saved path; the worktree fallback test uses a file-as-worktree (works as root).
 - M1: visual pass skipped: M1 adds no visible element (errors use the existing snackbar) and a file drag cannot be synthesised on Xvfb.
+- M3: visual pass skipped: no visible element changed (refusals use the existing snackbar). `SandboxShare` (mounts + really-mounted projects) rides on `FilesDropped`/`ImagePasted`; `shell::sandbox::share` builds it without host probes and fails closed (a notice) under the sandbox placement with no running container.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -53,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M2 (code-review high) | 1 | ffc7c326:e0447ebf | CLEAN (1 MINOR fixed: unopenable clipboard stays a silent empty paste) |
 | B M2 (conformance, sonnet) | 1 | same | CHANGES: 1 MAJOR (chord and middle-click paste never reached the image path; fixed via `paste_message`), 1 MINOR (comment) |
 | B M2 (re-review of fix, sonnet) | 2 | scoped fix diff | PASS (1 MINOR: empty bracketed paste on empty clipboard, harmless) |
+| A M3 (code-review high, fresh) | 1 | e2a5e7bd:5ef13056 | CHANGES: 1 MAJOR (state-dir container path joined with Path::join; fixed), 2 MINOR (fail-open without a running sandbox fixed; HostFacts probe removed) |
+| B M3 (conformance, fresh) | 1 | same family | CHANGES: 1 MAJOR (image paste with no running sandbox was silent; fixed with a notice), 1 MAJOR (reviewer could not run Verify; the unit ran the three test commands green), 1 MINOR (data-dir choice not unit-tested; declined) |
 
 ## Declined review findings
 

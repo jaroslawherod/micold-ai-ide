@@ -127,6 +127,16 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
             paste_source(&text, true, image_target.is_some()),
             &image_target,
         ) {
+            // A sandbox that is not running takes no image, and the user is told (FR-012).
+            (
+                PasteSource::Image,
+                Some(ImageTarget {
+                    sandbox: Err(reason),
+                    ..
+                }),
+            ) => Task::done(Message::Session(SessionMsg::InsertionFailed(
+                reason.clone(),
+            ))),
             (PasteSource::Image, Some(target)) => {
                 let target = target.clone();
                 Task::perform(
@@ -137,13 +147,13 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
                         Ok(Some(path)) => Message::Session(SessionMsg::ImagePasted {
                             terminal: target.terminal,
                             shell: target.shell,
-                            sandbox: target.sandbox.clone(),
+                            sandbox: target.sandbox.clone().ok().flatten(),
                             result: Ok(path),
                         }),
                         Err(reason) => Message::Session(SessionMsg::ImagePasted {
                             terminal: target.terminal,
                             shell: target.shell,
-                            sandbox: target.sandbox.clone(),
+                            sandbox: target.sandbox.clone().ok().flatten(),
                             result: Err(reason),
                         }),
                     },
@@ -166,7 +176,8 @@ fn text_message(text: &str, bracketed: bool) -> Message {
 struct ImageTarget {
     terminal: micold_core::protocol::messages::TerminalRef,
     shell: micold_core::path_insert::ShellKind,
-    sandbox: Option<micold_core::path_insert::SandboxShare>,
+    /// What the sandbox shares, or why there is no sandbox to save for (FR-012).
+    sandbox: Result<Option<micold_core::path_insert::SandboxShare>, String>,
     worktree: Option<(std::path::PathBuf, micold_core::path_insert::PastedLayout)>,
     fallback: micold_core::path_insert::PastedLayout,
 }
@@ -182,13 +193,12 @@ fn image_target(app: &App) -> Option<ImageTarget> {
         return None;
     }
     let (repo, session) = app.core.workspace.find_session(terminal.session)?;
-    // A sandbox that is not running takes no image: the paste goes on as text.
-    let sandbox = crate::shell::sandbox::share(app).ok()?;
+    let sandbox = crate::shell::sandbox::share(app);
     // A sandbox sees the state directory, so that is where an image goes when its worktree cannot
     // take it (FR-010); otherwise it is the app's data directory.
     let data_dir = match &sandbox {
-        Some(share) => share.mounts.state.host.clone(),
-        None => directories::ProjectDirs::from("", "", "micold-ai-ide")
+        Ok(Some(share)) => share.mounts.state.host.clone(),
+        _ => directories::ProjectDirs::from("", "", "micold-ai-ide")
             .map(|d| d.data_dir().to_path_buf())
             .unwrap_or_else(std::env::temp_dir),
     };
