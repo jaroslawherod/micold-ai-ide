@@ -372,7 +372,7 @@ impl PaneLayout {
             if gap < -EPS || shared <= EPS {
                 continue;
             }
-            let better = best.map_or(true, |(_, g, s)| {
+            let better = best.is_none_or(|(_, g, s)| {
                 gap < g - EPS || ((gap - g).abs() <= EPS && shared > s + EPS)
             });
             if better {
