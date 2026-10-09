@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Decisions
 
 - M1: the planned `CursorMoved` subscription is banned by `tests/idle_subscriptions.rs`; the pointer lives in `SplitView`'s widget state and the widget publishes `PaneMsg::FileDropped(pane, path)`; `shell::drops` coalesces with a 40 ms settle (research.md, M1 spike findings). No pane rectangles are published to app state, so T015 became `PaneLayout::pane_at` + the widget hook.
+- M2: visual pass skipped: no visible element changed (paste inserts text; errors use the existing snackbar).
 - M2: `arboard` (image-data, wayland-data-control) and `png` added; `paste_source` decides, the reducer reuses `files_dropped` for the saved path; the worktree fallback test uses a file-as-worktree (works as root).
 - M1: visual pass skipped: M1 adds no visible element (errors use the existing snackbar) and a file drag cannot be synthesised on Xvfb.
 
@@ -49,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 1 | 8f8d224863015e668a987938c539ac181beb136f:16e690ab28a89a13168bb4d176596569bd609fb8 | CHANGES: 1 MAJOR (fixed: refuse any control character when unbracketed), 2 MINOR (CursorLeft clears pointer fixed; shell-detect limit commented) |
 | A M1 (re-review of fix, sonnet) | 2 | 82d149fb7a8a2448c09cc2012611ff61bb357c5b:1257a0b81f0899a9b88f23a7c934a196f2e7a2a5 | CLEAN (1 MINOR, fmt-checked) |
 | B M1 (conformance, fresh) | 1 | same | CLEAN (4 MINOR: doc order fixed; shell limit noted; no cycle-log; no widget-level FileDropped test, declined) |
+| A M2 (code-review high) | 1 | ffc7c326:e0447ebf | CLEAN (1 MINOR fixed: unopenable clipboard stays a silent empty paste) |
+| B M2 (conformance, sonnet) | 1 | same | CHANGES: 1 MAJOR (chord and middle-click paste never reached the image path; fixed via `paste_message`), 1 MINOR (comment) |
 
 ## Declined review findings
 

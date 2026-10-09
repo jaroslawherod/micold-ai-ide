@@ -25,8 +25,11 @@ pub struct Rgba {
 /// The image on the system clipboard. `Ok(None)` when it holds no image (the caller then pastes as
 /// before); `Err` when it holds one that could not be read.
 pub fn read_clipboard() -> Result<Option<Rgba>, String> {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|e| format!("Nothing was inserted: the clipboard could not be opened ({e})."))?;
+    // A clipboard that cannot be opened cannot be known to hold an image: an empty paste stays
+    // the silent no-op it always was.
+    let Ok(mut clipboard) = arboard::Clipboard::new() else {
+        return Ok(None);
+    };
     match clipboard.get_image() {
         Ok(img) => Ok(Some(Rgba {
             width: img.width,
@@ -127,10 +130,10 @@ fn write_file(
 /// Add [`PastedLayout::exclude_line`] to the repository's `info/exclude`, once. The file is the
 /// one `git rev-parse --git-path info/exclude` names from `worktree`, which linked worktrees share.
 fn append_exclude(worktree: &Path) -> std::io::Result<()> {
-    let out = Command::new("git")
-        .args(["rev-parse", "--git-path", "info/exclude"])
-        .current_dir(worktree)
-        .output()?;
+    let mut cmd = Command::new("git");
+    cmd.args(["rev-parse", "--git-path", "info/exclude"])
+        .current_dir(worktree);
+    let out = micold_core::process::no_window(&mut cmd).output()?;
     if !out.status.success() {
         return Err(std::io::Error::other("not a git repository"));
     }

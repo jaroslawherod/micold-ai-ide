@@ -121,6 +121,8 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
     let image_target = image_target(app);
     iced::clipboard::read().then(move |c| {
         let text = c.unwrap_or_default();
+        // Whether an image is there is only learned by reading it, so `has_image` is optimistic
+        // here and `save_clipboard_image` falls back to an empty paste when there is none.
         match (
             paste_source(&text, true, image_target.is_some()),
             &image_target,

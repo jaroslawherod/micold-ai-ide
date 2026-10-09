@@ -1641,10 +1641,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     }
                     state.reporting_button = Some(1);
                     state.reported_cell = Some((col, line));
-                } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
-                    shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                        keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
-                    )));
+                } else {
+                    shell.publish(paste_message(
+                        clipboard.read(ClipboardKind::Standard),
+                        self.grid.bracketed_paste(),
+                    ));
                 }
                 shell.capture_event();
                 return;
@@ -1817,11 +1818,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.capture_event();
                 }
                 KeyRouting::Paste => {
-                    if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
-                        shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                            keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
-                        )));
-                    }
+                    shell.publish(paste_message(
+                        clipboard.read(ClipboardKind::Standard),
+                        self.grid.bracketed_paste(),
+                    ));
                     shell.capture_event();
                 }
                 KeyRouting::Ignore => {}
@@ -1902,11 +1902,41 @@ fn to_keymap_key(key: &keyboard::Key) -> Option<keymap::Key> {
     }
 }
 
+/// What the paste chord and middle-click publish (feature 487, FR-006, FR-009): the clipboard's
+/// text when it has any, exactly as before; otherwise a request for the shell's paste, which saves
+/// an image on the clipboard for an AI session (and pastes nothing when there is none).
+fn paste_message(text: Option<String>, bracketed: bool) -> Message {
+    match text {
+        Some(text) if !text.is_empty() => Message::Session(SessionMsg::TerminalBytes(
+            keymap::paste_bytes(&text, bracketed),
+        )),
+        _ => Message::Session(SessionMsg::TerminalPasteRequested),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Bin unit tests for the pane's pointer→grid mapping (feature 006 US2, T016). Run with
     //! `cargo test --features gui`.
     use super::*;
+
+    #[test]
+    fn a_paste_with_text_sends_it_and_one_without_asks_for_the_shells_paste() {
+        let bytes = |m: Message| match m {
+            Message::Session(SessionMsg::TerminalBytes(b)) => Some(b),
+            _ => None,
+        };
+        assert_eq!(
+            bytes(paste_message(Some("hi".into()), false)),
+            Some(b"hi".to_vec())
+        );
+        for none in [None, Some(String::new())] {
+            assert!(matches!(
+                paste_message(none, false),
+                Message::Session(SessionMsg::TerminalPasteRequested)
+            ));
+        }
+    }
 
     // --- Left-press routing: local selection vs mouse report (FR-013a / FR-013b) ---
 
