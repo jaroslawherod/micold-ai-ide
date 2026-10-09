@@ -354,6 +354,7 @@ mod tests {
                     container: PathBuf::from("/run/token"),
                 },
                 credentials: Vec::new(),
+                history: None,
             };
             Fixture {
                 _tmp: tmp,

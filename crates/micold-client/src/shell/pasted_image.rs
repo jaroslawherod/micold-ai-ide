@@ -303,6 +303,7 @@ mod tests {
                 container: PathBuf::from("/run/token"),
             },
             credentials: Vec::new(),
+            history: None,
         };
         let plan = plan_insertion(
             &[path],

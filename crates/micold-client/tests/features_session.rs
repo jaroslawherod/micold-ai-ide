@@ -1004,6 +1004,7 @@ mod drops {
                     container: PathBuf::from("/run/token"),
                 },
                 credentials: Vec::new(),
+                history: None,
             },
             mounted: vec!["/mnt/host/p".to_string()],
         }
