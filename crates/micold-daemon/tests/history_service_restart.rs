@@ -422,8 +422,8 @@ fn a19_a_file_of_random_bytes_starts_the_session_with_no_history_and_one_warning
 
     assert_eq!(
         lines.iter().filter(|l| !l.is_empty()).collect::<Vec<_>>(),
-        vec!["new output"],
-        "as a session with no saved history: no separator, nothing of the file"
+        vec!["── earlier output could not be restored ──", "new output"],
+        "as a session with no saved history but for the notice (M6): no separator, nothing of the file"
     );
     let warned = naming(&log, id);
     assert_eq!(warned.len(), 1, "one warning naming the session: {log:#?}");
