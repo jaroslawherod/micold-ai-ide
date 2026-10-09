@@ -185,6 +185,7 @@ impl<'a> Terminal<'a> {
                 session: self.session,
                 serial,
                 bytes: typed.clone().into_bytes(),
+                process: None,
             }))
             .await
             .expect("send input");
