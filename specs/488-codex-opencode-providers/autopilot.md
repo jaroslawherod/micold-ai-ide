@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
 - **Phase**: milestone M6
-- **Next step**: M6 gate + reviews A and B, then the orchestrator pushes and opens the PR from scratchpad/pr-488-m6.md
+- **Next step**: orchestrator pushes and opens the M6 PR from scratchpad/pr-488-m6.md, waits for CI, merges, then the close unit
 
 ## Pull requests
 
