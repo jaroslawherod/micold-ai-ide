@@ -547,3 +547,56 @@ fn worktree_reason(failure: ops::CreateFailure, branch: &str) -> String {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::naming::{ConventionalType, DerivedNames};
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::JsonFileStore;
+
+    fn run(number: u8, status: RunStatus) -> Run {
+        Run {
+            number,
+            provider: AiCli::ClaudeCode,
+            names: DerivedNames {
+                dir_name: format!("feat-login-page-{number}"),
+                branch: format!("feat/login-page-{number}"),
+            },
+            session: None,
+            status,
+        }
+    }
+
+    /// FR-018: a group that has a winner takes no second pick, even of a run that could be picked;
+    /// the winner and every status stay as they were.
+    #[test]
+    fn a_second_pick_on_a_group_with_a_winner_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut catalog = Catalog::load(
+            Box::new(JsonFileStore::at(dir.path().join("catalog.json"))),
+            Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+        );
+        let project = dir.path().join("project");
+        let group = RunGroup {
+            id: GroupId::new(),
+            name: "login page".into(),
+            naming: WorktreeNaming {
+                type_: Some(ConventionalType::Feat),
+                ticket: None,
+                name: "login page".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "0".repeat(40),
+            created: SystemTime::UNIX_EPOCH,
+            runs: vec![run(1, RunStatus::Picked), run(2, RunStatus::Prompted)],
+            winner: Some(1),
+        };
+        let mut runs = Runs::default();
+        runs.projects.insert(project.clone(), vec![group.clone()]);
+
+        assert!(runs.pick(&mut catalog, &project, group.id, 2).is_none());
+        assert_eq!(runs.group(&mut catalog, &project, group.id), Some(group));
+    }
+}

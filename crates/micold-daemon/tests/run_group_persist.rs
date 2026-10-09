@@ -11,9 +11,8 @@
 #[path = "support/runs.rs"]
 mod runs_support;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::os::unix::fs::MetadataExt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
 use micold_core::session::AiCli;
@@ -34,8 +33,8 @@ fn runs_dir_names(s: &Sandbox) -> Vec<String> {
     names
 }
 
-/// W5: the group is on disk by the time its first `RunGroupsChanged` arrives, every read of the
-/// file while the runs progress is a whole JSON document, and once they settle the file is all
+/// W5: the group is on disk by the time its first `RunGroupsChanged` arrives, each write replaces the
+/// file whole (temp file, then rename), and once they settle the file is all
 /// that is left in the runs directory (no temporary file).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn w5_the_runs_file_holds_the_group_before_the_first_push_and_is_written_whole() {
@@ -44,25 +43,6 @@ async fn w5_the_runs_file_holds_the_group_before_the_first_push_and_is_written_w
     let project = s.project();
     let path = s.runs_path();
     let mut client = window(&s.state, &project).await;
-
-    // A reader that keeps opening the file while the runs are written and progress.
-    let stop = Arc::new(AtomicBool::new(false));
-    let reader = {
-        let (stop, path) = (Arc::clone(&stop), path.clone());
-        std::thread::spawn(move || {
-            let mut reads = 0usize;
-            while !stop.load(Ordering::Relaxed) {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    if let Err(err) = serde_json::from_str::<serde_json::Value>(&text) {
-                        panic!("a partial runs file was observable ({err}): {text:?}");
-                    }
-                    reads += 1;
-                }
-                std::thread::sleep(Duration::from_millis(1));
-            }
-            reads
-        })
-    };
 
     let (answer, pushes) = request(&mut client, 1, create_msg(1, &project, vec![CLAUDE; 2])).await;
     let id = created(&answer);
@@ -73,6 +53,12 @@ async fn w5_the_runs_file_holds_the_group_before_the_first_push_and_is_written_w
             .expect("the accepted group is pushed"),
     };
     assert!(first.iter().any(|g| g.id == id), "the push holds the group");
+    // Keep the file as it is now alive under a second name, outside the runs directory. A write
+    // that replaces the file (temp file, then rename) leaves this inode whole and gives the path a
+    // new one; an in-place write would show through the link and keep the inode.
+    let snapshot = s.store.path().join("runs-snapshot.json");
+    std::fs::hard_link(&path, &snapshot).unwrap();
+    let snapshot_inode = std::fs::metadata(&snapshot).unwrap().ino();
     let on_disk = s.on_disk();
     assert!(
         on_disk.groups.iter().any(|g| g.id == id),
@@ -81,9 +67,13 @@ async fn w5_the_runs_file_holds_the_group_before_the_first_push_and_is_written_w
     );
 
     let group = settled(&mut client, id).await;
-    stop.store(true, Ordering::Relaxed);
-    let reads = reader.join().expect("every read saw a whole file");
-    assert!(reads > 0, "the reader saw the file");
+    assert_ne!(
+        std::fs::metadata(&path).unwrap().ino(),
+        snapshot_inode,
+        "the runs file is replaced by a rename, never rewritten in place"
+    );
+    let kept = std::fs::read_to_string(&snapshot).unwrap();
+    serde_json::from_str::<serde_json::Value>(&kept).expect("the replaced file stayed whole");
     assert_eq!(
         s.on_disk().groups,
         vec![group],
