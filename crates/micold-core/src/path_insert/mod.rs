@@ -387,6 +387,45 @@ mod tests {
             );
         }
 
+        // Unix only: a backslash is a file name character there.
+        #[cfg(unix)]
+        #[test]
+        fn a_backslash_name_is_quoted_in_bash_form_for_a_sandbox_under_fish() {
+            let f = fixture();
+            let file = f.root.join("proj").join("a\\b");
+            std::fs::write(&file, b"x").unwrap();
+            let m = mounted(&f);
+            let plan = plan_insertion(
+                std::slice::from_ref(&file),
+                ShellKind::Fish,
+                InsertTarget::Sandbox(&f.mounts, &m),
+            );
+            // Fish would double the backslash; the container's bash would read that as two.
+            assert_eq!(
+                plan.text().unwrap(),
+                format!("'{}/proj/a\\b'", f.root.to_string_lossy())
+            );
+        }
+
+        #[test]
+        fn the_innermost_project_wins_when_one_sits_inside_another() {
+            let mut f = fixture();
+            std::fs::create_dir_all(f.root.join("proj/inner")).unwrap();
+            f.mounts.projects[0].container = PathBuf::from("/mnt/outer");
+            let mut inner = ProjectMount::project_for(f.root.join("proj/inner"), false);
+            inner.container = PathBuf::from("/mnt/inner");
+            f.mounts.projects.push(inner);
+            let file = f.root.join("proj/inner/x.png");
+            std::fs::write(&file, b"x").unwrap();
+            let m = vec!["/mnt/outer".to_string(), "/mnt/inner".to_string()];
+            let plan = plan_insertion(
+                &[file],
+                ShellKind::Posix,
+                InsertTarget::Sandbox(&f.mounts, &m),
+            );
+            assert_eq!(plan.accepted[0].shown, PathBuf::from("/mnt/inner/x.png"));
+        }
+
         #[test]
         fn a_windows_mapping_writes_container_separators() {
             let mut f = fixture();

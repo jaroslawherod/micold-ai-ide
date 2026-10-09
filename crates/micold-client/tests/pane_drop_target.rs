@@ -2,9 +2,24 @@
 //! or not, and to none when the pointer is over no pane. The same gate style as feature 484's pane
 //! geometry tests: the layout is the real one, only the pointer is a number.
 
-use micold_core::pane_layout::{Axis, PaneLayout};
+mod support;
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use iced::advanced::widget::Tree;
+use iced::advanced::{layout, mouse, Layout, Shell};
+use iced::{window, Event, Point, Rectangle, Size};
+
+use micold_client::app::{Message, State};
+use micold_client::features::session::{Msg as SessionMsg, PaneMsg};
+use micold_client::ui::panes::{self, PaneArea};
+use micold_core::link::LinkContext;
+use micold_core::pane_layout::{Axis, PaneId, PaneLayout};
 use micold_core::protocol::messages::{SessionProcess, TerminalRef};
 use micold_core::session::SessionId;
+use micold_core::theme::ColorScheme;
+use support::layout::{renderer, WINDOW};
 
 const AREA: (f32, f32) = (1000.0, 600.0);
 const MIN: (f32, f32) = (10.0, 10.0);
@@ -58,13 +73,75 @@ fn a_single_pane_takes_every_drop_inside_the_area() {
     );
 }
 
-/// The widget is what carries the pointer to that function, and the pane list is what carries the
+/// Drive the real pane view (`ui::panes::view`, so the `SplitView` and its `.on_file_drop(`
+/// wiring) with a pointer move and a file drop, and return what it published.
+fn drop_at(pointer: (f32, f32), path: &str) -> Vec<Message> {
+    let (layout, _, _) = split();
+    let state = State::default();
+    let grids = HashMap::new();
+    let area = PaneArea {
+        layout: &layout,
+        grids: &grids,
+        refusal: None,
+    };
+    let links = LinkContext {
+        host_names: Vec::new(),
+        windows_host: false,
+        sandbox: None,
+    };
+    let mut element = panes::view(&state, &area, None, 0, ColorScheme::Dark, &links);
+    let renderer = renderer();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let viewport = Rectangle::with_size(WINDOW);
+    let mut messages = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    let mut clipboard = iced::advanced::clipboard::Null;
+    for event in [
+        Event::Mouse(mouse::Event::CursorMoved {
+            position: Point::new(pointer.0, pointer.1),
+        }),
+        Event::Window(window::Event::FileDropped(PathBuf::from(path))),
+    ] {
+        element.as_widget_mut().update(
+            &mut tree,
+            &event,
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut clipboard,
+            &mut shell,
+            &viewport,
+        );
+    }
+    // The view also reports its pane sizes; only the drops matter here.
+    messages.retain(|m| dropped(m).is_some());
+    messages
+}
+
+fn dropped(m: &Message) -> Option<(PaneId, &PathBuf)> {
+    match m {
+        Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path))) => Some((*pane, path)),
+        _ => None,
+    }
+}
+
+/// The widget is what carries the pointer to `pane_at`, and the pane list is what carries the
 /// answer to the terminal: both are wired where the panes are drawn.
 #[test]
-fn the_pane_tiles_report_file_drops() {
-    let src = include_str!("../src/ui/panes.rs");
-    assert!(src.contains(".on_file_drop("), "ui/panes.rs");
-    let split = include_str!("../src/ui/material/split_view.rs");
-    assert!(split.contains("FileDropped"), "split_view.rs");
-    assert!(split.contains(".pane_at("), "split_view.rs");
+fn a_file_dropped_on_the_pane_view_is_reported_with_the_pane_under_the_pointer() {
+    let (_, left, right) = split();
+    let got = drop_at((100.0, 300.0), "/tmp/a.png");
+    let [m] = got.as_slice() else {
+        panic!("{got:?}");
+    };
+    assert_eq!(dropped(m), Some((left, &PathBuf::from("/tmp/a.png"))));
+    let got = drop_at((1000.0, 300.0), "/tmp/b.png");
+    let [m] = got.as_slice() else {
+        panic!("{got:?}");
+    };
+    assert_eq!(dropped(m), Some((right, &PathBuf::from("/tmp/b.png"))));
 }

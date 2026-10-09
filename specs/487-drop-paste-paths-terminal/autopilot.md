@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #487
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M4
-- **Next step**: orchestrator pushes if needed, opens the M4 PR from scratchpad pr-487-m4.md, waits for CI, merges; then close
+- **Phase**: close
+- **Next step**: final review of the close diff, gate, push; orchestrator opens the close PR from scratchpad pr-487-close.md
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #663 | M1 drop files | merged | b1d3c18944e1172294740bffd45295af60570322 |
 | #667 | M2 paste image | merged | 3d65796a1f523c657562ab8b6ea91cee2f40ebf4 |
 | #671 | M3 sandbox container paths | merged (rebase) | 567676fc070508f04ed368aa11f278b2ae2e5394 (two Windows test fixes added on top by the orchestrator: host-equals-container test now #[cfg(unix)] with a mapped cross-platform twin) |
+| #675 | M4 cleanup | merged (rebase) | 474f5937d83f3afbb72677325991d63571479585 |
+| TBD | Close (TDD remediation T035–T042, spec closed) | in progress | |
 
 ## Milestones
 
@@ -29,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | drop files insert quoted paths | #663 | merged |
 | M2 | T018–T024 | full | paste image into AI session | #667 | merged |
 | M3 | T025–T029 | full | sandbox container paths, refusals | #671 | merged |
-| M4 | T030–T034 | full | cleanup on delete and startup | #TBD | gate green except six root-only tests; reviews A and B CLEAN; PR text in scratchpad pr-487-m4.md |
+| M4 | T030–T034 | full | cleanup on delete and startup | #675 | merged |
 
 ## Decisions
 
@@ -59,6 +61,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M2 (re-review of fix, sonnet) | 2 | scoped fix diff | PASS (1 MINOR: empty bracketed paste on empty clipboard, harmless) |
 | A M3 (code-review high, fresh) | 1 | e2a5e7bd:5ef13056 | CHANGES: 1 MAJOR (state-dir container path joined with Path::join; fixed), 2 MINOR (fail-open without a running sandbox fixed; HostFacts probe removed) |
 | B M3 (conformance, fresh) | 1 | same family | CHANGES: 1 MAJOR (image paste with no running sandbox was silent; fixed with a notice), 1 MAJOR (reviewer could not run Verify; the unit ran the three test commands green), 1 MINOR (data-dir choice not unit-tested; declined) |
+
+| Close converge | 1 | 474f5937 | converged: all FRs/SCs built (M3 B had no round 2 and M4 rows were prose; code checked) |
+| Close tdd-verify | 1 | 474f5937 | BLOCKED (test-after, 3 surviving mutants); remediated T035–T042, verdict kept as audited |
 
 ## Declined review findings
 
