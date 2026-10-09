@@ -584,3 +584,38 @@ existed and failed before the implementation.
   `a_forbidden_error_elsewhere_than_the_checks_is_still_no_access` passed at once (it pins the tolerance's width) and is held by that
   design: a tolerance of every `FORBIDDEN` would fail it.
 - green: `pull_request_source`, `pull_request_parse`, `pull_request_failure` all pass.
+
+### Follow-up M3 Review B F2 (post-close, 2026-10-09): red by mutation for T024 and T025
+
+T024 and T025 were written after the wiring. Each was now shown red under a mutant of the code it pins, one mutant per run
+(`cargo test -p micold-client --bin micold-ai-ide -- pr_status_`, and `--test pr_status_is_read_only_on_named_events`), then reverted.
+SH = `shell/pr_status.rs`, DS = `shell/daemon_sync.rs`, RD = `features/pr_status.rs`. Test names drop the `pr_status_` prefix.
+
+Gate (T024), all red:
+- an extra `start(...)` in SH `listing_arrived`, and an extra `enabled_changed(...)` in the DS `Attached` arm: `a_read_starts_from_one_line_and_the_shell_entry_points_are_pinned`
+- an extra `Msg::ListingArrived` in SH `enabled_changed`, and `listing_arrived` moved into the `Attached` arm: `the_listing_reaches_the_reducer_from_the_catalog_arm_only`
+- a second `PullRequestSource::read` in SH, and the `pull_requests` factory used in DS: `the_source_is_read_from_one_place`
+- a title logged in SH `log_outcome`, and an address logged in DS: `a_pull_requests_title_and_address_are_never_logged`
+
+T025 (`main_tests.rs`), all red:
+- `branches()` sorted / detached mapped to `""` / `start` also sending `WorktreeRefresh`: `reads_the_listed_branches_after_attached_and_the_listing` (U89, FR-018a)
+- `awaiting_listing` guard removed in RD: `a_later_listing_starts_nothing`, `refresh_ack_reads_after_the_control_is_idle`
+- non-GitHub remote ends as `Passing`: `without_a_github_remote_never_calls_the_source_and_clears`; gh-not-found as `Passing`: `without_gh_never_calls_the_source_and_clears`
+- `refresh_ended` dropped from the `OperationOk` arm: `refresh_ack_reads_after_the_control_is_idle`; from the timeout handler: `refresh_timed_out_reads_too`; from the `OperationError` arm: `refresh_failed_reads_too` (new test, that path had none)
+- `notify_error` on the remotes timeout: `refresh_then_a_failed_reading_adds_nothing_to_the_refresh`, `remotes_unanswered_for_ten_seconds_keep_the_statuses`; on `RateLimited`: `a_finished_reading_changes_nothing_else_and_reports_nothing`; on the remotes `OperationError`: `a_failed_remotes_request_keeps_the_statuses_without_a_notice`
+- `Msg::Tick` returning `Task::none()`: `tick_starts_a_reading` and the four tick-based tests
+- the `enabled` check removed: `tick_with_the_switch_off_starts_nothing`; `*again = true` removed: `tick_and_refreshes_during_a_reading_add_one_call_when_it_ends`; `pause_until` dropped: `tick_after_rate_limited_adds_no_call`
+- `Passing` clearing: `tick_after_passing_keeps_the_statuses_and_reads_again`; `Unavailable` not clearing: `tick_after_unavailable_clears_and_reads_again`; timeout as `Unavailable`: `remotes_unanswered_for_ten_seconds_keep_the_statuses`; `None` remotes as `Unavailable`: `a_failed_remotes_request_keeps_the_statuses_without_a_notice`
+- `Released` removed from project switch / disconnect: `a_project_switch_clears_and_reads_nothing`, `a_disconnect_clears_and_reads_nothing`; `if active` flipped in `Refused` / `Displaced`: `refused_as_busy_clears_and_reads_nothing`, `displaced_from_another_project_keeps_the_statuses`; `Msg::Held` update removed: `a_take_over_reads_once` and nearly every `pr_status_*`
+- switch on not starting / off not clearing: `the_switch_reads_once_when_turned_on_and_clears_when_turned_off`
+- a Finished toggling `refreshing`: `a_finished_reading_changes_nothing_else_and_reports_nothing`
+- source read synchronously in `on_remotes`: `selection_is_applied_while_the_source_is_reading` hangs on `BlockingSource` (killed after ~20 minutes): red by hang, no assertion message; no assertion-level mutant was found for it.
+
+Mutants that first survived, and the test strengthened to kill each:
+- `statuses.extend(..)` instead of replace: `tick_replaces_the_status_and_nothing_else` now answers an empty map third and asserts empty statuses
+- timer guard `unanswered` removed: `the_timer_of_an_answered_reading_changes_nothing` now sends a stale-request timer during a reading
+- same-value early return removed: `the_switch_reads_once_...` now repeats `settings(true)` after the reading ended and asserts nothing is sent
+- `refresh_failed_reads_too` added (see above)
+
+Not covered: FR-026's "source never called" with no GitHub remote is held only through call counts and the clear. After the test edits the
+six mutants that touch the edited tests were rerun red and the edited tests pass on the unmutated code; the gate then ran on the final tree.
