@@ -299,7 +299,7 @@ on every host, and shows the host's local time in the separator.
 
 - [x] T075 [P] Update `docs/development/architecture.md`: the `terminal_history` core module, the daemon's `history` module, where capture, carry, save, load and seed happen, and the stop request.
 - [x] T076 Run [quickstart.md](./quickstart.md) Part B with the `visual-pass` skill, save the screenshots under `specs/041-terminal-scrollback-persistence/evidence/`, and record B12 to B15 and the three manual Windows checks as run, not run, or covered by Part A, with the reason.
-- [ ] T077 Run `mise run gate` and `cargo check --target aarch64-apple-darwin`; confirm every file under [quickstart.md](./quickstart.md) Part A exists and passes.
+- [x] T077 Run `mise run gate` and `cargo check --target aarch64-apple-darwin`; confirm every file under [quickstart.md](./quickstart.md) Part A exists and passes.
 
 ---
 
