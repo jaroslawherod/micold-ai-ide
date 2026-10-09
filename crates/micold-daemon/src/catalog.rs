@@ -1152,6 +1152,30 @@ impl Catalog {
         Ok(owner)
     }
 
+    /// The worktree directory `session` runs in, or `None` for an unknown session or one that runs
+    /// in its project's root (feature 487: that is where its pasted images are kept).
+    pub fn session_worktree_dir(&self, session: SessionId) -> Option<PathBuf> {
+        let (project, s) = self.workspace.find_session(session)?;
+        matches!(s.location, SessionLocation::Worktree(_)).then(|| s.location.cwd(project))
+    }
+
+    /// Every worktree directory some session, archived or not, was run in (feature 487, FR-014).
+    pub fn session_worktree_dirs(&self) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = self
+            .workspace
+            .sessions
+            .iter()
+            .flat_map(|(project, list)| {
+                list.iter()
+                    .filter(|s| matches!(s.location, SessionLocation::Worktree(_)))
+                    .map(|s| s.location.cwd(project))
+            })
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        dirs
+    }
+
     /// The non-archived, unnamed sessions of `project` as `(id, cwd)` pairs — the candidates for empty-session
     /// pruning (T056). Already-archived sessions are skipped (never revived or re-counted — the
     /// anti-resurrection invariant, main `93a0a08`). The caller checks each cwd for a recorded AI-CLI

@@ -80,11 +80,11 @@
 
 **Independent test**: paste an image, delete the session: the file is gone and a dropped file is untouched.
 
-- [ ] T030 [P] [US4] Write failing unit tests in `crates/micold-core/src/path_insert/pasted.rs`: `orphans(roots, live_sessions)` returns only `pasted/<id>` dirs of non-live sessions and `.micold-pasted/*` entries of non-live sessions, never a path outside a `pasted` root (SC-005).
-- [ ] T031 [US4] Implement `PastedLayout::orphans` in `crates/micold-core/src/path_insert/pasted.rs` until T030 passes.
-- [ ] T032 [P] [US4] Write failing daemon tests in `crates/micold-daemon/tests/pasted_cleanup.rs`: `delete_session` removes `<worktree>/.micold-pasted/<id>` and `<data|state>/pasted/<id>` and leaves a dropped file and other sessions' dirs; the start sweep removes `pasted/<dead-id>` and known worktrees' stale `.micold-pasted/*` (SC-005).
-- [ ] T033 [US4] Implement the removal in `delete_session` and the startup sweep in `crates/micold-daemon/src/state.rs` until T032 passes.
-- [ ] T034 [US4] Add the cleanup paragraph to `docs/user-guide/terminal-panes.md`.
+- [x] T030 [P] [US4] Write failing unit tests in `crates/micold-core/src/path_insert/pasted.rs`: `orphans(roots, live_sessions)` returns only `pasted/<id>` dirs of non-live sessions and `.micold-pasted/*` entries of non-live sessions, never a path outside a `pasted` root (SC-005).
+- [x] T031 [US4] Implement `PastedLayout::orphans` in `crates/micold-core/src/path_insert/pasted.rs` until T030 passes.
+- [x] T032 [P] [US4] Write failing daemon tests in `crates/micold-daemon/tests/pasted_cleanup.rs`: `delete_session` removes `<worktree>/.micold-pasted/<id>` and `<data|state>/pasted/<id>` and leaves a dropped file and other sessions' dirs; the start sweep removes `pasted/<dead-id>` and known worktrees' stale `.micold-pasted/*` (SC-005).
+- [x] T033 [US4] Implement the removal in `delete_session` and the startup sweep in `crates/micold-daemon/src/state.rs` until T032 passes.
+- [x] T034 [US4] Add the cleanup paragraph to `docs/user-guide/terminal-panes.md`.
 
 **Checkpoint**: M4 ships.
 
