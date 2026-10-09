@@ -462,7 +462,7 @@ mod tests {
         fn a_missing_file_is_judged_by_its_parent() {
             let f = fixture();
             let m = mounted(&f);
-            let inside = f.root.join("proj/not-yet.png");
+            let inside = f.root.join("proj").join("not-yet.png");
             let outside = f.root.join("elsewhere/not-yet.png");
             let plan = plan_insertion(
                 &[inside.clone(), outside, f.root.join("nodir/x.png")],
