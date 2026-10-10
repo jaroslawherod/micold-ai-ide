@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: design PR
-- **Next step**: merge the design PR, then milestone M1
+- **Phase**: M1
+- **Next step**: M1 PR: full gate, push, open, merge; then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #694 | design (spec, plan, tasks) | merged | 984ef002 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | — | pending |
+| M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | — | built, reviewed |
 | M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | — | pending |
 | M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | — | pending |
 | M4 | T039–T046 | light | warning look at threshold; Settings → Environment switch, threshold, statement | — | pending |
@@ -46,8 +47,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 9b2c2be0c4f91c4d56352d31de30d7e240d7d52b:149cda625a4e7942faafdff528924971fb1bd223 | CLEAN (3 MINOR, all fixed: FR-019 + US3 scenario 6 for account change, FR-007 single 5-minute interval, checklist testable item unticked) |
 | Plan | 1 | 6faf43340f356aff088fee399abf65dceed3b86c:fddb3ebf8d1340bb82ea64e182257534998538e1 | CLEAN (3 MINOR, all fixed: claude_settings_dir marked new, sandbox placement risk, FR-003/FR-011 test lines) |
 | Tasks | 1 | f491c06f7c981feadd01b9f3fe232bba92085878:ce1baee44edcfdf64c10b86807c39f96ce42d697 | CLEAN |
+| M1 review A (high) | 1 | f2c8b438 | 10 findings: 6 fixed (403 log set bounded to known sessions; idle-session repeats ignored, FR-019; non-numeric or out-of-range `resets_at` drops the window; key-order doc; `unix_secs` reuses `unix_now`; rejections reset only on a kept reading), 3 declined (below), 1 taste |
+| M1 review B (conformance) | 1 | f2c8b438 | CHANGES: F1 MAJOR no `tdd/cycle-log.md` — fixed (backfilled with the red/green commits); F2 MINOR = review A's 403 set, fixed; F3 MINOR status/reason coupling, fixed |
 
 ## Declined review findings
+
+- M1 review A: `Welcome` read before the window is registered can miss one push in between — the catalog has the same gap; the next changed reading corrects it. Declined (cost over value).
+- M1 review A: `Settings`/wire carry `u8` rather than `WarnPercent` — taste; clamped at every write and read. Declined.
+- M1 review A: `Welcome` settings and plan usage taken under two locks — transient, corrected by the next `SettingsChanged`/`PlanUsageChanged`. Declined.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

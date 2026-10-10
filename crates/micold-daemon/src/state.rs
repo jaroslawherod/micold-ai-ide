@@ -39,16 +39,6 @@ use uuid::Uuid;
 
 use crate::activity::{turn_change, Activity, ActivityEvent, HookKind};
 
-/// How long a reading with unchanged windows goes without being pushed again (feature 490, R6).
-const PLAN_USAGE_UNCHANGED_SECS: i64 = 60;
-
-/// The wall clock in Unix seconds: when a plan-usage reading was obtained, and whether its windows
-/// have reset (feature 490, R5, R7).
-pub fn unix_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
 use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
@@ -284,6 +274,10 @@ struct Inner {
     /// The Claude plan's usage, the newest accepted reading from any session (feature 490,
     /// FR-019, research R6). Memory only (FR-014): a restart starts with none.
     plan_usage: Option<UsageReading>,
+    /// The windows each session last reported (feature 490, FR-019). An idle session's status
+    /// line repeats the values of its last response; a repeat is not newer than another session's
+    /// change, so it does not replace the reading held.
+    plan_usage_reported: HashMap<SessionId, Vec<micold_core::plan_usage::LimitWindow>>,
 }
 
 impl Inner {
@@ -445,6 +439,15 @@ fn unix_now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
 }
+
+/// [`unix_now`] signed, as plan-usage readings carry it: when one was obtained, and whether its
+/// windows have reset (feature 490, R5, R7).
+pub fn unix_secs() -> i64 {
+    i64::try_from(unix_now()).unwrap_or(i64::MAX)
+}
+
+/// How long a reading with unchanged windows goes without being pushed again (feature 490, R6).
+const PLAN_USAGE_UNCHANGED_SECS: i64 = 60;
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
 /// The variable Pi's activity component reads to find its log (feature 029, contracts/pi-cli.md).
@@ -685,6 +688,7 @@ impl DaemonState {
                 runs: crate::runs::Runs::default(),
                 attention_retry: AttentionRetry::default(),
                 plan_usage: None,
+                plan_usage_reported: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1340,12 +1344,21 @@ impl DaemonState {
     }
 
     /// Keep `reading`, reported by `session`, as the plan's usage (feature 490, FR-019, R6).
-    /// Returns whether every window is to be told: `false` while plan usage is off (S3.2), for a
-    /// session this service does not run, and for a reading with the same windows as the one held
-    /// that is less than a minute newer — so ten idle sessions do not push on every turn.
+    /// Returns whether it was kept, and every window is to be told: not while plan usage is off
+    /// (S3.2), not for a session this service does not run, not when the session only repeats
+    /// what it last reported (an idle session's status line, which must not undo another
+    /// session's newer values), and not for the same windows as the reading held less than a
+    /// minute later — so ten idle sessions do not push on every turn.
     pub fn note_plan_usage(&self, session: SessionId, reading: UsageReading) -> bool {
         let mut inner = self.lock();
         if !inner.catalog.plan_usage_enabled() || !inner.sessions.contains_key(&session) {
+            return false;
+        }
+        let repeated = inner
+            .plan_usage_reported
+            .insert(session, reading.windows.clone())
+            .is_some_and(|last| last == reading.windows);
+        if repeated && inner.plan_usage.is_some() {
             return false;
         }
         if inner.plan_usage.as_ref().is_some_and(|held| {
@@ -1364,6 +1377,9 @@ impl DaemonState {
         let (settings, cleared) = {
             let mut inner = self.lock();
             inner.catalog.set_plan_usage_enabled(on)?;
+            if !on {
+                inner.plan_usage_reported.clear();
+            }
             let cleared = !on && inner.plan_usage.take().is_some();
             (inner.catalog.settings_wire(), cleared)
         };

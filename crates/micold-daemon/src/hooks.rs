@@ -210,7 +210,12 @@ async fn handle_connection(
         matches!((tokens.get(&session_uuid), &head.bearer), (Some(expected), Some(got)) if expected == got)
     };
     if !authorized {
-        if route == Route::Status {
+        // Logged only for a session this receiver serves: a made-up uuid must not grow the set.
+        let known = tokens
+            .lock()
+            .expect("hook tokens lock poisoned")
+            .contains_key(&session_uuid);
+        if route == Route::Status && known {
             rejected(&rejections, session_uuid, "forbidden");
         }
         return respond(&mut stream, 403, "Forbidden").await;
@@ -233,13 +238,8 @@ async fn handle_connection(
     };
     let session = SessionId::from_uuid(session_uuid);
     if route == Route::Status {
-        let answer = plan_usage(&state, &rejections, session, &body);
-        return respond(
-            &mut stream,
-            answer,
-            if answer == 200 { "OK" } else { "Bad Request" },
-        )
-        .await;
+        let (status, reason) = plan_usage(&state, &rejections, session, &body);
+        return respond(&mut stream, status, reason).await;
     }
 
     // 6. Map the hook to an activity transition. The body is NEVER logged (contract §6).
@@ -256,42 +256,43 @@ async fn handle_connection(
     }
 }
 
-/// Apply a `/status` body to the plan's usage (feature 490, S3) and return the status code: `400`
-/// for a body that is not a JSON object, else `200`, with the reading kept only when it has a
-/// usable window and plan usage is on (S3.2). Every window is told of a reading the service keeps
-/// (W2). The body is never logged (S3.1).
+/// Apply a `/status` body to the plan's usage (feature 490, S3) and return the answer: `400` for a
+/// body that is not a JSON object, else `200`, with the reading kept only when it has a usable
+/// window and plan usage is on (S3.2). Every window is told of a reading the service keeps (W2).
+/// The body is never logged (S3.1).
 fn plan_usage(
     state: &DaemonState,
     rejections: &Rejections,
     session: SessionId,
     body: &[u8],
-) -> u16 {
+) -> (u16, &'static str) {
+    const OK: (u16, &str) = (200, "OK");
     let body: serde_json::Value = match serde_json::from_slice(body) {
         Ok(object @ serde_json::Value::Object(_)) => object,
         _ => {
             rejected(rejections, session.0, "malformed");
-            return 400;
+            return (400, "Bad Request");
         }
     };
     let Some(reading) = status_line::parse(&body, unix_secs()) else {
         rejected(rejections, session.0, "no usable window");
-        return 200;
+        return OK;
     };
     if !state.plan_usage_enabled() {
         rejected(rejections, session.0, "plan usage is off");
-        return 200;
+        return OK;
     }
-    // An accepted reading: the next failure of this session is news again (FR-016).
-    rejections
-        .lock()
-        .expect("status rejections lock poisoned")
-        .retain(|(uuid, _)| *uuid != session.0);
     if state.note_plan_usage(session, reading.clone()) {
+        // An accepted reading: the next failure of this session is news again (FR-016).
+        rejections
+            .lock()
+            .expect("status rejections lock poisoned")
+            .retain(|(uuid, _)| *uuid != session.0);
         state.broadcast(DaemonMsg::PlanUsageChanged {
             reading: Some(reading),
         });
     }
-    200
+    OK
 }
 
 /// Log a `/status` request the service did not use, at debug and once per (session, answer) until

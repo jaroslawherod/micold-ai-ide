@@ -20,7 +20,7 @@ pub const DEFAULT_PLAN_USAGE_ENABLED: bool = true;
 /// The account's plan usage at one moment (data-model *UsageReading*).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageReading {
-    /// Non-empty, in the order the source gave them.
+    /// Non-empty, in the source's key order.
     pub windows: Vec<LimitWindow>,
     /// When the daemon accepted the reading, in Unix seconds (research R5).
     pub obtained_at: i64,
