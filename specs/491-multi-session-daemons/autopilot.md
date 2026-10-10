@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M1) | 1 | ab3af6818291bc68e24c3e183b22d60a78446c4f:30ccfce93a158c7bda37cfdb0b4a8920fb55396f | CHANGES: 2 MAJOR, 2 MINOR (F1 lock around state read-modify-write, F2 set_single_daemon only on daemon change, F3 daemon taken at submit fixed; F4 binding outliving its worktree left, noted) |
 | Code A (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 5 MAJOR (F1 detach binding, F2 on_connected gating, F3 sandbox daemon id, F4 outbox on refused connect fixed; F5 declined), 3 MINOR (fixed) |
 | Code B (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 1 MAJOR (cycle-log entry, added), 3 MINOR (fixed); Verify green |
+| Code A+B (M2) | 2 | a1af07f954ab05029a0c4d7608e1a36d1fc8e8c3:3f7af08c3e6d3e7147aee13d5dfdfc24d282e9d7 | CLEAN (3 MINOR, see Follow-ups) |
 
 ## Declined review findings
 
@@ -67,7 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 code complete, reviews A and B done (round 2 clean), full gate green at 3f7af08c with MICOLD_SKIP_GH_LAUNCH_TEST=1. NOT pushed: `git push --force-with-lease -u origin HEAD` was denied by the permission classifier. Branch is ahead 6, behind origin/main 3. Next: `scripts/autopilot/branch-start.sh 752` (rebase), rerun `mise run gate`, push, open PR (body at the unit's scratchpad pr-body.md; title `feat(491): run host and container daemons concurrently with per-daemon state (#491)`, ends `Refs #491`).
 
 ## Open escalation
 
@@ -76,3 +77,7 @@ None.
 ## Follow-ups not done
 
 SSH (#687) and Kubernetes (#688) split out of #491; extension points only.
+- M2: switching project to a location on an already-connected other daemon does not re-ask CLI availability or re-adopt settings (on_connected does them only for the active daemon).
+- M2: a worktree's binding is dropped on the `WorktreeDeleted` reply only; a connection drop first leaves it until rebound.
+- M2: only one sandbox container (legacy or first container entry) is brought up by the app; further container daemons connect when already running (per-daemon bring-up for each is not done).
+- M2: ConfirmationAnswer, settings sends and CLI-availability asks go to the active daemon only.
