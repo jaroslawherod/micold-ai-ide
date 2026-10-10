@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #695 | Design | merged | 52c691b8fd00540bcf027f60e779003368266214 |
+| #752 | M1 registry, bindings, labels | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | PR-M1 | in review |
+| M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | in review |
 | M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | - | pending |
 | M3 | T030–T039 | full | Settings Daemons section with removal and rebind | - | pending |
 | M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | pending |
