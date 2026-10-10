@@ -137,6 +137,27 @@ pub enum Outcome {
         /// The quoted paths, joined by single spaces. No line break the user did not put in a name.
         text: String,
     },
+    /// The daemon registry changed (feature 491, FR-011): the shell persists it
+    /// (`Settings::set_registry`) and brings the links in step (`sync_links`).
+    DaemonRegistryChanged(micold_core::daemons::DaemonRegistry),
+    /// These sessions ended because their daemon was removed or its runtime settings changed:
+    /// the shell stops them on that daemon and shows them as ended (FR-012, FR-014).
+    DaemonSessionsEnded {
+        /// The daemon they ran on.
+        daemon: micold_core::daemons::DaemonId,
+        /// The sessions that ended.
+        sessions: Vec<SessionId>,
+    },
+    /// A worktree was bound to a daemon by an explicit action (FR-006, FR-014): the shell persists
+    /// the binding and registers the project on that daemon.
+    DaemonBound {
+        /// The worktree's project.
+        project: std::path::PathBuf,
+        /// The worktree's `dir_name`, `""` for Default.
+        worktree: String,
+        /// The daemon it now runs on.
+        daemon: micold_core::daemons::DaemonId,
+    },
 }
 
 /// What an activated link asks the operating system to open (feature 031, data-model §3).
@@ -187,6 +208,7 @@ pub mod attach;
 pub mod attention;
 pub mod changes;
 pub mod connection;
+pub mod daemons;
 pub mod help;
 pub mod notifications;
 pub mod pr_status;

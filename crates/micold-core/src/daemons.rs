@@ -396,6 +396,84 @@ impl DaemonStates {
     }
 }
 
+/// One worktree location of one project: the project's path and the worktree's `dir_name`, `""`
+/// for the Default location (the key bindings use).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WorktreeRef {
+    /// The project's path.
+    pub project: std::path::PathBuf,
+    /// The worktree's name; `""` for the Default location.
+    pub worktree: String,
+}
+
+/// One row of the Daemons list (FR-010): the runtime is a plain label, never a layout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DaemonView {
+    /// Stable identity.
+    pub id: DaemonId,
+    /// Display name.
+    pub name: String,
+    /// The runtime as a plain value ([`DaemonRuntime::label`]).
+    pub runtime_label: String,
+    /// Where the client dials it.
+    pub endpoint: String,
+    /// The version the daemon reported, once connected.
+    pub version: Option<String>,
+    /// Where its connection stands.
+    pub state: DaemonState,
+    /// The worktrees bound to it.
+    pub bound: Vec<WorktreeRef>,
+}
+
+/// Most recent connection errors kept per daemon.
+pub const MAX_CONNECTION_ERRORS: usize = 20;
+/// Most recent log lines kept per daemon.
+pub const MAX_LOG_LINES: usize = 200;
+
+/// One failed dial or lost connection, as the details view lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionError {
+    /// What the attempt reported.
+    pub reason: String,
+}
+
+/// What one daemon's details view shows: bounded, newest last, oldest dropped first.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DaemonDiagnostics {
+    errors: std::collections::VecDeque<ConnectionError>,
+    log: std::collections::VecDeque<String>,
+}
+
+impl DaemonDiagnostics {
+    /// Record a connection error, dropping the oldest past [`MAX_CONNECTION_ERRORS`].
+    pub fn record_error(&mut self, reason: impl Into<String>) {
+        if self.errors.len() == MAX_CONNECTION_ERRORS {
+            self.errors.pop_front();
+        }
+        self.errors.push_back(ConnectionError {
+            reason: reason.into(),
+        });
+    }
+
+    /// Append a log line, dropping the oldest past [`MAX_LOG_LINES`].
+    pub fn push_log(&mut self, line: impl Into<String>) {
+        if self.log.len() == MAX_LOG_LINES {
+            self.log.pop_front();
+        }
+        self.log.push_back(line.into());
+    }
+
+    /// The recent errors, oldest first.
+    pub fn errors(&self) -> Vec<ConnectionError> {
+        self.errors.iter().cloned().collect()
+    }
+
+    /// The log tail, oldest first.
+    pub fn log(&self) -> Vec<String> {
+        self.log.iter().cloned().collect()
+    }
+}
+
 /// The single daemon a pre-feature `daemon` block stands for (R5): id 1, named by its runtime,
 /// carrying the legacy container name and port so a running container is adopted, not recreated.
 pub fn migrated_entry(config: &crate::settings::DaemonConfig) -> DaemonEntry {

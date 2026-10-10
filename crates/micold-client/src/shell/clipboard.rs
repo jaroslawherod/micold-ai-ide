@@ -54,6 +54,9 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::FieldFocusCleared
         | Outcome::OpenLink(_)
         | Outcome::Insert { .. }
+        | Outcome::DaemonRegistryChanged(_)
+        | Outcome::DaemonSessionsEnded { .. }
+        | Outcome::DaemonBound { .. }
         | Outcome::SurfaceOpened(_) => Task::none(),
     }
 }
