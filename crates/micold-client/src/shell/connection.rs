@@ -26,7 +26,7 @@ use crate::App;
 
 /// This feature's entry point: one arm in `main.rs` routes here (contract M2).
 ///
-/// `id` is the daemon the report came from ([`Message::Daemon`]); a report touches that
+/// `id` is the daemon the report came from ([`Message::daemon`]); a report touches that
 /// daemon's links, catalog, mismatch and pending ops and no other's (feature 491, FR-007).
 pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
     match msg {
@@ -35,6 +35,7 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
             catalog,
             settings,
         } => daemon_sync::on_connected(app, id, outbox, catalog, settings),
+        Msg::OfDaemon(daemon, inner) => update(app, daemon, *inner),
         Msg::Event(event) => daemon_sync::on_daemon_event(app, id, event),
         Msg::GridFrame(frame) => daemon_sync::on_grid_frame(app, frame),
         Msg::Disconnected => daemon_sync::on_disconnected(app, id),

@@ -318,7 +318,7 @@ mod tests {
 fn daemon_connections(app: &App) -> Subscription<Message> {
     // A daemon added to the registry since the last update is dialled from its launch state.
     let registry = &app.core.settings.daemons;
-    let mut states = app.links.states().clone();
+    let mut states = app.core.settings.links.states().clone();
     let launch = micold_core::daemons::DaemonStates::at_launch(registry);
     for entry in registry.entries() {
         if states.state(entry.id).is_none() {

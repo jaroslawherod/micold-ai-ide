@@ -114,7 +114,6 @@ fn update_inner_applies_window_focus_changed() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        links: Default::default(),
         daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
         disconnected: Default::default(),
@@ -184,7 +183,6 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        links: Default::default(),
         daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
         disconnected: Default::default(),
@@ -838,7 +836,6 @@ fn base_app_fields() -> App {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        links: Default::default(),
         daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
         disconnected: Default::default(),
@@ -886,6 +883,8 @@ fn app_with_a_failed_sandbox() -> App {
         profile: micold_core::sandbox::SandboxProfile::default(),
         state_dir: PathBuf::from("/tmp/micold-test-state"),
         projects: Vec::new(),
+        container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
+        port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
     });
     app
 }
@@ -2669,6 +2668,8 @@ fn confirming_the_move_back_to_the_host_drops_the_container_plan() {
         profile: Default::default(),
         state_dir: PathBuf::from("/tmp/state"),
         projects: Vec::new(),
+        container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
+        port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
     });
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
@@ -2853,7 +2854,6 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        links: Default::default(),
         daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
         disconnected: Default::default(),
@@ -11253,6 +11253,87 @@ mod panes {
             Message::Session(SessionMsg::Pane(PaneMsg::DropsSettled)),
         );
         assert!(inputs(&mut rx).is_empty());
+        assert!(app.core.notifications.queue.is_active());
+    }
+}
+
+/// Feature 491 (FR-004, FR-007): the binary routes an op to its binding's daemon only, and one
+/// daemon dropping leaves the other's outbox and pending ops alone.
+mod two_daemons {
+    use super::*;
+    use micold_core::daemons::{
+        Binding, ContainerSettings, DaemonEntry, DaemonId, DaemonName, DaemonRegistry,
+        DaemonRuntime,
+    };
+
+    fn entry(id: u32, name: &str, runtime: DaemonRuntime) -> DaemonEntry {
+        DaemonEntry {
+            id: DaemonId(id),
+            name: DaemonName::new(name).expect("a name"),
+            runtime,
+            auto_start: true,
+        }
+    }
+
+    fn two_connected() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let mut app = base_app();
+        let container = DaemonRuntime::Container(ContainerSettings {
+            profile: Default::default(),
+            container_name: "box".into(),
+            port: 7001,
+        });
+        app.core.settings.daemons = DaemonRegistry::new(
+            vec![
+                entry(1, "Host", DaemonRuntime::Host),
+                entry(2, "Box", container),
+            ],
+            3,
+        );
+        let (tx1, rx1) = iced::futures::channel::mpsc::unbounded();
+        let (tx2, rx2) = iced::futures::channel::mpsc::unbounded();
+        let links = &mut app.core.settings.links;
+        links.insert(DaemonId(1), micold_core::daemons::DaemonState::Starting);
+        links.insert(DaemonId(2), micold_core::daemons::DaemonState::Starting);
+        links.connected(DaemonId(1), micold_client::daemon::Outbox::new(tx1));
+        links.connected(DaemonId(2), micold_client::daemon::Outbox::new(tx2));
+        (app, rx1, rx2)
+    }
+
+    fn send(app: &mut App, binding: Binding) {
+        crate::shell::daemon_sync::send_op_bound(app, binding, PendingOp::DeleteSession, |req| {
+            ClientMsg::SessionDelete {
+                req,
+                session: micold_core::session::SessionId(uuid::Uuid::nil()),
+            }
+        });
+    }
+
+    #[test]
+    fn an_op_goes_to_its_bound_daemon_and_to_no_other() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        send(&mut app, Binding::Bound(DaemonId(2)));
+        assert!(rx2.try_recv().is_ok(), "the bound daemon got the op");
+        assert!(rx1.try_recv().is_err(), "the other daemon heard nothing");
+        assert_eq!(app.pending_daemon.values().next(), Some(&DaemonId(2)));
+    }
+
+    #[test]
+    fn one_daemon_dropping_leaves_the_other_connected_and_its_pending_ops() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        send(&mut app, Binding::Bound(DaemonId(1)));
+        let _ = app.core.settings.links.lost(DaemonId(2), "gone");
+        assert!(app.core.settings.links.is_connected(DaemonId(1)));
+        assert!(!app.core.settings.links.is_connected(DaemonId(2)));
+        assert_eq!(app.pending_ops.len(), 1, "daemon 1's pending op survives");
+        // An op for the down daemon is refused and never reroutes to the live one.
+        let _ = rx1.try_recv();
+        send(&mut app, Binding::Bound(DaemonId(2)));
+        assert!(rx1.try_recv().is_err());
+        assert!(rx2.try_recv().is_err());
         assert!(app.core.notifications.queue.is_active());
     }
 }
