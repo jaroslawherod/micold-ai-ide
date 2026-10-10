@@ -178,3 +178,58 @@ fn removing_an_entry_writes_nothing_to_disk() {
         "the registry is plain data; removal touches no file"
     );
 }
+
+#[test]
+fn a_binding_written_by_the_client_survives_the_daemons_stale_save() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let mut ws = Workspace::empty();
+    ws.projects.push(Project {
+        path: PathBuf::from(PROJECT),
+        display_name: "one".into(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    store.save(&ws).unwrap();
+    store
+        .save_binding(&PathBuf::from(PROJECT), "feature-x", DaemonId(2))
+        .unwrap();
+    // The daemon saves its snapshot, taken before the binding existed.
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+    assert_eq!(
+        loaded.bindings.get(&PathBuf::from(PROJECT)),
+        Some(&bindings(&[("feature-x", 2)]))
+    );
+}
+
+#[test]
+fn a_binding_for_a_project_with_no_state_file_is_refused() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    assert!(store
+        .save_binding(&PathBuf::from(PROJECT), "", DaemonId(1))
+        .is_err());
+}
+
+#[test]
+fn a_refusal_names_the_daemon_that_holds_the_worktree() {
+    use micold_core::worktree::{explain_directory_taken_on, BlockReason, WorktreeOwner};
+    let holder = BlockReason::CheckedOutAt {
+        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
+        owner: WorktreeOwner::User,
+    };
+    let said = holder.explain_on("feat/x", Some("Sandbox"));
+    assert!(said.contains("feat-x") && said.contains("'Sandbox'"), "{said}");
+    assert_eq!(holder.explain_on("feat/x", None), holder.explain("feat/x"));
+    let outside = BlockReason::CheckedOutOutsideApp {
+        path: PathBuf::from("/elsewhere"),
+    };
+    assert_eq!(
+        outside.explain_on("b", Some("Sandbox")),
+        outside.explain("b"),
+        "a holder the app does not manage runs on no daemon"
+    );
+    let clash = explain_directory_taken_on(&PathBuf::from("/p/w/feat-x"), Some("Host"));
+    assert!(clash.fact.contains("feat-x") && clash.fact.contains("'Host'"));
+}

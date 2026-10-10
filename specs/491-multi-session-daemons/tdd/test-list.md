@@ -57,6 +57,8 @@ Rules live in `micold-core` (inside-out); the client behaviors are render-free r
 | U18 | Removing X then adding a new X does not rebind its worktrees | FR-014 | example | PENDING | `daemons_bindings.rs` |
 | U19 | Renaming keeps bindings; adding a second daemon does not unbind legacy worktrees | FR-003 | example | PENDING | `daemons_bindings.rs` |
 | U20 | Removing an entry writes nothing to disk | FR-014 | example | PENDING | `daemons_bindings.rs` |
+| U23 | A binding the client wrote (`save_binding`) survives the daemon's later save of an older snapshot; a project with no state file refuses it | FR-006, FR-017 | example | PENDING | `daemons_bindings.rs` |
+| U24 | A branch or name refusal names the holding worktree's daemon | FR-016 | example | PENDING | `daemons_bindings.rs` |
 
 ### `crates/micold-core/src/sandbox/`
 

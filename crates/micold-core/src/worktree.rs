@@ -650,6 +650,21 @@ impl BlockReason {
     }
 }
 
+impl BlockReason {
+    /// [`Self::explain`], naming the daemon the holding worktree runs on when it is one of the
+    /// app's own (feature 491, FR-016). `daemon` is the holder's daemon label as the sidebar shows
+    /// it; a holder the app does not manage has none, and `None` leaves the sentence as it was.
+    pub fn explain_on(&self, branch: &str, daemon: Option<&str>) -> String {
+        let base = self.explain(branch);
+        match (self, daemon) {
+            (BlockReason::CheckedOutAt { .. }, Some(daemon)) => {
+                format!("{base} It runs on the daemon '{daemon}'.")
+            }
+            _ => base,
+        }
+    }
+}
+
 /// A directory clash in the words the user reads (feature 016, FR-022; BUG-003 item 3).
 ///
 /// Two parts because the two surfaces that report this clash need different shapes of it — the
@@ -694,6 +709,16 @@ pub fn explain_directory_taken(dir: &Path) -> DirectoryClash {
         ),
         guidance: "Choose a different name, or remove the existing folder first.",
     }
+}
+
+/// [`explain_directory_taken`], naming the daemon the clashing worktree runs on (feature 491,
+/// FR-016); `None` for a folder no daemon holds.
+pub fn explain_directory_taken_on(dir: &Path, daemon: Option<&str>) -> DirectoryClash {
+    let mut clash = explain_directory_taken(dir);
+    if let Some(daemon) = daemon {
+        clash.fact = format!("{} It runs on the daemon '{daemon}'.", clash.fact);
+    }
+    clash
 }
 
 /// One row of the existing-branch picker (feature 016, FR-010–FR-012).

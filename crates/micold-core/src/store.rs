@@ -88,6 +88,18 @@ pub trait ProjectStore {
         Ok(())
     }
 
+    /// Bind a location of a project to a daemon (feature 491, FR-006): `key` is a worktree
+    /// `dir_name`, or `""` for the Default location.
+    ///
+    /// Bindings are app-owned and written by the client through this method alone: a read-modify-
+    /// write of the one `bindings` map in the project's state file, so nothing else the daemon
+    /// keeps there is touched. [`Self::save`] in turn keeps what is on disk, so the daemon's
+    /// in-memory snapshot never overwrites a binding written since it loaded. The default, for
+    /// stores that persist nothing, succeeds without writing.
+    fn save_binding(&self, _project_path: &Path, _key: &str, _daemon: DaemonId) -> io::Result<()> {
+        Ok(())
+    }
+
     /// Whether the catalog file is absent right now (002 BUG-007). The daemon asks this when a
     /// client connects: a launch that met a damaged file has just moved it aside, and a daemon
     /// that is already running holds the list in memory and would otherwise not write it back
@@ -903,6 +915,24 @@ impl ProjectStore for JsonFileStore {
         matches!(std::fs::symlink_metadata(&self.path), Err(err) if err.kind() == io::ErrorKind::NotFound)
     }
 
+    fn save_binding(&self, project_path: &Path, key: &str, daemon: DaemonId) -> io::Result<()> {
+        let path = self.project_state_path(project_path);
+        // A missing file is refused rather than created: a state file with only bindings in it
+        // would be authoritative on the next load and hide the sessions a pre-split catalog still
+        // carries. A corrupt one is refused for the reason `save` skips it.
+        let mut state = match load_project_state(&path) {
+            ProjectStateLoad::Found(state) => state,
+            ProjectStateLoad::Missing | ProjectStateLoad::Corrupt => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "the project's state file is not readable yet",
+                ));
+            }
+        };
+        state.bindings.insert(key.to_string(), daemon);
+        write_project_state(&path, &state)
+    }
+
     fn load(&self) -> LoadOutcome {
         let mut preserved = None;
         let (status, stored) = match std::fs::read_to_string(&self.path) {
@@ -1096,8 +1126,13 @@ impl ProjectStore for JsonFileStore {
                 // one-time backfill. A later run that can read the file saves it as usual.
                 continue;
             }
-            let state = StoredProjectState::from_workspace(workspace, &project.path);
+            let mut state = StoredProjectState::from_workspace(workspace, &project.path);
             let path = self.project_state_path(&project.path);
+            // Feature 491: bindings are written by the client alone (`save_binding`), so what is
+            // on disk wins over this snapshot, which may predate it.
+            if let ProjectStateLoad::Found(on_disk) = load_project_state(&path) {
+                state.bindings.extend(on_disk.bindings);
+            }
             if let Err(err) = write_project_state(&path, &state) {
                 first_err.get_or_insert(err);
                 state_write_failed[i] = true;
@@ -1235,6 +1270,18 @@ impl ProjectStore for FakeProjectStore {
         }
         state.saves.push(workspace.clone());
         state.workspace = workspace.clone();
+        Ok(())
+    }
+
+    fn save_binding(&self, project_path: &Path, key: &str, daemon: DaemonId) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .workspace
+            .bindings
+            .entry(project_path.to_path_buf())
+            .or_default()
+            .insert(key.to_string(), daemon);
         Ok(())
     }
 
