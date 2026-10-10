@@ -26,9 +26,7 @@ use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
-use micold_core::worktree::{
-    explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateMode,
-};
+use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
 /// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -66,6 +64,24 @@ pub fn modal<'a>(
         }
     }
 
+    // Which daemon the worktree runs on (feature 491, FR-006). Not offered with an empty registry:
+    // there is nothing to choose, and the form then says so in `source_caption`'s place by
+    // leaving the control out rather than showing an empty list.
+    if !form.daemons.is_empty() {
+        let chosen = form
+            .daemon
+            .and_then(|id| form.daemons.iter().find(|c| c.id == id).cloned());
+        fields = fields.push(
+            Select::new(
+                &form.daemons,
+                chosen,
+                |choice| Message::WorktreeForm(FormMsg::DaemonChosen(choice.id)),
+                r,
+            )
+            .label("Daemon"),
+        );
+    }
+
     fields = fields.push(preview(form, r));
 
     // Why a selected branch can't be used (FR-012). Feature 021 moved the refusal to the point of
@@ -77,7 +93,12 @@ pub fn modal<'a>(
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
                 fields = fields.push(
-                    Text::new(reason.explain(&candidate.name), TypeRole::Caption, r).tint(r.error),
+                    Text::new(
+                        form.explain_block(reason, &candidate.name),
+                        TypeRole::Caption,
+                        r,
+                    )
+                    .tint(r.error),
                 );
             }
         }
@@ -121,7 +142,7 @@ pub fn modal<'a>(
     // exactly one thing to do next.
     let actions = match &form.resolution {
         ResolutionState::Idle => default_actions(form, r),
-        state => resolution_panel(state, r),
+        state => resolution_panel(form, state, r),
     };
 
     let dialog = material::Surface::new(
@@ -435,7 +456,11 @@ fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
 }
 
 /// The conflict prompt and its confirmation (feature 016, contract `branch-conflict.md` §3).
-fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Message> {
+fn resolution_panel<'a>(
+    form: &WorktreeForm,
+    state: &ResolutionState,
+    r: Roles,
+) -> Element<'a, Message> {
     let cancel = |label: &str| {
         Button::outlined(label.to_string(), r)
             .on_press(Message::WorktreeForm(FormMsg::ResolutionCancelled))
@@ -560,7 +585,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                     ));
                 }
                 column![
-                    Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),
+                    Text::new(form.explain_block(reason, branch), TypeRole::Body, r).tint(r.error),
                     Text::new(
                         match reason {
                             BlockReason::CheckedOutOutsideApp { .. } =>
@@ -587,7 +612,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             // the same condition, caught after this pre-flight passed — reads as the same words
             // rather than a second hand-written version of them.
             BranchSituation::DirectoryTaken { dir } => {
-                let clash = explain_directory_taken(dir);
+                let clash = form.explain_taken(dir);
                 column![
                     Text::new(clash.fact, TypeRole::Body, r).tint(r.error),
                     Text::new(clash.guidance, TypeRole::Caption, r).muted(),

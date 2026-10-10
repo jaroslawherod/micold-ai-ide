@@ -284,6 +284,16 @@ impl Workspace {
         }
     }
 
+    /// Bind a location of `project` to `daemon` in memory (feature 491, FR-006). `key` is a
+    /// worktree's `dir_name`, or `""` for the Default location. Persisting it is the store's
+    /// [`crate::store::ProjectStore::save_binding`].
+    pub fn bind(&mut self, project: &Path, key: &str, daemon: crate::daemons::DaemonId) {
+        self.bindings
+            .entry(project.to_path_buf())
+            .or_default()
+            .insert(key.to_string(), daemon);
+    }
+
     /// The worktrees this app created in `project` (feature 029). Empty when it created none —
     /// or when the project's state could not be read, which the caller must distinguish via
     /// [`Self::unreadable_projects`] before drawing any conclusion from the emptiness.

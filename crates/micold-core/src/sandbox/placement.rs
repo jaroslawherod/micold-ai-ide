@@ -89,7 +89,9 @@ impl Placement {
         use crate::daemons::DaemonRuntime;
         match runtime {
             DaemonRuntime::Host => Some(Placement::HostProcess),
-            DaemonRuntime::Container(c) => Some(Placement::LocalSandbox(Box::new(c.profile.clone()))),
+            DaemonRuntime::Container(c) => {
+                Some(Placement::LocalSandbox(Box::new(c.profile.clone())))
+            }
             DaemonRuntime::Unsupported { .. } => None,
         }
     }

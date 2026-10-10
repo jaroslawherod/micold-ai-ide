@@ -402,6 +402,12 @@ only your registered projects. Takes effect the next time the application starts
 session service in a container](sandboxed-daemon.md) for what changes, what it can and cannot
 reach, and how to work offline.
 
+Your existing choice is migrated, once, into a list of session services (daemons) holding exactly
+one entry with the same placement and container settings, and every worktree is bound to it. The
+placement above keeps changing that one entry. Worktrees show the daemon they run on in the sidebar,
+and the New worktree form offers the daemon to use (see [Which session service a worktree runs
+on](worktrees-and-sessions.md#which-session-service-a-worktree-runs-on)).
+
 The container settings stay visible and editable whichever placement you pick, and are kept if you
 switch back — configuring the container and then trying the host process first doesn't mean setting
 it up again.

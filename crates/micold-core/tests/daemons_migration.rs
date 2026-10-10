@@ -29,10 +29,17 @@ fn a_host_document_yields_one_host_daemon_that_is_the_legacy_default() {
     let (_dir, _store, s) = load(HOST);
     assert_eq!(s.daemons.len(), 1, "one daemon");
     let e = &s.daemons[0];
-    assert_eq!(e.runtime, DaemonRuntime::Host, "placement host_process is Host");
+    assert_eq!(
+        e.runtime,
+        DaemonRuntime::Host,
+        "placement host_process is Host"
+    );
     assert_eq!(e.id, DaemonId(1), "the migrated daemon is id 1");
     assert_eq!(s.legacy_default_daemon, Some(DaemonId(1)), "legacy default");
-    assert_eq!(s.next_daemon_id, 2, "the counter moves past the migrated daemon");
+    assert_eq!(
+        s.next_daemon_id, 2,
+        "the counter moves past the migrated daemon"
+    );
 }
 
 #[test]
@@ -42,9 +49,15 @@ fn a_container_document_yields_one_container_daemon_with_the_legacy_name_port_an
     let DaemonRuntime::Container(c) = &s.daemons[0].runtime else {
         panic!("placement local_sandbox is a container daemon");
     };
-    assert_eq!(c.container_name, "micold-sandbox", "the legacy container is adopted");
+    assert_eq!(
+        c.container_name, "micold-sandbox",
+        "the legacy container is adopted"
+    );
     assert_eq!(c.port, 7727, "the legacy port");
-    assert!(c.profile.survive_logout, "the profile is carried, not reset");
+    assert!(
+        c.profile.survive_logout,
+        "the profile is carried, not reset"
+    );
     assert_eq!(s.daemons[0].id, DaemonId(1));
 }
 

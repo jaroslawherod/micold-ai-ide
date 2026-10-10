@@ -102,6 +102,11 @@ pub struct State {
     /// moves the service, so a Cancel cannot revert it — reverting it would mean the note lying
     /// about a container that is still running.
     pub placement_in_force: PlacementKind,
+    /// The daemon registry as last stored (feature 491). Seeded at boot from the settings file and
+    /// re-read after a save; a worktree's binding resolves against it.
+    pub daemons: micold_core::daemons::DaemonRegistry,
+    /// The daemon a worktree without a stored binding runs on (feature 491, FR-017).
+    pub legacy_default_daemon: Option<micold_core::daemons::DaemonId>,
     /// The placement change the user is being asked to confirm, while the question is open
     /// (FR-032; BUG-003). `None` the rest of the time, which is what closes the dialog.
     pub pending_placement: Option<PendingPlacementChange>,
@@ -514,6 +519,11 @@ impl ValidSettings {
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
             diff_layout: micold_core::settings::DiffLayout::Unified,
+            // Not in the form (feature 491): the registry is service-owned; a save sets only
+            // the changed fields on the stored settings (`set_changed`) and keeps the registry.
+            daemons: Vec::new(),
+            next_daemon_id: 0,
+            legacy_default_daemon: None,
         }
     }
 }
@@ -1661,6 +1671,14 @@ pub fn placement_change_confirmed(state: &mut crate::app::State) {
 /// looking at a form that disagrees with what they just did.
 pub fn placement_change_cancelled(state: &mut crate::app::State) {
     state.settings.pending_placement = None;
+}
+
+/// Take the daemon registry and the legacy default from stored settings (feature 491), at boot
+/// and after a save moved the single entry with the placement.
+pub fn registry_loaded(state: &mut State, stored: &Settings) {
+    state.daemons =
+        micold_core::daemons::DaemonRegistry::new(stored.daemons.clone(), stored.next_daemon_id);
+    state.legacy_default_daemon = stored.legacy_default_daemon;
 }
 
 /// The service is now running in `kind` (FR-035b).
