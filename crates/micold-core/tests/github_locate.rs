@@ -100,6 +100,31 @@ fn macos_dock_launch_finds_homebrew_gh() {
 }
 
 #[test]
+fn macos_dock_launch_finds_mise_shim_gh() {
+    let home = Path::new("/Users/me");
+    let shim_gh = home
+        .join(".local")
+        .join("share")
+        .join("mise")
+        .join("shims")
+        .join("gh");
+    let exists = |p: &Path| p == shim_gh;
+    let inputs = LocateInputs {
+        os: HostOs::MacOs,
+        env_include_path: None,
+        process_path: DOCK_PATH,
+        home: Some(home),
+        env: &no_env,
+        exists: &exists,
+    };
+    assert_eq!(
+        locate_gh(&inputs),
+        Some(shim_gh.clone()),
+        "a Dock launch does not see mise's PATH entry, so the well-known table finds the shim"
+    );
+}
+
+#[test]
 fn windows_finds_winget_gh() {
     let vars: HashMap<&str, &str> = HashMap::from([
         ("LOCALAPPDATA", r"C:\Users\me\AppData\Local"),
@@ -162,6 +187,7 @@ fn linux_well_known_dirs() {
         home.join(".linuxbrew").join("bin"),
         home.join(".local").join("bin"),
         home.join("bin"),
+        home.join(".local").join("share").join("mise").join("shims"),
     ] {
         assert!(
             dirs.contains(&expected),
