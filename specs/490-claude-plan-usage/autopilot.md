@@ -44,7 +44,11 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1 (category 1, product decision the repo does not settle). Evidence: the only documented source that reports plan percentages and reset times is Claude Code's status line JSON (`rate_limits.five_hour` / `seven_day`, `used_percentage` 0-100, `resets_at` epoch s; present only for Pro/Max subscribers and only after a session's first API response; https://code.claude.com/docs/en/statusline). The Admin/usage APIs cover API-key orgs, not plans; `/api/oauth/usage` is undocumented (forbidden by the issue); local logs give token counts, not plan %/reset. The app already hands each Claude session a `--settings` file (crates/micold-daemon/src/state.rs:872, feature 026 hooks), so a status-line command can ride in it; it must chain the user's own status line so theirs keeps working.
+
+- Q1 (FR-012): Which usage source? A (Recommended) Claude Code status line `rate_limits` via the app's existing `--settings` file, chaining the user's own status line; indicator shows only while an app-launched Claude session has a reading. B Local usage logs (estimate, no plan %/reset; fails FR-004/SC-002). C Drop the feature until Anthropic documents a standalone usage API.
+- Q2 (FR-001): Default of the switch? A (Recommended) On: with source A no credential is read and nothing leaves the machine beyond the CLI's own traffic, the spec's stated condition for on. B Off (opt-in like PR status on worktrees).
+
 
 ## Follow-ups not done
 
