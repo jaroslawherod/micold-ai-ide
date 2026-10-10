@@ -106,9 +106,9 @@ in the user's home):
    key is matched case-insensitively (Windows spells it `Path`);
 2. this process's own `PATH` (`micold_core::provider::process_path`);
 3. a fixed, per-OS list of **well-known install directories**:
-   - macOS: `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `~/.local/bin`
+   - macOS: `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `~/.local/bin`, `~/.local/share/mise/shims`
    - Linux: `/usr/local/bin`, `/usr/bin`, `/snap/bin`, `/home/linuxbrew/.linuxbrew/bin`,
-     `~/.linuxbrew/bin`, `~/.local/bin`, `~/bin`
+     `~/.linuxbrew/bin`, `~/.local/bin`, `~/bin`, `~/.local/share/mise/shims`
    - Windows: `%ProgramFiles%\GitHub CLI`, `%ProgramFiles(x86)%\GitHub CLI`,
      `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\scoop\shims`,
      `%ProgramData%\chocolatey\bin`

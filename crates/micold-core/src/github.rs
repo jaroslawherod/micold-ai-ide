@@ -202,6 +202,7 @@ impl HostOs {
                 Some(PathBuf::from("/usr/local/bin")),
                 Some(PathBuf::from("/opt/local/bin")),
                 under_home(&[".local", "bin"]),
+                under_home(&[".local", "share", "mise", "shims"]),
             ]
             .into_iter()
             .flatten()
@@ -214,6 +215,7 @@ impl HostOs {
                 under_home(&[".linuxbrew", "bin"]),
                 under_home(&[".local", "bin"]),
                 under_home(&["bin"]),
+                under_home(&[".local", "share", "mise", "shims"]),
             ]
             .into_iter()
             .flatten()
