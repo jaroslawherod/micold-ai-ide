@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: clarify
-- **Next step**: clarify unit — resolve FR-012 (usage source) and FR-001 (default on/off; depends on FR-012)
+- **Phase**: plan
+- **Next step**: plan unit (FR-012/FR-001 run on orchestrator defaults pending user confirmation; see Open escalation)
 
 ## Pull requests
 
@@ -26,6 +26,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | FR-012 usage source | Claude Code status-line `rate_limits` from app-run sessions via the existing `--settings` file, user's own status line chained (FR-020) | orchestrator default (recommended), awaiting user confirmation | code.claude.com/docs/en/statusline; crates/micold-daemon/src/state.rs:872 |
+| 2 | clarify | FR-001 default | On | orchestrator default (recommended), awaiting user confirmation | spec FR-001 condition: no credential read, nothing sent |
+| 3 | clarify | FR-009 staleness without polling | Current until shown window's reset passes; details show reading time | agent | statusline docs `rate_limits` |
+| 4 | clarify | FR-019 account identity | None in source; newest reading wins | agent | spec Out of Scope (no private storage) |
+| 5 | clarify | FR-007 switch vs running sessions | New sessions always; running ones when Claude Code reloads the per-session settings file | agent | state.rs activity_launch_for |
 
 ## Review rounds
 
@@ -43,6 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 None.
 
 ## Open escalation
+
+Note: the orchestrator applied Q1 A and Q2 A as defaults (recommended), awaiting user confirmation; spec.md is written on them (Decisions 1-2). If the user picks otherwise, redo FR-001/FR-012 and their round 2 consequences.
 
 Clarify round 1 (category 1, product decision the repo does not settle). Evidence: the only documented source that reports plan percentages and reset times is Claude Code's status line JSON (`rate_limits.five_hour` / `seven_day`, `used_percentage` 0-100, `resets_at` epoch s; present only for Pro/Max subscribers and only after a session's first API response; https://code.claude.com/docs/en/statusline). The Admin/usage APIs cover API-key orgs, not plans; `/api/oauth/usage` is undocumented (forbidden by the issue); local logs give token counts, not plan %/reset. The app already hands each Claude session a `--settings` file (crates/micold-daemon/src/state.rs:872, feature 026 hooks), so a status-line command can ride in it; it must chain the user's own status line so theirs keeps working.
 
