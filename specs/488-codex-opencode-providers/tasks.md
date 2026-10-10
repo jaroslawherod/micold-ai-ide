@@ -68,7 +68,7 @@ description: "Task list for #488 Codex CLI and OpenCode as session providers"
 
 ## Polish (left to the close unit — changes no code)
 
-- [ ] T035 Grep the user guide for each provider and topic (SC-006, US6); run quickstart Parts A and C and record results; `speckit-converge`.
+- [x] T035 Grep the user guide for each provider and topic (SC-006, US6); run quickstart Parts A and C and record results; `speckit-converge`.
 
 ## Dependencies
 
@@ -130,8 +130,23 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### M6 — Sandbox image and sign-in sharing
 
 - **Tasks**: T031–T034
-- **Deliverable**: the image carries both pinned CLIs and each CLI's sign-in file is shared read-only into the sandbox.
+- **Deliverable**: the image carries both pinned CLIs and each CLI's sign-in file is shared into the sandbox, writable like Claude Code's (autopilot.md Decisions (M6)).
 - **Satisfies**: US5 acceptance scenarios 1–3; FR-013
 - **Verify**: `mise run image && mise run test-sandbox`; T031 tests
 - **Depends on**: M4
 - **Tier**: full
+
+## Phase 8: TDD remediation
+
+Verdict FAIL (`tdd/verification.md`, audited at `aac20577`). The feature is not done until the blocking findings 1 and 2 are cleared. Do not edit or tick anything above this section to satisfy them.
+
+- [x] T036 [TDD-1] Reconcile the writable Codex/OpenCode sign-in mount with the spec: amend `spec.md` US5 and FR-013 and the M6 deliverable (read-only vs writable, decision recorded in `autopilot.md`), and rewrite the predicate in `crates/micold-core/tests/sandbox_argv.rs:301-309` to derive the expected mode from `AiCli::sandbox_auth_file` per provider, not from path substrings; Copilot and Pi (no sign-in file) and the git credentials must stay `ro`. Proof: `scripts/build-lock.sh cargo test -p micold-core --test sandbox_argv` and `--test sandbox_credentials`, plus a written decision in the spec.
+- [x] T037 (core rows; client chooser and daemon rows not re-broken) [TDD-2] Create `specs/488-codex-opencode-providers/tdd/test-list.md` from spec and plan, and record the missing red for the M1 and M3 behaviors: for each (provider surface, store round trip, protocol 39, chooser lists, seam additions, Codex bind/resume/candidates, naming, bounded prefix, archive marker) break the implementation, run the single test, record command and failure in `tdd/cycle-log.md`, restore. Proof: every row has a red; `git diff -- crates` is empty afterwards.
+- [x] T038 [TDD-3] Make the activity test able to fail: give a stand-in a hook or output pattern that a wrongly added `ActivitySource` would turn into busy, or assert `activity_source` through the daemon's projection input rather than the default; drop the 3 s sampling loop in `crates/micold-daemon/tests/codex_opencode_start.rs:418-446` if it stays vacuous. Proof: with `Codex::activity_source` temporarily returning a real source the test fails; restored and green.
+- [x] T039 [TDD-4] Add a daemon test that a Codex and an OpenCode session bound by the stand-in end up named from the stand-in's first turn (`hello codex`, `hello opencode`) through `state.rs:3076`/`:3231`. Proof: `scripts/build-lock.sh cargo test -p micold-daemon --test codex_resume` names the session.
+- [x] T040 [TDD-5] Make `the_app_start_path_gives_the_same_reason_before_any_terminal` (`codex_opencode_start.rs:328`) call `ops::start_session` for an unavailable provider and assert the refusal and that no live session exists; rename it to what it checks. Proof: `cargo test -p micold-daemon --test codex_opencode_start`.
+- [x] T041 [TDD-8] Pin the unpinned logic: a `codex_first_turn` fallback case with a `<environment_context>` and an `# AGENTS.md` item before the real turn and no `event_msg`; boundary cases at 2 s inside and outside `CLOCK_ALLOWANCE` for both providers; a fourth day directory not offered (`RECENT_DAYS`). Proof: the new tests fail when each constant or filter is mutated by hand and pass restored.
+- [x] T042 (fixed sleeps stay: each asserts that nothing happens, so there is no condition to wait on) [TDD-6, TDD-7] Extract the duplicated `Env` guard from `codex_resume.rs:33-63` and `codex_opencode_start.rs:34-64` into `crates/micold-daemon/tests/support/`, replace the fixed sleeps at `codex_resume.rs:313` and `codex_opencode_start.rs:518` with waits on a condition where one exists, and lock `CODEX_HOME` in `terminal_backend.rs:143`. Proof: `mise run duplication` does not rise; the three test targets pass.
+- [x] T043 (Windows target not installed here; CI checks it) [TDD-9] Add `.cmd`/`.exe` availability cases and un-gate what does not need a shell script in `opencode_provider.rs`, or record in the spec why Windows is out of reach (as the profile does for `cfg(windows)`). Proof: `cargo check --target x86_64-pc-windows-msvc --tests`.
+- [ ] T044 (NOT RUN: out of disk in this container, see tdd/verification.md) [TDD-mutation] With enough disk (`df -h /` above the size of a workspace build) and a non-root user, run `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo mutants --in-place -p micold-core -f crates/micold-core/src/provider.rs -f crates/micold-core/src/first_turn.rs -F 'CodexProvider|OpenCodeProvider|codex_first_turn|read_prefix_bounded|write_binding|bound_|valid_conversation_id|sole_candidate'`, triage survivors, and record the score in a fresh `tdd/verification.md`. Proof: no survivor inside a DONE behavior.
+- [x] T045 [TDD-10, TDD-11] Fix the stale M1 comments at `provider.rs:1698-1701`, `codex_provider.rs:1`, `opencode_provider.rs:1`. Proof: `grep -n "fresh start only" crates/micold-core/tests/*.rs` finds nothing.

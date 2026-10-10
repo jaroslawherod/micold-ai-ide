@@ -1584,7 +1584,7 @@ impl AiCliProvider for PiProvider {
 }
 
 // ---------------------------------------------------------------------------------------
-// Codex and OpenCode (feature 488, M1: fresh start only)
+// Codex and OpenCode (feature 488, M1 and M3)
 // ---------------------------------------------------------------------------------------
 
 /// `<base>/micold-bindings/<session>.archived` — the durable close marker both providers keep
@@ -1697,8 +1697,8 @@ fn write_binding(base: &Path, session_id: Uuid, conversation: &ConversationRef) 
 
 /// OpenAI's Codex CLI (`codex`).
 ///
-/// M1 starts it fresh in the worktree and remembers the provider; resume, naming and the
-/// conversation store arrive with M3, so every store read answers "nothing recorded".
+/// Starts it in the worktree, resumes a bound conversation, names it, and reads its rollout
+/// store (feature 488, M1 and M3).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CodexProvider;
 

@@ -1,4 +1,4 @@
-//! `CodexProvider` — the Codex profile of the AI CLI seam, fresh start only (feature 488, M1, T003).
+//! `CodexProvider` — the Codex profile of the AI CLI seam, start, resume, naming and store (feature 488, M1 and M3).
 //!
 //! Every derivation is pure, so the provider is testable without the CLI installed.
 
@@ -176,6 +176,83 @@ mod resume {
         assert!(CodexProvider
             .new_conversations(base.path(), &work, since())
             .is_empty());
+    }
+
+    /// Sets a rollout's modified time, the clock `new_conversations` reads.
+    fn touch(path: &Path, when: SystemTime) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+    }
+
+    fn response_user(text: &str) -> String {
+        serde_json::json!({
+            "type": "response_item",
+            "payload": {"type": "message", "role": "user",
+                "content": [{"type": "input_text", "text": text}]},
+        })
+        .to_string()
+    }
+
+    /// T041: the fallback skips both context items Codex inserts itself, with no `event_msg`.
+    #[test]
+    fn the_fallback_name_skips_inserted_context_items() {
+        let base = tempfile::tempdir().unwrap();
+        let work = cwd(base.path());
+        let session = Uuid::from_u128(1);
+        let env = response_user("<environment_context>cwd</environment_context>");
+        let agents = response_user("# AGENTS.md instructions for /work\n\nbe nice");
+        let real = response_user("add a test");
+        rollout(base.path(), "09", A, &work, &[&env, &agents, &real]);
+        bind(base.path(), session, A, &work).unwrap();
+        assert_eq!(
+            CodexProvider
+                .read_title(base.path(), &work, session)
+                .as_deref(),
+            Some("add a test")
+        );
+    }
+
+    /// T041: a rollout last written 1 s before the spawn is inside the 2 s clock allowance, one
+    /// written 3 s before is outside it.
+    #[test]
+    fn the_clock_allowance_is_two_seconds() {
+        let base = tempfile::tempdir().unwrap();
+        let work = cwd(base.path());
+        let spawned = SystemTime::now();
+        let inside = rollout(base.path(), "09", A, &work, &[]);
+        let outside = rollout(base.path(), "09", B, &work, &[]);
+        touch(&inside, spawned - Duration::from_secs(1));
+        touch(&outside, spawned - Duration::from_secs(3));
+        let found = CodexProvider.new_conversations(base.path(), &work, spawned);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].id, A);
+    }
+
+    /// T041: only the three newest day directories are searched.
+    #[test]
+    fn a_fourth_day_directory_is_not_offered() {
+        let base = tempfile::tempdir().unwrap();
+        let work = cwd(base.path());
+        let ids = [
+            "11111111-aaaa-4aaa-8aaa-00000000000a",
+            "11111111-aaaa-4aaa-8aaa-00000000000b",
+            "11111111-aaaa-4aaa-8aaa-00000000000c",
+            "11111111-aaaa-4aaa-8aaa-00000000000d",
+        ];
+        for (day, id) in ["06", "07", "08", "09"].iter().zip(ids) {
+            rollout(base.path(), day, id, &work, &[]);
+        }
+        let mut found: Vec<String> = CodexProvider
+            .new_conversations(base.path(), &work, since())
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        found.sort();
+        assert_eq!(found, ids[1..].to_vec(), "day 06 is the fourth newest");
     }
 
     #[test]

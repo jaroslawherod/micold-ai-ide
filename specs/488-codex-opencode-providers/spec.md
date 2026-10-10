@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Closed 2026-10-10 — shipped in PRs #679, #680, #683, #684, #690, #691, #692 and the close PR
 
 **Input**: User description: "Implement GitHub issue #488: Add Codex CLI and OpenCode as session providers. Sessions can run `claude`, `copilot` or `pi`. Users of other terminal coding agents, such as OpenAI Codex CLI and OpenCode, cannot pick them. Add both, following the existing provider pattern. For each: detection of the installed binary, the start command, resume of a previous conversation where the CLI supports it, session naming from the first turn, and activity detection where the CLI exposes enough signal. Sandboxed runtime: install or mount the CLI in the image, and share its sign-in the same way as for the existing providers. Document each provider in the user guide. Acceptance: each new provider can be selected when starting a session and a session remembers it; a provider whose CLI is not installed is shown as unavailable with the reason; activity shows `Unknown` rather than a wrong state when the CLI gives no signal."
 
@@ -89,7 +89,7 @@ A user who runs sessions in the sandboxed runtime finds `codex` and `opencode` i
 
 **Why this priority**: sandbox users only; host sessions are complete without it.
 
-**Independent Test**: build the image, run each CLI's version command inside it, and check the sign-in files are visible in the container and read-only.
+**Independent Test**: build the image, run each CLI's version command inside it, and check the sign-in files are visible in the container, at the same home-relative path, and writable like Claude Code's (decision 2026-10-10 below).
 
 **Acceptance Scenarios**:
 
@@ -171,7 +171,7 @@ The user guide documents each new provider: how it is detected, what a session d
 - **Verified in plan (2026-10-09, see `research.md`)**: binaries `codex` / `opencode`; Codex resumes with `codex resume <id>`, OpenCode with `--session <id>`; neither accepts an app-chosen conversation id, so a session binds to the id the CLI minted (research R1); Codex records `~/.codex/sessions/**/rollout-*-<id>.jsonl` with `id` and `cwd` on line one; OpenCode's store is a database read through its own CLI; sign-in is `$CODEX_HOME/auth.json` and `~/.local/share/opencode/auth.json`.
 - **Probe-dependent (T001 settles them; the fallbacks stay in force until then)**: V5 for OpenCode, V8, V10, V13, V14, V15.
 - **Still assumed (fallback in force)**: first-turn line shapes (no label), OpenCode JSON field names (unbound, no label), activity (`Unknown`), per-launch tool-server binding (unsupported, logged), Codex folder-trust prompt (a directory with a recorded `trust_level` accepts prompt injection; an unrecorded one is refused as `AsksTrust`).
-- **Correction to the seam assumption**: sandbox sign-in sharing is one claude-only file today, so FR-013 means one read-only sign-in file per provider; the plan adds a required seam method (research R5). The protocol version bump is 38 → 39.
+- **Correction to the seam assumption**: sandbox sign-in sharing is one claude-only file today, so FR-013 means one sign-in file per provider, shared the way Claude Code's is (writable, so a token refresh persists; a read-only mount would break a refresh; research R5 assumed read-only and was wrong); the plan adds a required seam method (research R5). The protocol version bump is 38 → 39.
 - The existing provider seam is extended only where the plan shows a gap (conversation identity, per-provider sign-in file), with existing providers returning their old values.
 - A first-turn name is shown only if the CLI's record carries the turn in a form readable without running the CLI.
 

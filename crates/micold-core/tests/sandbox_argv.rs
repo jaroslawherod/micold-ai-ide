@@ -20,6 +20,7 @@ use micold_core::sandbox::runtime::{
 use micold_core::sandbox::{
     CredentialLayout, CredentialShare, MountSet, SandboxProfile, SandboxSpec, SecretMount,
 };
+use micold_core::session::AiCli;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -301,10 +302,17 @@ fn only_the_ai_cli_sign_in_is_mounted_writable() {
         if !credential_hosts.contains(&host) {
             continue;
         }
-        // Every CLI's sign-in file, not only Claude Code's (feature 488).
-        let is_sign_in = host == sign_in
-            || host.ends_with("auth.json")
-                && (host.contains(".codex") || host.contains("opencode"));
+        // Every CLI's sign-in file, as that provider names it (feature 488, T036).
+        let is_sign_in = [
+            AiCli::ClaudeCode,
+            AiCli::Codex,
+            AiCli::OpenCode,
+            AiCli::Copilot,
+            AiCli::Pi,
+        ]
+        .iter()
+        .filter_map(|cli| cli.provider().sandbox_auth_file(Path::new(NIX_HOME)))
+        .any(|f| f.to_string_lossy() == host.as_str());
         let expected = if is_sign_in { "rw" } else { "ro" };
         assert_eq!(mode, expected, "credential mount {host} has the wrong mode");
     }

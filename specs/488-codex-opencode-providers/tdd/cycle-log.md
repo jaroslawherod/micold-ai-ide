@@ -48,3 +48,32 @@ Red run (2026-10-09) of `cargo test -p micold-core --test sandbox_credentials` b
 | Absent files are pruned one by one, the present one stays | client `only_the_sign_in_files_this_host_has_are_shared` |
 
 Existing tests that assumed one sign-in file were updated mechanically (`each_opt_in_adds_exactly_one_mount`, the two `home_*_to_create` tests, the two client prune tests). Finding: the sign-in mount is writable (rule N-4), not read-only as research R5 assumed; Codex/OpenCode follow Claude Code, the guide says so.
+
+# TDD cycle log — #488 M1/M3 retrospective red (T037) and T041 pins
+
+Core behaviours only; the client and daemon rows belong to their crates. Each break was applied by hand to one line, the single test run, the line restored (2026-10-10). Command prefix: `cargo test -p micold-core --test`.
+
+| Behaviour | Break applied | Command (after the prefix) and failing line |
+|---|---|---|
+| Provider surface | `CodexProvider::command` returns `"codexx"` | `codex_provider identity_is_codex` — `left: "codexx" right: "codex"` |
+| Store round trip | `StoredAiCli::Codex => AiCli::Pi` in `store.rs` | `store_roundtrip every_provider_survives` — `left: [.., Pi, Pi, OpenCode] right: [.., Pi, Codex, OpenCode]` |
+| Protocol 39 | `PROTOCOL_VERSION` = 38 | `schema_hash` — `the_wire_changes_for_this_feature_cost_exactly_one_version_bump`, `left: 38 right: 39` |
+| Chooser lists | `AiCli::ALL` lists `Pi` where `Codex` was | `ai_cli_registry` — `iterating_the_variants_is_deterministic_and_complete` |
+| Seam additions | `ClaudeProvider::identity` returns `Minted` | `ai_cli_provider the_app_picks` — `left: Minted right: AppAssigned` |
+| Codex candidates | cwd filter replaced by `true` | `codex_provider a_rollout_for_another` — assertion that no candidate is offered fails |
+| Naming | `"user_message"` matched as `"user_messagex"` | `codex_provider the_session_is_named` — `left: None right: Some("fix the flaky test")` |
+| Bounded prefix | `PREFIX_BYTES` 64 KiB → 64 MiB | `codex_provider only_a_bounded` — `left: Some("too late") right: None` |
+| Archive marker | `mark_archived` writes nothing | `codex_provider closing_marks` — `is_archived` assertion fails |
+| Codex bind/resume | rows in the M3 table above (T018/T019 breaks) | not repeated |
+
+T041 pins, each failing when its constant or filter is mutated (provider.rs lines, then restored):
+
+| Pin | Mutation | Failing test |
+|---|---|---|
+| 2 s `CLOCK_ALLOWANCE`, Codex (1 s inside, 3 s outside) | `from_secs(0)` and `from_secs(10)` | `codex_provider resume::the_clock_allowance_is_two_seconds` (both) |
+| 2 s `CLOCK_ALLOWANCE`, OpenCode | `from_secs(0)` and `from_secs(10)` | `opencode_provider resume::the_clock_allowance_is_two_seconds` (both) |
+| `RECENT_DAYS` = 3 | 4 and 2 | `codex_provider resume::a_fourth_day_directory_is_not_offered` (both) |
+| Fallback skips `<…` context item | drop `!starts_with('<')` | `resume::the_fallback_name_skips_inserted_context_items` |
+| Fallback skips `# AGENTS.md` item | drop that filter | same test |
+
+Note: in the first mutation run (dropped `<` filter) `the_seam_answers_for_activity_tools_readiness_and_trust` also failed once; it passes unmutated and in every other run, and was not reproduced.

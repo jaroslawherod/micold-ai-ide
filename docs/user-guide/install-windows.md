@@ -8,8 +8,9 @@ the installer does, how to upgrade and remove it, and what the package cannot do
 Micold AI IDE runs *your* tools rather than bundling them. Install these first:
 
 - [Git for Windows](https://git-scm.com/download/win) — projects and worktrees are git repositories.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) or
-  [GitHub Copilot CLI](https://docs.github.com/en/copilot), signed in and on your `PATH`.
+- An AI CLI, signed in and on your `PATH`: [Claude Code](https://docs.claude.com/en/docs/claude-code),
+  [GitHub Copilot CLI](https://docs.github.com/en/copilot), [Codex](https://github.com/openai/codex) or
+  [OpenCode](https://opencode.ai/).
 
 Windows 11, or Windows 10 version 1809 or later, is required.
 
