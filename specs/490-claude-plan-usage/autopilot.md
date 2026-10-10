@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: plan
-- **Next step**: plan unit (FR-012/FR-001 run on orchestrator defaults pending user confirmation; see Open escalation)
+- **Phase**: tasks
+- **Next step**: tasks unit (milestones M1 core/settings/wire, M2 status-line relay = swappable source, M3 indicator/settings UI/docs in plan.md; FR-012/FR-001 still on orchestrator defaults, see Open escalation)
 
 ## Pull requests
 
@@ -31,12 +31,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | clarify | FR-009 staleness without polling | Current until shown window's reset passes; details show reading time | agent | statusline docs `rate_limits` |
 | 4 | clarify | FR-019 account identity | None in source; newest reading wins | agent | spec Out of Scope (no private storage) |
 | 5 | clarify | FR-007 switch vs running sessions | New sessions always; running ones when Claude Code reloads the per-session settings file | agent | state.rs activity_launch_for |
+| 6 | plan | Relay binary for the status line | The daemon executable with a `status-line` argument; user's statusLine resolved at session prepare time and chained | agent | research.md R3, R4 |
 
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 9b2c2be0c4f91c4d56352d31de30d7e240d7d52b:149cda625a4e7942faafdff528924971fb1bd223 | CLEAN (3 MINOR, all fixed: FR-019 + US3 scenario 6 for account change, FR-007 single 5-minute interval, checklist testable item unticked) |
+| Plan | 1 | 6faf43340f356aff088fee399abf65dceed3b86c:fddb3ebf8d1340bb82ea64e182257534998538e1 | CLEAN (3 MINOR, all fixed: claude_settings_dir marked new, sandbox placement risk, FR-003/FR-011 test lines) |
 
 ## Declined review findings
 
