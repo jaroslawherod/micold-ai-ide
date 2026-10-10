@@ -22,6 +22,11 @@
 //! The first draft of `gallery.rs` failed this check on its own scheme-control label. That is the
 //! check working: the label is a decision about state, and it now lives in the reducer with a test.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -42,39 +47,6 @@ fn glue_sources() -> Vec<(String, String)> {
             ((*rel).to_string(), source)
         })
         .collect()
-}
-
-/// Strips `//` line comments and `/* */` blocks, so this file's own subject matter — which both glue
-/// files discuss in their module docs — cannot read as a violation.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
 }
 
 /// A branch, as it appears in source.
@@ -99,7 +71,7 @@ const STATE: &[&str] = &[
 fn decisions(sources: &[(String, String)]) -> Vec<String> {
     let mut out = Vec::new();
     for (path, src) in sources {
-        for (i, line) in code_only(src).lines().enumerate() {
+        for (i, line) in strip_comments(src).lines().enumerate() {
             let branches = BRANCHES.iter().any(|b| line.contains(b));
             let reads_state = STATE.iter().any(|s| line.contains(s));
             if branches && reads_state {

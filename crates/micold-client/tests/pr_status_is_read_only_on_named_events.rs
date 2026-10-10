@@ -14,6 +14,11 @@
 //! 3. the source's `read` is reached from one place;
 //! 4. nothing logs a pull request's title or address.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::rs_files;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -74,24 +79,7 @@ fn repo_root() -> PathBuf {
 
 fn client_sources(root: &Path) -> Vec<PathBuf> {
     // An unreadable path fails the scan rather than shrinking it.
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let entries =
-            fs::read_dir(dir).unwrap_or_else(|e| panic!("cannot list {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry
-                .unwrap_or_else(|e| panic!("cannot read an entry of {}: {e}", dir.display()))
-                .path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                out.push(path);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&root.join("crates/micold-client/src"), &mut out);
-    out.sort();
-    out
+    rs_files(&root.join("crates/micold-client/src"))
 }
 
 fn is_comment(line: &str) -> bool {

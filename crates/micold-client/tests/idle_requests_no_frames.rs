@@ -23,6 +23,11 @@
 #[path = "support/mod.rs"]
 mod support;
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, src_dir, strip_comments};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -253,70 +258,16 @@ const SANCTIONED: &str = "ui/cdk/motion.rs";
 
 /// Every `.rs` file under the render directories, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for dir in RENDER_DIRS {
-        walk(&src.join(dir), &mut out);
-    }
-    out.sort();
-    out
-}
-
-/// Strips `//` line comments and `/* */` blocks, so prose *about* the rule cannot trip it — this
-/// file's own subject matter appears in several module docs.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    let src = src_dir();
+    let dirs: Vec<_> = RENDER_DIRS.iter().map(|dir| src.join(dir)).collect();
+    sources_under(&dirs)
 }
 
 /// Lines of real code naming `request_redraw`, as `(file, line number, text)`.
 fn redraw_call_sites() -> Vec<(String, usize, String)> {
     let mut sites = Vec::new();
     for (path, src) in ui_sources() {
-        for (i, line) in code_only(&src).lines().enumerate() {
+        for (i, line) in strip_comments(&src).lines().enumerate() {
             if line.contains("request_redraw") {
                 sites.push((path.clone(), i + 1, line.trim().to_string()));
             }
@@ -362,7 +313,7 @@ fn only_the_motion_primitive_asks_for_frames() {
 ///    so what holds it is who may call it: `wake_at_has_one_caller` below.
 #[test]
 fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
-    let src = code_only(
+    let src = strip_comments(
         &fs::read_to_string(ui_dir().join("cdk/motion.rs")).expect("read the motion primitive"),
     );
     let lines: Vec<&str> = src.lines().collect();
@@ -435,7 +386,7 @@ fn wake_at_has_one_caller() {
         if path == SANCTIONED {
             continue;
         }
-        for (i, line) in code_only(&src).lines().enumerate() {
+        for (i, line) in strip_comments(&src).lines().enumerate() {
             if line.contains("wake_at(") {
                 sites.push((path.clone(), i + 1, line.trim().to_string()));
             }
@@ -530,7 +481,7 @@ fn assembles_in_layout(body: &str) -> bool {
 fn assemblers() -> Vec<(String, String)> {
     let mut out = Vec::new();
     for (path, src) in ui_sources() {
-        for (header, body) in impl_blocks(&code_only(&src)) {
+        for (header, body) in impl_blocks(&strip_comments(&src)) {
             if assembles_in_layout(&body) {
                 out.push((path.clone(), header));
             }
@@ -568,7 +519,7 @@ fn a_widget_that_assembles_in_layout_keeps_its_subtree() {
     let offenders: Vec<_> = found
         .iter()
         .filter(|(path, header)| {
-            let src = code_only(
+            let src = strip_comments(
                 &sources
                     .iter()
                     .find(|(p, _)| p == path)

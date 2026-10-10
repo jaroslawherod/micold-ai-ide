@@ -49,6 +49,11 @@
 //! joined up later. The rule is not "every figure is applied". It is T097's wording: a figure must
 //! not sit in the state where the requirement is *neither met nor waived*.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, strip_comments};
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -225,67 +230,7 @@ fn in_crate_gates() -> BTreeSet<String> {
 
 /// The rendering layer's sources, as `(path relative to src, code)`.
 fn sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    for dir in rendering_dirs() {
-        walk(&dir, &mut out);
-    }
-    out.sort();
-    out
-}
-
-/// Strips comments, so a constant *discussed* in prose is not mistaken for one that is used.
-///
-/// This matters more here than in `type_role_call_sites.rs`: the files that lost a figure are
-/// precisely the ones whose comments now explain the loss at length, and `button.rs` names
-/// `density::BUTTON_BASE` twice in the comment above the line that finally applies it.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    sources_under(&rendering_dirs())
 }
 
 /// Byte offset of the first *inline* `#[cfg(test)]` module, if any.
@@ -323,7 +268,7 @@ fn inline_test_module(code: &str) -> Option<usize> {
 /// A constant named only by a unit test is not a component using it, the same way an in-crate gate
 /// naming one is not.
 fn production_code(src: &str) -> String {
-    let code = code_only(src);
+    let code = strip_comments(src);
     match inline_test_module(&code) {
         Some(i) => code[..i].to_string(),
         None => code,
@@ -514,7 +459,7 @@ fn the_test_module_convention_this_relies_on_holds() {
     let offenders: Vec<String> = sources()
         .into_iter()
         .filter_map(|(path, src)| {
-            let code = code_only(&src);
+            let code = strip_comments(&src);
             let tail = inline_test_module(&code).map(|i| &code[i..])?;
             // A second inline module inside the tail means the first was not the file's last word.
             inline_test_module(&tail[1..]).map(|_| format!("  {path}"))

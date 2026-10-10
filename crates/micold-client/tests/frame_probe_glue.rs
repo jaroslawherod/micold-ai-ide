@@ -22,6 +22,11 @@
 //! The check is structural because the behavioural version is not available: `subscription` is
 //! private to the binary and a `Subscription` cannot be inspected for its contents.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -59,42 +64,9 @@ fn source() -> String {
     out
 }
 
-/// Strips `//` line comments and `/* */` blocks, so this file's subject matter — which `main.rs`
-/// discusses at length around the very code being checked — cannot read as a violation.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 /// Real lines of code subscribing to the per-frame clock, as `(line number, text)`.
 fn frame_clock_sites(src: &str) -> Vec<(usize, String)> {
-    code_only(src)
+    strip_comments(src)
         .lines()
         .enumerate()
         .filter(|(_, l)| l.contains("window::frames()"))
@@ -123,7 +95,7 @@ fn the_frame_clock_is_subscribed_in_exactly_one_place() {
 /// in every other test and turns the idle application into one that never sleeps.
 #[test]
 fn the_frame_clock_is_gated_on_a_measurement_run() {
-    let src = code_only(&source());
+    let src = strip_comments(&source());
     let lines: Vec<&str> = src.lines().collect();
 
     let at = lines
@@ -153,7 +125,7 @@ fn the_frame_clock_is_gated_on_a_measurement_run() {
 /// ever composes, for no one.
 #[test]
 fn the_probe_is_absent_unless_a_run_was_configured() {
-    let src = code_only(&source());
+    let src = strip_comments(&source());
     assert!(
         src.contains("probe: Option<"),
         "the probe must be optional state — an always-present probe means `view` times every frame \
@@ -198,7 +170,7 @@ fn the_scan_actually_reads_the_binary() {
 fn an_ungated_frame_clock_would_be_caught() {
     let planted =
         "let mut subs = vec![];\nsubs.push(iced::window::frames().map(|_| Message::NoOp));\n";
-    let src = code_only(planted);
+    let src = strip_comments(planted);
     let lines: Vec<&str> = src.lines().collect();
     let at = lines
         .iter()

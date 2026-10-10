@@ -18,6 +18,11 @@
 //! Text scanning, not type inspection: the property is about what a *source file* is allowed to
 //! name. A module that cannot name `text_input` cannot render an off-spec one.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -103,38 +108,6 @@ fn collect_tree(dir: &Path, out: &mut BTreeMap<String, String>) {
             out.insert(key, fs::read_to_string(&path).expect("read source"));
         }
     }
-}
-
-/// Strips `//` line comments and `/* */` blocks, so prose naming a widget is not a violation.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
 }
 
 /// Rendering widgets that carry an appearance, and so must come from the library (contract §1).
@@ -249,7 +222,7 @@ fn totals() -> (usize, usize, usize) {
     let mut styles = 0;
     let mut sizes = 0;
     for src in feature_modules().values() {
-        let code = code_only(src);
+        let code = strip_comments(src);
         widgets += widget_calls(&code);
         styles += style_references(&code);
         sizes += raw_size_references(&code);
@@ -262,7 +235,7 @@ fn breakdown() -> String {
     let mut rows: Vec<(usize, String)> = feature_modules()
         .iter()
         .map(|(name, src)| {
-            let code = code_only(src);
+            let code = strip_comments(src);
             let (w, s, z) = (
                 widget_calls(&code),
                 style_references(&code),

@@ -61,6 +61,11 @@
 //! failed, naming `probe`. The message is recorded in
 //! `specs/028-feature-encapsulation/assertion-adjudications.md`.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{read_rs_under, strip_line_comments};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -133,41 +138,13 @@ fn tests_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
 }
 
-/// Source with `//` comments stripped, so a name in prose is not a name in code.
-fn code_only(src: &str) -> String {
-    src.lines()
-        .map(|line| match line.find("//") {
-            Some(at) => &line[..at],
-            None => line,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// Every `.rs` file under `src/`, as `(path relative to src/, code)`.
 fn sources() -> BTreeMap<String, String> {
-    fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<String, String>) {
-        for entry in fs::read_dir(dir).expect("read src dir") {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, root, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let rel = path
-                    .strip_prefix(root)
-                    .expect("under src")
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                out.insert(
-                    rel,
-                    code_only(&fs::read_to_string(&path).expect("read source")),
-                );
-            }
-        }
-    }
     let root = src_dir();
-    let mut out = BTreeMap::new();
-    walk(&root, &root, &mut out);
-    out
+    read_rs_under(std::slice::from_ref(&root), &root)
+        .into_iter()
+        .map(|(name, src)| (name, strip_line_comments(&src)))
+        .collect()
 }
 
 /// The feature modules, by the files that exist.
@@ -222,7 +199,7 @@ fn every_feature_module_is_registered_exactly_once() {
         modules.len()
     );
 
-    let declared: BTreeSet<String> = code_only(
+    let declared: BTreeSet<String> = strip_line_comments(
         &fs::read_to_string(src_dir().join("features/mod.rs")).expect("read features/mod.rs"),
     )
     .lines()
@@ -287,16 +264,17 @@ fn every_feature_module_is_registered_exactly_once() {
 #[test]
 fn the_shell_half_exception_covers_only_real_shell_halves() {
     let modules = feature_modules();
-    let declared: BTreeSet<String> =
-        code_only(&fs::read_to_string(src_dir().join("shell/mod.rs")).expect("read shell/mod.rs"))
-            .lines()
-            .filter_map(|line| {
-                line.trim()
-                    .strip_prefix("pub mod ")?
-                    .strip_suffix(';')
-                    .map(str::to_string)
-            })
-            .collect();
+    let declared: BTreeSet<String> = strip_line_comments(
+        &fs::read_to_string(src_dir().join("shell/mod.rs")).expect("read shell/mod.rs"),
+    )
+    .lines()
+    .filter_map(|line| {
+        line.trim()
+            .strip_prefix("pub mod ")?
+            .strip_suffix(';')
+            .map(str::to_string)
+    })
+    .collect();
 
     for name in declared.intersection(&modules) {
         let path = src_dir().join("shell").join(format!("{name}.rs"));
@@ -307,7 +285,7 @@ fn the_shell_half_exception_covers_only_real_shell_halves() {
              `every_feature_module_is_registered_exactly_once` would be excusing a declaration \
              that is not a shell half at all"
         );
-        let code = code_only(&fs::read_to_string(&path).expect("read shell half"));
+        let code = strip_line_comments(&fs::read_to_string(&path).expect("read shell half"));
         assert!(
             code.contains(&format!("features::{name}::Msg")),
             "`src/shell/{name}.rs` borrows the `{name}` feature's name without naming \

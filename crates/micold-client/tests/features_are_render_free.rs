@@ -15,7 +15,11 @@
 //! requires naming the framework, and forbidding that would push out useful commentary while
 //! catching nothing.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{read_rs_under, strip_line_comments};
+
 use std::path::{Path, PathBuf};
 
 fn features_dir() -> PathBuf {
@@ -24,42 +28,7 @@ fn features_dir() -> PathBuf {
 
 /// Every `.rs` file under `src/features/`, recursively, as `(display path, source)`.
 fn feature_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string();
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&features_dir(), &mut out);
-    out
-}
-
-/// Strip `//`-style comments so a mention in prose does not read as a dependency.
-///
-/// Deliberately crude: it does not understand `//` inside a string literal. A false positive there
-/// would be a feature module embedding "//" in a literal *and* naming the framework beside it,
-/// which is not a thing that happens quietly — and erring toward flagging is the right direction
-/// for a guard.
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .map(|line| match line.find("//") {
-            Some(i) => &line[..i],
-            None => line,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    read_rs_under(&[features_dir()], Path::new(env!("CARGO_MANIFEST_DIR")))
 }
 
 #[test]
@@ -67,7 +36,7 @@ fn no_feature_module_names_the_rendering_framework_in_code() {
     let offenders: Vec<String> = feature_sources()
         .into_iter()
         .filter_map(|(name, source)| {
-            let code = code_only(&source);
+            let code = strip_line_comments(&source);
             code.contains("iced").then(|| {
                 let line = code
                     .lines()

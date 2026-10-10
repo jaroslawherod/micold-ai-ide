@@ -31,8 +31,11 @@
 #![allow(dead_code)]
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
+
+#[path = "source_scan.rs"]
+mod source_scan;
+pub use source_scan::code_only;
 
 /// Methods that mutate the receiver, for state paths whose type this file does not decompose.
 ///
@@ -133,7 +136,7 @@ pub const READERS: &[&str] = &[
 ];
 
 pub fn src_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    source_scan::src_dir()
 }
 
 pub fn workspace_rs() -> PathBuf {
@@ -142,80 +145,10 @@ pub fn workspace_rs() -> PathBuf {
 
 /// Every `.rs` file under `src/`, as `(path relative to src/, source with comments stripped)`.
 pub fn sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(src_dir())
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                let src = fs::read_to_string(&path).expect("read source");
-                out.push((name, code_only(&src)));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&src_dir(), &mut out);
-    out.sort();
-    out
-}
-
-/// Strips comments and string literals, so the doc comments explaining this rule — and any test
-/// fixture quoting a field name — cannot trip it.
-pub fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    let mut in_line = false;
-    let mut in_str = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        if in_line {
-            if c == '\n' {
-                in_line = false;
-                out.push('\n');
-            }
-            continue;
-        }
-        if in_str {
-            if c == '\\' {
-                chars.next();
-            } else if c == '"' {
-                in_str = false;
-            }
-            continue;
-        }
-        match c {
-            '"' => {
-                in_str = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'/') => {
-                in_line = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                chars.next();
-                in_block = true;
-                continue;
-            }
-            _ => {}
-        }
-        out.push(c);
-    }
-    out
+    source_scan::sources_under(&[src_dir()])
+        .into_iter()
+        .map(|(name, src)| (name, code_only(&src)))
+        .collect()
 }
 
 /// Length of the braced block whose opening brace has already been consumed.

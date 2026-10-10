@@ -33,6 +33,11 @@
 //! resulting chrome would be a truer test and a far larger one, and it would still be checking that
 //! a call site is joined up — which is a property of the source.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{rs_files, src_dir};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -44,35 +49,25 @@ use std::path::{Path, PathBuf};
 /// the focused one, which is the only place `.active(true)` legitimately appears without a keyboard
 /// anywhere near it.
 fn rendering_files() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if path.file_name().is_some_and(|n| n == "material") {
-                    continue;
-                }
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-
-    let mut out = Vec::new();
-    walk(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("ui"),
-        &mut out,
-    );
-    out
+    // The material library draws the widgets; this guard is about their call sites.
+    let ui = src_dir().join("ui");
+    rs_files(&ui)
+        .into_iter()
+        .filter(|path| {
+            let rel = path.strip_prefix(&ui).unwrap_or(path);
+            !rel.components().any(|c| c.as_os_str() == "material")
+        })
+        .map(|path| {
+            let name = path
+                .strip_prefix(src_dir())
+                .unwrap_or(&path)
+                .display()
+                .to_string()
+                .replace('\\', "/");
+            let src = std::fs::read_to_string(&path).expect("read source");
+            (name, src)
+        })
+        .collect()
 }
 
 /// The builder expression starting at `from`: everything up to the `;` that ends the statement.

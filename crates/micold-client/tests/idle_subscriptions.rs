@@ -22,23 +22,16 @@
 //! trick would read `subs.push(` and conclude it was unguarded. Tracking which block a line sits
 //! inside costs thirty lines and does not care how the argument is wrapped.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_line_comments;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 fn subscriptions_rs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/subscriptions.rs")
-}
-
-/// Strips `//` line comments, so this file's subject matter — which `subscriptions.rs` discusses
-/// at length directly above each of the pushes being checked — cannot be read as code.
-fn code_only(src: &str) -> String {
-    src.lines()
-        .map(|l| match l.find("//") {
-            Some(at) => &l[..at],
-            None => l,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// The line that opened the innermost block `needle` sits inside, or `None` if it sits at the top
@@ -49,7 +42,7 @@ fn code_only(src: &str) -> String {
 /// line that both opens and closes (`|| { … }`) nets to zero and is correctly ignored.
 fn enclosing_block(src: &str, needle: &str) -> Option<String> {
     let mut stack: Vec<String> = Vec::new();
-    for line in code_only(src).lines() {
+    for line in strip_line_comments(src).lines() {
         if line.contains(needle) {
             return stack.last().cloned();
         }
@@ -99,7 +92,7 @@ fn the_snackbar_clock_is_subscribed_only_while_a_notification_is_showing() {
 #[test]
 fn the_pointer_is_not_subscribed_at_all() {
     let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
-    let code = code_only(&src);
+    let code = strip_line_comments(&src);
     for banned in ["cursor_move", "CursorMoved"] {
         assert!(
             !code.contains(banned),

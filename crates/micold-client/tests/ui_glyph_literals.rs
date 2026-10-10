@@ -20,6 +20,11 @@
 //!
 //! Pure file inspection — no iced, runs under `cargo test --no-default-features`.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::rs_files;
+
 use std::path::{Path, PathBuf};
 
 /// Unicode blocks whose members are icon-like: a text font may map none of them, and anything the
@@ -47,21 +52,8 @@ fn glyph_block(c: char) -> Option<&'static str> {
 
 /// Every `.rs` file under `src/ui/`, recursively.
 fn ui_sources() -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(dir).expect("src/ui must be readable") {
-            let path = entry.expect("dir entry must be readable").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                out.push(path);
-            }
-        }
-    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
-    let mut out = Vec::new();
-    walk(&root, &mut out);
-    out.sort();
-    out
+    rs_files(&root)
 }
 
 /// One literal found in a source file: its decoded text and the 1-based line it starts on.

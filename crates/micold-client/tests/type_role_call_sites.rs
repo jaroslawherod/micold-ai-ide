@@ -28,7 +28,11 @@
 //! exactly **one** file, the one that turns a role into a size. Anywhere else, a call site can only
 //! reach the scale through a role — which is the property the first rule was trying to buy.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, strip_comments};
+
 use std::path::{Path, PathBuf};
 
 /// Everything that renders: the shared library, the feature modules, and the showcase — which is
@@ -39,63 +43,7 @@ fn rendering_dirs() -> Vec<PathBuf> {
 }
 
 fn sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    for dir in rendering_dirs() {
-        walk(&dir, &mut out);
-    }
-    out.sort();
-    out
-}
-
-/// Strips comments, so prose about sizes is not mistaken for setting one.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    sources_under(&rendering_dirs())
 }
 
 /// `true` when `arg` is a bare numeric literal rather than a named value.
@@ -141,7 +89,7 @@ const TYPE_SETTERS: &[&str] = &[".size(", ".line_height(", ".weight("];
 fn offences() -> Vec<String> {
     let mut out = Vec::new();
     for (path, src) in sources() {
-        for (i, line) in code_only(&src).lines().enumerate() {
+        for (i, line) in strip_comments(&src).lines().enumerate() {
             for setter in TYPE_SETTERS {
                 for arg in args_of(line, setter) {
                     if is_numeric_literal(arg) {
@@ -194,7 +142,7 @@ fn only_the_role_table_names_the_type_scale() {
         if path == RESOLVES_ROLES || path.ends_with("type_role_mapping.rs") {
             continue;
         }
-        for (i, line) in code_only(&src).lines().enumerate() {
+        for (i, line) in strip_comments(&src).lines().enumerate() {
             for needle in NAMES_THE_SCALE {
                 if line.contains(needle) {
                     found.push(format!("  {path}:{}  names `{needle}`", i + 1));

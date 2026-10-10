@@ -16,7 +16,11 @@
 //! registry, **and** when the registry stops constructing one of the kinds it is supposed to hold.
 //! A scan that cannot fire is worth nothing, and this feature has already produced one of those.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::read_rs_under;
+
 use std::path::{Path, PathBuf};
 
 /// The one file allowed to construct covered states, relative to `tests/`.
@@ -36,27 +40,7 @@ fn tests_dir() -> PathBuf {
 
 /// Every `.rs` file under `tests/`, recursively, as `(path relative to tests/, source)`.
 fn test_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(tests_dir())
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&tests_dir(), &mut out);
-    out.sort();
-    out
+    read_rs_under(&[tests_dir()], &tests_dir())
 }
 
 /// Strips comments, string literals and char literals, leaving executable code.
