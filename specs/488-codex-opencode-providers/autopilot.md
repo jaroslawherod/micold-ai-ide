@@ -76,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 visual pass: not run, no UI change.
 - M5 A (reviewer, sonnet) round 1 (snapshot cdae90711bbfb1ce934bf3ee8ad715c6fb97e802:940a8f2ad1470dd16f27b9346b69e3806dafaa56): CLEAN, 3 MINOR (cycle-log cell fixed; wrap and 2 s sleep left). M5 B (conformance, sonnet) round 1 (same snapshot): CLEAN, 2 MINOR (cycle-log cell and AS2 mapping fixed). M5 visual pass: not run, no UI change. T029: no code change.
 
+- Close A (fresh reviewer, snapshot 67ee85bf16c362aff474d29ab97e728298103fcd:95e49e6fc6c4e94193f2f8a4a922bc0f931d2915): CLEAN. Close B (conformance, sonnet, same snapshot): CHANGES, 3 MAJOR (T035 annotation, verification.md header vs close, T042/T043 proof records) fixed as records/prose only, 2 MINOR fixed. Gate: fmt, clippy, tests (only the 6 root-only permission tests fail), scripts tests, sandbox-real-runtime check all green. Visual pass: not run, no UI change.
+
 ## Decisions (M6)
 
 - The sign-in mount is writable (rule N-4, `CredentialShare::writable`), not read-only as research R5 assumed; kept for every CLI so a refresh persists as for Claude Code (FR-013 "writing nothing existing providers would not write"). Guide says so. A read-only mount would break claude.
