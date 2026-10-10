@@ -1346,7 +1346,7 @@ mod catalog_recovery_tests {
         target.legacy_default_daemon = registry.entries().first().map(|e| e.id);
         target.daemon.placement = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
         let mut saved = target.clone();
-        saved.theme = ThemePreference::Light;
+        saved.theme = micold_core::theme::ThemePreference::Light;
         let baseline = target.clone();
         set_changed(&mut target, &saved, Some(&baseline));
         assert_eq!(target.daemons, registry.entries().to_vec());

@@ -54,6 +54,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 F4 | binding outlives its deleted worktree | Same-name reuse through a path that binds nothing falls back to the stored binding; dropping bindings on delete is registry-editing work (M3); noted as follow-up. |
+| M1 | B r1 F1 | attach flow has no daemon choice | "Attach" in US1-4 is the form's existing-branch source, which goes through the same `WorktreeCreate` and binds. `AttachApply` (assistant-made worktrees) is a different flow whose rows take the legacy default until rebound (M3). |
+| M1 | B r1 F2 | Default location never bound | The `""` key resolves to the legacy default; an explicit write needs the rebind action (M3, T034). Test A1 covers resolution. |
+| M1 | B r1 F4 | T010 production wiring | Per-daemon inputs exist and are tested; callers switch in M2 with the actor (T018+), as T014 keeps the single path. |
 
 ## Handover
 
