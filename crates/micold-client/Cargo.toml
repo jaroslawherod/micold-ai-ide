@@ -32,6 +32,8 @@ name = "micold-showcase"
 path = "src/showcase/main.rs"
 
 [dependencies]
+# Feature 490: the local time zone offset for plan-usage reset times (research R11).
+chrono = { workspace = true }
 micold-core = { workspace = true }
 iced = { workspace = true }
 dark-light = { workspace = true }
