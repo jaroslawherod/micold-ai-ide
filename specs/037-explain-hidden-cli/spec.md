@@ -213,7 +213,7 @@ that already have a list to open: a row with fewer than two available CLIs has n
 FR-006) and stays as it is. That user, the BUG-001 reporter among them, is served by Stories 1
 and 2.
 
-**Independent Test**: With three supported CLIs and two projects whose environments differ, so
+**Independent Test**: With three supported CLIs and two projects whose environments differ, so (BUG-753: the row that lacks a CLI shows it as a disabled item with a red icon and the reason in a tooltip; "says nothing" holds for the other row.)
 that one row finds all three and the other finds two, open the per-session CLI choice on each row.
 The row that lacks a CLI says so and gives the reason for that row's directory. The other row says
 nothing. A third row whose directory provides one CLI has no chevron, as today.
