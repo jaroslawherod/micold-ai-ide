@@ -5480,12 +5480,26 @@ mod script_path_report {
         assert_eq!(result.map(|c| c.path), Some(path));
     }
 
+    /// Carry the stored daemon registry onto a drafted `Settings` (feature 491): the settings form
+    /// does not hold it, and a save keeps what is stored.
+    fn keep_registry(
+        drafted: &mut micold_core::settings::Settings,
+        store: &micold_core::settings::FakeSettingsStore,
+    ) {
+        let stored = micold_core::settings::SettingsStore::load(store).settings;
+        drafted.daemons = stored.daemons;
+        drafted.next_daemon_id = stored.next_daemon_id;
+        drafted.legacy_default_daemon = stored.legacy_default_daemon;
+    }
+
     #[test]
     fn a_save_with_a_missing_path_writes_exactly_the_drafted_settings_and_nothing_of_the_check() {
         let path = stored_path();
         let (mut app, _probe, store) =
             saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
-        let expected = valid_draft(&app).into_settings();
+        let mut expected = valid_draft(&app).into_settings();
+        // The form does not hold the registry (feature 491); the stored one is kept.
+        keep_registry(&mut expected, &store);
 
         save_and_check(&mut app);
 
@@ -5930,7 +5944,8 @@ mod script_path_report {
             .expect("Settings is open")
             .environment
             .timeout_secs = "9".to_string();
-        let draft = valid_draft(&app).into_settings();
+        let mut draft = valid_draft(&app).into_settings();
+        keep_registry(&mut draft, &store);
         save_and_check(&mut app);
         let _ = open_and_check(&mut app);
 
