@@ -266,7 +266,8 @@ fn on_statuses_read(
         .take(MERGED_CHECK_LIMIT)
         .collect();
     let project = app.core.workspace.active.clone();
-    let (Some(project), false, true) = (project, queries.is_empty(), app.daemon.is_some()) else {
+    let (Some(project), false, true) = (project, queries.is_empty(), app.active_outbox().is_some())
+    else {
         let outcome = Outcome::Ok {
             statuses,
             removable: BTreeSet::new(),
@@ -351,7 +352,10 @@ fn branches(app: &App) -> Vec<String> {
 fn start(app: &mut App, seq: u64) -> Task<Message> {
     let started = now();
     let branches = branches(app);
-    let (Some(project), true) = (app.core.workspace.active.clone(), app.daemon.is_some()) else {
+    let (Some(project), true) = (
+        app.core.workspace.active.clone(),
+        app.active_outbox().is_some(),
+    ) else {
         // Unreachable while the window holds a project; ended rather than left under way.
         return update(app, finished(seq, Outcome::Err(ReadingFailure::Passing)));
     };

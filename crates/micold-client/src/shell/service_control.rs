@@ -35,8 +35,11 @@ use micold_client::features::connection::Msg as ConnectionMsg;
 /// sessions then reload as interrupted-resumable (FR-006a). Live processes are lost — we say so —
 /// but the durable sessions survive.
 pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
-    app.version_mismatch = None;
-    app.build_mismatch = None;
+    // Only the daemon the window is working with is restarted, and only its mismatch is cleared.
+    if let Some(id) = app.active_daemon() {
+        app.version_mismatch.remove(&id);
+        app.build_mismatch.remove(&id);
+    }
     // When the service lives in a container, stopping it over its endpoint would leave the
     // container up with a dead process inside — the orphan US6 scenario 4 is about. Stop the
     // container itself; the banner that results carries the action that brings a fresh one up
@@ -149,13 +152,17 @@ mod tests {
     #[test]
     fn asking_for_a_restart_takes_down_the_banner_that_offered_it() {
         let mut app = base_app();
-        app.version_mismatch = Some((1, 2, "some-build".to_string()));
-        app.build_mismatch = Some(("a".into(), "b".into()));
+        app.version_mismatch.insert(
+            micold_core::daemons::DaemonId(1),
+            (1, 2, "some-build".to_string()),
+        );
+        app.build_mismatch
+            .insert(micold_core::daemons::DaemonId(1), ("a".into(), "b".into()));
 
         let _ = on_restart_service_requested(&mut app);
 
-        assert!(app.version_mismatch.is_none());
-        assert!(app.build_mismatch.is_none());
+        assert!(app.version_mismatch.is_empty());
+        assert!(app.build_mismatch.is_empty());
     }
 
     /// …and says so, because the restart is not free: it stops running processes, and a user who

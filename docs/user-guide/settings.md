@@ -408,6 +408,13 @@ placement above keeps changing that one entry. Worktrees show the daemon they ru
 and the New worktree form offers the daemon to use (see [Which session service a worktree runs
 on](worktrees-and-sessions.md#which-session-service-a-worktree-runs-on)).
 
+You can run a host daemon and several container daemons together, each worktree bound to one. Until
+this section lists them for adding and editing, add a daemon by editing the `daemons` array in
+`settings.json` with the application closed; the entry format, the limits (one host daemon at
+most, unique names, container names and ports) and what an unavailable daemon looks like are in
+[Running a host daemon and container daemons
+together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together).
+
 The container settings stay visible and editable whichever placement you pick, and are kept if you
 switch back — configuring the container and then trying the host process first doesn't mean setting
 it up again.

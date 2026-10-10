@@ -306,7 +306,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         notification_kinds: app.core.session.notification_kinds,
         long_task_threshold_secs: app.core.session.long_task_threshold_secs,
         // Connected, the service's value is the truth; the file may lag another window's change.
-        pr_status_enabled: if app.daemon.is_some() {
+        pr_status_enabled: if app.active_outbox().is_some() {
             app.core.pr_status.enabled
         } else {
             stored.pr_status_enabled
@@ -630,11 +630,14 @@ pub(crate) fn save_and_prepare_check(
     // `Some` only for a field the user changed, `None` for the rest (W4.1), and nothing at all
     // when the save changed none of them (BUG-570).
     let told = service_changes(&settings, baseline.as_ref());
-    if let (Some(daemon), Some(told)) = (&app.daemon, told) {
+    if let (Some(daemon), Some(told)) = (app.active_outbox(), told) {
         let req = app.next_req;
         app.next_req += 1;
         daemon.send(told.into_message(req));
         app.pending_ops.insert(req, PendingOp::SettingsSet);
+        if let Some(id) = app.active_daemon() {
+            app.pending_daemon.insert(req, id);
+        }
     }
     // The enabled/path/timeout settings themselves changed, so every previously cached
     // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source

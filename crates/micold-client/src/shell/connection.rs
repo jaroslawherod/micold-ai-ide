@@ -19,23 +19,27 @@
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::connection::Msg;
+use micold_core::daemons::DaemonId;
 
 use crate::shell::{daemon_sync, service_control};
 use crate::App;
 
 /// This feature's entry point: one arm in `main.rs` routes here (contract M2).
-pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
+///
+/// `id` is the daemon the report came from ([`Message::Daemon`]); a report touches that
+/// daemon's links, catalog, mismatch and pending ops and no other's (feature 491, FR-007).
+pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
     match msg {
         Msg::Connected {
             outbox,
             catalog,
             settings,
-        } => daemon_sync::on_connected(app, outbox, catalog, settings),
-        Msg::Event(event) => daemon_sync::on_daemon_event(app, event),
+        } => daemon_sync::on_connected(app, id, outbox, catalog, settings),
+        Msg::Event(event) => daemon_sync::on_daemon_event(app, id, event),
         Msg::GridFrame(frame) => daemon_sync::on_grid_frame(app, frame),
-        Msg::Disconnected => daemon_sync::on_disconnected(app),
-        Msg::ConnectFailed(reason) => daemon_sync::on_connect_failed(app, reason),
-        Msg::Refused(reason) => daemon_sync::on_refused(app, reason),
+        Msg::Disconnected => daemon_sync::on_disconnected(app, id),
+        Msg::ConnectFailed(reason) => daemon_sync::on_connect_failed(app, id, reason),
+        Msg::Refused(reason) => daemon_sync::on_refused(app, id, reason),
         Msg::TakeoverRequested => daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps
@@ -45,7 +49,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             daemon,
             daemon_build,
         } => {
-            app.version_mismatch = Some((client, daemon, daemon_build));
+            daemon_sync::on_version_mismatch(app, id, client, daemon, daemon_build);
             Task::none()
         }
         // Same contract, different package version (US6, FR-022a, BUG-002): record it so the
@@ -55,7 +59,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             client_build,
             daemon_build,
         } => {
-            app.build_mismatch = Some((client_build, daemon_build));
+            daemon_sync::on_build_mismatch(app, id, client_build, daemon_build);
             Task::none()
         }
         Msg::RestartServiceRequested => service_control::on_restart_service_requested(app),

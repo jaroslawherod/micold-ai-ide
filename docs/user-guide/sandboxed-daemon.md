@@ -16,6 +16,47 @@ You need a container runtime installed — Docker or Podman; see **Container run
 The first start downloads the service's image, which can take a few minutes on a slow connection.
 After that it starts in seconds.
 
+## Running a host daemon and container daemons together
+
+You can have several session services at once: at most one on this computer (the host daemon) and
+any number of container daemons, each with its own container name and port. Each worktree is bound
+to exactly one of them, and its sessions run there and nowhere else. A worktree is never moved to
+another daemon because its own is down.
+
+- A daemon that fails, stops or is unreachable affects only the worktrees bound to it. Every other
+  daemon keeps running and stays usable.
+- A worktree whose daemon is not connected shows what is wrong in place of its usual status:
+
+| Where | Text |
+|---|---|
+| A worktree with no daemon | `no daemon` |
+| A worktree whose daemon is not connected | `daemon <name> unavailable` |
+| A daemon the app cannot talk to (version) | `daemon <name> version mismatch: client <c>, daemon <d>`, with how to fix it |
+| A session whose daemon dropped | `lost to daemon <name>` (it is not marked finished) |
+| No Docker or Podman installed | `container runtime not found` |
+| Windows, mapped paths | `paths are mapped` |
+
+- Starting a session on an unavailable or missing daemon is refused with the same text; nothing
+  falls back to another daemon.
+- Each daemon has its own tool server, so the AI in a session only sees the worktrees of its own
+  daemon; see [Tools for the AI in your sessions](agent-tools.md#one-tool-server-per-daemon).
+
+Until Settings gains a section for adding daemons, add a second one by editing the `daemons` array
+in `settings.json` ([where it is stored](settings.md#where-settings-are-stored)) with the
+application closed. Copy the existing container entry and give the copy a new `id`, a unique
+`name`, a unique `container_name` and a unique `port`:
+
+```json
+{ "id": 2, "name": "Untrusted",
+  "runtime": { "kind": "container", "profile": { "survive_logout": true },
+               "container_name": "micold-sandbox-untrusted", "port": 7728 },
+  "auto_start": false }
+```
+
+Names, ids, container names and ports must be unique, ids are never reused, and there can be only
+one `"kind": "host"` entry. Removing an entry leaves worktrees on disk untouched; its worktrees show
+`no daemon` until you bind them elsewhere.
+
 ## Container runtimes
 
 Settings → **Session service** → **Container runtime** chooses between them. Docker is the default;

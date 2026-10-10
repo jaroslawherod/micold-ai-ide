@@ -83,11 +83,14 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
         Effect::SetLayout(layout) => {
             // Service-owned (R12): the daemon stores it and echoes `SettingsChanged` to every
             // window. Disconnected, the choice holds for this run only, as the reducer set it.
-            if let Some(daemon) = &app.daemon {
+            if let Some(daemon) = app.active_outbox() {
                 let req = app.next_req;
                 app.next_req += 1;
                 daemon.send(settings::diff_layout_set(req, layout));
                 app.pending_ops.insert(req, PendingOp::SettingsSet);
+                if let Some(id) = app.active_daemon() {
+                    app.pending_daemon.insert(req, id);
+                }
             }
             Task::none()
         }
