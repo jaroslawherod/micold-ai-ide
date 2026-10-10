@@ -2,8 +2,8 @@
 //! registry existed open as one daemon, every worktree and Default bound to it, and a close and
 //! reopen keeps all of it.
 
-use micold_client::app::State;
-use micold_client::features::settings::registry_loaded;
+use micold_client::app::{Message, State};
+use micold_client::features::settings::daemons_loaded;
 use micold_client::features::sidebar::NO_DAEMON_LABEL;
 use micold_core::daemons::{Binding, DaemonRuntime};
 use micold_core::project::{Availability, Project};
@@ -60,7 +60,7 @@ fn launch(settings: &JsonFileSettingsStore, projects: &JsonFileStore) -> State {
         status: WorktreeStatus::Valid,
         included: false,
     }];
-    registry_loaded(&mut state.settings, &settings.load().settings);
+    state.update(Message::Settings(daemons_loaded(&settings.load().settings)));
     state
 }
 

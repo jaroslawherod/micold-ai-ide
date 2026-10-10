@@ -615,7 +615,9 @@ pub(crate) fn save_and_prepare_check(
     // The registry's single entry moved with the placement (feature 491, FR-005): read it back.
     if let Some(store) = app.caps.settings() {
         let stored = store.load().settings;
-        micold_client::features::settings::registry_loaded(&mut app.core.settings, &stored);
+        app.core.update(Message::Settings(
+            micold_client::features::settings::daemons_loaded(&stored),
+        ));
     }
     // Also ask a connected daemon to apply the service-owned fields (scrollback,
     // FR-012a; environment-include, FR-012b) so the change takes effect immediately for

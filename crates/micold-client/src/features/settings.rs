@@ -1037,6 +1037,14 @@ impl SettingsDraft {
 /// same reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
+    /// The daemon registry was read from the stored settings: at boot, and after a save that moved
+    /// the single entry with the placement (feature 491).
+    DaemonsLoaded {
+        /// The registry as stored.
+        daemons: micold_core::daemons::DaemonRegistry,
+        /// The daemon a worktree without a binding runs on.
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    },
     /// The theme preference was set from outside the Settings form (FR-007, FR-008). The shell
     /// persists the updated preference afterward.
     ///
@@ -1235,6 +1243,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlacementChangeConfirmed => placement_change_confirmed(state),
         Msg::PlacementChangeCancelled => placement_change_cancelled(state),
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
+        Msg::DaemonsLoaded {
+            daemons,
+            legacy_default,
+        } => registry_loaded(&mut state.settings, daemons, legacy_default),
         Msg::IssueMappingLabelChanged(index, label) => edit_mapping(state, |entries| {
             if let Some(entry) = entries.get_mut(index) {
                 entry.label = label;
@@ -1675,10 +1687,24 @@ pub fn placement_change_cancelled(state: &mut crate::app::State) {
 
 /// Take the daemon registry and the legacy default from stored settings (feature 491), at boot
 /// and after a save moved the single entry with the placement.
-pub fn registry_loaded(state: &mut State, stored: &Settings) {
-    state.daemons =
-        micold_core::daemons::DaemonRegistry::new(stored.daemons.clone(), stored.next_daemon_id);
-    state.legacy_default_daemon = stored.legacy_default_daemon;
+fn registry_loaded(
+    state: &mut State,
+    daemons: micold_core::daemons::DaemonRegistry,
+    legacy_default: Option<micold_core::daemons::DaemonId>,
+) {
+    state.daemons = daemons;
+    state.legacy_default_daemon = legacy_default;
+}
+
+/// The [`Msg::DaemonsLoaded`] a shell sends for stored settings (feature 491).
+pub fn daemons_loaded(stored: &Settings) -> Msg {
+    Msg::DaemonsLoaded {
+        daemons: micold_core::daemons::DaemonRegistry::new(
+            stored.daemons.clone(),
+            stored.next_daemon_id,
+        ),
+        legacy_default: stored.legacy_default_daemon,
+    }
 }
 
 /// The service is now running in `kind` (FR-035b).
