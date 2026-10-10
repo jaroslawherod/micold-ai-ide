@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: tasks
-- **Next step**: tasks unit (milestones M1 core/settings/wire, M2 status-line relay = swappable source, M3 indicator/settings UI/docs in plan.md; FR-012/FR-001 still on orchestrator defaults, see Open escalation)
+- **Phase**: design PR
+- **Next step**: merge the design PR, then milestone M1
 
 ## Pull requests
 
@@ -21,17 +21,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | — | pending |
+| M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | — | pending |
+| M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | — | pending |
+| M4 | T039–T046 | light | warning look at threshold; Settings → Environment switch, threshold, statement | — | pending |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| 1 | clarify | FR-012 usage source | Claude Code status-line `rate_limits` from app-run sessions via the existing `--settings` file, user's own status line chained (FR-020) | orchestrator default (recommended), awaiting user confirmation | code.claude.com/docs/en/statusline; crates/micold-daemon/src/state.rs:872 |
-| 2 | clarify | FR-001 default | On | orchestrator default (recommended), awaiting user confirmation | spec FR-001 condition: no credential read, nothing sent |
-| 3 | clarify | FR-009 staleness without polling | Current until shown window's reset passes; details show reading time | agent | statusline docs `rate_limits` |
+| 1 | clarify | FR-012 usage source | Claude Code status-line `rate_limits` from app-run sessions via the existing `--settings` file, user's own status line chained (FR-020) | decided by user (jaro, 2026-10-10) | code.claude.com/docs/en/statusline; crates/micold-daemon/src/state.rs:872 |
+| 2 | clarify | FR-001 default | On | decided by user (jaro, 2026-10-10) | spec FR-001 condition: no credential read, nothing sent |
+| 3 | clarify | FR-009 staleness without polling | Each window current until its own reset passes; indicator re-picks the highest current window, hidden when none; details show reading time (FR-009 reworded in tasks unit after analyze I4) | agent | statusline docs `rate_limits` |
 | 4 | clarify | FR-019 account identity | None in source; newest reading wins | agent | spec Out of Scope (no private storage) |
 | 5 | clarify | FR-007 switch vs running sessions | New sessions always; running ones when Claude Code reloads the per-session settings file | agent | state.rs activity_launch_for |
 | 6 | plan | Relay binary for the status line | The daemon executable with a `status-line` argument; user's statusLine resolved at session prepare time and chained | agent | research.md R3, R4 |
+| 7 | tasks | Milestone cut | M1 (17 tasks) is Setup+Foundational+the daemon half of US1 s3: US1/US3 share one data path, so the P1 stories split by layer along US1 s3 (route / relay / indicator), each with an observable deliverable; M4 joins US2 and US4 because US2 s4 (threshold change applies) needs US4's field and US2 alone is 4 tasks; T047–T048 are doc-only, left to the close unit | agent | milestones.md rules 1–4; tasks.md Milestones |
+| 8 | tasks | FR-009 when the shown window passes but another is current | Re-pick the highest current window; hide only when none remains (spec FR-009, US1 s4 reworded; was "hide") | agent | speckit-analyze I4; Claude Code drops each window at its own reset, the others stay accurate |
 
 ## Review rounds
 
@@ -39,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 9b2c2be0c4f91c4d56352d31de30d7e240d7d52b:149cda625a4e7942faafdff528924971fb1bd223 | CLEAN (3 MINOR, all fixed: FR-019 + US3 scenario 6 for account change, FR-007 single 5-minute interval, checklist testable item unticked) |
 | Plan | 1 | 6faf43340f356aff088fee399abf65dceed3b86c:fddb3ebf8d1340bb82ea64e182257534998538e1 | CLEAN (3 MINOR, all fixed: claude_settings_dir marked new, sandbox placement risk, FR-003/FR-011 test lines) |
+| Tasks | 1 | f491c06f7c981feadd01b9f3fe232bba92085878:ce1baee44edcfdf64c10b86807c39f96ce42d697 | CLEAN |
 
 ## Declined review findings
 
@@ -51,13 +58,7 @@ None.
 
 ## Open escalation
 
-Note: the orchestrator applied Q1 A and Q2 A as defaults (recommended), awaiting user confirmation; spec.md is written on them (Decisions 1-2). If the user picks otherwise, redo FR-001/FR-012 and their round 2 consequences.
-
-Clarify round 1 (category 1, product decision the repo does not settle). Evidence: the only documented source that reports plan percentages and reset times is Claude Code's status line JSON (`rate_limits.five_hour` / `seven_day`, `used_percentage` 0-100, `resets_at` epoch s; present only for Pro/Max subscribers and only after a session's first API response; https://code.claude.com/docs/en/statusline). The Admin/usage APIs cover API-key orgs, not plans; `/api/oauth/usage` is undocumented (forbidden by the issue); local logs give token counts, not plan %/reset. The app already hands each Claude session a `--settings` file (crates/micold-daemon/src/state.rs:872, feature 026 hooks), so a status-line command can ride in it; it must chain the user's own status line so theirs keeps working.
-
-- Q1 (FR-012): Which usage source? A (Recommended) Claude Code status line `rate_limits` via the app's existing `--settings` file, chaining the user's own status line; indicator shows only while an app-launched Claude session has a reading. B Local usage logs (estimate, no plan %/reset; fails FR-004/SC-002). C Drop the feature until Anthropic documents a standalone usage API.
-- Q2 (FR-001): Default of the switch? A (Recommended) On: with source A no credential is read and nothing leaves the machine beyond the CLI's own traffic, the spec's stated condition for on. B Off (opt-in like PR status on worktrees).
-
+None. Clarify round 1 (Q1 FR-012 source, Q2 FR-001 default) closed: the user (jaro) chose "Status line, on" (Q1 A, Q2 A) on 2026-10-10; Decisions 1-2.
 
 ## Follow-ups not done
 

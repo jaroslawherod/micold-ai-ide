@@ -17,7 +17,7 @@ Derives `Debug, Clone, PartialEq, Eq, Serialize, Deserialize`.
 Operations (pure, `now: i64`):
 
 - `current(&self, now) -> Option<CurrentUsage>`: the windows with `resets_at` absent or
-  `> now`. `None` when none remain (FR-009, R7). A window with no `resets_at` stays current until a
+  `> now`, with the headline re-picked among them. `None` when none remain (FR-009, R7). A window with no `resets_at` stays current until a
   newer reading replaces it.
 - `same_windows(&self, other) -> bool`: equal ignoring `obtained_at` (R6 dedupe).
 
@@ -79,7 +79,8 @@ The user's own status line, resolved at session prepare time (R4).
   `(claude_config_dir or home/.claude)/settings.json` whose `statusLine` is a `type: "command"`
   object with a non-empty `command`. Deserialises only `statusLine`. Absent, unreadable or
   malformed files name nothing. `ConfigLocations` is existing (`mcp/binding.rs`); it gains a
-  `claude_settings_dir()` beside `claude_json()`.
+  `claude_settings_dir()`: `CLAUDE_CONFIG_DIR` when set, else `home/.claude` (not the directory of
+  `claude_json()`, which is `~/.claude.json` in the home directory when the variable is unset).
 
 ## RelayConfig (core, serde; written by the daemon, read by the relay)
 

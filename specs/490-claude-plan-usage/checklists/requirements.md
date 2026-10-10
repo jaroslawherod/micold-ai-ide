@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain, for the clarify unit: FR-001 (switch on or off by default) and FR-012 (which usage source). FR-001's answer depends on FR-012's. Until clarify answers them, those two are not yet testable, so "Requirements are testable and unambiguous" stays unticked; every other requirement is.
+- FR-001 and FR-012 were answered in clarify (decided by jaro on 2026-10-10: Claude Code status-line `rate_limits`, on by default); every requirement is testable.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`

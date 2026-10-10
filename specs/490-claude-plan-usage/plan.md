@@ -18,8 +18,8 @@ reset times (R7). Two service-owned settings (switch on by default, threshold 80
 feature 613's threshold path (R9).
 
 The source sits behind a seam: everything after `plan_usage::status_line` and the relay works on a
-source-neutral `UsageReading`, and the relay is its own milestone (M2), so if the user answers the
-open escalation differently (Decisions 1–2) only M2 and one constant change.
+source-neutral `UsageReading`, and the relay is its own milestone (M2), so a later change of source
+replaces only M2 and one constant. The user confirmed the source and the default (Decisions 1–2).
 
 ## Technical Context
 
@@ -65,7 +65,7 @@ all PASS, no Complexity Tracking entry.
 | **IV. Local-First (NON-NEGOTIABLE)** | PASS | No request of the feature's own; the relay talks to `127.0.0.1` only; reading in memory only; works offline by showing nothing. On by default is justified by FR-001: nothing leaves the device for this feature, so there is nothing to opt into. |
 | **V. Rust + iced** | PASS | Rust only. `WarnPercent` makes an out-of-range threshold unrepresentable; `UsageReading` has no empty-windows value after parsing. |
 | **VI. Cross-Platform** | PASS | One relay for all platforms; the only platform branch (which shell runs the user's command, R4) sits in `status_relay::user_shell` behind one function; quickstart §B4 checks Windows. CI covers all three. |
-| **VII. Documentation** | PASS | `docs/user-guide/settings.md` gains *Environment → Claude plan usage* (what is read: `statusLine` of Claude Code's settings files and the status-line data; nothing sent), and `docs/user-guide/worktrees-and-sessions.md` a short *Plan usage in the app bar* note. |
+| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` gains *Claude plan usage* (M2: what is read, the `statusLine` of Claude Code's settings files and the status-line data; nothing sent; the user's status line kept; M3: the app-bar indicator), and `docs/user-guide/settings.md` *Environment → Claude plan usage* (M4: switch, threshold, the same statement). |
 | **VIII. Reusable UI** | PASS | New shared `UsageIndicator` with a builder ending in `.into()`, showcase entry and gates (contracts/usage-indicator.md); tooltip and toolbar are the existing shared ones. |
 
 ## Requirement map
@@ -146,16 +146,21 @@ daemon, rendering in the client's `ui`, state in its render-free `features`.
 
 ## Milestones (for the tasks unit)
 
-- **M1 — Core model, settings and wire** (US4 partly, FR-005, FR-008–FR-010, FR-019 logic):
-  `plan_usage.rs`, `WarnPercent`, settings fields, `DaemonSettings`/`SettingsSet`, `Welcome` and
-  `PlanUsageChanged`, `note_plan_usage` and `set_plan_usage_enabled` (reading part), server
-  plumbing. Shippable alone: no reading can arrive yet, so nothing is visible.
-- **M2 — Source A: relay and route** (FR-007, FR-012–FR-017, FR-020): `status_line.rs`,
-  `user_status_line.rs`, `status_relay.rs`, `main.rs` dispatch, `hooks.rs` block, relay file and
-  `/status` route, switch rewrites live settings files. The swappable milestone.
-- **M3 — Indicator, Settings UI and docs** (US1–US4 views, FR-001, FR-003, FR-004, FR-006,
-  FR-018): `features/plan_usage.rs`, subscription, icons, `UsageIndicator`, toolbar, settings
-  section, showcase, gates, user guide.
+Cut by the tasks unit; tasks.md *Milestones* is authoritative.
+
+- **M1 — Readings reach the daemon** (FR-005 clamp, FR-008, FR-009 model, FR-014–FR-016,
+  FR-019): `plan_usage.rs`, `status_line.rs`, `WarnPercent`, settings fields, wire, `note_plan_usage`
+  and the reading part of `set_plan_usage_enabled`, server plumbing, the `/status` route. A POST to
+  the route is broadcast to every client.
+- **M2 — Source A: relay and settings-file block** (FR-002, FR-007, FR-012–FR-014, FR-017,
+  FR-020): `user_status_line.rs`, `status_relay.rs`, `main.rs` dispatch, `hooks.rs` block and relay
+  file, switch rewrites live settings files, the user-guide note on what is read. The swappable
+  milestone.
+- **M3 — The usage indicator** (US1, US3 views; FR-004, FR-006, FR-009): `features/plan_usage.rs`,
+  subscription, `Icon::PlanUsage`, `UsageIndicator`, toolbar, showcase, gates, user guide.
+- **M4 — Warning look and settings** (US2, US4; FR-001, FR-003, FR-005, FR-010, FR-018):
+  `Icon::UsageWarning`, the indicator's warning look, the Settings → Environment subsection,
+  `docs/user-guide/settings.md`.
 
 ## Test strategy
 
@@ -163,9 +168,8 @@ daemon, rendering in the client's `ui`, state in its render-free `features`.
 |---|---|---|
 | Core unit/integration | headline and tie rules, `current(now)` drops passed windows, tenths rounding, out-of-range and partial windows, `spend_limit` excluded, unknown keys named, `format_reset` within/after 24 h and offsets, `WarnPercent` clamp/parse, `UserStatusLine` precedence and `CLAUDE_CONFIG_DIR`, only `statusLine` read, settings defaults and clamp, wire round-trip | `micold-core/tests/plan_usage.rs`, `plan_usage_status_line.rs`, `plan_usage_user_status_line.rs`, `settings_plan_usage.rs`, `settings_contract_examples.rs` (extend) |
 | Daemon | `/status` route table S3 (auth before body, 413, 400, 200-drop when off), debug-once logging, newest-wins and dedupe broadcast, switch off clears and rewrites settings files without `statusLine`, relay S2.1–S2.6 with a fake shell and fake receiver (output passthrough, exit status, recursion guard, timeout does not delay output, only `rate_limits` posted) | `micold-daemon/tests/plan_usage_route.rs`, `plan_usage_setting.rs`, `status_relay.rs`; `hooks_receiver.rs` (extend: settings JSON with and without `statusLine`) |
-| Client (render-free) | reading from Welcome/PlanUsageChanged, cleared on disconnect, hidden when off, tick only while a reading exists, threshold field refuses 49/101 with the range message, change applies without new reading | `micold-client/tests/features_plan_usage.rs`, `features_settings.rs` (extend), `idle_subscriptions.rs` (extend) |
+| Client (render-free) | FR-003 statement in the Settings field note (`features_settings.rs`); FR-011 has no test of its own, no notification path is changed; reading from Welcome/PlanUsageChanged, cleared on disconnect, hidden when off, tick only while a reading exists, threshold field refuses 49/101 with the range message, change applies without new reading | `micold-client/tests/features_plan_usage.rs`, `features_settings.rs` (extend), `idle_subscriptions.rs` (extend) |
 | Geometry gates | indicator height and bar positions, icon codepoints and roles | `tests/gates/bar_controls_hold_their_size.rs` (extend), `tests/icons.rs`, `tests/icon_roles.rs` (extend) |
-| Client (render-free) | FR-003 statement present in the Settings section's field note | `features_settings.rs` (extend); FR-011 has no test of its own: no notification path is changed |
 | Visual pass | look in light/dark, warning distinguishable, tooltip text, real Claude Code end to end, Windows shell chaining | quickstart Part B |
 
 ## Risks
@@ -177,7 +181,6 @@ daemon, rendering in the client's `ui`, state in its render-free `features`.
 - **Windows shell selection** mirrors the documented Git Bash / PowerShell rule; a mismatch only
   affects the user's chained status line, checked in quickstart §B4.
 - **Sandboxed daemon (027)**: the daemon, its hook receiver and the Claude sessions all run inside the container, so the relay's loopback POST stays inside it and `UserStatusLine::resolve` reads the container's view of home and the session cwd; a user status line that exists only on the host is not chained there (as for any host-only Claude configuration). Covered by the spec's container edge case; no extra test beyond the daemon tests, which do not depend on placement.
-- **Decisions 1–2 await user confirmation**; see Summary for what changes.
 
 ## Complexity Tracking
 
